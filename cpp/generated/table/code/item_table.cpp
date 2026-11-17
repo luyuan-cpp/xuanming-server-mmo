@@ -28,6 +28,8 @@ void ItemTableManager::Load() {
         const auto& row_data = snap->data.data(i);
         snap->idMap.emplace(row_data.id(), &row_data);
         snap->affixRuleIndex[row_data.affix_rule()].push_back(&row_data);
+        snap->forgeMaterialIdIndex[row_data.forge_material_id()].push_back(&row_data);
+        snap->artifactIdIndex[row_data.artifact_id()].push_back(&row_data);
     }
 
     snapshot = std::move(snap);

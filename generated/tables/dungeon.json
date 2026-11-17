@@ -1,6 +1,7 @@
 {
  "data": [
   {
+   "allow_pet_capture": 0,
    "id": 1,
    "max_team_size": 5,
    "monster": [
@@ -11,6 +12,7 @@
    "time_limit": 1800
   },
   {
+   "allow_pet_capture": 0,
    "id": 2,
    "max_team_size": 5,
    "monster": [
@@ -21,6 +23,7 @@
    "time_limit": 3600
   },
   {
+   "allow_pet_capture": 0,
    "id": 3,
    "max_team_size": 10,
    "monster": [
@@ -29,6 +32,17 @@
     16
    ],
    "scene_id": 19,
+   "time_limit": 1800
+  },
+  {
+   "allow_pet_capture": 1,
+   "id": 4,
+   "max_team_size": 1,
+   "monster": [
+    1,
+    2
+   ],
+   "scene_id": 1,
    "time_limit": 1800
   }
  ]

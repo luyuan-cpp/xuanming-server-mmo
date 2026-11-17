@@ -75,6 +75,7 @@ inline constexpr uint32_t kBuffTypeSilence = 31;
 inline constexpr uint32_t kBuffTypeInvincibility = 32;
 inline constexpr uint32_t kBuffTypeImmunity = 34;
 inline constexpr uint32_t kBuffTypeDispel = 35;
+inline constexpr uint32_t kBuffTypeNextBasicAttack = 36;
 inline constexpr uint32_t kBuffTypeHealthRegeneration = 40;
 inline constexpr uint32_t kBuffTypeManaRegeneration = 41;
 inline constexpr uint32_t kBuffTypeHealthRegenerationBasedOnLostHealth = 42;

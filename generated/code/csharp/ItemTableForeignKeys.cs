@@ -32,12 +32,56 @@ namespace MmorpgClient.Table
             return GetAffixRuleRow(ItemTableManager.Instance.FindById(tableId));
         }
 
+        /// <summary>Resolve Item.forge_material_id → Item row, or null.</summary>
+        public static ItemTable GetForgeMaterialIdRow(ItemTable row)
+        {
+            if (row == null)
+            {
+                return null;
+            }
+            return ItemTableManager.Instance.FindById(row.ForgeMaterialId);
+        }
+
+        /// <summary>Resolve Item.forge_material_id → Item row, by Item id.</summary>
+        public static ItemTable GetForgeMaterialIdRow(uint tableId)
+        {
+            return GetForgeMaterialIdRow(ItemTableManager.Instance.FindById(tableId));
+        }
+
+        /// <summary>Resolve Item.artifact_id → EquipArtifact row, or null.</summary>
+        public static EquipArtifactTable GetArtifactIdRow(ItemTable row)
+        {
+            if (row == null)
+            {
+                return null;
+            }
+            return EquipArtifactTableManager.Instance.FindById(row.ArtifactId);
+        }
+
+        /// <summary>Resolve Item.artifact_id → EquipArtifact row, by Item id.</summary>
+        public static EquipArtifactTable GetArtifactIdRow(uint tableId)
+        {
+            return GetArtifactIdRow(ItemTableManager.Instance.FindById(tableId));
+        }
+
         // ---- Reverse FK (HasMany): find source rows by FK column value ----
 
         /// <summary>Reverse FK: all Item rows whose affix_rule == key.</summary>
         public static IReadOnlyList<ItemTable> FindRowsByAffixRule(uint key)
         {
             return ItemTableManager.Instance.GetByAffixRule(key);
+        }
+
+        /// <summary>Reverse FK: all Item rows whose forge_material_id == key.</summary>
+        public static IReadOnlyList<ItemTable> FindRowsByForgeMaterialId(uint key)
+        {
+            return ItemTableManager.Instance.GetByForgeMaterialId(key);
+        }
+
+        /// <summary>Reverse FK: all Item rows whose artifact_id == key.</summary>
+        public static IReadOnlyList<ItemTable> FindRowsByArtifactId(uint key)
+        {
+            return ItemTableManager.Instance.GetByArtifactId(key);
         }
     }
 }

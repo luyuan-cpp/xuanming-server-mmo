@@ -53,6 +53,14 @@ type PetInit_speedComp struct {
     Value uint64
 }
 
+type PetShop_price_goldComp struct {
+    Value uint64
+}
+
+type PetAcquisition_tierComp struct {
+    Value uint32
+}
+
 type PetAptitude_minComp struct {
     Values []uint32
 }
@@ -108,6 +116,14 @@ func MakePetInit_manaComp(row *pb.PetTable) PetInit_manaComp {
 
 func MakePetInit_speedComp(row *pb.PetTable) PetInit_speedComp {
     return PetInit_speedComp{Value: row.InitSpeed}
+}
+
+func MakePetShop_price_goldComp(row *pb.PetTable) PetShop_price_goldComp {
+    return PetShop_price_goldComp{Value: row.ShopPriceGold}
+}
+
+func MakePetAcquisition_tierComp(row *pb.PetTable) PetAcquisition_tierComp {
+    return PetAcquisition_tierComp{Value: row.AcquisitionTier}
 }
 
 func MakePetAptitude_minComp(row *pb.PetTable) PetAptitude_minComp {

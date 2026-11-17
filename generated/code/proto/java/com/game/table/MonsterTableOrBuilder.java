@@ -65,6 +65,18 @@ public interface MonsterTableOrBuilder extends
   long getGoldReward();
 
   /**
+   * <code>uint32 capture_pet_table_id = 11;</code>
+   * @return The capturePetTableId.
+   */
+  int getCapturePetTableId();
+
+  /**
+   * <code>uint32 capture_rate = 12;</code>
+   * @return The captureRate.
+   */
+  int getCaptureRate();
+
+  /**
    * <code>repeated .Monsterdrop drop = 10;</code>
    */
   java.util.List<com.game.table.Monsterdrop> 

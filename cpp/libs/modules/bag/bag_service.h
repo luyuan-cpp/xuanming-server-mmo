@@ -123,6 +123,21 @@ public:
         const std::string& extra, const std::function<uint32_t()>& beforeCommit = {},
         uint64_t consumeFromHoldId = 0, const GrantOverflowRoute* overflowRoute = nullptr);
 
+    struct InstanceReplacement {
+        BagType bagType{kInventory};
+        ItemComp expected;
+        ItemComp replacement;
+    };
+    // 同步严格兑换：材料必须扣足，新增只进人物背包，满包不转临时格。
+    // 实例修改只允许人物包/装备包内同身份、同模板、同数量的内容替换，不改变布局。
+    // 全部操作先在候选上完成并复核同源；beforeCommit可原子发布预构造的外部账本，
+    // 失败必须零副作用，成功后不得yield或重入。其后只有不失败的包发布、审计和通知。
+    // written只在成功时写入；失败不扣材料、不修改实例、不记获得/销毁流水。
+    static uint32_t ExchangeInventoryExact(entt::entity playerEntity, const ItemCountMap& consumed,
+        const std::vector<InitItemParam>& gained, const std::vector<InstanceReplacement>& replacements,
+        uint64_t correlationId, const std::string& extra, std::vector<GuidVector>& written,
+        const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit);
+
     // ── 物品数量预留(docs/design/battle-item-reservation.md)──────────────────────────────────
     // 一份预留 = 「人物背包里这几种物品各有这么多已被某件事占住」,数据在持久组件 PlayerItemHoldComp,规则在 item_hold.h。
     // 只约束**这名玩家的人物背包**里可按配置号计数的单位(ItemStore::IsCountableByConfig,与 GetTotalItemCount、

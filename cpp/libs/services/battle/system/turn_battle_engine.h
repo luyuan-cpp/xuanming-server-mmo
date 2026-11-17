@@ -23,6 +23,7 @@
 #include "proto/battle/player_battle.pb.h"
 
 #include "constants/turn_battle_constants.h"
+#include "constants/battle_effect_constants.h"
 #include "data/battle_data_provider.h"
 #include "system/class_skill_rules.h"
 
@@ -40,6 +41,9 @@ public:
     // 非法行动(死亡/已逃/技能校验链不过)不落账,按未提交处理,
     // 由回合超时的默认普攻兜底(设计文档 §5.1 超时/掉线默认行动)
     bool SubmitAction(uint64_t actorId, const BattleAction& action);
+    // 主人可控制自身或本场自己的宝宝,每个单位每回合仍只有一个普通指令。
+    bool SubmitActorAction(uint64_t ownerPlayerId, uint64_t actorId, const BattleAction& action);
+    uint32_t ValidateActorAction(uint64_t ownerPlayerId, uint64_t actorId, const BattleAction& action) const;
 
     // 行动合法性查询(零副作用)。节点在 SubmitAction 之前调它,把 tip 码回给提交者,
     // 不再"一律回 OK"(AGENTS §11.3:玩家资产路径 fail-closed,拒绝要让玩家知道原因)。
@@ -107,6 +111,80 @@ public:
     static uint64_t LegacySkillManaCost(const SkillTable& skillRow);
 
 private:
+    // 单次效果调用的临时上下文,不保存战斗状态;状态始终由BattleActorState/BattleBuffEntry承载。
+    struct EffectContext {
+        uint32_t skillId = 0;
+        uint32_t rank = 1;
+        uint64_t paidHealth = 0;
+        uint64_t paidMana = 0;
+        uint64_t actualDamage = 0;
+        uint64_t instigatorId = 0; // 催化持续伤害的行动者,原始伤害归属仍为Buff来源。
+        BattleDamageOrigin origin = BattleDamageOrigin::Direct;
+        double scale = 1.0;
+        uint32_t hitOrdinal = 0;  // 同一目标的段序,与表现层多目标索引分开。
+        uint32_t periodicState = 0;
+        bool critical = false;
+        uint64_t primaryTargetId = 0;
+        uint32_t healOrdinal = 0;
+        uint32_t shieldOrdinal = 0;
+        bool equipmentHeal = false;
+        bool healingSnapshot = false;
+    };
+    bool ConfiguredSubjectAllowed(const BattleActorState& actor, const SkillTable& row) const;
+    uint32_t ConfiguredRank(const BattleActorState& actor, const SkillTable& row) const;
+    uint32_t CheckConfiguredSkill(const BattleActorState& actor, const BattleAction& action,
+                                  const SkillTable& row) const;
+    bool ConfiguredTargetAllowed(const BattleActorState& actor, const BattleActorState& target,
+                                  const SkillTable& row) const;
+    std::vector<uint64_t> SelectConfiguredTargets(const BattleActorState& actor, const SkillTable& row,
+                                                 uint64_t primaryId);
+    void ExecuteConfiguredSkill(BattleActorState& actor, const BattleAction& action,
+                                 const SkillTable& row, TurnResultS2C& result,
+                                 BattleDamageOrigin origin = BattleDamageOrigin::Direct,
+                                 double scale = 1.0);
+    double ConfiguredValue(const BattleActorState& caster, const BattleActorState& target,
+                            const BuffTable& row, const EffectContext& context) const;
+    void ApplyConfiguredEffect(BattleActorState& caster, BattleActorState& target, uint32_t buffId,
+                                const EffectContext& context, TurnResultS2C& result, uint32_t depth = 0);
+    uint64_t ResolveConfiguredDamage(BattleActorState& source, BattleActorState& target, double damage,
+                                     uint32_t damageType, const EffectContext& context,
+                                     TurnResultS2C& result, eBattleHitKind hitKind = BATTLE_HIT_NORMAL);
+    uint64_t ResolveConfiguredHeal(BattleActorState& source, BattleActorState& target, double amount,
+                                   const EffectContext& context, TurnResultS2C& result);
+    void TriggerConfiguredBuffs(BattleActorState& owner, BattleActorState& other, BattleTrigger trigger,
+                                uint32_t damageType, const EffectContext& context, TurnResultS2C& result);
+    double ConfiguredModifier(const BattleActorState& actor, BattleModifier kind) const;
+    bool HasConfiguredBuffs(const BattleActorState& actor) const;
+    bool HasConfiguredState(const BattleActorState& actor, BattleStateKind state) const;
+    bool HasBuffTag(const BattleActorState& actor, const std::string& tag) const;
+    void InitializeConfiguredAbilities();
+    void TickConfiguredBuffs(TurnResultS2C& result);
+    void BeginConfiguredRound(TurnResultS2C& result);
+    bool ExecuteConfiguredControl(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
+    std::optional<BattleAction> SelectAutoConfiguredSkill(const BattleActorState& actor) const;
+    void RemoveConfiguredBuff(BattleActorState& actor, uint64_t buffId, TurnResultS2C& result);
+
+    // 装备静态来源来自 scene，次数只由本局状态拥有；按 item_id 排序使双同名预算分配稳定。
+    bool InitializeEquipment(BattleActorState& actor, const EquipmentEffects& effects);
+    uint32_t EquipmentManaCategory(const SkillTable& skill) const;
+    uint32_t MainEquipmentAilment(const SkillTable& skill) const;
+    std::vector<int> AvailableArtifacts(const BattleActorState& actor, uint32_t effect) const;
+    void UseArtifact(BattleActorState& actor, int index, uint64_t targetId, uint64_t value,
+                       TurnResultS2C& result);
+    void EquipmentDefend(BattleActorState& actor, TurnResultS2C& result);
+    uint64_t EquipmentReduceDamage(BattleActorState& source, BattleActorState& target,
+                                    uint64_t damage, const EffectContext& context, TurnResultS2C& result);
+    void EquipmentBreakShields(BattleActorState& source, BattleActorState& target,
+                                uint64_t damage, uint32_t type, const EffectContext& context,
+                                const std::vector<uint64_t>& shields, TurnResultS2C& result);
+    bool EquipmentControlRoll(BattleActorState& caster, BattleActorState& target, const BuffTable& row,
+                                const EffectContext& context, TurnResultS2C& result);
+    double EquipmentOutgoingHeal(const BattleActorState& source) const;
+    double EquipmentShield(BattleActorState& source, BattleActorState& target, double base,
+                             const EffectContext& context, std::vector<int>& contributions) const;
+    void CommitEquipmentShield(BattleActorState& source, uint64_t targetId,
+                                const std::vector<int>& contributions, TurnResultS2C& result);
+
     friend class TurnBattleEngineDeathTestAccess; // 内存测试注入周期伤害来源，不新增业务控制接口
     // ---- 初始化 ----
 
@@ -114,7 +192,7 @@ private:
     bool InitMonsters(const CreateBattleRequest& request);
     bool IsValidRewardProfile(const BattleRewardProfile& profile) const;
     // 出战宝宝:与主人同队的独立行动单位(player-pet.md §5)。
-    // 无客户端行动权(SubmitAction 只收 PLAYER),每回合由 FillDefaultActions 选可用技能或普攻,
+    // 新技能宝宝支持主人独立提交行动;旧快照由 FillDefaultActions 选可用技能或普攻,
     // 因此不进 AllPlayersReady 的就绪判定 —— 带宝宝不会拖慢任何一个回合。
     bool InitPets(const CreateBattleRequest& request);
     void AppendMonsterActor(uint32_t monsterTableId, uint32_t monsterIndex, uint32_t referenceLevel);
@@ -172,8 +250,10 @@ private:
     uint64_t EffectivePhysicalAttack(const BattleActorState& actor) const;
     uint64_t EffectiveDefense(const BattleActorState& actor) const;
     uint64_t EffectiveSpeed(const BattleActorState& actor) const;
-    // 减益:局内幅度为负的职业技能 buff、Buff 表带 Debuff 标签的、毒 / 灼烧 / 眩晕 / 沉默 / 冰冻
+    // 新模型优先显式善恶标签,未标时按属性方向判定;旧模型保留原有语义。
     bool IsDebuffEntry(const BattleBuffEntry& entry) const;
+    // 仅源技能init_effect中的被动/追击入口不可驱散,它们生成的子效果不继承保护。
+    bool IsConfiguredListenerBuff(const BattleBuffEntry& entry) const;
     // 按身上顺序移除至多 count 个减益,返回实际移除个数
     uint32_t DispelDebuffs(BattleActorState& target, uint32_t count, TurnResultS2C& result);
 
@@ -242,7 +322,7 @@ private:
     // 普攻:选目标 → ATTACK 事件 → 首段 → (连击率成立)追加段 → (受击者反击率成立)反击。
     // 连击 / 反震 / 反击只挂在这条路径上(含技能校验失败降级成的普攻),技能不触发
     void ExecuteAttack(BattleActorState& actor, uint64_t targetId, TurnResultS2C& result);
-    // 普攻的一段,固定顺序:命中 → 必杀 → 落伤害(致死走 HandleDeath)→ 反震。
+    // 普攻的一段,固定顺序:命中 → 必杀 → 首段 Buff 伤害事件 → 落伤害(致死走 HandleDeath)→ 反震。
     // hitKind 标在本段产出的 MISS / DAMAGE 事件上,并决定本段的规则:
     //   NORMAL  首段,伤害原样落地;
     //   COMBO   连击追加段,伤害 × kComboDamagePercent%;
@@ -250,6 +330,10 @@ private:
     // 返回本段是否命中。出手者可能在本段被反震弹死,调用方用 IsActorActive(attacker) 判断能否继续
     bool ResolveBasicAttackHit(BattleActorState& attacker, BattleActorState& target,
                                eBattleHitKind hitKind, TurnResultS2C& result);
+    // 普攻首段落血前消费“下次普攻”Buff。先快照实例 ID,再逐个重查;触发中新加的条目留给下次普通行动。
+    // 复制施加者上下文后完成本次子效果,不持有跨 AddBuffToActor 的容器引用;返回附伤后的原始伤害。
+    double TriggerBeforeBasicAttackBuffs(BattleActorState& attacker, BattleActorState& target,
+                                         double rawDamage, TurnResultS2C& result);
     // 反震:target 刚被 attacker 的一段普攻实扣 dealt 点且仍存活时,按 target 的 reflect_rate 掷骰;
     // 成立则 attacker 受到 ceil(dealt × kReflectDamagePercent%)(至少 1,不超过其当前气血;
     // 不吃减伤、不必杀、不受防御指令影响),发 DAMAGE(source=target,target=attacker,hit_kind=REFLECT)。
@@ -270,6 +354,8 @@ private:
     void ExecuteDefend(BattleActorState& actor, TurnResultS2C& result);
     void ExecuteItem(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
     void ExecuteFlee(BattleActorState& actor, TurnResultS2C& result);
+    uint32_t CheckCapture(const BattleActorState& actor, uint64_t targetId) const;
+    void ExecuteCapture(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
     void TickBuffsAtRoundEnd(TurnResultS2C& result);
     void TickActorBuffs(BattleActorState& actor, TurnResultS2C& result);
     void ApplyBuffIntervalEffect(BattleActorState& actor, const BattleBuffEntry& entry,
@@ -332,9 +418,13 @@ private:
     // 免疫检查 → (回合制新增)抗异常 → 驱散 → 叠层/刷新 → 新建 → 子 buff 语义,时间维度换算为回合。
     // 被抵抗时只发 BATTLE_EVENT_RESIST(source=施加者,target=抵抗者),不加 buff、不走驱散。
     // statPercent != 0 是职业技能的增减益:幅度写进条目 stat_percent、施加回合写进 applied_round
-    // (本回合末不扣持续);子 buff 不继承幅度
+    // (本回合末不扣持续);下次普攻 Buff 同样保留完整回合;子 buff 不继承幅度
     void AddBuffToActor(BattleActorState& target, uint32_t buffTableId, uint64_t casterId,
                         uint32_t depth, TurnResultS2C& result, double statPercent = 0.0);
+    // 挂载完成后的 Start:普通类型展开宿主子 Buff;“下次普攻”延后到伤害事件。
+    // 父实例中途被子效果驱散则停止其余 Start 子项;target_sub_buff 只由带实际受击目标的事件解释。
+    void OnBuffStart(BattleActorState& target, uint64_t buffId, const BuffTable& buffRow,
+                      uint32_t depth, TurnResultS2C& result);
     bool IsImmuneToBuff(const BattleActorState& target, const BuffTable& buffRow) const;
     // 抗异常判定(非 const:可能消耗一个随机数)。只在三个条件同时成立时才可能抵抗:
     // 施加者是本局单位、与目标不同队(自己或队友挂的不判)、buff 类型在 kAilmentBuffMappings 里。
@@ -343,7 +433,7 @@ private:
     bool RollAilmentResist(const BattleActorState& target, const BuffTable& buffRow,
                            uint64_t casterId);
     void DispelBuffsByTag(BattleActorState& target, const BuffTable& buffRow, TurnResultS2C& result);
-    // 职业技能增减益(statPercent != 0)重挂:持续刷新为满、施加回合记为本回合,幅度取两者中更强的那个
+    // 重挂持续刷新为满。职业属性 Buff 幅度取更强者;属性 / 下次普攻 Buff 的施加回合记为本回合。
     bool StackOrRefreshExistingBuff(BattleActorState& target, const BuffTable& buffRow,
                                     uint64_t casterId, TurnResultS2C& result, double statPercent);
     void RemoveBuffAt(BattleActorState& target, int buffIndex, TurnResultS2C& result);

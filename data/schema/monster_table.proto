@@ -38,4 +38,8 @@ message MonsterTable {
   // 击杀掉落。每槽 (物品 id, 数量, 万分比概率) 三列,整槽要么三格全填要么全空(半空槽会被导表器并进上一槽)
   repeated Monsterdrop drop = 10 [(cfg_slots) = 2];
   int32 designer = 9001 [(cfg_owner) = "designer"];
+  // 可捕捉的普通宠物种类，0为不可捕捉。
+  uint32 capture_pet_table_id = 11 [(cfg_fk) = "Pet"];
+  // 满血时捕捉成功率（万分比），残血时按缺血比例提高。
+  uint32 capture_rate = 12;
 }

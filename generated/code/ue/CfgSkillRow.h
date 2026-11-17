@@ -268,6 +268,45 @@ struct FCfgSkillRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	double buff_percent = 0.0;
 
+	/** 公共技能运行模型:0沿用旧职业/通用管线,1事件化回合技能。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 battle_model = 0;
+
+	/** 学习主体位:1人物,2宝宝,3共用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 caster_mask = 0;
+
+	/** 1主动,2被动,3追击,4开场。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 ability_kind = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 pet_max_targets = 0;
+
+	/** 开局挂载的事件监听/状态,不占用普通行动。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	TArray<int32> init_effect;
+
+	/** 策划追溯码,运行时不得按本字段分支。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	FString prototype_code;
+
+	/** 0不限;次数不因死亡、复活或离场重置。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 max_battle_uses = 0;
+
+	/** 0无,1降至1点气血,2牺牲至0;在目标校验后支付。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 health_cost_mode = 0;
+
+	/** 效果分类位:1物攻,2法攻,4治疗,8辅助,16障碍。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 action_tags = 0;
+
+	/** 是否允许选择倒地目标。仅明确配置的复生印使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 allow_dead_target = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	TArray<FCfgSkillRequiredItem> required_item;
 

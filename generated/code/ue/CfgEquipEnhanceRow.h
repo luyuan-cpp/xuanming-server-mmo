@@ -55,7 +55,7 @@ struct FCfgEquipEnhanceRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
-	/** 目标强化等级(从 1 起连续):第 N 行 = 从 +(N-1) 强化到 +N 的规则,以及 +N 的加成 */
+	/** 规则行身份。旧规则组 level 留 0 时兼作目标等级；新版行的等级由 level 指定。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|EquipEnhance")
 	int32 id = 0;
 
@@ -82,4 +82,12 @@ struct FCfgEquipEnhanceRow : public FTableRowBase
 	/** 材料数量(成败都扣);material_id 为 0 时必须为 0 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|EquipEnhance")
 	int32 material_count = 0;
+
+	/** 强化规则组：0 旧规则，1 首发基础装。首饰与法宝没有强化规则组。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|EquipEnhance")
+	int32 profile_id = 0;
+
+	/** 目标等级。旧规则组可留 0 并沿用 id，其余规则组必须显式填写。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|EquipEnhance")
+	int32 level = 0;
 };

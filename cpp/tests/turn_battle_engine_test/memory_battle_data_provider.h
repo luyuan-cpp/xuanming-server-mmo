@@ -49,6 +49,12 @@ public:
 
     void ClearBattleRewards() { rewardProfiles.clear(); }
 
+    PetTable& AddPet(uint32_t id) { auto& row = petRows[id]; row.set_id(id); return row; }
+    const PetTable* FindPet(uint32_t id) const override {
+        const auto it = petRows.find(id);
+        return it == petRows.end() ? nullptr : &it->second;
+    }
+
     MonsterTable& AddMonster(uint32_t monsterTableId) {
         auto& row = monsterRows[monsterTableId];
         row.set_id(monsterTableId);
@@ -189,6 +195,7 @@ private:
     std::map<uint32_t, DungeonTable> dungeonRows;
     std::map<std::pair<uint32_t, std::string>, BattleRewardProfile> rewardProfiles;
     std::map<uint32_t, MonsterTable> monsterRows;
+    std::map<uint32_t, PetTable> petRows;
     std::map<uint32_t, ItemTable> itemRows;
     std::map<uint32_t, uint64_t> cooldownDurations;
     std::map<uint32_t, std::vector<uint32_t>> dungeonMonsterIds;

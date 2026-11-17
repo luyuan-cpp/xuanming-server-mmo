@@ -95,6 +95,10 @@ namespace
 	// 玩家已经花过钱的等级,以后做转职 / 返还时还查得到。
 	bool IsActiveFor(const SkillTable &row, uint32_t classId, bool classHasClassSkills)
 	{
+		if (row.battle_model() != 0)
+		{
+			return PlayerSkillSystem::IsFreeSkillFor(row, 1);
+		}
 		if (PlayerSkillSystem::IsClassSkill(row))
 		{
 			return row.class_id() == classId;
@@ -233,7 +237,7 @@ namespace
 			{
 				continue;
 			}
-			if (classSkill && (row->class_id() != classId || EffectiveRankOf(*row, 1, level) == 0))
+			if (classSkill && (!IsActiveFor(*row, classId, false) || EffectiveRankOf(*row, 1, level) == 0))
 			{
 				// 种子配成别的职业的技能 / 初始技能解锁等级配高了:是表错,不发(已有的 rank 0 条目也原样不动)
 				LOG_WARN << "[PlayerSkill] Class seed skill cannot be learned: class_id=" << classId
@@ -262,16 +266,26 @@ namespace
 
 bool PlayerSkillSystem::IsClassSkill(const SkillTable &row)
 {
-	return row.class_id() != 0;
+	// 保留既有 API 名称；这里判断的是需要等级和现代规则的技能，不再等于职业锁。
+	return row.class_id() != 0 || row.battle_model() == 1;
+}
+
+bool PlayerSkillSystem::IsFreeSkillFor(const SkillTable& row, uint32_t casterMask)
+{
+	return row.battle_model() == 1 && (row.caster_mask() & casterMask) != 0;
 }
 
 bool PlayerSkillSystem::IsPassiveSkill(const SkillTable &row)
 {
-	return !row.passive_stat().empty();
+	return row.battle_model() == 1 ? row.ability_kind() != 1 : !row.passive_stat().empty();
 }
 
 bool PlayerSkillSystem::IsTurnBattleCastable(const SkillTable &row)
 {
+	if (row.battle_model() != 0)
+	{
+		return row.battle_model() == 1 && row.ability_kind() == 1;
+	}
 	// 被动技能没有施放动作、开关技能是状态切换、持续施法依赖引擎已删除的相位概念;
 	// 三者若进了快照,引擎会把它们当普通技能按 damage 表达式打出伤害。
 	// 职业被动只能靠 passive_stat 认:被动位号是 0,导表器会把重复槽位里的 0 当空格丢掉,skill_type 里写不出来。
@@ -371,7 +385,7 @@ uint32_t PlayerSkillSystem::EffectiveRank(entt::entity player, const uint32_t sk
 	const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
 	const auto *row = FindSkillRow(skillTableId);
 	if (list == nullptr || row == nullptr || !IsClassSkill(*row) || !HasClassAndLevel(player, "EffectiveRank") ||
-		row->class_id() != PlayerClassId(player))
+		!IsActiveFor(*row, PlayerClassId(player), false))
 	{
 		return 0;
 	}
@@ -500,9 +514,12 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	response.set_currency_balance(balance);
 
 	std::vector<const SkillTable *> rows;
+	const auto& configured = SkillTableManager::Instance().FindAll().data();
+	const bool hasFreeCatalog = std::any_of(configured.begin(), configured.end(),
+		[](const auto& row) { return IsFreeSkillFor(row, 1); });
 	for (const auto &row : SkillTableManager::Instance().FindAll().data())
 	{
-		if (IsClassSkill(row) && row.class_id() == classId)
+		if (hasFreeCatalog ? IsFreeSkillFor(row, 1) : IsClassSkill(row) && row.class_id() == classId)
 		{
 			rows.push_back(&row);
 		}
@@ -513,52 +530,39 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	const uint32_t busyTip = CheckSkillWritable(player);
 	for (const auto *row : rows)
 	{
-		// rank 是存储重数,也是 UpgradeSkill 比较 expected_rank 的口径。它可能高于本版本 max_rank(新版本写入 /
-		// 上限下调):此时 next_rank_cost = 0、阻断原因为满重,与 UpgradeSkill 经 PlanUpgrade 停在满重一致
-		const auto rank = StoredRank(list, row->id());
-		const auto rankLimit = classskill::RankLimit(level, row->unlock_level(), row->max_rank());
-		const uint64_t nextCost = rank < row->max_rank() ? classskill::UpgradeCost(rank + 1, row->unlock_level()) : 0;
-
-		auto *view = response.add_catalog();
-		view->set_skill_table_id(row->id());
-		view->set_name(row->name());
-		view->set_description(row->description());
-		view->set_icon_key(row->icon_key());
-		view->set_class_id(row->class_id());
-		view->set_category(row->category());
-		view->set_passive(IsPassiveSkill(*row));
-		view->set_target_team(row->target_team());
-		view->set_max_targets(row->max_targets());
-		view->set_unlock_level(row->unlock_level());
-		view->set_max_rank(row->max_rank());
-		view->set_rank(rank);
-		view->set_rank_limit(rankLimit);
-		view->set_mana_percent(row->mana_percent());
-		view->set_cooldown_rounds(row->cooldown_rounds());
-		view->set_next_rank_cost(nextCost);
-		view->set_duration_rounds(DurationRoundsOf(*row));
-
-		// 不能修习的原因,优先级与 UpgradeSkill 的判定顺序一致
-		uint32_t blockTip = 0;
-		if (busyTip != 0)
-		{
-			blockTip = busyTip;
-		}
-		else if (rank >= row->max_rank())
-		{
-			blockTip = kSkillMaxRankReached;
-		}
-		else if (rank >= rankLimit)
-		{
-			blockTip = kSkillLevelNotEnough;
-		}
-		else if (nextCost > balance)
-		{
-			blockTip = kSkillGoldNotEnough;
-		}
-		view->set_upgrade_block_tip_id(blockTip);
+		FillCatalogEntry(*row, StoredRank(list, row->id()), level, balance, busyTip, false, *response.add_catalog());
 	}
 	return kSuccess;
+}
+
+void PlayerSkillSystem::FillCatalogEntry(const SkillTable& row, uint32_t rank, uint32_t level,
+	uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view)
+{
+	const auto rankLimit = classskill::RankLimit(level, row.unlock_level(), row.max_rank());
+	const auto nextCost = rank < row.max_rank() ? classskill::UpgradeCost(rank + 1, row.unlock_level()) : 0;
+	view.set_skill_table_id(row.id());
+	view.set_name(row.name());
+	view.set_description(row.description());
+	view.set_icon_key(row.icon_key());
+	view.set_class_id(row.class_id());
+	view.set_category(row.category());
+	view.set_passive(IsPassiveSkill(row));
+	view.set_target_team(row.target_team());
+	view.set_max_targets(pet && row.battle_model() == 1 ? row.pet_max_targets() : row.max_targets());
+	view.set_unlock_level(row.unlock_level());
+	view.set_max_rank(row.max_rank());
+	view.set_rank(rank);
+	view.set_rank_limit(rankLimit);
+	view.set_mana_percent(row.mana_percent());
+	view.set_cooldown_rounds(row.cooldown_rounds());
+	view.set_next_rank_cost(nextCost);
+	view.set_duration_rounds(DurationRoundsOf(row));
+	view.set_allow_dead_target(row.allow_dead_target() != 0);
+	view.set_ability_kind(row.ability_kind());
+	view.set_caster_mask(row.caster_mask());
+	view.set_action_tags(row.action_tags());
+	view.set_upgrade_block_tip_id(busyTip != 0 ? busyTip : rank >= row.max_rank() ? kSkillMaxRankReached :
+		rank >= rankLimit ? kSkillLevelNotEnough : nextCost > balance ? kSkillGoldNotEnough : 0);
 }
 
 void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequest &request,
@@ -604,7 +608,7 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 		return;
 	}
 	const auto classId = PlayerClassId(player);
-	if (!IsClassSkill(*row) || row->class_id() != classId)
+	if (!IsClassSkill(*row) || !IsActiveFor(*row, classId, false))
 	{
 		finish(kSkillNotInClass);
 		return;
@@ -716,7 +720,8 @@ PlayerSkillSystem::PassiveBonus PlayerSkillSystem::CollectPassiveBonus(entt::ent
 	for (const auto &skill : list->skill_list())
 	{
 		const auto *row = FindSkillRow(skill.skill_table_id());
-		if (row == nullptr || !IsClassSkill(*row) || !IsPassiveSkill(*row) || row->class_id() != classId)
+		if (row == nullptr || !IsClassSkill(*row) || row->passive_stat().empty() ||
+			!IsActiveFor(*row, classId, false))
 		{
 			continue;
 		}

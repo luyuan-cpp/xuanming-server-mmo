@@ -95,6 +95,8 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.enhanceSuccess = record->enhance_success();
 	result.enhanceLevel = record->enhance_level();
 	result.createdSchemeId = record->created_scheme_id();
+	result.equipmentItemId = record->equipment_item_id();
+	result.forgeRevision = record->forge_revision();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -119,6 +121,8 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_enhance_success(result.enhanceSuccess);
 	record->set_enhance_level(result.enhanceLevel);
 	record->set_created_scheme_id(result.createdSchemeId);
+	record->set_equipment_item_id(result.equipmentItemId);
+	record->set_forge_revision(result.forgeRevision);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }
@@ -132,8 +136,15 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 	const uint64_t nextSeq = EffectiveNextSeq(ledger);
 	std::unordered_set<uint64_t> keys;
 	std::unordered_set<uint64_t> seqs;
+	std::unordered_set<uint64_t> forgeRevisions;
 	for (const auto &record : ledger.records())
 	{
+		if (record.kind() == static_cast<uint32_t>(ClientRequestKind::kEquipmentCraft) &&
+			(record.equipment_item_id() == 0 || record.forge_revision() == 0 ||
+			 record.forge_revision() > ledger.forge_revision() || !forgeRevisions.insert(record.forge_revision()).second))
+		{
+			return "invalid equipment craft receipt";
+		}
 		if (record.key() == 0)
 		{
 			return "a record has key 0";
@@ -218,11 +229,4 @@ void Remember(entt::entity player, uint64_t key, ClientRequestKind kind, std::st
 				  << " player_id=" << tlsEcs.GetPlayerId(player) << " client_request_id=" << key;
 		return;
 	}
-	if (!client_request_ledger::Remember(*ledger, key, kind, std::move(fingerprint), result))
-	{
-		// 只有接入点没先 Check 就执行才会走到这里:说明那个接入点的顺序写错了。
-		LOG_ERROR << "[ClientRequest] Remember refused, key is already in the ledger: kind=" << ClientRequestKindName(kind)
-				  << " player_id=" << tlsEcs.GetPlayerId(player) << " client_request_id=" << key;
-	}
-}
-} // namespace client_request_dedup
+	if (!client_request_ledger::Remember(*ledger, key, kind, std::move(fingerp

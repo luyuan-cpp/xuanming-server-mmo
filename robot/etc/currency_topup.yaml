@@ -1,0 +1,18 @@
+# 显式已有开发角色的银两运维；先填targets，不自动建角。
+# 口令仅从 LOGIN_DEV_PASSWORD_SHARED_SECRET 环境变量取，不写配置。
+# receipt_path必须全新；任何失败都检查回执，不自动或手工盲重发。
+gateway_addr: "http://127.0.0.1:8081"
+zone_id: 1
+robot_count: 1
+account_fmt: "robot_%04d"
+password: ""
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 3
+report_interval: 5
+mode: "currency-topup"
+auth_type: "password"
+currency_topup:
+  amount: 100000
+  receipt_path: "../build/verification/currency-topup-receipt.jsonl"
+  targets: []

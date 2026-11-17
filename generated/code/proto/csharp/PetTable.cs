@@ -22,19 +22,20 @@ public static partial class PetTableReflection {
   static PetTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Cg9wZXRfdGFibGUucHJvdG8i9QEKCFBldFRhYmxlEgoKAmlkGAEgASgNEgwK",
+          "Cg9wZXRfdGFibGUucHJvdG8iqAIKCFBldFRhYmxlEgoKAmlkGAEgASgNEgwK",
           "BG5hbWUYAiABKAkSDAoEZGVzYxgDIAEoCRIQCghtb2RlbF9pZBgEIAEoDRIP",
           "CgdxdWFsaXR5GAUgASgNEhQKDHVubG9ja19sZXZlbBgGIAEoDRIRCglsZXZl",
           "bF9jYXAYByABKA0SEwoLaW5pdF9oZWFsdGgYCCABKAQSEQoJaW5pdF9tYW5h",
           "GAkgASgEEhIKCmluaXRfc3BlZWQYCiABKAQSFAoMYXB0aXR1ZGVfbWluGAsg",
-          "AygNEhQKDGFwdGl0dWRlX21heBgMIAMoDRINCgVza2lsbBgNIAMoDSInCgxQ",
-          "ZXRUYWJsZURhdGESFwoEZGF0YRgBIAMoCzIJLlBldFRhYmxlQjoKDmNvbS5n",
-          "YW1lLnRhYmxlQhJQZXRUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3Bi",
-          "L3RhYmxlYgZwcm90bzM="));
+          "AygNEhQKDGFwdGl0dWRlX21heBgMIAMoDRINCgVza2lsbBgNIAMoDRIXCg9z",
+          "aG9wX3ByaWNlX2dvbGQYDiABKAQSGAoQYWNxdWlzaXRpb25fdGllchgPIAEo",
+          "DSInCgxQZXRUYWJsZURhdGESFwoEZGF0YRgBIAMoCzIJLlBldFRhYmxlQjoK",
+          "DmNvbS5nYW1lLnRhYmxlQhJQZXRUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJh",
+          "dGVkL3BiL3RhYmxlYgZwcm90bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::PetTable), global::PetTable.Parser, new[]{ "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::PetTable), global::PetTable.Parser, new[]{ "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill", "ShopPriceGold", "AcquisitionTier" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::PetTableData), global::PetTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -90,6 +91,8 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     aptitudeMin_ = other.aptitudeMin_.Clone();
     aptitudeMax_ = other.aptitudeMax_.Clone();
     skill_ = other.skill_.Clone();
+    shopPriceGold_ = other.shopPriceGold_;
+    acquisitionTier_ = other.acquisitionTier_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -252,6 +255,30 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     get { return skill_; }
   }
 
+  /// <summary>Field number for the "shop_price_gold" field.</summary>
+  public const int ShopPriceGoldFieldNumber = 14;
+  private ulong shopPriceGold_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong ShopPriceGold {
+    get { return shopPriceGold_; }
+    set {
+      shopPriceGold_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "acquisition_tier" field.</summary>
+  public const int AcquisitionTierFieldNumber = 15;
+  private uint acquisitionTier_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint AcquisitionTier {
+    get { return acquisitionTier_; }
+    set {
+      acquisitionTier_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -280,6 +307,8 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     if(!aptitudeMin_.Equals(other.aptitudeMin_)) return false;
     if(!aptitudeMax_.Equals(other.aptitudeMax_)) return false;
     if(!skill_.Equals(other.skill_)) return false;
+    if (ShopPriceGold != other.ShopPriceGold) return false;
+    if (AcquisitionTier != other.AcquisitionTier) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -300,6 +329,8 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     hash ^= aptitudeMin_.GetHashCode();
     hash ^= aptitudeMax_.GetHashCode();
     hash ^= skill_.GetHashCode();
+    if (ShopPriceGold != 0UL) hash ^= ShopPriceGold.GetHashCode();
+    if (AcquisitionTier != 0) hash ^= AcquisitionTier.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -361,6 +392,14 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     aptitudeMin_.WriteTo(output, _repeated_aptitudeMin_codec);
     aptitudeMax_.WriteTo(output, _repeated_aptitudeMax_codec);
     skill_.WriteTo(output, _repeated_skill_codec);
+    if (ShopPriceGold != 0UL) {
+      output.WriteRawTag(112);
+      output.WriteUInt64(ShopPriceGold);
+    }
+    if (AcquisitionTier != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(AcquisitionTier);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -414,6 +453,14 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     aptitudeMin_.WriteTo(ref output, _repeated_aptitudeMin_codec);
     aptitudeMax_.WriteTo(ref output, _repeated_aptitudeMax_codec);
     skill_.WriteTo(ref output, _repeated_skill_codec);
+    if (ShopPriceGold != 0UL) {
+      output.WriteRawTag(112);
+      output.WriteUInt64(ShopPriceGold);
+    }
+    if (AcquisitionTier != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(AcquisitionTier);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -457,6 +504,12 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     size += aptitudeMin_.CalculateSize(_repeated_aptitudeMin_codec);
     size += aptitudeMax_.CalculateSize(_repeated_aptitudeMax_codec);
     size += skill_.CalculateSize(_repeated_skill_codec);
+    if (ShopPriceGold != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ShopPriceGold);
+    }
+    if (AcquisitionTier != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AcquisitionTier);
+    }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
     }
@@ -502,6 +555,12 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     aptitudeMin_.Add(other.aptitudeMin_);
     aptitudeMax_.Add(other.aptitudeMax_);
     skill_.Add(other.skill_);
+    if (other.ShopPriceGold != 0UL) {
+      ShopPriceGold = other.ShopPriceGold;
+    }
+    if (other.AcquisitionTier != 0) {
+      AcquisitionTier = other.AcquisitionTier;
+    }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
 
@@ -576,6 +635,14 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
           skill_.AddEntriesFrom(input, _repeated_skill_codec);
           break;
         }
+        case 112: {
+          ShopPriceGold = input.ReadUInt64();
+          break;
+        }
+        case 120: {
+          AcquisitionTier = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -648,6 +715,14 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
         case 106:
         case 104: {
           skill_.AddEntriesFrom(ref input, _repeated_skill_codec);
+          break;
+        }
+        case 112: {
+          ShopPriceGold = input.ReadUInt64();
+          break;
+        }
+        case 120: {
+          AcquisitionTier = input.ReadUInt32();
           break;
         }
       }

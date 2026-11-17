@@ -52,15 +52,16 @@ public final class MonsterTableOuterClass extends com.google.protobuf.GeneratedF
     java.lang.String[] descriptorData = {
       "\n\023monster_table.proto\"G\n\013Monsterdrop\022\021\n\t" +
       "drop_item\030\001 \001(\r\022\022\n\ndrop_count\030\002 \001(\r\022\021\n\td" +
-      "rop_rate\030\003 \001(\r\"\307\001\n\014MonsterTable\022\n\n\002id\030\001 " +
+      "rop_rate\030\003 \001(\r\"\373\001\n\014MonsterTable\022\n\n\002id\030\001 " +
       "\001(\r\022\016\n\006health\030\002 \001(\004\022\020\n\010strength\030\003 \001(\004\022\r\n" +
       "\005armor\030\004 \001(\004\022\022\n\nresistance\030\005 \001(\004\022\022\n\ncrit" +
       "chance\030\006 \001(\004\022\r\n\005speed\030\007 \001(\004\022\022\n\nexp_rewar" +
-      "d\030\010 \001(\004\022\023\n\013gold_reward\030\t \001(\004\022\032\n\004drop\030\n \003" +
-      "(\0132\014.Monsterdrop\"/\n\020MonsterTableData\022\033\n\004" +
-      "data\030\001 \003(\0132\r.MonsterTableB>\n\016com.game.ta" +
-      "bleB\026MonsterTableOuterClassP\001Z\022generated" +
-      "/pb/tableb\006proto3"
+      "d\030\010 \001(\004\022\023\n\013gold_reward\030\t \001(\004\022\034\n\024capture_" +
+      "pet_table_id\030\013 \001(\r\022\024\n\014capture_rate\030\014 \001(\r" +
+      "\022\032\n\004drop\030\n \003(\0132\014.Monsterdrop\"/\n\020MonsterT" +
+      "ableData\022\033\n\004data\030\001 \003(\0132\r.MonsterTableB>\n" +
+      "\016com.game.tableB\026MonsterTableOuterClassP" +
+      "\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -77,7 +78,7 @@ public final class MonsterTableOuterClass extends com.google.protobuf.GeneratedF
     internal_static_MonsterTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_MonsterTable_descriptor,
-        new java.lang.String[] { "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "Drop", });
+        new java.lang.String[] { "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "CapturePetTableId", "CaptureRate", "Drop", });
     internal_static_MonsterTableData_descriptor =
       getDescriptor().getMessageType(2);
     internal_static_MonsterTableData_fieldAccessorTable = new

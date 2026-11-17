@@ -15,6 +15,7 @@
 #include "table/code/dungeon_table.h"
 #include "table/code/monster_table.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
 
 #include "table/proto/skill_table.pb.h"
 #include "table/proto/buff_table.pb.h"
@@ -23,6 +24,7 @@
 #include "table/proto/dungeon_table.pb.h"
 #include "table/proto/monster_table.pb.h"
 #include "table/proto/item_table.pb.h"
+#include "table/proto/pet_table.pb.h"
 
 namespace turnbattle
 {
@@ -69,7 +71,7 @@ namespace turnbattle
 													 const SkillPermissionTableData& skillPermission,
 													 const DungeonTableData& dungeon,
 													 const MonsterTableData& monster,
-													 const ItemTableData& item)
+													 const ItemTableData& item, const PetTableData& pet)
 	{
 		// 表序固定:改这里的顺序 = 改指纹契约,scene/battle 两端必须同版本发布
 		std::string buffer;
@@ -81,6 +83,7 @@ namespace turnbattle
 		AppendTableSection(buffer, "monster", monster);
 		// Item 追加在末尾:新表只能往后加,插在中间会让既有两端的指纹同时变化而难以排查
 		AppendTableSection(buffer, "item", item);
+		AppendTableSection(buffer, "pet", pet);
 
 		return Sha256::HashToHex(buffer).substr(0, kHexLength);
 	}
@@ -93,7 +96,8 @@ namespace turnbattle
 						   SkillPermissionTableManager::Instance().FindAll(),
 						   DungeonTableManager::Instance().FindAll(),
 						   MonsterTableManager::Instance().FindAll(),
-						   ItemTableManager::Instance().FindAll());
+						   ItemTableManager::Instance().FindAll(),
+                           PetTableManager::Instance().FindAll());
 	}
 
 	const std::string& BattleTableFingerprint::Current()

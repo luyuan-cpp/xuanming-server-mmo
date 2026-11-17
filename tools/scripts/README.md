@@ -2,6 +2,10 @@
 
 PowerShell and shell scripts for common development tasks.
 
+### 69项自由技能源表（2026-11-17）
+
+`skill_catalog.py plan --output <计划.json>` 生成完整69项和72条Buff的增量计划；`skill_catalog_xlsx.mjs <计划.json>` 使用现有 `@oai/artifact-tool` 依赖写入Skill/Buff/Pet目标格，通过 `skill_catalog_merge.py` 保留原OOXML包的非目标内容。`python tools/scripts/skill_catalog.py check` 校验正式目录、schema绑定、效果引用和宝宝资格。重复执行不重写相同内容；源文件改变或已有值不符会拒绝覆盖。完整命令、ID与首测参数见[首测参数文档](../../docs/design/skill-planning/first-test-parameters.md)，正式产物仍走项目统一导表入口。
+
 ### R双区Mall/Gateway四副本（2026-11-02，待实际验收）
 
 本节属于本仓R的Go/C++业务栈。四个全局Java角色为`mall`、`mall-replica`、`gateway`、`gateway-replica`，分别使用R的`java/mall_game`和`java/gateway_node`。两个Mall副本共用同一个商城逻辑库，两个Gateway副本共用同一个网关逻辑库；每个进程独立NORMAL主体、boot身份、grant和消费目录。Gateway按zone固定本轮两区Go login的gRPC地址，不借独立Java仓的Dubbo网关。
@@ -51,7 +55,7 @@ pwsh -NoProfile -File tools/scripts/start_game.ps1 -JavaOnly -JavaInstancePlanPa
 
 HTTP 默认映射宿主 8081 与 18081。已有其他本机服务器占用时，分别通过 `--gateway-client-port`、`--gateway-port` 选择空闲端口，保留原有服务。两项参数连同 Gate、Battle 端口一起校验互异，调试客户端使用实际选定的 HTTP 地址。
 
-预先用当前源码构建镜像后，运行 `docker compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up -d`。镜像构建沿用 `deploy/k8s/Dockerfile.cpp`、`Dockerfile.go-svc`（上下文 `go/`、命名上下文 `tables=generated/tables`）及 `Dockerfile.java-svc`；C++ 调试层见 `deploy/debug/Dockerfile`。Compose 禁止自动拉取，初始化任务成功后才启动 16 个常驻容器。
+预先用当前源码构建镜像后，运行 `docker compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up -d`。镜像构建沿用 `deploy/k8s/Dockerfile.cpp`、`Dockerfile.go-svc`（上下文 `go/`、命名上下文 `tables=generated/tables`）及 `Dockerfile.java-svc`；C++ 调试层见 `deploy/debug/Dockerfile`。Compose 禁止自动拉取，初始化任务成功后才启动 17 个常驻容器。
 
 写者注册步骤用单独的镜像（pwsh、mysql 客户端、`writer_authority`），首次要构建。基础镜像只构建一次，`writer_authority` 变了只跑第二行：
 
@@ -69,11 +73,20 @@ docker --context desktop-linux build -f deploy/k8s/Dockerfile.go-svc --build-arg
 python tools/scripts/rebuild_docker_debug.py go --services player-inbox
 ```
 
+已有调试栈首次接入 PVP 排行榜时，在维护窗口执行以下步骤。先补齐 rank 配置和本批密钥，再建表、注册写者并更新 match 的运行配置。match 会从原有投分游标继续发送积压批次。
+
+```powershell
+python tools/scripts/prepare_docker_debug.py --refresh-existing
+docker --context desktop-linux build -f deploy/k8s/Dockerfile.go-svc --build-arg SERVICE=rank --build-arg ENTRY=rank.go --build-context tables=generated/tables -t local/mmorpg-rank:debug go
+docker --context desktop-linux compose --env-file build/docker-debug-current/.env -f deploy/debug/compose.game.yml -f deploy/debug/compose.debug.yml up --no-deps --exit-code-from rank-migrate rank-migrate
+python tools/scripts/rebuild_docker_debug.py go --services rank,match
+```
+
 写者授权与 K8s 的 registrar init 同形状，门禁与生产相同，没有 dev 旁路：
 
 - `sql-boot` 每次 `up` 先跑：补库，生成注册和维护账号的口令、物理 authority 原件、锁资格声明（命名卷 `sql-boot-private`，口令随机，不进被跟踪文件），判定全局库要不要跑 `data_service -migrate`（它只接受空库）。全局库是半成品时直接报错，不替人删数据，用 `down -v` 重来；已有数据卷的权威表不全同样如此。
-- `db-migrate`、`data-migrate`、`match-migrate`、`player-inbox-migrate` 用 root 建表。`data-migrate` 建目录 `testdb` 和流水库 `testdb_ledger`。
-- `db`、`data-service`、`login`、`match`、`player-inbox`、`gateway` 前各有一个一次性的 `<服务>-sql-boot`（`service_completed_successfully`）：用 `lib/sql_boot_catalog_local.ps1` 的授权清单和 `deploy/sql` 的角色模板建这一 boot 的账号 `lw_<boot>_<服务>`，调 `writer_authority -command register`，把单次授权、运行配置和 SQL 变量写进命名卷 `<服务>-sql-writer`。常驻容器只读挂载它，由 `sql-writer-entry.sh` 取出摘要和变量再启动业务进程；消费标记写在 `<服务>-sql-consume`。
+- `db-migrate`、`data-migrate`、`match-migrate`、`rank-migrate`、`player-inbox-migrate` 用 root 建表。`data-migrate` 建目录 `testdb` 和流水库 `testdb_ledger`。
+- `db`、`data-service`、`login`、`match`、`rank`、`player-inbox`、`gateway` 前各有一个一次性的 `<服务>-sql-boot`（`service_completed_successfully`）：用 `lib/sql_boot_catalog_local.ps1` 的授权清单和 `deploy/sql` 的角色模板建这一 boot 的账号 `lw_<boot>_<服务>`，调 `writer_authority -command register`，把单次授权、运行配置和 SQL 变量写进命名卷 `<服务>-sql-writer`。常驻容器只读挂载它，由 `sql-writer-entry.sh` 取出摘要和变量再启动业务进程；消费标记写在 `<服务>-sql-consume`。
 - 上一轮的账号没有连接就删，还有连接（服务还在跑）就留到下一轮。`writer_registry` 里的旧行不删，只是停用账号的历史记录。
 - login 进程不连 SQL、不消费授权，这一步只为和 `go_services.ps1`、K8s 的写者清单同形状。chat、friend、guild、mail、rank、trade 不在这个栈里，其中 guild、trade、mail、friend 是角色护栏的参与者，协调者连不上它们，这个栈里过户和删角一律拒绝；要加时照 `match-sql-boot` 写一段，并在 `prepare_docker_debug.py` 的 `GO_CONFIGS` 加配置。
 - `player-inbox` 收全球匹配成局的个人结算：match 用 `MMORPG_PLAYER_INBOX_SECRET_MATCH` 签名入箱，scene 用 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE` 签名拉取。这个栈的 `game_config.yaml` 由 `prepare_docker_debug.py` 打开 `player_inbox.consumer_enabled`（显式写，不跟着源配置变），否则结算只进箱、到不了玩家。调试端口 `127.0.0.1:2352`。
@@ -98,9 +111,11 @@ python -X utf8 -B tools/scripts/start_docker_debug.py
 python -X utf8 -B tools/scripts/start_docker_debug.py --execute
 ```
 
-入口仅操作 `desktop-linux` 上的 `xuanming-debug-current` 原容器，要求基础初始化和写者注册任务已成功完成。16 个常驻服务及五个写者注册容器须与当前 `.env` 指定的镜像、挂载、端口及显式环境变量一致；不会重跑的历史初始化、迁移和 login 注册容器只核对成功状态与实际身份、配置及挂载基线，不要求追溯更新成最新业务镜像。正常运行的服务只检查，不重复启动或注册；停止的 `db`、`data-service`、`match`、`player-inbox`、`gateway` 先重新执行各自原注册容器，取得新授权，再启动服务。login 不消费 SQL 授权，不重跑它的注册任务。所有服务已经正常运行时，重复执行只做检查。
+入口仅操作 `desktop-linux` 上的 `xuanming-debug-current` 原容器，要求基础初始化和写者注册任务已成功完成。17 个常驻服务及六个写者注册容器须与当前 `.env` 指定的镜像、挂载、端口及显式环境变量一致；不会重跑的历史初始化、迁移和 login 注册容器只核对成功状态与实际身份、配置及挂载基线，不要求追溯更新成最新业务镜像。正常运行的服务只检查，不重复启动或注册；停止的 `db`、`data-service`、`match`、`rank`、`player-inbox`、`gateway` 先重新执行各自原注册容器，取得新授权，再启动服务。login 不消费 SQL 授权，不重跑它的注册任务。所有服务已经正常运行时，重复执行只做检查。
 
 现有容器使用手绘节庆地图时，日常启动会从容器的 Compose 标签识别部署批次的 `compose.authored.json`。预检逐项核对六个服务的开发表只读挂载和三个 C++ 节点的导航只读挂载，并将这些文件与覆盖配置的摘要纳入启动基线。该部署批次的配置和表目录需要保留。
+
+更新普通玩法表后，已有手绘地图覆盖目录不会自动读取镜像里的新表。先用 `tools/navmesh_baker/refresh_authored_runtime_tables.py` 生成新的开发批次：`--previous-manifest <旧批/runtime-data-manifest.json> --output build/verification/authored-festival-<新批次> --allow-table Pet --allow-table Monster --allow-table Dungeon --allow-table PlayMode --allow-table MessageLimiter`。脚本验证旧批来源和导航，复制当前正式源表与旧批的 `BaseScene.xlsx`、`World.xlsx`，调用正式沙盒导表器；两张地图的 JSON/PB 必须逐字节保持，其他表必须匹配当前正式导出，旧批变化必须局限于显式列出的表。成功后产出新的 `runtime-data-manifest.json`、`compose.authored.json` 和 `refresh-verification.json`，通过现有运行数据校验；旧批和正式源表不改，也不启动容器。部署时使用新覆盖文件并验证运行挂载；不能只更新镜像后继续挂旧表目录。
 
 每次调用独立保存 `build/verification/docker-start-<UTC>/`，包含启动计划、旧退出状态和结果。Compose 显式卷核对原卷名与读写属性；镜像声明的默认匿名卷核对原身份、目标、匿名标签、驱动及存在状态，所有实际挂载卷均纳入前后不变的基线，不要求匿名卷带 Compose 项目标签。脚本不构建、不拉取镜像、不重建容器、不清卷、不重放初始化或迁移；任一步失败立即停止并显示脱敏原因，保留已启动的服务及失败证据，不自动重试。成功输出 `Server startup completed.`，表示运行就绪检查完成；源码一致性仍由 VS Code 附加前检查执行，不能据此断言旧崩溃原因已修复。
 
@@ -634,15 +649,17 @@ python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py
 python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py --resume-builds-from build/verification/docker-rebuild-all-20261112T040700.029055Z
 ```
 
-入口为新批次重新预检、采集当前运行状态，并核对旧批次已成功的连续 C++ / Go 阶段。候选的完整来源、运行资源、SDK、基础镜像、Debug 构建参数和本机镜像 ID 都须与证据相符；任一核对失败即停止。新回执用 `reused_from` 标出每个复用阶段的来源。可先用同一参数加 `--check` 只读验证资格。Java 阶段按本次配置重新创建或核验 fixture，从头运行构建及测试。省略复用参数时，入口按通常流程重新构建所选语言。
+入口为新批次重新预检、采集当前运行状态，并核对旧批次已成功的连续 C++ / Go 阶段。候选的完整来源、运行资源、SDK、基础镜像、Debug 构建参数和本机镜像 ID 都须与证据相符；任一核对失败即停止。旧批次自身复用过的阶段也可继承，但其 `result.json`、`preflight.json` 和阶段路径必须共同指向同目录下更早的原始构建批次，该原始批次仍须未开始更新配置或容器。新回执用 `reused_from` 直接标出每个镜像的原始构建来源，保留本轮新完成的阶段，拒绝中间转引或循环。可先用同一参数加 `--check` 只读验证资格。Java 阶段按本次配置重新创建或核验 fixture，从头运行构建及测试。省略复用参数时，入口按通常流程重新构建所选语言。
 
-默认按 C++ → Go → Java 串行调用底层构建器：C++ 三节点 `gate`、`scene`、`battle`；Go 八服务 `login`、`db`、`data-service`、`scene-manager`、`player-locator`、`client-rpc-router`、`match`、`player-inbox`，以及 `sql-boot` 注册工具和 `db-migrate` 存档库迁移工具；Java `gateway`。`DB_MIGRATE_IMAGE` 随构建结果发布到原批次的配置，供下次显式迁移使用。全部构建成功且来源一致后，才执行 `prepare --refresh-existing`，保留 canonical `build/docker-debug-current/.env` 指向的原批次目录、端口、密码和卷前缀，再调用一次 `update_images`。全量更新只重建 12 个运行服务及 6 个写者注册步骤（`<服务>-sql-boot`），不重跑 init、migrate 或基础设施；最后核对健康、源码来源和镜像。写者账号每次重建都换。
+默认按 C++ → Go → Java 串行调用底层构建器：C++ 三节点 `gate`、`scene`、`battle`；Go 九服务 `login`、`db`、`data-service`、`scene-manager`、`player-locator`、`client-rpc-router`、`match`、`rank`、`player-inbox`，以及 `sql-boot` 注册工具和 `db-migrate` 存档库迁移工具；Java `gateway`。`DB_MIGRATE_IMAGE` 随构建结果发布到原批次的配置，供下次显式迁移使用。全部构建成功且来源一致后，才执行 `prepare --refresh-existing`，保留 canonical `build/docker-debug-current/.env` 指向的原批次目录、端口、密码和卷前缀，再调用一次 `update_images`。全量更新只重建 13 个运行服务及 7 个写者注册步骤（`<服务>-sql-boot`），不重跑 init、migrate 或基础设施；最后核对健康、源码来源和镜像。写者账号每次重建都换。
 
 已有调试栈在 Docker Desktop 重启后可直接执行同一条命令。完成所选语言、SDK、fixture 和运行栈预检后，入口持项目启动锁，按 MySQL → Redis → etcd → Kafka 的顺序恢复已退出的原容器。启动前核对容器完整 ID、配置、镜像、挂载卷、端口及项目运行状态；每项只发一次 `docker start`，最多等待 360 秒达到健康，再继续下一项。已健康的服务直接通过。已有服务运行但不健康、检测到身份或配置变化、启动失败或超时均停止编译，已成功恢复的基础服务及本轮启动回执保留在现场。恢复阶段仅涉及这四个基础服务。
 
 加 `--check` 可只读预检，终端和 `preflight.json` 中的 `infraReady` 和 `pendingResume` 分别显示实际就绪状态和执行模式将恢复的服务。`--check` 仅写本次审计文件。加 `--languages cpp,go` 等可选择语言子集，执行顺序仍为 C++ → Go → Java。配置变动、身份迁移或缺少生成器版本记录时，子集更新会受到保守检查，应按报错要求执行全量更新。
 
 Java 默认自动创建本次调用独占的三容器 TiDB 8.5.8 测试 fixture，经正式 producer 生成新的 `NORMAL` writer grant，再执行原有完整测试。无需手动配置十项 fixture 变量。统一入口会先检查本地工具、辅助程序、固定镜像及端口等前提；缺失时在 C++/Go 编译前停止。`--check` 只做只读检查，不创建 fixture。实际环境仅在轮到 Java 构建时创建，Java 构建和来源验证全部成功后才退休 writer 并清理本次 fixture，清理成功后才刷新配置和更新服务。创建、构建、验证或清理失败均停止并保留证据与尚存的 fixture，不自动重试，不跳过测试或复用旧 JAR。
+
+Java 网关的限流集成测试另需在调用进程设置 `GATEWAY_RATE_LIMIT_REDIS_URL`（单 Redis）和 `GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES`（逗号分隔的 Redis Cluster 种子），指向已准备的本机测试环境。两类 Redis 测试使用随机 `rl:it:` 键并逐键清理，不由 TiDB fixture 代替。缺少任一变量时，Java 构建器在封存及 Maven 编译前拒绝；统一入口的 TiDB `--check` 通过不代表 Redis 测试环境已经接好。不要通过扩大跳过白名单发布未执行这些测试的镜像。
 
 如需自定义外部 fixture，八项核心变量中任一已设置就选择外部模式，必须完整提供 `MMORPG_AUTHORITY_IT_JDBC_URL`、`MMORPG_SQL_USERNAME`、`MMORPG_SQL_PASSWORD`、`MMORPG_SQL_WRITER_GRANT_FILE`、`MMORPG_SQL_WRITER_GRANT_SHA256`、`MMORPG_SQL_DEPLOYMENT_ID`、`MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256`、`MMORPG_SQL_WRITER_CONSUME_DIR`，以及 `MMORPG_SQL_PRIVATE_FILE_HELPER` 和 `MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256`。JDBC URL 仅接受 `jdbc:mysql://127.0.0.1:<port>/<schema>` 或 `jdbc:mysql://localhost:<port>/<schema>`，必须显式指定端口和单个 schema，不接受 URL 参数、用户信息或多主机形式。仅配置 private-file helper 两项仍可使用自动模式。外部 fixture 不由统一入口退休或删除；两种模式传给 Java 的子环境均移除 `COMMERCE_IT_*` 和 SQL schema/registrar/maintenance 管理 DSN。公开 receipt 只记录 fixture 模式和阶段，不记录凭据或私有 context。离线单元测试用于验证编排契约，不代表已完成真实编译或部署。
 
@@ -658,3 +675,15 @@ VS Code 的“终端 → 运行任务”提供对应的“Docker：重编并更�
 - Use `-Verbose` flag for detailed output
 - Scripts are designed to be cross-platform compatible where possible
 - For large repositories, prefer iterative rename batches with `-MaxChanges` to keep refactors reviewable and reduce breakage risk
+
+
+## AI 任务验证与交付清单
+
+统一入口复用 `ai_pipeline/checks.json` 中登记的现有检查脚本，不改变发布权限。
+
+```powershell
+pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command ai-plan -TaskPath tools/scripts/ai_pipeline/tasks/client-compile-isolation.json
+pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command ai-verify -TaskPath tools/scripts/ai_pipeline/tasks/client-compile-isolation.json
+```
+
+任务模板见 [ai_pipeline/task.template.json](ai_pipeline/task.template.json)，后端基础检查见 [ai_pipeline/tasks/backend-smoke.json](ai_pipeline/tasks/backend-smoke.json)，完整说明见 [AI 开发流程管线](../../docs/design/ai-development-pipeline.md)。默认每次在忽略目录 `build/ai-pipeline/` 新建证据目录；输出任务快照、命令与状态、日志、源码/产物摘要、`report.json`、`delivery.md` 和 `checksums.json`。必需检查失败、跳过、未执行或输入在运行期间改变均不能交付；`-CheckIds` 仅作诊断筛选，不能把剩余必需项变成通过。

@@ -235,6 +235,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhanceTable final : public ::
     kCostGoldFieldNumber = 5,
     kMaterialIdFieldNumber = 6,
     kMaterialCountFieldNumber = 7,
+    kProfileIdFieldNumber = 8,
+    kLevelFieldNumber = 9,
   };
   // uint32 id = 1;
   void clear_id() ;
@@ -306,11 +308,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhanceTable final : public ::
   void _internal_set_material_count(::uint32_t value);
 
   public:
+  // uint32 profile_id = 8;
+  void clear_profile_id() ;
+  [[nodiscard]] ::uint32_t profile_id() const;
+  void set_profile_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_profile_id() const;
+  void _internal_set_profile_id(::uint32_t value);
+
+  public:
+  // uint32 level = 9;
+  void clear_level() ;
+  [[nodiscard]] ::uint32_t level() const;
+  void set_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level() const;
+  void _internal_set_level(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipEnhanceTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -346,6 +368,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipEnhanceTable final : public ::
     ::uint64_t cost_gold_;
     ::uint32_t material_id_;
     ::uint32_t material_count_;
+    ::uint32_t profile_id_;
+    ::uint32_t level_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -746,6 +770,54 @@ inline ::uint32_t EquipEnhanceTable::_internal_material_count() const {
 inline void EquipEnhanceTable::_internal_set_material_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.material_count_ = value;
+}
+
+// uint32 profile_id = 8;
+inline void EquipEnhanceTable::clear_profile_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.profile_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t EquipEnhanceTable::profile_id() const {
+  // @@protoc_insertion_point(field_get:EquipEnhanceTable.profile_id)
+  return _internal_profile_id();
+}
+inline void EquipEnhanceTable::set_profile_id(::uint32_t value) {
+  _internal_set_profile_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:EquipEnhanceTable.profile_id)
+}
+inline ::uint32_t EquipEnhanceTable::_internal_profile_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.profile_id_;
+}
+inline void EquipEnhanceTable::_internal_set_profile_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.profile_id_ = value;
+}
+
+// uint32 level = 9;
+inline void EquipEnhanceTable::clear_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t EquipEnhanceTable::level() const {
+  // @@protoc_insertion_point(field_get:EquipEnhanceTable.level)
+  return _internal_level();
+}
+inline void EquipEnhanceTable::set_level(::uint32_t value) {
+  _internal_set_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:EquipEnhanceTable.level)
+}
+inline ::uint32_t EquipEnhanceTable::_internal_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.level_;
+}
+inline void EquipEnhanceTable::_internal_set_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -41,6 +41,13 @@
    "id": 6,
    "match_mode": 7,
    "team_size_max": 5
+  },
+  {
+   "battle_config_id": 4,
+   "enabled": true,
+   "id": 7,
+   "match_mode": 4,
+   "team_size_max": 1
   }
  ]
 }

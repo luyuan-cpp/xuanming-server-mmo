@@ -36,23 +36,28 @@ public class SkillTableManager {
 
         final Map<Integer, List<SkillTable>> idxEffect;
 
+        final Map<Integer, List<SkillTable>> idxInitEffect;
+
 
 
         Snapshot(SkillTableData data,
                  Map<Integer, SkillTable> kvData,
                  Map<Integer, List<SkillTable>> idxSkillType,
                  Map<Integer, List<SkillTable>> idxTargetingMode,
-                 Map<Integer, List<SkillTable>> idxEffect) {
+                 Map<Integer, List<SkillTable>> idxEffect,
+                 Map<Integer, List<SkillTable>> idxInitEffect) {
             this.data = data;
             this.kvData = kvData;
             this.idxSkillType = idxSkillType;
             this.idxTargetingMode = idxTargetingMode;
             this.idxEffect = idxEffect;
+            this.idxInitEffect = idxInitEffect;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             SkillTableData.getDefaultInstance(),
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
@@ -78,6 +83,7 @@ public class SkillTableManager {
         Map<Integer, List<SkillTable>> idxSkillType = new HashMap<>();
         Map<Integer, List<SkillTable>> idxTargetingMode = new HashMap<>();
         Map<Integer, List<SkillTable>> idxEffect = new HashMap<>();
+        Map<Integer, List<SkillTable>> idxInitEffect = new HashMap<>();
 
         for (SkillTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
@@ -90,9 +96,12 @@ public class SkillTableManager {
             for (Integer elem : row.getEffectList()) {
                 idxEffect.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
+            for (Integer elem : row.getInitEffectList()) {
+                idxInitEffect.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+            }
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxSkillType, idxTargetingMode, idxEffect);
+        this.snapshot = new Snapshot(data, kvData, idxSkillType, idxTargetingMode, idxEffect, idxInitEffect);
     }
 
     public SkillTableData findAll() {
@@ -122,6 +131,10 @@ public class SkillTableManager {
 
     public List<SkillTable> findByEffectIndex(int key) {
         return snapshot.idxEffect.getOrDefault(key, Collections.emptyList());
+    }
+
+    public List<SkillTable> findByInitEffectIndex(int key) {
+        return snapshot.idxInitEffect.getOrDefault(key, Collections.emptyList());
     }
 
 
@@ -155,6 +168,10 @@ public class SkillTableManager {
 
     public int countByEffectIndex(int key) {
         return snapshot.idxEffect.getOrDefault(key, Collections.emptyList()).size();
+    }
+
+    public int countByInitEffectIndex(int key) {
+        return snapshot.idxInitEffect.getOrDefault(key, Collections.emptyList()).size();
     }
 
 

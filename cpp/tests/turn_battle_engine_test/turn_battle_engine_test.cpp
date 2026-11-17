@@ -4184,3 +4184,108 @@ TEST(BattleReplaySize, AutoBattlesStayWithinReplayLimits) {
         EXPECT_LT(report.payloadBytes, report.rawBytes) << c.name << ":帧之间高度重复,压缩后应更小";
     }
 }
+
+namespace {
+std::shared_ptr<MemoryBattleDataProvider> CaptureProvider(uint32_t tier = 0) {
+    auto data = MakeProvider();
+    data->AddDungeon(kDungeonConfig).set_allow_pet_capture(1);
+    data->SetDungeonMonsters(kDungeonConfig, {91, 91});
+    auto& monster = data->AddMonster(91);
+    monster.set_health(1000);
+    monster.set_speed(1);
+    monster.set_capture_pet_table_id(1);
+    monster.set_capture_rate(10000);
+    auto& pet = data->AddPet(1);
+    pet.set_unlock_level(1);
+    pet.set_acquisition_tier(tier);
+    return data;
+}
+}
+
+TEST(TurnBattleCapture, CaptureRemovesTargetWithoutKillAndConsumesOneSlot) {
+    auto data = CaptureProvider();
+    auto request = MakeRequest(turnbattle::kMatchModePveSolo, 1);
+    AddPlayer(request, kPlayerA, 0, 10000, 10000, 0, 100, 0, 1000)->set_pet_capture_slots(1);
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId)));
+    const auto result = engine.ResolveCurrentRound();
+    bool success = false;
+    for (const auto& event : result.events())
+        if (event.event_type() == BATTLE_EVENT_CAPTURE) success = event.success();
+    EXPECT_TRUE(success);
+    const auto state = engine.BuildStateSnapshot();
+    const auto* target = FindStateActor(state, kMonsterId);
+    ASSERT_NE(target, nullptr);
+    EXPECT_TRUE(target->fled());
+    EXPECT_FALSE(target->is_dead());
+    EXPECT_EQ(target->captured_by_player_id(), kPlayerA);
+    EXPECT_FALSE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId + 1)));
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    ASSERT_EQ(settlement.captured_pet_table_ids_size(), 1);
+    EXPECT_EQ(settlement.captured_pet_table_ids(0), 1u);
+    EXPECT_EQ(settlement.defeated_monsters_size(), 0);
+    EXPECT_EQ(settlement.SerializeAsString(), engine.BuildSettlement(kPlayerA).SerializeAsString());
+}
+
+TEST(TurnBattleCapture, MutationDivineAndClosedDungeonRejectCapture) {
+    for (uint32_t tier : {1u, 2u, 99u}) {
+        auto data = CaptureProvider(tier);
+        auto request = MakeRequest(turnbattle::kMatchModePveSolo, 1);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 1000)->set_pet_capture_slots(1);
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(request));
+        EXPECT_FALSE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId)));
+    }
+    auto data = CaptureProvider();
+    data->AddDungeon(kDungeonConfig).set_allow_pet_capture(0);
+    auto request = MakeRequest(turnbattle::kMatchModePveSolo, 1);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 1000)->set_pet_capture_slots(1);
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(request));
+    EXPECT_FALSE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId)));
+}
+
+TEST(TurnBattleCapture, NoSlotsAndInsufficientLevelReject) {
+    for (const bool full : {false, true}) {
+        auto data = CaptureProvider();
+        if (!full) data->AddPet(1).set_unlock_level(11);
+        auto request = MakeRequest(turnbattle::kMatchModePveSolo, 1);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 1000)->set_pet_capture_slots(full ? 0 : 1);
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(request));
+        EXPECT_FALSE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId)));
+    }
+}
+
+TEST(TurnBattleCapture, ActivityFallbackMonsterAndPvpRejectCapture) {
+    for (const bool activity : {false, true}) {
+        auto data = CaptureProvider();
+        auto request = MakeRequest(turnbattle::kMatchModePveSolo, 1);
+        if (activity) request.mutable_activity_context()->set_kind(BATTLE_ACTIVITY_KIND_GUILD_TRIAL);
+        else data->AddMonster(91).set_health(0); // 走兜底属性的坏行不能变成宠物来源。
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 1000)->set_pet_capture_slots(1);
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(request));
+        EXPECT_FALSE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId)));
+    }
+    auto request = MakeRequest(3, 1);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 1000)->set_pet_capture_slots(1);
+    AddPlayer(request, kPlayerB, 1, 1000, 1000, 0, 100, 0, 500);
+    TurnBattleEngine engine(CaptureProvider());
+    ASSERT_TRUE(engine.Initialize(request));
+    EXPECT_NE(kSuccess, engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kPlayerB)));
+}
+
+TEST(TurnBattleCapture, SameTargetOnlyBelongsToFirstSuccessfulPlayer) {
+    auto request = MakeRequest(turnbattle::kMatchModePveSolo, 1);
+    AddPlayer(request, kPlayerA, 0, 10000, 10000, 0, 100, 0, 1000)->set_pet_capture_slots(2);
+    AddPlayer(request, kPlayerB, 0, 10000, 10000, 0, 100, 0, 500)->set_pet_capture_slots(2);
+    TurnBattleEngine engine(CaptureProvider());
+    ASSERT_TRUE(engine.Initialize(request));
+    EXPECT_FALSE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId))); // 尚待另一位玩家。
+    ASSERT_TRUE(engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_CAPTURE, kMonsterId)));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(1, engine.BuildSettlement(kPlayerA).captured_pet_table_ids_size());
+    EXPECT_EQ(0, engine.BuildSettlement(kPlayerB).captured_pet_table_ids_size());
+}

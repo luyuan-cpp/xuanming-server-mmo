@@ -22,6 +22,8 @@ message PetTable {
 	repeated uint32 aptitude_min = 11;
 	repeated uint32 aptitude_max = 12;
 	repeated uint32 skill = 13;
+	uint64 shop_price_gold = 14;
+	uint32 acquisition_tier = 15;
 }
 
 message PetTableData {

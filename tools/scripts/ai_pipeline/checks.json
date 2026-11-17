@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "checks": {
+    "pipeline-selftest": {
+      "repository": "server_cpp",
+      "cwd": ".",
+      "argv": ["{python}", "-X", "utf8", "-B", "-m", "unittest", "discover", "-s", "tools/scripts/tests", "-p", "test_ai_pipeline.py", "-v"],
+      "timeout_seconds": 120,
+      "verifier": {"type": "unittest"},
+      "inputs": ["tools/scripts/ai_pipeline", "tools/scripts/tests/test_ai_pipeline.py"]
+    },
+    "cpp-script-contract": {
+      "repository": "server_cpp",
+      "cwd": ".",
+      "argv": ["{python}", "-X", "utf8", "-B", "-m", "unittest", "discover", "-s", "tools/scripts/tests", "-p", "test_cpp*.py", "-v"],
+      "timeout_seconds": 180,
+      "verifier": {"type": "unittest"},
+      "inputs": ["tools/scripts/tests", "tools/archived/vcxproj2cmake.py", "tools/scripts/build_linux.sh", "cpp"]
+    },
+    "log-guard-unit": {
+      "repository": "server_cpp",
+      "cwd": ".",
+      "argv": ["{python}", "-X", "utf8", "-B", "-m", "unittest", "discover", "-s", "tools/scripts/tests", "-p", "test_log_text_english.py", "-v"],
+      "timeout_seconds": 120,
+      "verifier": {"type": "unittest"},
+      "inputs": ["tools/scripts/check_log_text_english.py", "tools/scripts/tests/test_log_text_english.py"]
+    },
+    "release-contract": {
+      "repository": "server_cpp",
+      "cwd": ".",
+      "argv": ["pwsh", "-NoProfile", "-File", "tools/scripts/tests/release_common_version.tests.ps1"],
+      "timeout_seconds": 240,
+      "verifier": {"type": "regex", "pattern": "total=[1-9][0-9]* pass=[1-9][0-9]* fail=0", "reject_pattern": "(?i)\\bFAILED:|\\bSKIPPED\\b"},
+      "inputs": ["tools/scripts/tests/release_common_version.tests.ps1", "tools/scripts/tests/lib", "tools/scripts/lib/release_common.ps1", "tools/scripts/release_preflight.ps1"]
+    },
+    "table-schema-index": {
+      "repository": "server_cpp",
+      "cwd": "tools/data_table_exporter",
+      "argv": ["{python}", "-X", "utf8", "-B", "tools/gen_schema_index.py", "--check"],
+      "timeout_seconds": 120,
+      "verifier": {"type": "exit_code"},
+      "inputs": ["tools/data_table_exporter", "data/schema", "data/AGENTS.md"]
+    },
+    "go-gameday": {
+      "repository": "server_cpp",
+      "cwd": "go/shared",
+      "argv": ["{tool.go}", "test", "-mod=readonly", "-count=1", "-json", "./gameday"],
+      "timeout_seconds": 180,
+      "verifier": {"type": "go_json"},
+      "inputs": ["go/shared/gameday", "go/shared/go.mod", "go/shared/go.sum"]
+    },
+    "java-gameday": {
+      "repository": "server_java",
+      "cwd": ".",
+      "argv": ["pwsh", "-NoProfile", "-File", "{repo.server_cpp}/tools/scripts/ai_pipeline/adapters.ps1", "-CheckId", "java-gameday", "-Repository", "{repo.server_java}", "-RunDir", "{run_dir}", "-JdkRoot", "{tool.jdk21}"],
+      "timeout_seconds": 600,
+      "verifier": {"type": "junit", "paths": ["{run_dir}/java-tests/TEST-com.game.common.time.GameDayTest.xml"]},
+      "inputs": ["pom.xml", "mvnw.cmd", ".mvn/wrapper/maven-wrapper.properties", "game-proto/pom.xml", "game-proto/src", "game-common/pom.xml", "game-common/src", "game-player-store/src/main/proto/game/storage/route_authority.proto"]
+    },
+    "client-compile-isolation-tests": {
+      "repository": "client",
+      "cwd": ".",
+      "argv": ["pwsh", "-NoProfile", "-File", "tools/tests/test_client_compile_check.ps1", "-EvidencePath", "{run_dir}/client-isolation"],
+      "timeout_seconds": 180,
+      "verifier": {"type": "regex", "pattern": "RESULT total=(?P<count>[1-9][0-9]*) passed=(?P=count) failed=0", "reject_pattern": "(?i)\\bSKIPPED\\b"},
+      "inputs": ["tools/tests/test_client_compile_check.ps1", "tools/client_compile_check.ps1"]
+    },
+    "client-compile-check": {
+      "repository": "client",
+      "cwd": ".",
+      "argv": ["pwsh", "-NoProfile", "-File", "tools/client_compile_check.ps1", "-ProjectPath", "{repo.client}", "-UnityRoot", "{tool.unity_root}", "-ArtifactDir", "{run_dir}/client-compile"],
+      "timeout_seconds": 240,
+      "verifier": {"type": "regex", "pattern": "(?s)exit=0 files=[1-9][0-9]* errors=0 refs=.*compile-check artifacts=.* retained=true", "reject_pattern": "(?i)skipped missing references \\([1-9][0-9]*\\)"},
+      "inputs": ["tools/client_compile_check.ps1", "tools/compile_check", "Assets/Scripts", "MmorpgClient.csproj", "ProjectSettings/ProjectVersion.txt"]
+    },
+    "cpp-aoi": {
+      "repository": "server_cpp",
+      "cwd": ".",
+      "argv": ["pwsh", "-NoProfile", "-File", "tools/scripts/run_cpp_tests.ps1", "-Build", "-Filter", "aoi", "-LogDir", "{run_dir}/cpp-aoi"],
+      "timeout_seconds": 1200,
+      "verifier": {"type": "regex", "pattern": "All [1-9][0-9]* test programs completed normally", "reject_pattern": "(?im)\\b[1-9][0-9]* skipped\\b|\\[  SKIPPED \\]"},
+      "inputs": ["tools/scripts/run_cpp_tests.ps1", "cpp", "game.sln"]
+    }
+  }
+}

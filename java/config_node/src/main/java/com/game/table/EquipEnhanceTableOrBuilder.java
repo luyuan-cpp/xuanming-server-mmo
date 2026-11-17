@@ -51,4 +51,16 @@ public interface EquipEnhanceTableOrBuilder extends
    * @return The materialCount.
    */
   int getMaterialCount();
+
+  /**
+   * <code>uint32 profile_id = 8;</code>
+   * @return The profileId.
+   */
+  int getProfileId();
+
+  /**
+   * <code>uint32 level = 9;</code>
+   * @return The level.
+   */
+  int getLevel();
 }

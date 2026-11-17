@@ -11,6 +11,15 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_skill.h"
+#include "player/system/player_pet.h"
+#include "player/system/attribute_allocation_rules.h"
+#include "proto/common/component/player_pet_comp.pb.h"
+#include "proto/scene/player_pet.pb.h"
+#include "table/code/pet_table.h"
+#include "table/code/petrule_table.h"
+#include "table/code/attributepool_table.h"
+#include "table/code/attributedimension_table.h"
+#include "table/proto/tip/pet_error_tip.pb.h"
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
@@ -116,6 +125,120 @@ protected:
 
 }  // namespace
 
+TEST_F(PlayerSkillBookTest, FreeCatalogIsSharedAcrossClassesAndLearningUsesTheServerRank)
+{
+    const auto player = NewPlayer(1, 30, 100000);
+    const auto otherClass = NewPlayer(5, 30, 100000);
+    ListSkillsResponse first, second;
+    ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, first), kSuccess);
+    ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(otherClass, second), kSuccess);
+    ASSERT_EQ(first.catalog_size(), 50);
+    ASSERT_EQ(second.catalog_size(), first.catalog_size());
+    for (int i = 0; i < first.catalog_size(); ++i) {
+        EXPECT_EQ(first.catalog(i).skill_table_id(), second.catalog(i).skill_table_id());
+        EXPECT_EQ(first.catalog(i).class_id(), 0u);
+        EXPECT_EQ(first.catalog(i).rank(), 0u);
+    }
+    constexpr uint32_t sharedAttack = 10002; // A02，人物和宝宝均可学习。
+    ASSERT_NE(FindEntry(first, sharedAttack), nullptr);
+    const auto learned = Upgrade(otherClass, sharedAttack, 0, 1);
+    ASSERT_FALSE(learned.has_error_message());
+    const auto* view = FindEntry(learned.state(), sharedAttack);
+    ASSERT_NE(view, nullptr);
+    EXPECT_EQ(view->rank(), 1u);
+    EXPECT_EQ(view->ability_kind(), 1u);
+    EXPECT_EQ(view->caster_mask(), 3u);
+    EXPECT_EQ(view->next_rank_cost(), classskill::UpgradeCost(2, 1));
+    const auto balance = CurrencySystem::GetBalance(otherClass, kCurrencyGold);
+    EXPECT_EQ(Upgrade(otherClass, sharedAttack, 0, 1).error_message().id(), kSkillRankChanged);
+    EXPECT_EQ(CurrencySystem::GetBalance(otherClass, kCurrencyGold), balance);
+    EXPECT_TRUE(PlayerSkillSystem::HasSkill(otherClass, sharedAttack));
+}
+
+TEST_F(PlayerSkillBookTest, FreeStaticAndAutomaticSkillsReachSnapshotWithoutBecomingManualActions)
+{
+    const auto player = NewPlayer(4, 30, 0);
+    constexpr uint32_t hpPassive = 12004; // P04 的属性仅在 scene 计入。
+    Own(player, 10002, 2);
+    Own(player, hpPassive, 2);
+    BattlePlayerSnapshot snapshot;
+    PlayerSkillSystem::FillBattleSnapshot(player, snapshot);
+    ASSERT_EQ(snapshot.skill_table_ids_size(), 1);
+    EXPECT_EQ(snapshot.skill_table_ids(0), 10002u);
+    EXPECT_EQ(snapshot.skill_ranks().at(hpPassive), 2u);
+    ASSERT_NE(Row(hpPassive), nullptr);
+    EXPECT_DOUBLE_EQ(PlayerSkillSystem::CollectPassiveBonus(player).maxHealth,
+        Row(hpPassive)->passive_percent() * classskill::PassiveRankFactor(2));
+}
+
+TEST_F(PlayerSkillBookTest, PetSkillBookEnforcesOwnershipRankAndKeepsHealthRatio)
+{
+    PetTableManager::Instance().Load();
+    PetRuleTableManager::Instance().Load();
+    AttributePoolTableManager::Instance().Load();
+    AttributeDimensionTableManager::Instance().Load();
+    ASSERT_GT(PetTableManager::Instance().FindAll().data_size(), 0);
+    const auto player = NewPlayer(1, 30, 100000);
+    const auto stranger = NewPlayer(1, 30, 100000);
+    tlsEcs.actorRegistry.emplace<PlayerPetComp>(stranger);
+    auto& pets = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    pets.set_active_pet_id(88);
+    auto* pet = pets.add_pets();
+    pet->set_pet_id(88);
+    pet->set_pet_table_id(PetTableManager::Instance().FindAll().data(0).id());
+    pet->set_level(30);
+    pet->set_health(1);
+    pet->set_mana(1);
+    (*pet->mutable_skill_ranks())[999999] = 11; // 未知键仍是存档资产。
+    ListSkillsResponse book;
+    ASSERT_EQ(PetSystem::BuildSkillBook(player, 88, book), kSuccess);
+    EXPECT_EQ(book.pet_id(), 88u);
+    EXPECT_EQ(book.catalog_size(), 34);
+    EXPECT_EQ(FindEntry(book, 10003), nullptr); // A03 只可由人物学习。
+    EXPECT_EQ(PetSystem::BuildSkillBook(stranger, 88, book), kPetNotFound);
+
+    UpgradeSkillRequest request;
+    request.set_pet_id(88);
+    request.set_skill_table_id(12004);
+    request.set_count(1);
+    UpgradeSkillResponse response;
+    PetSystem::UpgradeSkill(stranger, request, response);
+    EXPECT_EQ(response.error_message().id(), kPetNotFound);
+    EXPECT_EQ(CurrencySystem::GetBalance(stranger, kCurrencyGold), 100000u);
+
+    BattlePetSnapshot before;
+    ASSERT_TRUE(PetSystem::BuildBattleSnapshot(player, before));
+    pet->set_health(before.max_health() / 2);
+    pet->set_mana(before.max_mana() / 2);
+    const auto oldHealth = pet->health(), oldMana = pet->mana();
+    PetSystem::UpgradeSkill(player, request, response);
+    ASSERT_FALSE(response.has_error_message());
+    EXPECT_EQ(pet->skill_ranks().at(12004), 1u);
+    EXPECT_EQ(pet->skill_ranks().at(999999), 11u);
+    BattlePetSnapshot after;
+    ASSERT_TRUE(PetSystem::BuildBattleSnapshot(player, after));
+    EXPECT_GT(after.max_health(), before.max_health());
+    EXPECT_EQ(pet->health(), attributerules::RescaleCurrent(oldHealth, before.max_health(), after.max_health()));
+    EXPECT_EQ(pet->mana(), attributerules::RescaleCurrent(oldMana, before.max_mana(), after.max_mana()));
+    EXPECT_EQ(after.skill_ranks().at(12004), 1u);
+    for (const auto id : after.skill_table_ids()) EXPECT_NE(id, 12004u);
+    const auto balance = CurrencySystem::GetBalance(player, kCurrencyGold);
+    PetSystem::UpgradeSkill(player, request, response);
+    EXPECT_EQ(response.error_message().id(), kSkillRankChanged);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), balance);
+    const auto petBeforeRejection = pet->SerializeAsString();
+    request.set_skill_table_id(10003);
+    PetSystem::UpgradeSkill(player, request, response);
+    EXPECT_EQ(response.error_message().id(), kSkillNotInClass);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), balance);
+    EXPECT_EQ(pet->SerializeAsString(), petBeforeRejection);
+    request.set_skill_table_id(987654);
+    PetSystem::UpgradeSkill(player, request, response);
+    EXPECT_EQ(response.error_message().id(), kInvalidTableId);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), balance);
+    EXPECT_EQ(pet->SerializeAsString(), petBeforeRejection);
+}
+
 // 旧实现遍历所有职业的种子,每个号都拿到 1 / 2 / 13;现在只按本职业 Class.skill 发首个主动 + 首个被动(1 重)
 TEST_F(PlayerSkillBookTest, RegisterPlayerSeedsOnlyCurrentClassInitialSkills) {
     const auto player = NewPlayer(2, 1, 0);
@@ -174,17 +297,13 @@ TEST_F(PlayerSkillBookTest, InitializeOnLoadDropsOnlyZeroAndDuplicateIdsAndCarri
         usable.push_back(skill.skill_table_id());
     }
     EXPECT_EQ(usable, (std::vector<uint32_t>{kPoZhenJingFeng, kHengGeLieYue, kTieGuZhuHun}));
-    ASSERT_EQ(book.catalog_size(), 8);
-    for (int index = 0; index < book.catalog_size(); ++index) {
-        EXPECT_EQ(book.catalog(index).skill_table_id(), static_cast<uint32_t>(1101 + index));
-        EXPECT_EQ(book.catalog(index).class_id(), 1u);
+    ASSERT_GT(book.catalog_size(), 0);
+    for (const auto& entry : book.catalog()) {
+        ASSERT_NE(Row(entry.skill_table_id()), nullptr);
+        EXPECT_TRUE(PlayerSkillSystem::IsFreeSkillFor(*Row(entry.skill_table_id()), 1));
     }
-    // 目录 rank 是存储重数(UpgradeSkill.expected_rank 的口径);高于上限时按满重阻断
-    const auto* hengGeView = FindEntry(book, kHengGeLieYue);
-    ASSERT_NE(hengGeView, nullptr);
-    EXPECT_EQ(hengGeView->rank(), aboveMax);
-    EXPECT_EQ(hengGeView->next_rank_cost(), 0u);
-    EXPECT_EQ(hengGeView->upgrade_block_tip_id(), static_cast<uint32_t>(kSkillMaxRankReached));
+    // 旧已学技能仍可用、保留存储重数；新学习目录只展示自由技能。
+    EXPECT_EQ(FindEntry(book, kHengGeLieYue), nullptr);
     EXPECT_EQ(book.class_id(), 1u);
     EXPECT_EQ(book.player_level(), 30u);
 
@@ -204,7 +323,7 @@ TEST_F(PlayerSkillBookTest, ClassWithoutClassSkillsKeepsLegacySkills) {
     EXPECT_TRUE(PlayerSkillSystem::HasSkill(player, 2));
     ListSkillsResponse book;
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, book), kSuccess);
-    EXPECT_EQ(book.catalog_size(), 0);
+    EXPECT_GT(book.catalog_size(), 0);
     EXPECT_EQ(book.skill_list().skill_list_size(), 2);
 }
 
@@ -219,14 +338,8 @@ TEST_F(PlayerSkillBookTest, UpgradeLearnsSkillAndChargesExactCost) {
 
     ASSERT_TRUE(response.has_state());
     EXPECT_EQ(response.state().currency_balance(), CurrencySystem::GetBalance(player, kCurrencyGold));
-    const auto* entry = FindEntry(response.state(), kHengGeLieYue);
-    ASSERT_NE(entry, nullptr);
-    EXPECT_EQ(entry->rank(), 1u);
-    EXPECT_EQ(entry->rank_limit(), 10u);
-    EXPECT_EQ(entry->next_rank_cost(), classskill::UpgradeCost(2, 10));
-    EXPECT_EQ(entry->upgrade_block_tip_id(), 0u);
-    EXPECT_FALSE(entry->passive());
-    EXPECT_EQ(entry->icon_key(), "UI/Skills/1102");
+    EXPECT_EQ(FindEntry(response.state(), kHengGeLieYue), nullptr);
+    EXPECT_TRUE(PlayerSkillSystem::HasSkill(player, kHengGeLieYue));
 }
 
 // 被动修习后立刻重算属性(本夹具不挂属性组件,重算记 ERROR 跳过),等级照常落下
@@ -236,10 +349,8 @@ TEST_F(PlayerSkillBookTest, UpgradingPassiveRaisesRank) {
     const auto response = Upgrade(player, kTieGuZhuHun, 1, 1);
     EXPECT_FALSE(response.has_error_message());
     EXPECT_EQ(StoredRank(player, kTieGuZhuHun), 2u);
-    const auto* entry = FindEntry(response.state(), kTieGuZhuHun);
-    ASSERT_NE(entry, nullptr);
-    EXPECT_TRUE(entry->passive());
-    EXPECT_EQ(entry->rank(), 2u);
+    EXPECT_EQ(FindEntry(response.state(), kTieGuZhuHun), nullptr);
+    EXPECT_GT(PlayerSkillSystem::CollectPassiveBonus(player).defense, 0.0);
 }
 
 TEST_F(PlayerSkillBookTest, TenUpgradesStopAtLevelLimitAndReportWhy) {
@@ -251,9 +362,7 @@ TEST_F(PlayerSkillBookTest, TenUpgradesStopAtLevelLimitAndReportWhy) {
     EXPECT_EQ(StoredRank(player, kHengGeLieYue), 2u);
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold),
               100000u - classskill::UpgradeCost(1, 10) - classskill::UpgradeCost(2, 10));
-    const auto* entry = FindEntry(response.state(), kHengGeLieYue);
-    ASSERT_NE(entry, nullptr);
-    EXPECT_EQ(entry->upgrade_block_tip_id(), static_cast<uint32_t>(kSkillLevelNotEnough));
+    EXPECT_EQ(FindEntry(response.state(), kHengGeLieYue), nullptr);
 }
 
 TEST_F(PlayerSkillBookTest, TenUpgradesStopWhenGoldRunsOut) {
@@ -330,9 +439,8 @@ TEST_F(PlayerSkillBookTest, BattleOrFreezeWindowRejectsWithoutCharging) {
     auto response = Upgrade(player, kHengGeLieYue, 0, 1);
     ASSERT_TRUE(response.has_error_message());
     EXPECT_EQ(response.error_message().id(), static_cast<uint32_t>(kSkillUpgradeBusy));
-    const auto* entry = FindEntry(response.state(), kHengGeLieYue);
-    ASSERT_NE(entry, nullptr);
-    EXPECT_EQ(entry->upgrade_block_tip_id(), static_cast<uint32_t>(kSkillUpgradeBusy));
+    ASSERT_GT(response.state().catalog_size(), 0);
+    EXPECT_EQ(response.state().catalog(0).upgrade_block_tip_id(), static_cast<uint32_t>(kSkillUpgradeBusy));
     tlsEcs.actorRegistry.remove<InBattleComp>(player);
 
     tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
@@ -430,10 +538,7 @@ TEST_F(PlayerSkillBookTest, UpgradeRefusesRankAboveTableMaxWithoutCharging) {
         EXPECT_EQ(response.error_message().id(), static_cast<uint32_t>(kSkillMaxRankReached)) << "count " << count;
         EXPECT_EQ(response.upgraded_count(), 0u);
         ASSERT_TRUE(response.has_state());
-        const auto* view = FindEntry(response.state(), kHengGeLieYue);
-        ASSERT_NE(view, nullptr);
-        EXPECT_EQ(view->rank(), aboveMax);
-        EXPECT_EQ(view->upgrade_block_tip_id(), static_cast<uint32_t>(kSkillMaxRankReached));
+        EXPECT_EQ(FindEntry(response.state(), kHengGeLieYue), nullptr);
     }
     EXPECT_EQ(StoredRank(player, kHengGeLieYue), aboveMax);
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 100000u);
@@ -465,10 +570,7 @@ TEST_F(PlayerSkillBookTest, RankZeroClassSkillIsUnlearnedButCarried) {
     for (const auto& skill : book.skill_list().skill_list()) {
         EXPECT_NE(skill.skill_table_id(), kHengGeLieYue) << "未学的条目不进已拥有列表";
     }
-    const auto* view = FindEntry(book, kHengGeLieYue);
-    ASSERT_NE(view, nullptr);
-    EXPECT_EQ(view->rank(), 0u);
-    EXPECT_EQ(view->upgrade_block_tip_id(), 0u);
+    EXPECT_EQ(FindEntry(book, kHengGeLieYue), nullptr);
 
     const auto response = Upgrade(player, kHengGeLieYue, 0, 1);
     EXPECT_FALSE(response.has_error_message());

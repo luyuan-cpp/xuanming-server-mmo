@@ -253,7 +253,7 @@ class FixtureTests(unittest.TestCase):
         docker.assert_not_called()
         run.assert_not_called()
 
-    def test_inventory_requires_full_container_ids_from_docker_list(self):
+    def test_inventory_requires_full_container_ids_and_dedicated_subnet(self):
         state = {'project': 'owned-unit', 'nonce': 'a' * 32}
         labels = {'com.docker.compose.project': state['project'], fixture.OWNER_LABEL: state['nonce']}
         ids = dict(zip(('pd', 'tikv', 'tidb'), ('b' * 64, 'c' * 64, 'd' * 64)))
@@ -271,14 +271,21 @@ class FixtureTests(unittest.TestCase):
                                         'Memory': (512 if service == 'pd' else 1536) * 1024 * 1024,
                                         'NanoCpus': 500000000 if service == 'pd' else 1000000000,
                                         'PortBindings': {'4000/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '24000'}]} if service == 'tidb' else {}}}
+        valid_ipam = {'Driver': 'default', 'Config': [{'Subnet': fixture.FIXTURE_SUBNET, 'Gateway': fixture.FIXTURE_GATEWAY}]}
+        network = {'Id': 'e' * 64, 'Labels': labels, 'Containers': dict.fromkeys(ids.values(), {}),
+                   'Driver': 'bridge', 'Scope': 'local', 'IPAM': valid_ipam}
         def inspect(arguments, environment):
             if arguments[0] == 'container':
                 return [rows[arguments[-1]]]
             if arguments[0] == 'network':
-                return [{'Id': 'e' * 64, 'Labels': labels, 'Containers': dict.fromkeys(ids.values(), {})}]
+                return [network]
             return [{'Name': arguments[-1], 'Driver': 'local', 'Options': {}, 'Labels': labels}]
-        for force_short in (False, True):
-            with self.subTest(force_short=force_short):
+        bad_ipams = ({}, {'Driver': 'default', 'Config': [{'Subnet': '192.168.240.0/20', 'Gateway': '192.168.240.1'}]},
+                     {'Driver': 'default', 'Config': [{'Subnet': fixture.FIXTURE_SUBNET}]},
+                     {'Driver': 'default', 'Config': valid_ipam['Config'] + [{'Subnet': '10.1.0.0/24'}]})
+        for force_short, ipam in ((False, valid_ipam), (True, valid_ipam), *((False, value) for value in bad_ipams)):
+            network['IPAM'] = ipam
+            with self.subTest(force_short=force_short, ipam=ipam):
                 def docker(arguments, environment):
                     if arguments[0] == 'compose':
                         return ids[arguments[-1]]
@@ -288,6 +295,9 @@ class FixtureTests(unittest.TestCase):
                 with patch.object(fixture, '_docker', side_effect=docker), patch.object(fixture, '_json_docker', side_effect=inspect):
                     if force_short:
                         with self.assertRaisesRegex(RuntimeError, 'Unexpected container'):
+                            fixture._inventory(state, {})
+                    elif ipam != valid_ipam:
+                        with self.assertRaisesRegex(RuntimeError, 'dedicated subnet'):
                             fixture._inventory(state, {})
                     else:
                         self.assertEqual(fixture._inventory(state, {})['containers'], ids)

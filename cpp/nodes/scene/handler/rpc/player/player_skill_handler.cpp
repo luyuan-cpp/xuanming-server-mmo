@@ -9,6 +9,7 @@
 #include "macros/return_define.h"
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "player/system/player_skill.h"
+#include "player/system/player_pet.h"
 #include "table/code/skill_table.h"
 #include <thread_context/ecs_context.h>
 
@@ -36,9 +37,10 @@ if (const auto usable = PlayerSkillSystem::CheckSkillUsable(player, skillTableId
 	return;
 }
 
-// 职业被动只在属性里生效,没有施放动作(class-skills.md §3.1)
+// 回合模型只能走 Battle.SubmitAction，不能交给旧即时制按秒运行同一份效果。
+// 非主动条目也没有手动施放动作。
 if (const auto *skillRow = SkillTableManager::Instance().FindByIdSilent(skillTableId).first;
-	skillRow != nullptr && PlayerSkillSystem::IsPassiveSkill(*skillRow))
+	skillRow != nullptr && (skillRow->battle_model() == 1 || PlayerSkillSystem::IsPassiveSkill(*skillRow)))
 {
 	response->mutable_error_message()->set_id(kSkillCannotBeCastInCurrentState);
 	return;
@@ -69,11 +71,13 @@ void SceneSkillClientPlayerHandler::ListSkills(entt::entity player,const ::ListS
 	::ListSkillsResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	// 已拥有列表 + 当前职业完整目录 + 等级 + 余额(class-skills.md §4)。
+	// 按人物/宝宝身份返回已学技能、可学习目录、等级与银两。
 	// BuildSkillBook 成功时 skill_list 一定在场(哪怕是空表):robot 的
 	// SceneSkillClientPlayerListSkillsHandler 把缺字段读成"技能被清空"(SetOwnedSkillIDs(nil)),
 	// 显式的空列表才能让首登的就绪信号照常触发。
-	if (const auto err = PlayerSkillSystem::BuildSkillBook(player, *response); err != kSuccess)
+	const auto err = request->pet_id() != 0 ? PetSystem::BuildSkillBook(player, request->pet_id(), *response) :
+		PlayerSkillSystem::BuildSkillBook(player, *response);
+	if (err != kSuccess)
 	{
 		response->Clear();
 		response->mutable_error_message()->set_id(err);
@@ -87,7 +91,8 @@ void SceneSkillClientPlayerHandler::UpgradeSkill(entt::entity player,const ::Upg
 {
 ///<<< BEGIN WRITING YOUR CODE
 	// 修习者只认会话绑定的 player 实体,请求里没有、也不接受角色身份
-	PlayerSkillSystem::UpgradeSkill(player, *request, *response);
+	if (request->pet_id() != 0) PetSystem::UpgradeSkill(player, *request, *response);
+	else PlayerSkillSystem::UpgradeSkill(player, *request, *response);
 ///<<< END WRITING YOUR CODE
 
 }

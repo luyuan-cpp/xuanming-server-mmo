@@ -2343,20 +2343,25 @@ TEST_F(PlayerEquipTest, IsEquipmentFollowsTheItemTable)
 // 改动是累加的。Editable 只改行、不改索引 —— 表校验遍历的是行,所以原地改 id / equip_kind / socket
 // 它都看得见(运行期按主键 / 按部位取行走的是索引,那是另一回事)。
 
-// 强化表不是空的,而且每一行都在从 1 起连续的等级里。没有这一条,ShippedTablesPassValidation 的
+// 每个强化 profile 不是空的,而且各自行都在从 1 起连续的等级里。没有这一条,ShippedTablesPassValidation 的
 // 「零问题」可能只是空表的零问题(三张表为空都不计问题:那是功能没开放,不是填错)。
 TEST_F(PlayerEquipTest, MaxEnhanceLevelCoversEveryShippedRow)
 {
-	const std::size_t rows = EquipEnhanceTableManager::Instance().Count();
-	ASSERT_GE(rows, std::size_t{kFixtureEnhanceLevels}) << kExportFirst;
-	EXPECT_EQ(rows, PlayerEquipSystem::MaxEnhanceLevel());
+	const auto &table = EquipEnhanceTableManager::Instance();
+	const auto &profiles = table.GetProfileIdIndex();
+	ASSERT_FALSE(profiles.empty()) << kExportFirst;
+	ASSERT_GE(table.GetByProfileId(0).size(), std::size_t{kFixtureEnhanceLevels}) << kExportFirst;
+	for (const auto &[profile, rows] : profiles)
+	{
+		EXPECT_EQ(rows.size(), PlayerEquipSystem::MaxEnhanceLevel(profile)) << "profile " << profile;
+	}
 }
 
 // 上限只数到第一个缺口:中间缺了一级,后面的行再多也用不上,表校验把它们逐行报出来。
 TEST_F(PlayerEquipTest, MaxEnhanceLevelStopsAtTheFirstGap)
 {
 	ASSERT_EQ(0u, PlayerEquipSystem::ValidateTables());
-	const uint32_t rows = static_cast<uint32_t>(EquipEnhanceTableManager::Instance().Count());
+	const uint32_t rows = static_cast<uint32_t>(EquipEnhanceTableManager::Instance().GetByProfileId(0).size());
 
 	EditableEnhanceIndex().erase(2); // 表里没有「强化到 +2」这一级了
 

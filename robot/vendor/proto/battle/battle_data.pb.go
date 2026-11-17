@@ -79,12 +79,13 @@ func (EBattleActorType) EnumDescriptor() ([]byte, []int) {
 type EBattleActionType int32
 
 const (
-	EBattleActionType_BATTLE_ACTION_NONE   EBattleActionType = 0
-	EBattleActionType_BATTLE_ACTION_ATTACK EBattleActionType = 1 // 普攻
-	EBattleActionType_BATTLE_ACTION_SKILL  EBattleActionType = 2
-	EBattleActionType_BATTLE_ACTION_DEFEND EBattleActionType = 3 // 防御:本回合受伤减半
-	EBattleActionType_BATTLE_ACTION_ITEM   EBattleActionType = 4 // 使用战斗道具(从快照副本扣,结算回写)
-	EBattleActionType_BATTLE_ACTION_FLEE   EBattleActionType = 5 // 逃跑(PVE 可用;成功率基于速度差)
+	EBattleActionType_BATTLE_ACTION_NONE    EBattleActionType = 0
+	EBattleActionType_BATTLE_ACTION_ATTACK  EBattleActionType = 1 // 普攻
+	EBattleActionType_BATTLE_ACTION_SKILL   EBattleActionType = 2
+	EBattleActionType_BATTLE_ACTION_DEFEND  EBattleActionType = 3 // 防御:本回合受伤减半
+	EBattleActionType_BATTLE_ACTION_ITEM    EBattleActionType = 4 // 使用战斗道具(从快照副本扣,结算回写)
+	EBattleActionType_BATTLE_ACTION_FLEE    EBattleActionType = 5 // 逃跑(PVE 可用;成功率基于速度差)
+	EBattleActionType_BATTLE_ACTION_CAPTURE EBattleActionType = 6 // 捕捉消耗本回合行动，由服务端判定。
 )
 
 // Enum value maps for EBattleActionType.
@@ -96,14 +97,16 @@ var (
 		3: "BATTLE_ACTION_DEFEND",
 		4: "BATTLE_ACTION_ITEM",
 		5: "BATTLE_ACTION_FLEE",
+		6: "BATTLE_ACTION_CAPTURE",
 	}
 	EBattleActionType_value = map[string]int32{
-		"BATTLE_ACTION_NONE":   0,
-		"BATTLE_ACTION_ATTACK": 1,
-		"BATTLE_ACTION_SKILL":  2,
-		"BATTLE_ACTION_DEFEND": 3,
-		"BATTLE_ACTION_ITEM":   4,
-		"BATTLE_ACTION_FLEE":   5,
+		"BATTLE_ACTION_NONE":    0,
+		"BATTLE_ACTION_ATTACK":  1,
+		"BATTLE_ACTION_SKILL":   2,
+		"BATTLE_ACTION_DEFEND":  3,
+		"BATTLE_ACTION_ITEM":    4,
+		"BATTLE_ACTION_FLEE":    5,
+		"BATTLE_ACTION_CAPTURE": 6,
 	}
 )
 
@@ -154,6 +157,7 @@ const (
 	EBattleEventType_BATTLE_EVENT_BLOCK       EBattleEventType = 13 // 格挡(预留,一期不产出)
 	EBattleEventType_BATTLE_EVENT_MANA        EBattleEventType = 14 // 法力变化:value=变化绝对值,is_negative 由 target_health_after 之外的 mana_after 表达
 	EBattleEventType_BATTLE_EVENT_RESIST      EBattleEventType = 15 // 异常状态被抵抗:source=施加者,target=抵抗者,buff_table_id=被抵抗的 buff;老客户端忽略
+	EBattleEventType_BATTLE_EVENT_CAPTURE     EBattleEventType = 16 // success为成功结果；成功后目标离场，结算发放宠物。
 )
 
 // Enum value maps for EBattleEventType.
@@ -175,6 +179,7 @@ var (
 		13: "BATTLE_EVENT_BLOCK",
 		14: "BATTLE_EVENT_MANA",
 		15: "BATTLE_EVENT_RESIST",
+		16: "BATTLE_EVENT_CAPTURE",
 	}
 	EBattleEventType_value = map[string]int32{
 		"BATTLE_EVENT_NONE":        0,
@@ -193,6 +198,7 @@ var (
 		"BATTLE_EVENT_BLOCK":       13,
 		"BATTLE_EVENT_MANA":        14,
 		"BATTLE_EVENT_RESIST":      15,
+		"BATTLE_EVENT_CAPTURE":     16,
 	}
 )
 
@@ -759,9 +765,10 @@ type BattlePlayerSnapshot struct {
 	// 已学职业技能的生效等级(skill_table_id -> 等级,含被动;docs/design/class-skills.md §6.1)。
 	// scene 按职业 / 角色等级夹好再填,引擎再按同一规则复核一次。旧通用技能不进这里。
 	// 被动的属性加成 scene 已算进上面的派生属性,引擎只消费战斗专用被动(治疗加成),不重复叠加。
-	SkillRanks    map[uint32]uint32 `protobuf:"bytes,21,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SkillRanks      map[uint32]uint32 `protobuf:"bytes,21,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	PetCaptureSlots uint32            `protobuf:"varint,22,opt,name=pet_capture_slots,json=petCaptureSlots,proto3" json:"pet_capture_slots,omitempty"` // scene 核定的本局可捕捉数量；旧快照缺省为0。
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -941,6 +948,13 @@ func (x *BattlePlayerSnapshot) GetSkillRanks() map[uint32]uint32 {
 	return nil
 }
 
+func (x *BattlePlayerSnapshot) GetPetCaptureSlots() uint32 {
+	if x != nil {
+		return x.PetCaptureSlots
+	}
+	return 0
+}
+
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
 // 属性口径与玩家快照逐项对齐:base_attributes 带 speed(出手序)与当前 HP/MP,
 // max_* 与物伤/法伤/防御来自 PetSystem 现算的二级属性。
@@ -1111,9 +1125,12 @@ type BattleActorState struct {
 	// 下发给客户端的状态快照里会被清空,不暴露对手的装备概率。
 	Combat *component.CombatAttributes `protobuf:"bytes,27,opt,name=combat,proto3" json:"combat,omitempty"`
 	// 本局职业技能生效等级(来自快照 skill_ranks,引擎复核后的值;怪物 / 宝宝为空)。
-	SkillRanks    map[uint32]uint32 `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SkillRanks         map[uint32]uint32 `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	CapturePetTableId  uint32            `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
+	CapturedByPlayerId uint64            `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
+	CaptureMinLevel    uint32            `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *BattleActorState) Reset() {
@@ -1340,6 +1357,27 @@ func (x *BattleActorState) GetSkillRanks() map[uint32]uint32 {
 		return x.SkillRanks
 	}
 	return nil
+}
+
+func (x *BattleActorState) GetCapturePetTableId() uint32 {
+	if x != nil {
+		return x.CapturePetTableId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetCapturedByPlayerId() uint64 {
+	if x != nil {
+		return x.CapturedByPlayerId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetCaptureMinLevel() uint32 {
+	if x != nil {
+		return x.CaptureMinLevel
+	}
+	return 0
 }
 
 type BattleAction struct {
@@ -1890,10 +1928,11 @@ type BattleSettlementData struct {
 	FinishedAtMs uint64 `protobuf:"varint,17,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
 	// 这一局的匹配模式(MatchMode 数值)与战斗配置号:同样由 FreezeBattleSettlementSource 从 BattleResultEvent 盖进来,
 	// scene 写进本人近期战斗结果,供列表展示与按 battle_id 查回放;不参与任何结算判定。0 = 来源没盖。
-	MatchMode      uint32 `protobuf:"varint,18,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
-	BattleConfigId uint32 `protobuf:"varint,19,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	MatchMode           uint32   `protobuf:"varint,18,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
+	BattleConfigId      uint32   `protobuf:"varint,19,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
+	CapturedPetTableIds []uint32 `protobuf:"varint,20,rep,packed,name=captured_pet_table_ids,json=capturedPetTableIds,proto3" json:"captured_pet_table_ids,omitempty"` // 本人捕捉的宠物种类，随整笔结算原子落库和去重。
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
@@ -2057,6 +2096,13 @@ func (x *BattleSettlementData) GetBattleConfigId() uint32 {
 		return x.BattleConfigId
 	}
 	return 0
+}
+
+func (x *BattleSettlementData) GetCapturedPetTableIds() []uint32 {
+	if x != nil {
+		return x.CapturedPetTableIds
+	}
+	return nil
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -2244,7 +2290,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\rapplied_round\x18\a \x01(\rR\fappliedRound\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xe8\x06\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\x94\a\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -2271,7 +2317,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x06gender\x18\x13 \x01(\rR\x06gender\x12)\n" +
 	"\x06combat\x18\x14 \x01(\v2\x11.CombatAttributesR\x06combat\x12F\n" +
 	"\vskill_ranks\x18\x15 \x03(\v2%.BattlePlayerSnapshot.SkillRanksEntryR\n" +
-	"skillRanks\x1a=\n" +
+	"skillRanks\x12*\n" +
+	"\x11pet_capture_slots\x18\x16 \x01(\rR\x0fpetCaptureSlots\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xab\x03\n" +
@@ -2290,7 +2337,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fmagic_attack\x18\n" +
 	" \x01(\x04R\vmagicAttack\x12\x18\n" +
 	"\adefense\x18\v \x01(\x04R\adefense\x12&\n" +
-	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\"\x96\t\n" +
+	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\"\xa6\n" +
+	"\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -2327,7 +2375,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x06gender\x18\x1a \x01(\rR\x06gender\x12)\n" +
 	"\x06combat\x18\x1b \x01(\v2\x11.CombatAttributesR\x06combat\x12B\n" +
 	"\vskill_ranks\x18\x1c \x03(\v2!.BattleActorState.SkillRanksEntryR\n" +
-	"skillRanks\x1aF\n" +
+	"skillRanks\x12/\n" +
+	"\x14capture_pet_table_id\x18\x1d \x01(\rR\x11capturePetTableId\x121\n" +
+	"\x15captured_by_player_id\x18\x1e \x01(\x04R\x12capturedByPlayerId\x12*\n" +
+	"\x11capture_min_level\x18\x1f \x01(\rR\x0fcaptureMinLevel\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
@@ -2382,7 +2433,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xe5\x05\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\x9a\x06\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -2404,7 +2455,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0efinished_at_ms\x18\x11 \x01(\x04R\ffinishedAtMs\x12\x1d\n" +
 	"\n" +
 	"match_mode\x18\x12 \x01(\rR\tmatchMode\x12(\n" +
-	"\x10battle_config_id\x18\x13 \x01(\rR\x0ebattleConfigId\"u\n" +
+	"\x10battle_config_id\x18\x13 \x01(\rR\x0ebattleConfigId\x123\n" +
+	"\x16captured_pet_table_ids\x18\x14 \x03(\rR\x13capturedPetTableIds\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -2424,14 +2476,15 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_ACTOR_TYPE_MONSTER\x10\x02\x12\x19\n" +
-	"\x15BATTLE_ACTOR_TYPE_PET\x10\x03*\xa8\x01\n" +
+	"\x15BATTLE_ACTOR_TYPE_PET\x10\x03*\xc3\x01\n" +
 	"\x11eBattleActionType\x12\x16\n" +
 	"\x12BATTLE_ACTION_NONE\x10\x00\x12\x18\n" +
 	"\x14BATTLE_ACTION_ATTACK\x10\x01\x12\x17\n" +
 	"\x13BATTLE_ACTION_SKILL\x10\x02\x12\x18\n" +
 	"\x14BATTLE_ACTION_DEFEND\x10\x03\x12\x16\n" +
 	"\x12BATTLE_ACTION_ITEM\x10\x04\x12\x16\n" +
-	"\x12BATTLE_ACTION_FLEE\x10\x05*\x9d\x03\n" +
+	"\x12BATTLE_ACTION_FLEE\x10\x05\x12\x19\n" +
+	"\x15BATTLE_ACTION_CAPTURE\x10\x06*\xb7\x03\n" +
 	"\x10eBattleEventType\x12\x15\n" +
 	"\x11BATTLE_EVENT_NONE\x10\x00\x12\x17\n" +
 	"\x13BATTLE_EVENT_ATTACK\x10\x01\x12\x16\n" +
@@ -2449,7 +2502,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11BATTLE_EVENT_MISS\x10\f\x12\x16\n" +
 	"\x12BATTLE_EVENT_BLOCK\x10\r\x12\x15\n" +
 	"\x11BATTLE_EVENT_MANA\x10\x0e\x12\x17\n" +
-	"\x13BATTLE_EVENT_RESIST\x10\x0f*m\n" +
+	"\x13BATTLE_EVENT_RESIST\x10\x0f\x12\x18\n" +
+	"\x14BATTLE_EVENT_CAPTURE\x10\x10*m\n" +
 	"\x0eeBattleHitKind\x12\x15\n" +
 	"\x11BATTLE_HIT_NORMAL\x10\x00\x12\x14\n" +
 	"\x10BATTLE_HIT_COMBO\x10\x01\x12\x16\n" +

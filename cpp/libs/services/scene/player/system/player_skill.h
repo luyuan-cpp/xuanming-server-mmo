@@ -7,6 +7,7 @@
 class BattlePlayerSnapshot;
 class ListSkillsResponse;
 class SkillTable;
+class SkillCatalogEntry;
 class UpgradeSkillRequest;
 class UpgradeSkillResponse;
 
@@ -49,22 +50,26 @@ public:
 	// 查不到表的数量与超上限重数的数量每次加载汇总打一行 WARN。没有要剔除的条目时组件不被替换。
 	static void SanitizeSkillList(entt::entity player);
 
-	// 是否拥有且能用:旧通用技能在列表里即可;职业技能还要生效等级 > 0(职业对、等级够;rank 0 即未学)。
+	// 是否拥有且能用:新模型按人物 caster_mask 与生效等级；旧职业技能兼容原职业条件。rank 0 即未学。
 	// 等于 CheckSkillUsable 回 kSuccess。
 	static bool HasSkill(entt::entity player, uint32_t skillTableId);
 	// 同一判定带上原因(施法入口用):能用回 kSuccess;没有这个技能、不生效或不能用回 kInvalidTableId;
 	// 缺技能列表、职业或等级(加载不变量被破坏)回 kServiceUnavailable 并记 ERROR;实体无效回 kEntityIsNull。
 	static uint32_t CheckSkillUsable(entt::entity player, uint32_t skillTableId);
 
-	// 职业技能的生效等级 = min(存储重数, 当前角色等级的上限),后者不超过本版本 max_rank;
-	// 没学(含 rank 0)/ 不是本职业 / 旧通用技能返回 0
+	// 有等级技能的生效等级 = min(存储重数, 当前角色等级的上限),后者不超过本版本 max_rank;
+	// 没学(含 rank 0)/ 不符合施法者资格 / 旧通用技能返回 0。
 	static uint32_t EffectiveRank(entt::entity player, uint32_t skillTableId);
 
-	// 技能书(ListSkills / UpgradeSkill 的回包):已拥有列表 + 当前职业完整目录 + 等级 + 余额。
+	// 技能书:已拥有列表 + 人物可学习的自由技能目录 + 等级 + 余额；没有新模型表时回退旧职业目录。
 	// 已拥有列表是显式投影(只带 skill_table_id 与职业技能的存储重数,不带内部 id 与未知字段);
 	// player_level 是 CappedLevel 之后的等级;目录 rank 是存储重数(可能高于 max_rank,此时按满重阻断)。
 	// 返回 kSuccess;实体无效 kEntityIsNull;缺必需组件 kServiceUnavailable(此时 response 只有 error 以外的空值)。
 	static uint32_t BuildSkillBook(entt::entity player, ListSkillsResponse& response);
+	// 人物/宝宝共用的目录投影；身份与持有状态由各自唯一写入口校验。
+	static void FillCatalogEntry(const SkillTable& row, uint32_t rank, uint32_t level,
+		uint64_t balance, uint32_t busyTip, bool pet, SkillCatalogEntry& view);
+	static bool IsFreeSkillFor(const SkillTable& row, uint32_t casterMask);
 
 	// 修习(学习 = 0 → 1;rank 0 的已有条目原地复用)。整笔拒绝时填 error_message 且不扣钱、不改等级;
 	// 部分成功时 upgraded_count < count、stop_tip_id 说明停在哪。无论成败 state 都是处理之后的完整技能书。

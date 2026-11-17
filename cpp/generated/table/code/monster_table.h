@@ -19,6 +19,7 @@ public:
     struct Snapshot {
         MonsterTableData data;
         IdMapType idMap;
+        std::unordered_map<uint32_t, std::vector<const MonsterTable*>> capturePetTableIdIndex;
     };
 
     static MonsterTableManager& Instance() {
@@ -51,6 +52,14 @@ public:
 
     void LoadSuccess() { if (loadSuccessCallback) { loadSuccessCallback(); } }
 
+    // FK: capture_pet_table_id -> Pet.id
+    const std::unordered_map<uint32_t, std::vector<const MonsterTable*>>& GetCapturePetTableIdIndex() const { return snapshot->capturePetTableIdIndex; }
+    const std::vector<const MonsterTable*>& GetByCapturePetTableId(uint32_t key) const {
+        static const std::vector<const MonsterTable*> kEmpty;
+        auto it = snapshot->capturePetTableIdIndex.find(key);
+        return it != snapshot->capturePetTableIdIndex.end() ? it->second : kEmpty;
+    }
+
     // ---- Exists ----
 
     bool Exists(uint32_t id) const { return snapshot->idMap.count(id) > 0; }
@@ -58,6 +67,10 @@ public:
     // ---- Count ----
 
     std::size_t Count() const { return snapshot->idMap.size(); }
+    std::size_t CountByCapturePetTableIdIndex(uint32_t key) const {
+        auto it = snapshot->capturePetTableIdIndex.find(key);
+        return it != snapshot->capturePetTableIdIndex.end() ? it->second.size() : 0;
+    }
 
     // ---- FindByIds (IN) ----
 

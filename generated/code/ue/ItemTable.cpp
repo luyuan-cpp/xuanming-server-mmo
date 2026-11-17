@@ -117,6 +117,10 @@ static void ItemTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, 
 	ItemTableCheckNarrowedField(RowObject, TEXT("equip_class"), TEXT("equip_class"), RowIndex, 2147483647.0, TEXT("uint32"));
 	ItemTableCheckNarrowedField(RowObject, TEXT("affix_pool"), TEXT("affix_pool"), RowIndex, 2147483647.0, TEXT("uint32"));
 	ItemTableCheckNarrowedField(RowObject, TEXT("affix_rule"), TEXT("affix_rule"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ItemTableCheckNarrowedField(RowObject, TEXT("equip_profile"), TEXT("equip_profile"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ItemTableCheckNarrowedField(RowObject, TEXT("forge_material_id"), TEXT("forge_material_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ItemTableCheckNarrowedField(RowObject, TEXT("forge_material_count"), TEXT("forge_material_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ItemTableCheckNarrowedField(RowObject, TEXT("artifact_id"), TEXT("artifact_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	// 子消息 base_attr[]:每个元素是一个对象,逐个元素查它的收窄列。
 	if (const TSharedPtr<FJsonValue>* BaseAttrField = RowObject->Values.Find(TEXT("base_attr")))
 	{
@@ -225,6 +229,8 @@ void UItemTable::BuildIndices(FSnapshot& Snap)
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
 		Snap.AffixRuleIndex.FindOrAdd(Row.affix_rule).Add(RowIndex);
+		Snap.ForgeMaterialIdIndex.FindOrAdd(Row.forge_material_id).Add(RowIndex);
+		Snap.ArtifactIdIndex.FindOrAdd(Row.artifact_id).Add(RowIndex);
 	}
 }
 
@@ -300,6 +306,52 @@ const TArray<int32>& UItemTable::GetAffixRuleIndices(int32 Key) const
 int32 UItemTable::CountByAffixRuleIndex(int32 Key) const
 {
 	return GetAffixRuleIndices(Key).Num();
+}
+
+TArray<const FCfgItemRow*> UItemTable::GetByForgeMaterialId(int32 Key) const
+{
+	TArray<const FCfgItemRow*> Result;
+	const TArray<int32>& Indices = GetForgeMaterialIdIndices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& UItemTable::GetForgeMaterialIdIndices(int32 Key) const
+{
+	const TArray<int32>* Found = Snapshot->ForgeMaterialIdIndex.Find(Key);
+	return Found != nullptr ? *Found : GItemEmptyIndices;
+}
+
+int32 UItemTable::CountByForgeMaterialIdIndex(int32 Key) const
+{
+	return GetForgeMaterialIdIndices(Key).Num();
+}
+
+TArray<const FCfgItemRow*> UItemTable::GetByArtifactId(int32 Key) const
+{
+	TArray<const FCfgItemRow*> Result;
+	const TArray<int32>& Indices = GetArtifactIdIndices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& UItemTable::GetArtifactIdIndices(int32 Key) const
+{
+	const TArray<int32>* Found = Snapshot->ArtifactIdIndex.Find(Key);
+	return Found != nullptr ? *Found : GItemEmptyIndices;
+}
+
+int32 UItemTable::CountByArtifactIdIndex(int32 Key) const
+{
+	return GetArtifactIdIndices(Key).Num();
 }
 
 TArray<const FCfgItemRow*> UItemTable::Where(TFunctionRef<bool(const FCfgItemRow&)> Pred) const

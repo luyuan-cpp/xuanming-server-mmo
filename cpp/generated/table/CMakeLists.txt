@@ -76,6 +76,7 @@ set(SOURCE_FILES
     code/mission_table.cpp
     code/mission_table_fk.cpp
     code/monster_table.cpp
+    code/monster_table_fk.cpp
     code/attributeautoplan_table.cpp
     code/attributedimension_table.cpp
     code/attributepool_table.cpp
@@ -191,6 +192,11 @@ set(SOURCE_FILES
     proto/activityvitalityreward_table.pb.cc
     code/activityschedule_table_fk.cpp
     proto/activityschedule_table.pb.cc
+    code/equipartifact_table.cpp
+    code/equipv1affix_table.cpp
+    code/equipv1affix_table_fk.cpp
+    proto/equipartifact_table.pb.cc
+    proto/equipv1affix_table.pb.cc
 )
 
 add_library(table STATIC ${SOURCE_FILES})

@@ -45,6 +45,8 @@ x-sql-boot-deps: &sql-boot-deps
     condition: service_completed_successfully
   match-migrate:
     condition: service_completed_successfully
+  rank-migrate:
+    condition: service_completed_successfully
   player-inbox-migrate:
     condition: service_completed_successfully
 
@@ -217,6 +219,22 @@ services:
       MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
     volumes:
       - ${DEBUG_RUN_DIR:?请先准备配置}/config/match.yaml:/app/etc/service.yaml:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      sql-boot:
+        condition: service_completed_successfully
+
+  rank-migrate:
+    <<: *app
+    image: ${RANK_IMAGE:-local/mmorpg-rank:debug}
+    entrypoint: [/app/service]
+    command: [-f, /app/etc/service.yaml, -migrate]
+    environment:
+      MMORPG_RANK_SQL_DSN: "root:${MYSQL_ROOT_PASSWORD:?请先准备配置}@tcp(mysql:3306)/mmorpg_rank?charset=utf8mb4&parseTime=true"
+      MMORPG_SQL_SCHEMA_PRINCIPAL: root@%
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config/rank.yaml:/app/etc/service.yaml:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -443,6 +461,48 @@ services:
       test: [CMD-SHELL, 'nc -z -w 2 127.0.0.1 50600']
       interval: 5s
       timeout: 3s
+      retries: 30
+
+  rank-sql-boot:
+    <<: *sql-boot
+    command: [-Step, register, -WriterService, rank]
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-boot:/app/sql-boot:ro
+      - ${DEBUG_RUN_DIR:?请先准备配置}/config:/app/sql-boot-config:ro
+      - sql-boot-private:/run/sql-boot/private
+      - rank-sql-writer:/run/sql-boot/boot/rank
+      - rank-sql-consume:/run/sql-boot/boot/rank/consume
+    depends_on: *sql-boot-deps
+
+  rank:
+    <<: *app
+    image: ${RANK_IMAGE:-local/mmorpg-rank:debug}
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    command: [/app/service, -f, /run/sql-writer/runtime/rank.yaml]
+    environment:
+      POD_IP: ${RANK_IP:?请先准备配置}
+      MMORPG_INTERNAL_AUTH_PUBLIC_KEYS: ${INTERNAL_AUTH_PUBLIC_KEYS:?请先准备配置}
+      RANK_PRODUCER_SECRET_MATCH: ${RANK_PRODUCER_SECRET_MATCH:?请先准备配置}
+      RANK_PRODUCER_SECRET_ADMIN: ${RANK_PRODUCER_SECRET_ADMIN:?请先准备配置}
+      MAIL_PRODUCER_SECRET_RANK: ${MAIL_PRODUCER_SECRET_RANK:?请先准备配置}
+    volumes:
+      - ${DEBUG_RUN_DIR:?请先准备配置}/sql-writer-entry.sh:/sql-writer-entry.sh:ro
+      - rank-sql-writer:/run/sql-writer:ro
+      - rank-sql-consume:/run/sql-writer/consume
+    networks:
+      default:
+        ipv4_address: ${RANK_IP:?请先准备配置}
+    depends_on:
+      rank-sql-boot:
+        condition: service_completed_successfully
+      data-service:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'nc -z -w 2 127.0.0.1 51100']
+      interval: 5s
+      timeout: 5s
       retries: 30
 
   match-sql-boot:
@@ -700,6 +760,10 @@ volumes:
     name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_login-sql-consume
   match-sql-writer:
     name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_match-sql-writer
+  rank-sql-writer:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_rank-sql-writer
+  rank-sql-consume:
+    name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_rank-sql-consume
   match-sql-consume:
     name: ${DEBUG_DATA_VOLUME_PREFIX:-${COMPOSE_PROJECT_NAME:-xuanming-debug-current}}_match-sql-consume
   player-inbox-sql-writer:

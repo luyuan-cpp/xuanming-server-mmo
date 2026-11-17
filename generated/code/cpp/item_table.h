@@ -20,6 +20,8 @@ public:
         ItemTableData data;
         IdMapType idMap;
         std::unordered_map<uint32_t, std::vector<const ItemTable*>> affixRuleIndex;
+        std::unordered_map<uint32_t, std::vector<const ItemTable*>> forgeMaterialIdIndex;
+        std::unordered_map<uint32_t, std::vector<const ItemTable*>> artifactIdIndex;
     };
 
     static ItemTableManager& Instance() {
@@ -53,11 +55,25 @@ public:
     void LoadSuccess() { if (loadSuccessCallback) { loadSuccessCallback(); } }
 
     // FK: affix_rule -> EquipAffixRule.id
+    // FK: forge_material_id -> Item.id
+    // FK: artifact_id -> EquipArtifact.id
     const std::unordered_map<uint32_t, std::vector<const ItemTable*>>& GetAffixRuleIndex() const { return snapshot->affixRuleIndex; }
     const std::vector<const ItemTable*>& GetByAffixRule(uint32_t key) const {
         static const std::vector<const ItemTable*> kEmpty;
         auto it = snapshot->affixRuleIndex.find(key);
         return it != snapshot->affixRuleIndex.end() ? it->second : kEmpty;
+    }
+    const std::unordered_map<uint32_t, std::vector<const ItemTable*>>& GetForgeMaterialIdIndex() const { return snapshot->forgeMaterialIdIndex; }
+    const std::vector<const ItemTable*>& GetByForgeMaterialId(uint32_t key) const {
+        static const std::vector<const ItemTable*> kEmpty;
+        auto it = snapshot->forgeMaterialIdIndex.find(key);
+        return it != snapshot->forgeMaterialIdIndex.end() ? it->second : kEmpty;
+    }
+    const std::unordered_map<uint32_t, std::vector<const ItemTable*>>& GetArtifactIdIndex() const { return snapshot->artifactIdIndex; }
+    const std::vector<const ItemTable*>& GetByArtifactId(uint32_t key) const {
+        static const std::vector<const ItemTable*> kEmpty;
+        auto it = snapshot->artifactIdIndex.find(key);
+        return it != snapshot->artifactIdIndex.end() ? it->second : kEmpty;
     }
 
     // ---- Exists ----
@@ -70,6 +86,14 @@ public:
     std::size_t CountByAffixRuleIndex(uint32_t key) const {
         auto it = snapshot->affixRuleIndex.find(key);
         return it != snapshot->affixRuleIndex.end() ? it->second.size() : 0;
+    }
+    std::size_t CountByForgeMaterialIdIndex(uint32_t key) const {
+        auto it = snapshot->forgeMaterialIdIndex.find(key);
+        return it != snapshot->forgeMaterialIdIndex.end() ? it->second.size() : 0;
+    }
+    std::size_t CountByArtifactIdIndex(uint32_t key) const {
+        auto it = snapshot->artifactIdIndex.find(key);
+        return it != snapshot->artifactIdIndex.end() ? it->second.size() : 0;
     }
 
     // ---- FindByIds (IN) ----

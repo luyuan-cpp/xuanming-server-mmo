@@ -1,4 +1,5 @@
 #include "player_battle.h"
+#include "player/system/player_equipment_v1.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "battle_lock_reply_shape.h"
 #include "battle_lock_rules.h"
@@ -1136,6 +1137,9 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	// 战斗类属性的装备加成(必杀 / 连击 / 反击 / 反震 / 抗性,equipment-attributes.md §4.5):
 	// 整块原样拷给引擎，不把缺失组件伪装成全 0 加成。
 	snapshot.mutable_combat()->CopyFrom(derived.combat());
+	PlayerEquipmentV1System::CollectEffects(player, *snapshot.mutable_equipment_effects());
+
+	snapshot.set_pet_capture_slots(PetSystem::AvailableCaptureSlots(player));
 
 	// —— 出战宝宝(player-pet.md §5):没带宝宝时不填,引擎侧自然没有这个单位 ——
 	if (::BattlePetSnapshot petSnapshot; PetSystem::BuildBattleSnapshot(player, petSnapshot))
@@ -2052,6 +2056,12 @@ bool HasCompleteBattleEffectInputs(entt::entity player, const ::BattleSettlement
 {
     if (!tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, CurrencyComp, PlayerCurrencyComp>(player))
         return false;
+    if (settlement.exp_gain() > 0) {
+        const auto* level = tlsEcs.actorRegistry.try_get<LevelComp>(player);
+        // 经验与金币、物品必须整笔应用。缺加载组件或累计溢出时保留原件，不能先发其它奖励再漏掉经验。
+        if (level == nullptr || settlement.exp_gain() > std::numeric_limits<uint64_t>::max() - level->total_exp())
+            return false;
+    }
     if (const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
         current != nullptr && current->battle_id() != settlement.battle_id()) return false;
     const bool kills = std::any_of(settlement.defeated_monsters().begin(), settlement.defeated_monsters().end(),
@@ -2096,7 +2106,7 @@ std::vector<std::pair<uint32_t, uint32_t>> ItemLinesOf(const ItemCountMap& items
 }
 
 // 这一局本人实际入账的结果。货币取实际入账的金额(先抵欠款的部分也算在内;被封禁的币种已从 currencyGains 摘掉,不记);
-// 掉落取剔除了被封禁项之后的清单(granted);消耗取 min(要求, 实际持有)(consumed)。经验系统没接入,不记经验。
+// 掉落取剔除了被封禁项之后的清单(granted);消耗取 min(要求, 实际持有)(consumed)。经验已经整笔计入累计值。
 PlayerBattleResult BuildBattleResult(const ::BattleSettlementData& settlement, const SettlementCurrencyGains& currencyGains,
                                      const ItemCountMap& granted, const ItemCountMap& consumed, const uint64_t settledAtMs)
 {
@@ -2111,6 +2121,7 @@ PlayerBattleResult BuildBattleResult(const ::BattleSettlementData& settlement, c
     entry.set_match_mode(settlement.match_mode());
     entry.set_battle_config_id(settlement.battle_config_id());
     entry.set_settled_at_ms(settledAtMs);
+    entry.set_exp_gain(settlement.exp_gain());
     for (const auto& [type, amount] : currencyGains) // std::map:按币种升序
     {
         if (amount == 0) continue;
@@ -2412,7 +2423,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // 近期战斗结果(PlayerBattleResultComp)同属持久数据,效果写完要在同一帧记进去,那时已没有失败分支:
     // 缺了说明加载不变量已被破坏,在这里整笔 DEFER,不补默认值(docs/design/battle-result-recovery.md §4.3)。
     if (!tlsEcs.actorRegistry.all_of<DerivedAttributesComp, PlayerBattleResultComp>(player) ||
-        (settlement.pets_size() > 0 && !tlsEcs.actorRegistry.all_of<PlayerPetComp>(player)) ||
+        ((settlement.pets_size() > 0 || settlement.captured_pet_table_ids_size() > 0) && !tlsEcs.actorRegistry.all_of<PlayerPetComp>(player)) ||
         (advancesMissions && !tlsEcs.actorRegistry.all_of<MissionsContainerComp>(player)) ||
         ((settlement.items_consumed_size() > 0 || settlement.items_gained_size() > 0) &&
          !tlsEcs.actorRegistry.all_of<PlayerBagsComp>(player)))
@@ -2457,7 +2468,12 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     }
     // 被获得封禁的掉落只剔除这一项(DropBlockedGains 的说明)。排在号段预检与入包之前:被封的掉落不铸号、不进候选。
     const auto blockedDrops = DropBlockedGains(player, inboxGained);
-    if (settlement.pets_size() > 0) originalPets = tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString();
+    const bool changesPets = settlement.pets_size() > 0 || settlement.captured_pet_table_ids_size() > 0;
+    if (changesPets) originalPets = tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString();
+    // 捕获资产与本局结算一并提交；先备好全部实例，容量或号源失败时整笔保持可重投。
+    std::vector<PetInstance> capturedPets;
+    if (PetSystem::PrepareCapturedPets(player, settlement.captured_pet_table_ids(), capturedPets) != kSuccess)
+        return false;
     // 实际可扣量 = 可计数总量 - 别的局的道具预留;本局自己的预留可以动用(battle-item-reservation.md)。
     // 与 ConsumeInventoryAndGrant(consumeFromHoldId = battleId)里的夹紧是同一个判据(BagService::RemovableCount)。
     if (!inboxConsumed.empty()) {
@@ -2511,7 +2527,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         const auto currentIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
         const auto* currentPets = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
         if (!currentIdentity || currentIdentity->SerializeAsString() != originalIdentity ||
-            (settlement.pets_size() > 0 && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
+            (changesPets && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
             HasUnsupportedInboxConsumption(player, settlement) ||
             !IsSettlementApplicable(player) || !HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
             !tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, PlayerBattleResultComp>(player))
@@ -2535,6 +2551,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         BagService::ConsumeInventoryAndGrant(player, inboxConsumed, inboxGained, battleId,
             "{\"source\":\"battle-inbox\"}", credit, /*consumeFromHoldId=*/battleId, &toMail);
     if (result != kSuccess) return false;
+    PetSystem::CommitCapturedPets(player, capturedPets);
     for (const auto& mail : mailed)
         LOG_INFO << "[PlayerBattle] metric=battle_items_mailed player_id=" << playerId << " battle_id=" << battleId
                  << " request_id=" << mail.requestId << " item_lines=" << mail.items.size()
@@ -2607,6 +2624,8 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kHealth);
     ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kEnergy);
 
+    if (!capturedPets.empty()) PetSystem::PushList(player);
+
     // 出战宝宝的终值回写(阵亡宝宝在 PetSystem 内回满,理由见那里的注释)。
     // 回写完必须推一次列表:玩家战后打开宝宝面板看到的应该是战后血量,
     // 不推的话面板会一直停在战前那份(设计文档 player-pet.md §4 承诺的推送时机)。
@@ -2620,12 +2639,16 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         if (!inboxPets.empty()) PetSystem::PushList(player);
     }
 
-    // 经验系统尚未接入,一期仅记日志留痕;升级后果见 PlayerAttributeSystem::GmSetLevel,
-    // 经验系统接入时抽出共用(见 open_issues)。
+    // 经验与结算账本、近期战果同帧修改；CHARACTER / WALLET / PROFILE 脏行随同一存盘事务提交。
+    // 重投由收件箱账本拦住，不重复入账。
+    // 升级曲线尚无配置，先完整保留已实得经验；不按猜测的曲线改变等级，也不覆写携带的超上限等级。
     if (settlement.exp_gain() > 0)
     {
-        LOG_INFO << "[PlayerBattle] Experience settlement deferred(experience system not integrated): player_id=" << playerId
-                 << " battle_id=" << battleId << " exp=" << settlement.exp_gain();
+        auto& level = tlsEcs.actorRegistry.get<LevelComp>(player);
+        level.set_total_exp(level.total_exp() + settlement.exp_gain());
+        LOG_INFO << "[PlayerBattle] Experience settlement credited: player_id=" << playerId
+                 << " battle_id=" << battleId << " exp=" << settlement.exp_gain()
+                 << " total_exp=" << level.total_exp();
     }
 
     // 只有 battle 最终结算携带的真实击杀事实推进任务。每只怪一条事实，顺序任务不会用同一次击杀跨过后续相同目标。
@@ -3166,9 +3189,4 @@ void PlayerBattleSystem::StopReaper()
 {
 	if (!gReaperActive || gReaperLoop == nullptr)
 	{
-		return;
-	}
-	gReaperLoop->cancel(gReaperTimerId);
-	gReaperActive = false;
-	LOG_INFO << "[PlayerBattle] Battle freeze reaper stopped";
-}
+	

@@ -71,4 +71,16 @@ public final class MonsterTableComp {
         }
     }
 
+    public record Capture_pet_table_id(int value) {
+        public static Capture_pet_table_id from(MonsterTable row) {
+            return new Capture_pet_table_id(row.getCapturePetTableId());
+        }
+    }
+
+    public record Capture_rate(int value) {
+        public static Capture_rate from(MonsterTable row) {
+            return new Capture_rate(row.getCaptureRate());
+        }
+    }
+
 }

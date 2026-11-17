@@ -52,7 +52,7 @@ public:
 
     void Init(muduo::net::EventLoop& loop, PickFetcher pick, Clock now)
     {
-        loop_ = &loop;
+        loop_ = std::ref(loop);
         pick_ = std::move(pick);
         now_ = std::move(now);
         stopped_ = false;
@@ -116,7 +116,7 @@ public:
 private:
     boost::cobalt::task<void> FetchAsync(Fetcher fetcher, Request request, uint64_t requestSequence)
     {
-        auto result = co_await loop_async::AwaitCallback<FetchResult>(*loop_, [&fetcher, &request](auto done) {
+        auto result = co_await loop_async::AwaitCallback<FetchResult>(loop_->get(), [&fetcher, &request](auto done) {
             fetcher(request, std::move(done));
             return true; // 发送路径承诺恰好回调一次,本地拒绝也延后交付。
         }, FetchResult{GrpcCallOutcome{kGrpcStatusUnavailable, "idsegment fetch rejected"}, std::nullopt});
@@ -155,7 +155,7 @@ private:
         tlsGuidSegmentRegistry.Get(kind).OnTransportFailure(why.str());
     }
 
-    muduo::net::EventLoop* loop_ = nullptr;
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_;
     PickFetcher pick_;
     Clock now_;
     std::optional<LoopTaskScope> tasks_;

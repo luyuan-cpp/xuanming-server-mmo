@@ -1071,11 +1071,14 @@ func (x *SortBagResponse) GetChanged() bool {
 	return false
 }
 
-// 穿上:物品必须在人物背包里。取接受该部位的槽位里第一个空槽;都占着就替换
-// 槽号最小的那个,旧装备回背包。成功回两个包的全量,客户端整体覆盖。
+// 穿上:物品必须在人物背包里。同名不同实例允许占用两个同类槽。
+// target_slot有值时只操作该槽,须在容量内且接受装备类型；槽0也是合法显式值。
+// 未指定时兼容旧客户端:先找第一个接受该部位的空槽,都占着则替换槽号最小的那个。
+// 旧装备回背包。成功回两个包的全量,客户端整体覆盖。
 type EquipItemRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	TargetSlot    *uint32                `protobuf:"varint,2,opt,name=target_slot,json=targetSlot,proto3,oneof" json:"target_slot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1113,6 +1116,13 @@ func (*EquipItemRequest) Descriptor() ([]byte, []int) {
 func (x *EquipItemRequest) GetItemId() uint64 {
 	if x != nil {
 		return x.ItemId
+	}
+	return 0
+}
+
+func (x *EquipItemRequest) GetTargetSlot() uint32 {
+	if x != nil && x.TargetSlot != nil {
+		return *x.TargetSlot
 	}
 	return 0
 }
@@ -2007,9 +2017,12 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x0fSortBagResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
 	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12\x18\n" +
-	"\achanged\x18\x03 \x01(\bR\achanged\"+\n" +
+	"\achanged\x18\x03 \x01(\bR\achanged\"a\n" +
 	"\x10EquipItemRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\"\x8d\x01\n" +
+	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12$\n" +
+	"\vtarget_slot\x18\x02 \x01(\rH\x00R\n" +
+	"targetSlot\x88\x01\x01B\x0e\n" +
+	"\f_target_slot\"\x8d\x01\n" +
 	"\x11EquipItemResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
 	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
@@ -2182,6 +2195,7 @@ func file_proto_scene_player_bag_proto_init() {
 	if File_proto_scene_player_bag_proto != nil {
 		return
 	}
+	file_proto_scene_player_bag_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

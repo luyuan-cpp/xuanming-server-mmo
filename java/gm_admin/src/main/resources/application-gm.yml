@@ -1,0 +1,50 @@
+server:
+  address: 127.0.0.1
+  port: ${GM_HTTP_PORT:18090}
+spring:
+  main:
+    lazy-initialization: true
+  quartz:
+    auto-startup: false
+  flyway:
+    enabled: false
+  datasource:
+    druid:
+      stat-view-servlet:
+        enabled: false
+    dynamic:
+      datasource:
+        master:
+          url: ${GM_JDBC_URL}
+          username: ${GM_DB_USER}
+          password: ${GM_DB_PASSWORD}
+  data:
+    redis:
+      host: 127.0.0.1
+      port: ${GM_REDIS_PORT:16391}
+      password: ${GM_REDIS_PASSWORD}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+jeecg:
+  shiro:
+    excludeUrls: ''
+  path:
+    upload: ${GM_UPLOAD_PATH}
+    webapp: ${GM_UPLOAD_PATH}
+logging:
+  level:
+    org.jeecg.modules.system.controller.LoginController: WARN
+    org.jeecg.config.shiro: WARN
+gm:
+  bootstrap-password: ${GM_BOOTSTRAP_PASSWORD:}
+  game:
+    gateway-url: ${GM_GATEWAY_URL:http://127.0.0.1:8081}
+    gateway-admin-key: ${GM_GATEWAY_ADMIN_KEY:}
+    data-target: ${GM_DATA_TARGET:127.0.0.1:2347}
+    locator-target: ${GM_LOCATOR_TARGET:127.0.0.1:2349}
+    plaintext: ${GM_GAME_PLAINTEXT:true}
+    mail-target: ${GM_MAIL_TARGET:}
+    mail-admin-secret: ${GM_MAIL_ADMIN_SECRET:}

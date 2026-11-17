@@ -257,6 +257,60 @@ public final class SkillTableComp {
         }
     }
 
+    public record Battle_model(int value) {
+        public static Battle_model from(SkillTable row) {
+            return new Battle_model(row.getBattleModel());
+        }
+    }
+
+    public record Caster_mask(int value) {
+        public static Caster_mask from(SkillTable row) {
+            return new Caster_mask(row.getCasterMask());
+        }
+    }
+
+    public record Ability_kind(int value) {
+        public static Ability_kind from(SkillTable row) {
+            return new Ability_kind(row.getAbilityKind());
+        }
+    }
+
+    public record Pet_max_targets(int value) {
+        public static Pet_max_targets from(SkillTable row) {
+            return new Pet_max_targets(row.getPetMaxTargets());
+        }
+    }
+
+    public record Prototype_code(String value) {
+        public static Prototype_code from(SkillTable row) {
+            return new Prototype_code(row.getPrototypeCode());
+        }
+    }
+
+    public record Max_battle_uses(int value) {
+        public static Max_battle_uses from(SkillTable row) {
+            return new Max_battle_uses(row.getMaxBattleUses());
+        }
+    }
+
+    public record Health_cost_mode(int value) {
+        public static Health_cost_mode from(SkillTable row) {
+            return new Health_cost_mode(row.getHealthCostMode());
+        }
+    }
+
+    public record Action_tags(int value) {
+        public static Action_tags from(SkillTable row) {
+            return new Action_tags(row.getActionTags());
+        }
+    }
+
+    public record Allow_dead_target(int value) {
+        public static Allow_dead_target from(SkillTable row) {
+            return new Allow_dead_target(row.getAllowDeadTarget());
+        }
+    }
+
     public record Skill_type(List<Integer> values) {
         public static Skill_type from(SkillTable row) {
             return new Skill_type(row.getSkillTypeList());
@@ -272,6 +326,12 @@ public final class SkillTableComp {
     public record Effect(List<Integer> values) {
         public static Effect from(SkillTable row) {
             return new Effect(row.getEffectList());
+        }
+    }
+
+    public record Init_effect(List<Integer> values) {
+        public static Init_effect from(SkillTable row) {
+            return new Init_effect(row.getInitEffectList());
         }
     }
 

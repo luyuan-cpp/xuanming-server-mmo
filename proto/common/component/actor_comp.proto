@@ -69,6 +69,9 @@ message BaseAttributesComp {
 // Player level comp, manages level and level-related features
 message LevelComp {
     uint32 level = 1;  // Player level
+    // 已实际入账的累计角色经验，与等级一起持久化。升级曲线尚未开放，入账不自行改等级；
+    // GM 调级也不清空累计经验。旧存档缺字段时从 0 开始，不把历史已结算奖励自动重放。
+    uint64 total_exp = 2;
 }
 
 message ActorStateComp {

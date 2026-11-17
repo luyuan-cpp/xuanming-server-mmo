@@ -28,6 +28,7 @@ void EquipEnhanceTableManager::Load() {
         const auto& row_data = snap->data.data(i);
         snap->idMap.emplace(row_data.id(), &row_data);
         snap->materialIdIndex[row_data.material_id()].push_back(&row_data);
+        snap->profileIdIndex[row_data.profile_id()].push_back(&row_data);
     }
 
     snapshot = std::move(snap);

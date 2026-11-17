@@ -123,6 +123,17 @@ private static final long serialVersionUID = 0L;
   }
   private int monsterMemoizedSerializedSize = -1;
 
+  public static final int ALLOW_PET_CAPTURE_FIELD_NUMBER = 6;
+  private int allowPetCapture_ = 0;
+  /**
+   * <code>uint32 allow_pet_capture = 6;</code>
+   * @return The allowPetCapture.
+   */
+  @java.lang.Override
+  public int getAllowPetCapture() {
+    return allowPetCapture_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -156,6 +167,9 @@ private static final long serialVersionUID = 0L;
     }
     for (int i = 0; i < monster_.size(); i++) {
       output.writeUInt32NoTag(monster_.getInt(i));
+    }
+    if (allowPetCapture_ != 0) {
+      output.writeUInt32(6, allowPetCapture_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -191,6 +205,10 @@ private static final long serialVersionUID = 0L;
       }
       monsterMemoizedSerializedSize = dataSize;
     }
+    if (allowPetCapture_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(6, allowPetCapture_);
+    }
     return size;
   }
   @java.lang.Override
@@ -225,6 +243,8 @@ private static final long serialVersionUID = 0L;
         != other.getTimeLimit()) return false;
     if (!getMonsterList()
         .equals(other.getMonsterList())) return false;
+    if (getAllowPetCapture()
+        != other.getAllowPetCapture()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -248,6 +268,8 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + MONSTER_FIELD_NUMBER;
       hash = (53 * hash) + getMonsterList().hashCode();
     }
+    hash = (37 * hash) + ALLOW_PET_CAPTURE_FIELD_NUMBER;
+    hash = (53 * hash) + getAllowPetCapture();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -384,6 +406,7 @@ private static final long serialVersionUID = 0L;
       maxTeamSize_ = 0;
       timeLimit_ = 0;
       monster_ = emptyIntList();
+      allowPetCapture_ = 0;
       return this;
     }
 
@@ -433,6 +456,9 @@ private static final long serialVersionUID = 0L;
         monster_.makeImmutable();
         result.monster_ = monster_;
       }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.allowPetCapture_ = allowPetCapture_;
+      }
     }
 
     @java.lang.Override
@@ -469,6 +495,9 @@ private static final long serialVersionUID = 0L;
           monster_.addAll(other.monster_);
         }
         onChanged();
+      }
+      if (other.getAllowPetCapture() != 0) {
+        setAllowPetCapture(other.getAllowPetCapture());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -532,6 +561,11 @@ private static final long serialVersionUID = 0L;
               input.popLimit(limit);
               break;
             } // case 42
+            case 48: {
+              allowPetCapture_ = input.readUInt32();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -757,6 +791,38 @@ private static final long serialVersionUID = 0L;
     public Builder clearMonster() {
       monster_ = emptyIntList();
       bitField0_ = (bitField0_ & ~0x00000010);
+      onChanged();
+      return this;
+    }
+
+    private int allowPetCapture_ ;
+    /**
+     * <code>uint32 allow_pet_capture = 6;</code>
+     * @return The allowPetCapture.
+     */
+    @java.lang.Override
+    public int getAllowPetCapture() {
+      return allowPetCapture_;
+    }
+    /**
+     * <code>uint32 allow_pet_capture = 6;</code>
+     * @param value The allowPetCapture to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowPetCapture(int value) {
+
+      allowPetCapture_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 allow_pet_capture = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowPetCapture() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      allowPetCapture_ = 0;
       onChanged();
       return this;
     }

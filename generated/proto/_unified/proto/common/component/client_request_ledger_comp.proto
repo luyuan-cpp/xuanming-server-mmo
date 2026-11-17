@@ -30,6 +30,8 @@ message ClientRequestRecord {
   bool enhance_success = 5;      // 强化:那一次掷骰成没成
   uint32 enhance_level = 6;      // 强化:那一次之后的等级
   uint32 created_scheme_id = 7;  // 新建加点方案:那一次建出来的方案号
+  uint64 equipment_item_id = 8; // 装备打造/装条：首次成功对应的实例。
+  uint64 forge_revision = 9;    // 装备打造/装条：首次成功后的业务水位。
 }
 
 message ClientRequestLedgerComp {
@@ -37,4 +39,7 @@ message ClientRequestLedgerComp {
   repeated ClientRequestRecord records = 1;
   // 下一条的 seq。0 = 从没记过(旧存档没有这个字段),按 1 处理。
   uint64 next_seq = 2;
+  // 装备打造/首次装词条共用的持久防重水位，初始0，每次成功+1；饱和时拒绝。
+  // 与records的淘汰序号独立；即使旧回执被淘汰，旧水位请求也不能再次扣料或造物。
+  uint64 forge_revision = 3;
 }

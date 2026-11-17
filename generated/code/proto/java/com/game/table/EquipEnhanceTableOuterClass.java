@@ -45,15 +45,16 @@ public final class EquipEnhanceTableOuterClass extends com.google.protobuf.Gener
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\030equipenhance_table.proto\"\247\001\n\021EquipEnha" +
+      "\n\030equipenhance_table.proto\"\312\001\n\021EquipEnha" +
       "nceTable\022\n\n\002id\030\001 \001(\r\022\027\n\017bonus_permyriad\030" +
       "\002 \001(\r\022\024\n\014success_rate\030\003 \001(\r\022\027\n\017fail_leve" +
       "l_loss\030\004 \001(\r\022\021\n\tcost_gold\030\005 \001(\004\022\023\n\013mater" +
-      "ial_id\030\006 \001(\r\022\026\n\016material_count\030\007 \001(\r\"9\n\025" +
-      "EquipEnhanceTableData\022 \n\004data\030\001 \003(\0132\022.Eq" +
-      "uipEnhanceTableBC\n\016com.game.tableB\033Equip" +
-      "EnhanceTableOuterClassP\001Z\022generated/pb/t" +
-      "ableb\006proto3"
+      "ial_id\030\006 \001(\r\022\026\n\016material_count\030\007 \001(\r\022\022\n\n" +
+      "profile_id\030\010 \001(\r\022\r\n\005level\030\t \001(\r\"9\n\025Equip" +
+      "EnhanceTableData\022 \n\004data\030\001 \003(\0132\022.EquipEn" +
+      "hanceTableBC\n\016com.game.tableB\033EquipEnhan" +
+      "ceTableOuterClassP\001Z\022generated/pb/tableb" +
+      "\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -64,7 +65,7 @@ public final class EquipEnhanceTableOuterClass extends com.google.protobuf.Gener
     internal_static_EquipEnhanceTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_EquipEnhanceTable_descriptor,
-        new java.lang.String[] { "Id", "BonusPermyriad", "SuccessRate", "FailLevelLoss", "CostGold", "MaterialId", "MaterialCount", });
+        new java.lang.String[] { "Id", "BonusPermyriad", "SuccessRate", "FailLevelLoss", "CostGold", "MaterialId", "MaterialCount", "ProfileId", "Level", });
     internal_static_EquipEnhanceTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_EquipEnhanceTableData_fieldAccessorTable = new

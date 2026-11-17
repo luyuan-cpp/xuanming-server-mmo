@@ -29,9 +29,10 @@ import (
 )
 
 // 缺省值与上界。上界防止配置笔误把连接数或超时放大到失控。
+// 连接池上界须容纳 scene_manager 铸造通道按 Little 定律推导的 130 条,部署连接总账已按此值计入 PlayerFixed。
 const (
 	DefaultPoolSizePerNode    = 4
-	MaxPoolSizePerNode        = 128
+	MaxPoolSizePerNode        = 130
 	DefaultConnMaxIdleSeconds = 60
 	DefaultTimeoutMs          = 1000
 	MaxTimeoutMs              = 10000

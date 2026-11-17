@@ -36,6 +36,9 @@ void SkillTableManager::Load() {
         for (const auto& elem : row_data.effect()) {
             snap->effectIndex.emplace(elem, &row_data);
         }
+        for (const auto& elem : row_data.init_effect()) {
+            snap->initEffectIndex.emplace(elem, &row_data);
+        }
     }
 
     snap->damageExpr.Init({

@@ -50,4 +50,10 @@ public interface DungeonTableOrBuilder extends
    * @return The monster at the given index.
    */
   int getMonster(int index);
+
+  /**
+   * <code>uint32 allow_pet_capture = 6;</code>
+   * @return The allowPetCapture.
+   */
+  int getAllowPetCapture();
 }

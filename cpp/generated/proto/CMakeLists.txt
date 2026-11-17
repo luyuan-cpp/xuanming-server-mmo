@@ -176,6 +176,7 @@ set(SOURCE_FILES
     opentelemetry/proto/trace/v1/trace.pb.cc
     payment/payment.pb.cc
     payment/payment_table.pb.cc
+    common/component/equipment_effects.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

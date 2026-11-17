@@ -422,9 +422,40 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
     kMovementSpeedReductionFieldNumber = 16,
     kCombatIdleSecondsFieldNumber = 20,
     kTimeFieldNumber = 21,
+    kBattleOpFieldNumber = 23,
+    kTriggerEventFieldNumber = 24,
+    kEffectTargetFieldNumber = 25,
+    kFlatValueFieldNumber = 26,
+    kPerLevelFieldNumber = 27,
+    kRatioFieldNumber = 28,
+    kValueBasisFieldNumber = 29,
+    kDamageFilterFieldNumber = 30,
+    kDurationRoundsFieldNumber = 31,
     kTagFieldNumber = 4,
     kImmuneTagFieldNumber = 5,
     kDispelTagFieldNumber = 6,
+    kRequiredTagFieldNumber = 39,
+    kSecondRequiredTagFieldNumber = 40,
+    kTriggerChanceFieldNumber = 33,
+    kTickCountFieldNumber = 32,
+    kPerRoundLimitFieldNumber = 34,
+    kHitLimitFieldNumber = 35,
+    kModifierStatFieldNumber = 36,
+    kApplicationChanceFieldNumber = 38,
+    kStateKindFieldNumber = 37,
+    kEffectCountFieldNumber = 43,
+    kConditionalBonusFieldNumber = 41,
+    kSecondaryRatioFieldNumber = 42,
+    kTargetCountFieldNumber = 44,
+    kPetTargetCountFieldNumber = 45,
+    kStackKeyFieldNumber = 46,
+    kRefreshPolicyFieldNumber = 47,
+    kKeepOnDeathFieldNumber = 48,
+    kEffectPriorityFieldNumber = 49,
+    kStartRoundFieldNumber = 50,
+    kStackLimitFieldNumber = 51,
+    kRequireLivingCasterFieldNumber = 52,
+    kTickOnApplyFieldNumber = 53,
   };
   // repeated double interval_effect = 14;
   [[nodiscard]] int interval_effect_size()
@@ -656,6 +687,96 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
   void _internal_set_time(::uint32_t value);
 
   public:
+  // uint32 battle_op = 23;
+  void clear_battle_op() ;
+  [[nodiscard]] ::uint32_t battle_op() const;
+  void set_battle_op(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_op() const;
+  void _internal_set_battle_op(::uint32_t value);
+
+  public:
+  // uint32 trigger_event = 24;
+  void clear_trigger_event() ;
+  [[nodiscard]] ::uint32_t trigger_event() const;
+  void set_trigger_event(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trigger_event() const;
+  void _internal_set_trigger_event(::uint32_t value);
+
+  public:
+  // uint32 effect_target = 25;
+  void clear_effect_target() ;
+  [[nodiscard]] ::uint32_t effect_target() const;
+  void set_effect_target(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_effect_target() const;
+  void _internal_set_effect_target(::uint32_t value);
+
+  public:
+  // double flat_value = 26;
+  void clear_flat_value() ;
+  [[nodiscard]] double flat_value() const;
+  void set_flat_value(double value);
+
+  private:
+  double _internal_flat_value() const;
+  void _internal_set_flat_value(double value);
+
+  public:
+  // double per_level = 27;
+  void clear_per_level() ;
+  [[nodiscard]] double per_level() const;
+  void set_per_level(double value);
+
+  private:
+  double _internal_per_level() const;
+  void _internal_set_per_level(double value);
+
+  public:
+  // double ratio = 28;
+  void clear_ratio() ;
+  [[nodiscard]] double ratio() const;
+  void set_ratio(double value);
+
+  private:
+  double _internal_ratio() const;
+  void _internal_set_ratio(double value);
+
+  public:
+  // uint32 value_basis = 29;
+  void clear_value_basis() ;
+  [[nodiscard]] ::uint32_t value_basis() const;
+  void set_value_basis(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_value_basis() const;
+  void _internal_set_value_basis(::uint32_t value);
+
+  public:
+  // uint32 damage_filter = 30;
+  void clear_damage_filter() ;
+  [[nodiscard]] ::uint32_t damage_filter() const;
+  void set_damage_filter(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_damage_filter() const;
+  void _internal_set_damage_filter(::uint32_t value);
+
+  public:
+  // uint32 duration_rounds = 31;
+  void clear_duration_rounds() ;
+  [[nodiscard]] ::uint32_t duration_rounds() const;
+  void set_duration_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_duration_rounds() const;
+  void _internal_set_duration_rounds(::uint32_t value);
+
+  public:
   // map<string, bool> tag = 4;
   [[nodiscard]] int tag_size()
       const;
@@ -704,13 +825,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
   ::google::protobuf::Map<::std::string, bool>* PROTOBUF_NONNULL _internal_mutable_dispel_tag();
 
   public:
+  // string required_tag = 39;
+  void clear_required_tag() ;
+  [[nodiscard]] const ::std::string& required_tag() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_required_tag(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_required_tag();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_required_tag();
+  void set_allocated_required_tag(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_required_tag() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_required_tag(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_required_tag();
+
+  public:
+  // string second_required_tag = 40;
+  void clear_second_required_tag() ;
+  [[nodiscard]] const ::std::string& second_required_tag() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_second_required_tag(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_second_required_tag();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_second_required_tag();
+  void set_allocated_second_required_tag(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_second_required_tag() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_second_required_tag(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_second_required_tag();
+
+  public:
+  // double trigger_chance = 33;
+  void clear_trigger_chance() ;
+  [[nodiscard]] double trigger_chance() const;
+  void set_trigger_chance(double value);
+
+  private:
+  double _internal_trigger_chance() const;
+  void _internal_set_trigger_chance(double value);
+
+  public:
+  // uint32 tick_count = 32;
+  void clear_tick_count() ;
+  [[nodiscard]] ::uint32_t tick_count() const;
+  void set_tick_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tick_count() const;
+  void _internal_set_tick_count(::uint32_t value);
+
+  public:
+  // uint32 per_round_limit = 34;
+  void clear_per_round_limit() ;
+  [[nodiscard]] ::uint32_t per_round_limit() const;
+  void set_per_round_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_per_round_limit() const;
+  void _internal_set_per_round_limit(::uint32_t value);
+
+  public:
+  // uint32 hit_limit = 35;
+  void clear_hit_limit() ;
+  [[nodiscard]] ::uint32_t hit_limit() const;
+  void set_hit_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_hit_limit() const;
+  void _internal_set_hit_limit(::uint32_t value);
+
+  public:
+  // uint32 modifier_stat = 36;
+  void clear_modifier_stat() ;
+  [[nodiscard]] ::uint32_t modifier_stat() const;
+  void set_modifier_stat(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_modifier_stat() const;
+  void _internal_set_modifier_stat(::uint32_t value);
+
+  public:
+  // double application_chance = 38;
+  void clear_application_chance() ;
+  [[nodiscard]] double application_chance() const;
+  void set_application_chance(double value);
+
+  private:
+  double _internal_application_chance() const;
+  void _internal_set_application_chance(double value);
+
+  public:
+  // uint32 state_kind = 37;
+  void clear_state_kind() ;
+  [[nodiscard]] ::uint32_t state_kind() const;
+  void set_state_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state_kind() const;
+  void _internal_set_state_kind(::uint32_t value);
+
+  public:
+  // uint32 effect_count = 43;
+  void clear_effect_count() ;
+  [[nodiscard]] ::uint32_t effect_count() const;
+  void set_effect_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_effect_count() const;
+  void _internal_set_effect_count(::uint32_t value);
+
+  public:
+  // double conditional_bonus = 41;
+  void clear_conditional_bonus() ;
+  [[nodiscard]] double conditional_bonus() const;
+  void set_conditional_bonus(double value);
+
+  private:
+  double _internal_conditional_bonus() const;
+  void _internal_set_conditional_bonus(double value);
+
+  public:
+  // double secondary_ratio = 42;
+  void clear_secondary_ratio() ;
+  [[nodiscard]] double secondary_ratio() const;
+  void set_secondary_ratio(double value);
+
+  private:
+  double _internal_secondary_ratio() const;
+  void _internal_set_secondary_ratio(double value);
+
+  public:
+  // uint32 target_count = 44;
+  void clear_target_count() ;
+  [[nodiscard]] ::uint32_t target_count() const;
+  void set_target_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_count() const;
+  void _internal_set_target_count(::uint32_t value);
+
+  public:
+  // uint32 pet_target_count = 45;
+  void clear_pet_target_count() ;
+  [[nodiscard]] ::uint32_t pet_target_count() const;
+  void set_pet_target_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_target_count() const;
+  void _internal_set_pet_target_count(::uint32_t value);
+
+  public:
+  // uint32 stack_key = 46;
+  void clear_stack_key() ;
+  [[nodiscard]] ::uint32_t stack_key() const;
+  void set_stack_key(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_stack_key() const;
+  void _internal_set_stack_key(::uint32_t value);
+
+  public:
+  // uint32 refresh_policy = 47;
+  void clear_refresh_policy() ;
+  [[nodiscard]] ::uint32_t refresh_policy() const;
+  void set_refresh_policy(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_refresh_policy() const;
+  void _internal_set_refresh_policy(::uint32_t value);
+
+  public:
+  // uint32 keep_on_death = 48;
+  void clear_keep_on_death() ;
+  [[nodiscard]] ::uint32_t keep_on_death() const;
+  void set_keep_on_death(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_keep_on_death() const;
+  void _internal_set_keep_on_death(::uint32_t value);
+
+  public:
+  // uint32 effect_priority = 49;
+  void clear_effect_priority() ;
+  [[nodiscard]] ::uint32_t effect_priority() const;
+  void set_effect_priority(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_effect_priority() const;
+  void _internal_set_effect_priority(::uint32_t value);
+
+  public:
+  // uint32 start_round = 50;
+  void clear_start_round() ;
+  [[nodiscard]] ::uint32_t start_round() const;
+  void set_start_round(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_start_round() const;
+  void _internal_set_start_round(::uint32_t value);
+
+  public:
+  // uint32 stack_limit = 51;
+  void clear_stack_limit() ;
+  [[nodiscard]] ::uint32_t stack_limit() const;
+  void set_stack_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_stack_limit() const;
+  void _internal_set_stack_limit(::uint32_t value);
+
+  public:
+  // uint32 require_living_caster = 52;
+  void clear_require_living_caster() ;
+  [[nodiscard]] ::uint32_t require_living_caster() const;
+  void set_require_living_caster(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_require_living_caster() const;
+  void _internal_set_require_living_caster(::uint32_t value);
+
+  public:
+  // uint32 tick_on_apply = 53;
+  void clear_tick_on_apply() ;
+  [[nodiscard]] ::uint32_t tick_on_apply() const;
+  void set_tick_on_apply(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tick_on_apply() const;
+  void _internal_set_tick_on_apply(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BuffTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 22,
-                          3, 88,
-                          2>;
+      ::google::protobuf::internal::TcParseTable<5, 53,
+                          3, 151,
+                          9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -735,7 +1086,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const BuffTable& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedField<double> interval_effect_;
     ::google::protobuf::RepeatedField<::uint32_t> sub_buff_;
@@ -758,9 +1109,40 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
     double movement_speed_reduction_;
     double combat_idle_seconds_;
     ::uint32_t time_;
+    ::uint32_t battle_op_;
+    ::uint32_t trigger_event_;
+    ::uint32_t effect_target_;
+    double flat_value_;
+    double per_level_;
+    double ratio_;
+    ::uint32_t value_basis_;
+    ::uint32_t damage_filter_;
+    ::uint32_t duration_rounds_;
     ::google::protobuf::internal::MapField<BuffTable_TagEntry_DoNotUse, ::std::string, bool> tag_;
     ::google::protobuf::internal::MapField<BuffTable_ImmuneTagEntry_DoNotUse, ::std::string, bool> immune_tag_;
     ::google::protobuf::internal::MapField<BuffTable_DispelTagEntry_DoNotUse, ::std::string, bool> dispel_tag_;
+    ::google::protobuf::internal::ArenaStringPtr required_tag_;
+    ::google::protobuf::internal::ArenaStringPtr second_required_tag_;
+    double trigger_chance_;
+    ::uint32_t tick_count_;
+    ::uint32_t per_round_limit_;
+    ::uint32_t hit_limit_;
+    ::uint32_t modifier_stat_;
+    double application_chance_;
+    ::uint32_t state_kind_;
+    ::uint32_t effect_count_;
+    double conditional_bonus_;
+    double secondary_ratio_;
+    ::uint32_t target_count_;
+    ::uint32_t pet_target_count_;
+    ::uint32_t stack_key_;
+    ::uint32_t refresh_policy_;
+    ::uint32_t keep_on_death_;
+    ::uint32_t effect_priority_;
+    ::uint32_t start_round_;
+    ::uint32_t stack_limit_;
+    ::uint32_t require_living_caster_;
+    ::uint32_t tick_on_apply_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1083,7 +1465,7 @@ inline int BuffTable::tag_size() const {
 inline void BuffTable::clear_tag() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tag_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline const ::google::protobuf::Map<::std::string, bool>& BuffTable::_internal_tag() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1099,7 +1481,7 @@ inline ::google::protobuf::Map<::std::string, bool>* PROTOBUF_NONNULL BuffTable:
 }
 inline ::google::protobuf::Map<::std::string, bool>* PROTOBUF_NONNULL BuffTable::mutable_tag()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_mutable_map:BuffTable.tag)
   return _internal_mutable_tag();
 }
@@ -1114,7 +1496,7 @@ inline int BuffTable::immune_tag_size() const {
 inline void BuffTable::clear_immune_tag() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.immune_tag_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline const ::google::protobuf::Map<::std::string, bool>& BuffTable::_internal_immune_tag() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1130,7 +1512,7 @@ inline ::google::protobuf::Map<::std::string, bool>* PROTOBUF_NONNULL BuffTable:
 }
 inline ::google::protobuf::Map<::std::string, bool>* PROTOBUF_NONNULL BuffTable::mutable_immune_tag()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_mutable_map:BuffTable.immune_tag)
   return _internal_mutable_immune_tag();
 }
@@ -1145,7 +1527,7 @@ inline int BuffTable::dispel_tag_size() const {
 inline void BuffTable::clear_dispel_tag() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.dispel_tag_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
 }
 inline const ::google::protobuf::Map<::std::string, bool>& BuffTable::_internal_dispel_tag() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1161,7 +1543,7 @@ inline ::google::protobuf::Map<::std::string, bool>* PROTOBUF_NONNULL BuffTable:
 }
 inline ::google::protobuf::Map<::std::string, bool>* PROTOBUF_NONNULL BuffTable::mutable_dispel_tag()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
   // @@protoc_insertion_point(field_mutable_map:BuffTable.dispel_tag)
   return _internal_mutable_dispel_tag();
 }
@@ -1709,6 +2091,830 @@ inline void BuffTable::set_allocated_bonus_damage(::std::string* PROTOBUF_NULLAB
     _impl_.bonus_damage_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:BuffTable.bonus_damage)
+}
+
+// uint32 battle_op = 23;
+inline void BuffTable::clear_battle_op() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_op_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t BuffTable::battle_op() const {
+  // @@protoc_insertion_point(field_get:BuffTable.battle_op)
+  return _internal_battle_op();
+}
+inline void BuffTable::set_battle_op(::uint32_t value) {
+  _internal_set_battle_op(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:BuffTable.battle_op)
+}
+inline ::uint32_t BuffTable::_internal_battle_op() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_op_;
+}
+inline void BuffTable::_internal_set_battle_op(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_op_ = value;
+}
+
+// uint32 trigger_event = 24;
+inline void BuffTable::clear_trigger_event() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trigger_event_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t BuffTable::trigger_event() const {
+  // @@protoc_insertion_point(field_get:BuffTable.trigger_event)
+  return _internal_trigger_event();
+}
+inline void BuffTable::set_trigger_event(::uint32_t value) {
+  _internal_set_trigger_event(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:BuffTable.trigger_event)
+}
+inline ::uint32_t BuffTable::_internal_trigger_event() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trigger_event_;
+}
+inline void BuffTable::_internal_set_trigger_event(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trigger_event_ = value;
+}
+
+// uint32 effect_target = 25;
+inline void BuffTable::clear_effect_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_target_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t BuffTable::effect_target() const {
+  // @@protoc_insertion_point(field_get:BuffTable.effect_target)
+  return _internal_effect_target();
+}
+inline void BuffTable::set_effect_target(::uint32_t value) {
+  _internal_set_effect_target(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:BuffTable.effect_target)
+}
+inline ::uint32_t BuffTable::_internal_effect_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effect_target_;
+}
+inline void BuffTable::_internal_set_effect_target(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_target_ = value;
+}
+
+// double flat_value = 26;
+inline void BuffTable::clear_flat_value() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.flat_value_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline double BuffTable::flat_value() const {
+  // @@protoc_insertion_point(field_get:BuffTable.flat_value)
+  return _internal_flat_value();
+}
+inline void BuffTable::set_flat_value(double value) {
+  _internal_set_flat_value(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:BuffTable.flat_value)
+}
+inline double BuffTable::_internal_flat_value() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.flat_value_;
+}
+inline void BuffTable::_internal_set_flat_value(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.flat_value_ = value;
+}
+
+// double per_level = 27;
+inline void BuffTable::clear_per_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_level_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline double BuffTable::per_level() const {
+  // @@protoc_insertion_point(field_get:BuffTable.per_level)
+  return _internal_per_level();
+}
+inline void BuffTable::set_per_level(double value) {
+  _internal_set_per_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:BuffTable.per_level)
+}
+inline double BuffTable::_internal_per_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.per_level_;
+}
+inline void BuffTable::_internal_set_per_level(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_level_ = value;
+}
+
+// double ratio = 28;
+inline void BuffTable::clear_ratio() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ratio_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline double BuffTable::ratio() const {
+  // @@protoc_insertion_point(field_get:BuffTable.ratio)
+  return _internal_ratio();
+}
+inline void BuffTable::set_ratio(double value) {
+  _internal_set_ratio(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:BuffTable.ratio)
+}
+inline double BuffTable::_internal_ratio() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ratio_;
+}
+inline void BuffTable::_internal_set_ratio(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ratio_ = value;
+}
+
+// uint32 value_basis = 29;
+inline void BuffTable::clear_value_basis() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.value_basis_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t BuffTable::value_basis() const {
+  // @@protoc_insertion_point(field_get:BuffTable.value_basis)
+  return _internal_value_basis();
+}
+inline void BuffTable::set_value_basis(::uint32_t value) {
+  _internal_set_value_basis(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:BuffTable.value_basis)
+}
+inline ::uint32_t BuffTable::_internal_value_basis() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.value_basis_;
+}
+inline void BuffTable::_internal_set_value_basis(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.value_basis_ = value;
+}
+
+// uint32 damage_filter = 30;
+inline void BuffTable::clear_damage_filter() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.damage_filter_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint32_t BuffTable::damage_filter() const {
+  // @@protoc_insertion_point(field_get:BuffTable.damage_filter)
+  return _internal_damage_filter();
+}
+inline void BuffTable::set_damage_filter(::uint32_t value) {
+  _internal_set_damage_filter(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:BuffTable.damage_filter)
+}
+inline ::uint32_t BuffTable::_internal_damage_filter() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.damage_filter_;
+}
+inline void BuffTable::_internal_set_damage_filter(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.damage_filter_ = value;
+}
+
+// uint32 duration_rounds = 31;
+inline void BuffTable::clear_duration_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duration_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline ::uint32_t BuffTable::duration_rounds() const {
+  // @@protoc_insertion_point(field_get:BuffTable.duration_rounds)
+  return _internal_duration_rounds();
+}
+inline void BuffTable::set_duration_rounds(::uint32_t value) {
+  _internal_set_duration_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:BuffTable.duration_rounds)
+}
+inline ::uint32_t BuffTable::_internal_duration_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.duration_rounds_;
+}
+inline void BuffTable::_internal_set_duration_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.duration_rounds_ = value;
+}
+
+// uint32 tick_count = 32;
+inline void BuffTable::clear_tick_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tick_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+}
+inline ::uint32_t BuffTable::tick_count() const {
+  // @@protoc_insertion_point(field_get:BuffTable.tick_count)
+  return _internal_tick_count();
+}
+inline void BuffTable::set_tick_count(::uint32_t value) {
+  _internal_set_tick_count(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BuffTable.tick_count)
+}
+inline ::uint32_t BuffTable::_internal_tick_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tick_count_;
+}
+inline void BuffTable::_internal_set_tick_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tick_count_ = value;
+}
+
+// double trigger_chance = 33;
+inline void BuffTable::clear_trigger_chance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trigger_chance_ = 0;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+}
+inline double BuffTable::trigger_chance() const {
+  // @@protoc_insertion_point(field_get:BuffTable.trigger_chance)
+  return _internal_trigger_chance();
+}
+inline void BuffTable::set_trigger_chance(double value) {
+  _internal_set_trigger_chance(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  // @@protoc_insertion_point(field_set:BuffTable.trigger_chance)
+}
+inline double BuffTable::_internal_trigger_chance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trigger_chance_;
+}
+inline void BuffTable::_internal_set_trigger_chance(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trigger_chance_ = value;
+}
+
+// uint32 per_round_limit = 34;
+inline void BuffTable::clear_per_round_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_round_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline ::uint32_t BuffTable::per_round_limit() const {
+  // @@protoc_insertion_point(field_get:BuffTable.per_round_limit)
+  return _internal_per_round_limit();
+}
+inline void BuffTable::set_per_round_limit(::uint32_t value) {
+  _internal_set_per_round_limit(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BuffTable.per_round_limit)
+}
+inline ::uint32_t BuffTable::_internal_per_round_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.per_round_limit_;
+}
+inline void BuffTable::_internal_set_per_round_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_round_limit_ = value;
+}
+
+// uint32 hit_limit = 35;
+inline void BuffTable::clear_hit_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hit_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+}
+inline ::uint32_t BuffTable::hit_limit() const {
+  // @@protoc_insertion_point(field_get:BuffTable.hit_limit)
+  return _internal_hit_limit();
+}
+inline void BuffTable::set_hit_limit(::uint32_t value) {
+  _internal_set_hit_limit(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BuffTable.hit_limit)
+}
+inline ::uint32_t BuffTable::_internal_hit_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hit_limit_;
+}
+inline void BuffTable::_internal_set_hit_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hit_limit_ = value;
+}
+
+// uint32 modifier_stat = 36;
+inline void BuffTable::clear_modifier_stat() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.modifier_stat_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+}
+inline ::uint32_t BuffTable::modifier_stat() const {
+  // @@protoc_insertion_point(field_get:BuffTable.modifier_stat)
+  return _internal_modifier_stat();
+}
+inline void BuffTable::set_modifier_stat(::uint32_t value) {
+  _internal_set_modifier_stat(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  // @@protoc_insertion_point(field_set:BuffTable.modifier_stat)
+}
+inline ::uint32_t BuffTable::_internal_modifier_stat() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.modifier_stat_;
+}
+inline void BuffTable::_internal_set_modifier_stat(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.modifier_stat_ = value;
+}
+
+// uint32 state_kind = 37;
+inline void BuffTable::clear_state_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+}
+inline ::uint32_t BuffTable::state_kind() const {
+  // @@protoc_insertion_point(field_get:BuffTable.state_kind)
+  return _internal_state_kind();
+}
+inline void BuffTable::set_state_kind(::uint32_t value) {
+  _internal_set_state_kind(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  // @@protoc_insertion_point(field_set:BuffTable.state_kind)
+}
+inline ::uint32_t BuffTable::_internal_state_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_kind_;
+}
+inline void BuffTable::_internal_set_state_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_kind_ = value;
+}
+
+// double application_chance = 38;
+inline void BuffTable::clear_application_chance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.application_chance_ = 0;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+}
+inline double BuffTable::application_chance() const {
+  // @@protoc_insertion_point(field_get:BuffTable.application_chance)
+  return _internal_application_chance();
+}
+inline void BuffTable::set_application_chance(double value) {
+  _internal_set_application_chance(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  // @@protoc_insertion_point(field_set:BuffTable.application_chance)
+}
+inline double BuffTable::_internal_application_chance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.application_chance_;
+}
+inline void BuffTable::_internal_set_application_chance(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.application_chance_ = value;
+}
+
+// string required_tag = 39;
+inline void BuffTable::clear_required_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_tag_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline const ::std::string& BuffTable::required_tag() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BuffTable.required_tag)
+  return _internal_required_tag();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BuffTable::set_required_tag(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  _impl_.required_tag_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:BuffTable.required_tag)
+}
+inline ::std::string* PROTOBUF_NONNULL BuffTable::mutable_required_tag()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ::std::string* _s = _internal_mutable_required_tag();
+  // @@protoc_insertion_point(field_mutable:BuffTable.required_tag)
+  return _s;
+}
+inline const ::std::string& BuffTable::_internal_required_tag() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.required_tag_.Get();
+}
+inline void BuffTable::_internal_set_required_tag(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_tag_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BuffTable::_internal_mutable_required_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.required_tag_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BuffTable::release_required_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BuffTable.required_tag)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x80000000U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  auto* released = _impl_.required_tag_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.required_tag_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BuffTable::set_allocated_required_tag(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  }
+  _impl_.required_tag_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.required_tag_.IsDefault()) {
+    _impl_.required_tag_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:BuffTable.required_tag)
+}
+
+// string second_required_tag = 40;
+inline void BuffTable::clear_second_required_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.second_required_tag_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+}
+inline const ::std::string& BuffTable::second_required_tag() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BuffTable.second_required_tag)
+  return _internal_second_required_tag();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BuffTable::set_second_required_tag(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  _impl_.second_required_tag_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:BuffTable.second_required_tag)
+}
+inline ::std::string* PROTOBUF_NONNULL BuffTable::mutable_second_required_tag()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ::std::string* _s = _internal_mutable_second_required_tag();
+  // @@protoc_insertion_point(field_mutable:BuffTable.second_required_tag)
+  return _s;
+}
+inline const ::std::string& BuffTable::_internal_second_required_tag() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.second_required_tag_.Get();
+}
+inline void BuffTable::_internal_set_second_required_tag(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.second_required_tag_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BuffTable::_internal_mutable_second_required_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.second_required_tag_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BuffTable::release_second_required_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BuffTable.second_required_tag)
+  if (!CheckHasBit(_impl_._has_bits_[1], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  auto* released = _impl_.second_required_tag_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.second_required_tag_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BuffTable::set_allocated_second_required_tag(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  }
+  _impl_.second_required_tag_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.second_required_tag_.IsDefault()) {
+    _impl_.second_required_tag_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:BuffTable.second_required_tag)
+}
+
+// double conditional_bonus = 41;
+inline void BuffTable::clear_conditional_bonus() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.conditional_bonus_ = 0;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
+}
+inline double BuffTable::conditional_bonus() const {
+  // @@protoc_insertion_point(field_get:BuffTable.conditional_bonus)
+  return _internal_conditional_bonus();
+}
+inline void BuffTable::set_conditional_bonus(double value) {
+  _internal_set_conditional_bonus(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
+  // @@protoc_insertion_point(field_set:BuffTable.conditional_bonus)
+}
+inline double BuffTable::_internal_conditional_bonus() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.conditional_bonus_;
+}
+inline void BuffTable::_internal_set_conditional_bonus(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.conditional_bonus_ = value;
+}
+
+// double secondary_ratio = 42;
+inline void BuffTable::clear_secondary_ratio() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.secondary_ratio_ = 0;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
+}
+inline double BuffTable::secondary_ratio() const {
+  // @@protoc_insertion_point(field_get:BuffTable.secondary_ratio)
+  return _internal_secondary_ratio();
+}
+inline void BuffTable::set_secondary_ratio(double value) {
+  _internal_set_secondary_ratio(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
+  // @@protoc_insertion_point(field_set:BuffTable.secondary_ratio)
+}
+inline double BuffTable::_internal_secondary_ratio() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.secondary_ratio_;
+}
+inline void BuffTable::_internal_set_secondary_ratio(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.secondary_ratio_ = value;
+}
+
+// uint32 effect_count = 43;
+inline void BuffTable::clear_effect_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+}
+inline ::uint32_t BuffTable::effect_count() const {
+  // @@protoc_insertion_point(field_get:BuffTable.effect_count)
+  return _internal_effect_count();
+}
+inline void BuffTable::set_effect_count(::uint32_t value) {
+  _internal_set_effect_count(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  // @@protoc_insertion_point(field_set:BuffTable.effect_count)
+}
+inline ::uint32_t BuffTable::_internal_effect_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effect_count_;
+}
+inline void BuffTable::_internal_set_effect_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_count_ = value;
+}
+
+// uint32 target_count = 44;
+inline void BuffTable::clear_target_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
+}
+inline ::uint32_t BuffTable::target_count() const {
+  // @@protoc_insertion_point(field_get:BuffTable.target_count)
+  return _internal_target_count();
+}
+inline void BuffTable::set_target_count(::uint32_t value) {
+  _internal_set_target_count(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
+  // @@protoc_insertion_point(field_set:BuffTable.target_count)
+}
+inline ::uint32_t BuffTable::_internal_target_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_count_;
+}
+inline void BuffTable::_internal_set_target_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_count_ = value;
+}
+
+// uint32 pet_target_count = 45;
+inline void BuffTable::clear_pet_target_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_target_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00001000U);
+}
+inline ::uint32_t BuffTable::pet_target_count() const {
+  // @@protoc_insertion_point(field_get:BuffTable.pet_target_count)
+  return _internal_pet_target_count();
+}
+inline void BuffTable::set_pet_target_count(::uint32_t value) {
+  _internal_set_pet_target_count(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00001000U);
+  // @@protoc_insertion_point(field_set:BuffTable.pet_target_count)
+}
+inline ::uint32_t BuffTable::_internal_pet_target_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_target_count_;
+}
+inline void BuffTable::_internal_set_pet_target_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_target_count_ = value;
+}
+
+// uint32 stack_key = 46;
+inline void BuffTable::clear_stack_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stack_key_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00002000U);
+}
+inline ::uint32_t BuffTable::stack_key() const {
+  // @@protoc_insertion_point(field_get:BuffTable.stack_key)
+  return _internal_stack_key();
+}
+inline void BuffTable::set_stack_key(::uint32_t value) {
+  _internal_set_stack_key(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00002000U);
+  // @@protoc_insertion_point(field_set:BuffTable.stack_key)
+}
+inline ::uint32_t BuffTable::_internal_stack_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.stack_key_;
+}
+inline void BuffTable::_internal_set_stack_key(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stack_key_ = value;
+}
+
+// uint32 refresh_policy = 47;
+inline void BuffTable::clear_refresh_policy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.refresh_policy_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00004000U);
+}
+inline ::uint32_t BuffTable::refresh_policy() const {
+  // @@protoc_insertion_point(field_get:BuffTable.refresh_policy)
+  return _internal_refresh_policy();
+}
+inline void BuffTable::set_refresh_policy(::uint32_t value) {
+  _internal_set_refresh_policy(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00004000U);
+  // @@protoc_insertion_point(field_set:BuffTable.refresh_policy)
+}
+inline ::uint32_t BuffTable::_internal_refresh_policy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.refresh_policy_;
+}
+inline void BuffTable::_internal_set_refresh_policy(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.refresh_policy_ = value;
+}
+
+// uint32 keep_on_death = 48;
+inline void BuffTable::clear_keep_on_death() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keep_on_death_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00008000U);
+}
+inline ::uint32_t BuffTable::keep_on_death() const {
+  // @@protoc_insertion_point(field_get:BuffTable.keep_on_death)
+  return _internal_keep_on_death();
+}
+inline void BuffTable::set_keep_on_death(::uint32_t value) {
+  _internal_set_keep_on_death(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00008000U);
+  // @@protoc_insertion_point(field_set:BuffTable.keep_on_death)
+}
+inline ::uint32_t BuffTable::_internal_keep_on_death() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.keep_on_death_;
+}
+inline void BuffTable::_internal_set_keep_on_death(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keep_on_death_ = value;
+}
+
+// uint32 effect_priority = 49;
+inline void BuffTable::clear_effect_priority() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_priority_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00010000U);
+}
+inline ::uint32_t BuffTable::effect_priority() const {
+  // @@protoc_insertion_point(field_get:BuffTable.effect_priority)
+  return _internal_effect_priority();
+}
+inline void BuffTable::set_effect_priority(::uint32_t value) {
+  _internal_set_effect_priority(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00010000U);
+  // @@protoc_insertion_point(field_set:BuffTable.effect_priority)
+}
+inline ::uint32_t BuffTable::_internal_effect_priority() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effect_priority_;
+}
+inline void BuffTable::_internal_set_effect_priority(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effect_priority_ = value;
+}
+
+// uint32 start_round = 50;
+inline void BuffTable::clear_start_round() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_round_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00020000U);
+}
+inline ::uint32_t BuffTable::start_round() const {
+  // @@protoc_insertion_point(field_get:BuffTable.start_round)
+  return _internal_start_round();
+}
+inline void BuffTable::set_start_round(::uint32_t value) {
+  _internal_set_start_round(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00020000U);
+  // @@protoc_insertion_point(field_set:BuffTable.start_round)
+}
+inline ::uint32_t BuffTable::_internal_start_round() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.start_round_;
+}
+inline void BuffTable::_internal_set_start_round(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_round_ = value;
+}
+
+// uint32 stack_limit = 51;
+inline void BuffTable::clear_stack_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stack_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00040000U);
+}
+inline ::uint32_t BuffTable::stack_limit() const {
+  // @@protoc_insertion_point(field_get:BuffTable.stack_limit)
+  return _internal_stack_limit();
+}
+inline void BuffTable::set_stack_limit(::uint32_t value) {
+  _internal_set_stack_limit(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00040000U);
+  // @@protoc_insertion_point(field_set:BuffTable.stack_limit)
+}
+inline ::uint32_t BuffTable::_internal_stack_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.stack_limit_;
+}
+inline void BuffTable::_internal_set_stack_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stack_limit_ = value;
+}
+
+// uint32 require_living_caster = 52;
+inline void BuffTable::clear_require_living_caster() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_living_caster_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00080000U);
+}
+inline ::uint32_t BuffTable::require_living_caster() const {
+  // @@protoc_insertion_point(field_get:BuffTable.require_living_caster)
+  return _internal_require_living_caster();
+}
+inline void BuffTable::set_require_living_caster(::uint32_t value) {
+  _internal_set_require_living_caster(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00080000U);
+  // @@protoc_insertion_point(field_set:BuffTable.require_living_caster)
+}
+inline ::uint32_t BuffTable::_internal_require_living_caster() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.require_living_caster_;
+}
+inline void BuffTable::_internal_set_require_living_caster(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_living_caster_ = value;
+}
+
+// uint32 tick_on_apply = 53;
+inline void BuffTable::clear_tick_on_apply() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tick_on_apply_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00100000U);
+}
+inline ::uint32_t BuffTable::tick_on_apply() const {
+  // @@protoc_insertion_point(field_get:BuffTable.tick_on_apply)
+  return _internal_tick_on_apply();
+}
+inline void BuffTable::set_tick_on_apply(::uint32_t value) {
+  _internal_set_tick_on_apply(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00100000U);
+  // @@protoc_insertion_point(field_set:BuffTable.tick_on_apply)
+}
+inline ::uint32_t BuffTable::_internal_tick_on_apply() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tick_on_apply_;
+}
+inline void BuffTable::_internal_set_tick_on_apply(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tick_on_apply_ = value;
 }
 
 // -------------------------------------------------------------------

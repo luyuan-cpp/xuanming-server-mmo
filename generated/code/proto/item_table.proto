@@ -27,6 +27,10 @@ message ItemTable {
 	uint32 equip_class = 11;
 	uint32 affix_pool = 12;
 	uint32 affix_rule = 13;
+	uint32 equip_profile = 15;
+	uint32 forge_material_id = 16;
+	uint32 forge_material_count = 17;
+	uint32 artifact_id = 18;
 	repeated Itembase_attr base_attr = 14;
 }
 

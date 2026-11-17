@@ -1,0 +1,46 @@
+# 独立本机 GM 邮件节点；业务配置复用 go/mail 的正式入口。
+Name: mail.rpc
+ListenOn: 0.0.0.0:50900
+AdvertiseHost: 172.29.220.19
+Mode: dev
+Timeout: 3500
+ZoneId: 1
+Etcd:
+  Hosts: [etcd:2379]
+  Key: MailNodeService.rpc
+MetricsListenAddr: 0.0.0.0:9240
+DSNEnv: MMORPG_MAIL_SQL_DSN
+Backend: mysql
+MaxOpenConns: 16
+AutoMigrate: false
+TableDir: /generated/tables
+SharedRedisAddr: redis:6379
+PlayerRedis:
+  PoolSizePerNode: 8
+KafkaBrokers: [kafka:29092]
+AssetSecretEnv: MMORPG_ASSET_OP_SECRET_MAIL
+DataServiceRpc:
+  Endpoints: [data-service:9000]
+  Timeout: 2000
+GuildRpc:
+  Endpoints: [127.0.0.1:50300]
+  Timeout: 500
+  NonBlock: true
+Producers:
+  admin: MAIL_PRODUCER_SECRET_ADMIN
+Log:
+  ServiceName: mail
+  Mode: console
+  Level: info
+KillSwitchPrefix: /mmorpg/killswitch/
+Mail:
+  MaxPersonalMailsPerPlayer: 200
+  MaxActiveSystemMails: 100
+  MaxPersonalMailTtlDays: 30
+  MaxSystemMailTtlDays: 30
+  MaxActiveGuildMailsPerGuild: 20
+Sweep:
+  Mode: report_only
+  Interval: 5m
+  RetentionDays: 7
+  BatchLimit: 1000

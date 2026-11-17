@@ -372,7 +372,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 402,
+static_assert(kMaxRpcMethodCount == 407,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1584,6 +1584,21 @@ void InitMessageInfo()
         std::make_unique<::RetrieveTemporaryItemsRequest>(),
         std::make_unique<::RetrieveTemporaryItemsResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerGetEquipmentCraftRulesMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "GetEquipmentCraftRules",
+        std::make_unique<::GetEquipmentCraftRulesRequest>(),
+        std::make_unique<::GetEquipmentCraftRulesResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerPreviewEquipmentCraftMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "PreviewEquipmentCraft",
+        std::make_unique<::PreviewEquipmentCraftRequest>(),
+        std::make_unique<::PreviewEquipmentCraftResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerCommitEquipmentCraftMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "CommitEquipmentCraft",
+        std::make_unique<::CommitEquipmentCraftRequest>(),
+        std::make_unique<::CommitEquipmentCraftResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneBattleResultClientPlayer ---
     gRpcMethodRegistry[SceneBattleResultClientPlayerGetRecentBattleResultsMessageId] = RpcMethodMeta{
@@ -1767,6 +1782,16 @@ void InitMessageInfo()
         "ScenePetClientPlayer", "GmGrantPet",
         std::make_unique<::GmGrantPetRequest>(),
         std::make_unique<::GmGrantPetResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerGetPetShopMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "GetPetShop",
+        std::make_unique<::GetPetShopRequest>(),
+        std::make_unique<::GetPetShopResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerBuyPetMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "BuyPet",
+        std::make_unique<::BuyPetRequest>(),
+        std::make_unique<::BuyPetResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSceneClientPlayer ---
@@ -2412,6 +2437,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneBagClientPlayerInlayGemMessageId:
 	case SceneBagClientPlayerRemoveGemMessageId:
 	case SceneBagClientPlayerRetrieveTemporaryItemsMessageId:
+	case SceneBagClientPlayerGetEquipmentCraftRulesMessageId:
+	case SceneBagClientPlayerPreviewEquipmentCraftMessageId:
+	case SceneBagClientPlayerCommitEquipmentCraftMessageId:
 	case SceneBattleResultClientPlayerGetRecentBattleResultsMessageId:
 	case SceneBattleResultClientPlayerAckBattleResultsMessageId:
 	case SceneCurrencyClientPlayerGmAddCurrencyMessageId:
@@ -2437,6 +2465,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case ScenePetClientPlayerAutoAllocatePetPointsMessageId:
 	case ScenePetClientPlayerRenamePetMessageId:
 	case ScenePetClientPlayerGmGrantPetMessageId:
+	case ScenePetClientPlayerGetPetShopMessageId:
+	case ScenePetClientPlayerBuyPetMessageId:
 	case SceneSceneClientPlayerEnterSceneMessageId:
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:
 	case SceneSceneClientPlayerTravelToZoneMessageId:

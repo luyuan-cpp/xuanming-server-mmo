@@ -114,6 +114,8 @@ static void EquipEnhanceTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& Row
 	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("cost_gold"), TEXT("cost_gold"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("material_id"), TEXT("material_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("material_count"), TEXT("material_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("profile_id"), TEXT("profile_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	EquipEnhanceTableCheckNarrowedField(RowObject, TEXT("level"), TEXT("level"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UEquipEnhanceTable::LoadFromJson(const FString& JsonText, FString& OutError)
@@ -205,6 +207,7 @@ void UEquipEnhanceTable::BuildIndices(FSnapshot& Snap)
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
 		Snap.MaterialIdIndex.FindOrAdd(Row.material_id).Add(RowIndex);
+		Snap.ProfileIdIndex.FindOrAdd(Row.profile_id).Add(RowIndex);
 	}
 }
 
@@ -280,6 +283,29 @@ const TArray<int32>& UEquipEnhanceTable::GetMaterialIdIndices(int32 Key) const
 int32 UEquipEnhanceTable::CountByMaterialIdIndex(int32 Key) const
 {
 	return GetMaterialIdIndices(Key).Num();
+}
+
+TArray<const FCfgEquipEnhanceRow*> UEquipEnhanceTable::GetByProfileId(int32 Key) const
+{
+	TArray<const FCfgEquipEnhanceRow*> Result;
+	const TArray<int32>& Indices = GetProfileIdIndices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& UEquipEnhanceTable::GetProfileIdIndices(int32 Key) const
+{
+	const TArray<int32>* Found = Snapshot->ProfileIdIndex.Find(Key);
+	return Found != nullptr ? *Found : GEquipEnhanceEmptyIndices;
+}
+
+int32 UEquipEnhanceTable::CountByProfileIdIndex(int32 Key) const
+{
+	return GetProfileIdIndices(Key).Num();
 }
 
 TArray<const FCfgEquipEnhanceRow*> UEquipEnhanceTable::Where(TFunctionRef<bool(const FCfgEquipEnhanceRow&)> Pred) const

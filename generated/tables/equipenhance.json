@@ -107,6 +107,116 @@
    "material_count": 10,
    "material_id": 2001,
    "success_rate": 2000
+  },
+  {
+   "bonus_permyriad": 200,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1001,
+   "level": 1,
+   "material_count": 2,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 400,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1002,
+   "level": 2,
+   "material_count": 3,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 600,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1003,
+   "level": 3,
+   "material_count": 4,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 800,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1004,
+   "level": 4,
+   "material_count": 5,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 1000,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1005,
+   "level": 5,
+   "material_count": 6,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 1200,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1006,
+   "level": 6,
+   "material_count": 7,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 1400,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1007,
+   "level": 7,
+   "material_count": 9,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 1600,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1008,
+   "level": 8,
+   "material_count": 11,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 1800,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1009,
+   "level": 9,
+   "material_count": 13,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
+  },
+  {
+   "bonus_permyriad": 2000,
+   "cost_gold": 0,
+   "fail_level_loss": 0,
+   "id": 1010,
+   "level": 10,
+   "material_count": 15,
+   "material_id": 3002,
+   "profile_id": 1,
+   "success_rate": 10000
   }
  ]
 }

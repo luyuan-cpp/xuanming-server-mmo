@@ -235,6 +235,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kSeqFieldNumber = 4,
     kEnhanceLevelFieldNumber = 6,
     kCreatedSchemeIdFieldNumber = 7,
+    kEquipmentItemIdFieldNumber = 8,
+    kForgeRevisionFieldNumber = 9,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -311,11 +313,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_created_scheme_id(::uint32_t value);
 
   public:
+  // uint64 equipment_item_id = 8;
+  void clear_equipment_item_id() ;
+  [[nodiscard]] ::uint64_t equipment_item_id() const;
+  void set_equipment_item_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_equipment_item_id() const;
+  void _internal_set_equipment_item_id(::uint64_t value);
+
+  public:
+  // uint64 forge_revision = 9;
+  void clear_forge_revision() ;
+  [[nodiscard]] ::uint64_t forge_revision() const;
+  void set_forge_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_forge_revision() const;
+  void _internal_set_forge_revision(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -351,6 +373,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint64_t seq_;
     ::uint32_t enhance_level_;
     ::uint32_t created_scheme_id_;
+    ::uint64_t equipment_item_id_;
+    ::uint64_t forge_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -508,6 +532,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   enum : int {
     kRecordsFieldNumber = 1,
     kNextSeqFieldNumber = 2,
+    kForgeRevisionFieldNumber = 3,
   };
   // repeated .ClientRequestRecord records = 1;
   [[nodiscard]] int records_size()
@@ -540,11 +565,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   void _internal_set_next_seq(::uint64_t value);
 
   public:
+  // uint64 forge_revision = 3;
+  void clear_forge_revision() ;
+  [[nodiscard]] ::uint64_t forge_revision() const;
+  void set_forge_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_forge_revision() const;
+  void _internal_set_forge_revision(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestLedgerComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -575,6 +610,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::ClientRequestRecord > records_;
     ::uint64_t next_seq_;
+    ::uint64_t forge_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -805,6 +841,54 @@ inline void ClientRequestRecord::_internal_set_created_scheme_id(::uint32_t valu
   _impl_.created_scheme_id_ = value;
 }
 
+// uint64 equipment_item_id = 8;
+inline void ClientRequestRecord::clear_equipment_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_item_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t ClientRequestRecord::equipment_item_id() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_item_id)
+  return _internal_equipment_item_id();
+}
+inline void ClientRequestRecord::set_equipment_item_id(::uint64_t value) {
+  _internal_set_equipment_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_item_id)
+}
+inline ::uint64_t ClientRequestRecord::_internal_equipment_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipment_item_id_;
+}
+inline void ClientRequestRecord::_internal_set_equipment_item_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipment_item_id_ = value;
+}
+
+// uint64 forge_revision = 9;
+inline void ClientRequestRecord::clear_forge_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t ClientRequestRecord::forge_revision() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.forge_revision)
+  return _internal_forge_revision();
+}
+inline void ClientRequestRecord::set_forge_revision(::uint64_t value) {
+  _internal_set_forge_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.forge_revision)
+}
+inline ::uint64_t ClientRequestRecord::_internal_forge_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.forge_revision_;
+}
+inline void ClientRequestRecord::_internal_set_forge_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_revision_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ClientRequestLedgerComp
@@ -886,6 +970,30 @@ inline ::uint64_t ClientRequestLedgerComp::_internal_next_seq() const {
 inline void ClientRequestLedgerComp::_internal_set_next_seq(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_seq_ = value;
+}
+
+// uint64 forge_revision = 3;
+inline void ClientRequestLedgerComp::clear_forge_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t ClientRequestLedgerComp::forge_revision() const {
+  // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.forge_revision)
+  return _internal_forge_revision();
+}
+inline void ClientRequestLedgerComp::set_forge_revision(::uint64_t value) {
+  _internal_set_forge_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ClientRequestLedgerComp.forge_revision)
+}
+inline ::uint64_t ClientRequestLedgerComp::_internal_forge_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.forge_revision_;
+}
+inline void ClientRequestLedgerComp::_internal_set_forge_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_revision_ = value;
 }
 
 #ifdef __GNUC__

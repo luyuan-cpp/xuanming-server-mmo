@@ -28,6 +28,10 @@ struct FCfgItemSnapshot
 	TMap<int32, int32> IdIndex;
 	/// affix_rule -> 全部命中行的下标(二级索引)。
 	TMap<int32, TArray<int32>> AffixRuleIndex;
+	/// forge_material_id -> 全部命中行的下标(二级索引)。
+	TMap<int32, TArray<int32>> ForgeMaterialIdIndex;
+	/// artifact_id -> 全部命中行的下标(二级索引)。
+	TMap<int32, TArray<int32>> ArtifactIdIndex;
 };
 
 /**
@@ -136,6 +140,26 @@ public:
 	const TMap<int32, TArray<int32>>& GetAffixRuleIndex() const
 	{
 		return Snapshot->AffixRuleIndex;
+	}
+
+	/// forge_material_id == Key 的全部行。
+	TArray<const FCfgItemRow*> GetByForgeMaterialId(int32 Key) const;
+	/// 零分配版:下标数组,配 RowAt() 用。
+	const TArray<int32>& GetForgeMaterialIdIndices(int32 Key) const;
+	int32 CountByForgeMaterialIdIndex(int32 Key) const;
+	const TMap<int32, TArray<int32>>& GetForgeMaterialIdIndex() const
+	{
+		return Snapshot->ForgeMaterialIdIndex;
+	}
+
+	/// artifact_id == Key 的全部行。
+	TArray<const FCfgItemRow*> GetByArtifactId(int32 Key) const;
+	/// 零分配版:下标数组,配 RowAt() 用。
+	const TArray<int32>& GetArtifactIdIndices(int32 Key) const;
+	int32 CountByArtifactIdIndex(int32 Key) const;
+	const TMap<int32, TArray<int32>>& GetArtifactIdIndex() const
+	{
+		return Snapshot->ArtifactIdIndex;
 	}
 
 	// ---- repeated 标量的值索引 ----

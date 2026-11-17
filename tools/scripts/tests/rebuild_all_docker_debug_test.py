@@ -8,7 +8,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import rebuild_all_docker_debug as subject
@@ -19,7 +19,7 @@ class RebuildAllTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.state = self.root / 'state'
         self.state.mkdir()
         self.canonical = {'COMPOSE_PROJECT_NAME': subject.startup.PROJECT, **prepare.DEV_INTERNAL_IDENTITY}
@@ -46,14 +46,16 @@ class RebuildAllTests(unittest.TestCase):
         names += [name + '-sql-boot' for name in subject.rebuild.SQL_WRITERS]
         names += list(subject.startup.INFRA)
         self.rows = {name: {'Id': name, 'Mounts': [], 'State': {'Status': 'exited' if name.endswith('-sql-boot') else 'running',
-                                                            'ExitCode': 0}} for name in names}
+                                                            'ExitCode': 0},
+                            'Config': {'Labels': {'com.docker.compose.service': name}}} for name in names}
         for name, row in self.rows.items():
             row['Image'] = 'built-' + ('sql-boot' if name.endswith('-sql-boot') else name)
         self.config = {'services': {name: {'image': 'local/' + name + ':old'} for name in names}}
         self.baseline = {'bases': {name: value['image'] for name, value in self.config['services'].items()},
                          'baseIds': {}, 'envSha256': 'digest', 'services': copy.deepcopy(self.rows),
                          'refreshInputs': {name: 'recipe' for lang in ('cpp', 'go') for name in subject.recipe_paths(lang)},
-                         'historical': [], 'projectVolumes': [], 'pendingResume': [], 'sqlBootImageId': 'existing-sql-boot'}
+                         'historical': [], 'projectVolumes': [], 'pendingResume': [], 'sqlBootImageId': 'existing-sql-boot',
+                         'authoredOverlay': subject.authored_contract([])}
         self.mock(subject, 'local_requirements', return_value=[])
         self.preflight = self.mock(subject, 'preflight', return_value=(self.config, self.baseline))
         self.run_stage = self.mock(subject, 'run_stage', return_value=0)
@@ -430,7 +432,7 @@ class RebuildAllTests(unittest.TestCase):
         self.assertEqual(self.run_stage.call_count, 4)
 
     def test_refreshed_guard_checks_actual_env_and_bind_digest(self):
-        rows = {'services': {}, 'historical': []}
+        rows = {'services': {}, 'historical': [], 'authoredOverlay': subject.authored_contract([])}
         self.mock(subject.startup, 'binding_hashes', return_value={'config': 'new'})
         with self.assertRaisesRegex(RuntimeError, 'Runtime files changed after refresh'):
             subject.unchanged_refreshed(self.canonical, {'config': 'old'}, rows)
@@ -543,6 +545,172 @@ class RebuildAllTests(unittest.TestCase):
                     self.assertEqual(subject.run_stage(['mock'], output,
                                                      {'SQL_PASSWORD': 'private-password', 'SQL_SCHEMA_DSN': 'private-dsn'}, 1), 0)
                     self.assertEqual(log.getvalue(), b'[REDACTED]\n[REDACTED]\n')
+
+    def authored_fixture(self):
+        self.mock(subject.startup, 'ROOT', new=self.root)
+        batch = self.root / 'build/verification/authored-festival-test'
+        self.tables = batch / 'tables/generated/tables'
+        self.navigation = self.root / 'data/scene_nav_bin/authored_maps'
+        self.staged = self.root / 'build/docker-debug-current'
+        for directory in (self.tables, self.navigation, self.staged):
+            directory.mkdir(parents=True)
+            (directory / 'fixture.bin').write_bytes(b'original')
+        targets = {name: {'/app/generated/generated_tables': self.tables,
+                          '/app/data/scene_nav_bin/authored_maps': self.navigation}
+                   for name in ('gate', 'scene', 'battle')}
+        targets.update({name: {'/generated/tables': self.tables}
+                        for name in ('login', 'scene-manager', 'player-locator')})
+        self.overlay = batch / 'compose.authored.json'
+        self.overlay_body = {'services': {name: {'volumes': [
+            {'type': 'bind', 'source': source.as_posix(), 'target': target, 'read_only': True}
+            for target, source in mounts.items()]} for name, mounts in targets.items()}}
+        self.overlay.write_text(json.dumps(self.overlay_body), encoding='utf-8')
+        self.authored_rows = {}
+        for index, (name, mounts) in enumerate(targets.items(), 1):
+            self.authored_rows[name] = {
+                'Id': format(index, '064x'), 'Image': 'sha256:' + '1' * 64, 'RestartCount': 0,
+                'Config': {'Labels': {'com.docker.compose.service': name,
+                    'com.docker.compose.project.config_files': ','.join(map(str, [*subject.startup.COMPOSE_FILES, self.overlay]))}},
+                'HostConfig': {},
+                'State': {'Status': 'running', 'ExitCode': 0, 'StartedAt': 'original',
+                          'FinishedAt': '', 'OOMKilled': False},
+                'Mounts': [{'Type': 'bind', 'Source': str(source), 'Destination': target, 'RW': False}
+                           for target, source in mounts.items()]}
+        self.authored_rows['gate']['Mounts'].append(
+            {'Type': 'bind', 'Source': str(self.staged), 'Destination': '/config', 'RW': False})
+
+    def authored_preflight_fixture(self):
+        import build_docker_cpp_debug as cpp
+        self.authored_fixture()
+        self.mock(prepare, 'refresh_existing_options')
+        self.mock(subject.startup, 'APPS', new=tuple(self.authored_rows))
+        self.mock(subject.startup, 'INFRA', new=())
+        self.mock(subject.startup, 'ONESHOTS', new=set())
+        self.mock(subject.startup, 'ready', return_value=True)
+        self.mock(subject.startup, 'ports', return_value=[18085])
+        self.mock(subject.startup, 'project_volumes', return_value=[])
+        self.mock(subject, 'current_containers', side_effect=lambda _: (self.authored_rows, []))
+        self.mock(subject, 'partial_refresh_guard')
+        self.mock(subject, 'infrastructure_plan', return_value=([], {}))
+        self.mock(subject, 'mounted_volumes', return_value={})
+        self.mock(subject, 'confirm_infrastructure_rows')
+        self.mock(subject, 'refresh_sources', return_value={})
+        self.mock(cpp, 'validate_sdk')
+        self.base_config = {'name': subject.startup.PROJECT, 'services': {
+            name: {'image': 'local/base', 'volumes': []} for name in [*self.authored_rows, 'sql-boot']}}
+        self.authored_config = copy.deepcopy(self.base_config)
+        for name, service in self.overlay_body['services'].items():
+            self.authored_config['services'][name]['volumes'] = service['volumes']
+        def docker(command, **kwargs):
+            if command[-3:] == ['config', '--format', 'json']:
+                if kwargs.get('input_text') is not None:
+                    self.assertEqual(json.loads(kwargs['input_text']), self.overlay_body)
+                    self.assertEqual(command[-5:-3], ['-f', '-'])
+                    self.assertNotIn(str(self.overlay), command)
+                    return json.dumps(self.authored_config)
+                return json.dumps(self.base_config)
+            self.assertEqual(command[-4:], ['inspect', '--format', '{{.Id}}', 'local/base'])
+            return 'sha256:' + '1' * 64
+        self.docker = self.mock(subject.startup, 'run', side_effect=docker)
+
+    def test_authored_preflight_preserves_validated_overlay_and_hashes(self):
+        self.authored_preflight_fixture()
+        config, baseline = subject.preflight(('cpp',), {})
+        self.assertEqual(config, self.authored_config)
+        self.assertEqual(baseline['authoredOverlay']['path'], self.overlay)
+        self.assertEqual(baseline['authoredOverlay']['original'], self.overlay.read_bytes())
+        self.assertEqual(len(baseline['bindHashes']), 3)
+        subject.unchanged_before_apply(config, baseline, {})
+
+    def test_authored_preflight_does_not_authorize_external_binds_without_overlay(self):
+        self.authored_preflight_fixture()
+        for row in self.authored_rows.values():
+            row['Config']['Labels']['com.docker.compose.project.config_files'] = ','.join(map(str, subject.startup.COMPOSE_FILES))
+        with self.assertRaisesRegex(RuntimeError, 'Bind source outside staged directory'):
+            subject.preflight(('cpp',), {})
+
+    def test_authored_preflight_rejects_missing_writable_or_arbitrary_binds(self):
+        self.authored_preflight_fixture()
+        original = copy.deepcopy(self.authored_rows['gate']['Mounts'])
+        external = self.root / 'unapproved'
+        external.mkdir()
+        for case in ('missing', 'writable', 'source', 'target'):
+            with self.subTest(case=case):
+                mounts = copy.deepcopy(original)
+                if case == 'missing':
+                    mounts.pop(0)
+                elif case == 'writable':
+                    mounts[0]['RW'] = True
+                else:
+                    mounts.append({'Type': 'bind', 'Source': str(external if case == 'source' else self.tables),
+                                   'Destination': '/unexpected', 'RW': False})
+                self.authored_rows['gate']['Mounts'] = mounts
+                with self.assertRaisesRegex(RuntimeError, 'authored bind mount differs|Bind source outside staged directory'):
+                    subject.preflight(('cpp',), {})
+
+    def test_authored_preflight_rejects_extra_compose_settings(self):
+        self.authored_preflight_fixture()
+        self.overlay_body['services']['gate']['environment'] = {'UNEXPECTED': 'value'}
+        self.overlay.write_text(json.dumps(self.overlay_body), encoding='utf-8')
+        with self.assertRaisesRegex(RuntimeError, 'Unauthorized authored Compose overlay'):
+            subject.preflight(('cpp',), {})
+
+    def test_authored_overlay_bytes_are_guarded_before_and_after_refresh(self):
+        self.authored_preflight_fixture()
+        config, baseline = subject.preflight(('cpp',), {})
+        self.overlay.write_bytes(self.overlay.read_bytes() + b'\n')
+        for guard in (lambda: subject.unchanged_runtime(baseline, {}),
+                      lambda: subject.refreshed_contract(self.canonical, config, baseline, {}),
+                      lambda: subject.unchanged_refreshed(self.canonical, baseline['bindHashes'], baseline)):
+            with self.subTest(guard=guard), self.assertRaisesRegex(RuntimeError, 'Authored Compose overlay changed'):
+                guard()
+
+    def test_refresh_accepts_staged_changes_but_not_authored_data_changes(self):
+        self.authored_preflight_fixture()
+        config, baseline = subject.preflight(('cpp',), {})
+        (self.staged / 'fixture.bin').write_bytes(b'refreshed')
+        canonical, hashes = subject.refreshed_contract(self.canonical, config, baseline, {})
+        self.assertNotEqual(hashes, baseline['bindHashes'])
+        subject.unchanged_refreshed(canonical, hashes, baseline)
+        (self.tables / 'fixture.bin').write_bytes(b'unexpected')
+        with self.assertRaisesRegex(RuntimeError, 'Authored bind files changed'):
+            subject.refreshed_contract(self.canonical, config, baseline, {})
+        with self.assertRaisesRegex(RuntimeError, 'Runtime files changed after refresh'):
+            subject.unchanged_refreshed(canonical, hashes, baseline)
+
+    def authored_pipeline_fixture(self):
+        self.pipeline_fixture()
+        self.authored_fixture()
+        for name, authored in self.authored_rows.items():
+            for key in ('Config', 'Mounts'):
+                self.rows[name][key] = copy.deepcopy(authored[key])
+                self.baseline['services'][name][key] = copy.deepcopy(authored[key])
+        self.baseline['authoredOverlay'] = subject.authored_contract(list(self.rows.values()))
+
+    def test_recreate_keeps_original_overlay_path_for_the_next_startup(self):
+        self.authored_pipeline_fixture()
+        self.run_pipeline()
+        command = self.run_stage.call_args.args[0]
+        files = [command[index + 1] for index, value in enumerate(command) if value == '-f']
+        self.assertEqual(files, list(map(str, [*subject.startup.COMPOSE_FILES, self.overlay])))
+        subject.compose_config.assert_called_with(ANY, self.baseline['authoredOverlay']['input'])
+        report = json.loads((self.root / 'preflight.json').read_text('utf-8'))
+        self.assertEqual(report['authoredOverlay'],
+                         {'path': str(self.overlay), 'sha256': subject.startup.sha(self.overlay.read_bytes())})
+        self.assertTrue(self.result['success'])
+
+    def test_final_verification_rejects_lost_authored_overlay_labels(self):
+        self.authored_pipeline_fixture()
+        def stage(command, *_):
+            if 'up' in command:
+                for row in self.rows.values():
+                    row['Config']['Labels'].pop('com.docker.compose.project.config_files', None)
+            return 0
+        self.run_stage.side_effect = stage
+        with self.assertRaisesRegex(RuntimeError, 'Authored Compose overlay changed'):
+            self.run_pipeline()
+        self.assertFalse(self.result['success'])
+        self.check.assert_not_called()
 
     def partial_fixture(self):
         names = ['bin/etc/base_deploy_config.yaml', 'bin/etc/game_config.yaml', 'bin/etc/battle_rewards.json',
@@ -686,6 +854,103 @@ class ResumeBuildTests(unittest.TestCase):
         self.assertEqual(builds['cpp']['reused_from'], str(self.old))
         self.assertEqual(builds['cpp']['manifestDigests'][str(self.manifest)], subject.rebuild.digest(self.manifest))
         self.scan.assert_called_once()
+
+    def linked_run(self, stamp='20261112T044500.000000Z'):
+        linked = self.old.parent / ('docker-rebuild-all-' + stamp)
+        origins = {'cpp': str(self.old)}
+        result = {**self.result, 'reused_from': origins, 'stages': [
+            {**self.result['stages'][0], 'reused_from': str(self.old)}, self.result['stages'][1]]}
+        preflight = {**subject.read_receipt(self.old, 'preflight.json'), 'reused_from': origins}
+        self.put(linked / 'result.json', result)
+        self.put(linked / 'preflight.json', preflight)
+        return linked, result, preflight
+
+    def test_inherited_cpp_keeps_original_source_across_repeated_resumes(self):
+        for stamp in ('20261112T044500.000000Z', '20261112T045000.000000Z'):
+            linked, _, _ = self.linked_run(stamp)
+            builds = subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+            self.assertEqual(list(builds), ['cpp'])
+            self.assertEqual(builds['cpp']['reused_from'], str(self.old))
+            self.assertEqual(builds['cpp']['manifestPaths'], self.built['manifestPaths'])
+
+    def test_inherited_cpp_and_new_go_are_reused_from_their_own_build_runs(self):
+        linked, result, _ = self.linked_run()
+        manifest = linked / 'go/login/source_meta/source-manifest.json'
+        details = {'version': 'debug-go', 'commit': 'go-commit', 'buildTime': 'go-created'}
+        self.put(manifest, {'schema': 1, 'language': 'go', 'files': self.files, 'build': details})
+        built = {'success': True, 'images': {'login': {'image': 'local/mmorpg-login:debug-go', 'imageId': self.identity}},
+                 'manifestPaths': {'login': str(manifest)}}
+        self.put(linked / 'go/result.json', built)
+        (linked / 'go.log').write_text('completed\n')
+        self.put(linked / 'go-base-images.json', {'login': 'local/base:v1'})
+        self.baseline['bases']['login'] = 'local/base:v1'
+        result['stages'][1] = {'language': 'go', 'exitCode': 0, 'output': str(linked / 'go'), 'log': str(linked / 'go.log')}
+        result['stages'].append({'language': 'java', 'exitCode': 1})
+        self.put(linked / 'result.json', result)
+        self.run.side_effect = lambda args: json.dumps({
+            'org.opencontainers.image.version': details['version'], 'org.opencontainers.image.revision': details['commit'],
+            'org.opencontainers.image.created': details['buildTime']}) if args[-2] == '{{json .Config.Labels}}' else self.inspect(args)
+        with patch.dict(subject.SERVICES, {'go': ('login',)}), patch.object(subject, 'go_resume_contract') as go_contract:
+            builds = subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+        self.assertEqual(list(builds), ['cpp', 'go'])
+        self.assertEqual(builds['cpp']['reused_from'], str(self.old))
+        self.assertEqual(builds['go']['reused_from'], str(linked))
+        self.assertEqual(go_contract.call_args.args[0], linked)
+
+    def test_inherited_stage_requires_matching_receipts_and_direct_paths(self):
+        linked, result, preflight = self.linked_run()
+        for document, body in (('result.json', result), ('preflight.json', preflight)):
+            self.put(linked / document, {**body, 'reused_from': {}})
+            with self.subTest(document=document), self.assertRaisesRegex(RuntimeError, 'origin'):
+                subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+            self.put(linked / document, body)
+        for key in ('output', 'log'):
+            changed = copy.deepcopy(result)
+            changed['stages'][0][key] = str(linked / ('cpp' if key == 'output' else 'cpp.log'))
+            self.put(linked / 'result.json', changed)
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'origin'):
+                subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+        self.put(linked / 'result.json', result)
+
+    def test_inherited_stage_rechecks_original_application_status_and_success(self):
+        linked, _, _ = self.linked_run()
+        for key in ('applied', 'configurationWriteStarted', 'containerUpdateStarted'):
+            self.put(self.old / 'result.json', {**self.result, key: True})
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, 'applying'):
+                subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+        self.put(self.old / 'result.json', self.result)
+        for change in ({'exitCode': 1}, {'reused_from': str(linked)}):
+            changed = copy.deepcopy(self.result)
+            changed['stages'][0].update(change)
+            self.put(self.old / 'result.json', changed)
+            with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, 'origin'):
+                subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+        self.put(self.old / 'result.json', self.result)
+
+    def test_inherited_stage_rejects_nonlocal_relative_or_nonpreceding_origins(self):
+        linked, result, preflight = self.linked_run()
+        for origin in (str(self.repo), self.old.name, str(linked), str(self.new)):
+            changed = copy.deepcopy(result)
+            changed['stages'][0]['reused_from'] = origin
+            changed['reused_from'] = {'cpp': origin}
+            self.put(linked / 'result.json', changed)
+            self.put(linked / 'preflight.json', {**preflight, 'reused_from': {'cpp': origin}})
+            with self.subTest(origin=origin), self.assertRaises(RuntimeError):
+                subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+
+    def test_inherited_stage_still_rejects_source_image_and_base_drift(self):
+        linked, _, preflight = self.linked_run()
+        self.scan.return_value = {'src/node.cpp': 'changed'}
+        with self.assertRaisesRegex(RuntimeError, 'Source files changed'):
+            subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+        self.scan.return_value = self.files
+        self.run.side_effect = lambda args: 'changed' if '{{.Id}}' in args else self.inspect(args)
+        with self.assertRaisesRegex(RuntimeError, 'image ID'):
+            subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
+        self.run.side_effect = self.inspect
+        self.put(linked / 'preflight.json', {**preflight, 'baseIds': {'local/base:v1': 'changed'}})
+        with self.assertRaisesRegex(RuntimeError, 'base'):
+            subject.resumed_builds(linked, subject.ORDER, self.new, self.baseline)
 
     def test_rejects_applied_unknown_or_partially_applied_receipts(self):
         for key in ('applied', 'configurationWriteStarted', 'containerUpdateStarted'):
@@ -880,7 +1145,8 @@ class InfraRecoveryTests(unittest.TestCase):
                 'signatures': {row['Id']: subject.startup.signature(row) for row in self.live.values()},
                 'states': {row['Id']: subject.startup.state(row) for row in self.live.values()},
                 'envSha256': subject.startup.sha(self.env_file.read_bytes()), 'refreshInputs': subject.refresh_sources(),
-                'bindHashes': {}, 'projectVolumes': sorted(self.volumes), 'baseIds': self.base_ids.copy()}
+                'bindHashes': {}, 'projectVolumes': sorted(self.volumes), 'baseIds': self.base_ids.copy(),
+                'authoredOverlay': subject.authored_contract(list(self.live.values()))}
 
     def resume(self, baseline):
         subject.resume_infrastructure(self.config, baseline, {}, self.root, self.result)

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10item_table.proto\">\n\rItembase_attr\x12\x14\n\x0c\x62\x61se_attr_id\x18\x01 \x01(\r\x12\x17\n\x0f\x62\x61se_attr_value\x18\x02 \x01(\r\"\xb4\x02\n\tItemTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x16\n\x0emax_stack_size\x18\x02 \x01(\r\x12\x12\n\nequip_kind\x18\x03 \x01(\r\x12\x15\n\rbattle_usable\x18\x04 \x01(\r\x12\x16\n\x0e\x62\x61ttle_heal_hp\x18\x05 \x01(\x04\x12\x16\n\x0e\x62\x61ttle_heal_mp\x18\x06 \x01(\x04\x12\x0c\n\x04name\x18\x07 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x08 \x01(\t\x12\x10\n\x08icon_key\x18\t \x01(\t\x12\x13\n\x0b\x65quip_level\x18\n \x01(\r\x12\x13\n\x0b\x65quip_class\x18\x0b \x01(\r\x12\x12\n\naffix_pool\x18\x0c \x01(\r\x12\x12\n\naffix_rule\x18\r \x01(\r\x12!\n\tbase_attr\x18\x0e \x03(\x0b\x32\x0e.Itembase_attr\")\n\rItemTableData\x12\x18\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\n.ItemTableB;\n\x0e\x63om.game.tableB\x13ItemTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10item_table.proto\">\n\rItembase_attr\x12\x14\n\x0c\x62\x61se_attr_id\x18\x01 \x01(\r\x12\x17\n\x0f\x62\x61se_attr_value\x18\x02 \x01(\r\"\x99\x03\n\tItemTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x16\n\x0emax_stack_size\x18\x02 \x01(\r\x12\x12\n\nequip_kind\x18\x03 \x01(\r\x12\x15\n\rbattle_usable\x18\x04 \x01(\r\x12\x16\n\x0e\x62\x61ttle_heal_hp\x18\x05 \x01(\x04\x12\x16\n\x0e\x62\x61ttle_heal_mp\x18\x06 \x01(\x04\x12\x0c\n\x04name\x18\x07 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x08 \x01(\t\x12\x10\n\x08icon_key\x18\t \x01(\t\x12\x13\n\x0b\x65quip_level\x18\n \x01(\r\x12\x13\n\x0b\x65quip_class\x18\x0b \x01(\r\x12\x12\n\naffix_pool\x18\x0c \x01(\r\x12\x12\n\naffix_rule\x18\r \x01(\r\x12\x15\n\requip_profile\x18\x0f \x01(\r\x12\x19\n\x11\x66orge_material_id\x18\x10 \x01(\r\x12\x1c\n\x14\x66orge_material_count\x18\x11 \x01(\r\x12\x13\n\x0b\x61rtifact_id\x18\x12 \x01(\r\x12!\n\tbase_attr\x18\x0e \x03(\x0b\x32\x0e.Itembase_attr\")\n\rItemTableData\x12\x18\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\n.ItemTableB;\n\x0e\x63om.game.tableB\x13ItemTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,7 +35,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_ITEMBASE_ATTR']._serialized_start=20
   _globals['_ITEMBASE_ATTR']._serialized_end=82
   _globals['_ITEMTABLE']._serialized_start=85
-  _globals['_ITEMTABLE']._serialized_end=393
-  _globals['_ITEMTABLEDATA']._serialized_start=395
-  _globals['_ITEMTABLEDATA']._serialized_end=436
+  _globals['_ITEMTABLE']._serialized_end=494
+  _globals['_ITEMTABLEDATA']._serialized_start=496
+  _globals['_ITEMTABLEDATA']._serialized_end=537
 # @@protoc_insertion_point(module_scope)

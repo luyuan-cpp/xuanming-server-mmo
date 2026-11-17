@@ -463,6 +463,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
     kEquipClassFieldNumber = 11,
     kAffixPoolFieldNumber = 12,
     kAffixRuleFieldNumber = 13,
+    kEquipProfileFieldNumber = 15,
+    kForgeMaterialIdFieldNumber = 16,
+    kForgeMaterialCountFieldNumber = 17,
+    kArtifactIdFieldNumber = 18,
   };
   // repeated .Itembase_attr base_attr = 14;
   [[nodiscard]] int base_attr_size()
@@ -630,12 +634,52 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
   void _internal_set_affix_rule(::uint32_t value);
 
   public:
+  // uint32 equip_profile = 15;
+  void clear_equip_profile() ;
+  [[nodiscard]] ::uint32_t equip_profile() const;
+  void set_equip_profile(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equip_profile() const;
+  void _internal_set_equip_profile(::uint32_t value);
+
+  public:
+  // uint32 forge_material_id = 16;
+  void clear_forge_material_id() ;
+  [[nodiscard]] ::uint32_t forge_material_id() const;
+  void set_forge_material_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_forge_material_id() const;
+  void _internal_set_forge_material_id(::uint32_t value);
+
+  public:
+  // uint32 forge_material_count = 17;
+  void clear_forge_material_count() ;
+  [[nodiscard]] ::uint32_t forge_material_count() const;
+  void set_forge_material_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_forge_material_count() const;
+  void _internal_set_forge_material_count(::uint32_t value);
+
+  public:
+  // uint32 artifact_id = 18;
+  void clear_artifact_id() ;
+  [[nodiscard]] ::uint32_t artifact_id() const;
+  void set_artifact_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_artifact_id() const;
+  void _internal_set_artifact_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ItemTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
-                          1, 49,
+      ::google::protobuf::internal::TcParseTable<5, 18,
+                          1, 57,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -677,6 +721,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
     ::uint32_t equip_class_;
     ::uint32_t affix_pool_;
     ::uint32_t affix_rule_;
+    ::uint32_t equip_profile_;
+    ::uint32_t forge_material_id_;
+    ::uint32_t forge_material_count_;
+    ::uint32_t artifact_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1393,6 +1441,102 @@ inline ::uint32_t ItemTable::_internal_affix_rule() const {
 inline void ItemTable::_internal_set_affix_rule(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.affix_rule_ = value;
+}
+
+// uint32 equip_profile = 15;
+inline void ItemTable::clear_equip_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_profile_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t ItemTable::equip_profile() const {
+  // @@protoc_insertion_point(field_get:ItemTable.equip_profile)
+  return _internal_equip_profile();
+}
+inline void ItemTable::set_equip_profile(::uint32_t value) {
+  _internal_set_equip_profile(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:ItemTable.equip_profile)
+}
+inline ::uint32_t ItemTable::_internal_equip_profile() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_profile_;
+}
+inline void ItemTable::_internal_set_equip_profile(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_profile_ = value;
+}
+
+// uint32 forge_material_id = 16;
+inline void ItemTable::clear_forge_material_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_material_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t ItemTable::forge_material_id() const {
+  // @@protoc_insertion_point(field_get:ItemTable.forge_material_id)
+  return _internal_forge_material_id();
+}
+inline void ItemTable::set_forge_material_id(::uint32_t value) {
+  _internal_set_forge_material_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:ItemTable.forge_material_id)
+}
+inline ::uint32_t ItemTable::_internal_forge_material_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.forge_material_id_;
+}
+inline void ItemTable::_internal_set_forge_material_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_material_id_ = value;
+}
+
+// uint32 forge_material_count = 17;
+inline void ItemTable::clear_forge_material_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_material_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t ItemTable::forge_material_count() const {
+  // @@protoc_insertion_point(field_get:ItemTable.forge_material_count)
+  return _internal_forge_material_count();
+}
+inline void ItemTable::set_forge_material_count(::uint32_t value) {
+  _internal_set_forge_material_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:ItemTable.forge_material_count)
+}
+inline ::uint32_t ItemTable::_internal_forge_material_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.forge_material_count_;
+}
+inline void ItemTable::_internal_set_forge_material_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.forge_material_count_ = value;
+}
+
+// uint32 artifact_id = 18;
+inline void ItemTable::clear_artifact_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.artifact_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t ItemTable::artifact_id() const {
+  // @@protoc_insertion_point(field_get:ItemTable.artifact_id)
+  return _internal_artifact_id();
+}
+inline void ItemTable::set_artifact_id(::uint32_t value) {
+  _internal_set_artifact_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:ItemTable.artifact_id)
+}
+inline ::uint32_t ItemTable::_internal_artifact_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.artifact_id_;
+}
+inline void ItemTable::_internal_set_artifact_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.artifact_id_ = value;
 }
 
 // repeated .Itembase_attr base_attr = 14;

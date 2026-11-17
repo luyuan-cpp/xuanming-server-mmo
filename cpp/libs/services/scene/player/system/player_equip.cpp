@@ -1,4 +1,5 @@
 #include "player_equip.h"
+#include "player_equipment_v1.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <algorithm>
@@ -87,10 +88,40 @@ const EquipAttributeTable* AttributeRow(uint32_t attrId) {
 	return row;
 }
 
-// EquipEnhance 第 level 行 = 「从 +(level − 1) 强化到 +level」的规则,以及 +level 的总加成。
-const EquipEnhanceTable* EnhanceRow(uint32_t level) {
-	const auto [row, err] = EquipEnhanceTableManager::Instance().FindByIdSilent(level);
-	return row;
+// 旧表没有 level 时继续以 id 为等级；新 profile 用显式 level，行号不再承载等级语义。
+uint32_t EnhanceRowLevel(const EquipEnhanceTable& row) {
+	return row.profile_id() == 0 && row.level() == 0 ? row.id() : row.level();
+}
+
+const EquipEnhanceTable* EnhanceRow(uint32_t profile, uint32_t level) {
+	if (!equiprules::SupportsEnhancement(profile) || level == 0) return nullptr;
+	if (profile == equiprules::ToRaw(equiprules::EquipmentProfile::kLegacy)) {
+		// 旧规则继续以主键查等级，保持既有表与存档语义；新 profile 不占用这些主键。
+		const auto* row = EquipEnhanceTableManager::Instance().FindByIdSilent(level).first;
+		return row != nullptr && row->profile_id() == profile && (row->level() == 0 || row->level() == level)
+			? row : nullptr;
+	}
+	const EquipEnhanceTable* found = nullptr;
+	for (const auto* row : EquipEnhanceTableManager::Instance().GetByProfileId(profile)) {
+		if (EnhanceRowLevel(*row) != level) continue;
+		if (found != nullptr) return nullptr; // 同 profile 同等级重复时拒绝，不依赖表内顺序。
+		found = row;
+	}
+	return found;
+}
+
+// V1 的保证是 profile 契约；热更或坏表不能把必成、零金币和 +10 偷换成旧规则。
+bool IsEnhanceRowAvailable(const EquipEnhanceTable& row) {
+	if (row.profile_id() == equiprules::ToRaw(equiprules::EquipmentProfile::kLegacy))
+		return row.success_rate() > 0;
+	if (row.profile_id() != equiprules::ToRaw(equiprules::EquipmentProfile::kV1Basic)) return false;
+	const uint32_t level = EnhanceRowLevel(row);
+	const auto* material = ItemRow(row.material_id());
+	return level > 0 && level <= equiprules::kV1MaxEnhanceLevel &&
+		row.bonus_permyriad() == equiprules::kV1EnhanceBonusPerLevel * level &&
+		row.success_rate() == equiprules::kPermyriadBase && row.fail_level_loss() == 0 &&
+		row.cost_gold() == 0 && row.material_id() != 0 && row.material_count() > 0 && material != nullptr &&
+		material->equip_kind() == 0 && material->battle_usable() == 0;
 }
 
 // EquipGem 表的原始查找:只回答「表里有没有这一行」。消费侧(已嵌在装备上的宝石算不算数)用它;
@@ -179,27 +210,29 @@ bool IsEffectAccepted(const EquipAttributeTable& row) {
 
 // 有效强化等级:存档值按表上限夹取(改表下调上限立即生效、不洗存档;表补回来即恢复)。
 // 未初始化的实例(!has_equip())恒为 0。
-uint32_t EffectiveEnhanceLevel(const ItemComp& item) {
+uint32_t EffectiveEnhanceLevel(const ItemComp& item, uint32_t profile) {
 	if (!item.has_equip() || item.equip().enhance_level() == 0) {
 		return 0;
 	}
-	return std::min<uint32_t>(item.equip().enhance_level(), PlayerEquipSystem::MaxEnhanceLevel());
+	return std::min<uint32_t>(item.equip().enhance_level(), PlayerEquipSystem::MaxEnhanceLevel(profile));
 }
 
 // 强化到 level 级后基础属性的总加成(万分比)。0 级 = 0;缺行按 0(level 来自 EffectiveEnhanceLevel 时
 // 一定在连续等级内,缺行只可能是两次查表之间换了表)。
-uint32_t EnhanceBonusPermyriad(uint32_t level) {
+uint32_t EnhanceBonusPermyriad(uint32_t profile, uint32_t level) {
 	if (level == 0) {
 		return 0;
 	}
-	const EquipEnhanceTable* row = EnhanceRow(level);
-	return row != nullptr ? row->bonus_permyriad() : 0;
+	const EquipEnhanceTable* row = EnhanceRow(profile, level);
+	return row != nullptr && (profile == 0 || IsEnhanceRowAvailable(*row)) ? row->bonus_permyriad() : 0;
 }
 
 // 一条基础属性「此刻算多少」:表值按万分比放大。bonusPermyriad == 0 严格恒等(未强化的装备与一期逐位一致)。
 // 强化只放大基础属性(二期 §1.4 E1);要改成也放大随机属性 / 宝石,改的是调用它的地方,不是这里。
-uint64_t ResolveBaseNow(uint64_t tableValue, uint32_t bonusPermyriad) {
-	return equiprules::ScaleByPermyriad(tableValue, bonusPermyriad);
+uint64_t ResolveBaseNow(const ItemTable& item, const EquipAttributeTable& attribute,
+						uint64_t tableValue, uint32_t bonusPermyriad) {
+	return equiprules::EnhancesBaseAttribute(item.equip_profile(), attribute.effect(), attribute.effect_param())
+		? equiprules::ScaleByPermyriad(tableValue, bonusPermyriad) : tableValue;
 }
 
 // 某部位的孔位行(EquipGemSocket 表里 equip_kind 相同的全部行),按 socket 升序;同号保持表内行序
@@ -500,9 +533,14 @@ void AccumulateWornItem(const ItemComp& item, uint64_t playerIdForLog, equiprule
 				  << playerIdForLog << " item_guid=" << item.item_id() << " config=" << item.config_id();
 		return;
 	}
+	if (!equiprules::IsKnownEquipmentProfile(row->equip_profile())) {
+		LOG_ERROR << "[PlayerEquip] Unknown equipment profile; bonus ignored: config=" << item.config_id()
+				  << " profile=" << row->equip_profile();
+		return;
+	}
 
 	// 强化只放大基础属性;0 级的万分比是 0,ResolveBaseNow 严格恒等(未强化的装备与一期逐位一致)。
-	const uint32_t enhancePermyriad = EnhanceBonusPermyriad(EffectiveEnhanceLevel(item));
+	const uint32_t enhancePermyriad = EnhanceBonusPermyriad(row->equip_profile(), EffectiveEnhanceLevel(item, row->equip_profile()));
 	for (const auto& base : row->base_attr()) {
 		const EquipAttributeTable* attr = AttributeRow(base.base_attr_id());
 		if (attr == nullptr) {
@@ -511,7 +549,7 @@ void AccumulateWornItem(const ItemComp& item, uint64_t playerIdForLog, equiprule
 			continue;
 		}
 		if (!equiprules::ApplyEffect(out, attr->effect(), attr->effect_param(),
-									 ResolveBaseNow(base.base_attr_value(), enhancePermyriad))) {
+									 ResolveBaseNow(*row, *attr, base.base_attr_value(), enhancePermyriad))) {
 			LOG_ERROR << "[PlayerEquip] Base attribute effect rejected by rules;skipped: config=" << item.config_id()
 					  << " attr_id=" << attr->id() << " effect=" << attr->effect()
 					  << " effect_param=" << attr->effect_param();
@@ -677,6 +715,12 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 					  << ")but max_stack_size=" << row.max_stack_size()
 					  << ";stacking would merge instances with different attributes;this row will not roll attributes and cannot be equipped";
 		}
+		if (!equiprules::IsKnownEquipmentProfile(row.equip_profile()) ||
+			(row.equip_profile() != 0 && (row.affix_pool() != 0 || row.affix_rule() != 0))) {
+			++problems;
+			LOG_ERROR << "[PlayerEquip] Table validation: Item id=" << row.id()
+					  << " has unknown profile or random-affix settings on a fixed-affix profile: profile=" << row.equip_profile();
+		}
 		if (row.affix_pool() != 0 &&
 			EquipAffixPoolTableManager::Instance().GetByPoolId(row.affix_pool()).empty()) {
 			++problems;
@@ -702,23 +746,29 @@ uint32_t PlayerEquipSystem::ValidateTables() {
 	// 这里只打日志、不拒启,单表热更也不重跑;所以写入口对缺行、对被配成装备的材料 / 宝石行另有 fail-closed
 	// (Enhance 的材料检查、GemRowIfGem),两道都要有。
 
-	// EquipEnhance:一行 = 「强化到 +id」。上限是从 1 起连续的最大 id,不在这段连续等级里的行永远用不到。
-	const uint32_t maxEnhanceLevel = MaxEnhanceLevel();
+	// 每个 profile 独立从 1 连续；旧 profile 的 level=0 兼容原 id，不能让新行抬高旧上限。
 	for (const auto& row : EquipEnhanceTableManager::Instance().FindAll().data()) {
-		if (row.id() == 0 || row.id() > maxEnhanceLevel) {
+		const uint32_t level = EnhanceRowLevel(row);
+		const uint32_t maxEnhanceLevel = MaxEnhanceLevel(row.profile_id());
+		if (level == 0 || level > maxEnhanceLevel) {
 			++problems;
 			LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id()
 					  << " is outside the enhance levels contiguous from 1 (currently contiguous up to " << maxEnhanceLevel
 					  << "), this row is never used (ids must be contiguous from 1 with no gaps)";
-		} else if (row.id() > 1) {
+		} else if (level > 1) {
 			// 连续等级内:bonus_permyriad 是「总加成」不是增量,越强化越低就是填错了。
-			const EquipEnhanceTable* previous = EnhanceRow(row.id() - 1);
+			const EquipEnhanceTable* previous = EnhanceRow(row.profile_id(), level - 1);
 			if (previous != nullptr && row.bonus_permyriad() < previous->bonus_permyriad()) {
 				++problems;
 				LOG_ERROR << "[PlayerEquip] Table validation: EquipEnhance id=" << row.id() << " bonus_permyriad="
 						  << row.bonus_permyriad() << " is less than the previous level's " << previous->bonus_permyriad()
 						  << " (it is the total bonus after enhancing to this level, not an increment over the previous level)";
 			}
+		}
+		if (row.profile_id() != 0 && !IsEnhanceRowAvailable(row)) {
+			++problems;
+			LOG_ERROR << "[PlayerEquip] Table validation: invalid V1 enhancement contract: id=" << row.id()
+					  << " profile=" << row.profile_id() << " level=" << level;
 		}
 		if (row.success_rate() == 0 || row.success_rate() > equiprules::kPermyriadBase) {
 			++problems;
@@ -875,7 +925,7 @@ void PlayerEquipSystem::RollNewInstance(ItemComp& item) {
 	if (row == nullptr || row->equip_kind() == 0) {
 		return;  // 不是装备:不置位,普通物品不该长出 equip 段
 	}
-	if (row->max_stack_size() != 1) {
+	if (row->max_stack_size() != 1 || !equiprules::IsKnownEquipmentProfile(row->equip_profile())) {
 		// 表配错的「可堆叠装备」:置位会让它从此不能并堆(ItemStore::CanStack 对 has_equip() 一律拒),
 		// 掷了属性也会被并堆吃掉。按普通物品处理;启动表校验已经报过这一行。
 		return;
@@ -883,6 +933,9 @@ void PlayerEquipSystem::RollNewInstance(ItemComp& item) {
 
 	// 先置位再掷:从这一行起,这件实例在任何路径上都不会被第二次初始化。
 	EquipInstanceData* equip = item.mutable_equip();
+	if (row->equip_profile() != equiprules::ToRaw(equiprules::EquipmentProfile::kLegacy)) {
+		return; // V1 的合法空词条保持空，首次安装走后续独立写入口，绝不退回随机池。
+	}
 	if (row->affix_pool() == 0 || row->affix_rule() == 0) {
 		return;  // 策划配的「不掷」
 	}
@@ -935,7 +988,7 @@ void PlayerEquipSystem::RollNewInstance(ItemComp& item) {
 // 写入口
 // ---------------------------------------------------------------------------
 
-uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId) {
+uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId, std::optional<uint32_t> requestedSlot) {
 	if (const auto err = CheckWritable(player); err != kSuccess) {
 		return err;
 	}
@@ -956,6 +1009,7 @@ uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId) {
 	if (row == nullptr || row->equip_kind() == 0 || row->max_stack_size() != 1) {
 		return kEquipNotEquipment;  // 可堆叠的「装备」是表配错,搬运原语不搬它,按非装备拒
 	}
+	if (!equiprules::IsKnownEquipmentProfile(row->equip_profile())) return kFeatureUnavailable;
 	if (!IsCarriable(*item, *row)) {
 		return kEquipItemNotFound;  // size != 1:被扣光还没回收的空实例,对玩家而言这件东西不存在
 	}
@@ -969,6 +1023,9 @@ uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId) {
 	if (slots.empty()) {
 		return kEquipNoSlot;
 	}
+	if (requestedSlot.has_value() && std::find(slots.begin(), slots.end(), *requestedSlot) == slots.end()) {
+		return kEquipNoSlot;
+	}
 	// 穿上就是把这一件移出人物背包。它的数量若还押在一局未结算的战斗里(战斗道具预留,
 	// docs/design/battle-item-reservation.md),移走之后结算扣不出。今天的物品表里没有既是装备又可参战的行;
 	// 这道闸让「预留只覆盖还在人物背包里的数量」不依赖配表约定。人物背包里出包的入口只有 BagService 与这里。
@@ -978,15 +1035,17 @@ uint32_t PlayerEquipSystem::Equip(entt::entity player, Guid itemId) {
 		return kFeatureUnavailable;
 	}
 
-	// 选槽:槽号升序里第一个空槽;都占着就替换槽号最小的那个。
+	// 显式指定时只使用目标槽;未指定才取第一个空槽,都占着时替换最小槽。
 	// 选定的槽显式传给 PutInstance —— 自动找位取的是表行序里的第一个空槽,不保证是槽号最小的。
-	uint32_t targetSlot = slots.front();
+	uint32_t targetSlot = requestedSlot.value_or(slots.front());
 	Guid replacedGuid = equipment.Layout().At(targetSlot);
-	for (const uint32_t slot : slots) {
-		if (equipment.Layout().At(slot) == kInvalidGuid) {
-			targetSlot = slot;
-			replacedGuid = kInvalidGuid;
-			break;
+	if (!requestedSlot.has_value()) {
+		for (const uint32_t slot : slots) {
+			if (equipment.Layout().At(slot) == kInvalidGuid) {
+				targetSlot = slot;
+				replacedGuid = kInvalidGuid;
+				break;
+			}
 		}
 	}
 	const bool replacing = replacedGuid != kInvalidGuid;
@@ -1191,7 +1250,8 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		return kEquipEnhanceUnavailable;
 	}
 	// 3. 强化是否开放
-	const uint32_t maxLevel = MaxEnhanceLevel();
+	const uint32_t profile = located.row->get().equip_profile();
+	const uint32_t maxLevel = MaxEnhanceLevel(profile);
 	if (maxLevel == 0) {
 		return kEquipEnhanceUnavailable;
 	}
@@ -1209,13 +1269,13 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 	}
 	// 5. 下一级的规则行。currentLevel < maxLevel 时它一定在连续等级里;查不到 = 两次查表之间换了表。
 	const uint32_t targetLevel = currentLevel + 1;
-	const EquipEnhanceTable* enhanceRow = EnhanceRow(targetLevel);
+	const EquipEnhanceTable* enhanceRow = EnhanceRow(profile, targetLevel);
 	if (enhanceRow == nullptr) {
 		LOG_ERROR << "[PlayerEquip] Enhance failed, EquipEnhance row missing: player_id=" << tlsEcs.GetPlayerId(player) << " guid=" << itemId
 				  << " config=" << configId << " target_level=" << targetLevel << " max_level=" << maxLevel;
 		return kEquipInternalError;
 	}
-	if (enhanceRow->success_rate() == 0) {
+	if (!IsEnhanceRowAvailable(*enhanceRow)) {
 		return kEquipEnhanceUnavailable;  // 必败的行:不为一次不可能成功的强化收费
 	}
 	// 规则抄进局部量:提交段不再读表行,也让下面每一步用的是同一份数。
@@ -1229,7 +1289,8 @@ uint32_t PlayerEquipSystem::Enhance(entt::entity player, Guid itemId, uint32_t e
 		// 6. 材料必须是一种真实存在的、不是装备的物品。按 config 扣数量不看 has_equip():材料被配成装备的话,
 		//    扣的就是玩家的装备实例(甚至是正在强化的这一件)。表校验只打日志,这里 fail-closed。
 		const ItemTable* materialRow = ItemRow(materialId);
-		if (materialRow == nullptr || materialRow->equip_kind() != 0) {
+		if (materialRow == nullptr || materialRow->equip_kind() != 0 ||
+			(profile != 0 && materialRow->battle_usable() != 0)) {
 			LOG_ERROR << "[PlayerEquip] Enhance failed, material row unusable (missing or configured as equipment): player_id=" << tlsEcs.GetPlayerId(player)
 					  << " guid=" << itemId << " target_level=" << targetLevel << " material_id=" << materialId
 					  << " material_row_found=" << (materialRow != nullptr);
@@ -1345,6 +1406,9 @@ uint32_t PlayerEquipSystem::InlayGem(entt::entity player, Guid itemId, uint32_t 
 		return err;
 	}
 	const uint32_t configId = located.item->get().config_id();
+	// V1 宝石开放规则未定，不沿同 equip_kind 的旧孔位自动开放；已有记录仍可显示、生效与取下。
+	if (located.row->get().equip_profile() != equiprules::ToRaw(equiprules::EquipmentProfile::kLegacy))
+		return kEquipGemSocketInvalid;
 	if (!located.initialized) {
 		LOG_WARN << "[PlayerEquip] Inlay refused, instance not initialized (no equip section): player_id=" << tlsEcs.GetPlayerId(player)
 				 << " guid=" << itemId << " config=" << configId << " socket=" << socket
@@ -1606,14 +1670,16 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 	}
 
 	info.set_equip_level(row->equip_level());
+	PlayerEquipmentV1System::FillDisplay(item, info);
 	info.set_equip_class(row->equip_class());
 	// equip_class_name 留空:Class 表目前没有名称列(data/schema/class_table.proto)。
 	// 以后加了名称列,在这里按 row->equip_class() 查表填上即可,协议不用动。
 
 	// 强化(二期 §4.3)。等级是按表上限夹取后的有效等级,与 CollectBonus 用的是同一个取法。
-	const uint32_t maxEnhanceLevel = MaxEnhanceLevel();
-	const uint32_t enhanceLevel = EffectiveEnhanceLevel(item);
-	const uint32_t enhancePermyriad = EnhanceBonusPermyriad(enhanceLevel);
+	if (!equiprules::IsKnownEquipmentProfile(row->equip_profile())) return;
+	const uint32_t maxEnhanceLevel = MaxEnhanceLevel(row->equip_profile());
+	const uint32_t enhanceLevel = EffectiveEnhanceLevel(item, row->equip_profile());
+	const uint32_t enhancePermyriad = EnhanceBonusPermyriad(row->equip_profile(), enhanceLevel);
 	info.set_enhance_level(enhanceLevel);
 	info.set_enhance_max_level(maxEnhanceLevel);
 	info.set_enhance_bonus_permyriad(enhancePermyriad);
@@ -1621,8 +1687,8 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 	// 所以「带了预览」=「强化入口不会因为这几条拒绝」。金币 / 材料够不够是玩家自己的事,不在这里判。
 	const EquipEnhanceTable* nextEnhanceRow = nullptr;
 	if (item.has_equip() && enhanceLevel < maxEnhanceLevel) {
-		const EquipEnhanceTable* candidate = EnhanceRow(enhanceLevel + 1);
-		if (candidate != nullptr && candidate->success_rate() > 0) {
+		const EquipEnhanceTable* candidate = EnhanceRow(row->equip_profile(), enhanceLevel + 1);
+		if (candidate != nullptr && IsEnhanceRowAvailable(*candidate)) {
 			nextEnhanceRow = candidate;
 		}
 	}
@@ -1663,7 +1729,7 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 		// 基础属性的三个数都只从 ResolveBaseNow 取(加成、tooltip、下一级预览同口径):
 		// value 已含强化增量;enhance_bonus 是其中强化带来的那一部分;0 级时 value == 表值、增量为 0。
 		const uint64_t tableValue = base.base_attr_value();
-		const uint64_t valueNow = ResolveBaseNow(tableValue, enhancePermyriad);
+		const uint64_t valueNow = ResolveBaseNow(*row, *attr, tableValue, enhancePermyriad);
 		auto* line = info.add_base_attrs();
 		line->set_attr_id(attr->id());
 		line->set_name(attr->name());
@@ -1674,7 +1740,7 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 		line->set_seq(baseSeq++);
 		line->set_enhance_bonus(valueNow - tableValue);
 		if (nextEnhanceRow != nullptr) {
-			line->set_enhance_next_value(ResolveBaseNow(tableValue, nextEnhanceRow->bonus_permyriad()));
+			line->set_enhance_next_value(ResolveBaseNow(*row, *attr, tableValue, nextEnhanceRow->bonus_permyriad()));
 		}
 	}
 
@@ -1736,6 +1802,7 @@ void PlayerEquipSystem::FillItemDisplay(const ItemComp& item, ::BagItemInfo& inf
 	bool hasPreviousSocket = false;
 	uint32_t previousSocket = 0;
 	for (const EquipGemSocketTable* socketRow : SocketRowsFor(row->equip_kind())) {
+		if (row->equip_profile() != 0 && FirstGemRecordOn(item, socketRow->socket()) == nullptr) continue;
 		if (hasPreviousSocket && socketRow->socket() == previousSocket) {
 			continue;  // 脏表里同一个孔的第二行:只认排在前面的那一行(与 CheckGemFit 取第一条一致)
 		}
@@ -1830,13 +1897,15 @@ bool PlayerEquipSystem::IsEquipment(uint32_t configId) {
 	return row != nullptr && row->equip_kind() != 0;
 }
 
-uint32_t PlayerEquipSystem::MaxEnhanceLevel() {
+uint32_t PlayerEquipSystem::MaxEnhanceLevel(uint32_t profile) {
+	if (!equiprules::SupportsEnhancement(profile)) return 0;
 	const auto& table = EquipEnhanceTableManager::Instance();
 	// 从 1 起数到第一个缺口为止。连续等级的长度不会超过行数,循环因此有界。
 	// 每次现算、不缓存:表只有十几行,而缓存要自己盯热更(绕开加载回调的单表 Load() 不会通知任何人)。
 	const std::size_t rowCount = table.Count();
 	uint32_t level = 0;
-	while (level < rowCount && table.Exists(level + 1)) {
+	while (level < rowCount && (profile == 0 || level < equiprules::kV1MaxEnhanceLevel) &&
+		   EnhanceRow(profile, level + 1) != nullptr) {
 		++level;
 	}
 	return level;
@@ -1850,6 +1919,4 @@ bool PlayerEquipSystem::IsGem(uint32_t configId) {
 // 仅供单测
 // ---------------------------------------------------------------------------
 
-void PlayerEquipSystem::SetRandomSourceForTest(std::function<uint64_t(uint64_t)> rand) {
-	RandomSourceForTestSlot() = std::move(rand);
-}
+void PlayerEquipSystem::SetRandomSourceForTest(std::f

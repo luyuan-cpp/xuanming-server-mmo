@@ -13,6 +13,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import build_docker_java_debug as builder
 
 
+class RedisFixtureTests(unittest.TestCase):
+    def test_missing_redis_is_rejected_before_any_build_work(self):
+        with patch.dict(builder.os.environ, {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, 'GATEWAY_RATE_LIMIT_REDIS_URL.*GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES'):
+                builder.build(SimpleNamespace(), Path('unused'), {}, {})
+
+    def test_both_fixture_shapes_are_required_and_diagnostics_never_echo_credentials(self):
+        environment = {'GATEWAY_RATE_LIMIT_REDIS_URL': 'redis://:private-password@127.0.0.1:24120',
+                       'GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES': ' '}
+        with self.assertRaises(RuntimeError) as raised:
+            builder.require_redis_test_fixtures(environment)
+        self.assertIn('GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES', str(raised.exception))
+        self.assertNotIn('private-password', str(raised.exception))
+        environment['GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES'] = '127.0.0.1:7100,127.0.0.1:7101,127.0.0.1:7102'
+        builder.require_redis_test_fixtures(environment)
+
+
 class ShortWorkspaceTests(unittest.TestCase):
     def test_deep_evidence_keeps_snapshot_and_toolchain_short_and_recorded(self):
         with tempfile.TemporaryDirectory() as directory:

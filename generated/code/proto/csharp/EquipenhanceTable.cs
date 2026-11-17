@@ -22,18 +22,19 @@ public static partial class EquipenhanceTableReflection {
   static EquipenhanceTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChhlcXVpcGVuaGFuY2VfdGFibGUucHJvdG8ipwEKEUVxdWlwRW5oYW5jZVRh",
+          "ChhlcXVpcGVuaGFuY2VfdGFibGUucHJvdG8iygEKEUVxdWlwRW5oYW5jZVRh",
           "YmxlEgoKAmlkGAEgASgNEhcKD2JvbnVzX3Blcm15cmlhZBgCIAEoDRIUCgxz",
           "dWNjZXNzX3JhdGUYAyABKA0SFwoPZmFpbF9sZXZlbF9sb3NzGAQgASgNEhEK",
           "CWNvc3RfZ29sZBgFIAEoBBITCgttYXRlcmlhbF9pZBgGIAEoDRIWCg5tYXRl",
-          "cmlhbF9jb3VudBgHIAEoDSI5ChVFcXVpcEVuaGFuY2VUYWJsZURhdGESIAoE",
-          "ZGF0YRgBIAMoCzISLkVxdWlwRW5oYW5jZVRhYmxlQkMKDmNvbS5nYW1lLnRh",
-          "YmxlQhtFcXVpcEVuaGFuY2VUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVk",
-          "L3BiL3RhYmxlYgZwcm90bzM="));
+          "cmlhbF9jb3VudBgHIAEoDRISCgpwcm9maWxlX2lkGAggASgNEg0KBWxldmVs",
+          "GAkgASgNIjkKFUVxdWlwRW5oYW5jZVRhYmxlRGF0YRIgCgRkYXRhGAEgAygL",
+          "MhIuRXF1aXBFbmhhbmNlVGFibGVCQwoOY29tLmdhbWUudGFibGVCG0VxdWlw",
+          "RW5oYW5jZVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGVi",
+          "BnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::EquipEnhanceTable), global::EquipEnhanceTable.Parser, new[]{ "Id", "BonusPermyriad", "SuccessRate", "FailLevelLoss", "CostGold", "MaterialId", "MaterialCount" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::EquipEnhanceTable), global::EquipEnhanceTable.Parser, new[]{ "Id", "BonusPermyriad", "SuccessRate", "FailLevelLoss", "CostGold", "MaterialId", "MaterialCount", "ProfileId", "Level" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::EquipEnhanceTableData), global::EquipEnhanceTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -83,6 +84,8 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
     costGold_ = other.costGold_;
     materialId_ = other.materialId_;
     materialCount_ = other.materialCount_;
+    profileId_ = other.profileId_;
+    level_ = other.level_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -176,6 +179,30 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
     }
   }
 
+  /// <summary>Field number for the "profile_id" field.</summary>
+  public const int ProfileIdFieldNumber = 8;
+  private uint profileId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ProfileId {
+    get { return profileId_; }
+    set {
+      profileId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "level" field.</summary>
+  public const int LevelFieldNumber = 9;
+  private uint level_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint Level {
+    get { return level_; }
+    set {
+      level_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -198,6 +225,8 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
     if (CostGold != other.CostGold) return false;
     if (MaterialId != other.MaterialId) return false;
     if (MaterialCount != other.MaterialCount) return false;
+    if (ProfileId != other.ProfileId) return false;
+    if (Level != other.Level) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -212,6 +241,8 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
     if (CostGold != 0UL) hash ^= CostGold.GetHashCode();
     if (MaterialId != 0) hash ^= MaterialId.GetHashCode();
     if (MaterialCount != 0) hash ^= MaterialCount.GetHashCode();
+    if (ProfileId != 0) hash ^= ProfileId.GetHashCode();
+    if (Level != 0) hash ^= Level.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -258,6 +289,14 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
       output.WriteRawTag(56);
       output.WriteUInt32(MaterialCount);
     }
+    if (ProfileId != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(ProfileId);
+    }
+    if (Level != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(Level);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -296,6 +335,14 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
       output.WriteRawTag(56);
       output.WriteUInt32(MaterialCount);
     }
+    if (ProfileId != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(ProfileId);
+    }
+    if (Level != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(Level);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -326,6 +373,12 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
     }
     if (MaterialCount != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(MaterialCount);
+    }
+    if (ProfileId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ProfileId);
+    }
+    if (Level != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Level);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -359,6 +412,12 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
     }
     if (other.MaterialCount != 0) {
       MaterialCount = other.MaterialCount;
+    }
+    if (other.ProfileId != 0) {
+      ProfileId = other.ProfileId;
+    }
+    if (other.Level != 0) {
+      Level = other.Level;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -407,6 +466,14 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
           MaterialCount = input.ReadUInt32();
           break;
         }
+        case 64: {
+          ProfileId = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          Level = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -452,6 +519,14 @@ public sealed partial class EquipEnhanceTable : pb::IMessage<EquipEnhanceTable>
         }
         case 56: {
           MaterialCount = input.ReadUInt32();
+          break;
+        }
+        case 64: {
+          ProfileId = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          Level = input.ReadUInt32();
           break;
         }
       }

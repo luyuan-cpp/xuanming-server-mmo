@@ -68,6 +68,38 @@ enum class DerivedStat : uint8_t {
     kCount
 };
 
+// Item.equip_profile 明确选择整套装备规则；旧模板的默认 0 永远沿用旧资产规则。
+// profile 不描述位置：所有装备仍在同一装备包，由 layout 与准入规则决定放在哪。
+enum class EquipmentProfile : uint8_t {
+    kLegacy = 0,
+    kV1Basic = 1,
+    kV1Accessory = 2,
+    kV1Artifact = 3,
+    kCount
+};
+inline constexpr uint32_t kV1MaxEnhanceLevel = 10;
+inline constexpr uint32_t kV1EnhanceBonusPerLevel = 200;
+
+constexpr uint32_t ToRaw(EquipmentProfile profile) { return static_cast<uint32_t>(profile); }
+constexpr bool IsKnownEquipmentProfile(uint32_t profile) {
+    return profile < ToRaw(EquipmentProfile::kCount);
+}
+constexpr bool SupportsEnhancement(uint32_t profile) {
+    return profile == ToRaw(EquipmentProfile::kLegacy) || profile == ToRaw(EquipmentProfile::kV1Basic);
+}
+
+// V1 只强化攻击和防御；速度以及后续新增的其他基础项不会被默认纳入。
+// 加成、详情与下一级预览共用这一判据，不按物品名称、配置号区间或槽位分支。
+constexpr bool EnhancesBaseAttribute(uint32_t profile, uint32_t effect, uint32_t parameter) {
+    if (profile == ToRaw(EquipmentProfile::kLegacy)) return true;
+    if (profile != ToRaw(EquipmentProfile::kV1Basic)) return false;
+    return effect == static_cast<uint32_t>(EffectKind::kBothAttacks) ||
+        (effect == static_cast<uint32_t>(EffectKind::kDerivedFlat) &&
+         (parameter == static_cast<uint32_t>(DerivedStat::kPhysicalAttack) ||
+          parameter == static_cast<uint32_t>(DerivedStat::kMagicAttack) ||
+          parameter == static_cast<uint32_t>(DerivedStat::kDefense)));
+}
+
 // 战斗类属性。**数值 == proto CombatAttributes 的字段号 == EquipAttribute.effect_param(effect = 5 时)**,
 // 三者不得错位:表里填错号 / proto 改号 / 这里插一项,都会让「抗冰冻」悄悄变成「抗昏睡」且零报错。
 // 与 proto 的对齐由单测里的 static_assert 机械守住;与表的对齐由启动表校验(ToCombatStat 非 kNone)守住。

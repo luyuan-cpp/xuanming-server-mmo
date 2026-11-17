@@ -20,6 +20,8 @@
 #include "ConfigSubsystem.h"
 #include "ItemTable.h"
 #include "EquipAffixRuleTable.h"
+#include "EquipArtifactTable.h"
+#include "ItemTable.h"
 
 /// 解析 Item.affix_rule -> EquipAffixRule 行。
 inline const FCfgEquipAffixRuleRow* GetItemAffixRuleRow(const UConfigSubsystem* Config, const FCfgItemRow& Row)
@@ -36,6 +38,36 @@ inline const FCfgEquipAffixRuleRow* GetItemAffixRuleRow(const UConfigSubsystem* 
 	return Row != nullptr ? GetItemAffixRuleRow(Config, *Row) : nullptr;
 }
 
+/// 解析 Item.forge_material_id -> Item 行。
+inline const FCfgItemRow* GetItemForgeMaterialIdRow(const UConfigSubsystem* Config, const FCfgItemRow& Row)
+{
+	const UItemTable* Target = Config != nullptr ? Config->GetItemTable() : nullptr;
+	return Target != nullptr ? Target->FindByIdSilent(Row.forge_material_id) : nullptr;
+}
+
+/// 同上,按 Item 的 id 取行再解析。
+inline const FCfgItemRow* GetItemForgeMaterialIdRow(const UConfigSubsystem* Config, int32 TableId)
+{
+	const UItemTable* Source = Config != nullptr ? Config->GetItemTable() : nullptr;
+	const FCfgItemRow* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
+	return Row != nullptr ? GetItemForgeMaterialIdRow(Config, *Row) : nullptr;
+}
+
+/// 解析 Item.artifact_id -> EquipArtifact 行。
+inline const FCfgEquipArtifactRow* GetItemArtifactIdRow(const UConfigSubsystem* Config, const FCfgItemRow& Row)
+{
+	const UEquipArtifactTable* Target = Config != nullptr ? Config->GetEquipArtifactTable() : nullptr;
+	return Target != nullptr ? Target->FindByIdSilent(Row.artifact_id) : nullptr;
+}
+
+/// 同上,按 Item 的 id 取行再解析。
+inline const FCfgEquipArtifactRow* GetItemArtifactIdRow(const UConfigSubsystem* Config, int32 TableId)
+{
+	const UItemTable* Source = Config != nullptr ? Config->GetItemTable() : nullptr;
+	const FCfgItemRow* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
+	return Row != nullptr ? GetItemArtifactIdRow(Config, *Row) : nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // 反向外键(HasMany):按外键列的值找源表的行
 // ---------------------------------------------------------------------------
@@ -45,4 +77,18 @@ inline TArray<const FCfgItemRow*> FindItemRowsByAffixRule(const UConfigSubsystem
 {
 	const UItemTable* Source = Config != nullptr ? Config->GetItemTable() : nullptr;
 	return Source != nullptr ? Source->GetByAffixRule(Key) : TArray<const FCfgItemRow*>();
+}
+
+/// 反查:forge_material_id == Key 的全部 Item 行。
+inline TArray<const FCfgItemRow*> FindItemRowsByForgeMaterialId(const UConfigSubsystem* Config, int32 Key)
+{
+	const UItemTable* Source = Config != nullptr ? Config->GetItemTable() : nullptr;
+	return Source != nullptr ? Source->GetByForgeMaterialId(Key) : TArray<const FCfgItemRow*>();
+}
+
+/// 反查:artifact_id == Key 的全部 Item 行。
+inline TArray<const FCfgItemRow*> FindItemRowsByArtifactId(const UConfigSubsystem* Config, int32 Key)
+{
+	const UItemTable* Source = Config != nullptr ? Config->GetItemTable() : nullptr;
+	return Source != nullptr ? Source->GetByArtifactId(Key) : TArray<const FCfgItemRow*>();
 }

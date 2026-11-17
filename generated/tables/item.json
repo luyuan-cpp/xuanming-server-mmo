@@ -1092,6 +1092,1254 @@
    "id": 1470,
    "max_stack_size": 1,
    "name": "星陨靴"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "用于首发基础装备的必成强化。",
+   "equip_class": 0,
+   "equip_kind": 0,
+   "equip_level": 0,
+   "equip_profile": 0,
+   "id": 3002,
+   "max_stack_size": 9999,
+   "name": "百炼石"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 40
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "1级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 1,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/012_peachwood_sword",
+   "id": 3101,
+   "max_stack_size": 1,
+   "name": "1级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 12
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "1级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 1,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3102,
+   "max_stack_size": 1,
+   "name": "1级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 24
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "1级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 1,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3103,
+   "max_stack_size": 1,
+   "name": "1级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 12
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 12
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "1级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 1,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3104,
+   "max_stack_size": 1,
+   "name": "1级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 220
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 10,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/012_peachwood_sword",
+   "id": 3111,
+   "max_stack_size": 1,
+   "name": "10级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 66
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 10,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3112,
+   "max_stack_size": 1,
+   "name": "10级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 132
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 10,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3113,
+   "max_stack_size": 1,
+   "name": "10级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 66
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 48
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "10级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 10,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3114,
+   "max_stack_size": 1,
+   "name": "10级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 420
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "20级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 20,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/007_flying_sword",
+   "id": 3121,
+   "max_stack_size": 1,
+   "name": "20级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 126
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "20级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 20,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3122,
+   "max_stack_size": 1,
+   "name": "20级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 252
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "20级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 20,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3123,
+   "max_stack_size": 1,
+   "name": "20级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 126
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 88
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "20级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 20,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3124,
+   "max_stack_size": 1,
+   "name": "20级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 620
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 30,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/007_flying_sword",
+   "id": 3131,
+   "max_stack_size": 1,
+   "name": "30级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 186
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 30,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3132,
+   "max_stack_size": 1,
+   "name": "30级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 372
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 30,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3133,
+   "max_stack_size": 1,
+   "name": "30级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 186
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 128
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "30级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 30,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3134,
+   "max_stack_size": 1,
+   "name": "30级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 820
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "40级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 40,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/001_daoist_saber",
+   "id": 3141,
+   "max_stack_size": 1,
+   "name": "40级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 246
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "40级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 40,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3142,
+   "max_stack_size": 1,
+   "name": "40级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 492
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "40级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 40,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3143,
+   "max_stack_size": 1,
+   "name": "40级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 246
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 168
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "40级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 40,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3144,
+   "max_stack_size": 1,
+   "name": "40级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 1020
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 50,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/001_daoist_saber",
+   "id": 3151,
+   "max_stack_size": 1,
+   "name": "50级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 306
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 50,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3152,
+   "max_stack_size": 1,
+   "name": "50级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 612
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 50,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3153,
+   "max_stack_size": 1,
+   "name": "50级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 306
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 208
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "50级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 50,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3154,
+   "max_stack_size": 1,
+   "name": "50级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 1220
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "60级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 60,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/074_lu_dongbin_immortal_sword",
+   "id": 3161,
+   "max_stack_size": 1,
+   "name": "60级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 366
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "60级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 60,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3162,
+   "max_stack_size": 1,
+   "name": "60级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 732
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "60级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 60,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3163,
+   "max_stack_size": 1,
+   "name": "60级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 366
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 248
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "60级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 60,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3164,
+   "max_stack_size": 1,
+   "name": "60级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 1420
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 70,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/074_lu_dongbin_immortal_sword",
+   "id": 3171,
+   "max_stack_size": 1,
+   "name": "70级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 426
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 70,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3172,
+   "max_stack_size": 1,
+   "name": "70级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 852
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 70,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3173,
+   "max_stack_size": 1,
+   "name": "70级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 426
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 288
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "70级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 70,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3174,
+   "max_stack_size": 1,
+   "name": "70级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 1,
+     "base_attr_value": 1620
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "80级定制武器，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 11,
+   "equip_level": 80,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "icon_key": "UI/qdao_v3/icons_weapon/19_lu_dongbin_immortal_sword",
+   "id": 3181,
+   "max_stack_size": 1,
+   "name": "80级定制武器"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 486
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "80级定制帽子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 12,
+   "equip_level": 80,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3182,
+   "max_stack_size": 1,
+   "name": "80级定制帽子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 972
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "80级定制衣服，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 13,
+   "equip_level": 80,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3183,
+   "max_stack_size": 1,
+   "name": "80级定制衣服"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "base_attr": [
+    {
+     "base_attr_id": 8,
+     "base_attr_value": 486
+    },
+    {
+     "base_attr_id": 11,
+     "base_attr_value": 328
+    }
+   ],
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "80级定制鞋子，基础属性固定，强化必成。",
+   "equip_class": 0,
+   "equip_kind": 14,
+   "equip_level": 80,
+   "equip_profile": 1,
+   "forge_material_count": 20,
+   "forge_material_id": 3001,
+   "id": 3184,
+   "max_stack_size": 1,
+   "name": "80级定制鞋子"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "用于定向打造装备本体及首次安装固定词条。",
+   "equip_class": 0,
+   "equip_kind": 0,
+   "equip_level": 0,
+   "equip_profile": 0,
+   "forge_material_count": 0,
+   "forge_material_id": 0,
+   "id": 3001,
+   "max_stack_size": 9999,
+   "name": "打造材料"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 1,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3201,
+   "max_stack_size": 1,
+   "name": "1级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 10,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3211,
+   "max_stack_size": 1,
+   "name": "10级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 20,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3221,
+   "max_stack_size": 1,
+   "name": "20级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 30,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3231,
+   "max_stack_size": 1,
+   "name": "30级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 40,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3241,
+   "max_stack_size": 1,
+   "name": "40级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 50,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3251,
+   "max_stack_size": 1,
+   "name": "50级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 60,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3261,
+   "max_stack_size": 1,
+   "name": "60级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 70,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3271,
+   "max_stack_size": 1,
+   "name": "70级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "承载两个不同的通用词条，空词条位不提供属性。",
+   "equip_class": 0,
+   "equip_kind": 15,
+   "equip_level": 80,
+   "equip_profile": 2,
+   "forge_material_count": 10,
+   "forge_material_id": 3001,
+   "id": 3281,
+   "max_stack_size": 1,
+   "name": "80级定制首饰"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 1,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "正常动作主目标的首段物理伤害结算后，额外削减伤害20%的剩余合格护盾，不伤气血。每回合1次。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3301,
+   "max_stack_size": 1,
+   "name": "破阵刃"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 2,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "正常动作主目标的首段法术伤害结算后，额外削减伤害20%的剩余合格护盾，不伤气血。每回合1次。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3302,
+   "max_stack_size": 1,
+   "name": "照影镜"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 3,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "正常动作主目标的主障碍被概率抵抗后，下一回合同类主目标命中增加6个百分点。每回合至多生成1份，每场2份。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3303,
+   "max_stack_size": 1,
+   "name": "回响铃"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 4,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "正常动作主目标气血不高于30%时，第一段即时治疗的施放修正增加12个百分点。每回合1次。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3304,
+   "max_stack_size": 1,
+   "name": "济生佩"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 5,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "正常施放独立主动护盾时，仅主目标的新护盾容量修正增加12个百分点。每回合1次。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3305,
+   "max_stack_size": 1,
+   "name": "固元印"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 6,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "前两回合首次将扣气血的敌方直接伤害减少20%，最多减免入战最大气血的6%。每场1次。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3306,
+   "max_stack_size": 1,
+   "name": "护心珠"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 7,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "实际执行普通防御后，回复入战最大法力的5%，按缺口封顶。每回合1次，每场实际回复3次。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3307,
+   "max_stack_size": 1,
+   "name": "归元葫"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 8,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "首次受到敌方正常动作的合法硬控制判定时，该次抵抗增加8个百分点，进入判定即消费。每回合1次，每场2次。",
+   "equip_class": 0,
+   "equip_kind": 16,
+   "equip_level": 1,
+   "equip_profile": 3,
+   "forge_material_count": 40,
+   "forge_material_id": 3001,
+   "id": 3308,
+   "max_stack_size": 1,
+   "name": "清心符"
   }
  ]
 }

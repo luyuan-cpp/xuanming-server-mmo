@@ -54,6 +54,7 @@ class Snapshot:
     arr_skill_type: dict[int, tuple[Row, ...]]
     arr_targeting_mode: dict[int, tuple[Row, ...]]
     arr_effect: dict[int, tuple[Row, ...]]
+    arr_init_effect: dict[int, tuple[Row, ...]]
 
 
 #: 还没 load 过时的空快照。让「没加载」和「加载成 0 行」走同一条读路径，
@@ -65,6 +66,7 @@ _EMPTY_SNAPSHOT: Snapshot = Snapshot(
     arr_skill_type={},
     arr_targeting_mode={},
     arr_effect={},
+    arr_init_effect={},
 )
 
 
@@ -110,6 +112,7 @@ class SkillTableManager:
         arr_skill_type: dict[int, list[Row]] = {}
         arr_targeting_mode: dict[int, list[Row]] = {}
         arr_effect: dict[int, list[Row]] = {}
+        arr_init_effect: dict[int, list[Row]] = {}
 
         for row in rows:
             by_id[row.id] = row
@@ -119,6 +122,8 @@ class SkillTableManager:
                 arr_targeting_mode.setdefault(elem, []).append(row)
             for elem in row.effect:
                 arr_effect.setdefault(elem, []).append(row)
+            for elem in row.init_effect:
+                arr_init_effect.setdefault(elem, []).append(row)
 
         # 多值索引建的时候用 list（要 append），落进快照前一律冻成 tuple：查询返回的
         # 就是索引里那个对象本体，是 list 的话调用方一个 .append() 就改到了别人的索引 ——
@@ -130,6 +135,7 @@ class SkillTableManager:
             arr_skill_type={k: tuple(v) for k, v in arr_skill_type.items()},
             arr_targeting_mode={k: tuple(v) for k, v in arr_targeting_mode.items()},
             arr_effect={k: tuple(v) for k, v in arr_effect.items()},
+            arr_init_effect={k: tuple(v) for k, v in arr_init_effect.items()},
         )
 
     def apply_snapshot(self, snapshot: Snapshot) -> None:
@@ -188,6 +194,10 @@ class SkillTableManager:
         """反查：repeated 列 ``effect`` 里含有 key 的全部行。"""
         return self._snap.arr_effect.get(key, _NO_ROWS)
 
+    def find_by_init_effect_index(self, key: int) -> tuple[Row, ...]:
+        """反查：repeated 列 ``init_effect`` 里含有 key 的全部行。"""
+        return self._snap.arr_init_effect.get(key, _NO_ROWS)
+
     # ---- Exists ----
 
     def exists(self, id_: int) -> bool:
@@ -206,6 +216,9 @@ class SkillTableManager:
 
     def count_by_effect_index(self, key: int) -> int:
         return len(self._snap.arr_effect.get(key, _NO_ROWS))
+
+    def count_by_init_effect_index(self, key: int) -> int:
+        return len(self._snap.arr_init_effect.get(key, _NO_ROWS))
 
     # ---- RandOne ----
 

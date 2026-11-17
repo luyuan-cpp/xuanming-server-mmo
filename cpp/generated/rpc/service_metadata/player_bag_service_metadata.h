@@ -38,3 +38,15 @@ constexpr uint32_t SceneBagClientPlayerRemoveGemIndex = 7;
 constexpr uint32_t SceneBagClientPlayerRetrieveTemporaryItemsMessageId = 374;
 constexpr uint32_t SceneBagClientPlayerRetrieveTemporaryItemsIndex = 8;
 #define SceneBagClientPlayerRetrieveTemporaryItemsMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(8)
+
+constexpr uint32_t SceneBagClientPlayerGetEquipmentCraftRulesMessageId = 404;
+constexpr uint32_t SceneBagClientPlayerGetEquipmentCraftRulesIndex = 9;
+#define SceneBagClientPlayerGetEquipmentCraftRulesMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(9)
+
+constexpr uint32_t SceneBagClientPlayerPreviewEquipmentCraftMessageId = 405;
+constexpr uint32_t SceneBagClientPlayerPreviewEquipmentCraftIndex = 10;
+#define SceneBagClientPlayerPreviewEquipmentCraftMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(10)
+
+constexpr uint32_t SceneBagClientPlayerCommitEquipmentCraftMessageId = 406;
+constexpr uint32_t SceneBagClientPlayerCommitEquipmentCraftIndex = 11;
+#define SceneBagClientPlayerCommitEquipmentCraftMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(11)

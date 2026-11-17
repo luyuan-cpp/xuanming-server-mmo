@@ -22,7 +22,7 @@ public static partial class BuffTableReflection {
   static BuffTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChBidWZmX3RhYmxlLnByb3RvIsEFCglCdWZmVGFibGUSCgoCaWQYASABKA0S",
+          "ChBidWZmX3RhYmxlLnByb3RvIoQLCglCdWZmVGFibGUSCgoCaWQYASABKA0S",
           "EQoJbm9fY2FzdGVyGAIgASgNEhEKCWJ1ZmZfdHlwZRgDIAEoDRIgCgN0YWcY",
           "BCADKAsyEy5CdWZmVGFibGUuVGFnRW50cnkSLQoKaW1tdW5lX3RhZxgFIAMo",
           "CzIZLkJ1ZmZUYWJsZS5JbW11bmVUYWdFbnRyeRItCgpkaXNwZWxfdGFnGAYg",
@@ -34,17 +34,33 @@ public static partial class BuffTableReflection {
           "GA8gASgBEiAKGG1vdmVtZW50X3NwZWVkX3JlZHVjdGlvbhgQIAEoARIbChNo",
           "ZWFsdGhfcmVnZW5lcmF0aW9uGBEgASgJEhAKCHN1Yl9idWZmGBIgAygNEhcK",
           "D3RhcmdldF9zdWJfYnVmZhgTIAMoDRIbChNjb21iYXRfaWRsZV9zZWNvbmRz",
-          "GBQgASgBEgwKBHRpbWUYFSABKA0SFAoMYm9udXNfZGFtYWdlGBYgASgJGioK",
-          "CFRhZ0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCDoCOAEaMAoO",
-          "SW1tdW5lVGFnRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgIOgI4",
-          "ARowCg5EaXNwZWxUYWdFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiAB",
-          "KAg6AjgBIikKDUJ1ZmZUYWJsZURhdGESGAoEZGF0YRgBIAMoCzIKLkJ1ZmZU",
-          "YWJsZUI7Cg5jb20uZ2FtZS50YWJsZUITQnVmZlRhYmxlT3V0ZXJDbGFzc1AB",
-          "WhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "GBQgASgBEgwKBHRpbWUYFSABKA0SFAoMYm9udXNfZGFtYWdlGBYgASgJEhEK",
+          "CWJhdHRsZV9vcBgXIAEoDRIVCg10cmlnZ2VyX2V2ZW50GBggASgNEhUKDWVm",
+          "ZmVjdF90YXJnZXQYGSABKA0SEgoKZmxhdF92YWx1ZRgaIAEoARIRCglwZXJf",
+          "bGV2ZWwYGyABKAESDQoFcmF0aW8YHCABKAESEwoLdmFsdWVfYmFzaXMYHSAB",
+          "KA0SFQoNZGFtYWdlX2ZpbHRlchgeIAEoDRIXCg9kdXJhdGlvbl9yb3VuZHMY",
+          "HyABKA0SEgoKdGlja19jb3VudBggIAEoDRIWCg50cmlnZ2VyX2NoYW5jZRgh",
+          "IAEoARIXCg9wZXJfcm91bmRfbGltaXQYIiABKA0SEQoJaGl0X2xpbWl0GCMg",
+          "ASgNEhUKDW1vZGlmaWVyX3N0YXQYJCABKA0SEgoKc3RhdGVfa2luZBglIAEo",
+          "DRIaChJhcHBsaWNhdGlvbl9jaGFuY2UYJiABKAESFAoMcmVxdWlyZWRfdGFn",
+          "GCcgASgJEhsKE3NlY29uZF9yZXF1aXJlZF90YWcYKCABKAkSGQoRY29uZGl0",
+          "aW9uYWxfYm9udXMYKSABKAESFwoPc2Vjb25kYXJ5X3JhdGlvGCogASgBEhQK",
+          "DGVmZmVjdF9jb3VudBgrIAEoDRIUCgx0YXJnZXRfY291bnQYLCABKA0SGAoQ",
+          "cGV0X3RhcmdldF9jb3VudBgtIAEoDRIRCglzdGFja19rZXkYLiABKA0SFgoO",
+          "cmVmcmVzaF9wb2xpY3kYLyABKA0SFQoNa2VlcF9vbl9kZWF0aBgwIAEoDRIX",
+          "Cg9lZmZlY3RfcHJpb3JpdHkYMSABKA0SEwoLc3RhcnRfcm91bmQYMiABKA0S",
+          "EwoLc3RhY2tfbGltaXQYMyABKA0SHQoVcmVxdWlyZV9saXZpbmdfY2FzdGVy",
+          "GDQgASgNEhUKDXRpY2tfb25fYXBwbHkYNSABKA0aKgoIVGFnRW50cnkSCwoD",
+          "a2V5GAEgASgJEg0KBXZhbHVlGAIgASgIOgI4ARowCg5JbW11bmVUYWdFbnRy",
+          "eRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAg6AjgBGjAKDkRpc3BlbFRh",
+          "Z0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCDoCOAEiKQoNQnVm",
+          "ZlRhYmxlRGF0YRIYCgRkYXRhGAEgAygLMgouQnVmZlRhYmxlQjsKDmNvbS5n",
+          "YW1lLnRhYmxlQhNCdWZmVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9w",
+          "Yi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::BuffTable), global::BuffTable.Parser, new[]{ "Id", "NoCaster", "BuffType", "Tag", "ImmuneTag", "DispelTag", "Level", "MaxLayer", "InfiniteDuration", "Duration", "ForceInterrupt", "Interval", "IntervalCount", "IntervalEffect", "MovementSpeedBoost", "MovementSpeedReduction", "HealthRegeneration", "SubBuff", "TargetSubBuff", "CombatIdleSeconds", "Time", "BonusDamage" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, null, null, }),
+          new pbr::GeneratedClrTypeInfo(typeof(global::BuffTable), global::BuffTable.Parser, new[]{ "Id", "NoCaster", "BuffType", "Tag", "ImmuneTag", "DispelTag", "Level", "MaxLayer", "InfiniteDuration", "Duration", "ForceInterrupt", "Interval", "IntervalCount", "IntervalEffect", "MovementSpeedBoost", "MovementSpeedReduction", "HealthRegeneration", "SubBuff", "TargetSubBuff", "CombatIdleSeconds", "Time", "BonusDamage", "BattleOp", "TriggerEvent", "EffectTarget", "FlatValue", "PerLevel", "Ratio", "ValueBasis", "DamageFilter", "DurationRounds", "TickCount", "TriggerChance", "PerRoundLimit", "HitLimit", "ModifierStat", "StateKind", "ApplicationChance", "RequiredTag", "SecondRequiredTag", "ConditionalBonus", "SecondaryRatio", "EffectCount", "TargetCount", "PetTargetCount", "StackKey", "RefreshPolicy", "KeepOnDeath", "EffectPriority", "StartRound", "StackLimit", "RequireLivingCaster", "TickOnApply" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, null, null, }),
           new pbr::GeneratedClrTypeInfo(typeof(global::BuffTableData), global::BuffTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -109,6 +125,37 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     combatIdleSeconds_ = other.combatIdleSeconds_;
     time_ = other.time_;
     bonusDamage_ = other.bonusDamage_;
+    battleOp_ = other.battleOp_;
+    triggerEvent_ = other.triggerEvent_;
+    effectTarget_ = other.effectTarget_;
+    flatValue_ = other.flatValue_;
+    perLevel_ = other.perLevel_;
+    ratio_ = other.ratio_;
+    valueBasis_ = other.valueBasis_;
+    damageFilter_ = other.damageFilter_;
+    durationRounds_ = other.durationRounds_;
+    tickCount_ = other.tickCount_;
+    triggerChance_ = other.triggerChance_;
+    perRoundLimit_ = other.perRoundLimit_;
+    hitLimit_ = other.hitLimit_;
+    modifierStat_ = other.modifierStat_;
+    stateKind_ = other.stateKind_;
+    applicationChance_ = other.applicationChance_;
+    requiredTag_ = other.requiredTag_;
+    secondRequiredTag_ = other.secondRequiredTag_;
+    conditionalBonus_ = other.conditionalBonus_;
+    secondaryRatio_ = other.secondaryRatio_;
+    effectCount_ = other.effectCount_;
+    targetCount_ = other.targetCount_;
+    petTargetCount_ = other.petTargetCount_;
+    stackKey_ = other.stackKey_;
+    refreshPolicy_ = other.refreshPolicy_;
+    keepOnDeath_ = other.keepOnDeath_;
+    effectPriority_ = other.effectPriority_;
+    startRound_ = other.startRound_;
+    stackLimit_ = other.stackLimit_;
+    requireLivingCaster_ = other.requireLivingCaster_;
+    tickOnApply_ = other.tickOnApply_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -376,6 +423,378 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     }
   }
 
+  /// <summary>Field number for the "battle_op" field.</summary>
+  public const int BattleOpFieldNumber = 23;
+  private uint battleOp_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BattleOp {
+    get { return battleOp_; }
+    set {
+      battleOp_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "trigger_event" field.</summary>
+  public const int TriggerEventFieldNumber = 24;
+  private uint triggerEvent_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint TriggerEvent {
+    get { return triggerEvent_; }
+    set {
+      triggerEvent_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "effect_target" field.</summary>
+  public const int EffectTargetFieldNumber = 25;
+  private uint effectTarget_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint EffectTarget {
+    get { return effectTarget_; }
+    set {
+      effectTarget_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "flat_value" field.</summary>
+  public const int FlatValueFieldNumber = 26;
+  private double flatValue_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double FlatValue {
+    get { return flatValue_; }
+    set {
+      flatValue_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "per_level" field.</summary>
+  public const int PerLevelFieldNumber = 27;
+  private double perLevel_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double PerLevel {
+    get { return perLevel_; }
+    set {
+      perLevel_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "ratio" field.</summary>
+  public const int RatioFieldNumber = 28;
+  private double ratio_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double Ratio {
+    get { return ratio_; }
+    set {
+      ratio_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "value_basis" field.</summary>
+  public const int ValueBasisFieldNumber = 29;
+  private uint valueBasis_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ValueBasis {
+    get { return valueBasis_; }
+    set {
+      valueBasis_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "damage_filter" field.</summary>
+  public const int DamageFilterFieldNumber = 30;
+  private uint damageFilter_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint DamageFilter {
+    get { return damageFilter_; }
+    set {
+      damageFilter_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "duration_rounds" field.</summary>
+  public const int DurationRoundsFieldNumber = 31;
+  private uint durationRounds_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint DurationRounds {
+    get { return durationRounds_; }
+    set {
+      durationRounds_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "tick_count" field.</summary>
+  public const int TickCountFieldNumber = 32;
+  private uint tickCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint TickCount {
+    get { return tickCount_; }
+    set {
+      tickCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "trigger_chance" field.</summary>
+  public const int TriggerChanceFieldNumber = 33;
+  private double triggerChance_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double TriggerChance {
+    get { return triggerChance_; }
+    set {
+      triggerChance_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "per_round_limit" field.</summary>
+  public const int PerRoundLimitFieldNumber = 34;
+  private uint perRoundLimit_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint PerRoundLimit {
+    get { return perRoundLimit_; }
+    set {
+      perRoundLimit_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "hit_limit" field.</summary>
+  public const int HitLimitFieldNumber = 35;
+  private uint hitLimit_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint HitLimit {
+    get { return hitLimit_; }
+    set {
+      hitLimit_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "modifier_stat" field.</summary>
+  public const int ModifierStatFieldNumber = 36;
+  private uint modifierStat_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ModifierStat {
+    get { return modifierStat_; }
+    set {
+      modifierStat_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "state_kind" field.</summary>
+  public const int StateKindFieldNumber = 37;
+  private uint stateKind_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint StateKind {
+    get { return stateKind_; }
+    set {
+      stateKind_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "application_chance" field.</summary>
+  public const int ApplicationChanceFieldNumber = 38;
+  private double applicationChance_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double ApplicationChance {
+    get { return applicationChance_; }
+    set {
+      applicationChance_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "required_tag" field.</summary>
+  public const int RequiredTagFieldNumber = 39;
+  private string requiredTag_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string RequiredTag {
+    get { return requiredTag_; }
+    set {
+      requiredTag_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "second_required_tag" field.</summary>
+  public const int SecondRequiredTagFieldNumber = 40;
+  private string secondRequiredTag_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string SecondRequiredTag {
+    get { return secondRequiredTag_; }
+    set {
+      secondRequiredTag_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "conditional_bonus" field.</summary>
+  public const int ConditionalBonusFieldNumber = 41;
+  private double conditionalBonus_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double ConditionalBonus {
+    get { return conditionalBonus_; }
+    set {
+      conditionalBonus_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "secondary_ratio" field.</summary>
+  public const int SecondaryRatioFieldNumber = 42;
+  private double secondaryRatio_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double SecondaryRatio {
+    get { return secondaryRatio_; }
+    set {
+      secondaryRatio_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "effect_count" field.</summary>
+  public const int EffectCountFieldNumber = 43;
+  private uint effectCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint EffectCount {
+    get { return effectCount_; }
+    set {
+      effectCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "target_count" field.</summary>
+  public const int TargetCountFieldNumber = 44;
+  private uint targetCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint TargetCount {
+    get { return targetCount_; }
+    set {
+      targetCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "pet_target_count" field.</summary>
+  public const int PetTargetCountFieldNumber = 45;
+  private uint petTargetCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint PetTargetCount {
+    get { return petTargetCount_; }
+    set {
+      petTargetCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "stack_key" field.</summary>
+  public const int StackKeyFieldNumber = 46;
+  private uint stackKey_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint StackKey {
+    get { return stackKey_; }
+    set {
+      stackKey_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "refresh_policy" field.</summary>
+  public const int RefreshPolicyFieldNumber = 47;
+  private uint refreshPolicy_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint RefreshPolicy {
+    get { return refreshPolicy_; }
+    set {
+      refreshPolicy_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "keep_on_death" field.</summary>
+  public const int KeepOnDeathFieldNumber = 48;
+  private uint keepOnDeath_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint KeepOnDeath {
+    get { return keepOnDeath_; }
+    set {
+      keepOnDeath_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "effect_priority" field.</summary>
+  public const int EffectPriorityFieldNumber = 49;
+  private uint effectPriority_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint EffectPriority {
+    get { return effectPriority_; }
+    set {
+      effectPriority_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "start_round" field.</summary>
+  public const int StartRoundFieldNumber = 50;
+  private uint startRound_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint StartRound {
+    get { return startRound_; }
+    set {
+      startRound_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "stack_limit" field.</summary>
+  public const int StackLimitFieldNumber = 51;
+  private uint stackLimit_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint StackLimit {
+    get { return stackLimit_; }
+    set {
+      stackLimit_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "require_living_caster" field.</summary>
+  public const int RequireLivingCasterFieldNumber = 52;
+  private uint requireLivingCaster_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint RequireLivingCaster {
+    get { return requireLivingCaster_; }
+    set {
+      requireLivingCaster_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "tick_on_apply" field.</summary>
+  public const int TickOnApplyFieldNumber = 53;
+  private uint tickOnApply_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint TickOnApply {
+    get { return tickOnApply_; }
+    set {
+      tickOnApply_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -413,6 +832,37 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(CombatIdleSeconds, other.CombatIdleSeconds)) return false;
     if (Time != other.Time) return false;
     if (BonusDamage != other.BonusDamage) return false;
+    if (BattleOp != other.BattleOp) return false;
+    if (TriggerEvent != other.TriggerEvent) return false;
+    if (EffectTarget != other.EffectTarget) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(FlatValue, other.FlatValue)) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(PerLevel, other.PerLevel)) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(Ratio, other.Ratio)) return false;
+    if (ValueBasis != other.ValueBasis) return false;
+    if (DamageFilter != other.DamageFilter) return false;
+    if (DurationRounds != other.DurationRounds) return false;
+    if (TickCount != other.TickCount) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(TriggerChance, other.TriggerChance)) return false;
+    if (PerRoundLimit != other.PerRoundLimit) return false;
+    if (HitLimit != other.HitLimit) return false;
+    if (ModifierStat != other.ModifierStat) return false;
+    if (StateKind != other.StateKind) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(ApplicationChance, other.ApplicationChance)) return false;
+    if (RequiredTag != other.RequiredTag) return false;
+    if (SecondRequiredTag != other.SecondRequiredTag) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(ConditionalBonus, other.ConditionalBonus)) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(SecondaryRatio, other.SecondaryRatio)) return false;
+    if (EffectCount != other.EffectCount) return false;
+    if (TargetCount != other.TargetCount) return false;
+    if (PetTargetCount != other.PetTargetCount) return false;
+    if (StackKey != other.StackKey) return false;
+    if (RefreshPolicy != other.RefreshPolicy) return false;
+    if (KeepOnDeath != other.KeepOnDeath) return false;
+    if (EffectPriority != other.EffectPriority) return false;
+    if (StartRound != other.StartRound) return false;
+    if (StackLimit != other.StackLimit) return false;
+    if (RequireLivingCaster != other.RequireLivingCaster) return false;
+    if (TickOnApply != other.TickOnApply) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -442,6 +892,37 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     if (CombatIdleSeconds != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(CombatIdleSeconds);
     if (Time != 0) hash ^= Time.GetHashCode();
     if (BonusDamage.Length != 0) hash ^= BonusDamage.GetHashCode();
+    if (BattleOp != 0) hash ^= BattleOp.GetHashCode();
+    if (TriggerEvent != 0) hash ^= TriggerEvent.GetHashCode();
+    if (EffectTarget != 0) hash ^= EffectTarget.GetHashCode();
+    if (FlatValue != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(FlatValue);
+    if (PerLevel != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(PerLevel);
+    if (Ratio != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(Ratio);
+    if (ValueBasis != 0) hash ^= ValueBasis.GetHashCode();
+    if (DamageFilter != 0) hash ^= DamageFilter.GetHashCode();
+    if (DurationRounds != 0) hash ^= DurationRounds.GetHashCode();
+    if (TickCount != 0) hash ^= TickCount.GetHashCode();
+    if (TriggerChance != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(TriggerChance);
+    if (PerRoundLimit != 0) hash ^= PerRoundLimit.GetHashCode();
+    if (HitLimit != 0) hash ^= HitLimit.GetHashCode();
+    if (ModifierStat != 0) hash ^= ModifierStat.GetHashCode();
+    if (StateKind != 0) hash ^= StateKind.GetHashCode();
+    if (ApplicationChance != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(ApplicationChance);
+    if (RequiredTag.Length != 0) hash ^= RequiredTag.GetHashCode();
+    if (SecondRequiredTag.Length != 0) hash ^= SecondRequiredTag.GetHashCode();
+    if (ConditionalBonus != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(ConditionalBonus);
+    if (SecondaryRatio != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(SecondaryRatio);
+    if (EffectCount != 0) hash ^= EffectCount.GetHashCode();
+    if (TargetCount != 0) hash ^= TargetCount.GetHashCode();
+    if (PetTargetCount != 0) hash ^= PetTargetCount.GetHashCode();
+    if (StackKey != 0) hash ^= StackKey.GetHashCode();
+    if (RefreshPolicy != 0) hash ^= RefreshPolicy.GetHashCode();
+    if (KeepOnDeath != 0) hash ^= KeepOnDeath.GetHashCode();
+    if (EffectPriority != 0) hash ^= EffectPriority.GetHashCode();
+    if (StartRound != 0) hash ^= StartRound.GetHashCode();
+    if (StackLimit != 0) hash ^= StackLimit.GetHashCode();
+    if (RequireLivingCaster != 0) hash ^= RequireLivingCaster.GetHashCode();
+    if (TickOnApply != 0) hash ^= TickOnApply.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -530,6 +1011,130 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
       output.WriteRawTag(178, 1);
       output.WriteString(BonusDamage);
     }
+    if (BattleOp != 0) {
+      output.WriteRawTag(184, 1);
+      output.WriteUInt32(BattleOp);
+    }
+    if (TriggerEvent != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(TriggerEvent);
+    }
+    if (EffectTarget != 0) {
+      output.WriteRawTag(200, 1);
+      output.WriteUInt32(EffectTarget);
+    }
+    if (FlatValue != 0D) {
+      output.WriteRawTag(209, 1);
+      output.WriteDouble(FlatValue);
+    }
+    if (PerLevel != 0D) {
+      output.WriteRawTag(217, 1);
+      output.WriteDouble(PerLevel);
+    }
+    if (Ratio != 0D) {
+      output.WriteRawTag(225, 1);
+      output.WriteDouble(Ratio);
+    }
+    if (ValueBasis != 0) {
+      output.WriteRawTag(232, 1);
+      output.WriteUInt32(ValueBasis);
+    }
+    if (DamageFilter != 0) {
+      output.WriteRawTag(240, 1);
+      output.WriteUInt32(DamageFilter);
+    }
+    if (DurationRounds != 0) {
+      output.WriteRawTag(248, 1);
+      output.WriteUInt32(DurationRounds);
+    }
+    if (TickCount != 0) {
+      output.WriteRawTag(128, 2);
+      output.WriteUInt32(TickCount);
+    }
+    if (TriggerChance != 0D) {
+      output.WriteRawTag(137, 2);
+      output.WriteDouble(TriggerChance);
+    }
+    if (PerRoundLimit != 0) {
+      output.WriteRawTag(144, 2);
+      output.WriteUInt32(PerRoundLimit);
+    }
+    if (HitLimit != 0) {
+      output.WriteRawTag(152, 2);
+      output.WriteUInt32(HitLimit);
+    }
+    if (ModifierStat != 0) {
+      output.WriteRawTag(160, 2);
+      output.WriteUInt32(ModifierStat);
+    }
+    if (StateKind != 0) {
+      output.WriteRawTag(168, 2);
+      output.WriteUInt32(StateKind);
+    }
+    if (ApplicationChance != 0D) {
+      output.WriteRawTag(177, 2);
+      output.WriteDouble(ApplicationChance);
+    }
+    if (RequiredTag.Length != 0) {
+      output.WriteRawTag(186, 2);
+      output.WriteString(RequiredTag);
+    }
+    if (SecondRequiredTag.Length != 0) {
+      output.WriteRawTag(194, 2);
+      output.WriteString(SecondRequiredTag);
+    }
+    if (ConditionalBonus != 0D) {
+      output.WriteRawTag(201, 2);
+      output.WriteDouble(ConditionalBonus);
+    }
+    if (SecondaryRatio != 0D) {
+      output.WriteRawTag(209, 2);
+      output.WriteDouble(SecondaryRatio);
+    }
+    if (EffectCount != 0) {
+      output.WriteRawTag(216, 2);
+      output.WriteUInt32(EffectCount);
+    }
+    if (TargetCount != 0) {
+      output.WriteRawTag(224, 2);
+      output.WriteUInt32(TargetCount);
+    }
+    if (PetTargetCount != 0) {
+      output.WriteRawTag(232, 2);
+      output.WriteUInt32(PetTargetCount);
+    }
+    if (StackKey != 0) {
+      output.WriteRawTag(240, 2);
+      output.WriteUInt32(StackKey);
+    }
+    if (RefreshPolicy != 0) {
+      output.WriteRawTag(248, 2);
+      output.WriteUInt32(RefreshPolicy);
+    }
+    if (KeepOnDeath != 0) {
+      output.WriteRawTag(128, 3);
+      output.WriteUInt32(KeepOnDeath);
+    }
+    if (EffectPriority != 0) {
+      output.WriteRawTag(136, 3);
+      output.WriteUInt32(EffectPriority);
+    }
+    if (StartRound != 0) {
+      output.WriteRawTag(144, 3);
+      output.WriteUInt32(StartRound);
+    }
+    if (StackLimit != 0) {
+      output.WriteRawTag(152, 3);
+      output.WriteUInt32(StackLimit);
+    }
+    if (RequireLivingCaster != 0) {
+      output.WriteRawTag(160, 3);
+      output.WriteUInt32(RequireLivingCaster);
+    }
+    if (TickOnApply != 0) {
+      output.WriteRawTag(168, 3);
+      output.WriteUInt32(TickOnApply);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -610,6 +1215,130 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
       output.WriteRawTag(178, 1);
       output.WriteString(BonusDamage);
     }
+    if (BattleOp != 0) {
+      output.WriteRawTag(184, 1);
+      output.WriteUInt32(BattleOp);
+    }
+    if (TriggerEvent != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(TriggerEvent);
+    }
+    if (EffectTarget != 0) {
+      output.WriteRawTag(200, 1);
+      output.WriteUInt32(EffectTarget);
+    }
+    if (FlatValue != 0D) {
+      output.WriteRawTag(209, 1);
+      output.WriteDouble(FlatValue);
+    }
+    if (PerLevel != 0D) {
+      output.WriteRawTag(217, 1);
+      output.WriteDouble(PerLevel);
+    }
+    if (Ratio != 0D) {
+      output.WriteRawTag(225, 1);
+      output.WriteDouble(Ratio);
+    }
+    if (ValueBasis != 0) {
+      output.WriteRawTag(232, 1);
+      output.WriteUInt32(ValueBasis);
+    }
+    if (DamageFilter != 0) {
+      output.WriteRawTag(240, 1);
+      output.WriteUInt32(DamageFilter);
+    }
+    if (DurationRounds != 0) {
+      output.WriteRawTag(248, 1);
+      output.WriteUInt32(DurationRounds);
+    }
+    if (TickCount != 0) {
+      output.WriteRawTag(128, 2);
+      output.WriteUInt32(TickCount);
+    }
+    if (TriggerChance != 0D) {
+      output.WriteRawTag(137, 2);
+      output.WriteDouble(TriggerChance);
+    }
+    if (PerRoundLimit != 0) {
+      output.WriteRawTag(144, 2);
+      output.WriteUInt32(PerRoundLimit);
+    }
+    if (HitLimit != 0) {
+      output.WriteRawTag(152, 2);
+      output.WriteUInt32(HitLimit);
+    }
+    if (ModifierStat != 0) {
+      output.WriteRawTag(160, 2);
+      output.WriteUInt32(ModifierStat);
+    }
+    if (StateKind != 0) {
+      output.WriteRawTag(168, 2);
+      output.WriteUInt32(StateKind);
+    }
+    if (ApplicationChance != 0D) {
+      output.WriteRawTag(177, 2);
+      output.WriteDouble(ApplicationChance);
+    }
+    if (RequiredTag.Length != 0) {
+      output.WriteRawTag(186, 2);
+      output.WriteString(RequiredTag);
+    }
+    if (SecondRequiredTag.Length != 0) {
+      output.WriteRawTag(194, 2);
+      output.WriteString(SecondRequiredTag);
+    }
+    if (ConditionalBonus != 0D) {
+      output.WriteRawTag(201, 2);
+      output.WriteDouble(ConditionalBonus);
+    }
+    if (SecondaryRatio != 0D) {
+      output.WriteRawTag(209, 2);
+      output.WriteDouble(SecondaryRatio);
+    }
+    if (EffectCount != 0) {
+      output.WriteRawTag(216, 2);
+      output.WriteUInt32(EffectCount);
+    }
+    if (TargetCount != 0) {
+      output.WriteRawTag(224, 2);
+      output.WriteUInt32(TargetCount);
+    }
+    if (PetTargetCount != 0) {
+      output.WriteRawTag(232, 2);
+      output.WriteUInt32(PetTargetCount);
+    }
+    if (StackKey != 0) {
+      output.WriteRawTag(240, 2);
+      output.WriteUInt32(StackKey);
+    }
+    if (RefreshPolicy != 0) {
+      output.WriteRawTag(248, 2);
+      output.WriteUInt32(RefreshPolicy);
+    }
+    if (KeepOnDeath != 0) {
+      output.WriteRawTag(128, 3);
+      output.WriteUInt32(KeepOnDeath);
+    }
+    if (EffectPriority != 0) {
+      output.WriteRawTag(136, 3);
+      output.WriteUInt32(EffectPriority);
+    }
+    if (StartRound != 0) {
+      output.WriteRawTag(144, 3);
+      output.WriteUInt32(StartRound);
+    }
+    if (StackLimit != 0) {
+      output.WriteRawTag(152, 3);
+      output.WriteUInt32(StackLimit);
+    }
+    if (RequireLivingCaster != 0) {
+      output.WriteRawTag(160, 3);
+      output.WriteUInt32(RequireLivingCaster);
+    }
+    if (TickOnApply != 0) {
+      output.WriteRawTag(168, 3);
+      output.WriteUInt32(TickOnApply);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -673,6 +1402,99 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     }
     if (BonusDamage.Length != 0) {
       size += 2 + pb::CodedOutputStream.ComputeStringSize(BonusDamage);
+    }
+    if (BattleOp != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(BattleOp);
+    }
+    if (TriggerEvent != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(TriggerEvent);
+    }
+    if (EffectTarget != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(EffectTarget);
+    }
+    if (FlatValue != 0D) {
+      size += 2 + 8;
+    }
+    if (PerLevel != 0D) {
+      size += 2 + 8;
+    }
+    if (Ratio != 0D) {
+      size += 2 + 8;
+    }
+    if (ValueBasis != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ValueBasis);
+    }
+    if (DamageFilter != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(DamageFilter);
+    }
+    if (DurationRounds != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(DurationRounds);
+    }
+    if (TickCount != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(TickCount);
+    }
+    if (TriggerChance != 0D) {
+      size += 2 + 8;
+    }
+    if (PerRoundLimit != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(PerRoundLimit);
+    }
+    if (HitLimit != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(HitLimit);
+    }
+    if (ModifierStat != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ModifierStat);
+    }
+    if (StateKind != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(StateKind);
+    }
+    if (ApplicationChance != 0D) {
+      size += 2 + 8;
+    }
+    if (RequiredTag.Length != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeStringSize(RequiredTag);
+    }
+    if (SecondRequiredTag.Length != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeStringSize(SecondRequiredTag);
+    }
+    if (ConditionalBonus != 0D) {
+      size += 2 + 8;
+    }
+    if (SecondaryRatio != 0D) {
+      size += 2 + 8;
+    }
+    if (EffectCount != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(EffectCount);
+    }
+    if (TargetCount != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(TargetCount);
+    }
+    if (PetTargetCount != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(PetTargetCount);
+    }
+    if (StackKey != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(StackKey);
+    }
+    if (RefreshPolicy != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(RefreshPolicy);
+    }
+    if (KeepOnDeath != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(KeepOnDeath);
+    }
+    if (EffectPriority != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(EffectPriority);
+    }
+    if (StartRound != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(StartRound);
+    }
+    if (StackLimit != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(StackLimit);
+    }
+    if (RequireLivingCaster != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(RequireLivingCaster);
+    }
+    if (TickOnApply != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(TickOnApply);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -739,6 +1561,99 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     }
     if (other.BonusDamage.Length != 0) {
       BonusDamage = other.BonusDamage;
+    }
+    if (other.BattleOp != 0) {
+      BattleOp = other.BattleOp;
+    }
+    if (other.TriggerEvent != 0) {
+      TriggerEvent = other.TriggerEvent;
+    }
+    if (other.EffectTarget != 0) {
+      EffectTarget = other.EffectTarget;
+    }
+    if (other.FlatValue != 0D) {
+      FlatValue = other.FlatValue;
+    }
+    if (other.PerLevel != 0D) {
+      PerLevel = other.PerLevel;
+    }
+    if (other.Ratio != 0D) {
+      Ratio = other.Ratio;
+    }
+    if (other.ValueBasis != 0) {
+      ValueBasis = other.ValueBasis;
+    }
+    if (other.DamageFilter != 0) {
+      DamageFilter = other.DamageFilter;
+    }
+    if (other.DurationRounds != 0) {
+      DurationRounds = other.DurationRounds;
+    }
+    if (other.TickCount != 0) {
+      TickCount = other.TickCount;
+    }
+    if (other.TriggerChance != 0D) {
+      TriggerChance = other.TriggerChance;
+    }
+    if (other.PerRoundLimit != 0) {
+      PerRoundLimit = other.PerRoundLimit;
+    }
+    if (other.HitLimit != 0) {
+      HitLimit = other.HitLimit;
+    }
+    if (other.ModifierStat != 0) {
+      ModifierStat = other.ModifierStat;
+    }
+    if (other.StateKind != 0) {
+      StateKind = other.StateKind;
+    }
+    if (other.ApplicationChance != 0D) {
+      ApplicationChance = other.ApplicationChance;
+    }
+    if (other.RequiredTag.Length != 0) {
+      RequiredTag = other.RequiredTag;
+    }
+    if (other.SecondRequiredTag.Length != 0) {
+      SecondRequiredTag = other.SecondRequiredTag;
+    }
+    if (other.ConditionalBonus != 0D) {
+      ConditionalBonus = other.ConditionalBonus;
+    }
+    if (other.SecondaryRatio != 0D) {
+      SecondaryRatio = other.SecondaryRatio;
+    }
+    if (other.EffectCount != 0) {
+      EffectCount = other.EffectCount;
+    }
+    if (other.TargetCount != 0) {
+      TargetCount = other.TargetCount;
+    }
+    if (other.PetTargetCount != 0) {
+      PetTargetCount = other.PetTargetCount;
+    }
+    if (other.StackKey != 0) {
+      StackKey = other.StackKey;
+    }
+    if (other.RefreshPolicy != 0) {
+      RefreshPolicy = other.RefreshPolicy;
+    }
+    if (other.KeepOnDeath != 0) {
+      KeepOnDeath = other.KeepOnDeath;
+    }
+    if (other.EffectPriority != 0) {
+      EffectPriority = other.EffectPriority;
+    }
+    if (other.StartRound != 0) {
+      StartRound = other.StartRound;
+    }
+    if (other.StackLimit != 0) {
+      StackLimit = other.StackLimit;
+    }
+    if (other.RequireLivingCaster != 0) {
+      RequireLivingCaster = other.RequireLivingCaster;
+    }
+    if (other.TickOnApply != 0) {
+      TickOnApply = other.TickOnApply;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -850,6 +1765,130 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
           BonusDamage = input.ReadString();
           break;
         }
+        case 184: {
+          BattleOp = input.ReadUInt32();
+          break;
+        }
+        case 192: {
+          TriggerEvent = input.ReadUInt32();
+          break;
+        }
+        case 200: {
+          EffectTarget = input.ReadUInt32();
+          break;
+        }
+        case 209: {
+          FlatValue = input.ReadDouble();
+          break;
+        }
+        case 217: {
+          PerLevel = input.ReadDouble();
+          break;
+        }
+        case 225: {
+          Ratio = input.ReadDouble();
+          break;
+        }
+        case 232: {
+          ValueBasis = input.ReadUInt32();
+          break;
+        }
+        case 240: {
+          DamageFilter = input.ReadUInt32();
+          break;
+        }
+        case 248: {
+          DurationRounds = input.ReadUInt32();
+          break;
+        }
+        case 256: {
+          TickCount = input.ReadUInt32();
+          break;
+        }
+        case 265: {
+          TriggerChance = input.ReadDouble();
+          break;
+        }
+        case 272: {
+          PerRoundLimit = input.ReadUInt32();
+          break;
+        }
+        case 280: {
+          HitLimit = input.ReadUInt32();
+          break;
+        }
+        case 288: {
+          ModifierStat = input.ReadUInt32();
+          break;
+        }
+        case 296: {
+          StateKind = input.ReadUInt32();
+          break;
+        }
+        case 305: {
+          ApplicationChance = input.ReadDouble();
+          break;
+        }
+        case 314: {
+          RequiredTag = input.ReadString();
+          break;
+        }
+        case 322: {
+          SecondRequiredTag = input.ReadString();
+          break;
+        }
+        case 329: {
+          ConditionalBonus = input.ReadDouble();
+          break;
+        }
+        case 337: {
+          SecondaryRatio = input.ReadDouble();
+          break;
+        }
+        case 344: {
+          EffectCount = input.ReadUInt32();
+          break;
+        }
+        case 352: {
+          TargetCount = input.ReadUInt32();
+          break;
+        }
+        case 360: {
+          PetTargetCount = input.ReadUInt32();
+          break;
+        }
+        case 368: {
+          StackKey = input.ReadUInt32();
+          break;
+        }
+        case 376: {
+          RefreshPolicy = input.ReadUInt32();
+          break;
+        }
+        case 384: {
+          KeepOnDeath = input.ReadUInt32();
+          break;
+        }
+        case 392: {
+          EffectPriority = input.ReadUInt32();
+          break;
+        }
+        case 400: {
+          StartRound = input.ReadUInt32();
+          break;
+        }
+        case 408: {
+          StackLimit = input.ReadUInt32();
+          break;
+        }
+        case 416: {
+          RequireLivingCaster = input.ReadUInt32();
+          break;
+        }
+        case 424: {
+          TickOnApply = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -958,6 +1997,130 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
         }
         case 178: {
           BonusDamage = input.ReadString();
+          break;
+        }
+        case 184: {
+          BattleOp = input.ReadUInt32();
+          break;
+        }
+        case 192: {
+          TriggerEvent = input.ReadUInt32();
+          break;
+        }
+        case 200: {
+          EffectTarget = input.ReadUInt32();
+          break;
+        }
+        case 209: {
+          FlatValue = input.ReadDouble();
+          break;
+        }
+        case 217: {
+          PerLevel = input.ReadDouble();
+          break;
+        }
+        case 225: {
+          Ratio = input.ReadDouble();
+          break;
+        }
+        case 232: {
+          ValueBasis = input.ReadUInt32();
+          break;
+        }
+        case 240: {
+          DamageFilter = input.ReadUInt32();
+          break;
+        }
+        case 248: {
+          DurationRounds = input.ReadUInt32();
+          break;
+        }
+        case 256: {
+          TickCount = input.ReadUInt32();
+          break;
+        }
+        case 265: {
+          TriggerChance = input.ReadDouble();
+          break;
+        }
+        case 272: {
+          PerRoundLimit = input.ReadUInt32();
+          break;
+        }
+        case 280: {
+          HitLimit = input.ReadUInt32();
+          break;
+        }
+        case 288: {
+          ModifierStat = input.ReadUInt32();
+          break;
+        }
+        case 296: {
+          StateKind = input.ReadUInt32();
+          break;
+        }
+        case 305: {
+          ApplicationChance = input.ReadDouble();
+          break;
+        }
+        case 314: {
+          RequiredTag = input.ReadString();
+          break;
+        }
+        case 322: {
+          SecondRequiredTag = input.ReadString();
+          break;
+        }
+        case 329: {
+          ConditionalBonus = input.ReadDouble();
+          break;
+        }
+        case 337: {
+          SecondaryRatio = input.ReadDouble();
+          break;
+        }
+        case 344: {
+          EffectCount = input.ReadUInt32();
+          break;
+        }
+        case 352: {
+          TargetCount = input.ReadUInt32();
+          break;
+        }
+        case 360: {
+          PetTargetCount = input.ReadUInt32();
+          break;
+        }
+        case 368: {
+          StackKey = input.ReadUInt32();
+          break;
+        }
+        case 376: {
+          RefreshPolicy = input.ReadUInt32();
+          break;
+        }
+        case 384: {
+          KeepOnDeath = input.ReadUInt32();
+          break;
+        }
+        case 392: {
+          EffectPriority = input.ReadUInt32();
+          break;
+        }
+        case 400: {
+          StartRound = input.ReadUInt32();
+          break;
+        }
+        case 408: {
+          StackLimit = input.ReadUInt32();
+          break;
+        }
+        case 416: {
+          RequireLivingCaster = input.ReadUInt32();
+          break;
+        }
+        case 424: {
+          TickOnApply = input.ReadUInt32();
           break;
         }
       }

@@ -36,6 +36,8 @@ type ClientRequestRecord struct {
 	EnhanceSuccess  bool   `protobuf:"varint,5,opt,name=enhance_success,json=enhanceSuccess,proto3" json:"enhance_success,omitempty"`      // 强化:那一次掷骰成没成
 	EnhanceLevel    uint32 `protobuf:"varint,6,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`            // 强化:那一次之后的等级
 	CreatedSchemeId uint32 `protobuf:"varint,7,opt,name=created_scheme_id,json=createdSchemeId,proto3" json:"created_scheme_id,omitempty"` // 新建加点方案:那一次建出来的方案号
+	EquipmentItemId uint64 `protobuf:"varint,8,opt,name=equipment_item_id,json=equipmentItemId,proto3" json:"equipment_item_id,omitempty"` // 装备打造/装条：首次成功对应的实例。
+	ForgeRevision   uint64 `protobuf:"varint,9,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`         // 装备打造/装条：首次成功后的业务水位。
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -119,12 +121,29 @@ func (x *ClientRequestRecord) GetCreatedSchemeId() uint32 {
 	return 0
 }
 
+func (x *ClientRequestRecord) GetEquipmentItemId() uint64 {
+	if x != nil {
+		return x.EquipmentItemId
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetForgeRevision() uint64 {
+	if x != nil {
+		return x.ForgeRevision
+	}
+	return 0
+}
+
 type ClientRequestLedgerComp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 条目之间无序,按 key 找;同一个 key 至多一条。
 	Records []*ClientRequestRecord `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
 	// 下一条的 seq。0 = 从没记过(旧存档没有这个字段),按 1 处理。
-	NextSeq       uint64 `protobuf:"varint,2,opt,name=next_seq,json=nextSeq,proto3" json:"next_seq,omitempty"`
+	NextSeq uint64 `protobuf:"varint,2,opt,name=next_seq,json=nextSeq,proto3" json:"next_seq,omitempty"`
+	// 装备打造/首次装词条共用的持久防重水位，初始0，每次成功+1；饱和时拒绝。
+	// 与records的淘汰序号独立；即使旧回执被淘汰，旧水位请求也不能再次扣料或造物。
+	ForgeRevision uint64 `protobuf:"varint,3,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -173,11 +192,18 @@ func (x *ClientRequestLedgerComp) GetNextSeq() uint64 {
 	return 0
 }
 
+func (x *ClientRequestLedgerComp) GetForgeRevision() uint64 {
+	if x != nil {
+		return x.ForgeRevision
+	}
+	return 0
+}
+
 var File_proto_common_component_client_request_ledger_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" +
 	"\n" +
-	"7proto/common/component/client_request_ledger_comp.proto\"\xe9\x01\n" +
+	"7proto/common/component/client_request_ledger_comp.proto\"\xbc\x02\n" +
 	"\x13ClientRequestRecord\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12 \n" +
@@ -185,10 +211,13 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x03seq\x18\x04 \x01(\x04R\x03seq\x12'\n" +
 	"\x0fenhance_success\x18\x05 \x01(\bR\x0eenhanceSuccess\x12#\n" +
 	"\renhance_level\x18\x06 \x01(\rR\fenhanceLevel\x12*\n" +
-	"\x11created_scheme_id\x18\a \x01(\rR\x0fcreatedSchemeId\"d\n" +
+	"\x11created_scheme_id\x18\a \x01(\rR\x0fcreatedSchemeId\x12*\n" +
+	"\x11equipment_item_id\x18\b \x01(\x04R\x0fequipmentItemId\x12%\n" +
+	"\x0eforge_revision\x18\t \x01(\x04R\rforgeRevision\"\x8b\x01\n" +
 	"\x17ClientRequestLedgerComp\x12.\n" +
 	"\arecords\x18\x01 \x03(\v2\x14.ClientRequestRecordR\arecords\x12\x19\n" +
-	"\bnext_seq\x18\x02 \x01(\x04R\anextSeqB\x18Z\x16proto/common/componentb\x06proto3"
+	"\bnext_seq\x18\x02 \x01(\x04R\anextSeq\x12%\n" +
+	"\x0eforge_revision\x18\x03 \x01(\x04R\rforgeRevisionB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_client_request_ledger_comp_proto_rawDescOnce sync.Once

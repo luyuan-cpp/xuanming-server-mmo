@@ -45,13 +45,13 @@ public final class DungeonTableOuterClass extends com.google.protobuf.GeneratedF
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023dungeon_table.proto\"h\n\014DungeonTable\022\n\n" +
-      "\002id\030\001 \001(\r\022\020\n\010scene_id\030\002 \001(\r\022\025\n\rmax_team_" +
-      "size\030\003 \001(\r\022\022\n\ntime_limit\030\004 \001(\r\022\017\n\007monste" +
-      "r\030\005 \003(\r\"/\n\020DungeonTableData\022\033\n\004data\030\001 \003(" +
-      "\0132\r.DungeonTableB>\n\016com.game.tableB\026Dung" +
-      "eonTableOuterClassP\001Z\022generated/pb/table" +
-      "b\006proto3"
+      "\n\023dungeon_table.proto\"\203\001\n\014DungeonTable\022\n" +
+      "\n\002id\030\001 \001(\r\022\020\n\010scene_id\030\002 \001(\r\022\025\n\rmax_team" +
+      "_size\030\003 \001(\r\022\022\n\ntime_limit\030\004 \001(\r\022\017\n\007monst" +
+      "er\030\005 \003(\r\022\031\n\021allow_pet_capture\030\006 \001(\r\"/\n\020D" +
+      "ungeonTableData\022\033\n\004data\030\001 \003(\0132\r.DungeonT" +
+      "ableB>\n\016com.game.tableB\026DungeonTableOute" +
+      "rClassP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -62,7 +62,7 @@ public final class DungeonTableOuterClass extends com.google.protobuf.GeneratedF
     internal_static_DungeonTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_DungeonTable_descriptor,
-        new java.lang.String[] { "Id", "SceneId", "MaxTeamSize", "TimeLimit", "Monster", });
+        new java.lang.String[] { "Id", "SceneId", "MaxTeamSize", "TimeLimit", "Monster", "AllowPetCapture", });
     internal_static_DungeonTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_DungeonTableData_fieldAccessorTable = new

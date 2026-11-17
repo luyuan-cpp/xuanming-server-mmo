@@ -48,11 +48,11 @@ constexpr DungeonTable::ParseTableT_ DungeonTable::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -83,7 +83,10 @@ constexpr DungeonTable::ParseTableT_ DungeonTable::InternalGenerateParseTable_(c
       {::_pbi::TcParser::FastV32P1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.monster_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 allow_pet_capture = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.allow_pet_capture_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.allow_pet_capture_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -98,6 +101,8 @@ constexpr DungeonTable::ParseTableT_ DungeonTable::InternalGenerateParseTable_(c
       {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.time_limit_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated uint32 monster = 5;
       {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.monster_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // uint32 allow_pet_capture = 6;
+      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.allow_pet_capture_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -119,7 +124,8 @@ inline constexpr DungeonTable::Impl_::Impl_(
         id_{0u},
         scene_id_{0u},
         max_team_size_{0u},
-        time_limit_{0u} {}
+        time_limit_{0u},
+        allow_pet_capture_{0u} {}
 
 template <typename>
 constexpr DungeonTable::DungeonTable(::_pbi::ConstantInitialized,
@@ -373,17 +379,19 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.scene_id_),
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.max_team_size_),
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.time_limit_),
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.monster_),
+        PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.allow_pet_capture_),
         1,
         2,
         3,
         4,
         0,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::DungeonTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -394,7 +402,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::DungeonTable)},
-        {13, sizeof(::DungeonTableData)},
+        {15, sizeof(::DungeonTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -403,19 +411,19 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_dungeon_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023dungeon_table.proto\"h\n\014DungeonTable\022\n\n"
-    "\002id\030\001 \001(\r\022\020\n\010scene_id\030\002 \001(\r\022\025\n\rmax_team_"
-    "size\030\003 \001(\r\022\022\n\ntime_limit\030\004 \001(\r\022\017\n\007monste"
-    "r\030\005 \003(\r\"/\n\020DungeonTableData\022\033\n\004data\030\001 \003("
-    "\0132\r.DungeonTableB>\n\016com.game.tableB\026Dung"
-    "eonTableOuterClassP\001Z\022generated/pb/table"
-    "b\006proto3"
+    "\n\023dungeon_table.proto\"\203\001\n\014DungeonTable\022\n"
+    "\n\002id\030\001 \001(\r\022\020\n\010scene_id\030\002 \001(\r\022\025\n\rmax_team"
+    "_size\030\003 \001(\r\022\022\n\ntime_limit\030\004 \001(\r\022\017\n\007monst"
+    "er\030\005 \003(\r\022\031\n\021allow_pet_capture\030\006 \001(\r\"/\n\020D"
+    "ungeonTableData\022\033\n\004data\030\001 \003(\0132\r.DungeonT"
+    "ableB>\n\016com.game.tableB\026DungeonTableOute"
+    "rClassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_dungeon_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_dungeon_5ftable_2eproto = {
     false,
     false,
-    248,
+    276,
     descriptor_table_protodef_dungeon_5ftable_2eproto,
     "dungeon_table.proto",
     &descriptor_table_dungeon_5ftable_2eproto_once,
@@ -472,9 +480,9 @@ DungeonTable::DungeonTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, time_limit_) -
+           offsetof(Impl_, allow_pet_capture_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::time_limit_));
+               sizeof(Impl_::allow_pet_capture_));
 
   // @@protoc_insertion_point(copy_constructor:DungeonTable)
 }
@@ -494,9 +502,9 @@ inline void DungeonTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, time_limit_) -
+           offsetof(Impl_, allow_pet_capture_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::time_limit_));
+               sizeof(Impl_::allow_pet_capture_));
 }
 DungeonTable::~DungeonTable() {
   // @@protoc_insertion_point(destructor:DungeonTable)
@@ -549,10 +557,10 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.monster_.Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.time_limit_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.time_limit_));
+        reinterpret_cast<char*>(&_impl_.allow_pet_capture_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.allow_pet_capture_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -624,6 +632,15 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
     }
   }
 
+  // uint32 allow_pet_capture = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_allow_pet_capture() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_allow_pet_capture(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -649,7 +666,7 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // repeated uint32 monster = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -685,6 +702,13 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
             this_._internal_time_limit());
       }
     }
+    // uint32 allow_pet_capture = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_allow_pet_capture() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_allow_pet_capture());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -703,7 +727,7 @@ void DungeonTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_monster()->MergeFrom(from._internal_monster());
     }
@@ -727,6 +751,11 @@ void DungeonTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.time_limit_ = from._impl_.time_limit_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_allow_pet_capture() != 0) {
+        _this->_impl_.allow_pet_capture_ = from._impl_.allow_pet_capture_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -747,8 +776,8 @@ void DungeonTable::InternalSwap(DungeonTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.monster_.InternalSwap(&other->_impl_.monster_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.time_limit_)
-      + sizeof(DungeonTable::_impl_.time_limit_)
+      PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.allow_pet_capture_)
+      + sizeof(DungeonTable::_impl_.allow_pet_capture_)
       - PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

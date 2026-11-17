@@ -141,6 +141,21 @@ func asPlayer(playerId uint64) context.Context {
 	return ctxkeys.WithSessionDetails(context.Background(), &base.SessionDetails{PlayerId: playerId})
 }
 
+func TestApplyReceiptKeepsApplicantView(t *testing.T) {
+	rec := newRecord(1)
+	result := &MutateResult{
+		Outcome: OutcomeCommitted,
+		Commit: &CommitResult{TeamId: rec.TeamId, Decision: Decision{Record: rec},
+			Indexes: map[uint64]IndexEntry{1: {TeamId: rec.TeamId, Epoch: 6}}},
+		Snapshot: Snapshot{PlayerId: 2, TeamId: rec.TeamId, Record: rec, PlayerEpoch: 9, NowMs: ruleNow},
+	}
+	view := sqlMutationResponse(2, OpApply, result).GetTeam()
+	require.NotNil(t, view)
+	require.Zero(t, view.GetTeamId())
+	require.Empty(t, view.GetMembers())
+	require.Equal(t, uint64(9), view.GetMembershipEpoch())
+}
+
 func (h *serviceHarness) takePushes() []pushRecord {
 	h.mu.Lock()
 	defer h.mu.Unlock()

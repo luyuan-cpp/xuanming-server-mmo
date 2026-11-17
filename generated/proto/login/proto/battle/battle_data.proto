@@ -3,6 +3,7 @@ option go_package = "login/proto/battle";
 
 import "proto/common/component/actor_comp.proto";
 import "proto/common/component/actor_attribute_state_comp.proto";
+import "proto/common/component/equipment_effects.proto";
 
 // 回合制战斗共享数据结构(快照/行动/事件/结算)。
 // 设计依据:docs/design/turn-based-battle-server.md §4。
@@ -35,6 +36,19 @@ message BattleBuffEntry {
   double stat_percent = 6;
   // 施加(或刷新)它的回合号。回合末结算时不扣它这一回合,所以"持续 2 回合"是完整的 2 回合;0 = 老口径(当回合末就扣)。
   uint32 applied_round = 7;
+  uint32 source_skill_id = 8;
+  uint64 snapshot_value = 9; // 施加时的效果快照，催毒仍使用原来源强度。
+  uint64 remaining_capacity = 10;
+  uint32 remaining_hits = 11;
+  uint32 remaining_ticks = 12;
+  uint32 extensions_used = 13;
+  uint32 last_trigger_round = 14;
+  uint32 trigger_count = 15;
+  uint32 tick_round = 16;
+  uint32 stacks = 17;
+  uint32 chosen_stat = 18;
+  uint64 secondary_value = 19;
+  optional double outgoing_heal_snapshot = 20; // 持续恢复施放时快照完整施放方修正，每跳只读受方修正。
 }
 
 // ---- 战斗内道具副本 ----
@@ -73,6 +87,8 @@ message BattlePlayerSnapshot {
   // scene 按职业 / 角色等级夹好再填,引擎再按同一规则复核一次。旧通用技能不进这里。
   // 被动的属性加成 scene 已算进上面的派生属性,引擎只消费战斗专用被动(治疗加成),不重复叠加。
   map<uint32, uint32> skill_ranks = 21;
+  uint32 pet_capture_slots = 22; // scene 核定的本局可捕捉数量；旧快照缺省为0。
+  EquipmentEffects equipment_effects = 23; // 仅人物装备，宝宝不继承。
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -94,6 +110,7 @@ message BattlePetSnapshot {
   uint64 magic_attack = 10;
   uint64 defense = 11;
   repeated uint32 skill_table_ids = 12;
+  map<uint32, uint32> skill_ranks = 13; // 公共原型的已学等级，开局再次校验宝宝资格。
 }
 
 // ---- 战斗单位运行时状态(玩家与怪物统一;引擎状态用 proto 承载,宪法 §3) ----
@@ -136,6 +153,27 @@ message BattleActorState {
   CombatAttributes combat = 27;
   // 本局职业技能生效等级(来自快照 skill_ranks,引擎复核后的值;怪物 / 宝宝为空)。
   map<uint32, uint32> skill_ranks = 28;
+  uint32 capture_pet_table_id = 29; // 仅可捕捉的普通野怪填写，0表示不可捕捉。
+  uint64 captured_by_player_id = 30; // 成功捕捉者；不计为击杀，不产生怪物掉落。
+  uint32 capture_min_level = 31;
+  map<uint32, uint32> ability_use_counts = 32; // 本场限次；技能表定义上限。
+  repeated uint32 runtime_skills = 33; // 非主动技能也保留，供被动、追击、开场查询。
+  uint32 withdraw_until_round = 34; // 劝退返回边界；与阵亡分开。
+  map<uint32, uint64> round_effect_usage = 35; // 来源技能的全体目标共享回合预算，下一回合清零。
+  EquipmentEffects equipment_effects = 36;
+  repeated BattleArtifactState artifact_states = 37;
+  uint64 entry_max_health = 38; // 入战上限，临时上限变化不放大法宝预算。
+  uint64 entry_max_mana = 39;
+}
+
+// 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
+message BattleArtifactState {
+  uint64 item_id = 1;
+  uint32 used_count = 2;
+  uint32 last_trigger_round = 3;
+  uint32 round_trigger_count = 4;
+  uint32 pending_ailment_kind = 5;
+  uint32 pending_round = 6;
 }
 
 // ---- 玩家行动指令 ----
@@ -146,6 +184,8 @@ enum eBattleActionType {
   BATTLE_ACTION_DEFEND = 3;  // 防御:本回合受伤减半
   BATTLE_ACTION_ITEM = 4;    // 使用战斗道具(从快照副本扣,结算回写)
   BATTLE_ACTION_FLEE = 5;    // 逃跑(PVE 可用;成功率基于速度差)
+  BATTLE_ACTION_CAPTURE = 6; // 捕捉消耗本回合行动，由服务端判定。
+  BATTLE_ACTION_RECALL_PET = 7; // 主人消耗正常行动，召回已过劝退等待期的本人宝宝。
 }
 
 message BattleAction {
@@ -173,6 +213,12 @@ enum eBattleEventType {
   BATTLE_EVENT_BLOCK = 13;     // 格挡(预留,一期不产出)
   BATTLE_EVENT_MANA = 14;      // 法力变化:value=变化绝对值,is_negative 由 target_health_after 之外的 mana_after 表达
   BATTLE_EVENT_RESIST = 15;    // 异常状态被抵抗:source=施加者,target=抵抗者,buff_table_id=被抵抗的 buff;老客户端忽略
+  BATTLE_EVENT_CAPTURE = 16; // success为成功结果；成功后目标离场，结算发放宠物。
+  BATTLE_EVENT_REVIVE = 17;
+  BATTLE_EVENT_MAX_HEALTH = 18;
+  BATTLE_EVENT_PET_RETREAT = 19;
+  BATTLE_EVENT_SHIELD = 20;
+  BATTLE_EVENT_ARTIFACT = 21; // 法宝产生实际收益或消耗概率判定次数。
 }
 
 // 一段伤害 / 出手是怎么来的(equipment-attributes.md §4.5)。0 = 普通,老客户端不读也不影响演出。
@@ -181,6 +227,8 @@ enum eBattleHitKind {
   BATTLE_HIT_COMBO = 1;    // 连击追加段(与首段同 group_id,hit_index 递增)
   BATTLE_HIT_COUNTER = 2;  // 反击(受击者还手的 ATTACK / DAMAGE)
   BATTLE_HIT_REFLECT = 3;  // 反震(DAMAGE:source=受击者,target=出手者)
+  BATTLE_HIT_PURSUIT = 4;
+  BATTLE_HIT_MIRROR = 5;
 }
 
 message BattleEventItem {
@@ -202,6 +250,14 @@ message BattleEventItem {
   // 只在法力真的被结算过的事件上带(MANA / ITEM);value 仍是绝对值,老客户端不读本字段照旧。
   // target_mana_after 才是权威终值,客户端演出与它不一致时以它为准。
   optional sint64 mana_delta = 15;
+  uint64 buff_instance_id = 16;
+  uint64 absorbed = 17;
+  uint64 shield_after = 18;
+  uint64 target_max_health_after = 19;
+  uint32 damage_origin = 20; // 直接、持续、反弹、转伤等来源由公共战斗规则定义。
+  uint64 instigator_id = 21; // 催动者与原持续效果施加者分别保留。
+  uint64 artifact_item_id = 22;
+  uint32 artifact_effect_id = 23;
 }
 
 // ---- 胜负 ----
@@ -275,6 +331,7 @@ message BattleSettlementData {
   // scene 写进本人近期战斗结果,供列表展示与按 battle_id 查回放;不参与任何结算判定。0 = 来源没盖。
   uint32 match_mode = 18;
   uint32 battle_config_id = 19;
+  repeated uint32 captured_pet_table_ids = 20; // 本人捕捉的宠物种类，随整笔结算原子落库和去重。
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----

@@ -16,6 +16,8 @@ message EquipEnhanceTable {
 	uint64 cost_gold = 5;
 	uint32 material_id = 6;
 	uint32 material_count = 7;
+	uint32 profile_id = 8;
+	uint32 level = 9;
 }
 
 message EquipEnhanceTableData {

@@ -11,9 +11,10 @@
 #include "table/proto/dungeon_table.pb.h"
 #include "table/proto/monster_table.pb.h"
 #include "table/proto/item_table.pb.h"
+#include "table/proto/pet_table.pb.h"
 
 // 战斗配表指纹单测(cross-zone-matchmaking.md §10):
-// 直接构造七张表的 proto 对象喂 ComputeFrom,不依赖表管理器/Excel 数据。
+// 直接构造八张表的 proto 对象喂 ComputeFrom,不依赖表管理器/Excel 数据。
 // 覆盖:同一份表两次计算相同;改任一张表的任一字段则不同;长度/字符集契约。
 
 namespace {
@@ -28,10 +29,11 @@ struct TableSet {
     DungeonTableData dungeon;
     MonsterTableData monster;
     ItemTableData item;
+    PetTableData pet;
 
     std::string Fingerprint() const {
         return BattleTableFingerprint::ComputeFrom(skill, buff, cooldown, permission, dungeon,
-                                                   monster, item);
+                                                   monster, item, pet);
     }
 };
 
@@ -171,3 +173,12 @@ TEST(BattleTableFingerprintTest, TableOrderIsPartOfContract) {
 }
 
 }  // namespace
+
+TEST(BattleTableFingerprintTest, PetAcquisitionTierChangesFingerprint) {
+    TableSet tables = MakeTables();
+    auto* pet = tables.pet.add_data();
+    pet->set_id(1);
+    const auto before = tables.Fingerprint();
+    pet->set_acquisition_tier(1);
+    EXPECT_NE(before, tables.Fingerprint());
+}

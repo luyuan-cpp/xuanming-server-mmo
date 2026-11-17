@@ -309,6 +309,28 @@ private static final long serialVersionUID = 0L;
   }
   private int skillMemoizedSerializedSize = -1;
 
+  public static final int SHOP_PRICE_GOLD_FIELD_NUMBER = 14;
+  private long shopPriceGold_ = 0L;
+  /**
+   * <code>uint64 shop_price_gold = 14;</code>
+   * @return The shopPriceGold.
+   */
+  @java.lang.Override
+  public long getShopPriceGold() {
+    return shopPriceGold_;
+  }
+
+  public static final int ACQUISITION_TIER_FIELD_NUMBER = 15;
+  private int acquisitionTier_ = 0;
+  /**
+   * <code>uint32 acquisition_tier = 15;</code>
+   * @return The acquisitionTier.
+   */
+  @java.lang.Override
+  public int getAcquisitionTier() {
+    return acquisitionTier_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -374,6 +396,12 @@ private static final long serialVersionUID = 0L;
     }
     for (int i = 0; i < skill_.size(); i++) {
       output.writeUInt32NoTag(skill_.getInt(i));
+    }
+    if (shopPriceGold_ != 0L) {
+      output.writeUInt64(14, shopPriceGold_);
+    }
+    if (acquisitionTier_ != 0) {
+      output.writeUInt32(15, acquisitionTier_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -459,6 +487,14 @@ private static final long serialVersionUID = 0L;
       }
       skillMemoizedSerializedSize = dataSize;
     }
+    if (shopPriceGold_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(14, shopPriceGold_);
+    }
+    if (acquisitionTier_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(15, acquisitionTier_);
+    }
     return size;
   }
   @java.lang.Override
@@ -509,6 +545,10 @@ private static final long serialVersionUID = 0L;
         .equals(other.getAptitudeMaxList())) return false;
     if (!getSkillList()
         .equals(other.getSkillList())) return false;
+    if (getShopPriceGold()
+        != other.getShopPriceGold()) return false;
+    if (getAcquisitionTier()
+        != other.getAcquisitionTier()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -555,6 +595,11 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + SKILL_FIELD_NUMBER;
       hash = (53 * hash) + getSkillList().hashCode();
     }
+    hash = (37 * hash) + SHOP_PRICE_GOLD_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getShopPriceGold());
+    hash = (37 * hash) + ACQUISITION_TIER_FIELD_NUMBER;
+    hash = (53 * hash) + getAcquisitionTier();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -699,6 +744,8 @@ private static final long serialVersionUID = 0L;
       aptitudeMin_ = emptyIntList();
       aptitudeMax_ = emptyIntList();
       skill_ = emptyIntList();
+      shopPriceGold_ = 0L;
+      acquisitionTier_ = 0;
       return this;
     }
 
@@ -773,6 +820,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00001000) != 0)) {
         skill_.makeImmutable();
         result.skill_ = skill_;
+      }
+      if (((from_bitField0_ & 0x00002000) != 0)) {
+        result.shopPriceGold_ = shopPriceGold_;
+      }
+      if (((from_bitField0_ & 0x00004000) != 0)) {
+        result.acquisitionTier_ = acquisitionTier_;
       }
     }
 
@@ -854,6 +907,12 @@ private static final long serialVersionUID = 0L;
           skill_.addAll(other.skill_);
         }
         onChanged();
+      }
+      if (other.getShopPriceGold() != 0L) {
+        setShopPriceGold(other.getShopPriceGold());
+      }
+      if (other.getAcquisitionTier() != 0) {
+        setAcquisitionTier(other.getAcquisitionTier());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -979,6 +1038,16 @@ private static final long serialVersionUID = 0L;
               input.popLimit(limit);
               break;
             } // case 106
+            case 112: {
+              shopPriceGold_ = input.readUInt64();
+              bitField0_ |= 0x00002000;
+              break;
+            } // case 112
+            case 120: {
+              acquisitionTier_ = input.readUInt32();
+              bitField0_ |= 0x00004000;
+              break;
+            } // case 120
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1644,6 +1713,70 @@ private static final long serialVersionUID = 0L;
     public Builder clearSkill() {
       skill_ = emptyIntList();
       bitField0_ = (bitField0_ & ~0x00001000);
+      onChanged();
+      return this;
+    }
+
+    private long shopPriceGold_ ;
+    /**
+     * <code>uint64 shop_price_gold = 14;</code>
+     * @return The shopPriceGold.
+     */
+    @java.lang.Override
+    public long getShopPriceGold() {
+      return shopPriceGold_;
+    }
+    /**
+     * <code>uint64 shop_price_gold = 14;</code>
+     * @param value The shopPriceGold to set.
+     * @return This builder for chaining.
+     */
+    public Builder setShopPriceGold(long value) {
+
+      shopPriceGold_ = value;
+      bitField0_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 shop_price_gold = 14;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearShopPriceGold() {
+      bitField0_ = (bitField0_ & ~0x00002000);
+      shopPriceGold_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private int acquisitionTier_ ;
+    /**
+     * <code>uint32 acquisition_tier = 15;</code>
+     * @return The acquisitionTier.
+     */
+    @java.lang.Override
+    public int getAcquisitionTier() {
+      return acquisitionTier_;
+    }
+    /**
+     * <code>uint32 acquisition_tier = 15;</code>
+     * @param value The acquisitionTier to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAcquisitionTier(int value) {
+
+      acquisitionTier_ = value;
+      bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 acquisition_tier = 15;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAcquisitionTier() {
+      bitField0_ = (bitField0_ & ~0x00004000);
+      acquisitionTier_ = 0;
       onChanged();
       return this;
     }

@@ -33,6 +33,8 @@ private static final long serialVersionUID = 0L;
     subBuff_ = emptyIntList();
     targetSubBuff_ = emptyIntList();
     bonusDamage_ = "";
+    requiredTag_ = "";
+    secondRequiredTag_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -622,6 +624,403 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int BATTLE_OP_FIELD_NUMBER = 23;
+  private int battleOp_ = 0;
+  /**
+   * <code>uint32 battle_op = 23;</code>
+   * @return The battleOp.
+   */
+  @java.lang.Override
+  public int getBattleOp() {
+    return battleOp_;
+  }
+
+  public static final int TRIGGER_EVENT_FIELD_NUMBER = 24;
+  private int triggerEvent_ = 0;
+  /**
+   * <code>uint32 trigger_event = 24;</code>
+   * @return The triggerEvent.
+   */
+  @java.lang.Override
+  public int getTriggerEvent() {
+    return triggerEvent_;
+  }
+
+  public static final int EFFECT_TARGET_FIELD_NUMBER = 25;
+  private int effectTarget_ = 0;
+  /**
+   * <code>uint32 effect_target = 25;</code>
+   * @return The effectTarget.
+   */
+  @java.lang.Override
+  public int getEffectTarget() {
+    return effectTarget_;
+  }
+
+  public static final int FLAT_VALUE_FIELD_NUMBER = 26;
+  private double flatValue_ = 0D;
+  /**
+   * <code>double flat_value = 26;</code>
+   * @return The flatValue.
+   */
+  @java.lang.Override
+  public double getFlatValue() {
+    return flatValue_;
+  }
+
+  public static final int PER_LEVEL_FIELD_NUMBER = 27;
+  private double perLevel_ = 0D;
+  /**
+   * <code>double per_level = 27;</code>
+   * @return The perLevel.
+   */
+  @java.lang.Override
+  public double getPerLevel() {
+    return perLevel_;
+  }
+
+  public static final int RATIO_FIELD_NUMBER = 28;
+  private double ratio_ = 0D;
+  /**
+   * <code>double ratio = 28;</code>
+   * @return The ratio.
+   */
+  @java.lang.Override
+  public double getRatio() {
+    return ratio_;
+  }
+
+  public static final int VALUE_BASIS_FIELD_NUMBER = 29;
+  private int valueBasis_ = 0;
+  /**
+   * <code>uint32 value_basis = 29;</code>
+   * @return The valueBasis.
+   */
+  @java.lang.Override
+  public int getValueBasis() {
+    return valueBasis_;
+  }
+
+  public static final int DAMAGE_FILTER_FIELD_NUMBER = 30;
+  private int damageFilter_ = 0;
+  /**
+   * <code>uint32 damage_filter = 30;</code>
+   * @return The damageFilter.
+   */
+  @java.lang.Override
+  public int getDamageFilter() {
+    return damageFilter_;
+  }
+
+  public static final int DURATION_ROUNDS_FIELD_NUMBER = 31;
+  private int durationRounds_ = 0;
+  /**
+   * <code>uint32 duration_rounds = 31;</code>
+   * @return The durationRounds.
+   */
+  @java.lang.Override
+  public int getDurationRounds() {
+    return durationRounds_;
+  }
+
+  public static final int TICK_COUNT_FIELD_NUMBER = 32;
+  private int tickCount_ = 0;
+  /**
+   * <code>uint32 tick_count = 32;</code>
+   * @return The tickCount.
+   */
+  @java.lang.Override
+  public int getTickCount() {
+    return tickCount_;
+  }
+
+  public static final int TRIGGER_CHANCE_FIELD_NUMBER = 33;
+  private double triggerChance_ = 0D;
+  /**
+   * <code>double trigger_chance = 33;</code>
+   * @return The triggerChance.
+   */
+  @java.lang.Override
+  public double getTriggerChance() {
+    return triggerChance_;
+  }
+
+  public static final int PER_ROUND_LIMIT_FIELD_NUMBER = 34;
+  private int perRoundLimit_ = 0;
+  /**
+   * <code>uint32 per_round_limit = 34;</code>
+   * @return The perRoundLimit.
+   */
+  @java.lang.Override
+  public int getPerRoundLimit() {
+    return perRoundLimit_;
+  }
+
+  public static final int HIT_LIMIT_FIELD_NUMBER = 35;
+  private int hitLimit_ = 0;
+  /**
+   * <code>uint32 hit_limit = 35;</code>
+   * @return The hitLimit.
+   */
+  @java.lang.Override
+  public int getHitLimit() {
+    return hitLimit_;
+  }
+
+  public static final int MODIFIER_STAT_FIELD_NUMBER = 36;
+  private int modifierStat_ = 0;
+  /**
+   * <code>uint32 modifier_stat = 36;</code>
+   * @return The modifierStat.
+   */
+  @java.lang.Override
+  public int getModifierStat() {
+    return modifierStat_;
+  }
+
+  public static final int STATE_KIND_FIELD_NUMBER = 37;
+  private int stateKind_ = 0;
+  /**
+   * <code>uint32 state_kind = 37;</code>
+   * @return The stateKind.
+   */
+  @java.lang.Override
+  public int getStateKind() {
+    return stateKind_;
+  }
+
+  public static final int APPLICATION_CHANCE_FIELD_NUMBER = 38;
+  private double applicationChance_ = 0D;
+  /**
+   * <code>double application_chance = 38;</code>
+   * @return The applicationChance.
+   */
+  @java.lang.Override
+  public double getApplicationChance() {
+    return applicationChance_;
+  }
+
+  public static final int REQUIRED_TAG_FIELD_NUMBER = 39;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object requiredTag_ = "";
+  /**
+   * <code>string required_tag = 39;</code>
+   * @return The requiredTag.
+   */
+  @java.lang.Override
+  public java.lang.String getRequiredTag() {
+    java.lang.Object ref = requiredTag_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      requiredTag_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string required_tag = 39;</code>
+   * @return The bytes for requiredTag.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getRequiredTagBytes() {
+    java.lang.Object ref = requiredTag_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      requiredTag_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int SECOND_REQUIRED_TAG_FIELD_NUMBER = 40;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object secondRequiredTag_ = "";
+  /**
+   * <code>string second_required_tag = 40;</code>
+   * @return The secondRequiredTag.
+   */
+  @java.lang.Override
+  public java.lang.String getSecondRequiredTag() {
+    java.lang.Object ref = secondRequiredTag_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      secondRequiredTag_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string second_required_tag = 40;</code>
+   * @return The bytes for secondRequiredTag.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSecondRequiredTagBytes() {
+    java.lang.Object ref = secondRequiredTag_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      secondRequiredTag_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int CONDITIONAL_BONUS_FIELD_NUMBER = 41;
+  private double conditionalBonus_ = 0D;
+  /**
+   * <code>double conditional_bonus = 41;</code>
+   * @return The conditionalBonus.
+   */
+  @java.lang.Override
+  public double getConditionalBonus() {
+    return conditionalBonus_;
+  }
+
+  public static final int SECONDARY_RATIO_FIELD_NUMBER = 42;
+  private double secondaryRatio_ = 0D;
+  /**
+   * <code>double secondary_ratio = 42;</code>
+   * @return The secondaryRatio.
+   */
+  @java.lang.Override
+  public double getSecondaryRatio() {
+    return secondaryRatio_;
+  }
+
+  public static final int EFFECT_COUNT_FIELD_NUMBER = 43;
+  private int effectCount_ = 0;
+  /**
+   * <code>uint32 effect_count = 43;</code>
+   * @return The effectCount.
+   */
+  @java.lang.Override
+  public int getEffectCount() {
+    return effectCount_;
+  }
+
+  public static final int TARGET_COUNT_FIELD_NUMBER = 44;
+  private int targetCount_ = 0;
+  /**
+   * <code>uint32 target_count = 44;</code>
+   * @return The targetCount.
+   */
+  @java.lang.Override
+  public int getTargetCount() {
+    return targetCount_;
+  }
+
+  public static final int PET_TARGET_COUNT_FIELD_NUMBER = 45;
+  private int petTargetCount_ = 0;
+  /**
+   * <code>uint32 pet_target_count = 45;</code>
+   * @return The petTargetCount.
+   */
+  @java.lang.Override
+  public int getPetTargetCount() {
+    return petTargetCount_;
+  }
+
+  public static final int STACK_KEY_FIELD_NUMBER = 46;
+  private int stackKey_ = 0;
+  /**
+   * <code>uint32 stack_key = 46;</code>
+   * @return The stackKey.
+   */
+  @java.lang.Override
+  public int getStackKey() {
+    return stackKey_;
+  }
+
+  public static final int REFRESH_POLICY_FIELD_NUMBER = 47;
+  private int refreshPolicy_ = 0;
+  /**
+   * <code>uint32 refresh_policy = 47;</code>
+   * @return The refreshPolicy.
+   */
+  @java.lang.Override
+  public int getRefreshPolicy() {
+    return refreshPolicy_;
+  }
+
+  public static final int KEEP_ON_DEATH_FIELD_NUMBER = 48;
+  private int keepOnDeath_ = 0;
+  /**
+   * <code>uint32 keep_on_death = 48;</code>
+   * @return The keepOnDeath.
+   */
+  @java.lang.Override
+  public int getKeepOnDeath() {
+    return keepOnDeath_;
+  }
+
+  public static final int EFFECT_PRIORITY_FIELD_NUMBER = 49;
+  private int effectPriority_ = 0;
+  /**
+   * <code>uint32 effect_priority = 49;</code>
+   * @return The effectPriority.
+   */
+  @java.lang.Override
+  public int getEffectPriority() {
+    return effectPriority_;
+  }
+
+  public static final int START_ROUND_FIELD_NUMBER = 50;
+  private int startRound_ = 0;
+  /**
+   * <code>uint32 start_round = 50;</code>
+   * @return The startRound.
+   */
+  @java.lang.Override
+  public int getStartRound() {
+    return startRound_;
+  }
+
+  public static final int STACK_LIMIT_FIELD_NUMBER = 51;
+  private int stackLimit_ = 0;
+  /**
+   * <code>uint32 stack_limit = 51;</code>
+   * @return The stackLimit.
+   */
+  @java.lang.Override
+  public int getStackLimit() {
+    return stackLimit_;
+  }
+
+  public static final int REQUIRE_LIVING_CASTER_FIELD_NUMBER = 52;
+  private int requireLivingCaster_ = 0;
+  /**
+   * <code>uint32 require_living_caster = 52;</code>
+   * @return The requireLivingCaster.
+   */
+  @java.lang.Override
+  public int getRequireLivingCaster() {
+    return requireLivingCaster_;
+  }
+
+  public static final int TICK_ON_APPLY_FIELD_NUMBER = 53;
+  private int tickOnApply_ = 0;
+  /**
+   * <code>uint32 tick_on_apply = 53;</code>
+   * @return The tickOnApply.
+   */
+  @java.lang.Override
+  public int getTickOnApply() {
+    return tickOnApply_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -723,6 +1122,99 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(bonusDamage_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 22, bonusDamage_);
+    }
+    if (battleOp_ != 0) {
+      output.writeUInt32(23, battleOp_);
+    }
+    if (triggerEvent_ != 0) {
+      output.writeUInt32(24, triggerEvent_);
+    }
+    if (effectTarget_ != 0) {
+      output.writeUInt32(25, effectTarget_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(flatValue_) != 0) {
+      output.writeDouble(26, flatValue_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(perLevel_) != 0) {
+      output.writeDouble(27, perLevel_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(ratio_) != 0) {
+      output.writeDouble(28, ratio_);
+    }
+    if (valueBasis_ != 0) {
+      output.writeUInt32(29, valueBasis_);
+    }
+    if (damageFilter_ != 0) {
+      output.writeUInt32(30, damageFilter_);
+    }
+    if (durationRounds_ != 0) {
+      output.writeUInt32(31, durationRounds_);
+    }
+    if (tickCount_ != 0) {
+      output.writeUInt32(32, tickCount_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(triggerChance_) != 0) {
+      output.writeDouble(33, triggerChance_);
+    }
+    if (perRoundLimit_ != 0) {
+      output.writeUInt32(34, perRoundLimit_);
+    }
+    if (hitLimit_ != 0) {
+      output.writeUInt32(35, hitLimit_);
+    }
+    if (modifierStat_ != 0) {
+      output.writeUInt32(36, modifierStat_);
+    }
+    if (stateKind_ != 0) {
+      output.writeUInt32(37, stateKind_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(applicationChance_) != 0) {
+      output.writeDouble(38, applicationChance_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(requiredTag_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 39, requiredTag_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(secondRequiredTag_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 40, secondRequiredTag_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(conditionalBonus_) != 0) {
+      output.writeDouble(41, conditionalBonus_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(secondaryRatio_) != 0) {
+      output.writeDouble(42, secondaryRatio_);
+    }
+    if (effectCount_ != 0) {
+      output.writeUInt32(43, effectCount_);
+    }
+    if (targetCount_ != 0) {
+      output.writeUInt32(44, targetCount_);
+    }
+    if (petTargetCount_ != 0) {
+      output.writeUInt32(45, petTargetCount_);
+    }
+    if (stackKey_ != 0) {
+      output.writeUInt32(46, stackKey_);
+    }
+    if (refreshPolicy_ != 0) {
+      output.writeUInt32(47, refreshPolicy_);
+    }
+    if (keepOnDeath_ != 0) {
+      output.writeUInt32(48, keepOnDeath_);
+    }
+    if (effectPriority_ != 0) {
+      output.writeUInt32(49, effectPriority_);
+    }
+    if (startRound_ != 0) {
+      output.writeUInt32(50, startRound_);
+    }
+    if (stackLimit_ != 0) {
+      output.writeUInt32(51, stackLimit_);
+    }
+    if (requireLivingCaster_ != 0) {
+      output.writeUInt32(52, requireLivingCaster_);
+    }
+    if (tickOnApply_ != 0) {
+      output.writeUInt32(53, tickOnApply_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -859,6 +1351,132 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(bonusDamage_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(22, bonusDamage_);
     }
+    if (battleOp_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(23, battleOp_);
+    }
+    if (triggerEvent_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(24, triggerEvent_);
+    }
+    if (effectTarget_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(25, effectTarget_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(flatValue_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(26, flatValue_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(perLevel_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(27, perLevel_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(ratio_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(28, ratio_);
+    }
+    if (valueBasis_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(29, valueBasis_);
+    }
+    if (damageFilter_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(30, damageFilter_);
+    }
+    if (durationRounds_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(31, durationRounds_);
+    }
+    if (tickCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(32, tickCount_);
+    }
+    return size;
+  }
+  private int computeSerializedSize_1() {
+    int size = 0;
+    if (java.lang.Double.doubleToRawLongBits(triggerChance_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(33, triggerChance_);
+    }
+    if (perRoundLimit_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(34, perRoundLimit_);
+    }
+    if (hitLimit_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(35, hitLimit_);
+    }
+    if (modifierStat_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(36, modifierStat_);
+    }
+    if (stateKind_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(37, stateKind_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(applicationChance_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(38, applicationChance_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(requiredTag_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(39, requiredTag_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(secondRequiredTag_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(40, secondRequiredTag_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(conditionalBonus_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(41, conditionalBonus_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(secondaryRatio_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(42, secondaryRatio_);
+    }
+    if (effectCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(43, effectCount_);
+    }
+    if (targetCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(44, targetCount_);
+    }
+    if (petTargetCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(45, petTargetCount_);
+    }
+    if (stackKey_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(46, stackKey_);
+    }
+    if (refreshPolicy_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(47, refreshPolicy_);
+    }
+    if (keepOnDeath_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(48, keepOnDeath_);
+    }
+    if (effectPriority_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(49, effectPriority_);
+    }
+    if (startRound_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(50, startRound_);
+    }
+    if (stackLimit_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(51, stackLimit_);
+    }
+    if (requireLivingCaster_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(52, requireLivingCaster_);
+    }
+    if (tickOnApply_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(53, tickOnApply_);
+    }
     return size;
   }
   @java.lang.Override
@@ -868,6 +1486,7 @@ private static final long serialVersionUID = 0L;
 
     size = 0;
     size += computeSerializedSize_0();
+    size += computeSerializedSize_1();
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -932,6 +1551,75 @@ private static final long serialVersionUID = 0L;
         != other.getTime()) return false;
     if (!getBonusDamage()
         .equals(other.getBonusDamage())) return false;
+    if (getBattleOp()
+        != other.getBattleOp()) return false;
+    if (getTriggerEvent()
+        != other.getTriggerEvent()) return false;
+    if (getEffectTarget()
+        != other.getEffectTarget()) return false;
+    if (java.lang.Double.doubleToLongBits(getFlatValue())
+        != java.lang.Double.doubleToLongBits(
+            other.getFlatValue())) return false;
+    if (java.lang.Double.doubleToLongBits(getPerLevel())
+        != java.lang.Double.doubleToLongBits(
+            other.getPerLevel())) return false;
+    if (java.lang.Double.doubleToLongBits(getRatio())
+        != java.lang.Double.doubleToLongBits(
+            other.getRatio())) return false;
+    if (getValueBasis()
+        != other.getValueBasis()) return false;
+    if (getDamageFilter()
+        != other.getDamageFilter()) return false;
+    if (getDurationRounds()
+        != other.getDurationRounds()) return false;
+    if (getTickCount()
+        != other.getTickCount()) return false;
+    if (java.lang.Double.doubleToLongBits(getTriggerChance())
+        != java.lang.Double.doubleToLongBits(
+            other.getTriggerChance())) return false;
+    if (getPerRoundLimit()
+        != other.getPerRoundLimit()) return false;
+    if (getHitLimit()
+        != other.getHitLimit()) return false;
+    if (getModifierStat()
+        != other.getModifierStat()) return false;
+    if (getStateKind()
+        != other.getStateKind()) return false;
+    if (java.lang.Double.doubleToLongBits(getApplicationChance())
+        != java.lang.Double.doubleToLongBits(
+            other.getApplicationChance())) return false;
+    if (!getRequiredTag()
+        .equals(other.getRequiredTag())) return false;
+    if (!getSecondRequiredTag()
+        .equals(other.getSecondRequiredTag())) return false;
+    if (java.lang.Double.doubleToLongBits(getConditionalBonus())
+        != java.lang.Double.doubleToLongBits(
+            other.getConditionalBonus())) return false;
+    if (java.lang.Double.doubleToLongBits(getSecondaryRatio())
+        != java.lang.Double.doubleToLongBits(
+            other.getSecondaryRatio())) return false;
+    if (getEffectCount()
+        != other.getEffectCount()) return false;
+    if (getTargetCount()
+        != other.getTargetCount()) return false;
+    if (getPetTargetCount()
+        != other.getPetTargetCount()) return false;
+    if (getStackKey()
+        != other.getStackKey()) return false;
+    if (getRefreshPolicy()
+        != other.getRefreshPolicy()) return false;
+    if (getKeepOnDeath()
+        != other.getKeepOnDeath()) return false;
+    if (getEffectPriority()
+        != other.getEffectPriority()) return false;
+    if (getStartRound()
+        != other.getStartRound()) return false;
+    if (getStackLimit()
+        != other.getStackLimit()) return false;
+    if (getRequireLivingCaster()
+        != other.getRequireLivingCaster()) return false;
+    if (getTickOnApply()
+        != other.getTickOnApply()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -1004,6 +1692,75 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getTime();
     hash = (37 * hash) + BONUS_DAMAGE_FIELD_NUMBER;
     hash = (53 * hash) + getBonusDamage().hashCode();
+    hash = (37 * hash) + BATTLE_OP_FIELD_NUMBER;
+    hash = (53 * hash) + getBattleOp();
+    hash = (37 * hash) + TRIGGER_EVENT_FIELD_NUMBER;
+    hash = (53 * hash) + getTriggerEvent();
+    hash = (37 * hash) + EFFECT_TARGET_FIELD_NUMBER;
+    hash = (53 * hash) + getEffectTarget();
+    hash = (37 * hash) + FLAT_VALUE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getFlatValue()));
+    hash = (37 * hash) + PER_LEVEL_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getPerLevel()));
+    hash = (37 * hash) + RATIO_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getRatio()));
+    hash = (37 * hash) + VALUE_BASIS_FIELD_NUMBER;
+    hash = (53 * hash) + getValueBasis();
+    hash = (37 * hash) + DAMAGE_FILTER_FIELD_NUMBER;
+    hash = (53 * hash) + getDamageFilter();
+    hash = (37 * hash) + DURATION_ROUNDS_FIELD_NUMBER;
+    hash = (53 * hash) + getDurationRounds();
+    hash = (37 * hash) + TICK_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getTickCount();
+    hash = (37 * hash) + TRIGGER_CHANCE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getTriggerChance()));
+    hash = (37 * hash) + PER_ROUND_LIMIT_FIELD_NUMBER;
+    hash = (53 * hash) + getPerRoundLimit();
+    hash = (37 * hash) + HIT_LIMIT_FIELD_NUMBER;
+    hash = (53 * hash) + getHitLimit();
+    hash = (37 * hash) + MODIFIER_STAT_FIELD_NUMBER;
+    hash = (53 * hash) + getModifierStat();
+    hash = (37 * hash) + STATE_KIND_FIELD_NUMBER;
+    hash = (53 * hash) + getStateKind();
+    hash = (37 * hash) + APPLICATION_CHANCE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getApplicationChance()));
+    hash = (37 * hash) + REQUIRED_TAG_FIELD_NUMBER;
+    hash = (53 * hash) + getRequiredTag().hashCode();
+    hash = (37 * hash) + SECOND_REQUIRED_TAG_FIELD_NUMBER;
+    hash = (53 * hash) + getSecondRequiredTag().hashCode();
+    hash = (37 * hash) + CONDITIONAL_BONUS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getConditionalBonus()));
+    hash = (37 * hash) + SECONDARY_RATIO_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getSecondaryRatio()));
+    hash = (37 * hash) + EFFECT_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getEffectCount();
+    hash = (37 * hash) + TARGET_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getTargetCount();
+    hash = (37 * hash) + PET_TARGET_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getPetTargetCount();
+    hash = (37 * hash) + STACK_KEY_FIELD_NUMBER;
+    hash = (53 * hash) + getStackKey();
+    hash = (37 * hash) + REFRESH_POLICY_FIELD_NUMBER;
+    hash = (53 * hash) + getRefreshPolicy();
+    hash = (37 * hash) + KEEP_ON_DEATH_FIELD_NUMBER;
+    hash = (53 * hash) + getKeepOnDeath();
+    hash = (37 * hash) + EFFECT_PRIORITY_FIELD_NUMBER;
+    hash = (53 * hash) + getEffectPriority();
+    hash = (37 * hash) + START_ROUND_FIELD_NUMBER;
+    hash = (53 * hash) + getStartRound();
+    hash = (37 * hash) + STACK_LIMIT_FIELD_NUMBER;
+    hash = (53 * hash) + getStackLimit();
+    hash = (37 * hash) + REQUIRE_LIVING_CASTER_FIELD_NUMBER;
+    hash = (53 * hash) + getRequireLivingCaster();
+    hash = (37 * hash) + TICK_ON_APPLY_FIELD_NUMBER;
+    hash = (53 * hash) + getTickOnApply();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -1165,6 +1922,7 @@ private static final long serialVersionUID = 0L;
     public Builder clear() {
       super.clear();
       bitField0_ = 0;
+      bitField1_ = 0;
       id_ = 0;
       noCaster_ = 0;
       buffType_ = 0;
@@ -1187,6 +1945,37 @@ private static final long serialVersionUID = 0L;
       combatIdleSeconds_ = 0D;
       time_ = 0;
       bonusDamage_ = "";
+      battleOp_ = 0;
+      triggerEvent_ = 0;
+      effectTarget_ = 0;
+      flatValue_ = 0D;
+      perLevel_ = 0D;
+      ratio_ = 0D;
+      valueBasis_ = 0;
+      damageFilter_ = 0;
+      durationRounds_ = 0;
+      tickCount_ = 0;
+      triggerChance_ = 0D;
+      perRoundLimit_ = 0;
+      hitLimit_ = 0;
+      modifierStat_ = 0;
+      stateKind_ = 0;
+      applicationChance_ = 0D;
+      requiredTag_ = "";
+      secondRequiredTag_ = "";
+      conditionalBonus_ = 0D;
+      secondaryRatio_ = 0D;
+      effectCount_ = 0;
+      targetCount_ = 0;
+      petTargetCount_ = 0;
+      stackKey_ = 0;
+      refreshPolicy_ = 0;
+      keepOnDeath_ = 0;
+      effectPriority_ = 0;
+      startRound_ = 0;
+      stackLimit_ = 0;
+      requireLivingCaster_ = 0;
+      tickOnApply_ = 0;
       return this;
     }
 
@@ -1214,6 +2003,7 @@ private static final long serialVersionUID = 0L;
     public com.game.table.BuffTable buildPartial() {
       com.game.table.BuffTable result = new com.game.table.BuffTable(this);
       if (bitField0_ != 0) { buildPartial0(result); }
+      if (bitField1_ != 0) { buildPartial1(result); }
       onBuilt();
       return result;
     }
@@ -1291,6 +2081,103 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField0_ & 0x00200000) != 0)) {
         result.bonusDamage_ = bonusDamage_;
+      }
+      if (((from_bitField0_ & 0x00400000) != 0)) {
+        result.battleOp_ = battleOp_;
+      }
+      if (((from_bitField0_ & 0x00800000) != 0)) {
+        result.triggerEvent_ = triggerEvent_;
+      }
+      if (((from_bitField0_ & 0x01000000) != 0)) {
+        result.effectTarget_ = effectTarget_;
+      }
+      if (((from_bitField0_ & 0x02000000) != 0)) {
+        result.flatValue_ = flatValue_;
+      }
+      if (((from_bitField0_ & 0x04000000) != 0)) {
+        result.perLevel_ = perLevel_;
+      }
+      if (((from_bitField0_ & 0x08000000) != 0)) {
+        result.ratio_ = ratio_;
+      }
+      if (((from_bitField0_ & 0x10000000) != 0)) {
+        result.valueBasis_ = valueBasis_;
+      }
+      if (((from_bitField0_ & 0x20000000) != 0)) {
+        result.damageFilter_ = damageFilter_;
+      }
+      if (((from_bitField0_ & 0x40000000) != 0)) {
+        result.durationRounds_ = durationRounds_;
+      }
+      if (((from_bitField0_ & 0x80000000) != 0)) {
+        result.tickCount_ = tickCount_;
+      }
+    }
+
+    private void buildPartial1(com.game.table.BuffTable result) {
+      int from_bitField1_ = bitField1_;
+      if (((from_bitField1_ & 0x00000001) != 0)) {
+        result.triggerChance_ = triggerChance_;
+      }
+      if (((from_bitField1_ & 0x00000002) != 0)) {
+        result.perRoundLimit_ = perRoundLimit_;
+      }
+      if (((from_bitField1_ & 0x00000004) != 0)) {
+        result.hitLimit_ = hitLimit_;
+      }
+      if (((from_bitField1_ & 0x00000008) != 0)) {
+        result.modifierStat_ = modifierStat_;
+      }
+      if (((from_bitField1_ & 0x00000010) != 0)) {
+        result.stateKind_ = stateKind_;
+      }
+      if (((from_bitField1_ & 0x00000020) != 0)) {
+        result.applicationChance_ = applicationChance_;
+      }
+      if (((from_bitField1_ & 0x00000040) != 0)) {
+        result.requiredTag_ = requiredTag_;
+      }
+      if (((from_bitField1_ & 0x00000080) != 0)) {
+        result.secondRequiredTag_ = secondRequiredTag_;
+      }
+      if (((from_bitField1_ & 0x00000100) != 0)) {
+        result.conditionalBonus_ = conditionalBonus_;
+      }
+      if (((from_bitField1_ & 0x00000200) != 0)) {
+        result.secondaryRatio_ = secondaryRatio_;
+      }
+      if (((from_bitField1_ & 0x00000400) != 0)) {
+        result.effectCount_ = effectCount_;
+      }
+      if (((from_bitField1_ & 0x00000800) != 0)) {
+        result.targetCount_ = targetCount_;
+      }
+      if (((from_bitField1_ & 0x00001000) != 0)) {
+        result.petTargetCount_ = petTargetCount_;
+      }
+      if (((from_bitField1_ & 0x00002000) != 0)) {
+        result.stackKey_ = stackKey_;
+      }
+      if (((from_bitField1_ & 0x00004000) != 0)) {
+        result.refreshPolicy_ = refreshPolicy_;
+      }
+      if (((from_bitField1_ & 0x00008000) != 0)) {
+        result.keepOnDeath_ = keepOnDeath_;
+      }
+      if (((from_bitField1_ & 0x00010000) != 0)) {
+        result.effectPriority_ = effectPriority_;
+      }
+      if (((from_bitField1_ & 0x00020000) != 0)) {
+        result.startRound_ = startRound_;
+      }
+      if (((from_bitField1_ & 0x00040000) != 0)) {
+        result.stackLimit_ = stackLimit_;
+      }
+      if (((from_bitField1_ & 0x00080000) != 0)) {
+        result.requireLivingCaster_ = requireLivingCaster_;
+      }
+      if (((from_bitField1_ & 0x00100000) != 0)) {
+        result.tickOnApply_ = tickOnApply_;
       }
     }
 
@@ -1399,6 +2286,103 @@ private static final long serialVersionUID = 0L;
         bonusDamage_ = other.bonusDamage_;
         bitField0_ |= 0x00200000;
         onChanged();
+      }
+      if (other.getBattleOp() != 0) {
+        setBattleOp(other.getBattleOp());
+      }
+      if (other.getTriggerEvent() != 0) {
+        setTriggerEvent(other.getTriggerEvent());
+      }
+      if (other.getEffectTarget() != 0) {
+        setEffectTarget(other.getEffectTarget());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getFlatValue()) != 0) {
+        setFlatValue(other.getFlatValue());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getPerLevel()) != 0) {
+        setPerLevel(other.getPerLevel());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getRatio()) != 0) {
+        setRatio(other.getRatio());
+      }
+      if (other.getValueBasis() != 0) {
+        setValueBasis(other.getValueBasis());
+      }
+      if (other.getDamageFilter() != 0) {
+        setDamageFilter(other.getDamageFilter());
+      }
+      if (other.getDurationRounds() != 0) {
+        setDurationRounds(other.getDurationRounds());
+      }
+      if (other.getTickCount() != 0) {
+        setTickCount(other.getTickCount());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getTriggerChance()) != 0) {
+        setTriggerChance(other.getTriggerChance());
+      }
+      if (other.getPerRoundLimit() != 0) {
+        setPerRoundLimit(other.getPerRoundLimit());
+      }
+      if (other.getHitLimit() != 0) {
+        setHitLimit(other.getHitLimit());
+      }
+      if (other.getModifierStat() != 0) {
+        setModifierStat(other.getModifierStat());
+      }
+      if (other.getStateKind() != 0) {
+        setStateKind(other.getStateKind());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getApplicationChance()) != 0) {
+        setApplicationChance(other.getApplicationChance());
+      }
+      if (!other.getRequiredTag().isEmpty()) {
+        requiredTag_ = other.requiredTag_;
+        bitField1_ |= 0x00000040;
+        onChanged();
+      }
+      if (!other.getSecondRequiredTag().isEmpty()) {
+        secondRequiredTag_ = other.secondRequiredTag_;
+        bitField1_ |= 0x00000080;
+        onChanged();
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getConditionalBonus()) != 0) {
+        setConditionalBonus(other.getConditionalBonus());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getSecondaryRatio()) != 0) {
+        setSecondaryRatio(other.getSecondaryRatio());
+      }
+      if (other.getEffectCount() != 0) {
+        setEffectCount(other.getEffectCount());
+      }
+      if (other.getTargetCount() != 0) {
+        setTargetCount(other.getTargetCount());
+      }
+      if (other.getPetTargetCount() != 0) {
+        setPetTargetCount(other.getPetTargetCount());
+      }
+      if (other.getStackKey() != 0) {
+        setStackKey(other.getStackKey());
+      }
+      if (other.getRefreshPolicy() != 0) {
+        setRefreshPolicy(other.getRefreshPolicy());
+      }
+      if (other.getKeepOnDeath() != 0) {
+        setKeepOnDeath(other.getKeepOnDeath());
+      }
+      if (other.getEffectPriority() != 0) {
+        setEffectPriority(other.getEffectPriority());
+      }
+      if (other.getStartRound() != 0) {
+        setStartRound(other.getStartRound());
+      }
+      if (other.getStackLimit() != 0) {
+        setStackLimit(other.getStackLimit());
+      }
+      if (other.getRequireLivingCaster() != 0) {
+        setRequireLivingCaster(other.getRequireLivingCaster());
+      }
+      if (other.getTickOnApply() != 0) {
+        setTickOnApply(other.getTickOnApply());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1582,6 +2566,161 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00200000;
               break;
             } // case 178
+            case 184: {
+              battleOp_ = input.readUInt32();
+              bitField0_ |= 0x00400000;
+              break;
+            } // case 184
+            case 192: {
+              triggerEvent_ = input.readUInt32();
+              bitField0_ |= 0x00800000;
+              break;
+            } // case 192
+            case 200: {
+              effectTarget_ = input.readUInt32();
+              bitField0_ |= 0x01000000;
+              break;
+            } // case 200
+            case 209: {
+              flatValue_ = input.readDouble();
+              bitField0_ |= 0x02000000;
+              break;
+            } // case 209
+            case 217: {
+              perLevel_ = input.readDouble();
+              bitField0_ |= 0x04000000;
+              break;
+            } // case 217
+            case 225: {
+              ratio_ = input.readDouble();
+              bitField0_ |= 0x08000000;
+              break;
+            } // case 225
+            case 232: {
+              valueBasis_ = input.readUInt32();
+              bitField0_ |= 0x10000000;
+              break;
+            } // case 232
+            case 240: {
+              damageFilter_ = input.readUInt32();
+              bitField0_ |= 0x20000000;
+              break;
+            } // case 240
+            case 248: {
+              durationRounds_ = input.readUInt32();
+              bitField0_ |= 0x40000000;
+              break;
+            } // case 248
+            case 256: {
+              tickCount_ = input.readUInt32();
+              bitField0_ |= 0x80000000;
+              break;
+            } // case 256
+            case 265: {
+              triggerChance_ = input.readDouble();
+              bitField1_ |= 0x00000001;
+              break;
+            } // case 265
+            case 272: {
+              perRoundLimit_ = input.readUInt32();
+              bitField1_ |= 0x00000002;
+              break;
+            } // case 272
+            case 280: {
+              hitLimit_ = input.readUInt32();
+              bitField1_ |= 0x00000004;
+              break;
+            } // case 280
+            case 288: {
+              modifierStat_ = input.readUInt32();
+              bitField1_ |= 0x00000008;
+              break;
+            } // case 288
+            case 296: {
+              stateKind_ = input.readUInt32();
+              bitField1_ |= 0x00000010;
+              break;
+            } // case 296
+            case 305: {
+              applicationChance_ = input.readDouble();
+              bitField1_ |= 0x00000020;
+              break;
+            } // case 305
+            case 314: {
+              requiredTag_ = input.readStringRequireUtf8();
+              bitField1_ |= 0x00000040;
+              break;
+            } // case 314
+            case 322: {
+              secondRequiredTag_ = input.readStringRequireUtf8();
+              bitField1_ |= 0x00000080;
+              break;
+            } // case 322
+            case 329: {
+              conditionalBonus_ = input.readDouble();
+              bitField1_ |= 0x00000100;
+              break;
+            } // case 329
+            case 337: {
+              secondaryRatio_ = input.readDouble();
+              bitField1_ |= 0x00000200;
+              break;
+            } // case 337
+            case 344: {
+              effectCount_ = input.readUInt32();
+              bitField1_ |= 0x00000400;
+              break;
+            } // case 344
+            case 352: {
+              targetCount_ = input.readUInt32();
+              bitField1_ |= 0x00000800;
+              break;
+            } // case 352
+            case 360: {
+              petTargetCount_ = input.readUInt32();
+              bitField1_ |= 0x00001000;
+              break;
+            } // case 360
+            case 368: {
+              stackKey_ = input.readUInt32();
+              bitField1_ |= 0x00002000;
+              break;
+            } // case 368
+            case 376: {
+              refreshPolicy_ = input.readUInt32();
+              bitField1_ |= 0x00004000;
+              break;
+            } // case 376
+            case 384: {
+              keepOnDeath_ = input.readUInt32();
+              bitField1_ |= 0x00008000;
+              break;
+            } // case 384
+            case 392: {
+              effectPriority_ = input.readUInt32();
+              bitField1_ |= 0x00010000;
+              break;
+            } // case 392
+            case 400: {
+              startRound_ = input.readUInt32();
+              bitField1_ |= 0x00020000;
+              break;
+            } // case 400
+            case 408: {
+              stackLimit_ = input.readUInt32();
+              bitField1_ |= 0x00040000;
+              break;
+            } // case 408
+            case 416: {
+              requireLivingCaster_ = input.readUInt32();
+              bitField1_ |= 0x00080000;
+              break;
+            } // case 416
+            case 424: {
+              tickOnApply_ = input.readUInt32();
+              bitField1_ |= 0x00100000;
+              break;
+            } // case 424
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1598,6 +2737,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     private int bitField0_;
+    private int bitField1_;
 
     private int id_ ;
     /**
@@ -2820,6 +3960,1078 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       bonusDamage_ = value;
       bitField0_ |= 0x00200000;
+      onChanged();
+      return this;
+    }
+
+    private int battleOp_ ;
+    /**
+     * <code>uint32 battle_op = 23;</code>
+     * @return The battleOp.
+     */
+    @java.lang.Override
+    public int getBattleOp() {
+      return battleOp_;
+    }
+    /**
+     * <code>uint32 battle_op = 23;</code>
+     * @param value The battleOp to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBattleOp(int value) {
+
+      battleOp_ = value;
+      bitField0_ |= 0x00400000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 battle_op = 23;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBattleOp() {
+      bitField0_ = (bitField0_ & ~0x00400000);
+      battleOp_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int triggerEvent_ ;
+    /**
+     * <code>uint32 trigger_event = 24;</code>
+     * @return The triggerEvent.
+     */
+    @java.lang.Override
+    public int getTriggerEvent() {
+      return triggerEvent_;
+    }
+    /**
+     * <code>uint32 trigger_event = 24;</code>
+     * @param value The triggerEvent to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTriggerEvent(int value) {
+
+      triggerEvent_ = value;
+      bitField0_ |= 0x00800000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 trigger_event = 24;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTriggerEvent() {
+      bitField0_ = (bitField0_ & ~0x00800000);
+      triggerEvent_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int effectTarget_ ;
+    /**
+     * <code>uint32 effect_target = 25;</code>
+     * @return The effectTarget.
+     */
+    @java.lang.Override
+    public int getEffectTarget() {
+      return effectTarget_;
+    }
+    /**
+     * <code>uint32 effect_target = 25;</code>
+     * @param value The effectTarget to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEffectTarget(int value) {
+
+      effectTarget_ = value;
+      bitField0_ |= 0x01000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 effect_target = 25;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEffectTarget() {
+      bitField0_ = (bitField0_ & ~0x01000000);
+      effectTarget_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private double flatValue_ ;
+    /**
+     * <code>double flat_value = 26;</code>
+     * @return The flatValue.
+     */
+    @java.lang.Override
+    public double getFlatValue() {
+      return flatValue_;
+    }
+    /**
+     * <code>double flat_value = 26;</code>
+     * @param value The flatValue to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFlatValue(double value) {
+
+      flatValue_ = value;
+      bitField0_ |= 0x02000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double flat_value = 26;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFlatValue() {
+      bitField0_ = (bitField0_ & ~0x02000000);
+      flatValue_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private double perLevel_ ;
+    /**
+     * <code>double per_level = 27;</code>
+     * @return The perLevel.
+     */
+    @java.lang.Override
+    public double getPerLevel() {
+      return perLevel_;
+    }
+    /**
+     * <code>double per_level = 27;</code>
+     * @param value The perLevel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPerLevel(double value) {
+
+      perLevel_ = value;
+      bitField0_ |= 0x04000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double per_level = 27;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPerLevel() {
+      bitField0_ = (bitField0_ & ~0x04000000);
+      perLevel_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private double ratio_ ;
+    /**
+     * <code>double ratio = 28;</code>
+     * @return The ratio.
+     */
+    @java.lang.Override
+    public double getRatio() {
+      return ratio_;
+    }
+    /**
+     * <code>double ratio = 28;</code>
+     * @param value The ratio to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRatio(double value) {
+
+      ratio_ = value;
+      bitField0_ |= 0x08000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double ratio = 28;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRatio() {
+      bitField0_ = (bitField0_ & ~0x08000000);
+      ratio_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private int valueBasis_ ;
+    /**
+     * <code>uint32 value_basis = 29;</code>
+     * @return The valueBasis.
+     */
+    @java.lang.Override
+    public int getValueBasis() {
+      return valueBasis_;
+    }
+    /**
+     * <code>uint32 value_basis = 29;</code>
+     * @param value The valueBasis to set.
+     * @return This builder for chaining.
+     */
+    public Builder setValueBasis(int value) {
+
+      valueBasis_ = value;
+      bitField0_ |= 0x10000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 value_basis = 29;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearValueBasis() {
+      bitField0_ = (bitField0_ & ~0x10000000);
+      valueBasis_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int damageFilter_ ;
+    /**
+     * <code>uint32 damage_filter = 30;</code>
+     * @return The damageFilter.
+     */
+    @java.lang.Override
+    public int getDamageFilter() {
+      return damageFilter_;
+    }
+    /**
+     * <code>uint32 damage_filter = 30;</code>
+     * @param value The damageFilter to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDamageFilter(int value) {
+
+      damageFilter_ = value;
+      bitField0_ |= 0x20000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 damage_filter = 30;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDamageFilter() {
+      bitField0_ = (bitField0_ & ~0x20000000);
+      damageFilter_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int durationRounds_ ;
+    /**
+     * <code>uint32 duration_rounds = 31;</code>
+     * @return The durationRounds.
+     */
+    @java.lang.Override
+    public int getDurationRounds() {
+      return durationRounds_;
+    }
+    /**
+     * <code>uint32 duration_rounds = 31;</code>
+     * @param value The durationRounds to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDurationRounds(int value) {
+
+      durationRounds_ = value;
+      bitField0_ |= 0x40000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 duration_rounds = 31;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDurationRounds() {
+      bitField0_ = (bitField0_ & ~0x40000000);
+      durationRounds_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int tickCount_ ;
+    /**
+     * <code>uint32 tick_count = 32;</code>
+     * @return The tickCount.
+     */
+    @java.lang.Override
+    public int getTickCount() {
+      return tickCount_;
+    }
+    /**
+     * <code>uint32 tick_count = 32;</code>
+     * @param value The tickCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTickCount(int value) {
+
+      tickCount_ = value;
+      bitField0_ |= 0x80000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 tick_count = 32;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTickCount() {
+      bitField0_ = (bitField0_ & ~0x80000000);
+      tickCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private double triggerChance_ ;
+    /**
+     * <code>double trigger_chance = 33;</code>
+     * @return The triggerChance.
+     */
+    @java.lang.Override
+    public double getTriggerChance() {
+      return triggerChance_;
+    }
+    /**
+     * <code>double trigger_chance = 33;</code>
+     * @param value The triggerChance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTriggerChance(double value) {
+
+      triggerChance_ = value;
+      bitField1_ |= 0x00000001;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double trigger_chance = 33;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTriggerChance() {
+      bitField1_ = (bitField1_ & ~0x00000001);
+      triggerChance_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private int perRoundLimit_ ;
+    /**
+     * <code>uint32 per_round_limit = 34;</code>
+     * @return The perRoundLimit.
+     */
+    @java.lang.Override
+    public int getPerRoundLimit() {
+      return perRoundLimit_;
+    }
+    /**
+     * <code>uint32 per_round_limit = 34;</code>
+     * @param value The perRoundLimit to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPerRoundLimit(int value) {
+
+      perRoundLimit_ = value;
+      bitField1_ |= 0x00000002;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 per_round_limit = 34;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPerRoundLimit() {
+      bitField1_ = (bitField1_ & ~0x00000002);
+      perRoundLimit_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int hitLimit_ ;
+    /**
+     * <code>uint32 hit_limit = 35;</code>
+     * @return The hitLimit.
+     */
+    @java.lang.Override
+    public int getHitLimit() {
+      return hitLimit_;
+    }
+    /**
+     * <code>uint32 hit_limit = 35;</code>
+     * @param value The hitLimit to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHitLimit(int value) {
+
+      hitLimit_ = value;
+      bitField1_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 hit_limit = 35;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHitLimit() {
+      bitField1_ = (bitField1_ & ~0x00000004);
+      hitLimit_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int modifierStat_ ;
+    /**
+     * <code>uint32 modifier_stat = 36;</code>
+     * @return The modifierStat.
+     */
+    @java.lang.Override
+    public int getModifierStat() {
+      return modifierStat_;
+    }
+    /**
+     * <code>uint32 modifier_stat = 36;</code>
+     * @param value The modifierStat to set.
+     * @return This builder for chaining.
+     */
+    public Builder setModifierStat(int value) {
+
+      modifierStat_ = value;
+      bitField1_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 modifier_stat = 36;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearModifierStat() {
+      bitField1_ = (bitField1_ & ~0x00000008);
+      modifierStat_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int stateKind_ ;
+    /**
+     * <code>uint32 state_kind = 37;</code>
+     * @return The stateKind.
+     */
+    @java.lang.Override
+    public int getStateKind() {
+      return stateKind_;
+    }
+    /**
+     * <code>uint32 state_kind = 37;</code>
+     * @param value The stateKind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateKind(int value) {
+
+      stateKind_ = value;
+      bitField1_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 state_kind = 37;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStateKind() {
+      bitField1_ = (bitField1_ & ~0x00000010);
+      stateKind_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private double applicationChance_ ;
+    /**
+     * <code>double application_chance = 38;</code>
+     * @return The applicationChance.
+     */
+    @java.lang.Override
+    public double getApplicationChance() {
+      return applicationChance_;
+    }
+    /**
+     * <code>double application_chance = 38;</code>
+     * @param value The applicationChance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setApplicationChance(double value) {
+
+      applicationChance_ = value;
+      bitField1_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double application_chance = 38;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearApplicationChance() {
+      bitField1_ = (bitField1_ & ~0x00000020);
+      applicationChance_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object requiredTag_ = "";
+    /**
+     * <code>string required_tag = 39;</code>
+     * @return The requiredTag.
+     */
+    public java.lang.String getRequiredTag() {
+      java.lang.Object ref = requiredTag_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        requiredTag_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string required_tag = 39;</code>
+     * @return The bytes for requiredTag.
+     */
+    public com.google.protobuf.ByteString
+        getRequiredTagBytes() {
+      java.lang.Object ref = requiredTag_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        requiredTag_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string required_tag = 39;</code>
+     * @param value The requiredTag to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRequiredTag(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      requiredTag_ = value;
+      bitField1_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string required_tag = 39;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRequiredTag() {
+      requiredTag_ = getDefaultInstance().getRequiredTag();
+      bitField1_ = (bitField1_ & ~0x00000040);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string required_tag = 39;</code>
+     * @param value The bytes for requiredTag to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRequiredTagBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      requiredTag_ = value;
+      bitField1_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object secondRequiredTag_ = "";
+    /**
+     * <code>string second_required_tag = 40;</code>
+     * @return The secondRequiredTag.
+     */
+    public java.lang.String getSecondRequiredTag() {
+      java.lang.Object ref = secondRequiredTag_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        secondRequiredTag_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string second_required_tag = 40;</code>
+     * @return The bytes for secondRequiredTag.
+     */
+    public com.google.protobuf.ByteString
+        getSecondRequiredTagBytes() {
+      java.lang.Object ref = secondRequiredTag_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        secondRequiredTag_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string second_required_tag = 40;</code>
+     * @param value The secondRequiredTag to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecondRequiredTag(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      secondRequiredTag_ = value;
+      bitField1_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string second_required_tag = 40;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSecondRequiredTag() {
+      secondRequiredTag_ = getDefaultInstance().getSecondRequiredTag();
+      bitField1_ = (bitField1_ & ~0x00000080);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string second_required_tag = 40;</code>
+     * @param value The bytes for secondRequiredTag to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecondRequiredTagBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      secondRequiredTag_ = value;
+      bitField1_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+
+    private double conditionalBonus_ ;
+    /**
+     * <code>double conditional_bonus = 41;</code>
+     * @return The conditionalBonus.
+     */
+    @java.lang.Override
+    public double getConditionalBonus() {
+      return conditionalBonus_;
+    }
+    /**
+     * <code>double conditional_bonus = 41;</code>
+     * @param value The conditionalBonus to set.
+     * @return This builder for chaining.
+     */
+    public Builder setConditionalBonus(double value) {
+
+      conditionalBonus_ = value;
+      bitField1_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double conditional_bonus = 41;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearConditionalBonus() {
+      bitField1_ = (bitField1_ & ~0x00000100);
+      conditionalBonus_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private double secondaryRatio_ ;
+    /**
+     * <code>double secondary_ratio = 42;</code>
+     * @return The secondaryRatio.
+     */
+    @java.lang.Override
+    public double getSecondaryRatio() {
+      return secondaryRatio_;
+    }
+    /**
+     * <code>double secondary_ratio = 42;</code>
+     * @param value The secondaryRatio to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSecondaryRatio(double value) {
+
+      secondaryRatio_ = value;
+      bitField1_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double secondary_ratio = 42;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSecondaryRatio() {
+      bitField1_ = (bitField1_ & ~0x00000200);
+      secondaryRatio_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private int effectCount_ ;
+    /**
+     * <code>uint32 effect_count = 43;</code>
+     * @return The effectCount.
+     */
+    @java.lang.Override
+    public int getEffectCount() {
+      return effectCount_;
+    }
+    /**
+     * <code>uint32 effect_count = 43;</code>
+     * @param value The effectCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEffectCount(int value) {
+
+      effectCount_ = value;
+      bitField1_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 effect_count = 43;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEffectCount() {
+      bitField1_ = (bitField1_ & ~0x00000400);
+      effectCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int targetCount_ ;
+    /**
+     * <code>uint32 target_count = 44;</code>
+     * @return The targetCount.
+     */
+    @java.lang.Override
+    public int getTargetCount() {
+      return targetCount_;
+    }
+    /**
+     * <code>uint32 target_count = 44;</code>
+     * @param value The targetCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTargetCount(int value) {
+
+      targetCount_ = value;
+      bitField1_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 target_count = 44;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTargetCount() {
+      bitField1_ = (bitField1_ & ~0x00000800);
+      targetCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int petTargetCount_ ;
+    /**
+     * <code>uint32 pet_target_count = 45;</code>
+     * @return The petTargetCount.
+     */
+    @java.lang.Override
+    public int getPetTargetCount() {
+      return petTargetCount_;
+    }
+    /**
+     * <code>uint32 pet_target_count = 45;</code>
+     * @param value The petTargetCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPetTargetCount(int value) {
+
+      petTargetCount_ = value;
+      bitField1_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 pet_target_count = 45;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPetTargetCount() {
+      bitField1_ = (bitField1_ & ~0x00001000);
+      petTargetCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int stackKey_ ;
+    /**
+     * <code>uint32 stack_key = 46;</code>
+     * @return The stackKey.
+     */
+    @java.lang.Override
+    public int getStackKey() {
+      return stackKey_;
+    }
+    /**
+     * <code>uint32 stack_key = 46;</code>
+     * @param value The stackKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStackKey(int value) {
+
+      stackKey_ = value;
+      bitField1_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 stack_key = 46;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStackKey() {
+      bitField1_ = (bitField1_ & ~0x00002000);
+      stackKey_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int refreshPolicy_ ;
+    /**
+     * <code>uint32 refresh_policy = 47;</code>
+     * @return The refreshPolicy.
+     */
+    @java.lang.Override
+    public int getRefreshPolicy() {
+      return refreshPolicy_;
+    }
+    /**
+     * <code>uint32 refresh_policy = 47;</code>
+     * @param value The refreshPolicy to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRefreshPolicy(int value) {
+
+      refreshPolicy_ = value;
+      bitField1_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 refresh_policy = 47;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRefreshPolicy() {
+      bitField1_ = (bitField1_ & ~0x00004000);
+      refreshPolicy_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int keepOnDeath_ ;
+    /**
+     * <code>uint32 keep_on_death = 48;</code>
+     * @return The keepOnDeath.
+     */
+    @java.lang.Override
+    public int getKeepOnDeath() {
+      return keepOnDeath_;
+    }
+    /**
+     * <code>uint32 keep_on_death = 48;</code>
+     * @param value The keepOnDeath to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKeepOnDeath(int value) {
+
+      keepOnDeath_ = value;
+      bitField1_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 keep_on_death = 48;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKeepOnDeath() {
+      bitField1_ = (bitField1_ & ~0x00008000);
+      keepOnDeath_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int effectPriority_ ;
+    /**
+     * <code>uint32 effect_priority = 49;</code>
+     * @return The effectPriority.
+     */
+    @java.lang.Override
+    public int getEffectPriority() {
+      return effectPriority_;
+    }
+    /**
+     * <code>uint32 effect_priority = 49;</code>
+     * @param value The effectPriority to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEffectPriority(int value) {
+
+      effectPriority_ = value;
+      bitField1_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 effect_priority = 49;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEffectPriority() {
+      bitField1_ = (bitField1_ & ~0x00010000);
+      effectPriority_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int startRound_ ;
+    /**
+     * <code>uint32 start_round = 50;</code>
+     * @return The startRound.
+     */
+    @java.lang.Override
+    public int getStartRound() {
+      return startRound_;
+    }
+    /**
+     * <code>uint32 start_round = 50;</code>
+     * @param value The startRound to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStartRound(int value) {
+
+      startRound_ = value;
+      bitField1_ |= 0x00020000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 start_round = 50;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStartRound() {
+      bitField1_ = (bitField1_ & ~0x00020000);
+      startRound_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int stackLimit_ ;
+    /**
+     * <code>uint32 stack_limit = 51;</code>
+     * @return The stackLimit.
+     */
+    @java.lang.Override
+    public int getStackLimit() {
+      return stackLimit_;
+    }
+    /**
+     * <code>uint32 stack_limit = 51;</code>
+     * @param value The stackLimit to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStackLimit(int value) {
+
+      stackLimit_ = value;
+      bitField1_ |= 0x00040000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 stack_limit = 51;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStackLimit() {
+      bitField1_ = (bitField1_ & ~0x00040000);
+      stackLimit_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int requireLivingCaster_ ;
+    /**
+     * <code>uint32 require_living_caster = 52;</code>
+     * @return The requireLivingCaster.
+     */
+    @java.lang.Override
+    public int getRequireLivingCaster() {
+      return requireLivingCaster_;
+    }
+    /**
+     * <code>uint32 require_living_caster = 52;</code>
+     * @param value The requireLivingCaster to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRequireLivingCaster(int value) {
+
+      requireLivingCaster_ = value;
+      bitField1_ |= 0x00080000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 require_living_caster = 52;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRequireLivingCaster() {
+      bitField1_ = (bitField1_ & ~0x00080000);
+      requireLivingCaster_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int tickOnApply_ ;
+    /**
+     * <code>uint32 tick_on_apply = 53;</code>
+     * @return The tickOnApply.
+     */
+    @java.lang.Override
+    public int getTickOnApply() {
+      return tickOnApply_;
+    }
+    /**
+     * <code>uint32 tick_on_apply = 53;</code>
+     * @param value The tickOnApply to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTickOnApply(int value) {
+
+      tickOnApply_ = value;
+      bitField1_ |= 0x00100000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 tick_on_apply = 53;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTickOnApply() {
+      bitField1_ = (bitField1_ & ~0x00100000);
+      tickOnApply_ = 0;
       onChanged();
       return this;
     }

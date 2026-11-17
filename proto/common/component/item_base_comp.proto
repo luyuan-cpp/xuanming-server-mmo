@@ -33,11 +33,18 @@ message EquipGem
 // 这一段随 ItemComp.equip / ItemEntry.equip 整份搬运,穿脱、存档、跨区都不用再逐字段跟。
 // 强化 / 镶嵌只改 has_equip() 的实例;不要为了写这两个字段对未初始化的实例调 mutable_equip()
 // —— 那会把「没掷过属性」变成「已初始化」。
+// V1 固定词条只保存选择；槽位 1/2 是词条位身份，不是装备穿戴位置。
+message EquipFixedAffix {
+  uint32 slot = 1;
+  uint32 affix_id = 2; // EquipV1Affix.id；数值与显示由规则表提供。
+}
+
 message EquipInstanceData
 {
 	repeated EquipAffix affixes = 1;
 	uint32 enhance_level = 2;	// 强化等级(+N),0 = 未强化。入库的只有「+几」,加成按 EquipEnhance 表现查
 	repeated EquipGem gems = 3;	// 已镶嵌宝石;同一 socket 至多一条
+	repeated EquipFixedAffix fixed_affixes = 4; // V1 首次安装的固定词条，不与旧颜色档混用。
 }
 
 message ItemComp

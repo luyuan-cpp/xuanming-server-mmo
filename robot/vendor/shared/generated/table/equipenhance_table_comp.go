@@ -41,6 +41,14 @@ type EquipEnhanceMaterial_countComp struct {
     Value uint32
 }
 
+type EquipEnhanceProfile_idComp struct {
+    Value uint32
+}
+
+type EquipEnhanceLevelComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -72,5 +80,13 @@ func MakeEquipEnhanceMaterial_idComp(row *pb.EquipEnhanceTable) EquipEnhanceMate
 
 func MakeEquipEnhanceMaterial_countComp(row *pb.EquipEnhanceTable) EquipEnhanceMaterial_countComp {
     return EquipEnhanceMaterial_countComp{Value: row.MaterialCount}
+}
+
+func MakeEquipEnhanceProfile_idComp(row *pb.EquipEnhanceTable) EquipEnhanceProfile_idComp {
+    return EquipEnhanceProfile_idComp{Value: row.ProfileId}
+}
+
+func MakeEquipEnhanceLevelComp(row *pb.EquipEnhanceTable) EquipEnhanceLevelComp {
+    return EquipEnhanceLevelComp{Value: row.Level}
 }
 

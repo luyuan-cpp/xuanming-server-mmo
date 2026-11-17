@@ -530,8 +530,11 @@ func (x *BaseAttributesComp) GetSpeed() uint64 {
 
 // Player level comp, manages level and level-related features
 type LevelComp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Level         uint32                 `protobuf:"varint,1,opt,name=level,proto3" json:"level,omitempty"` // Player level
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Level uint32                 `protobuf:"varint,1,opt,name=level,proto3" json:"level,omitempty"` // Player level
+	// 已实际入账的累计角色经验，与等级一起持久化。升级曲线尚未开放，入账不自行改等级；
+	// GM 调级也不清空累计经验。旧存档缺字段时从 0 开始，不把历史已结算奖励自动重放。
+	TotalExp      uint64 `protobuf:"varint,2,opt,name=total_exp,json=totalExp,proto3" json:"total_exp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -569,6 +572,13 @@ func (*LevelComp) Descriptor() ([]byte, []int) {
 func (x *LevelComp) GetLevel() uint32 {
 	if x != nil {
 		return x.Level
+	}
+	return 0
+}
+
+func (x *LevelComp) GetTotalExp() uint64 {
+	if x != nil {
+		return x.TotalExp
 	}
 	return 0
 }
@@ -661,9 +671,10 @@ const file_proto_common_component_actor_comp_proto_rawDesc = "" +
 	"\n" +
 	"resistance\x18\a \x01(\x04R\n" +
 	"resistance\x12\x14\n" +
-	"\x05speed\x18\b \x01(\x04R\x05speed\"!\n" +
+	"\x05speed\x18\b \x01(\x04R\x05speed\">\n" +
 	"\tLevelComp\x12\x14\n" +
-	"\x05level\x18\x01 \x01(\rR\x05level\"\x8d\x01\n" +
+	"\x05level\x18\x01 \x01(\rR\x05level\x12\x1b\n" +
+	"\ttotal_exp\x18\x02 \x01(\x04R\btotalExp\"\x8d\x01\n" +
 	"\x0eActorStateComp\x12=\n" +
 	"\n" +
 	"state_list\x18\x01 \x03(\v2\x1e.ActorStateComp.StateListEntryR\tstateList\x1a<\n" +

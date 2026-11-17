@@ -20,7 +20,7 @@ Java 独立仓 `D:/luyuan/xuanming-server-mmo` 在本机不存在，本批配表
 支持多套加点方案(切换 / 新开 / 改名)、自动加点推荐、按池洗点。
 
 **非目标(一期不做)**:
-- 经验与升级曲线(本系统只消费 `LevelComp.level`,不产出等级;升级由未来的经验系统触发 `PlayerUpgradeEvent`,本系统只监听);
+- 升级曲线与自动升级(本系统只消费 `LevelComp.level`,不产出等级；战斗经验已在结算时计入 `LevelComp.total_exp`，未来接入曲线后复用等级变化副作用);
 - 洗点道具 / 分池部分洗点(只做整池重置 + 金币);
 - 丹药写入 `bonus_values` 的具体来源(尚无写入方)；装备已由装备栏现算加入重算，不写回该持久字段；
 
@@ -319,7 +319,7 @@ message PlayerAttributeComp {
 
 ## 8. 已知缺口
 
-- **经验系统未接**:等级只能靠 `GmSetPlayerLevel` 改;战斗引擎已产出 `exp_gain`,落地待经验系统。
+- **经验入账与升级分开**（2026-11-15）：战斗结算的 `exp_gain` 已与金币、物品、收件箱账本同一次存盘计入 `LevelComp.total_exp`，近期战果同时记实际入账额；重复投递不重复加。旧存档累计值从 0 开始，不重放历史已经 APPLIED 的金币和物品。累计经验使用 uint64，溢出或缺失加载组件时整笔延后。没有策划升级曲线，当前不根据经验猜测等级，GM 调级也不清空累计值；自动升级仍待曲线落地。
 - **`class_id` 下发 scene 已打通(2026-09-13,commit f5983bd86)**:login 入场前 `backfillPlayerIdentity`(`player_class_backfill.go`;2026-09-20 B3a-2 起同一次 CAS 也补名字,原名 `backfillPlayerClass`)
   把账号角色记录里的职业补进 `PlayerAllData.uint32_pb_component.class`,scene 加载后 `ResolveClassRow` / `AutoAllocate` /
   `FindAllocRatio` 按真实职业取行，当前破军全投力量拿标准基础物伤的 +125%。账号记录里职业本身为 0 的老号不猜测职业，仍走 `class_id=0` 兜底档。

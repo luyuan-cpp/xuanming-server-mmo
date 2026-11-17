@@ -23,22 +23,24 @@ public static partial class ItemTableReflection {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
           "ChBpdGVtX3RhYmxlLnByb3RvIj4KDUl0ZW1iYXNlX2F0dHISFAoMYmFzZV9h",
-          "dHRyX2lkGAEgASgNEhcKD2Jhc2VfYXR0cl92YWx1ZRgCIAEoDSK0AgoJSXRl",
+          "dHRyX2lkGAEgASgNEhcKD2Jhc2VfYXR0cl92YWx1ZRgCIAEoDSKZAwoJSXRl",
           "bVRhYmxlEgoKAmlkGAEgASgNEhYKDm1heF9zdGFja19zaXplGAIgASgNEhIK",
           "CmVxdWlwX2tpbmQYAyABKA0SFQoNYmF0dGxlX3VzYWJsZRgEIAEoDRIWCg5i",
           "YXR0bGVfaGVhbF9ocBgFIAEoBBIWCg5iYXR0bGVfaGVhbF9tcBgGIAEoBBIM",
           "CgRuYW1lGAcgASgJEhMKC2Rlc2NyaXB0aW9uGAggASgJEhAKCGljb25fa2V5",
           "GAkgASgJEhMKC2VxdWlwX2xldmVsGAogASgNEhMKC2VxdWlwX2NsYXNzGAsg",
-          "ASgNEhIKCmFmZml4X3Bvb2wYDCABKA0SEgoKYWZmaXhfcnVsZRgNIAEoDRIh",
-          "CgliYXNlX2F0dHIYDiADKAsyDi5JdGVtYmFzZV9hdHRyIikKDUl0ZW1UYWJs",
-          "ZURhdGESGAoEZGF0YRgBIAMoCzIKLkl0ZW1UYWJsZUI7Cg5jb20uZ2FtZS50",
-          "YWJsZUITSXRlbVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFi",
-          "bGViBnByb3RvMw=="));
+          "ASgNEhIKCmFmZml4X3Bvb2wYDCABKA0SEgoKYWZmaXhfcnVsZRgNIAEoDRIV",
+          "Cg1lcXVpcF9wcm9maWxlGA8gASgNEhkKEWZvcmdlX21hdGVyaWFsX2lkGBAg",
+          "ASgNEhwKFGZvcmdlX21hdGVyaWFsX2NvdW50GBEgASgNEhMKC2FydGlmYWN0",
+          "X2lkGBIgASgNEiEKCWJhc2VfYXR0chgOIAMoCzIOLkl0ZW1iYXNlX2F0dHIi",
+          "KQoNSXRlbVRhYmxlRGF0YRIYCgRkYXRhGAEgAygLMgouSXRlbVRhYmxlQjsK",
+          "DmNvbS5nYW1lLnRhYmxlQhNJdGVtVGFibGVPdXRlckNsYXNzUAFaEmdlbmVy",
+          "YXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
           new pbr::GeneratedClrTypeInfo(typeof(global::Itembase_attr), global::Itembase_attr.Parser, new[]{ "BaseAttrId", "BaseAttrValue" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::ItemTable), global::ItemTable.Parser, new[]{ "Id", "MaxStackSize", "EquipKind", "BattleUsable", "BattleHealHp", "BattleHealMp", "Name", "Description", "IconKey", "EquipLevel", "EquipClass", "AffixPool", "AffixRule", "BaseAttr" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::ItemTable), global::ItemTable.Parser, new[]{ "Id", "MaxStackSize", "EquipKind", "BattleUsable", "BattleHealHp", "BattleHealMp", "Name", "Description", "IconKey", "EquipLevel", "EquipClass", "AffixPool", "AffixRule", "EquipProfile", "ForgeMaterialId", "ForgeMaterialCount", "ArtifactId", "BaseAttr" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::ItemTableData), global::ItemTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -329,6 +331,10 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     equipClass_ = other.equipClass_;
     affixPool_ = other.affixPool_;
     affixRule_ = other.affixRule_;
+    equipProfile_ = other.equipProfile_;
+    forgeMaterialId_ = other.forgeMaterialId_;
+    forgeMaterialCount_ = other.forgeMaterialCount_;
+    artifactId_ = other.artifactId_;
     baseAttr_ = other.baseAttr_.Clone();
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
@@ -495,6 +501,54 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     }
   }
 
+  /// <summary>Field number for the "equip_profile" field.</summary>
+  public const int EquipProfileFieldNumber = 15;
+  private uint equipProfile_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint EquipProfile {
+    get { return equipProfile_; }
+    set {
+      equipProfile_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "forge_material_id" field.</summary>
+  public const int ForgeMaterialIdFieldNumber = 16;
+  private uint forgeMaterialId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ForgeMaterialId {
+    get { return forgeMaterialId_; }
+    set {
+      forgeMaterialId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "forge_material_count" field.</summary>
+  public const int ForgeMaterialCountFieldNumber = 17;
+  private uint forgeMaterialCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ForgeMaterialCount {
+    get { return forgeMaterialCount_; }
+    set {
+      forgeMaterialCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "artifact_id" field.</summary>
+  public const int ArtifactIdFieldNumber = 18;
+  private uint artifactId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ArtifactId {
+    get { return artifactId_; }
+    set {
+      artifactId_ = value;
+    }
+  }
+
   /// <summary>Field number for the "base_attr" field.</summary>
   public const int BaseAttrFieldNumber = 14;
   private static readonly pb::FieldCodec<global::Itembase_attr> _repeated_baseAttr_codec
@@ -534,6 +588,10 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     if (EquipClass != other.EquipClass) return false;
     if (AffixPool != other.AffixPool) return false;
     if (AffixRule != other.AffixRule) return false;
+    if (EquipProfile != other.EquipProfile) return false;
+    if (ForgeMaterialId != other.ForgeMaterialId) return false;
+    if (ForgeMaterialCount != other.ForgeMaterialCount) return false;
+    if (ArtifactId != other.ArtifactId) return false;
     if(!baseAttr_.Equals(other.baseAttr_)) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
@@ -555,6 +613,10 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     if (EquipClass != 0) hash ^= EquipClass.GetHashCode();
     if (AffixPool != 0) hash ^= AffixPool.GetHashCode();
     if (AffixRule != 0) hash ^= AffixRule.GetHashCode();
+    if (EquipProfile != 0) hash ^= EquipProfile.GetHashCode();
+    if (ForgeMaterialId != 0) hash ^= ForgeMaterialId.GetHashCode();
+    if (ForgeMaterialCount != 0) hash ^= ForgeMaterialCount.GetHashCode();
+    if (ArtifactId != 0) hash ^= ArtifactId.GetHashCode();
     hash ^= baseAttr_.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
@@ -627,6 +689,22 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
       output.WriteUInt32(AffixRule);
     }
     baseAttr_.WriteTo(output, _repeated_baseAttr_codec);
+    if (EquipProfile != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(EquipProfile);
+    }
+    if (ForgeMaterialId != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(ForgeMaterialId);
+    }
+    if (ForgeMaterialCount != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(ForgeMaterialCount);
+    }
+    if (ArtifactId != 0) {
+      output.WriteRawTag(144, 1);
+      output.WriteUInt32(ArtifactId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -690,6 +768,22 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
       output.WriteUInt32(AffixRule);
     }
     baseAttr_.WriteTo(ref output, _repeated_baseAttr_codec);
+    if (EquipProfile != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(EquipProfile);
+    }
+    if (ForgeMaterialId != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(ForgeMaterialId);
+    }
+    if (ForgeMaterialCount != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(ForgeMaterialCount);
+    }
+    if (ArtifactId != 0) {
+      output.WriteRawTag(144, 1);
+      output.WriteUInt32(ArtifactId);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -738,6 +832,18 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     }
     if (AffixRule != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AffixRule);
+    }
+    if (EquipProfile != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(EquipProfile);
+    }
+    if (ForgeMaterialId != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ForgeMaterialId);
+    }
+    if (ForgeMaterialCount != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ForgeMaterialCount);
+    }
+    if (ArtifactId != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ArtifactId);
     }
     size += baseAttr_.CalculateSize(_repeated_baseAttr_codec);
     if (_unknownFields != null) {
@@ -790,6 +896,18 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     }
     if (other.AffixRule != 0) {
       AffixRule = other.AffixRule;
+    }
+    if (other.EquipProfile != 0) {
+      EquipProfile = other.EquipProfile;
+    }
+    if (other.ForgeMaterialId != 0) {
+      ForgeMaterialId = other.ForgeMaterialId;
+    }
+    if (other.ForgeMaterialCount != 0) {
+      ForgeMaterialCount = other.ForgeMaterialCount;
+    }
+    if (other.ArtifactId != 0) {
+      ArtifactId = other.ArtifactId;
     }
     baseAttr_.Add(other.baseAttr_);
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -867,6 +985,22 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
           baseAttr_.AddEntriesFrom(input, _repeated_baseAttr_codec);
           break;
         }
+        case 120: {
+          EquipProfile = input.ReadUInt32();
+          break;
+        }
+        case 128: {
+          ForgeMaterialId = input.ReadUInt32();
+          break;
+        }
+        case 136: {
+          ForgeMaterialCount = input.ReadUInt32();
+          break;
+        }
+        case 144: {
+          ArtifactId = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -940,6 +1074,22 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
         }
         case 114: {
           baseAttr_.AddEntriesFrom(ref input, _repeated_baseAttr_codec);
+          break;
+        }
+        case 120: {
+          EquipProfile = input.ReadUInt32();
+          break;
+        }
+        case 128: {
+          ForgeMaterialId = input.ReadUInt32();
+          break;
+        }
+        case 136: {
+          ForgeMaterialCount = input.ReadUInt32();
+          break;
+        }
+        case 144: {
+          ArtifactId = input.ReadUInt32();
           break;
         }
       }

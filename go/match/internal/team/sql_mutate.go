@@ -241,9 +241,11 @@ func sqlMutationResponse(caller uint64, kind OpKind, result *MutateResult) *team
 		}
 	}
 	if result.Commit != nil {
-		view, _ := viewFromCommit(result.Commit, caller, nil, nil)
-		return &teampb.TeamResponse{ErrorMessage: tipOf(code, result.CodeParam), Team: view}
+		if view, ok := viewFromCommit(result.Commit, caller, nil, nil); ok {
+			return &teampb.TeamResponse{ErrorMessage: tipOf(code, result.CodeParam), Team: view}
+		}
 	}
+	// 申请人没有加入名册，提交集里没有他；同一事务读取的自身索引仍可构建他的无队视图。
 	view, _ := viewFromSnapshot(&result.Snapshot, nil, nil)
 	return &teampb.TeamResponse{ErrorMessage: tipOf(code, result.CodeParam), Team: view}
 }

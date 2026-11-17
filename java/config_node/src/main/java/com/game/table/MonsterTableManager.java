@@ -31,16 +31,21 @@ public class MonsterTableManager {
 
 
 
+        final Map<Integer, List<MonsterTable>> idxCapturePetTableId;
+
 
         Snapshot(MonsterTableData data,
-                 Map<Integer, MonsterTable> kvData) {
+                 Map<Integer, MonsterTable> kvData,
+                 Map<Integer, List<MonsterTable>> idxCapturePetTableId) {
             this.data = data;
             this.kvData = kvData;
+            this.idxCapturePetTableId = idxCapturePetTableId;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             MonsterTableData.getDefaultInstance(),
+            Collections.emptyMap(),
             Collections.emptyMap()
     );
 
@@ -60,12 +65,14 @@ public class MonsterTableManager {
         MonsterTableData data = builder.build();
 
         Map<Integer, MonsterTable> kvData = new HashMap<>(data.getDataCount());
+        Map<Integer, List<MonsterTable>> idxCapturePetTableId = new HashMap<>();
 
         for (MonsterTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
+            idxCapturePetTableId.computeIfAbsent(row.getCapturePetTableId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData);
+        this.snapshot = new Snapshot(data, kvData, idxCapturePetTableId);
     }
 
     public MonsterTableData findAll() {
@@ -87,7 +94,13 @@ public class MonsterTableManager {
 
 
 
+    public List<MonsterTable> getByCapturePetTableId(int key) {
+        return snapshot.idxCapturePetTableId.getOrDefault(key, Collections.emptyList());
+    }
 
+
+
+    // FK: capture_pet_table_id → Pet.id
 
 
     // ---- Exists ----
@@ -106,6 +119,10 @@ public class MonsterTableManager {
 
 
 
+
+    public int countByCapturePetTableIdIndex(int key) {
+        return snapshot.idxCapturePetTableId.getOrDefault(key, Collections.emptyList()).size();
+    }
 
 
     // ---- FindByIds (IN) ----

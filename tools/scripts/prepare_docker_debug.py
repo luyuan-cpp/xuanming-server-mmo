@@ -27,16 +27,19 @@ GO_CONFIGS = {
     "scene_manager": "scene_manager_service.yaml",
     "client_rpc_router": "client_rpc_router.yaml",
     "match": "match_service.yaml",
+    "rank": "rank.yaml",
     # 全球匹配成局的个人结算写进收件箱，scene 再从这里拉取。
     "player_inbox": "player_inbox.yaml",
 }
 SERVICE_IP_OFFSETS = {
     "login": 10, "db": 11, "data_service": 12, "player_locator": 13,
     "scene_manager": 14, "client_rpc_router": 15, "match": 16, "player_inbox": 17,
+    "rank": 18,
     "gate": 30, "scene": 31, "battle": 32,
 }
 # 观战两把密钥、存盘接口密钥、匹配链路四把密钥、账号目录四把调用方密钥和角色护栏九把密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
 ADDITIVE_SECRET_NAMES = ("SPECTATE_TOKEN_SECRET", "MATCH_OPS_CALLER_SECRET", "PLAYER_STORE_SCENE_SECRET",
+                         "RANK_PRODUCER_SECRET_ADMIN", "MAIL_PRODUCER_SECRET_RANK",
                          "MATCH_PROBE_SECRET", "RANK_PRODUCER_SECRET_MATCH", "MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "MMORPG_PLAYER_INBOX_SECRET_MATCH",
                          "MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN", "MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE",
                          "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE", "MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER",
@@ -598,7 +601,7 @@ def prepare(args: argparse.Namespace, stack: ExitStack, original: bytes | None =
         listen_host = str(subnet.network_address + SERVICE_IP_OFFSETS[service]) if service in ("scene_manager", "player_locator") else "0.0.0.0"
         config["ListenOn"] = listen_host + ":" + config["ListenOn"].rsplit(":", 1)[1]
         config["Mode"] = "dev"
-        if service in ("login", "player_locator", "scene_manager"):
+        if service in ("login", "player_locator", "scene_manager", "rank"):
             config["TableDir"] = "/generated/tables"
         if "SnowflakeCacheDir" in config:
             config["SnowflakeCacheDir"] = "/tmp/snowflake"
@@ -635,8 +638,14 @@ def prepare(args: argparse.Namespace, stack: ExitStack, original: bytes | None =
     scene_manager["WorldChannelCountByConfId"] = {}
     match = configs["match"]
     # 匹配只有 SQL 权威一条路径：连 compose 的 MySQL，库由 mysql-init 预建，表由 match-migrate 建。
-    match["GlobalMatch"].update(Backend="mysql", Host="mysql:3306", User="root")
+    match["GlobalMatch"].update(Backend="mysql", Host="mysql:3306", User="root", RankEndpoint="rank:51100")
     match.pop("MatchRedis", None)
+    rank = configs["rank"]
+    rank.update(Backend="mysql", AdvertiseHost="rank")
+    rank["Etcd"]["Key"] = ""
+    rank["DataServiceRpc"]["Endpoints"] = ["data-service:9000"]
+    # 实时积分榜无需等邮件服上线；封榜奖励由 rank 的持久队列重试。
+    rank["MailRpc"].update(Endpoints=["mail:50900"], NonBlock=True)
     player_inbox = configs["player_inbox"]
     # 独占库由 mysql-init 预建，表由 player-inbox-migrate 建；常驻账号同样来自注册步骤写的运行配置。
     player_inbox["MySQL"].update(Backend="mysql", Host="mysql:3306")

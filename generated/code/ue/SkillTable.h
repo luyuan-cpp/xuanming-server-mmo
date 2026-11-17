@@ -38,6 +38,10 @@ struct FCfgSkillSnapshot
 	/// 每行在同一个值下**最多出现一次**:数组里重复填同一个值(配置表里很常见,
 	/// 定长数组补位就会)不该让这一行在结果里重复 N 遍。
 	TMap<int32, TArray<int32>> EffectValueIndex;
+	/// init_effect[] 的元素值 -> 含有该值的全部行下标。
+	/// 每行在同一个值下**最多出现一次**:数组里重复填同一个值(配置表里很常见,
+	/// 定长数组补位就会)不该让这一行在结果里重复 N 遍。
+	TMap<int32, TArray<int32>> InitEffectValueIndex;
 };
 
 /**
@@ -177,6 +181,16 @@ public:
 	const TMap<int32, TArray<int32>>& GetEffectIndex() const
 	{
 		return Snapshot->EffectValueIndex;
+	}
+
+	/// init_effect[] 里含有 Value 的全部行。同一行只出现一次,
+	/// 哪怕它的 init_effect[] 里填了好几个同样的值。
+	TArray<const FCfgSkillRow*> GetRowsByInitEffect(int32 Value) const;
+	/// 含有 Value 的**行数**(不是值出现的次数)。
+	int32 CountByInitEffectIndex(int32 Value) const;
+	const TMap<int32, TArray<int32>>& GetInitEffectIndex() const
+	{
+		return Snapshot->InitEffectValueIndex;
 	}
 
 	// ---- 复合键 ----

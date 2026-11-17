@@ -104,8 +104,13 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 }
 
 func (s *Service) resumeSQLTeamLaunch(ctx context.Context, caller uint64, launch *teampb.TeamLaunchRecord) *teampb.TeamResponse {
+	data, err := authority.DecodeTeamLaunch(launch)
+	if err != nil {
+		return s.respond(ctx, caller, ErrInternal, 0)
+	}
+	var code uint32
 	if launch.State == 5 && launch.BattleId == 0 {
-		return s.respond(ctx, caller, ErrStateChanged, 0)
+		code = ErrStateChanged
 	}
 	if launch.State == 1 {
 		formation, err := s.starter.ReserveSQLTeamMatch(ctx, launch)
@@ -116,18 +121,12 @@ func (s *Service) resumeSQLTeamLaunch(ctx context.Context, caller uint64, launch
 			launch.BattleId, launch.State = formation.BattleId, 3
 		}
 	}
-	response := s.respond(ctx, caller, 0, 0)
-	if launch.BattleId != 0 {
-		formation, err := s.svcCtx.Authority.Formation(ctx, launch.BattleId)
-		if err != nil {
-			return s.respond(ctx, caller, ErrInternal, 0)
-		}
-		data, err := authority.DecodeTeamLaunch(launch)
-		if err != nil {
-			return s.respond(ctx, caller, ErrInternal, 0)
-		}
-		response.MatchIntent = &teampb.TeamMatchIntent{RequestId: data.Original.Request.RequestId, BattleId: formation.BattleId, State: formation.State}
+	response := s.respond(ctx, caller, code, 0)
+	intent, err := s.svcCtx.Authority.TeamMatchIntent(ctx, caller, data.Original.Request.RequestId)
+	if err != nil {
+		return s.respond(ctx, caller, ErrInternal, 0)
 	}
+	response.MatchIntent = intent
 	return response
 }
 

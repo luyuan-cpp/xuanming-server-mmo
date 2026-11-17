@@ -120,7 +120,9 @@ std::string EncodeExportTraceServiceRequest(const OtlpResource& resource, std::s
     }
 
     std::string body;
-    request.SerializeToString(&body);
+    if (!request.SerializeToString(&body)) {
+        return {};
+    }
     return body;
 }
 

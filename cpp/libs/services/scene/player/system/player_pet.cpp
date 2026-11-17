@@ -2,6 +2,8 @@
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <algorithm>
+#include <cassert>
+#include <unordered_set>
 #include <limits>
 #include <optional>
 #include <utility>
@@ -17,12 +19,16 @@
 
 #include "battle/system/player_battle.h"
 #include "modules/currency/constants/currency.h"
+#include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/comp/player_ownership_comp.h"
 #include "player/system/attribute_allocation_rules.h"
 #include "player/system/pet_rules.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_skill.h"
+#include "services/battle/system/class_skill_rules.h"
 
 #include "rpc/service_metadata/player_pet_service_metadata.h"
 #include "table/code/attributeautoplan_table.h"
@@ -30,14 +36,17 @@
 #include "table/code/attributepool_table.h"
 #include "table/code/pet_table.h"
 #include "table/code/petrule_table.h"
+#include "table/code/skill_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/pet_error_tip.pb.h"
+#include "table/proto/tip/skill_error_tip.pb.h"
 
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/scene/player_pet.pb.h"
+#include "proto/scene/player_skill.pb.h"
 
 namespace {
 
@@ -97,22 +106,32 @@ std::vector<const AttributeDimensionTable*> PetDimensions(uint32_t poolId) {
 	return result;
 }
 
-// 宝宝实际可用的技能 = 种类自带(PetTable.skill)∪ 实例已学(PetInstance.skill_table_ids)。
-// 面板和战斗快照必须走这同一个函数:早先面板现读表、快照读实例副本,改表之后两边就分叉,
-// 玩家在面板上看到的技能和它在战斗里真正会放的不是一回事。
-// (核心线还没有技能书,实例那半边恒空;字段留着是给二期的学习入口。)
+uint32_t PetEffectiveLevel(const PetInstance& pet, const PetTable* row);
+
+uint32_t StoredSkillRank(const PetInstance& pet, const PetTable& species, uint32_t skillId) {
+	if (const auto it = pet.skill_ranks().find(skillId); it != pet.skill_ranks().end()) return it->second;
+	// 原有种类技能/已学 ID 没有等级字段，按已学一重解释，不修改存档。
+	return std::find(species.skill().begin(), species.skill().end(), skillId) != species.skill().end() ||
+		std::find(pet.skill_table_ids().begin(), pet.skill_table_ids().end(), skillId) != pet.skill_table_ids().end() ? 1u : 0u;
+}
+
+// 面板、派生属性与战斗快照共用同一份有资格且已学的集合，不借分类数限制技能数量。
 std::vector<uint32_t> ResolveSkills(const PetInstance& pet, const PetTable& row) {
 	std::vector<uint32_t> skills;
-	for (int i = 0; i < row.skill_size(); ++i) {
-		if (row.skill(i) != 0) {
-			skills.push_back(row.skill(i));
-		}
-	}
-	for (const auto skillTableId : pet.skill_table_ids()) {
-		if (skillTableId != 0 &&
-			std::find(skills.begin(), skills.end(), skillTableId) == skills.end()) {
-			skills.push_back(skillTableId);
-		}
+	std::vector<uint32_t> candidates(row.skill().begin(), row.skill().end());
+	candidates.insert(candidates.end(), pet.skill_table_ids().begin(), pet.skill_table_ids().end());
+	for (const auto& [id, rank] : pet.skill_ranks()) candidates.push_back(id);
+	std::sort(candidates.begin(), candidates.end());
+	candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+	for (const auto id : candidates) {
+		const auto* skill = SkillTableManager::Instance().FindByIdSilent(id).first;
+		if (skill == nullptr) continue;
+		if (skill->battle_model() != 0) {
+			if (!PlayerSkillSystem::IsFreeSkillFor(*skill, 2) ||
+				classskill::EffectiveRank(StoredSkillRank(pet, row, id), PetEffectiveLevel(pet, &row),
+					skill->unlock_level(), skill->max_rank()) == 0) continue;
+		} else if (skill->class_id() != 0) continue;
+		skills.push_back(id);
 	}
 	return skills;
 }
@@ -355,7 +374,31 @@ uint64_t ResetCostFor(const PetInstance& pet, const AttributePoolTable& pool, co
 // 一只宝宝的二级属性:现算,不缓存(见头文件"没有第二份真相")。加点按 BuildDimensionInputs 过门后的生效值算,
 // 所以从不生效状态洗点前后上限不变,HP/MP 也不变(加点统一规则 7)。等级按生效等级(PetEffectiveLevel)。
 petrules::DerivedAttributes ComputeDerived(const PetInstance& pet, const PetTable& row, const AttributePoolTable& pool) {
-	return petrules::ComputeDerived(BaseValuesOf(row), BuildDimensionInputs(pet, pool), PetEffectiveLevel(pet, &row));
+	auto derived = petrules::ComputeDerived(BaseValuesOf(row), BuildDimensionInputs(pet, pool), PetEffectiveLevel(pet, &row));
+	PlayerSkillSystem::PassiveBonus bonus;
+	for (const auto id : ResolveSkills(pet, row)) {
+		const auto* skill = SkillTableManager::Instance().FindByIdSilent(id).first;
+		if (skill == nullptr || !PlayerSkillSystem::IsFreeSkillFor(*skill, 2) || skill->passive_stat().empty()) continue;
+		const auto rank = classskill::EffectiveRank(StoredSkillRank(pet, row, id), PetEffectiveLevel(pet, &row),
+			skill->unlock_level(), skill->max_rank());
+		const auto value = skill->passive_percent() * classskill::PassiveRankFactor(rank);
+		switch (classskill::ParsePassiveStat(skill->passive_stat())) {
+		case classskill::PassiveStat::kDefense: bonus.defense += value; break;
+		case classskill::PassiveStat::kPhysicalAttack: bonus.physicalAttack += value; break;
+		case classskill::PassiveStat::kMagicAttack: bonus.magicAttack += value; break;
+		case classskill::PassiveStat::kMaxHealth: bonus.maxHealth += value; break;
+		case classskill::PassiveStat::kMaxMana: bonus.maxMana += value; break;
+		case classskill::PassiveStat::kSpeed: bonus.speed += value; break;
+		default: break; // 事件被动交给 battle，不能在面板重复计入。
+		}
+	}
+	derived.maxHealth = std::max<uint64_t>(1, classskill::FloorRatio(derived.maxHealth, 1.0 + bonus.maxHealth));
+	derived.maxMana = classskill::FloorRatio(derived.maxMana, 1.0 + bonus.maxMana);
+	derived.physicalAttack = classskill::FloorRatio(derived.physicalAttack, 1.0 + bonus.physicalAttack);
+	derived.magicAttack = classskill::FloorRatio(derived.magicAttack, 1.0 + bonus.magicAttack);
+	derived.defense = classskill::FloorRatio(derived.defense, 1.0 + bonus.defense);
+	derived.speed = classskill::FloorRatio(derived.speed, 1.0 + bonus.speed);
+	return derived;
 }
 
 // 加载期可观测性(只读,不写任何数据):加点不生效、或带着本版本解释不了的键时各打一条 WARN。
@@ -586,6 +629,90 @@ uint32_t PetSystem::BuildList(entt::entity player, PetListInfo& list) {
 		FillPetInfo(player, comp, pet, *pool, *list.add_pets());
 	}
 	return kSuccess;
+}
+
+uint32_t PetSystem::BuildSkillBook(entt::entity player, uint64_t petId, ListSkillsResponse& response) {
+	response.Clear();
+	response.set_pet_id(petId);
+	if (!tlsEcs.actorRegistry.valid(player)) return kEntityIsNull;
+	const auto* comp = FindComp(player);
+	const auto ownerLevel = OwnerLevel(player);
+	if (comp == nullptr || !ownerLevel.has_value()) return kServiceUnavailable;
+	const auto* pet = FindPet(*comp, petId);
+	if (pet == nullptr) return kPetNotFound;
+	const auto* species = PetRow(pet->pet_table_id());
+	if (species == nullptr) return kPetTableRowMissing;
+	const auto level = PetEffectiveLevel(*pet, species);
+	const auto balance = CurrencySystem::GetBalance(player, kCurrencyGold);
+	response.set_player_level(level);
+	response.set_currency_balance(balance);
+	auto* owned = response.mutable_skill_list();
+	for (const auto id : ResolveSkills(*pet, *species)) {
+		auto* entry = owned->add_skill_list();
+		entry->set_skill_table_id(id);
+		entry->set_rank(StoredSkillRank(*pet, *species, id));
+	}
+	std::vector<const SkillTable*> rows;
+	for (const auto& row : SkillTableManager::Instance().FindAll().data()) {
+		if (PlayerSkillSystem::IsFreeSkillFor(row, 2)) rows.push_back(&row);
+	}
+	std::sort(rows.begin(), rows.end(), [](const auto* a, const auto* b) { return a->id() < b->id(); });
+	const auto busy = PlayerBattleSystem::IsInBattle(player) ||
+		tlsEcs.actorRegistry.any_of<PlayerFrozenComp, PlayerTravelHandoffComp>(player) ? kSkillUpgradeBusy :
+		*ownerLevel < level ? kPetOwnerLevelNotEnough : 0u;
+	for (const auto* row : rows) {
+		PlayerSkillSystem::FillCatalogEntry(*row, StoredSkillRank(*pet, *species, row->id()), level,
+			balance, busy, true, *response.add_catalog());
+	}
+	return kSuccess;
+}
+
+void PetSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequest& request, UpgradeSkillResponse& response) {
+	response.Clear();
+	const auto finish = [&](uint32_t tip) {
+		if (tip != 0) response.mutable_error_message()->set_id(tip);
+		if (const auto error = BuildSkillBook(player, request.pet_id(), *response.mutable_state()); error != kSuccess) {
+			response.clear_state();
+			if (tip == 0) response.mutable_error_message()->set_id(error);
+		}
+	};
+	if (!tlsEcs.actorRegistry.valid(player)) { finish(kEntityIsNull); return; }
+	if (!classskill::IsValidUpgradeCount(request.count())) { finish(kSkillUpgradeCountInvalid); return; }
+	auto* comp = FindComp(player);
+	const auto ownerLevel = OwnerLevel(player);
+	if (comp == nullptr || !ownerLevel.has_value()) { finish(kServiceUnavailable); return; }
+	auto* pet = FindPet(*comp, request.pet_id());
+	if (pet == nullptr) { finish(kPetNotFound); return; }
+	const auto* species = PetRow(pet->pet_table_id());
+	const auto* pool = PetPool();
+	if (species == nullptr || pool == nullptr) { finish(kInvalidTableData); return; }
+	const auto* row = SkillTableManager::Instance().FindByIdSilent(request.skill_table_id()).first;
+	if (row == nullptr) { finish(kInvalidTableId); return; }
+	// 与人物修习共用错误语义：未知 ID 与当前主体没有学习资格分别报告。
+	if (!PlayerSkillSystem::IsFreeSkillFor(*row, 2)) { finish(kSkillNotInClass); return; }
+	if (PlayerBattleSystem::IsInBattle(player) ||
+		tlsEcs.actorRegistry.any_of<PlayerFrozenComp, PlayerTravelHandoffComp>(player)) { finish(kSkillUpgradeBusy); return; }
+	const auto level = PetEffectiveLevel(*pet, species);
+	if (*ownerLevel < level) { finish(kPetOwnerLevelNotEnough); return; }
+	const auto rank = StoredSkillRank(*pet, *species, row->id());
+	if (request.expected_rank() != rank) { finish(kSkillRankChanged); return; }
+	const auto plan = classskill::PlanUpgrade(rank, row->max_rank(),
+		classskill::RankLimit(level, row->unlock_level(), row->max_rank()), row->unlock_level(),
+		CurrencySystem::GetBalance(player, kCurrencyGold), request.count());
+	const auto stopTip = plan.stop == classskill::UpgradeStop::kMaxRank ? kSkillMaxRankReached :
+		plan.stop == classskill::UpgradeStop::kLevelLimit ? kSkillLevelNotEnough :
+		plan.stop == classskill::UpgradeStop::kGold ? kSkillGoldNotEnough : 0u;
+	if (plan.steps == 0) { finish(stopTip); return; }
+	const auto before = ComputeDerived(*pet, *species, *pool);
+	if (const auto error = CurrencySystem::DeductCurrency(player, kCurrencyGold,
+		static_cast<int64_t>(plan.totalCost), TX_CURRENCY_DEDUCT, row->id()); error != kSuccess) { finish(error); return; }
+	// 等级与货币同属玩家存盘；旧 ID 和未知等级键保留，不能因当前表解释不了而删资产。
+	(*pet->mutable_skill_ranks())[row->id()] = plan.finalRank;
+	RecalculateOne(player, *ownerLevel, *pet, *pool, RecalcReason::kSkillChanged, &before);
+	response.set_upgraded_count(plan.steps);
+	if (plan.steps < request.count()) response.set_stop_tip_id(stopTip);
+	PushList(player);
+	finish(0);
 }
 
 uint32_t PetSystem::Summon(entt::entity player, uint64_t petId) {
@@ -851,32 +978,10 @@ uint32_t PetSystem::Rename(entt::entity player, uint64_t petId, const std::strin
 	return kSuccess;
 }
 
-uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t& petIdOut) {
-	petIdOut = 0;
-	if (const auto err = CheckWritable(player); err != kSuccess) {
-		return err;
-	}
-	const auto* row = PetRow(petTableId);
-	if (row == nullptr) {
-		return kPetTableRowMissing;
-	}
-	const auto* pool = PetPool();
-	if (pool == nullptr) {
-		return kInvalidTableData;
-	}
-	auto* petComp = FindComp(player);
-	if (petComp == nullptr) {
-		return kServiceUnavailable;  // 缺必需组件 = 服务端故障,FindComp 已记错误
-	}
-	const auto ownerLevel = OwnerLevel(player);
-	if (!ownerLevel.has_value()) {
-		return kServiceUnavailable;
-	}
-	auto& comp = *petComp;
-	if (static_cast<uint32_t>(comp.pets_size()) >= MaxPets()) {
-		return kPetSlotFull;
-	}
-
+namespace {
+// 只生成完整候选，不写玩家组件，不触发存盘。
+uint32_t PrepareNewPet(entt::entity player, const PetTable& row, const AttributePoolTable& pool,
+    uint32_t ownerLevel, PetInstance& candidate) {
 	// 宠物沿用 item 身份域;scene 已退出 Snowflake 初始化,统一经号段取号。
 	// 铸号成功后才新增宠物,段未就绪或已耗尽时不留下半只宝宝。
 	Guid petId = kInvalidGuid;
@@ -886,19 +991,19 @@ uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t&
 		return kPetIdGenerateFailed;
 	}
 
-	auto* pet = comp.add_pets();
+	auto* pet = &candidate;
 	pet->set_pet_id(petId);
-	pet->set_pet_table_id(petTableId);
-	pet->set_level(petrules::EffectiveLevel(*ownerLevel, row->level_cap()));
+	pet->set_pet_table_id(row.id());
+	pet->set_level(petrules::EffectiveLevel(ownerLevel, row.level_cap()));
 	pet->set_created_at(TimeSystem::NowSecondsUTC());
 
 	// 资质:每个维度在 [aptitude_min, aptitude_max] 闭区间独立随机,出生即定终身(洗资质是二期)。
 	// 表缺列/配反时退回基准 10000,宝宝仍然可用,只是没有资质差异。
-	const auto dimensions = PetDimensions(pool->id());
+	const auto dimensions = PetDimensions(pool.id());
 	for (size_t i = 0; i < dimensions.size(); ++i) {
 		const auto index = static_cast<int>(i);
-		uint32_t low = index < row->aptitude_min_size() ? row->aptitude_min(index) : petrules::kAptitudeBase;
-		uint32_t high = index < row->aptitude_max_size() ? row->aptitude_max(index) : petrules::kAptitudeBase;
+		uint32_t low = index < row.aptitude_min_size() ? row.aptitude_min(index) : petrules::kAptitudeBase;
+		uint32_t high = index < row.aptitude_max_size() ? row.aptitude_max(index) : petrules::kAptitudeBase;
 		// 单边缺配(只填了 min 或只填了 max)按另一边取定值:0 资质等于这一维完全不产出,
 		// 绝不是策划留空想要的结果;两边都缺才退回基准
 		if (low == 0 && high == 0) {
@@ -916,19 +1021,164 @@ uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t&
 	}
 
 	// 出生满状态
-	const auto derived = ComputeDerived(*pet, *row, *pool);
+	const auto derived = ComputeDerived(*pet, row, pool);
 	pet->set_health(derived.maxHealth);
 	pet->set_mana(derived.maxMana);
 	// 种类自带技能**不抄进实例**:抄了就是第二份真相,策划改表之后这只宝宝会永远
 	// 停在发放那一刻的技能表。实例里的 skill_table_ids 只留给二期的技能书学习。
 
-	petIdOut = petId;
-	LOG_INFO << "[PlayerPet] Pet granted: player_id=" << tlsEcs.GetPlayerId(player) << " pet_id=" << petId
-			 << " pet_table_id=" << petTableId << " level=" << pet->level();
-	// 宝宝不在背包里,发放不记物品流水,资产流水那个收口带不到它;资质又是掷出来的、出生即定终身。
-	// 所以这里自己请求一次关键进度存盘(约 1 秒内提交):崩溃回档会让玩家丢掉这只宝宝,也让资质有机会重掷(总体方案 §4.5)。
-	PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_granted");
-	return kSuccess;
+    return kSuccess;
+}
+
+bool PetDataKnown(const PlayerPetComp& pets) {
+    if (!pets.GetReflection()->GetUnknownFields(pets).empty()) return false;
+    std::unordered_set<uint64_t> ids;
+    for (const auto& pet : pets.pets()) {
+        if (!pet.GetReflection()->GetUnknownFields(pet).empty() || pet.pet_id() == 0 ||
+            pet.pet_table_id() == 0 || pet.level() == 0 || !ids.insert(pet.pet_id()).second) return false;
+    }
+    return pets.active_pet_id() == 0 || ids.contains(pets.active_pet_id());
+}
+} // namespace
+
+uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t& petIdOut) {
+    petIdOut = 0;
+    if (const auto err = CheckWritable(player); err != kSuccess) return err;
+    const auto* row = PetRow(petTableId);
+    if (row == nullptr) return kPetTableRowMissing;
+    const auto* pool = PetPool();
+    if (pool == nullptr) return kInvalidTableData;
+    auto* comp = FindComp(player);
+    const auto level = OwnerLevel(player);
+    if (comp == nullptr || !level.has_value()) return kServiceUnavailable;
+    if (static_cast<uint32_t>(comp->pets_size()) >= MaxPets()) return kPetSlotFull;
+    PetInstance candidate;
+    if (const auto err = PrepareNewPet(player, *row, *pool, *level, candidate); err != kSuccess) return err;
+    petIdOut = candidate.pet_id();
+    *comp->add_pets() = std::move(candidate);
+    LOG_INFO << "[PlayerPet] Pet granted: player_id=" << tlsEcs.GetPlayerId(player)
+             << " pet_id=" << petIdOut << " pet_table_id=" << petTableId;
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_granted");
+    return kSuccess;
+}
+
+uint64_t PetSystem::NextPurchaseSequence(entt::entity player) {
+    if (!tlsEcs.actorRegistry.valid(player)) return 0;
+    const auto* comp = FindComp(player);
+    if (comp == nullptr || comp->last_purchase_sequence() == std::numeric_limits<uint64_t>::max()) return 0;
+    return comp->last_purchase_sequence() + 1;
+}
+
+uint32_t PetSystem::BuildShop(entt::entity player, GetPetShopResponse& response) {
+    response.Clear();
+    if (!tlsEcs.actorRegistry.valid(player)) return kEntityIsNull;
+    const auto* comp = FindComp(player);
+    if (comp == nullptr || !PetDataKnown(*comp) ||
+        !tlsEcs.actorRegistry.all_of<CurrencyComp, PlayerCurrencyComp>(player)) return kServiceUnavailable;
+    const auto* pool = PetPool();
+    if (pool == nullptr || !pool->GetReflection()->GetUnknownFields(*pool).empty()) return kInvalidTableData;
+    for (const auto& row : PetTableManager::Instance().FindAll().data()) {
+        if (!row.GetReflection()->GetUnknownFields(row).empty() || row.acquisition_tier() != 0 || row.shop_price_gold() == 0 ||
+            row.shop_price_gold() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) continue;
+        auto* offer = response.add_offers();
+        offer->set_pet_table_id(row.id());
+        offer->set_name(row.name());
+        offer->set_model_id(row.model_id());
+        offer->set_unlock_level(row.unlock_level());
+        offer->set_price_gold(row.shop_price_gold());
+        offer->set_desc(row.desc());
+    }
+    response.set_gold(CurrencySystem::GetBalance(player, kCurrencyGold));
+    response.set_next_purchase_sequence(NextPurchaseSequence(player));
+    return kSuccess;
+}
+
+uint32_t PetSystem::BuyPet(entt::entity player, uint32_t petTableId, uint64_t sequence,
+    uint64_t priceGold, uint64_t& petIdOut) {
+    petIdOut = 0;
+    if (const auto err = CheckWritable(player); err != kSuccess) return err;
+    auto* comp = FindComp(player);
+    if (comp == nullptr || !PetDataKnown(*comp)) return kServiceUnavailable;
+    if (sequence == 0) return kInvalidParameter;
+    if (sequence == comp->last_purchase_sequence()) {
+        if (petTableId != comp->last_purchase_pet_table_id() || priceGold != comp->last_purchase_price_gold())
+            return kInvalidParameter;
+        petIdOut = comp->last_purchase_pet_id();
+        return petIdOut != 0 ? kSuccess : kServiceUnavailable;
+    }
+    if (sequence != NextPurchaseSequence(player)) return kInvalidParameter;
+    const auto* row = PetRow(petTableId);
+    if (row == nullptr) return kPetTableRowMissing;
+    if (!row->GetReflection()->GetUnknownFields(*row).empty()) return kInvalidTableData;
+    if (row->acquisition_tier() != 0 || row->shop_price_gold() == 0) return kFeatureUnavailable;
+    if (priceGold != row->shop_price_gold()) return kInvalidParameter;
+    if (priceGold > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return kInvalidTableData;
+    const auto* pool = PetPool();
+    if (pool == nullptr || !pool->GetReflection()->GetUnknownFields(*pool).empty()) return kInvalidTableData;
+    const auto level = OwnerLevel(player);
+    if (!level.has_value() || !tlsEcs.actorRegistry.all_of<CurrencyComp, PlayerCurrencyComp>(player))
+        return kServiceUnavailable;
+    if (*level < row->unlock_level()) return kPetOwnerLevelNotEnough;
+    if (static_cast<uint32_t>(comp->pets_size()) >= MaxPets()) return kPetSlotFull;
+    if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(priceGold))) return kPetGoldNotEnough;
+    PetInstance candidate;
+    if (const auto err = PrepareNewPet(player, *row, *pool, *level, candidate); err != kSuccess) return err;
+    // 扣款前完成发号与候选构造，扣款成功之后只有同一逻辑线程上的无失败提交。
+    if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(priceGold),
+            TX_SHOP_BUY, candidate.pet_id()); err != kSuccess) return err;
+    petIdOut = candidate.pet_id();
+    *comp->add_pets() = std::move(candidate);
+    comp->set_last_purchase_sequence(sequence);
+    comp->set_last_purchase_pet_table_id(petTableId);
+    comp->set_last_purchase_pet_id(petIdOut);
+    comp->set_last_purchase_price_gold(priceGold);
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_purchased");
+    return kSuccess;
+}
+
+uint32_t PetSystem::AvailableCaptureSlots(entt::entity player) {
+    if (!tlsEcs.actorRegistry.valid(player)) return 0;
+    const auto* comp = FindComp(player);
+    const auto* pool = PetPool();
+    if (comp == nullptr || !PetDataKnown(*comp) || pool == nullptr ||
+        !pool->GetReflection()->GetUnknownFields(*pool).empty()) return 0;
+    const auto count = static_cast<uint32_t>(comp->pets_size());
+    return count < MaxPets() ? MaxPets() - count : 0;
+}
+
+uint32_t PetSystem::PrepareCapturedPets(entt::entity player,
+    const google::protobuf::RepeatedField<uint32_t>& petTableIds, std::vector<PetInstance>& out) {
+    out.clear();
+    if (petTableIds.empty()) return kSuccess;
+    if (!tlsEcs.actorRegistry.valid(player)) return kEntityIsNull;
+    const auto* comp = FindComp(player);
+    const auto level = OwnerLevel(player);
+    if (comp == nullptr || !level.has_value() || !PetDataKnown(*comp)) return kServiceUnavailable;
+    const auto* pool = PetPool();
+    if (pool == nullptr || !pool->GetReflection()->GetUnknownFields(*pool).empty()) return kInvalidTableData;
+    if (static_cast<uint32_t>(petTableIds.size()) > AvailableCaptureSlots(player)) return kPetSlotFull;
+    // 整组先校验表和等级，再消耗号源。
+    for (uint32_t id : petTableIds) {
+        const auto* row = PetRow(id);
+        if (row == nullptr) return kPetTableRowMissing;
+        if (!row->GetReflection()->GetUnknownFields(*row).empty()) return kInvalidTableData;
+        if (row->acquisition_tier() != 0) return kFeatureUnavailable;
+        if (*level < row->unlock_level()) return kPetOwnerLevelNotEnough;
+    }
+    for (uint32_t id : petTableIds) {
+        PetInstance candidate;
+        const auto err = PrepareNewPet(player, *PetRow(id), *pool, *level, candidate);
+        if (err != kSuccess) { out.clear(); return err; }
+        out.push_back(std::move(candidate));
+    }
+    return kSuccess;
+}
+
+void PetSystem::CommitCapturedPets(entt::entity player, const std::vector<PetInstance>& pets) {
+    if (pets.empty()) return;
+    auto* comp = FindComp(player);
+    assert(comp != nullptr); // 调用方已完成整笔结算预检，并在同一逻辑线程同步提交。
+    for (const auto& pet : pets) *comp->add_pets() = pet;
 }
 
 uint32_t PetSystem::RemovePetForTrade(entt::entity player, uint64_t petId, PetInstance& snapshotOut) {
@@ -1063,7 +1313,13 @@ bool PetSystem::BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& sn
 	// speed 直接用二级属性:回合引擎的出手序与逃跑判定只读 BaseAttributesComp.speed
 	attributes->set_speed(derived.speed);
 	for (const auto skillTableId : ResolveSkills(*pet, *row)) {
-		snapshot.add_skill_table_ids(skillTableId);
+		const auto* skill = SkillTableManager::Instance().FindByIdSilent(skillTableId).first;
+		if (skill == nullptr) continue;
+		if (PlayerSkillSystem::IsTurnBattleCastable(*skill)) snapshot.add_skill_table_ids(skillTableId);
+		if (skill->battle_model() == 1) {
+			(*snapshot.mutable_skill_ranks())[skillTableId] = classskill::EffectiveRank(
+				StoredSkillRank(*pet, *row, skillTableId), PetEffectiveLevel(*pet, row), skill->unlock_level(), skill->max_rank());
+		}
 	}
 	return true;
 }

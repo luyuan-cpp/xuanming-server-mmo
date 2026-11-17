@@ -16,18 +16,19 @@ import sys
 REPO = Path(__file__).resolve().parents[2]
 STATE = REPO / "build/docker-debug-current"
 CPP = ("gate", "scene", "battle")
-GO = ("login", "db", "data-service", "scene-manager", "player-locator", "client-rpc-router", "match", "player-inbox", "sql-boot", "db-migrate")
+GO = ("login", "db", "data-service", "scene-manager", "player-locator", "client-rpc-router", "match", "rank", "player-inbox", "sql-boot", "db-migrate")
 IMAGE_KEYS = {
     **dict.fromkeys(CPP, "NODE_DEBUG_IMAGE"),
     "login": "LOGIN_IMAGE", "db": "DB_IMAGE", "data-service": "DATA_SERVICE_IMAGE",
     "scene-manager": "SCENE_MANAGER_IMAGE", "player-locator": "PLAYER_LOCATOR_IMAGE",
     "client-rpc-router": "CLIENT_RPC_ROUTER_IMAGE", "match": "MATCH_IMAGE", "player-inbox": "PLAYER_INBOX_IMAGE",
+    "rank": "RANK_IMAGE",
     "gateway": "GATEWAY_IMAGE",
     "sql-boot": "SQL_BOOT_IMAGE",
     "db-migrate": "DB_MIGRATE_IMAGE",
 }
 # 写者的单次启动授权启动即消费：换容器要连注册步骤（compose 的 <服务>-sql-boot）一起重建，只重建服务会被拒启。
-SQL_WRITERS = ("login", "db", "data-service", "match", "player-inbox", "gateway")
+SQL_WRITERS = ("login", "db", "data-service", "match", "rank", "player-inbox", "gateway")
 # 一次性容器没有运行态可核对：重编只换 .env 里的镜像，下一次 up 生效。
 ONE_SHOT = ("sql-boot", "db-migrate")
 DOCKER = ["docker", "--context", "desktop-linux"]

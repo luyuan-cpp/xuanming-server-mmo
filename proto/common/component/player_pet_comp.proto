@@ -27,10 +27,16 @@ message PetInstance {
   uint64 mana = 8;            // 当前法力
   uint64 created_at = 9;      // 获得时间(Unix 秒)
   repeated uint32 skill_table_ids = 10;  // 宝宝技能(SkillTable id),核心线来自 PetTable
+  map<uint32, uint32> skill_ranks = 11; // 公共技能原型的已学等级，由 PetSystem 唯一写入。
 }
 
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 message PlayerPetComp {
   repeated PetInstance pets = 1;
   uint64 active_pet_id = 2;   // 出战中的宝宝 pet_id;0 = 未出战
+  // 商店购买的单调序号与最近成功回执，和扣款、宠物实例一起存盘。
+  uint64 last_purchase_sequence = 3;
+  uint32 last_purchase_pet_table_id = 4;
+  uint64 last_purchase_pet_id = 5;
+  uint64 last_purchase_price_gold = 6;
 }

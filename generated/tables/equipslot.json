@@ -31,6 +31,26 @@
    "equip_kind": 14,
    "id": 6,
    "name": "鞋子"
+  },
+  {
+   "equip_kind": 15,
+   "id": 7,
+   "name": "首饰一"
+  },
+  {
+   "equip_kind": 15,
+   "id": 8,
+   "name": "首饰二"
+  },
+  {
+   "equip_kind": 16,
+   "id": 9,
+   "name": "法宝一"
+  },
+  {
+   "equip_kind": 16,
+   "id": 10,
+   "name": "法宝二"
   }
  ]
 }

@@ -2268,8 +2268,8 @@ TEST_F(PlayerEquipAttributeTest, ReloadFromTheDatabaseRecordRecomputesTheEquipme
 	EXPECT_EQ(Base(player).mana(), base->mana());
 }
 
-// 旧快照只有顶层背包时，也必须先恢复装备再重算派生属性，保留当前气血与法力。
-TEST_F(PlayerEquipAttributeTest, LegacyTopLevelBagReloadRecomputesTheEquipmentBonus)
+// 旧 ItemEntry 没有完整 instance 时，仍从兼容字段恢复装备，再重算属性并保留气血与法力。
+TEST_F(PlayerEquipAttributeTest, LegacyItemEntryReloadRecomputesTheEquipmentBonus)
 {
 	ASSERT_NO_FATAL_FAILURE(WearCombatSet(player));
 	ASSERT_NO_FATAL_FAILURE(TakeOff(player, kGuidClothes));
@@ -2282,10 +2282,22 @@ TEST_F(PlayerEquipAttributeTest, LegacyTopLevelBagReloadRecomputesTheEquipmentBo
 	CompletePersistedComps(player);
 	PlayerAllData saved;
 	ASSERT_TRUE(PlayerAllDataMessageFieldsMarshal(player, saved));
-	saved.mutable_player_database_data()->clear_bag_component();
+	auto *savedBag = saved.mutable_player_database_data()->mutable_bag_component();
+	ASSERT_EQ(4, savedBag->items_size());
+	for (auto &entry : *savedBag->mutable_items())
+	{
+		ASSERT_TRUE(entry.has_instance());
+		ASSERT_TRUE(entry.has_equip());
+		entry.clear_instance();
+	}
 	PlayerAllData parsed;
 	ASSERT_TRUE(parsed.ParseFromString(saved.SerializeAsString()));
-	ASSERT_FALSE(parsed.player_database_data().has_bag_component());
+	ASSERT_TRUE(parsed.player_database_data().has_bag_component());
+	for (const auto &entry : parsed.player_database_data().bag_component().items())
+	{
+		ASSERT_FALSE(entry.has_instance());
+		ASSERT_TRUE(entry.has_equip());
+	}
 
 	const auto restored = tlsEcs.actorRegistry.create();
 	players.push_back(restored);

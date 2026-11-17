@@ -20,6 +20,7 @@ public:
         EquipEnhanceTableData data;
         IdMapType idMap;
         std::unordered_map<uint32_t, std::vector<const EquipEnhanceTable*>> materialIdIndex;
+        std::unordered_map<uint32_t, std::vector<const EquipEnhanceTable*>> profileIdIndex;
     };
 
     static EquipEnhanceTableManager& Instance() {
@@ -59,6 +60,12 @@ public:
         auto it = snapshot->materialIdIndex.find(key);
         return it != snapshot->materialIdIndex.end() ? it->second : kEmpty;
     }
+    const std::unordered_map<uint32_t, std::vector<const EquipEnhanceTable*>>& GetProfileIdIndex() const { return snapshot->profileIdIndex; }
+    const std::vector<const EquipEnhanceTable*>& GetByProfileId(uint32_t key) const {
+        static const std::vector<const EquipEnhanceTable*> kEmpty;
+        auto it = snapshot->profileIdIndex.find(key);
+        return it != snapshot->profileIdIndex.end() ? it->second : kEmpty;
+    }
 
     // ---- Exists ----
 
@@ -70,6 +77,10 @@ public:
     std::size_t CountByMaterialIdIndex(uint32_t key) const {
         auto it = snapshot->materialIdIndex.find(key);
         return it != snapshot->materialIdIndex.end() ? it->second.size() : 0;
+    }
+    std::size_t CountByProfileIdIndex(uint32_t key) const {
+        auto it = snapshot->profileIdIndex.find(key);
+        return it != snapshot->profileIdIndex.end() ? it->second.size() : 0;
     }
 
     // ---- FindByIds (IN) ----

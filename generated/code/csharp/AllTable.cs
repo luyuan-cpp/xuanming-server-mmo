@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 49;
+        public const int TableCount = 51;
 
         private static Action s_loadSuccessCallback;
 
@@ -56,12 +56,14 @@ namespace MmorpgClient.Table
                 DungeonTableManager.FileName(useBinary),
                 EquipAffixPoolTableManager.FileName(useBinary),
                 EquipAffixRuleTableManager.FileName(useBinary),
+                EquipArtifactTableManager.FileName(useBinary),
                 EquipAttributeTableManager.FileName(useBinary),
                 EquipAttributeCapTableManager.FileName(useBinary),
                 EquipEnhanceTableManager.FileName(useBinary),
                 EquipGemTableManager.FileName(useBinary),
                 EquipGemSocketTableManager.FileName(useBinary),
                 EquipSlotTableManager.FileName(useBinary),
+                EquipV1AffixTableManager.FileName(useBinary),
                 GlobalVariableTableManager.FileName(useBinary),
                 GuildActivityTableManager.FileName(useBinary),
                 GuildDonateTableManager.FileName(useBinary),
@@ -112,12 +114,14 @@ namespace MmorpgClient.Table
             DungeonTableManager.Instance.Load(configDir, useBinary);
             EquipAffixPoolTableManager.Instance.Load(configDir, useBinary);
             EquipAffixRuleTableManager.Instance.Load(configDir, useBinary);
+            EquipArtifactTableManager.Instance.Load(configDir, useBinary);
             EquipAttributeTableManager.Instance.Load(configDir, useBinary);
             EquipAttributeCapTableManager.Instance.Load(configDir, useBinary);
             EquipEnhanceTableManager.Instance.Load(configDir, useBinary);
             EquipGemTableManager.Instance.Load(configDir, useBinary);
             EquipGemSocketTableManager.Instance.Load(configDir, useBinary);
             EquipSlotTableManager.Instance.Load(configDir, useBinary);
+            EquipV1AffixTableManager.Instance.Load(configDir, useBinary);
             GlobalVariableTableManager.Instance.Load(configDir, useBinary);
             GuildActivityTableManager.Instance.Load(configDir, useBinary);
             GuildDonateTableManager.Instance.Load(configDir, useBinary);
@@ -203,6 +207,8 @@ namespace MmorpgClient.Table
                 EquipAffixPoolTableManager.Instance.LoadFromBytes, EquipAffixPoolTableManager.Instance.LoadFromJson);
             LoadOne(EquipAffixRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 EquipAffixRuleTableManager.Instance.LoadFromBytes, EquipAffixRuleTableManager.Instance.LoadFromJson);
+            LoadOne(EquipArtifactTableManager.FileName(useBinary), byteProvider, useBinary,
+                EquipArtifactTableManager.Instance.LoadFromBytes, EquipArtifactTableManager.Instance.LoadFromJson);
             LoadOne(EquipAttributeTableManager.FileName(useBinary), byteProvider, useBinary,
                 EquipAttributeTableManager.Instance.LoadFromBytes, EquipAttributeTableManager.Instance.LoadFromJson);
             LoadOne(EquipAttributeCapTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -215,6 +221,8 @@ namespace MmorpgClient.Table
                 EquipGemSocketTableManager.Instance.LoadFromBytes, EquipGemSocketTableManager.Instance.LoadFromJson);
             LoadOne(EquipSlotTableManager.FileName(useBinary), byteProvider, useBinary,
                 EquipSlotTableManager.Instance.LoadFromBytes, EquipSlotTableManager.Instance.LoadFromJson);
+            LoadOne(EquipV1AffixTableManager.FileName(useBinary), byteProvider, useBinary,
+                EquipV1AffixTableManager.Instance.LoadFromBytes, EquipV1AffixTableManager.Instance.LoadFromJson);
             LoadOne(GlobalVariableTableManager.FileName(useBinary), byteProvider, useBinary,
                 GlobalVariableTableManager.Instance.LoadFromBytes, GlobalVariableTableManager.Instance.LoadFromJson);
             LoadOne(GuildActivityTableManager.FileName(useBinary), byteProvider, useBinary,

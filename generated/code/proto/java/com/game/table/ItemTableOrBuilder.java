@@ -107,6 +107,30 @@ public interface ItemTableOrBuilder extends
   int getAffixRule();
 
   /**
+   * <code>uint32 equip_profile = 15;</code>
+   * @return The equipProfile.
+   */
+  int getEquipProfile();
+
+  /**
+   * <code>uint32 forge_material_id = 16;</code>
+   * @return The forgeMaterialId.
+   */
+  int getForgeMaterialId();
+
+  /**
+   * <code>uint32 forge_material_count = 17;</code>
+   * @return The forgeMaterialCount.
+   */
+  int getForgeMaterialCount();
+
+  /**
+   * <code>uint32 artifact_id = 18;</code>
+   * @return The artifactId.
+   */
+  int getArtifactId();
+
+  /**
    * <code>repeated .Itembase_attr base_attr = 14;</code>
    */
   java.util.List<com.game.table.Itembase_attr> 

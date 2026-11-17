@@ -42,6 +42,7 @@ message SkillUsedS2C
 
 // List skills request
 message ListSkillsRequest {
+  uint64 pet_id = 1; // 0 查人物；非 0 查会话所属宝宝的完整技能目录。
 }
 
 // List skills response
@@ -54,6 +55,7 @@ message ListSkillsResponse {
   uint32 player_level = 4;
   uint32 class_id = 5;
   uint64 currency_balance = 6;              // 修习货币余额(CurrencySystem kCurrencyGold,客户端称"银两")
+  uint64 pet_id = 7; // 返回本次目录主体，防止切换人物/宝宝后的迟到响应覆盖界面。
 }
 
 // 技能书的一行:配置表的展示投影 + 本角色的等级与可修习性。数值真源是 Skill 表与服务端规则,
@@ -77,6 +79,10 @@ message SkillCatalogEntry {
   uint64 next_rank_cost = 16;     // 再修一重的价格;已满重为 0
   uint32 upgrade_block_tip_id = 17; // 0 = 现在可以修习一重;否则为不能修习的原因(tip 码,skill_error 段)
   uint32 duration_rounds = 18;    // 附带增益 / 减益的持续回合;没有为 0
+  bool allow_dead_target = 19; // 仅复生类配置允许选择倒地单位，普通治疗不能选尸体。
+  uint32 ability_kind = 20; // 1主动、2被动、3追击、4开场。
+  uint32 caster_mask = 21; // 1人物、2宝宝；按施法者资格区分。
+  uint32 action_tags = 22; // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
 }
 
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。
@@ -84,6 +90,7 @@ message UpgradeSkillRequest {
   uint32 skill_table_id = 1;
   uint32 expected_rank = 2;       // 客户端看到的当前等级;与服务端不一致整笔拒绝(旧请求重放不会再扣一次)
   uint32 count = 3;               // 只收 1 或 10;10 次在满重 / 等级上限 / 余额不足处提前停
+  uint64 pet_id = 4; // 0 修习人物技能；非 0 必须属于当前会话玩家。
 }
 
 message UpgradeSkillResponse {

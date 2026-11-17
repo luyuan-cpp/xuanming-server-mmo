@@ -78,6 +78,130 @@ struct BuffBonus_damageComp {
     std::string_view value;
 };
 
+struct BuffBattle_opComp {
+    uint32_t value;
+};
+
+struct BuffTrigger_eventComp {
+    uint32_t value;
+};
+
+struct BuffEffect_targetComp {
+    uint32_t value;
+};
+
+struct BuffFlat_valueComp {
+    double value;
+};
+
+struct BuffPer_levelComp {
+    double value;
+};
+
+struct BuffRatioComp {
+    double value;
+};
+
+struct BuffValue_basisComp {
+    uint32_t value;
+};
+
+struct BuffDamage_filterComp {
+    uint32_t value;
+};
+
+struct BuffDuration_roundsComp {
+    uint32_t value;
+};
+
+struct BuffTick_countComp {
+    uint32_t value;
+};
+
+struct BuffTrigger_chanceComp {
+    double value;
+};
+
+struct BuffPer_round_limitComp {
+    uint32_t value;
+};
+
+struct BuffHit_limitComp {
+    uint32_t value;
+};
+
+struct BuffModifier_statComp {
+    uint32_t value;
+};
+
+struct BuffState_kindComp {
+    uint32_t value;
+};
+
+struct BuffApplication_chanceComp {
+    double value;
+};
+
+struct BuffRequired_tagComp {
+    std::string_view value;
+};
+
+struct BuffSecond_required_tagComp {
+    std::string_view value;
+};
+
+struct BuffConditional_bonusComp {
+    double value;
+};
+
+struct BuffSecondary_ratioComp {
+    double value;
+};
+
+struct BuffEffect_countComp {
+    uint32_t value;
+};
+
+struct BuffTarget_countComp {
+    uint32_t value;
+};
+
+struct BuffPet_target_countComp {
+    uint32_t value;
+};
+
+struct BuffStack_keyComp {
+    uint32_t value;
+};
+
+struct BuffRefresh_policyComp {
+    uint32_t value;
+};
+
+struct BuffKeep_on_deathComp {
+    uint32_t value;
+};
+
+struct BuffEffect_priorityComp {
+    uint32_t value;
+};
+
+struct BuffStart_roundComp {
+    uint32_t value;
+};
+
+struct BuffStack_limitComp {
+    uint32_t value;
+};
+
+struct BuffRequire_living_casterComp {
+    uint32_t value;
+};
+
+struct BuffTick_on_applyComp {
+    uint32_t value;
+};
+
 struct BuffInterval_effectComp {
     std::span<const double> values;
 };
@@ -142,6 +266,99 @@ inline BuffTimeComp MakeBuffTimeComp(const BuffTable& row) {
 }
 inline BuffBonus_damageComp MakeBuffBonus_damageComp(const BuffTable& row) {
     return { std::string_view(row.bonus_damage()) };
+}
+inline BuffBattle_opComp MakeBuffBattle_opComp(const BuffTable& row) {
+    return { row.battle_op() };
+}
+inline BuffTrigger_eventComp MakeBuffTrigger_eventComp(const BuffTable& row) {
+    return { row.trigger_event() };
+}
+inline BuffEffect_targetComp MakeBuffEffect_targetComp(const BuffTable& row) {
+    return { row.effect_target() };
+}
+inline BuffFlat_valueComp MakeBuffFlat_valueComp(const BuffTable& row) {
+    return { row.flat_value() };
+}
+inline BuffPer_levelComp MakeBuffPer_levelComp(const BuffTable& row) {
+    return { row.per_level() };
+}
+inline BuffRatioComp MakeBuffRatioComp(const BuffTable& row) {
+    return { row.ratio() };
+}
+inline BuffValue_basisComp MakeBuffValue_basisComp(const BuffTable& row) {
+    return { row.value_basis() };
+}
+inline BuffDamage_filterComp MakeBuffDamage_filterComp(const BuffTable& row) {
+    return { row.damage_filter() };
+}
+inline BuffDuration_roundsComp MakeBuffDuration_roundsComp(const BuffTable& row) {
+    return { row.duration_rounds() };
+}
+inline BuffTick_countComp MakeBuffTick_countComp(const BuffTable& row) {
+    return { row.tick_count() };
+}
+inline BuffTrigger_chanceComp MakeBuffTrigger_chanceComp(const BuffTable& row) {
+    return { row.trigger_chance() };
+}
+inline BuffPer_round_limitComp MakeBuffPer_round_limitComp(const BuffTable& row) {
+    return { row.per_round_limit() };
+}
+inline BuffHit_limitComp MakeBuffHit_limitComp(const BuffTable& row) {
+    return { row.hit_limit() };
+}
+inline BuffModifier_statComp MakeBuffModifier_statComp(const BuffTable& row) {
+    return { row.modifier_stat() };
+}
+inline BuffState_kindComp MakeBuffState_kindComp(const BuffTable& row) {
+    return { row.state_kind() };
+}
+inline BuffApplication_chanceComp MakeBuffApplication_chanceComp(const BuffTable& row) {
+    return { row.application_chance() };
+}
+inline BuffRequired_tagComp MakeBuffRequired_tagComp(const BuffTable& row) {
+    return { std::string_view(row.required_tag()) };
+}
+inline BuffSecond_required_tagComp MakeBuffSecond_required_tagComp(const BuffTable& row) {
+    return { std::string_view(row.second_required_tag()) };
+}
+inline BuffConditional_bonusComp MakeBuffConditional_bonusComp(const BuffTable& row) {
+    return { row.conditional_bonus() };
+}
+inline BuffSecondary_ratioComp MakeBuffSecondary_ratioComp(const BuffTable& row) {
+    return { row.secondary_ratio() };
+}
+inline BuffEffect_countComp MakeBuffEffect_countComp(const BuffTable& row) {
+    return { row.effect_count() };
+}
+inline BuffTarget_countComp MakeBuffTarget_countComp(const BuffTable& row) {
+    return { row.target_count() };
+}
+inline BuffPet_target_countComp MakeBuffPet_target_countComp(const BuffTable& row) {
+    return { row.pet_target_count() };
+}
+inline BuffStack_keyComp MakeBuffStack_keyComp(const BuffTable& row) {
+    return { row.stack_key() };
+}
+inline BuffRefresh_policyComp MakeBuffRefresh_policyComp(const BuffTable& row) {
+    return { row.refresh_policy() };
+}
+inline BuffKeep_on_deathComp MakeBuffKeep_on_deathComp(const BuffTable& row) {
+    return { row.keep_on_death() };
+}
+inline BuffEffect_priorityComp MakeBuffEffect_priorityComp(const BuffTable& row) {
+    return { row.effect_priority() };
+}
+inline BuffStart_roundComp MakeBuffStart_roundComp(const BuffTable& row) {
+    return { row.start_round() };
+}
+inline BuffStack_limitComp MakeBuffStack_limitComp(const BuffTable& row) {
+    return { row.stack_limit() };
+}
+inline BuffRequire_living_casterComp MakeBuffRequire_living_casterComp(const BuffTable& row) {
+    return { row.require_living_caster() };
+}
+inline BuffTick_on_applyComp MakeBuffTick_on_applyComp(const BuffTable& row) {
+    return { row.tick_on_apply() };
 }
 inline BuffInterval_effectComp MakeBuffInterval_effectComp(const BuffTable& row) {
     const auto& rf = row.interval_effect();

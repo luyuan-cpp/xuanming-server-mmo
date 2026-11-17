@@ -16,7 +16,7 @@ $realRepo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-sql-boot-docker-tests-' + [guid]::NewGuid().ToString('N'))
 $authorityTables = @(Get-LocalSqlBootAuthorityTables)
 # compose 服务名 → 写者清单里的服务名。
-$composeWriters = [ordered]@{ db = 'db'; 'data-service' = 'data_service'; login = 'login'; match = 'match'; 'player-inbox' = 'player_inbox'; gateway = 'gateway' }
+$composeWriters = [ordered]@{ db = 'db'; 'data-service' = 'data_service'; login = 'login'; match = 'match'; rank = 'rank'; 'player-inbox' = 'player_inbox'; gateway = 'gateway' }
 
 function Reset-Fixture {
     $script:Calls = [Collections.Generic.List[object]]::new()
@@ -33,6 +33,7 @@ function Get-FixtureTableRows {
         testdb_ledger = @('transaction_log', 'player_snapshot', 'rollback_audit_log')
         mmorpg_guild = @('guild_trial_launch', 'guild_trial_launch_role', 'guild_trial_lobby', 'guild_trial_lobby_slot', 'schema_migrations')
         mmorpg_match = @('match_authority_ticket', 'match_battle_completion', 'team_launch', 'team_launch_role', 'role_fence', 'schema_migrations')
+        mmorpg_rank = @('rank_board', 'rank_entry', 'schema_migrations')
         mmorpg_player_inbox = @('player_inbox_stream', 'player_inbox_item', 'player_inbox_audit', 'role_fence', 'schema_migrations')
         player_store_1000000_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
     }
@@ -131,6 +132,7 @@ function New-FixturePaths {
     Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'login.yaml') -Value "Node:`n  RedisClient:`n    Host: redis:6379`n    DB: 0`nPlacement:`n  Region: 0`n  StorageShards: 1`n" -NoNewline
     Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'match.yaml') -Value "GlobalMatch:`n  Backend: mysql`n  Host: mysql:3306`n  User: root`n" -NoNewline
     Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'player_inbox.yaml') -Value "MySQL:`n  Host: mysql:3306`n  DBName: mmorpg_player_inbox`n  Backend: mysql`nSchema:`n  AutoMigrate: false`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $paths.ConfigRoot 'rank.yaml') -Value "Backend: mysql`nEtcd:`n  Key: ''`nDSNEnv: MMORPG_RANK_SQL_DSN`n" -NoNewline
     return $paths
 }
 
@@ -409,7 +411,7 @@ try {
     }
     Test-Case 'compose:注册排在全部建表之后,没有共享账号,口令不经 compose 环境' {
         $deps = [regex]::Match($composeText, '(?ms)^x-sql-boot-deps: &sql-boot-deps\r?\n.*?(?=^\S|\z)').Value
-        foreach ($name in @('sql-boot', 'db-migrate', 'data-migrate', 'match-migrate', 'player-inbox-migrate')) {
+        foreach ($name in @('sql-boot', 'db-migrate', 'data-migrate', 'match-migrate', 'rank-migrate', 'player-inbox-migrate')) {
             Assert-Match $deps "(?s)$name`:\s+condition: service_completed_successfully" "等 $name"
         }
         # match 不再核 guild 的表,这个栈不常驻 guild,不用借它的镜像建表。
@@ -463,7 +465,7 @@ try {
         Assert-Match $manifest 'name: MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: account-directory-scene, optional: false\}' '与 match.yaml 同一写法'
     }
     Test-Case 'compose.debug:Go 写者的调试器接在入口脚本后面,data-migrate 不再覆盖入口' {
-        foreach ($composeName in @('login', 'db', 'data-service', 'match', 'player-inbox')) {
+        foreach ($composeName in @('login', 'db', 'data-service', 'match', 'rank', 'player-inbox')) {
             $block = Get-ComposeBlock $debugText $composeName
             Assert-True ($block.Contains('command: [/usr/local/bin/dlv, exec, /app/service,')) "$composeName 走 dlv"
             Assert-True ($block.Contains("/run/sql-writer/runtime/$($composeWriters[$composeName]).yaml")) "$composeName 读每 boot 配置"

@@ -106,4 +106,12 @@ struct FCfgPetRow : public FTableRowBase
 	/** 自带技能(SkillTable id) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
 	TArray<int32> skill;
+
+	/** 宠物商店银两售价，0 表示不上架。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
+	int64 shop_price_gold = 0;
+
+	/** 获取类别：0普通（银两/捕捉），1变异（令牌兑换），2神兽（充值抽奖）。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
+	int32 acquisition_tier = 0;
 };

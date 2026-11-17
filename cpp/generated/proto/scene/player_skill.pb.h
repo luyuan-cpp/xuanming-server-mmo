@@ -21,7 +21,6 @@
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/arenastring.h"
-#include "google/protobuf/generated_message_bases.h"
 #include "google/protobuf/generated_message_tctable_decl.h"
 #include "google/protobuf/generated_message_util.h"
 #include "google/protobuf/metadata_lite.h"
@@ -294,6 +293,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeSkillRequest final : public 
   enum : int {
     kSkillTableIdFieldNumber = 1,
     kExpectedRankFieldNumber = 2,
+    kPetIdFieldNumber = 4,
     kCountFieldNumber = 3,
   };
   // uint32 skill_table_id = 1;
@@ -316,6 +316,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeSkillRequest final : public 
   void _internal_set_expected_rank(::uint32_t value);
 
   public:
+  // uint64 pet_id = 4;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
   // uint32 count = 3;
   void clear_count() ;
   [[nodiscard]] ::uint32_t count() const;
@@ -330,7 +340,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeSkillRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -361,6 +371,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeSkillRequest final : public 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t skill_table_id_;
     ::uint32_t expected_rank_;
+    ::uint64_t pet_id_;
     ::uint32_t count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -772,18 +783,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
     kCategoryFieldNumber = 6,
     kSkillTableIdFieldNumber = 1,
     kClassIdFieldNumber = 5,
-    kPassiveFieldNumber = 7,
     kTargetTeamFieldNumber = 8,
     kMaxTargetsFieldNumber = 9,
     kUnlockLevelFieldNumber = 10,
     kMaxRankFieldNumber = 11,
     kRankFieldNumber = 12,
-    kManaPercentFieldNumber = 14,
     kRankLimitFieldNumber = 13,
+    kPassiveFieldNumber = 7,
+    kAllowDeadTargetFieldNumber = 19,
     kCooldownRoundsFieldNumber = 15,
+    kManaPercentFieldNumber = 14,
     kNextRankCostFieldNumber = 16,
     kUpgradeBlockTipIdFieldNumber = 17,
     kDurationRoundsFieldNumber = 18,
+    kAbilityKindFieldNumber = 20,
+    kCasterMaskFieldNumber = 21,
+    kActionTagsFieldNumber = 22,
   };
   // string name = 2;
   void clear_name() ;
@@ -865,16 +880,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
   void _internal_set_class_id(::uint32_t value);
 
   public:
-  // bool passive = 7;
-  void clear_passive() ;
-  [[nodiscard]] bool passive() const;
-  void set_passive(bool value);
-
-  private:
-  bool _internal_passive() const;
-  void _internal_set_passive(bool value);
-
-  public:
   // uint32 target_team = 8;
   void clear_target_team() ;
   [[nodiscard]] ::uint32_t target_team() const;
@@ -925,16 +930,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
   void _internal_set_rank(::uint32_t value);
 
   public:
-  // double mana_percent = 14;
-  void clear_mana_percent() ;
-  [[nodiscard]] double mana_percent() const;
-  void set_mana_percent(double value);
-
-  private:
-  double _internal_mana_percent() const;
-  void _internal_set_mana_percent(double value);
-
-  public:
   // uint32 rank_limit = 13;
   void clear_rank_limit() ;
   [[nodiscard]] ::uint32_t rank_limit() const;
@@ -945,6 +940,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
   void _internal_set_rank_limit(::uint32_t value);
 
   public:
+  // bool passive = 7;
+  void clear_passive() ;
+  [[nodiscard]] bool passive() const;
+  void set_passive(bool value);
+
+  private:
+  bool _internal_passive() const;
+  void _internal_set_passive(bool value);
+
+  public:
+  // bool allow_dead_target = 19;
+  void clear_allow_dead_target() ;
+  [[nodiscard]] bool allow_dead_target() const;
+  void set_allow_dead_target(bool value);
+
+  private:
+  bool _internal_allow_dead_target() const;
+  void _internal_set_allow_dead_target(bool value);
+
+  public:
   // uint32 cooldown_rounds = 15;
   void clear_cooldown_rounds() ;
   [[nodiscard]] ::uint32_t cooldown_rounds() const;
@@ -953,6 +968,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
   private:
   ::uint32_t _internal_cooldown_rounds() const;
   void _internal_set_cooldown_rounds(::uint32_t value);
+
+  public:
+  // double mana_percent = 14;
+  void clear_mana_percent() ;
+  [[nodiscard]] double mana_percent() const;
+  void set_mana_percent(double value);
+
+  private:
+  double _internal_mana_percent() const;
+  void _internal_set_mana_percent(double value);
 
   public:
   // uint64 next_rank_cost = 16;
@@ -985,11 +1010,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
   void _internal_set_duration_rounds(::uint32_t value);
 
   public:
+  // uint32 ability_kind = 20;
+  void clear_ability_kind() ;
+  [[nodiscard]] ::uint32_t ability_kind() const;
+  void set_ability_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ability_kind() const;
+  void _internal_set_ability_kind(::uint32_t value);
+
+  public:
+  // uint32 caster_mask = 21;
+  void clear_caster_mask() ;
+  [[nodiscard]] ::uint32_t caster_mask() const;
+  void set_caster_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_caster_mask() const;
+  void _internal_set_caster_mask(::uint32_t value);
+
+  public:
+  // uint32 action_tags = 22;
+  void clear_action_tags() ;
+  [[nodiscard]] ::uint32_t action_tags() const;
+  void set_action_tags(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_action_tags() const;
+  void _internal_set_action_tags(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillCatalogEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 18,
+      ::google::protobuf::internal::TcParseTable<5, 22,
                           0, 73,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1024,18 +1079,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
     ::google::protobuf::internal::ArenaStringPtr category_;
     ::uint32_t skill_table_id_;
     ::uint32_t class_id_;
-    bool passive_;
     ::uint32_t target_team_;
     ::uint32_t max_targets_;
     ::uint32_t unlock_level_;
     ::uint32_t max_rank_;
     ::uint32_t rank_;
-    double mana_percent_;
     ::uint32_t rank_limit_;
+    bool passive_;
+    bool allow_dead_target_;
     ::uint32_t cooldown_rounds_;
+    double mana_percent_;
     ::uint64_t next_rank_cost_;
     ::uint32_t upgrade_block_tip_id_;
     ::uint32_t duration_rounds_;
+    ::uint32_t ability_kind_;
+    ::uint32_t caster_mask_;
+    ::uint32_t action_tags_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1043,10 +1102,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:ListSkillsRequest) */ {
  public:
   inline ListSkillsRequest() : ListSkillsRequest(nullptr) {}
+  ~ListSkillsRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
   void operator delete(ListSkillsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
@@ -1118,17 +1178,50 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsRequest final : public ::
 
   [[nodiscard]] ListSkillsRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<ListSkillsRequest>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<ListSkillsRequest>(arena);
   }
-  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
-  inline void CopyFrom(const ListSkillsRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
-  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
-  void MergeFrom(const ListSkillsRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListSkillsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListSkillsRequest& from) { ListSkillsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
 
   public:
   [[nodiscard]] bool IsInitialized() const {
     return true;
   }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListSkillsRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
@@ -1156,11 +1249,24 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsRequest final : public ::
   // nested types ----------------------------------------------------
 
   // accessors -------------------------------------------------------
+  enum : int {
+    kPetIdFieldNumber = 1,
+  };
+  // uint64 pet_id = 1;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ListSkillsRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 0,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1177,6 +1283,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsRequest final : public ::
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListSkillsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t pet_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
 };
 // -------------------------------------------------------------------
@@ -2057,6 +2179,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsResponse final : public :
     kPlayerLevelFieldNumber = 4,
     kClassIdFieldNumber = 5,
     kCurrencyBalanceFieldNumber = 6,
+    kPetIdFieldNumber = 7,
   };
   // repeated .SkillCatalogEntry catalog = 3;
   [[nodiscard]] int catalog_size()
@@ -2141,11 +2264,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsResponse final : public :
   void _internal_set_currency_balance(::uint64_t value);
 
   public:
+  // uint64 pet_id = 7;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ListSkillsResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2180,6 +2313,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsResponse final : public :
     ::uint32_t player_level_;
     ::uint32_t class_id_;
     ::uint64_t currency_balance_;
+    ::uint64_t pet_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3225,6 +3359,30 @@ inline void SkillUsedS2C::_internal_set_time_stamp(::uint64_t value) {
 
 // ListSkillsRequest
 
+// uint64 pet_id = 1;
+inline void ListSkillsRequest::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ListSkillsRequest::pet_id() const {
+  // @@protoc_insertion_point(field_get:ListSkillsRequest.pet_id)
+  return _internal_pet_id();
+}
+inline void ListSkillsRequest::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ListSkillsRequest.pet_id)
+}
+inline ::uint64_t ListSkillsRequest::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void ListSkillsRequest::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ListSkillsResponse
@@ -3542,6 +3700,30 @@ inline void ListSkillsResponse::_internal_set_currency_balance(::uint64_t value)
   _impl_.currency_balance_ = value;
 }
 
+// uint64 pet_id = 7;
+inline void ListSkillsResponse::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t ListSkillsResponse::pet_id() const {
+  // @@protoc_insertion_point(field_get:ListSkillsResponse.pet_id)
+  return _internal_pet_id();
+}
+inline void ListSkillsResponse::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ListSkillsResponse.pet_id)
+}
+inline ::uint64_t ListSkillsResponse::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void ListSkillsResponse::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // SkillCatalogEntry
@@ -3854,7 +4036,7 @@ inline void SkillCatalogEntry::set_allocated_category(::std::string* PROTOBUF_NU
 inline void SkillCatalogEntry::clear_passive() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.passive_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline bool SkillCatalogEntry::passive() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.passive)
@@ -3862,7 +4044,7 @@ inline bool SkillCatalogEntry::passive() const {
 }
 inline void SkillCatalogEntry::set_passive(bool value) {
   _internal_set_passive(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.passive)
 }
 inline bool SkillCatalogEntry::_internal_passive() const {
@@ -3878,7 +4060,7 @@ inline void SkillCatalogEntry::_internal_set_passive(bool value) {
 inline void SkillCatalogEntry::clear_target_team() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_team_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t SkillCatalogEntry::target_team() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.target_team)
@@ -3886,7 +4068,7 @@ inline ::uint32_t SkillCatalogEntry::target_team() const {
 }
 inline void SkillCatalogEntry::set_target_team(::uint32_t value) {
   _internal_set_target_team(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.target_team)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_target_team() const {
@@ -3902,7 +4084,7 @@ inline void SkillCatalogEntry::_internal_set_target_team(::uint32_t value) {
 inline void SkillCatalogEntry::clear_max_targets() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_targets_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t SkillCatalogEntry::max_targets() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.max_targets)
@@ -3910,7 +4092,7 @@ inline ::uint32_t SkillCatalogEntry::max_targets() const {
 }
 inline void SkillCatalogEntry::set_max_targets(::uint32_t value) {
   _internal_set_max_targets(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.max_targets)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_max_targets() const {
@@ -3926,7 +4108,7 @@ inline void SkillCatalogEntry::_internal_set_max_targets(::uint32_t value) {
 inline void SkillCatalogEntry::clear_unlock_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.unlock_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t SkillCatalogEntry::unlock_level() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.unlock_level)
@@ -3934,7 +4116,7 @@ inline ::uint32_t SkillCatalogEntry::unlock_level() const {
 }
 inline void SkillCatalogEntry::set_unlock_level(::uint32_t value) {
   _internal_set_unlock_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.unlock_level)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_unlock_level() const {
@@ -3950,7 +4132,7 @@ inline void SkillCatalogEntry::_internal_set_unlock_level(::uint32_t value) {
 inline void SkillCatalogEntry::clear_max_rank() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_rank_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t SkillCatalogEntry::max_rank() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.max_rank)
@@ -3958,7 +4140,7 @@ inline ::uint32_t SkillCatalogEntry::max_rank() const {
 }
 inline void SkillCatalogEntry::set_max_rank(::uint32_t value) {
   _internal_set_max_rank(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.max_rank)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_max_rank() const {
@@ -3974,7 +4156,7 @@ inline void SkillCatalogEntry::_internal_set_max_rank(::uint32_t value) {
 inline void SkillCatalogEntry::clear_rank() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rank_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t SkillCatalogEntry::rank() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.rank)
@@ -3982,7 +4164,7 @@ inline ::uint32_t SkillCatalogEntry::rank() const {
 }
 inline void SkillCatalogEntry::set_rank(::uint32_t value) {
   _internal_set_rank(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.rank)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_rank() const {
@@ -3998,7 +4180,7 @@ inline void SkillCatalogEntry::_internal_set_rank(::uint32_t value) {
 inline void SkillCatalogEntry::clear_rank_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rank_limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t SkillCatalogEntry::rank_limit() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.rank_limit)
@@ -4006,7 +4188,7 @@ inline ::uint32_t SkillCatalogEntry::rank_limit() const {
 }
 inline void SkillCatalogEntry::set_rank_limit(::uint32_t value) {
   _internal_set_rank_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.rank_limit)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_rank_limit() const {
@@ -4022,7 +4204,7 @@ inline void SkillCatalogEntry::_internal_set_rank_limit(::uint32_t value) {
 inline void SkillCatalogEntry::clear_mana_percent() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mana_percent_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline double SkillCatalogEntry::mana_percent() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.mana_percent)
@@ -4030,7 +4212,7 @@ inline double SkillCatalogEntry::mana_percent() const {
 }
 inline void SkillCatalogEntry::set_mana_percent(double value) {
   _internal_set_mana_percent(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.mana_percent)
 }
 inline double SkillCatalogEntry::_internal_mana_percent() const {
@@ -4070,7 +4252,7 @@ inline void SkillCatalogEntry::_internal_set_cooldown_rounds(::uint32_t value) {
 inline void SkillCatalogEntry::clear_next_rank_cost() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_rank_cost_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t SkillCatalogEntry::next_rank_cost() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.next_rank_cost)
@@ -4078,7 +4260,7 @@ inline ::uint64_t SkillCatalogEntry::next_rank_cost() const {
 }
 inline void SkillCatalogEntry::set_next_rank_cost(::uint64_t value) {
   _internal_set_next_rank_cost(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.next_rank_cost)
 }
 inline ::uint64_t SkillCatalogEntry::_internal_next_rank_cost() const {
@@ -4094,7 +4276,7 @@ inline void SkillCatalogEntry::_internal_set_next_rank_cost(::uint64_t value) {
 inline void SkillCatalogEntry::clear_upgrade_block_tip_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.upgrade_block_tip_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t SkillCatalogEntry::upgrade_block_tip_id() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.upgrade_block_tip_id)
@@ -4102,7 +4284,7 @@ inline ::uint32_t SkillCatalogEntry::upgrade_block_tip_id() const {
 }
 inline void SkillCatalogEntry::set_upgrade_block_tip_id(::uint32_t value) {
   _internal_set_upgrade_block_tip_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.upgrade_block_tip_id)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_upgrade_block_tip_id() const {
@@ -4118,7 +4300,7 @@ inline void SkillCatalogEntry::_internal_set_upgrade_block_tip_id(::uint32_t val
 inline void SkillCatalogEntry::clear_duration_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.duration_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t SkillCatalogEntry::duration_rounds() const {
   // @@protoc_insertion_point(field_get:SkillCatalogEntry.duration_rounds)
@@ -4126,7 +4308,7 @@ inline ::uint32_t SkillCatalogEntry::duration_rounds() const {
 }
 inline void SkillCatalogEntry::set_duration_rounds(::uint32_t value) {
   _internal_set_duration_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:SkillCatalogEntry.duration_rounds)
 }
 inline ::uint32_t SkillCatalogEntry::_internal_duration_rounds() const {
@@ -4136,6 +4318,102 @@ inline ::uint32_t SkillCatalogEntry::_internal_duration_rounds() const {
 inline void SkillCatalogEntry::_internal_set_duration_rounds(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.duration_rounds_ = value;
+}
+
+// bool allow_dead_target = 19;
+inline void SkillCatalogEntry::clear_allow_dead_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_dead_target_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool SkillCatalogEntry::allow_dead_target() const {
+  // @@protoc_insertion_point(field_get:SkillCatalogEntry.allow_dead_target)
+  return _internal_allow_dead_target();
+}
+inline void SkillCatalogEntry::set_allow_dead_target(bool value) {
+  _internal_set_allow_dead_target(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:SkillCatalogEntry.allow_dead_target)
+}
+inline bool SkillCatalogEntry::_internal_allow_dead_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allow_dead_target_;
+}
+inline void SkillCatalogEntry::_internal_set_allow_dead_target(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_dead_target_ = value;
+}
+
+// uint32 ability_kind = 20;
+inline void SkillCatalogEntry::clear_ability_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ability_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t SkillCatalogEntry::ability_kind() const {
+  // @@protoc_insertion_point(field_get:SkillCatalogEntry.ability_kind)
+  return _internal_ability_kind();
+}
+inline void SkillCatalogEntry::set_ability_kind(::uint32_t value) {
+  _internal_set_ability_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:SkillCatalogEntry.ability_kind)
+}
+inline ::uint32_t SkillCatalogEntry::_internal_ability_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ability_kind_;
+}
+inline void SkillCatalogEntry::_internal_set_ability_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ability_kind_ = value;
+}
+
+// uint32 caster_mask = 21;
+inline void SkillCatalogEntry::clear_caster_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.caster_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t SkillCatalogEntry::caster_mask() const {
+  // @@protoc_insertion_point(field_get:SkillCatalogEntry.caster_mask)
+  return _internal_caster_mask();
+}
+inline void SkillCatalogEntry::set_caster_mask(::uint32_t value) {
+  _internal_set_caster_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:SkillCatalogEntry.caster_mask)
+}
+inline ::uint32_t SkillCatalogEntry::_internal_caster_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.caster_mask_;
+}
+inline void SkillCatalogEntry::_internal_set_caster_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.caster_mask_ = value;
+}
+
+// uint32 action_tags = 22;
+inline void SkillCatalogEntry::clear_action_tags() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.action_tags_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t SkillCatalogEntry::action_tags() const {
+  // @@protoc_insertion_point(field_get:SkillCatalogEntry.action_tags)
+  return _internal_action_tags();
+}
+inline void SkillCatalogEntry::set_action_tags(::uint32_t value) {
+  _internal_set_action_tags(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:SkillCatalogEntry.action_tags)
+}
+inline ::uint32_t SkillCatalogEntry::_internal_action_tags() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.action_tags_;
+}
+inline void SkillCatalogEntry::_internal_set_action_tags(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.action_tags_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4194,7 +4472,7 @@ inline void UpgradeSkillRequest::_internal_set_expected_rank(::uint32_t value) {
 inline void UpgradeSkillRequest::clear_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t UpgradeSkillRequest::count() const {
   // @@protoc_insertion_point(field_get:UpgradeSkillRequest.count)
@@ -4202,7 +4480,7 @@ inline ::uint32_t UpgradeSkillRequest::count() const {
 }
 inline void UpgradeSkillRequest::set_count(::uint32_t value) {
   _internal_set_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:UpgradeSkillRequest.count)
 }
 inline ::uint32_t UpgradeSkillRequest::_internal_count() const {
@@ -4212,6 +4490,30 @@ inline ::uint32_t UpgradeSkillRequest::_internal_count() const {
 inline void UpgradeSkillRequest::_internal_set_count(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.count_ = value;
+}
+
+// uint64 pet_id = 4;
+inline void UpgradeSkillRequest::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t UpgradeSkillRequest::pet_id() const {
+  // @@protoc_insertion_point(field_get:UpgradeSkillRequest.pet_id)
+  return _internal_pet_id();
+}
+inline void UpgradeSkillRequest::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:UpgradeSkillRequest.pet_id)
+}
+inline ::uint64_t UpgradeSkillRequest::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void UpgradeSkillRequest::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
 }
 
 // -------------------------------------------------------------------

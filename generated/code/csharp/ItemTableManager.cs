@@ -68,6 +68,8 @@ namespace MmorpgClient.Table
             public readonly RepeatedField<ItemTable> Rows;
             public readonly Dictionary<uint, ItemTable> KvData;
             public readonly Dictionary<uint, IReadOnlyList<ItemTable>> IdxAffixRule;
+            public readonly Dictionary<uint, IReadOnlyList<ItemTable>> IdxForgeMaterialId;
+            public readonly Dictionary<uint, IReadOnlyList<ItemTable>> IdxArtifactId;
 
             public Snapshot(ItemTableData container, int capacity)
             {
@@ -75,6 +77,8 @@ namespace MmorpgClient.Table
                 Rows = container.Data;
                 KvData = new Dictionary<uint, ItemTable>(capacity);
                 IdxAffixRule = new Dictionary<uint, IReadOnlyList<ItemTable>>();
+                IdxForgeMaterialId = new Dictionary<uint, IReadOnlyList<ItemTable>>();
+                IdxArtifactId = new Dictionary<uint, IReadOnlyList<ItemTable>>();
             }
         }
 
@@ -122,10 +126,14 @@ namespace MmorpgClient.Table
                 ItemTable row = rows[i];
                 snap.KvData[row.Id] = row;
                 Index(snap.IdxAffixRule, row.AffixRule, row);
+                Index(snap.IdxForgeMaterialId, row.ForgeMaterialId, row);
+                Index(snap.IdxArtifactId, row.ArtifactId, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
             Freeze(snap.IdxAffixRule);
+            Freeze(snap.IdxForgeMaterialId);
+            Freeze(snap.IdxArtifactId);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
             _snapshot = snap;
@@ -174,7 +182,23 @@ namespace MmorpgClient.Table
             Snapshot snap = _snapshot;
             return Bucket(snap.IdxAffixRule, key);
         }
+
+        /// <summary>Secondary index lookup on forge_material_id; 未命中返回空集合。</summary>
+        public IReadOnlyList<ItemTable> GetByForgeMaterialId(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxForgeMaterialId, key);
+        }
+
+        /// <summary>Secondary index lookup on artifact_id; 未命中返回空集合。</summary>
+        public IReadOnlyList<ItemTable> GetByArtifactId(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxArtifactId, key);
+        }
         // FK: affix_rule → EquipAffixRule.id
+        // FK: forge_material_id → Item.id
+        // FK: artifact_id → EquipArtifact.id
 
         // ---- Exists ----
 
@@ -197,6 +221,18 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return Bucket(snap.IdxAffixRule, key).Count;
+        }
+
+        public int CountByForgeMaterialIdIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxForgeMaterialId, key).Count;
+        }
+
+        public int CountByArtifactIdIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxArtifactId, key).Count;
         }
 
         // ---- FindByIds (IN) ----

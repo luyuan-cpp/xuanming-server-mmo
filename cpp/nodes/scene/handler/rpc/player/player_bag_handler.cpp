@@ -2,6 +2,7 @@
 #include "player_bag_handler.h"
 
 ///<<< BEGIN WRITING YOUR CODE
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -9,6 +10,7 @@
 #include "player_gm_guard.h"        // GM 客户端指令的 scene 侧第二道锁
 #include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/player_equip.h"
+#include "services/scene/player/system/player_equipment_v1.h"
 #include "services/scene/player/system/player_feature_snapshot.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -97,7 +99,9 @@ void SceneBagClientPlayerHandler::EquipItem(entt::entity player,const ::EquipIte
 		response->mutable_error_message()->set_id(kInvalidParameter);
 		return;
 	}
-	if (const auto err = PlayerEquipSystem::Equip(player, request->item_id()); err != kSuccess)
+	const std::optional<uint32_t> targetSlot = request->has_target_slot()
+		? std::optional<uint32_t>{request->target_slot()} : std::nullopt;
+	if (const auto err = PlayerEquipSystem::Equip(player, request->item_id(), targetSlot); err != kSuccess)
 	{
 		response->mutable_error_message()->set_id(err);
 		return;
@@ -281,4 +285,30 @@ void SceneBagClientPlayerHandler::RetrieveTemporaryItems(entt::entity player,con
 	ReplyInventoryAndTemporary(player, *response);
 ///<<< END WRITING YOUR CODE
 
+}
+
+void SceneBagClientPlayerHandler::GetEquipmentCraftRules(entt::entity player,const ::GetEquipmentCraftRulesRequest* request,
+	::GetEquipmentCraftRulesResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto error = PlayerEquipmentV1System::GetRules(player, *response);
+    if (error != kSuccess) response->mutable_error_message()->set_id(error);
+///<<< END WRITING YOUR CODE
+}
+
+void SceneBagClientPlayerHandler::PreviewEquipmentCraft(entt::entity player,const ::PreviewEquipmentCraftRequest* request,
+	::PreviewEquipmentCraftResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto error = PlayerEquipmentV1System::Preview(player, *request, *response);
+    if (error != kSuccess) response->mutable_error_message()->set_id(error);
+///<<< END WRITING YOUR CODE
+}
+
+void SceneBagClientPlayerHandler::CommitEquipmentCraft(entt::entity player,const ::CommitEquipmentCraftRequest* request,
+	::CommitEquipmentCraftResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PlayerEquipmentV1System::Commit(player, *request, *response);
+///<<< END WRITING YOUR CODE
 }

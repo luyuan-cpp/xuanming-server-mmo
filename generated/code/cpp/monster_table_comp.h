@@ -50,6 +50,14 @@ struct MonsterGold_rewardComp {
     uint64_t value;
 };
 
+struct MonsterCapture_pet_table_idComp {
+    uint32_t value;
+};
+
+struct MonsterCapture_rateComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -81,4 +89,10 @@ inline MonsterExp_rewardComp MakeMonsterExp_rewardComp(const MonsterTable& row) 
 }
 inline MonsterGold_rewardComp MakeMonsterGold_rewardComp(const MonsterTable& row) {
     return { row.gold_reward() };
+}
+inline MonsterCapture_pet_table_idComp MakeMonsterCapture_pet_table_idComp(const MonsterTable& row) {
+    return { row.capture_pet_table_id() };
+}
+inline MonsterCapture_rateComp MakeMonsterCapture_rateComp(const MonsterTable& row) {
+    return { row.capture_rate() };
 }

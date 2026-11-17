@@ -41,6 +41,15 @@ public:
     static void RetrieveTemporaryItems(entt::entity player,
         const ::RetrieveTemporaryItemsRequest* request,
         ::RetrieveTemporaryItemsResponse* response);
+    static void GetEquipmentCraftRules(entt::entity player,
+        const ::GetEquipmentCraftRulesRequest* request,
+        ::GetEquipmentCraftRulesResponse* response);
+    static void PreviewEquipmentCraft(entt::entity player,
+        const ::PreviewEquipmentCraftRequest* request,
+        ::PreviewEquipmentCraftResponse* response);
+    static void CommitEquipmentCraft(entt::entity player,
+        const ::CommitEquipmentCraftRequest* request,
+        ::CommitEquipmentCraftResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -128,6 +137,33 @@ public:
             RetrieveTemporaryItems(player,
                 static_cast<const ::RetrieveTemporaryItemsRequest*>(request),
                 static_cast<::RetrieveTemporaryItemsResponse*>(response));
+			}
+            break;
+        case 9:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::GetEquipmentCraftRulesResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            GetEquipmentCraftRules(player,
+                static_cast<const ::GetEquipmentCraftRulesRequest*>(request),
+                static_cast<::GetEquipmentCraftRulesResponse*>(response));
+			}
+            break;
+        case 10:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::PreviewEquipmentCraftResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            PreviewEquipmentCraft(player,
+                static_cast<const ::PreviewEquipmentCraftRequest*>(request),
+                static_cast<::PreviewEquipmentCraftResponse*>(response));
+			}
+            break;
+        case 11:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::CommitEquipmentCraftResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            CommitEquipmentCraft(player,
+                static_cast<const ::CommitEquipmentCraftRequest*>(request),
+                static_cast<::CommitEquipmentCraftResponse*>(response));
 			}
             break;
         default:

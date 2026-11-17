@@ -1,0 +1,15 @@
+# 仅本地开发服；每次新建 robot_93<UnixMillis> 账号，不访问用户角色。
+# 若Docker开发口令不同，通过LOGIN_DEV_PASSWORD_SHARED_SECRET环境变量覆盖password，不记录密钥。
+# GM 只设置测试号等级30和100000银两；购买/捕捉均走普通RPC。
+# 捕捉最多24回合/2分钟；失败保留失败证据，不修改概率或配置。
+gateway_addr: "http://127.0.0.1:8081"
+zone_id: 1
+robot_count: 1
+account_fmt: "robot_%04d"
+password: "123456"
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 3
+report_interval: 5
+mode: "pet-acquisition-smoke"
+auth_type: "password"

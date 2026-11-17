@@ -33,18 +33,28 @@ public class ItemTableManager {
 
         final Map<Integer, List<ItemTable>> idxAffixRule;
 
+        final Map<Integer, List<ItemTable>> idxForgeMaterialId;
+
+        final Map<Integer, List<ItemTable>> idxArtifactId;
+
 
         Snapshot(ItemTableData data,
                  Map<Integer, ItemTable> kvData,
-                 Map<Integer, List<ItemTable>> idxAffixRule) {
+                 Map<Integer, List<ItemTable>> idxAffixRule,
+                 Map<Integer, List<ItemTable>> idxForgeMaterialId,
+                 Map<Integer, List<ItemTable>> idxArtifactId) {
             this.data = data;
             this.kvData = kvData;
             this.idxAffixRule = idxAffixRule;
+            this.idxForgeMaterialId = idxForgeMaterialId;
+            this.idxArtifactId = idxArtifactId;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             ItemTableData.getDefaultInstance(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap()
     );
@@ -66,13 +76,17 @@ public class ItemTableManager {
 
         Map<Integer, ItemTable> kvData = new HashMap<>(data.getDataCount());
         Map<Integer, List<ItemTable>> idxAffixRule = new HashMap<>();
+        Map<Integer, List<ItemTable>> idxForgeMaterialId = new HashMap<>();
+        Map<Integer, List<ItemTable>> idxArtifactId = new HashMap<>();
 
         for (ItemTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
             idxAffixRule.computeIfAbsent(row.getAffixRule(), k -> new ArrayList<>()).add(row);
+            idxForgeMaterialId.computeIfAbsent(row.getForgeMaterialId(), k -> new ArrayList<>()).add(row);
+            idxArtifactId.computeIfAbsent(row.getArtifactId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxAffixRule);
+        this.snapshot = new Snapshot(data, kvData, idxAffixRule, idxForgeMaterialId, idxArtifactId);
     }
 
     public ItemTableData findAll() {
@@ -98,9 +112,21 @@ public class ItemTableManager {
         return snapshot.idxAffixRule.getOrDefault(key, Collections.emptyList());
     }
 
+    public List<ItemTable> getByForgeMaterialId(int key) {
+        return snapshot.idxForgeMaterialId.getOrDefault(key, Collections.emptyList());
+    }
+
+    public List<ItemTable> getByArtifactId(int key) {
+        return snapshot.idxArtifactId.getOrDefault(key, Collections.emptyList());
+    }
+
 
 
     // FK: affix_rule → EquipAffixRule.id
+
+    // FK: forge_material_id → Item.id
+
+    // FK: artifact_id → EquipArtifact.id
 
 
     // ---- Exists ----
@@ -122,6 +148,14 @@ public class ItemTableManager {
 
     public int countByAffixRuleIndex(int key) {
         return snapshot.idxAffixRule.getOrDefault(key, Collections.emptyList()).size();
+    }
+
+    public int countByForgeMaterialIdIndex(int key) {
+        return snapshot.idxForgeMaterialId.getOrDefault(key, Collections.emptyList()).size();
+    }
+
+    public int countByArtifactIdIndex(int key) {
+        return snapshot.idxArtifactId.getOrDefault(key, Collections.emptyList()).size();
     }
 
 

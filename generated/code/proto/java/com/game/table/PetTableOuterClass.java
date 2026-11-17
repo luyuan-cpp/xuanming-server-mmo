@@ -45,16 +45,17 @@ public final class PetTableOuterClass extends com.google.protobuf.GeneratedFile 
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\017pet_table.proto\"\365\001\n\010PetTable\022\n\n\002id\030\001 \001" +
+      "\n\017pet_table.proto\"\250\002\n\010PetTable\022\n\n\002id\030\001 \001" +
       "(\r\022\014\n\004name\030\002 \001(\t\022\014\n\004desc\030\003 \001(\t\022\020\n\010model_" +
       "id\030\004 \001(\r\022\017\n\007quality\030\005 \001(\r\022\024\n\014unlock_leve" +
       "l\030\006 \001(\r\022\021\n\tlevel_cap\030\007 \001(\r\022\023\n\013init_healt" +
       "h\030\010 \001(\004\022\021\n\tinit_mana\030\t \001(\004\022\022\n\ninit_speed" +
       "\030\n \001(\004\022\024\n\014aptitude_min\030\013 \003(\r\022\024\n\014aptitude" +
-      "_max\030\014 \003(\r\022\r\n\005skill\030\r \003(\r\"\'\n\014PetTableDat" +
-      "a\022\027\n\004data\030\001 \003(\0132\t.PetTableB:\n\016com.game.t" +
-      "ableB\022PetTableOuterClassP\001Z\022generated/pb" +
-      "/tableb\006proto3"
+      "_max\030\014 \003(\r\022\r\n\005skill\030\r \003(\r\022\027\n\017shop_price_" +
+      "gold\030\016 \001(\004\022\030\n\020acquisition_tier\030\017 \001(\r\"\'\n\014" +
+      "PetTableData\022\027\n\004data\030\001 \003(\0132\t.PetTableB:\n" +
+      "\016com.game.tableB\022PetTableOuterClassP\001Z\022g" +
+      "enerated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -65,7 +66,7 @@ public final class PetTableOuterClass extends com.google.protobuf.GeneratedFile 
     internal_static_PetTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_PetTable_descriptor,
-        new java.lang.String[] { "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill", });
+        new java.lang.String[] { "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill", "ShopPriceGold", "AcquisitionTier", });
     internal_static_PetTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_PetTableData_fieldAccessorTable = new

@@ -41,6 +41,12 @@ public:
     static void GmGrantPet(entt::entity player,
         const ::GmGrantPetRequest* request,
         ::GmGrantPetResponse* response);
+    static void GetPetShop(entt::entity player,
+        const ::GetPetShopRequest* request,
+        ::GetPetShopResponse* response);
+    static void BuyPet(entt::entity player,
+        const ::BuyPetRequest* request,
+        ::BuyPetResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -126,6 +132,24 @@ public:
             GmGrantPet(player,
                 static_cast<const ::GmGrantPetRequest*>(request),
                 static_cast<::GmGrantPetResponse*>(response));
+			}
+            break;
+        case 9:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::GetPetShopResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            GetPetShop(player,
+                static_cast<const ::GetPetShopRequest*>(request),
+                static_cast<::GetPetShopResponse*>(response));
+			}
+            break;
+        case 10:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::BuyPetResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            BuyPet(player,
+                static_cast<const ::BuyPetRequest*>(request),
+                static_cast<::BuyPetResponse*>(response));
 			}
             break;
         default:

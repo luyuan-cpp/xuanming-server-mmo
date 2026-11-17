@@ -34,6 +34,13 @@ services:
     depends_on: [tikv]
 networks:
   default:
+    # 一次性 Java fixture 专用网段，避免历史调试网络耗尽 Docker 默认地址池。
+    # 宿主访问仍只走 TiDB 的 loopback 映射；已有同网段时 Docker 必须拒绝创建。
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.254.254.0/24
+          gateway: 10.254.254.1
     labels:
       org.xuanming.java-fixture.owner: ${JAVA_FIXTURE_OWNER:?owner required}
 volumes:

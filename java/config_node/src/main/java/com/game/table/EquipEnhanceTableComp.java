@@ -59,4 +59,16 @@ public final class EquipEnhanceTableComp {
         }
     }
 
+    public record Profile_id(int value) {
+        public static Profile_id from(EquipEnhanceTable row) {
+            return new Profile_id(row.getProfileId());
+        }
+    }
+
+    public record Level(int value) {
+        public static Level from(EquipEnhanceTable row) {
+            return new Level(row.getLevel());
+        }
+    }
+
 }

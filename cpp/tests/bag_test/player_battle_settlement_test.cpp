@@ -37,6 +37,8 @@
 #include "proto/battle/battle_data.pb.h"
 #include "table/code/item_table.h"
 #include "table/code/pet_table.h"
+#include "table/code/petrule_table.h"
+#include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
 #include "table/code/condition_table.h"
 #include "table/code/dungeon_table.h"
@@ -501,6 +503,42 @@ protected:
     std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission;
     uint64_t saveSeq{0};
 };
+
+TEST_F(PlayerBattleSettlementTest, ExperienceGainCreditsPersistedTotalAndResultWithoutChangingLevel) {
+    auto& level = tlsEcs.actorRegistry.emplace<LevelComp>(player);
+    level.set_level(42);
+    level.set_total_exp(250);
+    settlement.set_exp_gain(100);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(350u, level.total_exp());
+    EXPECT_EQ(42u, level.level()); // 未配置升级曲线，不能擅自改等级。
+    ASSERT_EQ(1, Results().entries_size());
+    EXPECT_EQ(100u, Results().entries(0).exp_gain());
+}
+
+TEST_F(PlayerBattleSettlementTest, MissingExperienceComponentDefersWholeSettlementAndCanRetryAfterLoad) {
+    settlement.set_exp_gain(100);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+    auto& level = tlsEcs.actorRegistry.emplace<LevelComp>(player);
+    level.set_level(1);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(100u, level.total_exp());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+}
+
+TEST_F(PlayerBattleSettlementTest, ExperienceOverflowDefersAllEffectsAndExactUint64LimitCanApply) {
+    auto& level = tlsEcs.actorRegistry.emplace<LevelComp>(player);
+    level.set_level(90); // 携带的超上限存储等级也不得因经验入账被压回本版本上限。
+    level.set_total_exp(std::numeric_limits<uint64_t>::max() - 99);
+    settlement.set_exp_gain(100);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+    EXPECT_EQ(std::numeric_limits<uint64_t>::max() - 99, level.total_exp());
+    level.set_total_exp(std::numeric_limits<uint64_t>::max() - 100);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(std::numeric_limits<uint64_t>::max(), level.total_exp());
+    EXPECT_EQ(90u, level.level());
+    EXPECT_EQ(100u, Results().entries(0).exp_gain());
+}
 
 TEST_F(PlayerBattleSettlementTest, NewCurrencyGainsDoNotImplicitlyAddLegacyGold) {
     AddCurrencyGain(kCurrencyDiamond, 5);
@@ -1603,6 +1641,9 @@ TEST_F(PlayerBattleSettlementItemTest, InboxThreeCurrenciesUseOneAtomicCreditAnd
 {
     ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
     ASSERT_NO_FATAL_FAILURE(PrepareThreeCurrencyInboxExchange());
+    auto& level = tlsEcs.actorRegistry.emplace<LevelComp>(player);
+    level.set_level(5); level.set_total_exp(250);
+    settlement.set_exp_gain(100);
     ScopedCompositionInbox inbox;
     const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
     ASSERT_TRUE(confirmed.has_value());
@@ -1624,6 +1665,9 @@ TEST_F(PlayerBattleSettlementItemTest, InboxThreeCurrenciesUseOneAtomicCreditAnd
         PlayerInboxSystem::OnFetchReply(playerId, kCompositionBattleDomain, fetch.correlation_id(), response);
     };
     respond(gCompositionInboxFetches.back());
+    EXPECT_EQ(350u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp());
+    ASSERT_EQ(1, Results().entries_size());
+    EXPECT_EQ(100u, Results().entries(0).exp_gain());
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
     EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
@@ -1635,6 +1679,8 @@ TEST_F(PlayerBattleSettlementItemTest, InboxThreeCurrenciesUseOneAtomicCreditAnd
     PlayerAllData persisted;
     auto* first = persisted.mutable_player_database_data(); first->set_player_id(playerId);
     first->mutable_currency()->CopyFrom(tlsEcs.actorRegistry.get<CurrencyComp>(player));
+    first->mutable_level_component()->CopyFrom(tlsEcs.actorRegistry.get<LevelComp>(player));
+    first->mutable_battle_results()->CopyFrom(Results());
     first->mutable_derived_attributes_component()->CopyFrom(tlsEcs.actorRegistry.get<BaseAttributesComp>(player));
     first->mutable_inbox_ledger()->CopyFrom(tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player));
     persisted.set_last_save_seq(++saveSeq);
@@ -1658,6 +1704,8 @@ TEST_F(PlayerBattleSettlementItemTest, InboxThreeCurrenciesUseOneAtomicCreditAnd
     gCompositionInboxNowMs += player_inbox_rules::kMinCheckGapMs + 1;
     PlayerInboxSystem::OnNotifyEvent(playerId, kCompositionBattleDomain); PlayerInboxSystem::Tick();
     ASSERT_EQ(2u, gCompositionInboxFetches.size()); respond(gCompositionInboxFetches.back());
+    EXPECT_EQ(350u, tlsEcs.actorRegistry.get<LevelComp>(player).total_exp()) << "已提交的同一结算重投不能重复加经验";
+    EXPECT_EQ(1, Results().entries_size());
     EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(7u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
     EXPECT_EQ(3u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
@@ -3908,3 +3956,82 @@ TEST_F(PlayerBattleSettlementItemTest, InboxVoidSettlementReleasesOnlyThisBattle
 }
 
 }  // namespace
+
+// 捕获宠物沿正式 Inbox 结算落地，与本局金币、物品、HP 和水位一并提交。
+class PlayerBattleCaptureSettlementTest : public PlayerBattleSettlementItemTest {
+protected:
+    void SetUp() override {
+        PlayerBattleSettlementItemTest::SetUp();
+        PetTableManager::Instance().Load();
+        PetRuleTableManager::Instance().Load();
+        AttributePoolTableManager::Instance().Load();
+        AttributeDimensionTableManager::Instance().Load();
+        tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+        tlsEcs.actorRegistry.emplace<LevelComp>(player).set_level(20);
+        ASSERT_NE(nullptr, PetTableManager::Instance().FindByIdSilent(1).first);
+        ASSERT_GT(PetSystem::AvailableCaptureSlots(player), 0u);
+        settlement.add_captured_pet_table_ids(1);
+    }
+    PlayerPetComp& Pets() { return tlsEcs.actorRegistry.get<PlayerPetComp>(player); }
+};
+
+TEST_F(PlayerBattleCaptureSettlementTest, UnknownCaptureDefersEntireBatchWithoutGrantingFirstPet) {
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    settlement.add_captured_pet_table_ids(UINT32_MAX);
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    EXPECT_EQ(0, Pets().pets_size());
+}
+
+TEST_F(PlayerBattleCaptureSettlementTest, FullPetCapacityDefersGoldHealthAndKillsTogether) {
+    const uint32_t capacity = PetSystem::AvailableCaptureSlots(player);
+    for (uint32_t i = 0; i < capacity; ++i) {
+        auto* pet = Pets().add_pets();
+        pet->set_pet_id(1000 + i); pet->set_pet_table_id(1); pet->set_level(1);
+    }
+    const auto before = Pets().SerializeAsString();
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    EXPECT_EQ(before, Pets().SerializeAsString());
+}
+
+TEST_F(PlayerBattleCaptureSettlementTest, FullItemBagsDoNotCommitPreparedCapture) {
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    Inventory().SetCapacityForRestore(0); Temporary().SetCapacityForRestore(0);
+    SetGained(kSettlementNonStackItem, 1);
+    ASSERT_NO_FATAL_FAILURE(ExpectInboxExchangeRejectedWithoutEffects(PlayerInboxExecKind::kDefer));
+    EXPECT_EQ(0, Pets().pets_size());
+}
+
+TEST_F(PlayerBattleCaptureSettlementTest, PersistedInboxReplayDoesNotMintCapturedPetAgain) {
+    ScopedPreparedExchangeSegments segments; ASSERT_TRUE(segments.Install());
+    ScopedCompositionInbox inbox;
+    const auto confirmed = RoleAdmissionSystem::ConfirmedIdentity(playerId);
+    ASSERT_TRUE(confirmed.has_value());
+    RoleAdmissionSystem::Dependencies dependencies;
+    dependencies.now = [] { return RoleAdmissionSystem::Clock::time_point(std::chrono::milliseconds(gCompositionInboxNowMs)); };
+    dependencies.localNode = [] { return RoleAdmissionSystem::LocalNode{"battle-sql-test-scene", "4242", 1}; };
+    dependencies.confirmedAdmissions.push_back(*confirmed);
+    RoleAdmissionSystem::ScopedDependencies proof(std::move(dependencies));
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player);
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(1u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    ASSERT_EQ(1, Pets().pets_size());
+    EXPECT_EQ(1u, Pets().pets(0).pet_table_id());
+    EXPECT_NE(0u, Pets().pets(0).pet_id());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    const auto persistedPets = Pets();
+    const auto persistedLedger = tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player);
+
+    // 同次存档中的宠物与永久水位重载后，重复投递只能复述原结局。
+    tlsEcs.playerList.erase(playerId); tlsEcs.actorRegistry.destroy(player);
+    ASSERT_NO_FATAL_FAILURE(CreatePlayerEntity()); RegisterPlayer();
+    tlsEcs.actorRegistry.emplace<PlayerPetComp>(player, persistedPets);
+    tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player, persistedLedger);
+    gCompositionInboxNowMs += player_inbox_rules::kMinCheckGapMs + 1;
+    PlayerInboxSystem::OnPlayerLanded(player); PlayerInboxSystem::Tick();
+    ASSERT_EQ(2u, gCompositionInboxFetches.size());
+    RespondWithBattleSettlement(gCompositionInboxFetches.back(), playerId, settlement, 10);
+    EXPECT_EQ(persistedPets.SerializeAsString(), Pets().SerializeAsString());
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(0u, KillProgress());
+}

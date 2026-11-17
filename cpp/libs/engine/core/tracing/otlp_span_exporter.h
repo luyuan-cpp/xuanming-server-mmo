@@ -4,7 +4,9 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
 
 #include "core/tracing/otlp_http.h"
 #include "core/tracing/otlp_trace_encoder.h"
@@ -85,7 +87,7 @@ private:
     SpanExportStats& stats_;
     OtlpSpanExporterOptions options_;
     std::unique_ptr<muduo::net::EventLoopThread> thread_;
-    muduo::net::EventLoop* loop_{nullptr};   // 导出线程的 loop,随 thread_ 存活
+    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_; // 借用 thread_ 的 loop,启动前与关闭后为空
     std::shared_ptr<Impl> impl_;
     std::shared_ptr<Latch> latch_;           // 收尾完成信号:导出线程在最后一跳置位,Shutdown 等它
     bool started_{false};

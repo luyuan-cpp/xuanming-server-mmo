@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+// 首发固定法宝效果的权威 schema。次数由每件物品实例在战斗内独立记录。
+package mmorpg.cfgtable.v1;
+import "cfg_options.proto";
+
+message EquipArtifactTable {
+  option (cfg_sheet) = "EquipArtifact";
+  option (cfg_source_file) = "EquipArtifact.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_ids_permanent) = true;
+
+  // 固定效果种类：1 破阵、2 照影、3 回响、4 济生、5 固元、6 护心、7 归元、8 清心。
+  uint32 id = 1;
+  // 增幅、削盾、减伤、回复或概率修正，万分比整数。
+  uint32 bonus_bps = 2;
+  // 以入战最大气血为基准的减伤上限，万分比；0 表示无此项限制。
+  uint32 cap_bps = 3;
+  // 每件实例每回合的次数限制；0 表示不另设此项上限。
+  uint32 per_round_limit = 4;
+  // 每件实例整场次数限制；0 表示不另设此项上限。
+  uint32 battle_limit = 5;
+  // 只在前几个全局回合可触发；0 表示没有回合窗口限制。
+  uint32 active_rounds = 6;
+  // 触发治疗增幅时的当前气血比例上限，万分比；0 表示没有此条件。
+  uint32 health_threshold_bps = 7;
+  string name = 8;
+  string description = 9;
+}

@@ -122,4 +122,23 @@ message SkillTable {
   double passive_percent = 45;
   // effect[] 里那个增益 / 减益的基础幅度(带符号比例);生效值按施法者技能等级放大后存进局内 buff
   double buff_percent = 46;
+  // 公共技能运行模型:0沿用旧职业/通用管线,1事件化回合技能。
+  uint32 battle_model = 47;
+  // 学习主体位:1人物,2宝宝,3共用。
+  uint32 caster_mask = 48;
+  // 1主动,2被动,3追击,4开场。
+  uint32 ability_kind = 49;
+  uint32 pet_max_targets = 50;
+  // 开局挂载的事件监听/状态,不占用普通行动。
+  repeated uint32 init_effect = 51 [(cfg_slots) = 4];
+  // 策划追溯码,运行时不得按本字段分支。
+  string prototype_code = 52;
+  // 0不限;次数不因死亡、复活或离场重置。
+  uint32 max_battle_uses = 53;
+  // 0无,1降至1点气血,2牺牲至0;在目标校验后支付。
+  uint32 health_cost_mode = 54;
+  // 效果分类位:1物攻,2法攻,4治疗,8辅助,16障碍。
+  uint32 action_tags = 55;
+  // 是否允许选择倒地目标。仅明确配置的复生印使用。
+  uint32 allow_dead_target = 56;
 }

@@ -6,6 +6,7 @@
 
 import importlib.util
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
@@ -13,6 +14,8 @@ import unittest
 REPO = Path(__file__).resolve().parents[3]
 SPEC = importlib.util.spec_from_file_location("check_log_text_english", REPO / "tools/scripts/check_log_text_english.py")
 CHECKER = importlib.util.module_from_spec(SPEC)
+# dataclass 解析延迟注解时通过 sys.modules 查找模块，按正常导入顺序先登记。
+sys.modules[SPEC.name] = CHECKER
 SPEC.loader.exec_module(CHECKER)
 
 ZH = "中文"

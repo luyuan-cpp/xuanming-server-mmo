@@ -41,6 +41,12 @@ public final class DungeonTableComp {
         }
     }
 
+    public record Allow_pet_capture(int value) {
+        public static Allow_pet_capture from(DungeonTable row) {
+            return new Allow_pet_capture(row.getAllowPetCapture());
+        }
+    }
+
     public record Monster(List<Integer> values) {
         public static Monster from(DungeonTable row) {
             return new Monster(row.getMonsterList());

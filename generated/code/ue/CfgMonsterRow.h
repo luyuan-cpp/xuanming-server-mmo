@@ -100,6 +100,14 @@ struct FCfgMonsterRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
 	int64 gold_reward = 0;
 
+	/** 可捕捉的普通宠物种类，0为不可捕捉。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int32 capture_pet_table_id = 0;
+
+	/** 满血时捕捉成功率（万分比），残血时按缺血比例提高。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int32 capture_rate = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
 	TArray<FCfgMonsterDrop> drop;
 };

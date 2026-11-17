@@ -81,6 +81,14 @@ extern const ::google::protobuf::internal::ClassDataFull PetInstance_AptitudeEnt
 #else
 extern const PetInstance_AptitudeEntry_DoNotUseGlobalsTypeInternal PetInstance_AptitudeEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PetInstance_SkillRanksEntry_DoNotUse;
+struct PetInstance_SkillRanksEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PetInstance_SkillRanksEntry_DoNotUseGlobalsTypeInternal PetInstance_SkillRanksEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PetInstance_SkillRanksEntry_DoNotUse_class_data_;
+#else
+extern const PetInstance_SkillRanksEntry_DoNotUseGlobalsTypeInternal PetInstance_SkillRanksEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerPetComp;
 struct PlayerPetCompGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -98,6 +106,55 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance_SkillRanksEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  PetInstance_SkillRanksEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr PetInstance_SkillRanksEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit PetInstance_SkillRanksEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &PetInstance_SkillRanksEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend PetInstance_SkillRanksEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
 // -------------------------------------------------------------------
 
 class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance_AptitudeEntry_DoNotUse final
@@ -254,7 +311,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
   [[nodiscard]] static const PetInstance& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PetInstance>(&PetInstance_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(PetInstance& a, PetInstance& b) { a.Swap(&b); }
   inline void Swap(PetInstance* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -356,6 +413,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
     kCreatedAtFieldNumber = 9,
     kAllocatedFieldNumber = 5,
     kAptitudeFieldNumber = 6,
+    kSkillRanksFieldNumber = 11,
   };
   // repeated uint32 skill_table_ids = 10;
   [[nodiscard]] int skill_table_ids_size()
@@ -484,12 +542,28 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
   ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_aptitude();
 
   public:
+  // map<uint32, uint32> skill_ranks = 11;
+  [[nodiscard]] int skill_ranks_size()
+      const;
+  private:
+  int _internal_skill_ranks_size() const;
+
+  public:
+  void clear_skill_ranks() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& skill_ranks() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_skill_ranks();
+
+  private:
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_skill_ranks() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_ranks();
+
+  public:
   // @@protoc_insertion_point(class_scope:PetInstance)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
-                          2, 32,
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          3, 32,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -528,6 +602,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInstance final : public ::google
     ::uint64_t created_at_;
     ::google::protobuf::internal::MapField<PetInstance_AllocatedEntry_DoNotUse, ::uint32_t, ::uint32_t> allocated_;
     ::google::protobuf::internal::MapField<PetInstance_AptitudeEntry_DoNotUse, ::uint32_t, ::uint32_t> aptitude_;
+    ::google::protobuf::internal::MapField<PetInstance_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -591,7 +666,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
   [[nodiscard]] static const PlayerPetComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerPetComp>(&PlayerPetComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(PlayerPetComp& a, PlayerPetComp& b) { a.Swap(&b); }
   inline void Swap(PlayerPetComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -685,6 +760,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
   enum : int {
     kPetsFieldNumber = 1,
     kActivePetIdFieldNumber = 2,
+    kLastPurchaseSequenceFieldNumber = 3,
+    kLastPurchasePetIdFieldNumber = 5,
+    kLastPurchasePriceGoldFieldNumber = 6,
+    kLastPurchasePetTableIdFieldNumber = 4,
   };
   // repeated .PetInstance pets = 1;
   [[nodiscard]] int pets_size()
@@ -717,11 +796,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
   void _internal_set_active_pet_id(::uint64_t value);
 
   public:
+  // uint64 last_purchase_sequence = 3;
+  void clear_last_purchase_sequence() ;
+  [[nodiscard]] ::uint64_t last_purchase_sequence() const;
+  void set_last_purchase_sequence(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_purchase_sequence() const;
+  void _internal_set_last_purchase_sequence(::uint64_t value);
+
+  public:
+  // uint64 last_purchase_pet_id = 5;
+  void clear_last_purchase_pet_id() ;
+  [[nodiscard]] ::uint64_t last_purchase_pet_id() const;
+  void set_last_purchase_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_purchase_pet_id() const;
+  void _internal_set_last_purchase_pet_id(::uint64_t value);
+
+  public:
+  // uint64 last_purchase_price_gold = 6;
+  void clear_last_purchase_price_gold() ;
+  [[nodiscard]] ::uint64_t last_purchase_price_gold() const;
+  void set_last_purchase_price_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_last_purchase_price_gold() const;
+  void _internal_set_last_purchase_price_gold(::uint64_t value);
+
+  public:
+  // uint32 last_purchase_pet_table_id = 4;
+  void clear_last_purchase_pet_table_id() ;
+  [[nodiscard]] ::uint32_t last_purchase_pet_table_id() const;
+  void set_last_purchase_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_last_purchase_pet_table_id() const;
+  void _internal_set_last_purchase_pet_table_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerPetComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -752,6 +871,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::PetInstance > pets_;
     ::uint64_t active_pet_id_;
+    ::uint64_t last_purchase_sequence_;
+    ::uint64_t last_purchase_pet_id_;
+    ::uint64_t last_purchase_price_gold_;
+    ::uint32_t last_purchase_pet_table_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -770,6 +893,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerPetComp final : public ::goog
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -1099,6 +1224,37 @@ PetInstance::_internal_mutable_skill_table_ids() {
   return &_impl_.skill_table_ids_;
 }
 
+// map<uint32, uint32> skill_ranks = 11;
+inline int PetInstance::_internal_skill_ranks_size() const {
+  return _internal_skill_ranks().size();
+}
+inline int PetInstance::skill_ranks_size() const {
+  return _internal_skill_ranks_size();
+}
+inline void PetInstance::clear_skill_ranks() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_ranks_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetInstance::_internal_skill_ranks() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_ranks_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PetInstance::skill_ranks() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:PetInstance.skill_ranks)
+  return _internal_skill_ranks();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInstance::_internal_mutable_skill_ranks() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.skill_ranks_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PetInstance::mutable_skill_ranks()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_mutable_map:PetInstance.skill_ranks)
+  return _internal_mutable_skill_ranks();
+}
+
 // -------------------------------------------------------------------
 
 // PlayerPetComp
@@ -1180,6 +1336,102 @@ inline ::uint64_t PlayerPetComp::_internal_active_pet_id() const {
 inline void PlayerPetComp::_internal_set_active_pet_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_pet_id_ = value;
+}
+
+// uint64 last_purchase_sequence = 3;
+inline void PlayerPetComp::clear_last_purchase_sequence() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_sequence_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t PlayerPetComp::last_purchase_sequence() const {
+  // @@protoc_insertion_point(field_get:PlayerPetComp.last_purchase_sequence)
+  return _internal_last_purchase_sequence();
+}
+inline void PlayerPetComp::set_last_purchase_sequence(::uint64_t value) {
+  _internal_set_last_purchase_sequence(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:PlayerPetComp.last_purchase_sequence)
+}
+inline ::uint64_t PlayerPetComp::_internal_last_purchase_sequence() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_purchase_sequence_;
+}
+inline void PlayerPetComp::_internal_set_last_purchase_sequence(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_sequence_ = value;
+}
+
+// uint32 last_purchase_pet_table_id = 4;
+inline void PlayerPetComp::clear_last_purchase_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t PlayerPetComp::last_purchase_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:PlayerPetComp.last_purchase_pet_table_id)
+  return _internal_last_purchase_pet_table_id();
+}
+inline void PlayerPetComp::set_last_purchase_pet_table_id(::uint32_t value) {
+  _internal_set_last_purchase_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:PlayerPetComp.last_purchase_pet_table_id)
+}
+inline ::uint32_t PlayerPetComp::_internal_last_purchase_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_purchase_pet_table_id_;
+}
+inline void PlayerPetComp::_internal_set_last_purchase_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_pet_table_id_ = value;
+}
+
+// uint64 last_purchase_pet_id = 5;
+inline void PlayerPetComp::clear_last_purchase_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t PlayerPetComp::last_purchase_pet_id() const {
+  // @@protoc_insertion_point(field_get:PlayerPetComp.last_purchase_pet_id)
+  return _internal_last_purchase_pet_id();
+}
+inline void PlayerPetComp::set_last_purchase_pet_id(::uint64_t value) {
+  _internal_set_last_purchase_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:PlayerPetComp.last_purchase_pet_id)
+}
+inline ::uint64_t PlayerPetComp::_internal_last_purchase_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_purchase_pet_id_;
+}
+inline void PlayerPetComp::_internal_set_last_purchase_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_pet_id_ = value;
+}
+
+// uint64 last_purchase_price_gold = 6;
+inline void PlayerPetComp::clear_last_purchase_price_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_price_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t PlayerPetComp::last_purchase_price_gold() const {
+  // @@protoc_insertion_point(field_get:PlayerPetComp.last_purchase_price_gold)
+  return _internal_last_purchase_price_gold();
+}
+inline void PlayerPetComp::set_last_purchase_price_gold(::uint64_t value) {
+  _internal_set_last_purchase_price_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:PlayerPetComp.last_purchase_price_gold)
+}
+inline ::uint64_t PlayerPetComp::_internal_last_purchase_price_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_purchase_price_gold_;
+}
+inline void PlayerPetComp::_internal_set_last_purchase_price_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_purchase_price_gold_ = value;
 }
 
 #ifdef __GNUC__

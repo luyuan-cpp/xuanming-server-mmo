@@ -4,6 +4,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <set>
 #include <tuple>
 #include <type_traits>
 #include <typeindex>
@@ -520,6 +521,105 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     if (tlsEcs.actorRegistry.any_of<GrantOverflowRejectStreakComp>(playerEntity))
         tlsEcs.actorRegistry.remove<GrantOverflowRejectStreakComp>(playerEntity);
     // 真扣到了消耗 = 人物背包移走了东西(「腾位通知」),在两包都发布之后通知。不算净值:同一笔的获得占了多少位不管。
+    if (!drained.empty()) NotifySpaceFreed(playerEntity, inventory);
+    return kSuccess;
+}
+
+uint32_t BagService::ExchangeInventoryExact(entt::entity playerEntity, const ItemCountMap& consumed,
+    const std::vector<InitItemParam>& gained, const std::vector<InstanceReplacement>& replacements,
+    uint64_t correlationId, const std::string& extra, std::vector<GuidVector>& written,
+    const std::function<uint32_t(const std::vector<GuidVector>&)>& beforeCommit)
+{
+    if (!tlsEcs.actorRegistry.valid(playerEntity) || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity))
+        return kInvalidParameter;
+    const auto playerId = tlsEcs.GetPlayerId(playerEntity);
+    if (playerId == 0 || tlsEcs.GetPlayer(playerId) != playerEntity) return kInvalidParameter;
+    auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+    if (bags == nullptr || !beforeCommit || (gained.empty() && replacements.empty())) return kInvalidParameter;
+    auto& inventory = bags->bags[kInventory];
+    auto& equipment = bags->bags[kEquipment];
+    if (!inventory.IsLayerConsistent() || !equipment.IsLayerConsistent()) return kInvalidParameter;
+    for (const auto& [config, count] : consumed)
+        if (config == 0 || count == 0 || ItemTableManager::Instance().FindByIdSilent(config).first == nullptr)
+            return kInvalidParameter;
+    if (CheckRemovable(playerEntity, inventory, consumed) != RemovalVerdict::kEnough)
+        return kBagInsufficientItems;
+    const auto gainsAllowed = [&] {
+        for (const auto& param : gained)
+            if (GainBlockService::IsItemGainBlocked(playerEntity, param.itemPBComp.config_id())) return false;
+        return true;
+    };
+    if (!gainsAllowed()) return kAssetBlocked;
+    const auto fingerprint = [](const Bag& bag) {
+        std::vector<std::pair<Guid, std::string>> items;
+        bag.store_.ForEach([&items](Guid id, const ItemComp& item) { items.emplace_back(id, item.SerializeAsString()); });
+        std::sort(items.begin(), items.end());
+        std::vector<std::pair<uint32_t, Guid>> slots(bag.layout_->Slots().begin(), bag.layout_->Slots().end());
+        std::sort(slots.begin(), slots.end());
+        return std::tuple{std::move(items), std::move(slots), bag.store_.NextAcquireSeq(), bag.Capacity(),
+            bag.layout_.get(), bag.admission_.get(), bag.ProfileId(), bag.PlayerGuid()};
+    };
+    const auto inventoryBefore = fingerprint(inventory), equipmentBefore = fingerprint(equipment);
+    const auto sameSource = [&] {
+        if (!tlsEcs.actorRegistry.valid(playerEntity) || tlsEcs.GetPlayer(playerId) != playerEntity ||
+            !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return false;
+        const auto* current = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(playerEntity);
+        return current == bags && fingerprint(inventory) == inventoryBefore && fingerprint(equipment) == equipmentBefore;
+    };
+    const auto clone = [](const Bag& source, Bag& candidate) {
+        candidate.store_ = source.store_;
+        candidate.layout_ = source.layout_->Clone();
+        candidate.admission_ = std::make_unique<BorrowedAdmission>(source.Admission());
+        candidate.profileId_ = source.profileId_;
+        candidate.playerGuid = source.playerGuid;
+        return candidate.layout_ != nullptr;
+    };
+    Bag nextInventory, nextEquipment;
+    if (!clone(inventory, nextInventory) || !clone(equipment, nextEquipment)) return kInvalidParameter;
+    std::set<Guid> changed;
+    for (const auto& edit : replacements) {
+        if ((edit.bagType != kInventory && edit.bagType != kEquipment) || edit.expected.item_id() == 0 ||
+            !changed.insert(edit.expected.item_id()).second ||
+            edit.expected.item_id() != edit.replacement.item_id() ||
+            edit.expected.config_id() != edit.replacement.config_id() ||
+            edit.expected.size() != edit.replacement.size() ||
+            edit.expected.acquire_seq() != edit.replacement.acquire_seq()) return kInvalidParameter;
+        auto& candidate = edit.bagType == kInventory ? nextInventory : nextEquipment;
+        auto* item = candidate.GetItemCompByGuid(edit.expected.item_id());
+        if (item == nullptr || item->SerializeAsString() != edit.expected.SerializeAsString()) return kInvalidParameter;
+        *item = edit.replacement;
+    }
+    std::vector<DrainedInstance> drained;
+    if (!consumed.empty()) {
+        const auto result = nextInventory.RemoveItems(consumed, &drained);
+        if (result != kSuccess) return result;
+    }
+    // 替换的实例不得在同一笔中又被当作材料销毁。
+    for (const auto& entry : drained) if (changed.contains(entry.guid)) return kInvalidParameter;
+    std::vector<GuidVector> created;
+    if (!gained.empty()) {
+        const auto result = nextInventory.AddItems(gained, &created, InstalledItemInstanceInitializer());
+        if (result != kSuccess) return result;
+        if (created.size() != gained.size()) return kInvalidParameter;
+    }
+    if (!sameSource()) return kInvalidParameter;
+    if (!gainsAllowed()) return kAssetBlocked;
+    if (CheckRemovable(playerEntity, inventory, consumed) != RemovalVerdict::kEnough) return kBagInsufficientItems;
+    const auto result = beforeCommit(created);
+    if (result != kSuccess) return result;
+    static_assert(std::is_nothrow_move_assignable_v<ItemStore>);
+    inventory.store_ = std::move(nextInventory.store_);
+    inventory.layout_ = std::move(nextInventory.layout_);
+    equipment.store_ = std::move(nextEquipment.store_);
+    equipment.layout_ = std::move(nextEquipment.layout_);
+    written = std::move(created);
+    for (const auto& entry : drained)
+        TransactionLogSystem::LogItemDestroy(playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);
+    for (std::size_t i = 0; i < gained.size(); ++i) {
+        const auto& item = gained[i].itemPBComp;
+        LogItemsCreated(playerEntity, written[i], item.config_id(), item.size(), TX_ITEM_AWARD, correlationId, extra);
+        AnomalyDetector::RecordItemGain(playerEntity, item.config_id(), item.size());
+    }
     if (!drained.empty()) NotifySpaceFreed(playerEntity, inventory);
     return kSuccess;
 }

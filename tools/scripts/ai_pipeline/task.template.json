@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "replace-with-task-id",
+  "title": "替换为本次任务名称",
+  "goal": "写清玩家或开发者可观察到的行为变化；此模板只默认验证管线自身，实施实际功能前必须补齐对应验收。",
+  "repositories": ["server_cpp"],
+  "scope": {"server_cpp": ["tools/scripts/ai_pipeline", "tools/scripts/tests/test_ai_pipeline.py"]},
+  "checks": [{"id": "pipeline-selftest", "required": true}],
+  "acceptance": [{"id": "pipeline-regression", "description": "管线回归实际执行，零失败且零跳过；替换任务时补充真实功能验收。", "checks": ["pipeline-selftest"]}],
+  "test_matrix": {
+    "static": {"not_applicable": "此模板只演示管线自测；实际功能应登记适用的静态检查。"},
+    "build": {"not_applicable": "本示例为解释执行的工程工具，不涉及 C++、Java 或 Unity 编译。"},
+    "unit": {"checks": ["pipeline-selftest"]},
+    "contract": {"not_applicable": "未变更游戏协议、配置表或跨版本客户端契约。"},
+    "integration": {"not_applicable": "不连接数据库或运行服务，不据此声明集成测试通过。"},
+    "e2e": {"not_applicable": "没有登录、入场、战斗或结算链路变化。"},
+    "visual": {"not_applicable": "没有 UI、美术或场景变化。"},
+    "performance": {"not_applicable": "不改变运行时热路径；未做性能测量。"}
+  },
+  "delivery": {"kind": "development", "notes": "只交付本地验证证据。复制模板后须逐项替换适用范围和验收；不得把模板通过当成业务功能验收。"}
+}

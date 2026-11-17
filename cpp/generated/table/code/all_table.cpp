@@ -22,12 +22,14 @@
 #include "dungeon_table.h"
 #include "equipaffixpool_table.h"
 #include "equipaffixrule_table.h"
+#include "equipartifact_table.h"
 #include "equipattribute_table.h"
 #include "equipattributecap_table.h"
 #include "equipenhance_table.h"
 #include "equipgem_table.h"
 #include "equipgemsocket_table.h"
 #include "equipslot_table.h"
+#include "equipv1affix_table.h"
 #include "globalvariable_table.h"
 #include "guildactivity_table.h"
 #include "guilddonate_table.h"
@@ -95,6 +97,8 @@ void LoadTables() {
 
     EquipAffixRuleTableManager::Instance().Load();
 
+    EquipArtifactTableManager::Instance().Load();
+
     EquipAttributeTableManager::Instance().Load();
 
     EquipAttributeCapTableManager::Instance().Load();
@@ -106,6 +110,8 @@ void LoadTables() {
     EquipGemSocketTableManager::Instance().Load();
 
     EquipSlotTableManager::Instance().Load();
+
+    EquipV1AffixTableManager::Instance().Load();
 
     GlobalVariableTableManager::Instance().Load();
 
@@ -195,6 +201,8 @@ void LoadTables() {
 
     EquipAffixRuleTableManager::Instance().LoadSuccess();
 
+    EquipArtifactTableManager::Instance().LoadSuccess();
+
     EquipAttributeTableManager::Instance().LoadSuccess();
 
     EquipAttributeCapTableManager::Instance().LoadSuccess();
@@ -206,6 +214,8 @@ void LoadTables() {
     EquipGemSocketTableManager::Instance().LoadSuccess();
 
     EquipSlotTableManager::Instance().LoadSuccess();
+
+    EquipV1AffixTableManager::Instance().LoadSuccess();
 
     GlobalVariableTableManager::Instance().LoadSuccess();
 
@@ -264,7 +274,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(49);
+    static muduo::CountDownLatch latch(51);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -410,6 +420,14 @@ void LoadTablesAsync() {
     });
     EquipAffixRuleLoadThread.detach();
 
+    std::thread EquipArtifactLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        EquipArtifactTableManager::Instance().Load();
+        latch.countDown();
+    });
+    EquipArtifactLoadThread.detach();
+
     std::thread EquipAttributeLoadThread([]() {
         void InitThreadLocalConfig();
         InitThreadLocalConfig();
@@ -457,6 +475,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     EquipSlotLoadThread.detach();
+
+    std::thread EquipV1AffixLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        EquipV1AffixTableManager::Instance().Load();
+        latch.countDown();
+    });
+    EquipV1AffixLoadThread.detach();
 
     std::thread GlobalVariableLoadThread([]() {
         void InitThreadLocalConfig();
@@ -697,6 +723,8 @@ void LoadTablesAsync() {
 
     EquipAffixRuleTableManager::Instance().LoadSuccess();
 
+    EquipArtifactTableManager::Instance().LoadSuccess();
+
     EquipAttributeTableManager::Instance().LoadSuccess();
 
     EquipAttributeCapTableManager::Instance().LoadSuccess();
@@ -708,6 +736,8 @@ void LoadTablesAsync() {
     EquipGemSocketTableManager::Instance().LoadSuccess();
 
     EquipSlotTableManager::Instance().LoadSuccess();
+
+    EquipV1AffixTableManager::Instance().LoadSuccess();
 
     GlobalVariableTableManager::Instance().LoadSuccess();
 

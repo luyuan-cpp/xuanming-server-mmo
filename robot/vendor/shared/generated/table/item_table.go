@@ -21,6 +21,8 @@ type itemSnapshot struct {
     data   []*pb.ItemTable
     kvData map[uint32]*pb.ItemTable
     idxAffixRule map[uint32][]*pb.ItemTable
+    idxForgeMaterialId map[uint32][]*pb.ItemTable
+    idxArtifactId map[uint32][]*pb.ItemTable
 }
 
 type ItemTableManager struct {
@@ -42,6 +44,8 @@ func NewItemTableManager() *ItemTableManager {
     m.snap.Store(&itemSnapshot{
         kvData: make(map[uint32]*pb.ItemTable),
         idxAffixRule: make(map[uint32][]*pb.ItemTable),
+        idxForgeMaterialId: make(map[uint32][]*pb.ItemTable),
+        idxArtifactId: make(map[uint32][]*pb.ItemTable),
     })
     return m
 }
@@ -72,11 +76,15 @@ func (m *ItemTableManager) Load(configDir string, useBinary bool) error {
     snap := &itemSnapshot{
         kvData: make(map[uint32]*pb.ItemTable, len(container.Data)),
         idxAffixRule: make(map[uint32][]*pb.ItemTable),
+        idxForgeMaterialId: make(map[uint32][]*pb.ItemTable),
+        idxArtifactId: make(map[uint32][]*pb.ItemTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
         snap.idxAffixRule[row.AffixRule] = append(snap.idxAffixRule[row.AffixRule], row)
+        snap.idxForgeMaterialId[row.ForgeMaterialId] = append(snap.idxForgeMaterialId[row.ForgeMaterialId], row)
+        snap.idxArtifactId[row.ArtifactId] = append(snap.idxArtifactId[row.ArtifactId], row)
     }
 
     snap.data = container.Data
@@ -102,6 +110,18 @@ func (m *ItemTableManager) GetByAffixRule(key uint32) []*pb.ItemTable {
 }
 
 
+func (m *ItemTableManager) GetByForgeMaterialId(key uint32) []*pb.ItemTable {
+    snap := m.snap.Load()
+    return snap.idxForgeMaterialId[key]
+}
+
+
+func (m *ItemTableManager) GetByArtifactId(key uint32) []*pb.ItemTable {
+    snap := m.snap.Load()
+    return snap.idxArtifactId[key]
+}
+
+
 
 // ---- Exists ----
 
@@ -124,6 +144,18 @@ func (m *ItemTableManager) Count() int {
 func (m *ItemTableManager) CountByAffixRuleIndex(key uint32) int {
     snap := m.snap.Load()
     return len(snap.idxAffixRule[key])
+}
+
+
+func (m *ItemTableManager) CountByForgeMaterialIdIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxForgeMaterialId[key])
+}
+
+
+func (m *ItemTableManager) CountByArtifactIdIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxArtifactId[key])
 }
 
 
@@ -176,6 +208,10 @@ func (m *ItemTableManager) First(pred func(*pb.ItemTable) bool) (*pb.ItemTable, 
     return nil, false
 }
 // FK: affix_rule → EquipAffixRule.id
+
+// FK: forge_material_id → Item.id
+
+// FK: artifact_id → EquipArtifact.id
 
 
 // ---- Composite Key ----

@@ -174,6 +174,42 @@ struct SkillBuff_percentComp {
     double value;
 };
 
+struct SkillBattle_modelComp {
+    uint32_t value;
+};
+
+struct SkillCaster_maskComp {
+    uint32_t value;
+};
+
+struct SkillAbility_kindComp {
+    uint32_t value;
+};
+
+struct SkillPet_max_targetsComp {
+    uint32_t value;
+};
+
+struct SkillPrototype_codeComp {
+    std::string_view value;
+};
+
+struct SkillMax_battle_usesComp {
+    uint32_t value;
+};
+
+struct SkillHealth_cost_modeComp {
+    uint32_t value;
+};
+
+struct SkillAction_tagsComp {
+    uint32_t value;
+};
+
+struct SkillAllow_dead_targetComp {
+    uint32_t value;
+};
+
 struct SkillSkill_typeComp {
     std::span<const uint32_t> values;
 };
@@ -183,6 +219,10 @@ struct SkillTargeting_modeComp {
 };
 
 struct SkillEffectComp {
+    std::span<const uint32_t> values;
+};
+
+struct SkillInit_effectComp {
     std::span<const uint32_t> values;
 };
 
@@ -311,6 +351,33 @@ inline SkillPassive_percentComp MakeSkillPassive_percentComp(const SkillTable& r
 inline SkillBuff_percentComp MakeSkillBuff_percentComp(const SkillTable& row) {
     return { row.buff_percent() };
 }
+inline SkillBattle_modelComp MakeSkillBattle_modelComp(const SkillTable& row) {
+    return { row.battle_model() };
+}
+inline SkillCaster_maskComp MakeSkillCaster_maskComp(const SkillTable& row) {
+    return { row.caster_mask() };
+}
+inline SkillAbility_kindComp MakeSkillAbility_kindComp(const SkillTable& row) {
+    return { row.ability_kind() };
+}
+inline SkillPet_max_targetsComp MakeSkillPet_max_targetsComp(const SkillTable& row) {
+    return { row.pet_max_targets() };
+}
+inline SkillPrototype_codeComp MakeSkillPrototype_codeComp(const SkillTable& row) {
+    return { std::string_view(row.prototype_code()) };
+}
+inline SkillMax_battle_usesComp MakeSkillMax_battle_usesComp(const SkillTable& row) {
+    return { row.max_battle_uses() };
+}
+inline SkillHealth_cost_modeComp MakeSkillHealth_cost_modeComp(const SkillTable& row) {
+    return { row.health_cost_mode() };
+}
+inline SkillAction_tagsComp MakeSkillAction_tagsComp(const SkillTable& row) {
+    return { row.action_tags() };
+}
+inline SkillAllow_dead_targetComp MakeSkillAllow_dead_targetComp(const SkillTable& row) {
+    return { row.allow_dead_target() };
+}
 inline SkillSkill_typeComp MakeSkillSkill_typeComp(const SkillTable& row) {
     const auto& rf = row.skill_type();
     return { std::span<const uint32_t>(rf.data(), rf.size()) };
@@ -321,5 +388,9 @@ inline SkillTargeting_modeComp MakeSkillTargeting_modeComp(const SkillTable& row
 }
 inline SkillEffectComp MakeSkillEffectComp(const SkillTable& row) {
     const auto& rf = row.effect();
+    return { std::span<const uint32_t>(rf.data(), rf.size()) };
+}
+inline SkillInit_effectComp MakeSkillInit_effectComp(const SkillTable& row) {
+    const auto& rf = row.init_effect();
     return { std::span<const uint32_t>(rf.data(), rf.size()) };
 }

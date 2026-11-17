@@ -472,4 +472,8 @@
     <ClInclude Include="payment\payment.pb.h" />
     <ClInclude Include="payment\payment_table.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\equipment_effects.pb.cc" />
+    <ClInclude Include="common\component\equipment_effects.pb.h" />
+  </ItemGroup>
 </Project>

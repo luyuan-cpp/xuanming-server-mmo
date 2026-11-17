@@ -467,10 +467,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
     kArmorFieldNumber = 4,
     kResistanceFieldNumber = 5,
     kCritchanceFieldNumber = 6,
+    kIdFieldNumber = 1,
+    kCapturePetTableIdFieldNumber = 11,
     kSpeedFieldNumber = 7,
     kExpRewardFieldNumber = 8,
     kGoldRewardFieldNumber = 9,
-    kIdFieldNumber = 1,
+    kCaptureRateFieldNumber = 12,
   };
   // repeated .Monsterdrop drop = 10;
   [[nodiscard]] int drop_size()
@@ -543,6 +545,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
   void _internal_set_critchance(::uint64_t value);
 
   public:
+  // uint32 id = 1;
+  void clear_id() ;
+  [[nodiscard]] ::uint32_t id() const;
+  void set_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_id() const;
+  void _internal_set_id(::uint32_t value);
+
+  public:
+  // uint32 capture_pet_table_id = 11;
+  void clear_capture_pet_table_id() ;
+  [[nodiscard]] ::uint32_t capture_pet_table_id() const;
+  void set_capture_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_capture_pet_table_id() const;
+  void _internal_set_capture_pet_table_id(::uint32_t value);
+
+  public:
   // uint64 speed = 7;
   void clear_speed() ;
   [[nodiscard]] ::uint64_t speed() const;
@@ -573,21 +595,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
   void _internal_set_gold_reward(::uint64_t value);
 
   public:
-  // uint32 id = 1;
-  void clear_id() ;
-  [[nodiscard]] ::uint32_t id() const;
-  void set_id(::uint32_t value);
+  // uint32 capture_rate = 12;
+  void clear_capture_rate() ;
+  [[nodiscard]] ::uint32_t capture_rate() const;
+  void set_capture_rate(::uint32_t value);
 
   private:
-  ::uint32_t _internal_id() const;
-  void _internal_set_id(::uint32_t value);
+  ::uint32_t _internal_capture_rate() const;
+  void _internal_set_capture_rate(::uint32_t value);
 
   public:
   // @@protoc_insertion_point(class_scope:MonsterTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -622,10 +644,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
     ::uint64_t armor_;
     ::uint64_t resistance_;
     ::uint64_t critchance_;
+    ::uint32_t id_;
+    ::uint32_t capture_pet_table_id_;
     ::uint64_t speed_;
     ::uint64_t exp_reward_;
     ::uint64_t gold_reward_;
-    ::uint32_t id_;
+    ::uint32_t capture_rate_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -940,7 +964,7 @@ inline void Monsterdrop::_internal_set_drop_rate(::uint32_t value) {
 inline void MonsterTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t MonsterTable::id() const {
   // @@protoc_insertion_point(field_get:MonsterTable.id)
@@ -948,7 +972,7 @@ inline ::uint32_t MonsterTable::id() const {
 }
 inline void MonsterTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:MonsterTable.id)
 }
 inline ::uint32_t MonsterTable::_internal_id() const {
@@ -1084,7 +1108,7 @@ inline void MonsterTable::_internal_set_critchance(::uint64_t value) {
 inline void MonsterTable::clear_speed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.speed_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t MonsterTable::speed() const {
   // @@protoc_insertion_point(field_get:MonsterTable.speed)
@@ -1092,7 +1116,7 @@ inline ::uint64_t MonsterTable::speed() const {
 }
 inline void MonsterTable::set_speed(::uint64_t value) {
   _internal_set_speed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:MonsterTable.speed)
 }
 inline ::uint64_t MonsterTable::_internal_speed() const {
@@ -1108,7 +1132,7 @@ inline void MonsterTable::_internal_set_speed(::uint64_t value) {
 inline void MonsterTable::clear_exp_reward() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exp_reward_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t MonsterTable::exp_reward() const {
   // @@protoc_insertion_point(field_get:MonsterTable.exp_reward)
@@ -1116,7 +1140,7 @@ inline ::uint64_t MonsterTable::exp_reward() const {
 }
 inline void MonsterTable::set_exp_reward(::uint64_t value) {
   _internal_set_exp_reward(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:MonsterTable.exp_reward)
 }
 inline ::uint64_t MonsterTable::_internal_exp_reward() const {
@@ -1132,7 +1156,7 @@ inline void MonsterTable::_internal_set_exp_reward(::uint64_t value) {
 inline void MonsterTable::clear_gold_reward() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_reward_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t MonsterTable::gold_reward() const {
   // @@protoc_insertion_point(field_get:MonsterTable.gold_reward)
@@ -1140,7 +1164,7 @@ inline ::uint64_t MonsterTable::gold_reward() const {
 }
 inline void MonsterTable::set_gold_reward(::uint64_t value) {
   _internal_set_gold_reward(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:MonsterTable.gold_reward)
 }
 inline ::uint64_t MonsterTable::_internal_gold_reward() const {
@@ -1150,6 +1174,54 @@ inline ::uint64_t MonsterTable::_internal_gold_reward() const {
 inline void MonsterTable::_internal_set_gold_reward(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_reward_ = value;
+}
+
+// uint32 capture_pet_table_id = 11;
+inline void MonsterTable::clear_capture_pet_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.capture_pet_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t MonsterTable::capture_pet_table_id() const {
+  // @@protoc_insertion_point(field_get:MonsterTable.capture_pet_table_id)
+  return _internal_capture_pet_table_id();
+}
+inline void MonsterTable::set_capture_pet_table_id(::uint32_t value) {
+  _internal_set_capture_pet_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:MonsterTable.capture_pet_table_id)
+}
+inline ::uint32_t MonsterTable::_internal_capture_pet_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.capture_pet_table_id_;
+}
+inline void MonsterTable::_internal_set_capture_pet_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.capture_pet_table_id_ = value;
+}
+
+// uint32 capture_rate = 12;
+inline void MonsterTable::clear_capture_rate() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.capture_rate_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t MonsterTable::capture_rate() const {
+  // @@protoc_insertion_point(field_get:MonsterTable.capture_rate)
+  return _internal_capture_rate();
+}
+inline void MonsterTable::set_capture_rate(::uint32_t value) {
+  _internal_set_capture_rate(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:MonsterTable.capture_rate)
+}
+inline ::uint32_t MonsterTable::_internal_capture_rate() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.capture_rate_;
+}
+inline void MonsterTable::_internal_set_capture_rate(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.capture_rate_ = value;
 }
 
 // repeated .Monsterdrop drop = 10;

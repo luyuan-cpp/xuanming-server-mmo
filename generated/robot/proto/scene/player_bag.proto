@@ -82,6 +82,9 @@ message BagItemInfo {
   uint32 gem_type = 18;                          // 宝石物品:宝石类型(≥ 1);不是宝石 = 0
   EquipAttrLineInfo gem_attr = 19;               // 宝石物品:这颗宝石提供的属性(不是宝石、或属性行不可用时不带)。tier / cap / seq 恒 0
   uint32 enhance_bonus_permyriad = 20;           // 装备:当前有效等级的基础属性总加成(万分比);0 级为 0,满级也写
+  uint32 equip_profile = 21;
+  repeated EquipFixedAffixSlotInfo fixed_affix_slots = 22;
+  EquipArtifactInfo artifact = 23;
 }
 
 message BagSlotInfo {
@@ -129,9 +132,14 @@ message SortBagResponse {
   bool changed = 3;
 }
 
-// 穿上:物品必须在人物背包里。取接受该部位的槽位里第一个空槽;都占着就替换
-// 槽号最小的那个,旧装备回背包。成功回两个包的全量,客户端整体覆盖。
-message EquipItemRequest { uint64 item_id = 1; }
+// 穿上:物品必须在人物背包里。同名不同实例允许占用两个同类槽。
+// target_slot有值时只操作该槽,须在容量内且接受装备类型；槽0也是合法显式值。
+// 未指定时兼容旧客户端:先找第一个接受该部位的空槽,都占着则替换槽号最小的那个。
+// 旧装备回背包。成功回两个包的全量,客户端整体覆盖。
+message EquipItemRequest {
+  uint64 item_id = 1;
+  optional uint32 target_slot = 2;
+}
 message EquipItemResponse {
   TipInfoMessage error_message = 1;
   BagInfo bag = 2;        // 人物背包
@@ -235,6 +243,108 @@ message RetrieveTemporaryItemsResponse {
   BagInfo temporary = 3;  // 临时格全量
 }
 
+// 固定词条数值统一为万分比；unit区分相对百分比与概率百分点。
+message EquipFixedAffixInfo {
+  uint32 affix_id = 1;
+  uint32 pool = 2; // 1方向、2效能、3通用。
+  string name = 3;
+  string description = 4;
+  uint32 value_bps = 5;
+  uint32 source_cap_bps = 6;
+  uint32 effect = 7;
+  uint32 effect_param = 8;
+  uint32 unit = 9; // 1相对百分比、2概率/抗性百分点。
+  uint32 material_config_id = 10;
+  uint32 material_count = 11;
+}
+message EquipFixedAffixSlotInfo {
+  uint32 slot = 1;
+  uint32 pool = 2;
+  EquipFixedAffixInfo selected = 3; // 无此段表示有效空位，不自动补条。
+}
+message EquipArtifactInfo {
+  uint32 effect_id = 1;
+  string name = 2;
+  string description = 3;
+  uint32 bonus_bps = 4;
+  uint32 cap_bps = 5;
+  uint32 per_round_limit = 6;
+  uint32 battle_limit = 7;
+  uint32 active_rounds = 8;
+  uint32 health_threshold_bps = 9;
+}
+message EquipmentCraftChoice {
+  enum Operation {
+    UNSPECIFIED = 0;
+    CREATE_ITEM = 1;
+    INSTALL_AFFIX = 2;
+  }
+  Operation operation = 1;
+  uint32 config_id = 2; // CREATE_ITEM使用；INSTALL_AFFIX必须为0。
+  uint64 item_id = 3;   // INSTALL_AFFIX使用；CREATE_ITEM必须为0。
+  uint32 affix_slot = 4;
+  uint32 affix_id = 5;
+}
+message EquipmentCraftMaterial {
+  uint32 config_id = 1;
+  string name = 2;
+  string icon_key = 3;
+  uint32 count = 4;
+  uint64 owned = 5;
+  uint64 available = 6; // 不含战斗预留和本版本不可扣的实例。
+}
+message EquipmentCraftRecipe {
+  BagItemInfo product = 1;
+  uint32 material_config_id = 2;
+  uint32 material_count = 3;
+}
+message GetEquipmentCraftRulesRequest {}
+message GetEquipmentCraftRulesResponse {
+  TipInfoMessage error_message = 1;
+  bytes rules_fingerprint = 2; // 权威配置的确定性摘要；客户端只原样携带。
+  uint64 forge_revision = 3;
+  repeated EquipmentCraftRecipe recipes = 4;
+  repeated EquipFixedAffixInfo affixes = 5;
+}
+message EquipmentCraftPreview {
+  EquipmentCraftChoice choice = 1;
+  bytes rules_fingerprint = 2;
+  uint64 expected_forge_revision = 3;
+  BagItemInfo result = 4;
+  EquipmentCraftMaterial material = 5;
+  bool available = 6;
+  uint32 unavailable_tip = 7;
+}
+message PreviewEquipmentCraftRequest { EquipmentCraftChoice choice = 1; }
+message PreviewEquipmentCraftResponse {
+  TipInfoMessage error_message = 1;
+  EquipmentCraftPreview preview = 2;
+}
+// 发送前持久保存整份请求；超时/断线只重放原字节，不替换水位、选项或摘要。
+message CommitEquipmentCraftRequest {
+  EquipmentCraftChoice choice = 1;
+  bytes rules_fingerprint = 2;
+  uint64 expected_forge_revision = 3;
+  uint64 client_request_id = 4; // 必须非0。
+}
+message CommitEquipmentCraftResponse {
+  enum Outcome {
+    UNKNOWN = 0; // 包括旧水位回执已淘汰，不能解释为首次失败。
+    REJECTED = 1; // 本意图在提交前明确拒绝，无资产变更。
+    APPLIED = 2;
+  }
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  Outcome outcome = 3;
+  bool durable = 4; // 仅确认提交的完整存档含该成功水位时为true。
+  bool replayed = 5;
+  uint64 item_id = 6;
+  uint64 result_forge_revision = 7;
+  uint64 current_forge_revision = 8;
+  BagInfo bag = 9;
+  BagInfo equipment = 10;
+}
+
 service SceneBagClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -255,4 +365,7 @@ service SceneBagClientPlayer {
   rpc RemoveGem (RemoveGemRequest) returns (RemoveGemResponse);
   // 临时格 → 人物背包(玩家显式操作,method index 8)。传送途中拒绝、战斗中放行;不改装备栏,不重算属性。
   rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemporaryItemsResponse);
+  rpc GetEquipmentCraftRules (GetEquipmentCraftRulesRequest) returns (GetEquipmentCraftRulesResponse);
+  rpc PreviewEquipmentCraft (PreviewEquipmentCraftRequest) returns (PreviewEquipmentCraftResponse);
+  rpc CommitEquipmentCraft (CommitEquipmentCraftRequest) returns (CommitEquipmentCraftResponse);
 }

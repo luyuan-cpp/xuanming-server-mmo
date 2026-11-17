@@ -67,6 +67,16 @@ message SkillTable {
 	string passive_stat = 44;
 	double passive_percent = 45;
 	double buff_percent = 46;
+	uint32 battle_model = 47;
+	uint32 caster_mask = 48;
+	uint32 ability_kind = 49;
+	uint32 pet_max_targets = 50;
+	repeated uint32 init_effect = 51;
+	string prototype_code = 52;
+	uint32 max_battle_uses = 53;
+	uint32 health_cost_mode = 54;
+	uint32 action_tags = 55;
+	uint32 allow_dead_target = 56;
 	repeated Skillrequired_item required_item = 21;
 	repeated Skillrequired_resource required_resource = 22;
 	repeated Skillcost_resource cost_resource = 23;

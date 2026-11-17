@@ -11,6 +11,7 @@
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/bag_system.h"
+#include "table/code/equipslot_table.h"
 #include "thread_context/ecs_context.h"
 
 // bag_marshal — bridge between BagAllData proto and PlayerBagsComp on a
@@ -48,6 +49,20 @@
 
 namespace
 {
+
+// 旧档容量不足时只扩容,不重排原布局;正式槽位新增后也可由同一恢复入口接入。
+std::size_t MinimumEquipmentCapacity()
+{
+    std::size_t capacity = kEquipmentCapacity;
+    for (const auto& row : EquipSlotTableManager::Instance().FindAll().data())
+    {
+        if (!row.name().empty() && row.equip_kind() != 0)
+        {
+            capacity = std::max(capacity, static_cast<std::size_t>(row.id()) + 1);
+        }
+    }
+    return capacity;
+}
 
 // ItemComp -> ItemEntry。
 //
@@ -211,6 +226,7 @@ void Unmarshal(entt::entity player, const BagAllData& in)
     // If we receive a shorter array (older client / corrupt payload), the
     // missing bags fall through to default capacity_ from the Bag default ctor.
     const int caps = in.capacities_size();
+    const std::size_t equipmentCapacity = MinimumEquipmentCapacity();
     for (uint32_t bagType = 0; bagType < static_cast<uint32_t>(kBagTypeCount); ++bagType)
     {
         bags.bags[bagType].SetPlayerGuid(owner);
@@ -218,7 +234,13 @@ void Unmarshal(entt::entity player, const BagAllData& in)
         if (static_cast<int>(bagType) < caps)
         {
             bags.bags[bagType].SetCapacityForRestore(
-                static_cast<std::size_t>(in.capacities(static_cast<int>(bagType))));
+                bagType == kEquipment
+                    ? std::max(equipmentCapacity, static_cast<std::size_t>(in.capacities(static_cast<int>(bagType))))
+                    : static_cast<std::size_t>(in.capacities(static_cast<int>(bagType))));
+        }
+        else if (bagType == kEquipment)
+        {
+            bags.bags[bagType].SetCapacityForRestore(std::max(equipmentCapacity, bags.bags[bagType].Capacity()));
         }
     }
 

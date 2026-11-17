@@ -66,6 +66,15 @@ func main() {
 	stats := metrics.NewStats()
 	robotStatsRef = stats
 
+	if cfg.Mode == "currency-topup" {
+		if err := RunCurrencyTopup(cfg, stats); err != nil {
+			zap.L().Error("CURRENCY_TOPUP_FAIL", zap.Error(err))
+			_ = zap.L().Sync()
+			os.Exit(1)
+		}
+		return
+	}
+
 	if cfg.Mode == "asset-arrival-prepare" {
 		if err := RunAssetArrivalPrepare(cfg, stats); err != nil {
 			zap.L().Error("ASSET_ARRIVAL_PREPARE_FAIL", zap.Error(err))
@@ -142,6 +151,11 @@ func main() {
 	// Pet-smoke 模式:单机器人做「宝宝(宠物)系统」端到端冒烟
 	// (发宝宝 → 池隔离 → 等级跟随主人 → 自动加点预览 → 确认 → 各类拒绝守卫 → 出战 → 重登往返 → 收回)。
 	// 见 pet_smoke_scenario.go 与 docs/design/player-pet.md。
+	if cfg.Mode == "pet-acquisition-smoke" {
+		RunPetAcquisitionSmoke(cfg)
+		return
+	}
+
 	if cfg.Mode == "pet-smoke" {
 		RunPetSmoke(cfg)
 		return

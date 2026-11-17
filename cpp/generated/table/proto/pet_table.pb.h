@@ -241,6 +241,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
     kInitManaFieldNumber = 9,
     kInitSpeedFieldNumber = 10,
     kLevelCapFieldNumber = 7,
+    kAcquisitionTierFieldNumber = 15,
+    kShopPriceGoldFieldNumber = 14,
   };
   // repeated uint32 aptitude_min = 11;
   [[nodiscard]] int aptitude_min_size()
@@ -412,11 +414,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
   void _internal_set_level_cap(::uint32_t value);
 
   public:
+  // uint32 acquisition_tier = 15;
+  void clear_acquisition_tier() ;
+  [[nodiscard]] ::uint32_t acquisition_tier() const;
+  void set_acquisition_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_acquisition_tier() const;
+  void _internal_set_acquisition_tier(::uint32_t value);
+
+  public:
+  // uint64 shop_price_gold = 14;
+  void clear_shop_price_gold() ;
+  [[nodiscard]] ::uint64_t shop_price_gold() const;
+  void set_shop_price_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_shop_price_gold() const;
+  void _internal_set_shop_price_gold(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PetTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           0, 33,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -461,6 +483,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
     ::uint64_t init_mana_;
     ::uint64_t init_speed_;
     ::uint32_t level_cap_;
+    ::uint32_t acquisition_tier_;
+    ::uint64_t shop_price_gold_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1166,6 +1190,54 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 PetTable::_internal_mutable_skill() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.skill_;
+}
+
+// uint64 shop_price_gold = 14;
+inline void PetTable::clear_shop_price_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shop_price_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t PetTable::shop_price_gold() const {
+  // @@protoc_insertion_point(field_get:PetTable.shop_price_gold)
+  return _internal_shop_price_gold();
+}
+inline void PetTable::set_shop_price_gold(::uint64_t value) {
+  _internal_set_shop_price_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:PetTable.shop_price_gold)
+}
+inline ::uint64_t PetTable::_internal_shop_price_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.shop_price_gold_;
+}
+inline void PetTable::_internal_set_shop_price_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.shop_price_gold_ = value;
+}
+
+// uint32 acquisition_tier = 15;
+inline void PetTable::clear_acquisition_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acquisition_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t PetTable::acquisition_tier() const {
+  // @@protoc_insertion_point(field_get:PetTable.acquisition_tier)
+  return _internal_acquisition_tier();
+}
+inline void PetTable::set_acquisition_tier(::uint32_t value) {
+  _internal_set_acquisition_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:PetTable.acquisition_tier)
+}
+inline ::uint32_t PetTable::_internal_acquisition_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.acquisition_tier_;
+}
+inline void PetTable::_internal_set_acquisition_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acquisition_tier_ = value;
 }
 
 // -------------------------------------------------------------------

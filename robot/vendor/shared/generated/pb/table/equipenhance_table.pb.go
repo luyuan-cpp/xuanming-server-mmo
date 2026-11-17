@@ -30,6 +30,8 @@ type EquipEnhanceTable struct {
 	CostGold       uint64                 `protobuf:"varint,5,opt,name=cost_gold,json=costGold,proto3" json:"cost_gold,omitempty"`
 	MaterialId     uint32                 `protobuf:"varint,6,opt,name=material_id,json=materialId,proto3" json:"material_id,omitempty"`
 	MaterialCount  uint32                 `protobuf:"varint,7,opt,name=material_count,json=materialCount,proto3" json:"material_count,omitempty"`
+	ProfileId      uint32                 `protobuf:"varint,8,opt,name=profile_id,json=profileId,proto3" json:"profile_id,omitempty"`
+	Level          uint32                 `protobuf:"varint,9,opt,name=level,proto3" json:"level,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -113,6 +115,20 @@ func (x *EquipEnhanceTable) GetMaterialCount() uint32 {
 	return 0
 }
 
+func (x *EquipEnhanceTable) GetProfileId() uint32 {
+	if x != nil {
+		return x.ProfileId
+	}
+	return 0
+}
+
+func (x *EquipEnhanceTable) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
 type EquipEnhanceTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*EquipEnhanceTable   `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -161,7 +177,7 @@ var File_equipenhance_table_proto protoreflect.FileDescriptor
 
 const file_equipenhance_table_proto_rawDesc = "" +
 	"\n" +
-	"\x18equipenhance_table.proto\"\xfc\x01\n" +
+	"\x18equipenhance_table.proto\"\xb1\x02\n" +
 	"\x11EquipEnhanceTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12'\n" +
 	"\x0fbonus_permyriad\x18\x02 \x01(\rR\x0ebonusPermyriad\x12!\n" +
@@ -170,7 +186,10 @@ const file_equipenhance_table_proto_rawDesc = "" +
 	"\tcost_gold\x18\x05 \x01(\x04R\bcostGold\x12\x1f\n" +
 	"\vmaterial_id\x18\x06 \x01(\rR\n" +
 	"materialId\x12%\n" +
-	"\x0ematerial_count\x18\a \x01(\rR\rmaterialCount\"?\n" +
+	"\x0ematerial_count\x18\a \x01(\rR\rmaterialCount\x12\x1d\n" +
+	"\n" +
+	"profile_id\x18\b \x01(\rR\tprofileId\x12\x14\n" +
+	"\x05level\x18\t \x01(\rR\x05level\"?\n" +
 	"\x15EquipEnhanceTableData\x12&\n" +
 	"\x04data\x18\x01 \x03(\v2\x12.EquipEnhanceTableR\x04dataBC\n" +
 	"\x0ecom.game.tableB\x1bEquipEnhanceTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

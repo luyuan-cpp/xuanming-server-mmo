@@ -33,18 +33,23 @@ public class EquipEnhanceTableManager {
 
         final Map<Integer, List<EquipEnhanceTable>> idxMaterialId;
 
+        final Map<Integer, List<EquipEnhanceTable>> idxProfileId;
+
 
         Snapshot(EquipEnhanceTableData data,
                  Map<Integer, EquipEnhanceTable> kvData,
-                 Map<Integer, List<EquipEnhanceTable>> idxMaterialId) {
+                 Map<Integer, List<EquipEnhanceTable>> idxMaterialId,
+                 Map<Integer, List<EquipEnhanceTable>> idxProfileId) {
             this.data = data;
             this.kvData = kvData;
             this.idxMaterialId = idxMaterialId;
+            this.idxProfileId = idxProfileId;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             EquipEnhanceTableData.getDefaultInstance(),
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap()
     );
@@ -66,13 +71,15 @@ public class EquipEnhanceTableManager {
 
         Map<Integer, EquipEnhanceTable> kvData = new HashMap<>(data.getDataCount());
         Map<Integer, List<EquipEnhanceTable>> idxMaterialId = new HashMap<>();
+        Map<Integer, List<EquipEnhanceTable>> idxProfileId = new HashMap<>();
 
         for (EquipEnhanceTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
             idxMaterialId.computeIfAbsent(row.getMaterialId(), k -> new ArrayList<>()).add(row);
+            idxProfileId.computeIfAbsent(row.getProfileId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxMaterialId);
+        this.snapshot = new Snapshot(data, kvData, idxMaterialId, idxProfileId);
     }
 
     public EquipEnhanceTableData findAll() {
@@ -96,6 +103,10 @@ public class EquipEnhanceTableManager {
 
     public List<EquipEnhanceTable> getByMaterialId(int key) {
         return snapshot.idxMaterialId.getOrDefault(key, Collections.emptyList());
+    }
+
+    public List<EquipEnhanceTable> getByProfileId(int key) {
+        return snapshot.idxProfileId.getOrDefault(key, Collections.emptyList());
     }
 
 
@@ -122,6 +133,10 @@ public class EquipEnhanceTableManager {
 
     public int countByMaterialIdIndex(int key) {
         return snapshot.idxMaterialId.getOrDefault(key, Collections.emptyList()).size();
+    }
+
+    public int countByProfileIdIndex(int key) {
+        return snapshot.idxProfileId.getOrDefault(key, Collections.emptyList()).size();
     }
 
 

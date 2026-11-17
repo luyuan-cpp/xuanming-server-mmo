@@ -161,45 +161,47 @@ cd tools/data_table_exporter && py -m pytest -q
 | **AttributePool** | `AttributePool.xlsx` | `attributepool_table.proto` | 10 | 10 | 2 | — | — | `owner_type` | — | — | — | — |
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
-| **Buff** | `Buff.xlsx` | `buff_table.proto` | 32 | 22 | 26 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
+| **Buff** | `Buff.xlsx` | `buff_table.proto` | 63 | 53 | 98 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
 | **Cooldown** | `Cooldown.xlsx` | `cooldown_table.proto` | 2 | 2 | 9 | — | — | — | — | — | — | — |
-| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 7 | 5 | 3 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
+| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 8 | 6 | 4 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
 | **EquipAffixPool** | `EquipAffixPool.xlsx` | `equipaffixpool_table.proto` | 4 | 4 | 29 | — | — | `pool_id` `attr_id` | `attr_id→EquipAttribute.id` | — | — | — |
 | **EquipAffixRule** | `EquipAffixRule.xlsx` | `equipaffixrule_table.proto` | 5 | 5 | 1 | — | — | — | — | — | — | — |
+| **EquipArtifact** | `EquipArtifact.xlsx` | `equipartifact_table.proto` | 9 | 9 | 8 | — | — | — | — | — | — | — |
 | **EquipAttribute** | `EquipAttribute.xlsx` | `equipattribute_table.proto` | 6 | 6 | 26 | — | — | — | — | — | — | — |
 | **EquipAttributeCap** | `EquipAttributeCap.xlsx` | `equipattributecap_table.proto` | 5 | 5 | 125 | — | — | `attr_id` | `attr_id→EquipAttribute.id` | — | — | — |
-| **EquipEnhance** | `EquipEnhance.xlsx` | `equipenhance_table.proto` | 7 | 7 | 12 | — | — | `material_id` | `material_id→Item.id` | — | — | — |
+| **EquipEnhance** | `EquipEnhance.xlsx` | `equipenhance_table.proto` | 9 | 9 | 22 | — | — | `material_id` `profile_id` | `material_id→Item.id` | — | — | — |
 | **EquipGem** | `EquipGem.xlsx` | `equipgem_table.proto` | 4 | 4 | 12 | — | — | `id` `attr_id` | `id→Item.id` `attr_id→EquipAttribute.id` | — | — | — |
 | **EquipGemSocket** | `EquipGemSocket.xlsx` | `equipgemsocket_table.proto` | 5 | 5 | 6 | — | — | `equip_kind` | — | — | — | — |
-| **EquipSlot** | `EquipSlot.xlsx` | `equipslot_table.proto` | 3 | 3 | 7 | — | — | — | — | — | — | — |
+| **EquipSlot** | `EquipSlot.xlsx` | `equipslot_table.proto` | 3 | 3 | 11 | — | — | — | — | — | — | — |
+| **EquipV1Affix** | `EquipV1Affix.xlsx` | `equipv1affix_table.proto` | 10 | 10 | 36 | — | — | `pool` `material_id` | `material_id→Item.id` | — | — | — |
 | **GlobalVariable** | `GlobalVariable.xlsx` | `globalvariable_table.proto` | 8 | 1 | 16 | — | — | — | — | — | — | — |
 | **GuildActivity** | `GuildActivity.xlsx` | `guildactivity_table.proto` | 15 | 15 | 3 | — | — | `reward_id` `dungeon_id` | `reward_id→Reward.id` `dungeon_id→Dungeon.id` | — | — | — |
 | **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 3 | — | — | — | — | — | — | — |
 | **GuildLevel** | `GuildLevel.xlsx` | `guildlevel_table.proto` | 4 | 4 | 10 | — | — | — | — | — | — | — |
 | **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 10 | 10 | 1 | — | — | — | — | — | — | — |
 | **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 11 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
-| **Item** | `Item.xlsx` | `item_table.proto` | 19 | 14 | 77 | — | — | `affix_rule` | `affix_rule→EquipAffixRule.id` | — | — | `base_attr` |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 89 | — | — | — | — | — | — | — |
+| **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 132 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 91 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
-| **Monster** | `Monster.xlsx` | `monster_table.proto` | 16 | 10 | 16 | — | — | — | — | — | — | `drop` |
+| **Monster** | `Monster.xlsx` | `monster_table.proto` | 18 | 12 | 16 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
 | **MysteryMerchantGoods** | `MysteryMerchantGoods.xlsx` | `mysterymerchantgoods_table.proto` | 8 | 8 | 12 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **MysteryMerchantRule** | `MysteryMerchantRule.xlsx` | `mysterymerchantrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **MysteryMerchantSpot** | `MysteryMerchantSpot.xlsx` | `mysterymerchantspot_table.proto` | 6 | 6 | 6 | — | — | `scene_config_id` | — | — | — | — |
-| **Pet** | `Pet.xlsx` | `pet_table.proto` | 22 | 13 | 22 | — | — | — | — | — | — | — |
+| **Pet** | `Pet.xlsx` | `pet_table.proto` | 24 | 15 | 22 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 6 | 6 | 1 | — | — | — | — | — | — | — |
-| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 5 | 5 | 6 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
+| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 5 | 5 | 7 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
 | **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
-| **Skill** | `Skill.xlsx` | `skill_table.proto` | 68 | 46 | 46 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
+| **Skill** | `Skill.xlsx` | `skill_table.proto` | 81 | 56 | 115 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **49** 张表、**524** 个物理列、**379** 个进产物的字段。
+合计 **51** 张表、**598** 个物理列、**450** 个进产物的字段。
 
 <!-- END GENERATED -->

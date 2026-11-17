@@ -41,6 +41,7 @@
 #include "data/battle_table_fingerprint.h"
 // 活动上下文与逃跑 / 阵亡名单的回显组装(帮会同道历练,guild-phase2 §6.19–§6.21)。
 #include "system/battle_result_activity.h"
+#include "system/battle_actor_command_rules.h"
 
 #include "proto/common/base/message.pb.h"
 #include "proto/common/event/battle_event.pb.h"
@@ -741,11 +742,18 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
     }
 
     if (TerminalPending(*room)) { response.mutable_error_message()->set_id(kServiceUnavailable); return; }
+    const auto commandState = room->engine.BuildStateSnapshot();
+    if (!turnbattle::CanCommandBattleActor(commandState, playerId, request))
+    {
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+    const auto actorId = request.actor_id() == 0 ? playerId : request.actor_id();
     // 先查后提交:校验码回给提交者(G2)。原先"一律回 OK"会让玩家点了吃药、
     // 客户端显示成功、回合结算却变成默认普攻,连原因都看不到 —— 玩家资产路径
     // 不许静默降级(AGENTS §11.3)。ValidateAction 零副作用,与 SubmitAction 的
     // 接受条件逐条同源。
-    const uint32_t validation = room->engine.ValidateAction(playerId, request.action());
+    const uint32_t validation = room->engine.ValidateActorAction(playerId, actorId, request.action());
     if (validation != kSuccess)
     {
         LOG_DEBUG << "SubmitBattleAction validation failed: battle_id=" << request.battle_id()
@@ -763,7 +771,7 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
     }
 
     // 非法行动引擎不落账,按未提交处理,回合超时的默认普攻兜底(引擎契约)
-    const bool allReady = room->engine.SubmitAction(playerId, request.action());
+    const bool allReady = room->engine.SubmitAction(actorId, request.action());
     if (allReady)
     {
         // 全员就绪提前结算,不等 action_deadline。

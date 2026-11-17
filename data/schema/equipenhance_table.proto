@@ -6,8 +6,9 @@ syntax = "proto3";
 // 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
 // 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
 //
-// 装备强化规则:一行 = 一个**目标**强化等级。第 N 行既是「从 +(N-1) 强化到 +N」的规则(成功率、消耗、失败掉级),
-// 也是 +N 的加成。强化上限 = 表里从 1 起**连续**的最大 id(表为空 = 强化未开放),所以加等级只加行、id 不许跳号。
+// 装备强化规则:一行 = 一个规则组的目标强化等级，同时定义升级消耗、成功率和本级总加成。
+// 旧规则组 profile_id=0 的 level=0 时按 id 取等级，保留原 1..12 行及数值。
+// 其余规则显式写 level；每个规则组的强化上限由从 1 起连续的目标等级决定，不能跨组串用。
 // 加成只放大装备的基础属性,数值不入库:入库的只有「+几」,改表立即对存量装备生效(等级按表上限夹取)。
 // 源表由 tools/scripts/equip_xlsx_patch.py forge-tables 生成;schema 与 xlsx 必须成对提交。
 
@@ -20,7 +21,7 @@ message EquipEnhanceTable {
   option (cfg_source_file) = "EquipEnhance.xlsx";
   option (cfg_primary_key) = "id";
 
-  // 目标强化等级(从 1 起连续):第 N 行 = 从 +(N-1) 强化到 +N 的规则,以及 +N 的加成
+  // 规则行身份。旧规则组 level 留 0 时兼作目标等级；新版行的等级由 level 指定。
   uint32 id = 1;
   // 强化到本级后基础属性的总加成(万分比,不是相对上一级的增量);随等级单调不减
   uint32 bonus_permyriad = 2;
@@ -34,4 +35,8 @@ message EquipEnhanceTable {
   uint32 material_id = 6 [(cfg_fk) = "Item"];
   // 材料数量(成败都扣);material_id 为 0 时必须为 0
   uint32 material_count = 7;
+  // 强化规则组：0 旧规则，1 首发基础装。首饰与法宝没有强化规则组。
+  uint32 profile_id = 8 [(cfg_index) = true];
+  // 目标等级。旧规则组可留 0 并沿用 id，其余规则组必须显式填写。
+  uint32 level = 9;
 }

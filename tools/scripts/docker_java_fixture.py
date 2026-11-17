@@ -36,6 +36,8 @@ IMAGES = {'pd': 'sha256:507b401ece53aba15db9628a90a1e350c3cd1b9b39c086c708e2e885
           'tikv': 'sha256:cdb681d570c490424d69ecc1ecda6865999f2b86ae3b2d2cb070989bf4d2701d',
           'tidb': 'sha256:3378c71dc8b3dd39742dc0ba546c80880a5d8b0da67a9f9d116cfc33505505c3'}
 OWNER_LABEL = 'org.xuanming.java-fixture.owner'
+FIXTURE_SUBNET = '10.254.254.0/24'
+FIXTURE_GATEWAY = '10.254.254.1'
 COMPOSE = ROOT / 'deploy/debug/java-fixture/compose.yml'
 RUNNER = ROOT / 'tools/scripts/docker_java_fixture.ps1'
 # The owned producer prepares the mall schema and per-table grants in one action.
@@ -293,6 +295,11 @@ def _inventory(state, environment):
     network = networks[0]
     _require(_labels(network.get('Labels') or {}, state) and set(network.get('Containers') or {}) == set(containers.values()),
              'Java fixture network has changed ownership or foreign attachments')
+    ipam = network.get('IPAM') or {}
+    _require(network.get('Driver') == 'bridge' and network.get('Scope') == 'local'
+             and ipam.get('Driver') == 'default'
+             and ipam.get('Config') == [{'Subnet': FIXTURE_SUBNET, 'Gateway': FIXTURE_GATEWAY}],
+             'Java fixture network differs from the dedicated subnet contract')
     volumes = {}
     for service in ('pd', 'tikv'):
         name = state['project'] + '_' + service + '-data'

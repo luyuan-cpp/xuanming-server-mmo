@@ -15,6 +15,7 @@
 #include "table/code/dungeon_table.h"
 #include "table/code/monster_table.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
 
 namespace turnbattle {
 
@@ -101,6 +102,10 @@ const DungeonTable* TableBattleDataProvider::FindDungeon(uint32_t dungeonTableId
 
 const MonsterTable* TableBattleDataProvider::FindMonster(uint32_t monsterTableId) const {
     return MonsterTableManager::Instance().FindByIdSilent(monsterTableId).first;
+}
+
+const PetTable* TableBattleDataProvider::FindPet(uint32_t petTableId) const {
+    return PetTableManager::Instance().FindByIdSilent(petTableId).first;
 }
 
 const ItemTable* TableBattleDataProvider::FindItem(uint32_t itemTableId) const {

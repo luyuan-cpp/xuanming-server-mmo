@@ -14,6 +14,7 @@ message DungeonTable {
 	uint32 max_team_size = 3;
 	uint32 time_limit = 4;
 	repeated uint32 monster = 5;
+	uint32 allow_pet_capture = 6;
 }
 
 message DungeonTableData {

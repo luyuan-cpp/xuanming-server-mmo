@@ -157,18 +157,72 @@ func (x *EquipGem) GetGemConfigId() uint32 {
 // 这一段随 ItemComp.equip / ItemEntry.equip 整份搬运,穿脱、存档、跨区都不用再逐字段跟。
 // 强化 / 镶嵌只改 has_equip() 的实例;不要为了写这两个字段对未初始化的实例调 mutable_equip()
 // —— 那会把「没掷过属性」变成「已初始化」。
+// V1 固定词条只保存选择；槽位 1/2 是词条位身份，不是装备穿戴位置。
+type EquipFixedAffix struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	AffixId       uint32                 `protobuf:"varint,2,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"` // EquipV1Affix.id；数值与显示由规则表提供。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipFixedAffix) Reset() {
+	*x = EquipFixedAffix{}
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipFixedAffix) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipFixedAffix) ProtoMessage() {}
+
+func (x *EquipFixedAffix) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipFixedAffix.ProtoReflect.Descriptor instead.
+func (*EquipFixedAffix) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *EquipFixedAffix) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *EquipFixedAffix) GetAffixId() uint32 {
+	if x != nil {
+		return x.AffixId
+	}
+	return 0
+}
+
 type EquipInstanceData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Affixes       []*EquipAffix          `protobuf:"bytes,1,rep,name=affixes,proto3" json:"affixes,omitempty"`
 	EnhanceLevel  uint32                 `protobuf:"varint,2,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"` // 强化等级(+N),0 = 未强化。入库的只有「+几」,加成按 EquipEnhance 表现查
 	Gems          []*EquipGem            `protobuf:"bytes,3,rep,name=gems,proto3" json:"gems,omitempty"`                                      // 已镶嵌宝石;同一 socket 至多一条
+	FixedAffixes  []*EquipFixedAffix     `protobuf:"bytes,4,rep,name=fixed_affixes,json=fixedAffixes,proto3" json:"fixed_affixes,omitempty"`  // V1 首次安装的固定词条，不与旧颜色档混用。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *EquipInstanceData) Reset() {
 	*x = EquipInstanceData{}
-	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -180,7 +234,7 @@ func (x *EquipInstanceData) String() string {
 func (*EquipInstanceData) ProtoMessage() {}
 
 func (x *EquipInstanceData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -193,7 +247,7 @@ func (x *EquipInstanceData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipInstanceData.ProtoReflect.Descriptor instead.
 func (*EquipInstanceData) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{2}
+	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *EquipInstanceData) GetAffixes() []*EquipAffix {
@@ -213,6 +267,13 @@ func (x *EquipInstanceData) GetEnhanceLevel() uint32 {
 func (x *EquipInstanceData) GetGems() []*EquipGem {
 	if x != nil {
 		return x.Gems
+	}
+	return nil
+}
+
+func (x *EquipInstanceData) GetFixedAffixes() []*EquipFixedAffix {
+	if x != nil {
+		return x.FixedAffixes
 	}
 	return nil
 }
@@ -246,7 +307,7 @@ type ItemComp struct {
 
 func (x *ItemComp) Reset() {
 	*x = ItemComp{}
-	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[3]
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -258,7 +319,7 @@ func (x *ItemComp) String() string {
 func (*ItemComp) ProtoMessage() {}
 
 func (x *ItemComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[3]
+	mi := &file_proto_common_component_item_base_comp_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -271,7 +332,7 @@ func (x *ItemComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ItemComp.ProtoReflect.Descriptor instead.
 func (*ItemComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{3}
+	return file_proto_common_component_item_base_comp_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ItemComp) GetItemId() uint64 {
@@ -322,11 +383,15 @@ const file_proto_common_component_item_base_comp_proto_rawDesc = "" +
 	"\x03seq\x18\x04 \x01(\rR\x03seq\"F\n" +
 	"\bEquipGem\x12\x16\n" +
 	"\x06socket\x18\x01 \x01(\rR\x06socket\x12\"\n" +
-	"\rgem_config_id\x18\x02 \x01(\rR\vgemConfigId\"~\n" +
+	"\rgem_config_id\x18\x02 \x01(\rR\vgemConfigId\"@\n" +
+	"\x0fEquipFixedAffix\x12\x12\n" +
+	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x19\n" +
+	"\baffix_id\x18\x02 \x01(\rR\aaffixId\"\xb5\x01\n" +
 	"\x11EquipInstanceData\x12%\n" +
 	"\aaffixes\x18\x01 \x03(\v2\v.EquipAffixR\aaffixes\x12#\n" +
 	"\renhance_level\x18\x02 \x01(\rR\fenhanceLevel\x12\x1d\n" +
-	"\x04gems\x18\x03 \x03(\v2\t.EquipGemR\x04gems\"\x9f\x01\n" +
+	"\x04gems\x18\x03 \x03(\v2\t.EquipGemR\x04gems\x125\n" +
+	"\rfixed_affixes\x18\x04 \x03(\v2\x10.EquipFixedAffixR\ffixedAffixes\"\x9f\x01\n" +
 	"\bItemComp\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x12\n" +
@@ -347,22 +412,24 @@ func file_proto_common_component_item_base_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_item_base_comp_proto_rawDescData
 }
 
-var file_proto_common_component_item_base_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_common_component_item_base_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_common_component_item_base_comp_proto_goTypes = []any{
 	(*EquipAffix)(nil),        // 0: EquipAffix
 	(*EquipGem)(nil),          // 1: EquipGem
-	(*EquipInstanceData)(nil), // 2: EquipInstanceData
-	(*ItemComp)(nil),          // 3: ItemComp
+	(*EquipFixedAffix)(nil),   // 2: EquipFixedAffix
+	(*EquipInstanceData)(nil), // 3: EquipInstanceData
+	(*ItemComp)(nil),          // 4: ItemComp
 }
 var file_proto_common_component_item_base_comp_proto_depIdxs = []int32{
 	0, // 0: EquipInstanceData.affixes:type_name -> EquipAffix
 	1, // 1: EquipInstanceData.gems:type_name -> EquipGem
-	2, // 2: ItemComp.equip:type_name -> EquipInstanceData
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	2, // 2: EquipInstanceData.fixed_affixes:type_name -> EquipFixedAffix
+	3, // 3: ItemComp.equip:type_name -> EquipInstanceData
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_item_base_comp_proto_init() }
@@ -376,7 +443,7 @@ func file_proto_common_component_item_base_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_item_base_comp_proto_rawDesc), len(file_proto_common_component_item_base_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

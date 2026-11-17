@@ -28,6 +28,12 @@
     <ClCompile Include="player_equip_test.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="player_equip_target_slot_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="player_equip_v1_test.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
     <ClCompile Include="player_mystery_merchant_test.cpp">
       <Filter>source</Filter>
     </ClCompile>

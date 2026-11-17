@@ -67,6 +67,11 @@ services:
     cap_add: [SYS_PTRACE]
     ports: ["127.0.0.1:2352:40000"]
 
+  rank:
+    command: [/usr/local/bin/dlv, exec, /app/service, --headless=true, --listen=0.0.0.0:40000, --api-version=2, --accept-multiclient, --continue, --, -f, /run/sql-writer/runtime/rank.yaml]
+    cap_add: [SYS_PTRACE]
+    ports: ["127.0.0.1:2353:40000"]
+
   gateway:
     environment:
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"

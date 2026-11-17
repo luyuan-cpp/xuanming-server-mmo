@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "EquipArtifactTableOuterClass";
+option java_multiple_files = true;
+
+
+message EquipArtifactTable {
+	uint32 id = 1;
+	uint32 bonus_bps = 2;
+	uint32 cap_bps = 3;
+	uint32 per_round_limit = 4;
+	uint32 battle_limit = 5;
+	uint32 active_rounds = 6;
+	uint32 health_threshold_bps = 7;
+	string name = 8;
+	string description = 9;
+}
+
+message EquipArtifactTableData {
+	repeated EquipArtifactTable data = 1;
+}

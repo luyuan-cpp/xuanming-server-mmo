@@ -43,7 +43,7 @@ ControlRedis:
 # 不写 Addrs = 指向上面 ControlRedis 的实例(只适合本机单实例;ControlRedis 是集群时不写 Addrs 拒启)。集群部署写种子地址并打开 Cluster:
 #   Addrs: [127.0.0.1:7000, 127.0.0.1:7001, 127.0.0.1:7002]
 #   Cluster: true
-# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。铸造通道另有固定 32 条(svc.ownerEpochMintPoolSize)。
+# PoolSizePerNode 是每个节点的连接池上限,单实例即总上限。铸造通道另有固定 130 条(svc.ownerEpochMintPoolSize)。
 # 读写 3s、取连接 4s、拨号 5s 沿用这条路径换句柄之前的口径,要改写 ReadTimeoutMs / WriteTimeoutMs / PoolTimeoutMs / DialTimeoutMs。
 PlayerRedis:
   PoolSizePerNode: 20

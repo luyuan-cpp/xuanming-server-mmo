@@ -77,6 +77,18 @@ public final class PetTableComp {
         }
     }
 
+    public record Shop_price_gold(long value) {
+        public static Shop_price_gold from(PetTable row) {
+            return new Shop_price_gold(row.getShopPriceGold());
+        }
+    }
+
+    public record Acquisition_tier(int value) {
+        public static Acquisition_tier from(PetTable row) {
+            return new Acquisition_tier(row.getAcquisitionTier());
+        }
+    }
+
     public record Aptitude_min(List<Integer> values) {
         public static Aptitude_min from(PetTable row) {
             return new Aptitude_min(row.getAptitudeMinList());

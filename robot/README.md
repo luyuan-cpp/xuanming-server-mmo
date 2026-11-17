@@ -41,10 +41,12 @@ zone_id: 0
 
 | `mode` | 做什么 |
 |--------|--------|
+| `currency-topup` | 仅本地开发服，按明确的账号与已有角色ID补银两；独占回执防止重复批次，逐人核对余额与重登结果。配置见 `etc/currency_topup.yaml`，口令从 `LOGIN_DEV_PASSWORD_SHARED_SECRET` 环境变量注入；任何超时均停止，不能盲目重发。 |
 | `stress`(默认) | 大量机器人并发登录、进场景、按 AI 策略行动 |
 | `login-test` | 登录场景测试集:重连、顶号、超时等,跑完即退出 |
 | `battle-smoke` | 两个机器人匹配并打完一场回合制战斗 |
 | `attribute-smoke`、`pet-smoke` | 属性加点、宠物 |
+| `pet-acquisition-smoke` | 本地开发服普通宠物获取：每次独立新测试账号，商店22种报价、购买扣款/重试幂等、野外config4直连捕捉、持久结算及重登回执验证（`etc/pet_acquisition_smoke.yaml`）；GM仅准备测试等级与银两 |
 | `equip-smoke`、`equip-forge-smoke` | 装备随机属性与穿脱;装备强化、宝石镶嵌与取下(两条冒烟各用各的账号,强化不可逆) |
 | `chat-smoke`、`friend-smoke`、`guild-smoke`、`team-smoke`、`trade-smoke` | 聊天、好友、帮会、组队、交易 |
 | `mail-smoke` | 邮件:直连 MailAdmin 发系统 / 定向 / 带附件三封,两区读信、删信、领取未开放与 S2C 方法不可调(`etc/mail_smoke.yaml`;mail 与 robot 要拿到同一个 `MMORPG_MAIL_ADMIN_TOKEN`,取法见该文件头) |
@@ -61,6 +63,31 @@ zone_id: 0
 | `currency-crash-snapshot` | 货币崩溃窗口验证用的单次登录快照 |
 
 每种模式在 `etc/` 下都有对应的配置样例。
+
+### 给已有开发角色补银两
+
+`currency-topup` 用于本地开发服，网关必须是 `http://127.0.0.1:<端口>`，`zone_id` 必须明确且非零。
+它按顺序登录 `currency_topup.targets` 中的账号，只选择对应 `player_id` 已有角色；账号下有多个角色时也不会改选第一名，找不到指定角色就停止，不会建角。
+账号仅限 `dev_`、`robot_` 前缀，并仍须通过服务器正常开发密码认证及 GM 开关。该模式只发送银两类型的 `GmAddCurrency`，不升级、不发材料、不购买物品。
+
+复制 [etc/currency_topup.yaml](etc/currency_topup.yaml) 到本次运维目录，填入已核对归属的目标列表。保持 `robot_count: 1`、`auth_type: password`，关闭 HTTP 登录和 AI。
+`currency_topup.amount` 是每名角色本次增加的正数，不是最终余额；例如 `100000` 表示每人增加十万银两。
+`targets` 每项必须同时填写 `account` 和完整的 `player_id`，同一角色不能重复列出；整理清单时用字符串保留 64 位 ID，避免经过 JavaScript 浮点数损失精度。
+
+共享口令由受控执行器注入 `LOGIN_DEV_PASSWORD_SHARED_SECRET` 环境变量，样例中的 `password` 保持空，不将口令写入 YAML、命令行或日志。
+在 `robot/` 目录运行已编译的机器人程序，例如：
+
+```powershell
+& ../build/verification/currency-topup.exe -c ../build/verification/currency-topup-reviewed.yaml
+```
+
+每批开始前确定一个**固定且尚不存在**的 `currency_topup.receipt_path`，建议使用运维目录下的绝对路径。
+程序以独占创建方式打开 JSONL 回执；文件已存在就拒绝整批，发放前先写入并同步 `grant_intent`，收到明确成功回包再记 `grant_acknowledged`。
+随后核对银两准确增加、其它币种不变，正式离场并重登同一角色再次核对，成功记录 `relogin_verified`；所有目标完成才写 `batch_complete` 并输出 `CURRENCY_TOPUP_OK`。
+
+这个回执用于阻止同批次误重跑，GM 发钱 RPC 本身没有本工具可用的幂等请求号。
+遇到超时、断线或余额不符，程序立即停止且不自动重发；先按回执中的角色、时间和前后余额核对存档及货币流水。
+`grant_intent` 没有后续成功记录也可能已经到账，不能据此再次发放。不要删除回执或仅更换文件名重跑整批；只有确认尚未发放的目标，才可另行准备经过核账的新清单。
 
 ## 目录
 

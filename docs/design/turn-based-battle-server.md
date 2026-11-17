@@ -1397,7 +1397,7 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 
 本节替代旧 D41/D43 的逐怪奖励口径。PVE 获胜时，每位 A 方存活且未逃跑的玩家各领一份奖励；怪物仍可随队伍规模生成，任务仍记录真实击杀，但经验、货币和道具抽取次数均不乘除人数或击杀数。PVP、失败、平局、阵亡和逃跑不发这份 PVE 奖励。
 
-权威配置为 `bin/etc/battle_rewards.json`，结构由 `proto/battle/battle_data.proto` 的 `BattleRewardConfig` 定义。`profiles` 按 `battle_config_id` 与 `strategy_key` 选档：优先副本策略档、副本通用档、默认策略档、默认通用档；副本号 0、空策略为必需默认档。每档可配 `exp_gain`、`currencies`、`item_draws` 和带 `item_table_id/count/weight` 的 `random_items`。默认货币为金币 100、钻石 10、绑定钻石 20；药品 10/11 等权抽 2 次，有放回、同种汇总。经验继续沿用现有结算字段及 scene 处理口径，不新增升级系统。
+权威配置为 `bin/etc/battle_rewards.json`，结构由 `proto/battle/battle_data.proto` 的 `BattleRewardConfig` 定义。`profiles` 按 `battle_config_id` 与 `strategy_key` 选档：优先副本策略档、副本通用档、默认策略档、默认通用档；副本号 0、空策略为必需默认档。每档可配 `exp_gain`、`currencies`、`item_draws` 和带 `item_table_id/count/weight` 的 `random_items`。默认货币为金币 100、钻石 10、绑定钻石 20；药品 10/11 等权抽 2 次，有放回、同种汇总。2026-11-15 起 scene 把 `exp_gain` 与结算账本同次计入持久的 `LevelComp.total_exp`，并在本人战果中记录实得额；没有升级曲线，不凭空改变角色等级。
 
 battle 在表加载完成后读取文件一次，支持 `BATTLE_REWARD_CONFIG_PATH` 覆盖默认 `etc/battle_rewards.json`；非法/缺失配置拒绝启动。修改文件后需重启 battle。K8s 生成器从同一文件渲染 ConfigMap，避免整个 `etc` 挂载遮蔽奖励文件。每场开局复制通用奖励档，终局 `SelectRewardStrategy(playerId)` 预留服务端按实际战斗行为选档的入口，目前返回空，不假定尚未确定的策略规则。
 

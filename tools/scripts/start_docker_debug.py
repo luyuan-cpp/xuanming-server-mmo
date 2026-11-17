@@ -18,10 +18,10 @@ DOCKER = ["docker", "--context", "desktop-linux"]
 ENV = ROOT / "build/docker-debug-current/.env"
 COMPOSE_FILES = [ROOT / "deploy/debug/compose.game.yml", ROOT / "deploy/debug/compose.debug.yml"]
 INFRA = ("mysql", "redis", "etcd", "kafka")
-APPS = ("db", "data-service", "client-rpc-router", "scene-manager", "match", "player-inbox",
+APPS = ("db", "data-service", "client-rpc-router", "scene-manager", "rank", "match", "player-inbox",
         "player-locator", "scene", "battle", "login", "gate", "gateway")
-INIT = ("kafka-init", "sql-boot", "db-migrate", "data-migrate", "match-migrate", "player-inbox-migrate")
-WRITERS = {"db", "data-service", "match", "player-inbox", "gateway"}
+INIT = ("kafka-init", "sql-boot", "db-migrate", "data-migrate", "match-migrate", "rank-migrate", "player-inbox-migrate")
+WRITERS = {"db", "data-service", "match", "rank", "player-inbox", "gateway"}
 ONESHOTS = set(INIT) | {name + "-sql-boot" for name in WRITERS | {"login"}}
 # 这些容器只保留成功历史，不参与日常恢复；业务镜像更新不会追溯更新旧迁移容器。
 HISTORY_ONLY = set(INIT) | {"login-sql-boot"}
@@ -29,6 +29,29 @@ NODE_PORTS = {"gate": 10000, "scene": 20001, "battle": 20000}
 AUTHORED_TABLE_TARGETS = {**dict.fromkeys(NODE_PORTS, '/app/generated/generated_tables'),
                           **dict.fromkeys(('login', 'scene-manager', 'player-locator'), '/generated/tables')}
 OUT = None
+# 用户批准的原恢复证据；固定摘要防止用新生成的成功标记替代历史事实。
+RECOVERY_SOURCES = {
+    'docker-start-20261115T045313.214784Z/preflight.json': '61f2466b375fd952fdb4e8402e969970d968f5604d0497c37e4f672f360f7d06',
+    'rank-debug-check-20261115/verified.json': 'd23321cce75a60bd8074ecc995be2c4d776d9e4e969d83d11d3f561cd573c1ac',
+    'pet-acquisition-apply-20261116/containers-after-verified.json': '06ae0ade84d03b2e31b39d0e95448dcb4af3534839606622188ecff0964f7c7a',
+    'pet-acquisition-apply-20261116/verification-result.json': 'b255df9cbb9ef8f4f7eb8997a7f6a67d65b813764327515a0f9e62a28f88761a',
+}
+# 本次保留的 rank 注册卷在旧完整快照之后创建，单独钉住真实创建身份。
+RECOVERY_ADDED_VOLUMES = {
+    'xuanming-debug-current_20261106_latest_r1_rank-sql-consume': '9a53868da6e4cb88c19ecd30473ea25500fa84b0107335a487684c4c14bef192',
+    'xuanming-debug-current_20261106_latest_r1_rank-sql-writer': 'b3945684fcefc5de656d346b96c2e3bb29d79048f5c2826d36e72cc1a0e9f291',
+}
+
+
+def recovery_path():
+    return ROOT / 'build/verification/container-recovery-20261117/compose.recovery.json'
+
+
+def compose_label_files(row):
+    files = [Path(p) for p in row['Config']['Labels'].get('com.docker.compose.project.config_files', '').split(',')]
+    if files and files[-1] == recovery_path():
+        files = files[:-1]
+    return files
 
 
 
@@ -70,7 +93,7 @@ def authored_overlay(rows):
     candidates = set()
     for row in rows:
         labels = row['Config']['Labels']
-        files = [Path(p) for p in labels.get('com.docker.compose.project.config_files', '').split(',')]
+        files = compose_label_files(row)
         if not any(path.name == 'compose.authored.json' for path in files):
             continue
         require(files[:-1] == COMPOSE_FILES and files[-1].name == 'compose.authored.json',
@@ -215,8 +238,7 @@ def compose_contract(overlay_input=None):
         options['input_text'] = overlay_input
     config = json.loads(run(command + ['config', '--format', 'json'], **options))
     require(config.get('name') == PROJECT, 'Unexpected resolved project')
-    require(set(config['services']) == set(INFRA) | set(APPS) | ONESHOTS
-            and len(config['services']) == 28, 'Unexpected Compose service set')
+    require(set(config['services']) == set(INFRA) | set(APPS) | ONESHOTS, 'Unexpected Compose service set')
     require(ENV.read_bytes() == original, 'Environment changed during configuration read')
     return config, sha(original)
 
@@ -235,7 +257,7 @@ def ports(config, name, target):
     return result
 
 
-def validate_mounts(name, row, service, volume_definitions, image_volumes, volume_details):
+def validate_mounts(name, row, service, volume_definitions, image_volumes, volume_details, recovery=None):
     # 历史任务只核实际挂载；将执行的容器还必须精确匹配当前 Compose 显式挂载。
     configured = service.get('volumes', []) if service is not None else []
     explicit = {v['target']: v for v in configured}
@@ -262,8 +284,15 @@ def validate_mounts(name, row, service, volume_definitions, image_volumes, volum
         require(actual.get('Driver') == volume.get('Driver'), 'Mounted volume driver differs: ' + name)
         if target in explicit:
             require(explicit[target]['type'] == 'volume', 'Volume overrides an explicit mount: ' + name)
-            require(project == PROJECT, 'Named volume lacks project ownership: ' + name)
-            anonymous = False
+            prior = (recovery or {}).get('anonymousVolumes', {}).get(target) if name == 'kafka' else None
+            anonymous = prior is not None and prior['name'] == identity
+            if anonymous:
+                require(target in image_volumes and actual.get('RW') is True
+                        and 'com.docker.volume.anonymous' in labels
+                        and volume_signature(volume) == prior['volumeSignature'],
+                        'Recovered anonymous volume identity changed: ' + name)
+            else:
+                require(project == PROJECT, 'Named volume lacks project ownership: ' + name)
         elif service is None and project == PROJECT and 'com.docker.volume.anonymous' not in labels:
             anonymous = False
         else:
@@ -274,17 +303,156 @@ def validate_mounts(name, row, service, volume_definitions, image_volumes, volum
             anonymous = True
         result.append({'target': target, 'name': identity, 'readWrite': actual['RW'],
                        'driver': actual['Driver'], 'anonymous': anonymous,
-                       'volumeSignature': hashed({k: volume.get(k) for k in
-                           ('Name', 'Driver', 'Scope', 'CreatedAt', 'Labels', 'Options', 'Mountpoint')})})
+                       'volumeSignature': volume_signature(volume)})
     return sorted(result, key=lambda value: value['target'])
+
+
+class InventoryError(RuntimeError):
+    def __init__(self, message, diagnostics):
+        super().__init__(message)
+        self.diagnostics = diagnostics
+
+
+def history_key(row):
+    return 'storage-migration:' + row['Id']
+
+
+def validate_service_inventory(rows, allowed_missing=()):
+    # 只输出固定服务白名单和容器身份摘要；标签中的未知文本可能含秘密。
+    expected = set(INFRA) | set(APPS) | ONESHOTS
+    counts = dict.fromkeys(expected, 0)
+    extra = []
+    historical = 0
+    for row in rows:
+        labels = row['Config'].get('Labels') or {}
+        name = labels.get('com.docker.compose.service')
+        known = name in expected and labels.get('com.docker.compose.project') == PROJECT
+        oneoff = labels.get('com.docker.compose.oneoff', '').lower()
+        if known and oneoff == 'false' and labels.get('com.docker.compose.container-number') == '1':
+            counts[name] += 1
+        elif known and name == 'db-migrate' and oneoff == 'true' and row['State']['Status'] == 'exited' \
+                and row['State']['ExitCode'] == 0 and not row['State']['StartedAt'].startswith('0001-'):
+            historical += 1
+        else:
+            extra.append({'containerIdSha256': sha(row['Id'].encode()),
+                          'service': name if known else '<unknown>',
+                          'reason': 'Unexpected or incomplete historical container'})
+    details = {'containerCount': len(rows), 'expectedServiceCount': len(expected),
+               'missingServices': sorted(name for name, count in counts.items() if count == 0),
+               'duplicateServices': {name: counts[name] for name in sorted(counts) if counts[name] > 1},
+               'extraContainers': extra, 'successfulHistoricalMigrations': historical}
+    if not rows:
+        raise InventoryError('No project containers found in desktop-linux; they may have been removed. '
+                             'Data volumes may still exist. Startup will not recreate containers or replay migrations; '
+                             'inspect retained volumes and recovery evidence first', details)
+    if set(details['missingServices']) - set(allowed_missing) or details['duplicateServices'] or extra:
+        raise InventoryError('Invalid project inventory: missing=' + ','.join(details['missingServices'])
+                             + '; duplicate=' + ','.join(details['duplicateServices'])
+                             + '; extra=' + str(len(extra)) + '. Inventory rejected', details)
+    return details
+
+
+def volume_signature(volume):
+    return hashed({k: volume.get(k) for k in
+                   ('Name', 'Driver', 'Scope', 'CreatedAt', 'Labels', 'Options', 'Mountpoint')})
+
+
+def recovery_contract(rows, authored_input):
+    path = recovery_path()
+    recovered = [row for row in rows if path in [Path(value) for value in
+                 row['Config']['Labels'].get('com.docker.compose.project.config_files', '').split(',')]]
+    if not recovered:
+        return authored_input, None
+    require(path.is_file() and path.resolve() == path, 'Recovery Compose overlay missing or redirected')
+    selected = set(INFRA) | set(APPS) | {name + '-sql-boot' for name in WRITERS}
+    # 常驻和注册容器必须来自同一次明确恢复；历史容器可以仍保留。
+    for row in rows:
+        labels = row['Config']['Labels']
+        if labels.get('com.docker.compose.service') in selected:
+            files = [Path(p) for p in labels.get('com.docker.compose.project.config_files', '').split(',')]
+            require(files == [*COMPOSE_FILES,
+                    ROOT / 'build/verification/authored-festival-pet-acquisition-20261116/compose.authored.json', path],
+                    'Inconsistent recovery Compose provenance')
+    evidence = []
+    sources = {}
+    for relative, expected in RECOVERY_SOURCES.items():
+        source = ROOT / 'build/verification' / relative
+        require(source.is_file() and source.resolve() == source, 'Recovery evidence missing or redirected')
+        raw = source.read_bytes()
+        require(sha(raw) == expected, 'Approved recovery evidence changed')
+        sources[str(source)] = expected
+        evidence.append(json.loads(raw))
+    history, initialized, latest, verified = evidence
+    require(history['passed'] is True and verified['success'] is True
+            and history['contract']['project'] == PROJECT, 'Recovery history is not verified')
+    require(all(initialized['services'].get(name) == 0 for name in INIT), 'Historical initialization proof incomplete')
+    for name in HISTORY_ONLY - {'rank-migrate'}:
+        prior = history['states'].get(name, {})
+        require(prior.get('status') == 'exited' and prior.get('exitCode') == 0
+                and prior.get('startedAt') and not prior['startedAt'].startswith('0001-'),
+                'Historical initialization proof incomplete: ' + name)
+    require(all(latest[name]['id'] == history['contract']['ids'][name] for name in INFRA),
+            'Historical infrastructure continuity is unproven')
+    config, _ = compose_contract(authored_input)
+    expected = {'services': {}, 'volumes': {key: {'name': value['name'], 'external': True}
+                                          for key, value in config['volumes'].items()}}
+    for name in selected:
+        identity = latest[name]['imageId']
+        require(re.fullmatch(r'sha256:[0-9a-f]{64}', identity), 'Invalid historical image identity')
+        expected['services'][name] = {'image': identity, 'pull_policy': 'never'}
+    anonymous = {}
+    for index, mount in enumerate(history['contract']['mountedVolumes']['kafka']):
+        if mount['anonymous']:
+            key = 'recovery-kafka-' + str(index)
+            expected['volumes'][key] = {'name': mount['name'], 'external': True}
+            expected['services']['kafka'].setdefault('volumes', []).append(
+                {'type': 'volume', 'source': key, 'target': mount['target']})
+            anonymous[mount['target']] = mount
+    require(len(anonymous) == 2, 'Historical Kafka volume proof incomplete')
+    raw = path.read_bytes()
+    require(json.loads(raw) == expected, 'Unauthorized recovery Compose overlay')
+    combined = json.loads(authored_input) if authored_input else {'services': {}}
+    for name, service in expected['services'].items():
+        combined['services'].setdefault(name, {}).update(service)
+    combined['volumes'] = expected['volumes']
+    signatures = {}
+    for mounts in history['contract']['mountedVolumes'].values():
+        for mount in mounts:
+            signatures[mount['name']] = mount['volumeSignature']
+    signatures.update(RECOVERY_ADDED_VOLUMES)
+    require(all(v['name'] in signatures for v in expected['volumes'].values()),
+            'Recovery volume has no approved retained identity')
+    for name in selected:
+        prior_mounts = {m['target']: m for m in history['contract']['mountedVolumes'].get(name, [])}
+        if name == 'rank-sql-boot':
+            # rank 晚于完整快照接入；共享私有卷沿用旧注册器的同目标历史身份。
+            for mount in history['contract']['mountedVolumes'].get('db-sql-boot', []):
+                if mount['target'] == '/run/sql-boot/private':
+                    prior_mounts.setdefault(mount['target'], mount)
+        for mount in config.get('services', {}).get(name, {}).get('volumes', []):
+            if mount['type'] != 'volume':
+                continue
+            identity = config['volumes'][mount['source']]['name']
+            prior = prior_mounts.get(mount['target'])
+            require(prior is not None and prior['name'] == identity
+                    or name in {'rank', 'rank-sql-boot'} and identity in RECOVERY_ADDED_VOLUMES,
+                    'Recovery service volume differs from historical binding: ' + name)
+    return json.dumps(combined), {'sourceSha256': sources, 'overlaySha256': sha(raw),
+                                'anonymousVolumes': anonymous, 'volumeSignatures': signatures,
+                                'requiredVolumes': sorted(v['name'] for v in expected['volumes'].values())}
 
 
 def inventory():
     selected = run(DOCKER + ['ps', '-aq', '--no-trunc', '--filter',
         'label=com.docker.compose.project=' + PROJECT]).split()
-    require(len(selected) in (28, 29) and len(set(selected)) == len(selected), 'Unexpected project container count')
-    rows = inspect(selected)
+    require(len(set(selected)) == len(selected), 'Duplicate project container identity')
+    rows = inspect(selected) if selected else []
+    require(len(rows) == len(selected) and {row['Id'] for row in rows} == set(selected),
+            'Project inventory changed during inspection')
+    validate_service_inventory(rows, HISTORY_ONLY)
     overlay, overlay_bytes, overlay_input, allowed = authored_overlay(rows)
+    overlay_input, recovery = recovery_contract(rows, overlay_input)
+    diagnostic = validate_service_inventory(rows, HISTORY_ONLY if recovery else ())
     config, env_sha = compose_contract(overlay_input)
     image_volumes = {}
     for identity in sorted({row['Image'] for row in rows}):
@@ -292,10 +460,17 @@ def inventory():
         require(declared is None or isinstance(declared, dict), 'Invalid image volume declaration')
         image_volumes[identity] = sorted(declared or {})
     mounted_names = sorted({m['Name'] for row in rows for m in row['Mounts'] if m['Type'] == 'volume'})
+    if recovery:
+        mounted_names = sorted(set(mounted_names) | set(recovery['requiredVolumes']))
     details = json.loads(run(DOCKER + ['volume', 'inspect', *mounted_names])) if mounted_names else []
     volume_details = {value['Name']: value for value in details}
     require(set(volume_details) == set(mounted_names) and len(volume_details) == len(details),
             'Mounted volume inventory is incomplete')
+    if recovery:
+        for name, volume in volume_details.items():
+            prior = recovery['volumeSignatures'].get(name)
+            require(prior is None or volume_signature(volume) == prior,
+                    'Historical data volume identity changed')
     services = {}
     extra = []
     mount_contracts = {}
@@ -320,14 +495,14 @@ def inventory():
             require(name == 'db-migrate' and labels.get('com.docker.compose.oneoff', '').lower() == 'true'
                     and state(row)['status'] == 'exited' and state(row)['exitCode'] == 0,
                     'Unexpected extra container')
-            mount_contracts['storage-migration'] = validate_mounts(name, row, None, config['volumes'],
-                                                                  image_volumes[row['Image']], volume_details)
+            mount_contracts[history_key(row)] = validate_mounts(name, row, None, config['volumes'],
+                                                                  image_volumes[row['Image']], volume_details, recovery)
             extra.append(row)
             continue
         require(name not in services, 'Duplicate service container: ' + name)
         mount_contracts[name] = validate_mounts(name, row,
             None if name in HISTORY_ONLY else config['services'][name], config['volumes'],
-            image_volumes[row['Image']], volume_details)
+            image_volumes[row['Image']], volume_details, recovery)
         if name in HISTORY_ONLY:
             current = state(row)
             require(current['status'] == 'exited' and current['exitCode'] == 0
@@ -358,9 +533,10 @@ def inventory():
                               for p in (bindings or []))
         require(actual_ports == expected_ports, 'Published ports differ from Compose: ' + name)
         services[name] = row
-    require(set(services) == set(config['services']) and len(extra) <= 1, 'Incomplete current service inventory')
-    if extra:
-        services['storage-migration'] = extra[0]
+    require(set(services) == set(config['services']) - set(diagnostic['missingServices']),
+            'Incomplete current service inventory')
+    for row in extra:
+        services[history_key(row)] = row
     volume_names = project_volumes()
     named = {v['name'] for entries in mount_contracts.values() for v in entries if not v['anonymous']}
     require(named <= set(volume_names), 'Named volume is not in the project volume baseline')
@@ -372,6 +548,9 @@ def inventory():
     if overlay is not None:
         require(overlay.read_bytes() == overlay_bytes, 'Authored Compose overlay changed during inventory')
         compose_sha[str(overlay)] = sha(overlay_bytes)
+    if recovery:
+        require(sha(recovery_path().read_bytes()) == recovery['overlaySha256'], 'Recovery Compose overlay changed during inventory')
+        compose_sha[str(recovery_path())] = recovery['overlaySha256']
     contract = {'project': PROJECT, 'envSha256': env_sha, 'composeSha256': compose_sha,
                 'scriptSha256': sha(Path(__file__).read_bytes()),
                 'configSha256': hashed(config), 'ids': {n: r['Id'] for n, r in services.items()},
@@ -380,6 +559,9 @@ def inventory():
                 'mountedVolumes': mount_contracts, 'imageVolumeDeclarations': image_volumes,
                 'projectVolumes': volume_names, 'gatewayPorts': ports(config, 'gateway', 8081),
                 'gatePorts': ports(config, 'gate', node_ports['gate']), 'nodePorts': node_ports}
+    if recovery:
+        contract['recoveryProvenance'] = recovery
+        contract['absentHistoricalServices'] = diagnostic['missingServices']
     return contract, services
 
 
@@ -402,7 +584,7 @@ def preflight():
     plan = []
     for name, current in states.items():
         require(not current['oomKilled'], 'Prior OOM requires investigation: ' + name)
-        if name in ONESHOTS or name == 'storage-migration':
+        if name in ONESHOTS or name.startswith('storage-migration:'):
             require(current['status'] == 'exited' and current['exitCode'] == 0
                     and not current['startedAt'].startswith('0001-'),
                     'Prior initialization did not complete: ' + name)
@@ -561,6 +743,8 @@ def main():
             else:
                 result.update(passed=True, phase='preflight-complete', sourceCheckExecuted=False)
     except (Exception, KeyboardInterrupt) as error:
+        if isinstance(error, InventoryError):
+            result['inventoryDiagnostics'] = error.diagnostics
         result.update(errorType=type(error).__name__,
                       error=str(error) if isinstance(error, RuntimeError) else 'Operation failed; raw details suppressed')
         event('stopped', phase=result['phase'], service=result.get('activeService'), errorType=type(error).__name__)

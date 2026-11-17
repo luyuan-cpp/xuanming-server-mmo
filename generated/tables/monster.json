@@ -2,6 +2,8 @@
  "data": [
   {
    "armor": 36,
+   "capture_pet_table_id": 1,
+   "capture_rate": 2500,
    "critchance": 0,
    "drop": [
     {
@@ -20,6 +22,8 @@
   },
   {
    "armor": 48,
+   "capture_pet_table_id": 2,
+   "capture_rate": 2500,
    "critchance": 0,
    "drop": [
     {
@@ -43,6 +47,8 @@
   },
   {
    "armor": 60,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 0,
    "exp_reward": 30,
    "gold_reward": 15,
@@ -54,6 +60,8 @@
   },
   {
    "armor": 72,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 0,
    "exp_reward": 40,
    "gold_reward": 20,
@@ -65,6 +73,8 @@
   },
   {
    "armor": 84,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 5,
    "exp_reward": 50,
    "gold_reward": 25,
@@ -76,6 +86,8 @@
   },
   {
    "armor": 96,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 5,
    "exp_reward": 80,
    "gold_reward": 40,
@@ -87,6 +99,8 @@
   },
   {
    "armor": 120,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 5,
    "exp_reward": 100,
    "gold_reward": 55,
@@ -98,6 +112,8 @@
   },
   {
    "armor": 144,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 10,
    "exp_reward": 130,
    "gold_reward": 70,
@@ -109,6 +125,8 @@
   },
   {
    "armor": 168,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 10,
    "exp_reward": 160,
    "gold_reward": 90,
@@ -120,6 +138,8 @@
   },
   {
    "armor": 192,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 10,
    "exp_reward": 200,
    "gold_reward": 120,
@@ -131,6 +151,8 @@
   },
   {
    "armor": 216,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 15,
    "exp_reward": 260,
    "gold_reward": 150,
@@ -142,6 +164,8 @@
   },
   {
    "armor": 240,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 15,
    "exp_reward": 320,
    "gold_reward": 190,
@@ -153,6 +177,8 @@
   },
   {
    "armor": 264,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 15,
    "exp_reward": 400,
    "gold_reward": 240,
@@ -164,6 +190,8 @@
   },
   {
    "armor": 300,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 20,
    "exp_reward": 520,
    "gold_reward": 300,
@@ -175,6 +203,8 @@
   },
   {
    "armor": 336,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 20,
    "exp_reward": 680,
    "gold_reward": 400,
@@ -186,6 +216,8 @@
   },
   {
    "armor": 420,
+   "capture_pet_table_id": 0,
+   "capture_rate": 0,
    "critchance": 25,
    "exp_reward": 1200,
    "gold_reward": 800,

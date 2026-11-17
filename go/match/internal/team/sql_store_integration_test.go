@@ -147,6 +147,45 @@ func (f *nativeTeamFixture) inviteAndAccept(t *testing.T, leader, member, teamID
 	require.Equal(t, OutcomeCommitted, result.Outcome)
 }
 
+// 从带原角色的服务入口发起操作，覆盖目标预检、事务内的收件索引和相同 UUID 的重放。
+func TestTeamTiDBApplyAndInviteOtherPlayers(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	h := newServiceHarness(t)
+	h.addPlayers(1, 2, 3, 4)
+	h.svcCtx.Authority = f.owner
+	h.service.store = f.store
+	h.service.homeZones = NewAuthorityHomeZone(f.owner, 0)
+	f.create(t, 1, 101)
+	f.inviteAndAccept(t, 1, 4, 101)
+	leader, applicant, invitee := f.actor(t, 1), f.actor(t, 2), f.actor(t, 3)
+	_, err := f.store.ReadFree(applicant, 4)
+	require.Error(t, err, "私有名册仍只允许原角色自己读")
+	wrong := h.service.ApplyJoinTeam(applicant, 2, &teampb.ApplyJoinTeamRequest{RequestId: uuid.NewString(), TargetPlayerId: 101})
+	require.Equal(t, ErrNoTeam, wrong.GetErrorMessage().GetId())
+	apply := &teampb.ApplyJoinTeamRequest{RequestId: uuid.NewString(), TargetPlayerId: 4}
+	for range 2 {
+		reply := h.service.ApplyJoinTeam(applicant, 2, apply)
+		require.Zero(t, reply.GetErrorMessage().GetId())
+		require.NotNil(t, reply.Team)
+		require.Zero(t, reply.Team.TeamId, "申请成功不等于已入队")
+	}
+	view := h.service.GetMyTeam(leader, 1, &teampb.GetMyTeamRequest{}).GetTeam()
+	require.Len(t, view.GetApplications(), 1)
+	require.Equal(t, uint64(2), view.Applications[0].GetPlayer().GetPlayerId())
+	var count int
+	require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM team_application_index WHERE applicant_id=? AND team_id=?", 2, 101).Scan(&count))
+	require.Equal(t, 1, count)
+	invite := &teampb.InviteToTeamRequest{RequestId: uuid.NewString(), ExpectedTeamId: 101, TargetPlayerId: 3}
+	for range 2 {
+		reply := h.service.InviteToTeam(leader, 1, invite)
+		require.Zero(t, reply.GetErrorMessage().GetId())
+	}
+	inbox := h.service.ListMyInvites(invitee, 3, &teampb.ListMyInvitesRequest{})
+	require.Zero(t, inbox.GetErrorMessage().GetId())
+	require.Len(t, inbox.Invites, 1)
+	require.Equal(t, uint64(101), inbox.Invites[0].GetTeamId())
+}
+
 func TestTeamTiDBOriginalUUIDReplayAfterLeaveAndRestart(t *testing.T) {
 	f := newNativeTeamFixture(t)
 	request := &teampb.CreateTeamRequest{RequestId: uuid.NewString()}

@@ -27,6 +27,7 @@ CATALOGUE = {
     "scene-manager": ("scene_manager", "scene_manager_service.go"),
     "client-rpc-router": ("client_rpc_router", "client_rpc_router_service.go"),
     "match": ("match", "."),
+    "rank": ("rank", "."),
     "player-inbox": ("player_inbox", "."),
     # 写者注册的一次性容器（compose 的 sql-boot、<服务>-sql-boot）：基础镜像是 deploy/debug/Dockerfile.sql-boot，/app/service 是 writer_authority。
     "sql-boot": ("data_service", "./cmd/writer_authority"),
@@ -238,7 +239,7 @@ def main() -> int:
     args = parser.parse_args()
     requested = list(CATALOGUE) if args.services == "all" else list(dict.fromkeys(args.services.split(",")))
     if not requested or any(name not in CATALOGUE for name in requested):
-        parser.error("services 只能是当前八个常驻 Go 服务、sql-boot 或 db-migrate")
+        parser.error("unknown service; supported: " + ", ".join(CATALOGUE))
     services = [name for name in CATALOGUE if name in requested]
     if not args.output.is_absolute():
         parser.error("output 必须为绝对路径")

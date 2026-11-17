@@ -1,0 +1,46 @@
+name: AI 验证入口回归
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/scripts/ai_pipeline/**'
+      - 'tools/scripts/dev_tools.ps1'
+      - 'tools/scripts/tests/test_ai_pipeline.py'
+      - '.github/workflows/ai-pipeline.yml'
+  pull_request:
+    paths:
+      - 'tools/scripts/ai_pipeline/**'
+      - 'tools/scripts/dev_tools.ps1'
+      - 'tools/scripts/tests/test_ai_pipeline.py'
+      - '.github/workflows/ai-pipeline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-pipeline-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runner-tests:
+    name: 验证入口 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: 真实子进程与临时仓黑盒测试
+        run: python -X utf8 -B -m unittest discover -s tools/scripts/tests -p test_ai_pipeline.py -v
+      - name: 统一开发入口计划检查
+        shell: pwsh
+        run: ./tools/scripts/dev_tools.ps1 -Command ai-plan -TaskPath tools/scripts/ai_pipeline/task.template.json -PipelineOutput build/ai-pipeline/ci-plan

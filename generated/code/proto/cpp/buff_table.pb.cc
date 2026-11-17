@@ -462,11 +462,11 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(BuffTable, _impl_._has_bits_),
       0, // no _extensions_
-      22, 248,  // max_field_number, fast_idx_mask
+      53, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4290772992,  // skipmap
+      0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      22,  // num_field_entries
+      53,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -556,16 +556,46 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
       {::_pbi::TcParser::FastUS2,
        {434, 4, 0,
         PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.bonus_damage_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 battle_op = 23;
+      {::_pbi::TcParser::FastV32S2,
+       {440, 19, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.battle_op_)}},
+      // uint32 trigger_event = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 20, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.trigger_event_)}},
+      // uint32 effect_target = 25;
+      {::_pbi::TcParser::FastV32S2,
+       {456, 21, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.effect_target_)}},
+      // double flat_value = 26;
+      {::_pbi::TcParser::FastF64S2,
+       {465, 22, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.flat_value_)}},
+      // double per_level = 27;
+      {::_pbi::TcParser::FastF64S2,
+       {473, 23, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.per_level_)}},
+      // double ratio = 28;
+      {::_pbi::TcParser::FastF64S2,
+       {481, 24, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.ratio_)}},
+      // uint32 value_basis = 29;
+      {::_pbi::TcParser::FastV32S2,
+       {488, 25, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.value_basis_)}},
+      // uint32 damage_filter = 30;
+      {::_pbi::TcParser::FastV32S2,
+       {496, 26, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.damage_filter_)}},
+      // uint32 duration_rounds = 31;
+      {::_pbi::TcParser::FastV32S2,
+       {504, 27, 0,
+        PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.duration_rounds_)}},
     }}, {{
+      33, 0, 2,
+      0, 32,
+      65504, 48,
       65535, 65535
     }}, {{
       // uint32 id = 1;
@@ -575,11 +605,11 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
       // uint32 buff_type = 3;
       {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.buff_type_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // map<string, bool> tag = 4;
-      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.tag_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.tag_), _Internal::kHasBitsOffset + 28, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // map<string, bool> immune_tag = 5;
-      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.immune_tag_), _Internal::kHasBitsOffset + 20, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.immune_tag_), _Internal::kHasBitsOffset + 29, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // map<string, bool> dispel_tag = 6;
-      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.dispel_tag_), _Internal::kHasBitsOffset + 21, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.dispel_tag_), _Internal::kHasBitsOffset + 30, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // uint32 level = 7;
       {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.level_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_layer = 8;
@@ -612,6 +642,68 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
       {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.time_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string bonus_damage = 22;
       {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.bonus_damage_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 battle_op = 23;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.battle_op_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 trigger_event = 24;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.trigger_event_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 effect_target = 25;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.effect_target_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // double flat_value = 26;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.flat_value_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // double per_level = 27;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.per_level_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // double ratio = 28;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.ratio_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // uint32 value_basis = 29;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.value_basis_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 damage_filter = 30;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.damage_filter_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 duration_rounds = 31;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.duration_rounds_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tick_count = 32;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.tick_count_), _Internal::kHasBitsOffset + 34, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // double trigger_chance = 33;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.trigger_chance_), _Internal::kHasBitsOffset + 33, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // uint32 per_round_limit = 34;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.per_round_limit_), _Internal::kHasBitsOffset + 35, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 hit_limit = 35;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.hit_limit_), _Internal::kHasBitsOffset + 36, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 modifier_stat = 36;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.modifier_stat_), _Internal::kHasBitsOffset + 37, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 state_kind = 37;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.state_kind_), _Internal::kHasBitsOffset + 39, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // double application_chance = 38;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.application_chance_), _Internal::kHasBitsOffset + 38, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // string required_tag = 39;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.required_tag_), _Internal::kHasBitsOffset + 31, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string second_required_tag = 40;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.second_required_tag_), _Internal::kHasBitsOffset + 32, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // double conditional_bonus = 41;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.conditional_bonus_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // double secondary_ratio = 42;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.secondary_ratio_), _Internal::kHasBitsOffset + 42, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // uint32 effect_count = 43;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.effect_count_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 target_count = 44;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.target_count_), _Internal::kHasBitsOffset + 43, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 pet_target_count = 45;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.pet_target_count_), _Internal::kHasBitsOffset + 44, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 stack_key = 46;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.stack_key_), _Internal::kHasBitsOffset + 45, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 refresh_policy = 47;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.refresh_policy_), _Internal::kHasBitsOffset + 46, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 keep_on_death = 48;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.keep_on_death_), _Internal::kHasBitsOffset + 47, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 effect_priority = 49;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.effect_priority_), _Internal::kHasBitsOffset + 48, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 start_round = 50;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.start_round_), _Internal::kHasBitsOffset + 49, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 stack_limit = 51;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.stack_limit_), _Internal::kHasBitsOffset + 50, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 require_living_caster = 52;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.require_living_caster_), _Internal::kHasBitsOffset + 51, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tick_on_apply = 53;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.tick_on_apply_), _Internal::kHasBitsOffset + 52, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         {::_pbi::TcParser::GetMapAuxInfo(
@@ -622,13 +714,15 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
             1, 0, 9, 8, 0)},
     }},
     {{
-      "\11\0\0\0\3\12\12\0\0\0\0\0\0\0\0\0\0\23\0\0\0\0\14\0"
+      "\11\0\0\0\3\12\12\0\0\0\0\0\0\0\0\0\0\23\0\0\0\0\14\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\14\23\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "BuffTable"
       "tag"
       "immune_tag"
       "dispel_tag"
       "health_regeneration"
       "bonus_damage"
+      "required_tag"
+      "second_required_tag"
     }},
   };
 }
@@ -675,6 +769,15 @@ inline constexpr BuffTable::Impl_::Impl_(
         movement_speed_reduction_{0},
         combat_idle_seconds_{0},
         time_{0u},
+        battle_op_{0u},
+        trigger_event_{0u},
+        effect_target_{0u},
+        flat_value_{0},
+        per_level_{0},
+        ratio_{0},
+        value_basis_{0u},
+        damage_filter_{0u},
+        duration_rounds_{0u},
         tag_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::BuffTable,
             PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.tag_)>()
@@ -689,7 +792,33 @@ inline constexpr BuffTable::Impl_::Impl_(
             ::BuffTable,
             PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.dispel_tag_)>()
          }
-     {}
+        ,
+        required_tag_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        second_required_tag_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        trigger_chance_{0},
+        tick_count_{0u},
+        per_round_limit_{0u},
+        hit_limit_{0u},
+        modifier_stat_{0u},
+        application_chance_{0},
+        state_kind_{0u},
+        effect_count_{0u},
+        conditional_bonus_{0},
+        secondary_ratio_{0},
+        target_count_{0u},
+        pet_target_count_{0u},
+        stack_key_{0u},
+        refresh_policy_{0u},
+        keep_on_death_{0u},
+        effect_priority_{0u},
+        start_round_{0u},
+        stack_limit_{0u},
+        require_living_caster_{0u},
+        tick_on_apply_{0u} {}
 
 template <typename>
 constexpr BuffTable::BuffTable(::_pbi::ConstantInitialized,
@@ -964,7 +1093,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_._has_bits_),
-        25, // hasbit index offset
+        56, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.no_caster_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.buff_type_),
@@ -987,12 +1116,43 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.combat_idle_seconds_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.time_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.bonus_damage_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.battle_op_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.trigger_event_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.effect_target_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.flat_value_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.per_level_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.ratio_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.value_basis_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.damage_filter_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.duration_rounds_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.tick_count_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.trigger_chance_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.per_round_limit_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.hit_limit_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.modifier_stat_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.state_kind_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.application_chance_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.required_tag_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.second_required_tag_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.conditional_bonus_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.secondary_ratio_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.effect_count_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.target_count_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.pet_target_count_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.stack_key_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.refresh_policy_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.keep_on_death_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.effect_priority_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.start_round_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.stack_limit_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.require_living_caster_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.tick_on_apply_),
         5,
         6,
         7,
-        19,
-        20,
-        21,
+        28,
+        29,
+        30,
         8,
         9,
         10,
@@ -1009,6 +1169,37 @@ const ::uint32_t
         17,
         18,
         4,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        34,
+        33,
+        35,
+        36,
+        37,
+        39,
+        38,
+        31,
+        32,
+        41,
+        42,
+        40,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuffTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1022,7 +1213,7 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::BuffTable_ImmuneTagEntry_DoNotUse)},
         {14, sizeof(::BuffTable_DispelTagEntry_DoNotUse)},
         {21, sizeof(::BuffTable)},
-        {68, sizeof(::BuffTableData)},
+        {130, sizeof(::BuffTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1034,7 +1225,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_buff_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\020buff_table.proto\"\301\005\n\tBuffTable\022\n\n\002id\030\001"
+    "\n\020buff_table.proto\"\204\013\n\tBuffTable\022\n\n\002id\030\001"
     " \001(\r\022\021\n\tno_caster\030\002 \001(\r\022\021\n\tbuff_type\030\003 \001"
     "(\r\022 \n\003tag\030\004 \003(\0132\023.BuffTable.TagEntry\022-\n\n"
     "immune_tag\030\005 \003(\0132\031.BuffTable.ImmuneTagEn"
@@ -1048,19 +1239,37 @@ const char descriptor_table_protodef_buff_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTI
     "\020 \001(\001\022\033\n\023health_regeneration\030\021 \001(\t\022\020\n\010su"
     "b_buff\030\022 \003(\r\022\027\n\017target_sub_buff\030\023 \003(\r\022\033\n"
     "\023combat_idle_seconds\030\024 \001(\001\022\014\n\004time\030\025 \001(\r"
-    "\022\024\n\014bonus_damage\030\026 \001(\t\032*\n\010TagEntry\022\013\n\003ke"
-    "y\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n\016ImmuneTagE"
-    "ntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n\016"
-    "DispelTagEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001"
-    "(\010:\0028\001\")\n\rBuffTableData\022\030\n\004data\030\001 \003(\0132\n."
-    "BuffTableB;\n\016com.game.tableB\023BuffTableOu"
-    "terClassP\001Z\022generated/pb/tableb\006proto3"
+    "\022\024\n\014bonus_damage\030\026 \001(\t\022\021\n\tbattle_op\030\027 \001("
+    "\r\022\025\n\rtrigger_event\030\030 \001(\r\022\025\n\reffect_targe"
+    "t\030\031 \001(\r\022\022\n\nflat_value\030\032 \001(\001\022\021\n\tper_level"
+    "\030\033 \001(\001\022\r\n\005ratio\030\034 \001(\001\022\023\n\013value_basis\030\035 \001"
+    "(\r\022\025\n\rdamage_filter\030\036 \001(\r\022\027\n\017duration_ro"
+    "unds\030\037 \001(\r\022\022\n\ntick_count\030  \001(\r\022\026\n\016trigge"
+    "r_chance\030! \001(\001\022\027\n\017per_round_limit\030\" \001(\r\022"
+    "\021\n\thit_limit\030# \001(\r\022\025\n\rmodifier_stat\030$ \001("
+    "\r\022\022\n\nstate_kind\030% \001(\r\022\032\n\022application_cha"
+    "nce\030& \001(\001\022\024\n\014required_tag\030\' \001(\t\022\033\n\023secon"
+    "d_required_tag\030( \001(\t\022\031\n\021conditional_bonu"
+    "s\030) \001(\001\022\027\n\017secondary_ratio\030* \001(\001\022\024\n\014effe"
+    "ct_count\030+ \001(\r\022\024\n\014target_count\030, \001(\r\022\030\n\020"
+    "pet_target_count\030- \001(\r\022\021\n\tstack_key\030. \001("
+    "\r\022\026\n\016refresh_policy\030/ \001(\r\022\025\n\rkeep_on_dea"
+    "th\0300 \001(\r\022\027\n\017effect_priority\0301 \001(\r\022\023\n\013sta"
+    "rt_round\0302 \001(\r\022\023\n\013stack_limit\0303 \001(\r\022\035\n\025r"
+    "equire_living_caster\0304 \001(\r\022\025\n\rtick_on_ap"
+    "ply\0305 \001(\r\032*\n\010TagEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005va"
+    "lue\030\002 \001(\010:\0028\001\0320\n\016ImmuneTagEntry\022\013\n\003key\030\001"
+    " \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n\016DispelTagEntr"
+    "y\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\")\n\rBuf"
+    "fTableData\022\030\n\004data\030\001 \003(\0132\n.BuffTableB;\n\016"
+    "com.game.tableB\023BuffTableOuterClassP\001Z\022g"
+    "enerated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_buff_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_buff_5ftable_2eproto = {
     false,
     false,
-    838,
+    1545,
     descriptor_table_protodef_buff_5ftable_2eproto,
     "buff_table.proto",
     &descriptor_table_buff_5ftable_2eproto_once,
@@ -1249,7 +1458,9 @@ PROTOBUF_NDEBUG_INLINE BuffTable::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.dispel_tag_)>()
           , from.dispel_tag_
         }
-     {}
+        ,
+        required_tag_(arena, from.required_tag_),
+        second_required_tag_(arena, from.second_required_tag_) {}
 
 BuffTable::BuffTable(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -1269,9 +1480,16 @@ BuffTable::BuffTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, time_) -
+           offsetof(Impl_, duration_rounds_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::time_));
+               sizeof(Impl_::duration_rounds_));
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, trigger_chance_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, trigger_chance_),
+           offsetof(Impl_, tick_on_apply_) -
+               offsetof(Impl_, trigger_chance_) +
+               sizeof(Impl_::tick_on_apply_));
 
   // @@protoc_insertion_point(copy_constructor:BuffTable)
 }
@@ -1312,16 +1530,24 @@ PROTOBUF_NDEBUG_INLINE BuffTable::Impl_::Impl_(
             ::BuffTable,
             PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.dispel_tag_)>()
          }
-     {}
+        ,
+        required_tag_(arena),
+        second_required_tag_(arena) {}
 
 inline void BuffTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, time_) -
+           offsetof(Impl_, duration_rounds_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::time_));
+               sizeof(Impl_::duration_rounds_));
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, trigger_chance_),
+           0,
+           offsetof(Impl_, tick_on_apply_) -
+               offsetof(Impl_, trigger_chance_) +
+               sizeof(Impl_::tick_on_apply_));
 }
 BuffTable::~BuffTable() {
   // @@protoc_insertion_point(destructor:BuffTable)
@@ -1336,6 +1562,8 @@ inline void BuffTable::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.health_regeneration_.Destroy();
   this_._impl_.bonus_damage_.Destroy();
+  this_._impl_.required_tag_.Destroy();
+  this_._impl_.second_required_tag_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -1400,19 +1628,46 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
         reinterpret_cast<char*>(&_impl_.movement_speed_boost_) -
         reinterpret_cast<char*>(&_impl_.level_)) + sizeof(_impl_.movement_speed_boost_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.movement_speed_reduction_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.time_) -
-        reinterpret_cast<char*>(&_impl_.movement_speed_reduction_)) + sizeof(_impl_.time_));
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+        reinterpret_cast<char*>(&_impl_.per_level_) -
+        reinterpret_cast<char*>(&_impl_.movement_speed_reduction_)) + sizeof(_impl_.per_level_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    ::memset(&_impl_.ratio_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.duration_rounds_) -
+        reinterpret_cast<char*>(&_impl_.ratio_)) + sizeof(_impl_.duration_rounds_));
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
       _impl_.tag_.Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
       _impl_.immune_tag_.Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
       _impl_.dispel_tag_.Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      _impl_.required_tag_.ClearNonDefaultToEmpty();
+    }
+  }
+  cached_has_bits = _impl_._has_bits_[1];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.second_required_tag_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.trigger_chance_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.state_kind_) -
+        reinterpret_cast<char*>(&_impl_.trigger_chance_)) + sizeof(_impl_.state_kind_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.effect_count_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.keep_on_death_) -
+        reinterpret_cast<char*>(&_impl_.effect_count_)) + sizeof(_impl_.keep_on_death_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    ::memset(&_impl_.effect_priority_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.tick_on_apply_) -
+        reinterpret_cast<char*>(&_impl_.effect_priority_)) + sizeof(_impl_.tick_on_apply_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1465,7 +1720,7 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
   }
 
   // map<string, bool> tag = 4;
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x10000000U)) {
     if (!this_._internal_tag().empty()) {
       using MapType = ::google::protobuf::Map<::std::string, bool>;
       using WireHelper = _pbi::MapEntryFuncs<::std::string, bool,
@@ -1494,7 +1749,7 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
   }
 
   // map<string, bool> immune_tag = 5;
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x20000000U)) {
     if (!this_._internal_immune_tag().empty()) {
       using MapType = ::google::protobuf::Map<::std::string, bool>;
       using WireHelper = _pbi::MapEntryFuncs<::std::string, bool,
@@ -1523,7 +1778,7 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
   }
 
   // map<string, bool> dispel_tag = 6;
-  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+  if (CheckHasBit(cached_has_bits, 0x40000000U)) {
     if (!this_._internal_dispel_tag().empty()) {
       using MapType = ::google::protobuf::Map<::std::string, bool>;
       using WireHelper = _pbi::MapEntryFuncs<::std::string, bool,
@@ -1699,6 +1954,290 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
     }
   }
 
+  // uint32 battle_op = 23;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_battle_op() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          23, this_._internal_battle_op(), target);
+    }
+  }
+
+  // uint32 trigger_event = 24;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_trigger_event() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_trigger_event(), target);
+    }
+  }
+
+  // uint32 effect_target = 25;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_effect_target() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          25, this_._internal_effect_target(), target);
+    }
+  }
+
+  // double flat_value = 26;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_flat_value()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          26, this_._internal_flat_value(), target);
+    }
+  }
+
+  // double per_level = 27;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_per_level()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          27, this_._internal_per_level(), target);
+    }
+  }
+
+  // double ratio = 28;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_ratio()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          28, this_._internal_ratio(), target);
+    }
+  }
+
+  // uint32 value_basis = 29;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_value_basis() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          29, this_._internal_value_basis(), target);
+    }
+  }
+
+  // uint32 damage_filter = 30;
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (this_._internal_damage_filter() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          30, this_._internal_damage_filter(), target);
+    }
+  }
+
+  // uint32 duration_rounds = 31;
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+    if (this_._internal_duration_rounds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          31, this_._internal_duration_rounds(), target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[1];
+  // uint32 tick_count = 32;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_tick_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          32, this_._internal_tick_count(), target);
+    }
+  }
+
+  // double trigger_chance = 33;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_trigger_chance()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          33, this_._internal_trigger_chance(), target);
+    }
+  }
+
+  // uint32 per_round_limit = 34;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_per_round_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          34, this_._internal_per_round_limit(), target);
+    }
+  }
+
+  // uint32 hit_limit = 35;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_hit_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          35, this_._internal_hit_limit(), target);
+    }
+  }
+
+  // uint32 modifier_stat = 36;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_modifier_stat() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          36, this_._internal_modifier_stat(), target);
+    }
+  }
+
+  // uint32 state_kind = 37;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_state_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          37, this_._internal_state_kind(), target);
+    }
+  }
+
+  // double application_chance = 38;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_application_chance()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          38, this_._internal_application_chance(), target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string required_tag = 39;
+  if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+    if (!this_._internal_required_tag().empty()) {
+      const ::std::string& _s = this_._internal_required_tag();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BuffTable.required_tag");
+      target = stream->WriteStringMaybeAliased(39, _s, target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[1];
+  // string second_required_tag = 40;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_second_required_tag().empty()) {
+      const ::std::string& _s = this_._internal_second_required_tag();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BuffTable.second_required_tag");
+      target = stream->WriteStringMaybeAliased(40, _s, target);
+    }
+  }
+
+  // double conditional_bonus = 41;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_conditional_bonus()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          41, this_._internal_conditional_bonus(), target);
+    }
+  }
+
+  // double secondary_ratio = 42;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_secondary_ratio()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          42, this_._internal_secondary_ratio(), target);
+    }
+  }
+
+  // uint32 effect_count = 43;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_effect_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          43, this_._internal_effect_count(), target);
+    }
+  }
+
+  // uint32 target_count = 44;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_target_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          44, this_._internal_target_count(), target);
+    }
+  }
+
+  // uint32 pet_target_count = 45;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_pet_target_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          45, this_._internal_pet_target_count(), target);
+    }
+  }
+
+  // uint32 stack_key = 46;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_stack_key() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          46, this_._internal_stack_key(), target);
+    }
+  }
+
+  // uint32 refresh_policy = 47;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_refresh_policy() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          47, this_._internal_refresh_policy(), target);
+    }
+  }
+
+  // uint32 keep_on_death = 48;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_keep_on_death() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          48, this_._internal_keep_on_death(), target);
+    }
+  }
+
+  // uint32 effect_priority = 49;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_effect_priority() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          49, this_._internal_effect_priority(), target);
+    }
+  }
+
+  // uint32 start_round = 50;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_start_round() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          50, this_._internal_start_round(), target);
+    }
+  }
+
+  // uint32 stack_limit = 51;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_stack_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          51, this_._internal_stack_limit(), target);
+    }
+  }
+
+  // uint32 require_living_caster = 52;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_require_living_caster() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          52, this_._internal_require_living_caster(), target);
+    }
+  }
+
+  // uint32 tick_on_apply = 53;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_tick_on_apply() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          53, this_._internal_tick_on_apply(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1840,7 +2379,7 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // double movement_speed_reduction = 16;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint64_t>(this_._internal_movement_speed_reduction()) != 0) {
@@ -1860,8 +2399,70 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
                                         this_._internal_time());
       }
     }
-    // map<string, bool> tag = 4;
+    // uint32 battle_op = 23;
     if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_battle_op() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_battle_op());
+      }
+    }
+    // uint32 trigger_event = 24;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_trigger_event() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_trigger_event());
+      }
+    }
+    // uint32 effect_target = 25;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_effect_target() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_effect_target());
+      }
+    }
+    // double flat_value = 26;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_flat_value()) != 0) {
+        total_size += 10;
+      }
+    }
+    // double per_level = 27;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_per_level()) != 0) {
+        total_size += 10;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    // double ratio = 28;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_ratio()) != 0) {
+        total_size += 10;
+      }
+    }
+    // uint32 value_basis = 29;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_value_basis() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_value_basis());
+      }
+    }
+    // uint32 damage_filter = 30;
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (this_._internal_damage_filter() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_damage_filter());
+      }
+    }
+    // uint32 duration_rounds = 31;
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (this_._internal_duration_rounds() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_duration_rounds());
+      }
+    }
+    // map<string, bool> tag = 4;
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_tag_size());
       for (const auto& entry : this_._internal_tag()) {
@@ -1871,7 +2472,7 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
       }
     }
     // map<string, bool> immune_tag = 5;
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_immune_tag_size());
       for (const auto& entry : this_._internal_immune_tag()) {
@@ -1881,13 +2482,170 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
       }
     }
     // map<string, bool> dispel_tag = 6;
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_dispel_tag_size());
       for (const auto& entry : this_._internal_dispel_tag()) {
         total_size += _pbi::MapEntryFuncs<::std::string, bool,
                                        _pbi::WireFormatLite::TYPE_STRING,
                                        _pbi::WireFormatLite::TYPE_BOOL>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+    // string required_tag = 39;
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (!this_._internal_required_tag().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_required_tag());
+      }
+    }
+  }
+  cached_has_bits = this_._impl_._has_bits_[1];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string second_required_tag = 40;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_second_required_tag().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_second_required_tag());
+      }
+    }
+    // double trigger_chance = 33;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_trigger_chance()) != 0) {
+        total_size += 10;
+      }
+    }
+    // uint32 tick_count = 32;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_tick_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_tick_count());
+      }
+    }
+    // uint32 per_round_limit = 34;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_per_round_limit() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_per_round_limit());
+      }
+    }
+    // uint32 hit_limit = 35;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_hit_limit() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_hit_limit());
+      }
+    }
+    // uint32 modifier_stat = 36;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_modifier_stat() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_modifier_stat());
+      }
+    }
+    // double application_chance = 38;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_application_chance()) != 0) {
+        total_size += 10;
+      }
+    }
+    // uint32 state_kind = 37;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_state_kind() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_state_kind());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // uint32 effect_count = 43;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_effect_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_effect_count());
+      }
+    }
+    // double conditional_bonus = 41;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_conditional_bonus()) != 0) {
+        total_size += 10;
+      }
+    }
+    // double secondary_ratio = 42;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_secondary_ratio()) != 0) {
+        total_size += 10;
+      }
+    }
+    // uint32 target_count = 44;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_target_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_target_count());
+      }
+    }
+    // uint32 pet_target_count = 45;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_pet_target_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_pet_target_count());
+      }
+    }
+    // uint32 stack_key = 46;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_stack_key() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_stack_key());
+      }
+    }
+    // uint32 refresh_policy = 47;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_refresh_policy() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_refresh_policy());
+      }
+    }
+    // uint32 keep_on_death = 48;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_keep_on_death() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_keep_on_death());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    // uint32 effect_priority = 49;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_effect_priority() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_effect_priority());
+      }
+    }
+    // uint32 start_round = 50;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_start_round() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_start_round());
+      }
+    }
+    // uint32 stack_limit = 51;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_stack_limit() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_stack_limit());
+      }
+    }
+    // uint32 require_living_caster = 52;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_require_living_caster() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_require_living_caster());
+      }
+    }
+    // uint32 tick_on_apply = 53;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_tick_on_apply() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_tick_on_apply());
       }
     }
   }
@@ -1994,7 +2752,7 @@ void BuffTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint64_t>(from._internal_movement_speed_reduction()) != 0) {
         _this->_impl_.movement_speed_reduction_ = from._impl_.movement_speed_reduction_;
@@ -2011,16 +2769,188 @@ void BuffTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00080000U)) {
-      _this->_impl_.tag_.MergeFrom(from._impl_.tag_);
+      if (from._internal_battle_op() != 0) {
+        _this->_impl_.battle_op_ = from._impl_.battle_op_;
+      }
     }
     if (CheckHasBit(cached_has_bits, 0x00100000U)) {
-      _this->_impl_.immune_tag_.MergeFrom(from._impl_.immune_tag_);
+      if (from._internal_trigger_event() != 0) {
+        _this->_impl_.trigger_event_ = from._impl_.trigger_event_;
+      }
     }
     if (CheckHasBit(cached_has_bits, 0x00200000U)) {
-      _this->_impl_.dispel_tag_.MergeFrom(from._impl_.dispel_tag_);
+      if (from._internal_effect_target() != 0) {
+        _this->_impl_.effect_target_ = from._impl_.effect_target_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_flat_value()) != 0) {
+        _this->_impl_.flat_value_ = from._impl_.flat_value_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_per_level()) != 0) {
+        _this->_impl_.per_level_ = from._impl_.per_level_;
+      }
     }
   }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_ratio()) != 0) {
+        _this->_impl_.ratio_ = from._impl_.ratio_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_value_basis() != 0) {
+        _this->_impl_.value_basis_ = from._impl_.value_basis_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (from._internal_damage_filter() != 0) {
+        _this->_impl_.damage_filter_ = from._impl_.damage_filter_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (from._internal_duration_rounds() != 0) {
+        _this->_impl_.duration_rounds_ = from._impl_.duration_rounds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      _this->_impl_.tag_.MergeFrom(from._impl_.tag_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+      _this->_impl_.immune_tag_.MergeFrom(from._impl_.immune_tag_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      _this->_impl_.dispel_tag_.MergeFrom(from._impl_.dispel_tag_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (!from._internal_required_tag().empty()) {
+        _this->_internal_set_required_tag(from._internal_required_tag());
+      } else {
+        if (_this->_impl_.required_tag_.IsDefault()) {
+          _this->_internal_set_required_tag("");
+        }
+      }
+    }
+  }
+  cached_has_bits = from._impl_._has_bits_[1];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_second_required_tag().empty()) {
+        _this->_internal_set_second_required_tag(from._internal_second_required_tag());
+      } else {
+        if (_this->_impl_.second_required_tag_.IsDefault()) {
+          _this->_internal_set_second_required_tag("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_trigger_chance()) != 0) {
+        _this->_impl_.trigger_chance_ = from._impl_.trigger_chance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_tick_count() != 0) {
+        _this->_impl_.tick_count_ = from._impl_.tick_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_per_round_limit() != 0) {
+        _this->_impl_.per_round_limit_ = from._impl_.per_round_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_hit_limit() != 0) {
+        _this->_impl_.hit_limit_ = from._impl_.hit_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_modifier_stat() != 0) {
+        _this->_impl_.modifier_stat_ = from._impl_.modifier_stat_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_application_chance()) != 0) {
+        _this->_impl_.application_chance_ = from._impl_.application_chance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_state_kind() != 0) {
+        _this->_impl_.state_kind_ = from._impl_.state_kind_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_effect_count() != 0) {
+        _this->_impl_.effect_count_ = from._impl_.effect_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_conditional_bonus()) != 0) {
+        _this->_impl_.conditional_bonus_ = from._impl_.conditional_bonus_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_secondary_ratio()) != 0) {
+        _this->_impl_.secondary_ratio_ = from._impl_.secondary_ratio_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_target_count() != 0) {
+        _this->_impl_.target_count_ = from._impl_.target_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_pet_target_count() != 0) {
+        _this->_impl_.pet_target_count_ = from._impl_.pet_target_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_stack_key() != 0) {
+        _this->_impl_.stack_key_ = from._impl_.stack_key_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_refresh_policy() != 0) {
+        _this->_impl_.refresh_policy_ = from._impl_.refresh_policy_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_keep_on_death() != 0) {
+        _this->_impl_.keep_on_death_ = from._impl_.keep_on_death_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_effect_priority() != 0) {
+        _this->_impl_.effect_priority_ = from._impl_.effect_priority_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_start_round() != 0) {
+        _this->_impl_.start_round_ = from._impl_.start_round_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_stack_limit() != 0) {
+        _this->_impl_.stack_limit_ = from._impl_.stack_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_require_living_caster() != 0) {
+        _this->_impl_.require_living_caster_ = from._impl_.require_living_caster_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_tick_on_apply() != 0) {
+        _this->_impl_.tick_on_apply_ = from._impl_.tick_on_apply_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_.Or(from._impl_._has_bits_);
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
 }
@@ -2039,20 +2969,29 @@ void BuffTable::InternalSwap(BuffTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_._has_bits_[1], other->_impl_._has_bits_[1]);
   _impl_.interval_effect_.InternalSwap(&other->_impl_.interval_effect_);
   _impl_.sub_buff_.InternalSwap(&other->_impl_.sub_buff_);
   _impl_.target_sub_buff_.InternalSwap(&other->_impl_.target_sub_buff_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.health_regeneration_, &other->_impl_.health_regeneration_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.bonus_damage_, &other->_impl_.bonus_damage_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.time_)
-      + sizeof(BuffTable::_impl_.time_)
+      PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.duration_rounds_)
+      + sizeof(BuffTable::_impl_.duration_rounds_)
       - PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));
   _impl_.tag_.InternalSwap(&other->_impl_.tag_);
   _impl_.immune_tag_.InternalSwap(&other->_impl_.immune_tag_);
   _impl_.dispel_tag_.InternalSwap(&other->_impl_.dispel_tag_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.required_tag_, &other->_impl_.required_tag_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.second_required_tag_, &other->_impl_.second_required_tag_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.tick_on_apply_)
+      + sizeof(BuffTable::_impl_.tick_on_apply_)
+      - PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.trigger_chance_)>(
+          reinterpret_cast<char*>(&_impl_.trigger_chance_),
+          reinterpret_cast<char*>(&other->_impl_.trigger_chance_));
 }
 
 ::google::protobuf::Metadata BuffTable::GetMetadata() const {

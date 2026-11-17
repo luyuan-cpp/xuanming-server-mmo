@@ -98,6 +98,8 @@ message SpectateEndS2C {
 message SubmitBattleActionRequest {
   uint64 battle_id = 1;
   BattleAction action = 2;
+  uint64 actor_id = 3; // 0 兼容人物指令；宝宝填局内 actor_id，服务端复核主人。
+  uint32 round_index = 4; // 新客户端必须填写，拒绝上一回合迟到指令；旧人物指令 0 兼容。
 }
 
 message SubmitBattleActionResponse {

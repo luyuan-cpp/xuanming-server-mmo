@@ -338,6 +338,83 @@ public interface SkillTableOrBuilder extends
   double getBuffPercent();
 
   /**
+   * <code>uint32 battle_model = 47;</code>
+   * @return The battleModel.
+   */
+  int getBattleModel();
+
+  /**
+   * <code>uint32 caster_mask = 48;</code>
+   * @return The casterMask.
+   */
+  int getCasterMask();
+
+  /**
+   * <code>uint32 ability_kind = 49;</code>
+   * @return The abilityKind.
+   */
+  int getAbilityKind();
+
+  /**
+   * <code>uint32 pet_max_targets = 50;</code>
+   * @return The petMaxTargets.
+   */
+  int getPetMaxTargets();
+
+  /**
+   * <code>repeated uint32 init_effect = 51;</code>
+   * @return A list containing the initEffect.
+   */
+  java.util.List<java.lang.Integer> getInitEffectList();
+  /**
+   * <code>repeated uint32 init_effect = 51;</code>
+   * @return The count of initEffect.
+   */
+  int getInitEffectCount();
+  /**
+   * <code>repeated uint32 init_effect = 51;</code>
+   * @param index The index of the element to return.
+   * @return The initEffect at the given index.
+   */
+  int getInitEffect(int index);
+
+  /**
+   * <code>string prototype_code = 52;</code>
+   * @return The prototypeCode.
+   */
+  java.lang.String getPrototypeCode();
+  /**
+   * <code>string prototype_code = 52;</code>
+   * @return The bytes for prototypeCode.
+   */
+  com.google.protobuf.ByteString
+      getPrototypeCodeBytes();
+
+  /**
+   * <code>uint32 max_battle_uses = 53;</code>
+   * @return The maxBattleUses.
+   */
+  int getMaxBattleUses();
+
+  /**
+   * <code>uint32 health_cost_mode = 54;</code>
+   * @return The healthCostMode.
+   */
+  int getHealthCostMode();
+
+  /**
+   * <code>uint32 action_tags = 55;</code>
+   * @return The actionTags.
+   */
+  int getActionTags();
+
+  /**
+   * <code>uint32 allow_dead_target = 56;</code>
+   * @return The allowDeadTarget.
+   */
+  int getAllowDeadTarget();
+
+  /**
    * <code>repeated .Skillrequired_item required_item = 21;</code>
    */
   java.util.List<com.game.table.Skillrequired_item> 

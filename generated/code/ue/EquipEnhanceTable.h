@@ -28,6 +28,8 @@ struct FCfgEquipEnhanceSnapshot
 	TMap<int32, int32> IdIndex;
 	/// material_id -> 全部命中行的下标(二级索引)。
 	TMap<int32, TArray<int32>> MaterialIdIndex;
+	/// profile_id -> 全部命中行的下标(二级索引)。
+	TMap<int32, TArray<int32>> ProfileIdIndex;
 };
 
 /**
@@ -136,6 +138,16 @@ public:
 	const TMap<int32, TArray<int32>>& GetMaterialIdIndex() const
 	{
 		return Snapshot->MaterialIdIndex;
+	}
+
+	/// profile_id == Key 的全部行。
+	TArray<const FCfgEquipEnhanceRow*> GetByProfileId(int32 Key) const;
+	/// 零分配版:下标数组,配 RowAt() 用。
+	const TArray<int32>& GetProfileIdIndices(int32 Key) const;
+	int32 CountByProfileIdIndex(int32 Key) const;
+	const TMap<int32, TArray<int32>>& GetProfileIdIndex() const
+	{
+		return Snapshot->ProfileIdIndex;
 	}
 
 	// ---- repeated 标量的值索引 ----

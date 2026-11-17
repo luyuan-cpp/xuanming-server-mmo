@@ -24,6 +24,8 @@
 #include "player/system/attribute_allocation_rules.h"
 #include "player/system/equip_attribute_rules.h"
 #include "player/system/player_equip.h"
+#include "player/system/player_equipment_v1.h"
+#include "proto/common/component/equipment_effects.pb.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_pet.h"
 #include "player/system/player_skill.h"
@@ -822,11 +824,13 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	// 向下取整之前进累加器。每次从技能列表现算、不读上一次的结果,所以重复重算 / 重登都不会叠加。
 	// scene 是这六项与暴击被动唯一的消费者:战斗快照带的是放大后的值,引擎不再乘一次。
 	const auto passive = PlayerSkillSystem::CollectPassiveBonus(player);
-	acc.maxHealth *= 1.0 + passive.maxHealth;
+	EquipmentEffects equipmentEffects;
+	PlayerEquipmentV1System::CollectEffects(player, equipmentEffects);
+	acc.maxHealth *= 1.0 + passive.maxHealth + equipmentEffects.max_health_bps() / 10000.0;
 	acc.maxMana *= 1.0 + passive.maxMana;
-	acc.physicalAttack *= 1.0 + passive.physicalAttack;
-	acc.magicAttack *= 1.0 + passive.magicAttack;
-	acc.speed *= 1.0 + passive.speed;
+	acc.physicalAttack *= 1.0 + passive.physicalAttack + equipmentEffects.physical_attack_bps() / 10000.0;
+	acc.magicAttack *= 1.0 + passive.magicAttack + equipmentEffects.magic_attack_bps() / 10000.0;
+	acc.speed *= 1.0 + passive.speed + equipmentEffects.speed_bps() / 10000.0;
 	acc.defense *= 1.0 + passive.defense;
 
 	const uint64_t oldMaxHealth = derived.max_health();

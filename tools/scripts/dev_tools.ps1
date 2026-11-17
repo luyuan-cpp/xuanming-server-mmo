@@ -1,9 +1,14 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "persist-schema-seal", "persist-schema-verify", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-migrate", "sql-boot-catalog-local", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "db-move", "kafka-offset-reset", "redis-wipe-local", "git-stats")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "persist-schema-seal", "persist-schema-verify", "tree", "naming-audit", "naming-apply", "third-party-lock-check", "third-party-zlib-build", "third-party-protobuf-build", "third-party-boringssl-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-redis-split-status", "k8s-redis-wipe", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "k8s-route-tool", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-migrate", "sql-boot-catalog-local", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "db-move", "kafka-offset-reset", "redis-wipe-local", "git-stats", "ai-plan", "ai-verify")]
     [string]$Command,
 
     [string]$ConfigPath = "",
+    # AI 任务验证只编排已登记脚本；目录与具体命令由任务和检查目录管理。
+    [string]$TaskPath = "",
+    [string]$PipelineOutput = "",
+    [string]$RepoConfigPath = "",
+    [string[]]$CheckIds = @(),
 
     [int]$StatsYear = (Get-Date).Year,
     [int]$StatsMonth = (Get-Date).Month,
@@ -1415,6 +1420,8 @@ Unified dev commands (C++ nodes + Go services):
 
 Other common commands:
     -Command git-stats [-StatsYear <year> -StatsMonth <month> -StatsAuthor <author>]
+    -Command ai-plan -TaskPath <task.json> [-RepoConfigPath <local.json>]
+    -Command ai-verify -TaskPath <task.json> [-PipelineOutput <new-directory>] [-CheckIds <id1,id2>]
     -Command tree
     -Command naming-audit
     -Command naming-apply
@@ -1483,7 +1490,21 @@ Proto-gen naming docs:
 "@ | Write-Output
 }
 
+function Invoke-AiTaskVerification {
+    param([string]$Mode)
+    if ([string]::IsNullOrWhiteSpace($TaskPath)) { throw 'AI verification requires -TaskPath.' }
+    $runnerPath = Join-Path $PSScriptRoot 'ai_pipeline/runner.py'
+    $arguments = @('-X', 'utf8', '-B', $runnerPath, $Mode, '--task', $TaskPath)
+    if ($PipelineOutput) { $arguments += @('--output', $PipelineOutput) }
+    if ($RepoConfigPath) { $arguments += @('--repos', $RepoConfigPath) }
+    if ($CheckIds.Count -gt 0) { $arguments += '--checks'; $arguments += $CheckIds }
+    & python @arguments
+    exit $LASTEXITCODE
+}
+
 switch ($Command) {
+    'ai-plan' { Invoke-AiTaskVerification -Mode 'plan' }
+    'ai-verify' { Invoke-AiTaskVerification -Mode 'run' }
     "help" { Invoke-Help }
     "pbgen-build" { Invoke-ProtoGenBuild }
     "pbgen-run" { Invoke-ProtoGenRun; Invoke-ProtoGenPostHooks }

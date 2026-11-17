@@ -52,6 +52,8 @@ class Snapshot:
     #: 主键唯一：一个 id 一行。
     by_id: dict[int, Row]
     idx_affix_rule: dict[int, tuple[Row, ...]]
+    idx_forge_material_id: dict[int, tuple[Row, ...]]
+    idx_artifact_id: dict[int, tuple[Row, ...]]
 
 
 #: 还没 load 过时的空快照。让「没加载」和「加载成 0 行」走同一条读路径，
@@ -61,6 +63,8 @@ _EMPTY_SNAPSHOT: Snapshot = Snapshot(
     rows=(),
     by_id={},
     idx_affix_rule={},
+    idx_forge_material_id={},
+    idx_artifact_id={},
 )
 
 
@@ -104,10 +108,14 @@ class ItemTableManager:
         rows: tuple[Row, ...] = tuple(container.data)
         by_id: dict[int, Row] = {}
         idx_affix_rule: dict[int, list[Row]] = {}
+        idx_forge_material_id: dict[int, list[Row]] = {}
+        idx_artifact_id: dict[int, list[Row]] = {}
 
         for row in rows:
             by_id[row.id] = row
             idx_affix_rule.setdefault(row.affix_rule, []).append(row)
+            idx_forge_material_id.setdefault(row.forge_material_id, []).append(row)
+            idx_artifact_id.setdefault(row.artifact_id, []).append(row)
 
         # 多值索引建的时候用 list（要 append），落进快照前一律冻成 tuple：查询返回的
         # 就是索引里那个对象本体，是 list 的话调用方一个 .append() 就改到了别人的索引 ——
@@ -117,6 +125,8 @@ class ItemTableManager:
             rows=rows,
             by_id=by_id,
             idx_affix_rule={k: tuple(v) for k, v in idx_affix_rule.items()},
+            idx_forge_material_id={k: tuple(v) for k, v in idx_forge_material_id.items()},
+            idx_artifact_id={k: tuple(v) for k, v in idx_artifact_id.items()},
         )
 
     def apply_snapshot(self, snapshot: Snapshot) -> None:
@@ -167,6 +177,14 @@ class ItemTableManager:
         """二级索引：``affix_rule`` == key 的全部行。"""
         return self._snap.idx_affix_rule.get(key, _NO_ROWS)
 
+    def get_by_forge_material_id(self, key: int) -> tuple[Row, ...]:
+        """二级索引：``forge_material_id`` == key 的全部行。"""
+        return self._snap.idx_forge_material_id.get(key, _NO_ROWS)
+
+    def get_by_artifact_id(self, key: int) -> tuple[Row, ...]:
+        """二级索引：``artifact_id`` == key 的全部行。"""
+        return self._snap.idx_artifact_id.get(key, _NO_ROWS)
+
     # ---- Exists ----
 
     def exists(self, id_: int) -> bool:
@@ -179,6 +197,12 @@ class ItemTableManager:
 
     def count_by_affix_rule_index(self, key: int) -> int:
         return len(self._snap.idx_affix_rule.get(key, _NO_ROWS))
+
+    def count_by_forge_material_id_index(self, key: int) -> int:
+        return len(self._snap.idx_forge_material_id.get(key, _NO_ROWS))
+
+    def count_by_artifact_id_index(self, key: int) -> int:
+        return len(self._snap.idx_artifact_id.get(key, _NO_ROWS))
 
     # ---- RandOne ----
 
@@ -206,6 +230,8 @@ class ItemTableManager:
 
     # 外键登记（解析函数在 item_table_fk.py，不在这里）：
     # FK: affix_rule -> EquipAffixRule.id
+    # FK: forge_material_id -> Item.id
+    # FK: artifact_id -> EquipArtifact.id
 
 
 #: 模块级单例。别再 ``ItemTableManager()`` 自己新建一个 —— 那个实例是空的，

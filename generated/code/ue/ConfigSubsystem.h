@@ -47,12 +47,14 @@
 #include "DungeonTable.h"
 #include "EquipAffixPoolTable.h"
 #include "EquipAffixRuleTable.h"
+#include "EquipArtifactTable.h"
 #include "EquipAttributeTable.h"
 #include "EquipAttributeCapTable.h"
 #include "EquipEnhanceTable.h"
 #include "EquipGemTable.h"
 #include "EquipGemSocketTable.h"
 #include "EquipSlotTable.h"
+#include "EquipV1AffixTable.h"
 #include "GlobalVariableTable.h"
 #include "GuildActivityTable.h"
 #include "GuildDonateTable.h"
@@ -116,7 +118,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 49;
+	static constexpr int32 TableCount = 51;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -222,6 +224,9 @@ public:
 	UEquipAffixRuleTable* GetEquipAffixRuleTable() const { return EquipAffixRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UEquipArtifactTable* GetEquipArtifactTable() const { return EquipArtifactTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UEquipAttributeTable* GetEquipAttributeTable() const { return EquipAttributeTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -238,6 +243,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UEquipSlotTable* GetEquipSlotTable() const { return EquipSlotTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UEquipV1AffixTable* GetEquipV1AffixTable() const { return EquipV1AffixTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UGlobalVariableTable* GetGlobalVariableTable() const { return GlobalVariableTable; }
@@ -352,6 +360,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UEquipAffixRuleTable> EquipAffixRuleTable;
 	UPROPERTY(Transient)
+	TObjectPtr<UEquipArtifactTable> EquipArtifactTable;
+	UPROPERTY(Transient)
 	TObjectPtr<UEquipAttributeTable> EquipAttributeTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UEquipAttributeCapTable> EquipAttributeCapTable;
@@ -363,6 +373,8 @@ private:
 	TObjectPtr<UEquipGemSocketTable> EquipGemSocketTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UEquipSlotTable> EquipSlotTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UEquipV1AffixTable> EquipV1AffixTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UGlobalVariableTable> GlobalVariableTable;
 	UPROPERTY(Transient)

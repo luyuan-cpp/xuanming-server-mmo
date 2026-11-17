@@ -831,11 +831,11 @@ constexpr LevelComp::ParseTableT_ LevelComp::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(LevelComp, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -845,15 +845,21 @@ constexpr LevelComp::ParseTableT_ LevelComp::InternalGenerateParseTable_(const :
       ::_pbi::TcParser::GetTable<::LevelComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // uint64 total_exp = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LevelComp, _impl_.total_exp_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(LevelComp, _impl_.total_exp_)}},
       // uint32 level = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelComp, _impl_.level_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(LevelComp, _impl_.level_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(LevelComp, _impl_.level_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 level = 1;
-      {PROTOBUF_FIELD_OFFSET(LevelComp, _impl_.level_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(LevelComp, _impl_.level_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 total_exp = 2;
+      {PROTOBUF_FIELD_OFFSET(LevelComp, _impl_.total_exp_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -866,6 +872,7 @@ inline constexpr LevelComp::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        total_exp_{::uint64_t{0u}},
         level_{0u} {}
 
 template <typename>
@@ -1843,8 +1850,10 @@ const ::uint32_t
         7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::LevelComp, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::LevelComp, _impl_.level_),
+        PROTOBUF_FIELD_OFFSET(::LevelComp, _impl_.total_exp_),
+        1,
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ActorStateComp_StateListEntry_DoNotUse, _impl_._has_bits_),
@@ -1871,8 +1880,8 @@ static const ::_pbi::MigrationSchema
         {54, sizeof(::ViewRadius)},
         {59, sizeof(::BaseAttributesComp)},
         {78, sizeof(::LevelComp)},
-        {83, sizeof(::ActorStateComp_StateListEntry_DoNotUse)},
-        {90, sizeof(::ActorStateComp)},
+        {85, sizeof(::ActorStateComp_StateListEntry_DoNotUse)},
+        {92, sizeof(::ActorStateComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1904,12 +1913,12 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2factor_5fcomp_2
     "ttributesComp\022\020\n\010strength\030\001 \001(\004\022\017\n\007stami"
     "na\030\002 \001(\004\022\016\n\006health\030\003 \001(\004\022\014\n\004mana\030\004 \001(\004\022\022"
     "\n\ncritchance\030\005 \001(\004\022\r\n\005armor\030\006 \001(\004\022\022\n\nres"
-    "istance\030\007 \001(\004\022\r\n\005speed\030\010 \001(\004\"\032\n\tLevelCom"
-    "p\022\r\n\005level\030\001 \001(\r\"v\n\016ActorStateComp\0222\n\nst"
-    "ate_list\030\001 \003(\0132\036.ActorStateComp.StateLis"
-    "tEntry\0320\n\016StateListEntry\022\013\n\003key\030\001 \001(\r\022\r\n"
-    "\005value\030\002 \001(\010:\0028\001B\022Z\020common/componentb\006pr"
-    "oto3"
+    "istance\030\007 \001(\004\022\r\n\005speed\030\010 \001(\004\"-\n\tLevelCom"
+    "p\022\r\n\005level\030\001 \001(\r\022\021\n\ttotal_exp\030\002 \001(\004\"v\n\016A"
+    "ctorStateComp\0222\n\nstate_list\030\001 \003(\0132\036.Acto"
+    "rStateComp.StateListEntry\0320\n\016StateListEn"
+    "try\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\010:\0028\001B\022Z\020c"
+    "ommon/componentb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto_deps[1] = {
@@ -1919,7 +1928,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2factor_5fc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto = {
     false,
     false,
-    764,
+    783,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto,
     "proto/common/component/actor_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto_once,
@@ -4020,7 +4029,12 @@ PROTOBUF_NDEBUG_INLINE LevelComp::Impl_::Impl_(
 
 inline void LevelComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.level_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, total_exp_),
+           0,
+           offsetof(Impl_, level_) -
+               offsetof(Impl_, total_exp_) +
+               sizeof(Impl_::level_));
 }
 LevelComp::~LevelComp() {
   // @@protoc_insertion_point(destructor:LevelComp)
@@ -4069,7 +4083,12 @@ PROTOBUF_NOINLINE void LevelComp::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.level_ = 0u;
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.total_exp_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.level_) -
+        reinterpret_cast<char*>(&_impl_.total_exp_)) + sizeof(_impl_.level_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4094,11 +4113,20 @@ PROTOBUF_NOINLINE void LevelComp::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 level = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           1, this_._internal_level(), target);
+    }
+  }
+
+  // uint64 total_exp = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_total_exp() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_total_exp(), target);
     }
   }
 
@@ -4125,10 +4153,18 @@ PROTOBUF_NOINLINE void LevelComp::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
-    // uint32 level = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 total_exp = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_total_exp() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_total_exp());
+      }
+    }
+    // uint32 level = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_level());
@@ -4152,9 +4188,16 @@ void LevelComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_level() != 0) {
-      _this->_impl_.level_ = from._impl_.level_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_total_exp() != 0) {
+        _this->_impl_.total_exp_ = from._impl_.total_exp_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_level() != 0) {
+        _this->_impl_.level_ = from._impl_.level_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -4174,7 +4217,12 @@ void LevelComp::InternalSwap(LevelComp* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.level_, other->_impl_.level_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(LevelComp, _impl_.level_)
+      + sizeof(LevelComp::_impl_.level_)
+      - PROTOBUF_FIELD_OFFSET(LevelComp, _impl_.total_exp_)>(
+          reinterpret_cast<char*>(&_impl_.total_exp_),
+          reinterpret_cast<char*>(&other->_impl_.total_exp_));
 }
 
 ::google::protobuf::Metadata LevelComp::GetMetadata() const {

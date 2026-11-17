@@ -70,6 +70,7 @@ namespace MmorpgClient.Table
             public readonly Dictionary<uint, IReadOnlyList<SkillTable>> IdxSkillType;
             public readonly Dictionary<uint, IReadOnlyList<SkillTable>> IdxTargetingMode;
             public readonly Dictionary<uint, IReadOnlyList<SkillTable>> IdxEffect;
+            public readonly Dictionary<uint, IReadOnlyList<SkillTable>> IdxInitEffect;
 
             public Snapshot(SkillTableData container, int capacity)
             {
@@ -79,6 +80,7 @@ namespace MmorpgClient.Table
                 IdxSkillType = new Dictionary<uint, IReadOnlyList<SkillTable>>();
                 IdxTargetingMode = new Dictionary<uint, IReadOnlyList<SkillTable>>();
                 IdxEffect = new Dictionary<uint, IReadOnlyList<SkillTable>>();
+                IdxInitEffect = new Dictionary<uint, IReadOnlyList<SkillTable>>();
             }
         }
 
@@ -140,12 +142,18 @@ namespace MmorpgClient.Table
                 {
                     Index(snap.IdxEffect, effectElems[j], row);
                 }
+                RepeatedField<uint> initEffectElems = row.InitEffect;
+                for (int j = 0; j < initEffectElems.Count; j++)
+                {
+                    Index(snap.IdxInitEffect, initEffectElems[j], row);
+                }
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
             Freeze(snap.IdxSkillType);
             Freeze(snap.IdxTargetingMode);
             Freeze(snap.IdxEffect);
+            Freeze(snap.IdxInitEffect);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
             _snapshot = snap;
@@ -209,6 +217,13 @@ namespace MmorpgClient.Table
             return Bucket(snap.IdxEffect, key);
         }
 
+        /// <summary>Rows whose repeated field init_effect contains <paramref name="key"/>.</summary>
+        public IReadOnlyList<SkillTable> FindByInitEffectIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxInitEffect, key);
+        }
+
         // ---- Exists ----
 
         public bool Exists(uint id)
@@ -242,6 +257,12 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return Bucket(snap.IdxEffect, key).Count;
+        }
+
+        public int CountByInitEffectIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxInitEffect, key).Count;
         }
 
         // ---- FindByIds (IN) ----

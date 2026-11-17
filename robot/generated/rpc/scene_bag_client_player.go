@@ -238,3 +238,72 @@ func (sceneBagClientPlayerRpc) decodeRetrieveTemporaryItems(reply *base.MessageC
 	}
 	return resp, nil
 }
+
+// GetEquipmentCraftRules 异步调用 SceneBagClientPlayer.GetEquipmentCraftRules(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) GetEquipmentCraftRules(c *pkg.GameClient, req *scene.GetEquipmentCraftRulesRequest, timeout time.Duration, done func(*scene.GetEquipmentCraftRulesResponse, error)) {
+	c.Call(game.SceneBagClientPlayerGetEquipmentCraftRulesMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetEquipmentCraftRules(reply, err))
+	})
+}
+
+// GetEquipmentCraftRulesSync 同步调用 SceneBagClientPlayer.GetEquipmentCraftRules(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) GetEquipmentCraftRulesSync(ctx context.Context, c *pkg.GameClient, req *scene.GetEquipmentCraftRulesRequest, timeout time.Duration) (*scene.GetEquipmentCraftRulesResponse, error) {
+	return r.decodeGetEquipmentCraftRules(c.CallSync(ctx, game.SceneBagClientPlayerGetEquipmentCraftRulesMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeGetEquipmentCraftRules(reply *base.MessageContent, err error) (*scene.GetEquipmentCraftRulesResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetEquipmentCraftRulesResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.GetEquipmentCraftRules reply: %w", err)
+	}
+	return resp, nil
+}
+
+// PreviewEquipmentCraft 异步调用 SceneBagClientPlayer.PreviewEquipmentCraft(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) PreviewEquipmentCraft(c *pkg.GameClient, req *scene.PreviewEquipmentCraftRequest, timeout time.Duration, done func(*scene.PreviewEquipmentCraftResponse, error)) {
+	c.Call(game.SceneBagClientPlayerPreviewEquipmentCraftMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodePreviewEquipmentCraft(reply, err))
+	})
+}
+
+// PreviewEquipmentCraftSync 同步调用 SceneBagClientPlayer.PreviewEquipmentCraft(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) PreviewEquipmentCraftSync(ctx context.Context, c *pkg.GameClient, req *scene.PreviewEquipmentCraftRequest, timeout time.Duration) (*scene.PreviewEquipmentCraftResponse, error) {
+	return r.decodePreviewEquipmentCraft(c.CallSync(ctx, game.SceneBagClientPlayerPreviewEquipmentCraftMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodePreviewEquipmentCraft(reply *base.MessageContent, err error) (*scene.PreviewEquipmentCraftResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.PreviewEquipmentCraftResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.PreviewEquipmentCraft reply: %w", err)
+	}
+	return resp, nil
+}
+
+// CommitEquipmentCraft 异步调用 SceneBagClientPlayer.CommitEquipmentCraft(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) CommitEquipmentCraft(c *pkg.GameClient, req *scene.CommitEquipmentCraftRequest, timeout time.Duration, done func(*scene.CommitEquipmentCraftResponse, error)) {
+	c.Call(game.SceneBagClientPlayerCommitEquipmentCraftMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCommitEquipmentCraft(reply, err))
+	})
+}
+
+// CommitEquipmentCraftSync 同步调用 SceneBagClientPlayer.CommitEquipmentCraft(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) CommitEquipmentCraftSync(ctx context.Context, c *pkg.GameClient, req *scene.CommitEquipmentCraftRequest, timeout time.Duration) (*scene.CommitEquipmentCraftResponse, error) {
+	return r.decodeCommitEquipmentCraft(c.CallSync(ctx, game.SceneBagClientPlayerCommitEquipmentCraftMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeCommitEquipmentCraft(reply *base.MessageContent, err error) (*scene.CommitEquipmentCraftResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.CommitEquipmentCraftResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.CommitEquipmentCraft reply: %w", err)
+	}
+	return resp, nil
+}

@@ -1,0 +1,6 @@
+# 供主线审阅的最小差异；mail-prepare 不会应用本文件。
+# 合入原栈时只把 private/scene.env 中的同名值注入 scene，再沿原栈的身份/启动门禁重建该进程。
+services:
+  scene:
+    environment:
+      MMORPG_ASSET_OP_SECRET_MAIL: ${MMORPG_ASSET_OP_SECRET_MAIL:?load the isolated mail scene.env first}

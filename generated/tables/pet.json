@@ -1,6 +1,7 @@
 {
  "data": [
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -22,12 +23,14 @@
    "model_id": 1001,
    "name": "灵狐",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     14000,
     10000,
@@ -49,9 +52,15 @@
    "model_id": 1002,
    "name": "石灵",
    "quality": 1,
+   "shop_price_gold": 1000,
+   "skill": [
+    10014,
+    12004
+   ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     12000,
     10000,
@@ -73,9 +82,15 @@
    "model_id": 1003,
    "name": "金猊",
    "quality": 2,
+   "shop_price_gold": 20000,
+   "skill": [
+    10002,
+    13001
+   ],
    "unlock_level": 10
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     14000,
@@ -97,12 +112,14 @@
    "model_id": 1004,
    "name": "云鹤",
    "quality": 2,
+   "shop_price_gold": 20000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 10
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -124,12 +141,14 @@
    "model_id": 1005,
    "name": "烛翎",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -151,12 +170,14 @@
    "model_id": 1006,
    "name": "绛铃",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -178,12 +199,14 @@
    "model_id": 1007,
    "name": "霜团貂",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -205,12 +228,14 @@
    "model_id": 1008,
    "name": "桂灯童",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -232,12 +257,14 @@
    "model_id": 1009,
    "name": "砚羽灵",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -259,12 +286,14 @@
    "model_id": 1010,
    "name": "岚铎仙",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -286,12 +315,14 @@
    "model_id": 1011,
    "name": "汐螺",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -313,12 +344,14 @@
    "model_id": 1012,
    "name": "苍嶂麟",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -340,12 +373,14 @@
    "model_id": 1013,
    "name": "竹风狸",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -367,12 +402,14 @@
    "model_id": 1014,
    "name": "赤砂魁",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -394,12 +431,14 @@
    "model_id": 1015,
    "name": "玄潮龟",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -421,12 +460,14 @@
    "model_id": 1016,
    "name": "月弦师",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -448,12 +489,14 @@
    "model_id": 1017,
    "name": "露华灵",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -475,12 +518,14 @@
    "model_id": 1018,
    "name": "绯耳灵",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -502,12 +547,14 @@
    "model_id": 1019,
    "name": "霞角鹿",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -529,12 +576,14 @@
    "model_id": 1020,
    "name": "芽铃童",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -556,12 +605,14 @@
    "model_id": 1021,
    "name": "葫团团",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   },
   {
+   "acquisition_tier": 0,
    "aptitude_max": [
     11000,
     13000,
@@ -583,8 +634,9 @@
    "model_id": 1022,
    "name": "符小虎",
    "quality": 1,
+   "shop_price_gold": 1000,
    "skill": [
-    14
+    10006
    ],
    "unlock_level": 1
   }

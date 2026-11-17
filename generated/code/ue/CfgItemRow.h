@@ -120,6 +120,22 @@ struct FCfgItemRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
 	int32 affix_rule = 0;
 
+	/** 装备规则版本：0 保留旧随机属性及强化规则，1 首发基础装，2 首发首饰，3 首发法宝。 同一模板的版本不修改；新增版本使用新物品 id，避免静默改变已有实例。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
+	int32 equip_profile = 0;
+
+	/** 定向打造材料。0 表示本模板未开放打造；材料数量必须同时为 0。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
+	int32 forge_material_id = 0;
+
+	/** 打造一个本体所需数量；不含后续首次安装词条的费用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
+	int32 forge_material_count = 0;
+
+	/** 固定法宝效果。0 表示不是法宝；两件同名法宝仍是两个独立实例。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
+	int32 artifact_id = 0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
 	TArray<FCfgItemBaseAttr> base_attr;
 };

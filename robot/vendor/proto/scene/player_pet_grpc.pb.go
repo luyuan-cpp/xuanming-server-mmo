@@ -29,6 +29,8 @@ const (
 	ScenePetClientPlayer_RenamePet_FullMethodName             = "/ScenePetClientPlayer/RenamePet"
 	ScenePetClientPlayer_NotifyPetListChanged_FullMethodName  = "/ScenePetClientPlayer/NotifyPetListChanged"
 	ScenePetClientPlayer_GmGrantPet_FullMethodName            = "/ScenePetClientPlayer/GmGrantPet"
+	ScenePetClientPlayer_GetPetShop_FullMethodName            = "/ScenePetClientPlayer/GetPetShop"
+	ScenePetClientPlayer_BuyPet_FullMethodName                = "/ScenePetClientPlayer/BuyPet"
 )
 
 // ScenePetClientPlayerClient is the client API for ScenePetClientPlayer service.
@@ -44,6 +46,8 @@ type ScenePetClientPlayerClient interface {
 	RenamePet(ctx context.Context, in *RenamePetRequest, opts ...grpc.CallOption) (*RenamePetResponse, error)
 	NotifyPetListChanged(ctx context.Context, in *PetListChangedS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	GmGrantPet(ctx context.Context, in *GmGrantPetRequest, opts ...grpc.CallOption) (*GmGrantPetResponse, error)
+	GetPetShop(ctx context.Context, in *GetPetShopRequest, opts ...grpc.CallOption) (*GetPetShopResponse, error)
+	BuyPet(ctx context.Context, in *BuyPetRequest, opts ...grpc.CallOption) (*BuyPetResponse, error)
 }
 
 type scenePetClientPlayerClient struct {
@@ -144,6 +148,26 @@ func (c *scenePetClientPlayerClient) GmGrantPet(ctx context.Context, in *GmGrant
 	return out, nil
 }
 
+func (c *scenePetClientPlayerClient) GetPetShop(ctx context.Context, in *GetPetShopRequest, opts ...grpc.CallOption) (*GetPetShopResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPetShopResponse)
+	err := c.cc.Invoke(ctx, ScenePetClientPlayer_GetPetShop_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *scenePetClientPlayerClient) BuyPet(ctx context.Context, in *BuyPetRequest, opts ...grpc.CallOption) (*BuyPetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuyPetResponse)
+	err := c.cc.Invoke(ctx, ScenePetClientPlayer_BuyPet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ScenePetClientPlayerServer is the server API for ScenePetClientPlayer service.
 // All implementations must embed UnimplementedScenePetClientPlayerServer
 // for forward compatibility.
@@ -157,6 +181,8 @@ type ScenePetClientPlayerServer interface {
 	RenamePet(context.Context, *RenamePetRequest) (*RenamePetResponse, error)
 	NotifyPetListChanged(context.Context, *PetListChangedS2C) (*base.Empty, error)
 	GmGrantPet(context.Context, *GmGrantPetRequest) (*GmGrantPetResponse, error)
+	GetPetShop(context.Context, *GetPetShopRequest) (*GetPetShopResponse, error)
+	BuyPet(context.Context, *BuyPetRequest) (*BuyPetResponse, error)
 	mustEmbedUnimplementedScenePetClientPlayerServer()
 }
 
@@ -193,6 +219,12 @@ func (UnimplementedScenePetClientPlayerServer) NotifyPetListChanged(context.Cont
 }
 func (UnimplementedScenePetClientPlayerServer) GmGrantPet(context.Context, *GmGrantPetRequest) (*GmGrantPetResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GmGrantPet not implemented")
+}
+func (UnimplementedScenePetClientPlayerServer) GetPetShop(context.Context, *GetPetShopRequest) (*GetPetShopResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPetShop not implemented")
+}
+func (UnimplementedScenePetClientPlayerServer) BuyPet(context.Context, *BuyPetRequest) (*BuyPetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuyPet not implemented")
 }
 func (UnimplementedScenePetClientPlayerServer) mustEmbedUnimplementedScenePetClientPlayerServer() {}
 func (UnimplementedScenePetClientPlayerServer) testEmbeddedByValue()                              {}
@@ -377,6 +409,42 @@ func _ScenePetClientPlayer_GmGrantPet_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ScenePetClientPlayer_GetPetShop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPetShopRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScenePetClientPlayerServer).GetPetShop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScenePetClientPlayer_GetPetShop_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScenePetClientPlayerServer).GetPetShop(ctx, req.(*GetPetShopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ScenePetClientPlayer_BuyPet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuyPetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScenePetClientPlayerServer).BuyPet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScenePetClientPlayer_BuyPet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScenePetClientPlayerServer).BuyPet(ctx, req.(*BuyPetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ScenePetClientPlayer_ServiceDesc is the grpc.ServiceDesc for ScenePetClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -419,6 +487,14 @@ var ScenePetClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GmGrantPet",
 			Handler:    _ScenePetClientPlayer_GmGrantPet_Handler,
+		},
+		{
+			MethodName: "GetPetShop",
+			Handler:    _ScenePetClientPlayer_GetPetShop_Handler,
+		},
+		{
+			MethodName: "BuyPet",
+			Handler:    _ScenePetClientPlayer_BuyPet_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

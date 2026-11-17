@@ -215,3 +215,49 @@ func (scenePetClientPlayerRpc) decodeGmGrantPet(reply *base.MessageContent, err 
 	}
 	return resp, nil
 }
+
+// GetPetShop 异步调用 ScenePetClientPlayer.GetPetShop(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) GetPetShop(c *pkg.GameClient, req *scene.GetPetShopRequest, timeout time.Duration, done func(*scene.GetPetShopResponse, error)) {
+	c.Call(game.ScenePetClientPlayerGetPetShopMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetPetShop(reply, err))
+	})
+}
+
+// GetPetShopSync 同步调用 ScenePetClientPlayer.GetPetShop(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) GetPetShopSync(ctx context.Context, c *pkg.GameClient, req *scene.GetPetShopRequest, timeout time.Duration) (*scene.GetPetShopResponse, error) {
+	return r.decodeGetPetShop(c.CallSync(ctx, game.ScenePetClientPlayerGetPetShopMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeGetPetShop(reply *base.MessageContent, err error) (*scene.GetPetShopResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetPetShopResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.GetPetShop reply: %w", err)
+	}
+	return resp, nil
+}
+
+// BuyPet 异步调用 ScenePetClientPlayer.BuyPet(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) BuyPet(c *pkg.GameClient, req *scene.BuyPetRequest, timeout time.Duration, done func(*scene.BuyPetResponse, error)) {
+	c.Call(game.ScenePetClientPlayerBuyPetMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeBuyPet(reply, err))
+	})
+}
+
+// BuyPetSync 同步调用 ScenePetClientPlayer.BuyPet(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) BuyPetSync(ctx context.Context, c *pkg.GameClient, req *scene.BuyPetRequest, timeout time.Duration) (*scene.BuyPetResponse, error) {
+	return r.decodeBuyPet(c.CallSync(ctx, game.ScenePetClientPlayerBuyPetMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeBuyPet(reply *base.MessageContent, err error) (*scene.BuyPetResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.BuyPetResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.BuyPet reply: %w", err)
+	}
+	return resp, nil
+}

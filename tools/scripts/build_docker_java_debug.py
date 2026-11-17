@@ -306,8 +306,17 @@ def check_line_tables(javap: Path, snapshot: Path, jar: Path,
                 raise RuntimeError("Breakpoint class has no source file attribute; inspect javap.log")
 
 
+def require_redis_test_fixtures(environment: dict[str, str]) -> None:
+    # 单节点和跨槽用例都必须实跑；缺接线时在封存、编译前报出变量名，不等整轮 Maven 后才发现跳过。
+    names = ("GATEWAY_RATE_LIMIT_REDIS_URL", "GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES")
+    missing = [name for name in names if not environment.get(name, "").strip()]
+    if missing:
+        raise RuntimeError("Explicit Redis test fixtures are required; missing variables: " + ", ".join(missing))
+
+
 def build(args: argparse.Namespace, output: Path,
           result: dict[str, object], details: dict[str, object]) -> None:
+    require_redis_test_fixtures(os.environ)
     protoc = args.protoc.resolve()
     if not re.fullmatch(r"[0-9a-fA-F]{64}", args.protoc_sha256) or not protoc.is_file() or sha256(protoc) != args.protoc_sha256.lower():
         raise RuntimeError("Explicit protoc executable SHA256 does not match")

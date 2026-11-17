@@ -48,11 +48,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -91,6 +91,20 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.created_scheme_id_), 6>(),
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.created_scheme_id_)}},
+      // uint64 equipment_item_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.equipment_item_id_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_item_id_)}},
+      // uint64 forge_revision = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.forge_revision_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -108,6 +122,10 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhance_level_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 created_scheme_id = 7;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.created_scheme_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 equipment_item_id = 8;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_item_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 forge_revision = 9;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -128,7 +146,9 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         enhance_success_{false},
         seq_{::uint64_t{0u}},
         enhance_level_{0u},
-        created_scheme_id_{0u} {}
+        created_scheme_id_{0u},
+        equipment_item_id_{::uint64_t{0u}},
+        forge_revision_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -234,11 +254,11 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -248,14 +268,19 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
       ::_pbi::TcParser::GetTable<::ClientRequestLedgerComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 next_seq = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.next_seq_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated .ClientRequestRecord records = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.records_)}},
+      // uint64 next_seq = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.next_seq_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_)}},
+      // uint64 forge_revision = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.forge_revision_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -263,6 +288,8 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
       {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.records_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 next_seq = 2;
       {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 forge_revision = 3;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -286,7 +313,8 @@ inline constexpr ClientRequestLedgerComp::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.records_)>()
          }
         ,
-        next_seq_{::uint64_t{0u}} {}
+        next_seq_{::uint64_t{0u}},
+        forge_revision_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ClientRequestLedgerComp::ClientRequestLedgerComp(::_pbi::ConstantInitialized,
@@ -389,7 +417,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        10, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -397,6 +425,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.enhance_success_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.enhance_level_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.created_scheme_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_item_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.forge_revision_),
         1,
         2,
         0,
@@ -404,19 +434,23 @@ const ::uint32_t
         3,
         5,
         6,
+        7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.records_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.next_seq_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.forge_revision_),
         0,
         1,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {17, sizeof(::ClientRequestLedgerComp)},
+        {21, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -426,20 +460,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\235\001\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\320\001\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
-    "d_scheme_id\030\007 \001(\r\"R\n\027ClientRequestLedger"
-    "Comp\022%\n\007records\030\001 \003(\0132\024.ClientRequestRec"
-    "ord\022\020\n\010next_seq\030\002 \001(\004B\022Z\020common/componen"
-    "tb\006proto3"
+    "d_scheme_id\030\007 \001(\r\022\031\n\021equipment_item_id\030\010"
+    " \001(\004\022\026\n\016forge_revision\030\t \001(\004\"j\n\027ClientRe"
+    "questLedgerComp\022%\n\007records\030\001 \003(\0132\024.Clien"
+    "tRequestRecord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forg"
+    "e_revision\030\003 \001(\004B\022Z\020common/componentb\006pr"
+    "oto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    329,
+    404,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -489,9 +525,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, created_scheme_id_) -
+           offsetof(Impl_, forge_revision_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::created_scheme_id_));
+               sizeof(Impl_::forge_revision_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -506,9 +542,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, created_scheme_id_) -
+           offsetof(Impl_, forge_revision_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::created_scheme_id_));
+               sizeof(Impl_::forge_revision_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -562,11 +598,12 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.fingerprint_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.key_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.created_scheme_id_) -
-        reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.created_scheme_id_));
+        reinterpret_cast<char*>(&_impl_.equipment_item_id_) -
+        reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.equipment_item_id_));
   }
+  _impl_.forge_revision_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -652,6 +689,24 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
+  // uint64 equipment_item_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_equipment_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_equipment_item_id(), target);
+    }
+  }
+
+  // uint64 forge_revision = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_forge_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_forge_revision(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -677,7 +732,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // bytes fingerprint = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_fingerprint().empty()) {
@@ -726,6 +781,22 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
             this_._internal_created_scheme_id());
       }
     }
+    // uint64 equipment_item_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_equipment_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_equipment_item_id());
+      }
+    }
+  }
+   {
+    // uint64 forge_revision = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_forge_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_forge_revision());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -744,7 +815,7 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_fingerprint().empty()) {
         _this->_internal_set_fingerprint(from._internal_fingerprint());
@@ -784,6 +855,16 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.created_scheme_id_ = from._impl_.created_scheme_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_equipment_item_id() != 0) {
+        _this->_impl_.equipment_item_id_ = from._impl_.equipment_item_id_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_forge_revision() != 0) {
+      _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -806,8 +887,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.created_scheme_id_)
-      + sizeof(ClientRequestRecord::_impl_.created_scheme_id_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_)
+      + sizeof(ClientRequestRecord::_impl_.forge_revision_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));
@@ -855,7 +936,13 @@ ClientRequestLedgerComp::ClientRequestLedgerComp(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.next_seq_ = from._impl_.next_seq_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, next_seq_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, next_seq_),
+           offsetof(Impl_, forge_revision_) -
+               offsetof(Impl_, next_seq_) +
+               sizeof(Impl_::forge_revision_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestLedgerComp)
 }
@@ -871,7 +958,12 @@ PROTOBUF_NDEBUG_INLINE ClientRequestLedgerComp::Impl_::Impl_(
 
 inline void ClientRequestLedgerComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.next_seq_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, next_seq_),
+           0,
+           offsetof(Impl_, forge_revision_) -
+               offsetof(Impl_, next_seq_) +
+               sizeof(Impl_::forge_revision_));
 }
 ClientRequestLedgerComp::~ClientRequestLedgerComp() {
   // @@protoc_insertion_point(destructor:ClientRequestLedgerComp)
@@ -924,7 +1016,11 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.records_.Clear();
   }
-  _impl_.next_seq_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.next_seq_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.forge_revision_) -
+        reinterpret_cast<char*>(&_impl_.next_seq_)) + sizeof(_impl_.forge_revision_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -970,6 +1066,15 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
     }
   }
 
+  // uint64 forge_revision = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_forge_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_forge_revision(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -995,7 +1100,7 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // repeated .ClientRequestRecord records = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_records_size();
@@ -1008,6 +1113,13 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
       if (this_._internal_next_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_next_seq());
+      }
+    }
+    // uint64 forge_revision = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_forge_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_forge_revision());
       }
     }
   }
@@ -1029,7 +1141,7 @@ void ClientRequestLedgerComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_records()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -1038,6 +1150,11 @@ void ClientRequestLedgerComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_next_seq() != 0) {
         _this->_impl_.next_seq_ = from._impl_.next_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_forge_revision() != 0) {
+        _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
       }
     }
   }
@@ -1059,7 +1176,12 @@ void ClientRequestLedgerComp::InternalSwap(ClientRequestLedgerComp* PROTOBUF_RES
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.records_.InternalSwap(&other->_impl_.records_);
-  swap(_impl_.next_seq_, other->_impl_.next_seq_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_)
+      + sizeof(ClientRequestLedgerComp::_impl_.forge_revision_)
+      - PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_)>(
+          reinterpret_cast<char*>(&_impl_.next_seq_),
+          reinterpret_cast<char*>(&other->_impl_.next_seq_));
 }
 
 ::google::protobuf::Metadata ClientRequestLedgerComp::GetMetadata() const {

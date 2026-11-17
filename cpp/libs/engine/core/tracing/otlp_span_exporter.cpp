@@ -41,9 +41,9 @@ public:
         std::function<void(uint64_t id, int savedErrno)> onConnectFailed;
     };
 
-    HttpConnection(muduo::net::EventLoop* loop, const muduo::net::InetAddress& address, uint64_t id, Callbacks callbacks)
+    HttpConnection(muduo::net::EventLoop& loop, const muduo::net::InetAddress& address, uint64_t id, Callbacks callbacks)
         : loop_(loop),
-          client_(loop, address, "otlp-span-export#" + std::to_string(id)),
+          client_(&loop, address, "otlp-span-export#" + std::to_string(id)),
           id_(id),
           callbacks_(std::move(callbacks))
     {
@@ -92,7 +92,7 @@ public:
                 return;
             }
             self->client_.stop();
-            self->loop_->queueInLoop([weakSelf, savedErrno] {
+            self->loop_.queueInLoop([weakSelf, savedErrno] {
                 if (const auto again = weakSelf.lock()) {
                     again->callbacks_.onConnectFailed(again->id_, savedErrno);
                 }
@@ -131,7 +131,7 @@ public:
     }
 
 private:
-    muduo::net::EventLoop* loop_;
+    muduo::net::EventLoop& loop_; // 借用导出线程的 loop,连接在该线程结束前释放
     muduo::net::TcpClient client_;
     uint64_t id_;
     Callbacks callbacks_;
@@ -164,7 +164,7 @@ struct OtlpSpanExporter::Latch {
 
 class OtlpSpanExporter::Impl : public std::enable_shared_from_this<OtlpSpanExporter::Impl> {
 public:
-    Impl(muduo::net::EventLoop* loop, SpanExportQueue& queue, SpanExportStats& stats, OtlpSpanExporterOptions options,
+    Impl(muduo::net::EventLoop& loop, SpanExportQueue& queue, SpanExportStats& stats, OtlpSpanExporterOptions options,
          std::shared_ptr<OtlpSpanExporter::Latch> latch)
         : loop_(loop), queue_(queue), stats_(stats), options_(std::move(options)), latch_(std::move(latch)),
           url_(options_.endpoint.ToUrl())
@@ -176,14 +176,14 @@ public:
     {
         std::weak_ptr<Impl> weakSelf = weak_from_this();
         // 周期定时器只绑 weak:Impl 先没了就是空操作。
-        periodicTimer_ = loop_->runEvery(ToSeconds(options_.scheduleDelay), [weakSelf] {
+        periodicTimer_ = loop_.runEvery(ToSeconds(options_.scheduleDelay), [weakSelf] {
             if (const auto self = weakSelf.lock()) {
                 self->TryExport();
             }
         });
         periodicTimerArmed_ = true;
         // 攒够一批时提前发。回调在 Submit 的线程上、持队列锁执行,只做一次 queueInLoop;摘回调(停机)之后 loop_ 不会再被碰到。
-        muduo::net::EventLoop* loop = loop_;
+        muduo::net::EventLoop* loop = &loop_;
         queue_.SetBatchReadyCallback([loop, weakSelf] {
             loop->queueInLoop([weakSelf] {
                 if (const auto self = weakSelf.lock()) {
@@ -203,7 +203,7 @@ public:
         queue_.SetBatchReadyCallback(nullptr);
         CancelPeriodicTimer();
         std::weak_ptr<Impl> weakSelf = weak_from_this();
-        shutdownTimer_ = loop_->runAfter(ToSeconds(options_.shutdownTimeout), [weakSelf] {
+        shutdownTimer_ = loop_.runAfter(ToSeconds(options_.shutdownTimeout), [weakSelf] {
             if (const auto self = weakSelf.lock()) {
                 self->shutdownTimerArmed_ = false;
                 self->OnShutdownDeadline();
@@ -254,8 +254,13 @@ private:
         }
         batch_.clear();
         inFlightSpans_ = queue_.PopBatch(batch_, options_.maxExportBatchSize);
-        request_ = BuildOtlpHttpRequest(options_.endpoint, EncodeExportTraceServiceRequest(options_.resource, batch_));
+        const std::string body = EncodeExportTraceServiceRequest(options_.resource, batch_);
         batch_.clear();
+        if (body.empty()) {
+            FailInFlight("cannot serialize OTLP request", /*backoff=*/false);
+            return;
+        }
+        request_ = BuildOtlpHttpRequest(options_.endpoint, body);
         ArmExportDeadline();
 
         if (reuse) {
@@ -379,7 +384,7 @@ private:
         }
         const uint64_t generation = ++exportGeneration_;
         std::weak_ptr<Impl> weakSelf = weak_from_this();
-        exportDeadline_ = loop_->runAfter(ToSeconds(timeout), [weakSelf, generation] {
+        exportDeadline_ = loop_.runAfter(ToSeconds(timeout), [weakSelf, generation] {
             if (const auto self = weakSelf.lock()) {
                 self->OnExportDeadline(generation);
             }
@@ -390,7 +395,7 @@ private:
     void CancelExportDeadline()
     {
         if (exportDeadlineArmed_) {
-            loop_->cancel(exportDeadline_);
+            loop_.cancel(exportDeadline_);
             exportDeadlineArmed_ = false;
         }
     }
@@ -487,7 +492,7 @@ private:
         // 接下来的动作一律排到下一轮:这里可能正处在连接的回调栈上,不在这里同步建新连接或再发一批。
         std::weak_ptr<Impl> weakSelf = weak_from_this();
         if (shuttingDown_) {
-            loop_->queueInLoop([weakSelf] {
+            loop_.queueInLoop([weakSelf] {
                 if (const auto self = weakSelf.lock()) {
                     self->ContinueShutdown();
                 }
@@ -496,7 +501,7 @@ private:
         }
         // 还够一批就接着发,不等下一个周期(BatchSpanProcessor 的语义)。
         if (queue_.Size() >= options_.maxExportBatchSize) {
-            loop_->queueInLoop([weakSelf] {
+            loop_.queueInLoop([weakSelf] {
                 if (const auto self = weakSelf.lock()) {
                     self->TryExport();
                 }
@@ -543,7 +548,7 @@ private:
         CancelExportDeadline();
         CancelPeriodicTimer();
         if (shutdownTimerArmed_) {
-            loop_->cancel(shutdownTimer_);
+            loop_.cancel(shutdownTimer_);
             shutdownTimerArmed_ = false;
         }
         const size_t discarded = queue_.DiscardAll();
@@ -554,8 +559,8 @@ private:
         // 连接对象排在队尾析构(不在它自己的回调栈上);~TcpClient 再排的 forceCloseInLoop / connectDestroyed /
         // Connector 的 resetChannel 由下面三跳 queueInLoop 排空之后才放行(AGENTS.md §11.7)。
         std::shared_ptr<OtlpSpanExporter::Latch> latch = latch_;
-        muduo::net::EventLoop* loop = loop_;
-        loop_->queueInLoop([loop, latch] {
+        muduo::net::EventLoop* loop = &loop_;
+        loop_.queueInLoop([loop, latch] {
             loop->queueInLoop([loop, latch] {
                 loop->queueInLoop([latch] { latch->Signal(); });
             });
@@ -594,19 +599,19 @@ private:
             return;
         }
         connectionId_ = 0;
-        loop_->queueInLoop([released = std::move(connection_)]() mutable { released.reset(); });
+        loop_.queueInLoop([released = std::move(connection_)]() mutable { released.reset(); });
         connection_.reset();
     }
 
     void CancelPeriodicTimer()
     {
         if (periodicTimerArmed_) {
-            loop_->cancel(periodicTimer_);
+            loop_.cancel(periodicTimer_);
             periodicTimerArmed_ = false;
         }
     }
 
-    muduo::net::EventLoop* loop_;
+    muduo::net::EventLoop& loop_; // 借用导出线程的 loop,收尾完成后不再访问
     SpanExportQueue& queue_;
     SpanExportStats& stats_;
     OtlpSpanExporterOptions options_;
@@ -659,11 +664,11 @@ void OtlpSpanExporter::Start()
     started_ = true;
     thread_ = std::make_unique<muduo::net::EventLoopThread>(muduo::net::EventLoopThread::ThreadInitCallback(),
                                                            "span-export");
-    loop_ = thread_->startLoop();
+    loop_ = std::ref(*thread_->startLoop());
     latch_ = std::make_shared<Latch>();
     // Impl 在本线程上构造(只存参数,不碰 loop),之后它的全部状态只在导出线程上读写。
-    impl_ = std::make_shared<Impl>(loop_, queue_, stats_, options_, latch_);
-    loop_->runInLoop([impl = impl_] { impl->StartInLoop(); });
+    impl_ = std::make_shared<Impl>(loop_->get(), queue_, stats_, options_, latch_);
+    loop_->get().runInLoop([impl = impl_] { impl->StartInLoop(); });
 }
 
 void OtlpSpanExporter::Shutdown()
@@ -672,7 +677,7 @@ void OtlpSpanExporter::Shutdown()
         return;
     }
     stopped_ = true;
-    loop_->runInLoop([impl = impl_] { impl->BeginShutdownInLoop(); });
+    loop_->get().runInLoop([impl = impl_] { impl->BeginShutdownInLoop(); });
     // 收尾本身以 shutdownTimeout 为限(导出线程上的定时器),多等 2 秒给收尾的几跳 queueInLoop 与线程调度。
     if (!latch_->WaitFor(options_.shutdownTimeout + std::chrono::seconds(2))) {
         // 导出线程卡住了(例如解析主机名阻塞):不能在本线程上拆它的 loop、连接与定时器。有意泄漏,进程正在退出。
@@ -684,7 +689,7 @@ void OtlpSpanExporter::Shutdown()
     // ~EventLoopThread:quit + join。Impl 在导出线程上已经释放了连接、取消了定时器,之后在本线程上析构是安全的。
     thread_.reset();
     impl_.reset();
-    loop_ = nullptr;
+    loop_.reset();
 }
 
 SpanExportStats& ProcessSpanExportStats()

@@ -20,11 +20,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="constants\turn_battle_constants.h" />
+    <ClInclude Include="constants\battle_effect_constants.h" />
+    <ClInclude Include="system\battle_actor_command_rules.h" />
     <ClInclude Include="data\battle_data_provider.h" />
     <ClInclude Include="data\battle_table_fingerprint.h" />
     <ClInclude Include="data\table_battle_data_provider.h" />
     <ClInclude Include="system\turn_battle_engine.h" />
     <ClInclude Include="system\combat_damage_rules.h" />
+    <ClInclude Include="system\equipment_battle_rules.h" />
     <ClInclude Include="system\class_skill_rules.h" />
     <ClInclude Include="system\battle_replay_recorder.h" />
     <ClInclude Include="system\battle_script.h" />
@@ -33,6 +36,8 @@
     <ClCompile Include="data\battle_table_fingerprint.cpp" />
     <ClCompile Include="data\table_battle_data_provider.cpp" />
     <ClCompile Include="system\turn_battle_engine.cpp" />
+    <ClCompile Include="system\configured_battle_effects.cpp" />
+    <ClCompile Include="system\equipment_battle_effects.cpp" />
     <ClCompile Include="system\battle_replay_recorder.cpp" />
     <ClCompile Include="system\battle_script.cpp" />
   </ItemGroup>

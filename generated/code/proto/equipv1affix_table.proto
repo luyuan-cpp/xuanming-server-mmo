@@ -1,0 +1,26 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "EquipV1AffixTableOuterClass";
+option java_multiple_files = true;
+
+
+message EquipV1AffixTable {
+	uint32 id = 1;
+	uint32 pool = 2;
+	uint32 effect = 3;
+	uint32 effect_param = 4;
+	uint32 value_permyriad = 5;
+	uint32 source_cap = 6;
+	string name = 7;
+	string description = 8;
+	uint32 material_id = 9;
+	uint32 material_count = 10;
+}
+
+message EquipV1AffixTableData {
+	repeated EquipV1AffixTable data = 1;
+}

@@ -155,4 +155,115 @@ struct FCfgBuffRow : public FTableRowBase
 	 *  刻意不暴露给 Blueprint,见上面结构体注释的「表达式列」。 */
 	UPROPERTY()
 	FString bonus_damage;
+
+	/** 事件回合模型的操作与枚举见battle_effect_constants.h;0完全沿用旧Buff。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 battle_op = 0;
+
+	/** 0挂载,1普攻后,2技能后,3受击后,4造成持续伤害后,5闪避后,6回合开始。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 trigger_event = 0;
+
+	/** 0技能目标/宿主,1自身,2事件对方,3施加者。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 effect_target = 0;
+
+	/** 值=flat+等级*per_level+value_basis*ratio,挂载时快照。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	double flat_value = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	double per_level = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	double ratio = 0.0;
+
+	/** 0无,1物攻,2法攻,3目标气血上限,4目标法力上限,5已付气血,6已付法力,7实际伤害。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 value_basis = 0;
+
+	/** 0不筛选,1物理,2法术。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 damage_filter = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 duration_rounds = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 tick_count = 0;
+
+	/** 比例0..1;0表示不随机、必触发。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	double trigger_chance = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 per_round_limit = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 hit_limit = 0;
+
+	/** 属性修改种类,见BattleModifier枚举。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 modifier_stat = 0;
+
+	/** 控制种类或持续状态类别:1封主动,2封法,3封物,4混乱,5昏睡,6冰冻,7毒,8灼烧,9劝退。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 state_kind = 0;
+
+	/** 控制基础成功率0..1;0表示必中。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	double application_chance = 0.0;
+
+	/** 如Poison/Burn/Break/Slow/Sleep;consume/extend操作按此筛选。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	FString required_tag;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	FString second_required_tag;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	double conditional_bonus = 0.0;
+
+	/** 额外参数:复活生命比例、法力盾换算比例、反弹比例等由操作定义。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	double secondary_ratio = 0.0;
+
+	/** 0不限;清除/催动次数/延长次数等离散预算。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 effect_count = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 target_count = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 pet_target_count = 0;
+
+	/** 同名覆盖键;0用表ID。跨来源只保留同键最强实例。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 stack_key = 0;
+
+	/** 0同源刷新,1跨来源强度覆盖,2跨来源剩余容量覆盖。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 refresh_policy = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 keep_on_death = 0;
+
+	/** 数值小的先结算,同优先级按实例ID。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 effect_priority = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 start_round = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 stack_limit = 0;
+
+	/** 来源死亡时暂停状态效果,时钟仍推进,复活不重新初始化。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 require_living_caster = 0;
+
+	/** 1表示当轮末可结算/扣时,0从下一轮开始。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 tick_on_apply = 0;
 };

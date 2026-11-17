@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -19,6 +21,8 @@
 //
 // 线程局部,从不跨线程共享,读写都不加锁。读者:Node::AsyncOutput 给每行日志追加 [ctx ...] 后缀(§5.1);
 // RpcChannel 发起调用时捕获当前 trace,回包时恢复。
+// 作用域的 previousRecorder_ 只借用同线程外层作用域的记录器;空引用表示进入前没有在录 span。
+// 作用域不可复制或移动,必须按嵌套顺序析构,确保外层记录器活到内层恢复完成。
 
 namespace tracing {
 
@@ -124,14 +128,16 @@ private:
 class ScopedSpan {
 public:
     ScopedSpan()
-        : previous_(detail::tlsTrace), previousRecorder_(detail::tlsRecorder)
+        : previous_(detail::tlsTrace),
+          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = previous_.IsValid() ? ChildSpan(previous_) : NewRoot();
         detail::tlsRecorder = nullptr;
     }
 
     explicit ScopedSpan(const TraceContext& captured)
-        : previous_(detail::tlsTrace), previousRecorder_(detail::tlsRecorder)
+        : previous_(detail::tlsTrace),
+          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = captured;
         detail::tlsRecorder = nullptr;
@@ -140,7 +146,7 @@ public:
     ~ScopedSpan()
     {
         detail::tlsTrace = previous_;
-        detail::tlsRecorder = previousRecorder_;
+        detail::tlsRecorder = previousRecorder_ ? &previousRecorder_->get() : nullptr;
     }
 
     ScopedSpan(const ScopedSpan&) = delete;
@@ -150,7 +156,7 @@ public:
 
 private:
     TraceContext previous_;
-    SpanRecorder* previousRecorder_;
+    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder_;
 };
 
 // 作用域内开一条新根(不看当前有没有 trace),退出时恢复进入前的值。只给「本进程就是起点」的入口用:
@@ -160,14 +166,16 @@ private:
 class ScopedRoot {
 public:
     ScopedRoot()
-        : previous_(detail::tlsTrace), previousRecorder_(detail::tlsRecorder)
+        : previous_(detail::tlsTrace),
+          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = NewRoot();
         detail::tlsRecorder = nullptr;
     }
 
     ScopedRoot(SpanSystem system, SpanName name)
-        : previous_(detail::tlsTrace), previousRecorder_(detail::tlsRecorder)
+        : previous_(detail::tlsTrace),
+          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = NewRoot();
         recorder_.Begin(detail::tlsTrace, SpanId{}, false, SpanKind::kServer, system, name);
@@ -178,7 +186,7 @@ public:
     {
         recorder_.End();
         detail::tlsTrace = previous_;
-        detail::tlsRecorder = previousRecorder_;
+        detail::tlsRecorder = previousRecorder_ ? &previousRecorder_->get() : nullptr;
     }
 
     void SetError(std::string_view description) noexcept { recorder_.SetError(description); }
@@ -190,7 +198,7 @@ public:
 
 private:
     TraceContext previous_;
-    SpanRecorder* previousRecorder_;
+    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder_;
     SpanRecorder recorder_;
 };
 
@@ -202,14 +210,16 @@ private:
 class ScopedIncoming {
 public:
     explicit ScopedIncoming(const TraceContext& incoming)
-        : previous_(detail::tlsTrace), previousRecorder_(detail::tlsRecorder)
+        : previous_(detail::tlsTrace),
+          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         detail::tlsTrace = incoming.IsValid() ? ChildSpan(incoming) : NewRoot();
         detail::tlsRecorder = nullptr;
     }
 
     ScopedIncoming(const TraceContext& incoming, SpanKind kind, SpanSystem system, SpanName name)
-        : previous_(detail::tlsTrace), previousRecorder_(detail::tlsRecorder)
+        : previous_(detail::tlsTrace),
+          previousRecorder_(detail::tlsRecorder ? std::make_optional(std::ref(*detail::tlsRecorder)) : std::nullopt)
     {
         const bool continued = incoming.IsValid();
         detail::tlsTrace = continued ? ChildSpan(incoming) : NewRoot();
@@ -221,7 +231,7 @@ public:
     {
         recorder_.End();
         detail::tlsTrace = previous_;
-        detail::tlsRecorder = previousRecorder_;
+        detail::tlsRecorder = previousRecorder_ ? &previousRecorder_->get() : nullptr;
     }
 
     void SetError(std::string_view description) noexcept { recorder_.SetError(description); }
@@ -233,7 +243,7 @@ public:
 
 private:
     TraceContext previous_;
-    SpanRecorder* previousRecorder_;
+    std::optional<std::reference_wrapper<SpanRecorder>> previousRecorder_;
     SpanRecorder recorder_;
 };
 

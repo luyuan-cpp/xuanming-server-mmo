@@ -686,6 +686,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     kSeenFieldNumber = 14,
     kMatchModeFieldNumber = 15,
     kBattleConfigIdFieldNumber = 16,
+    kExpGainFieldNumber = 18,
     kItemsMailedFieldNumber = 17,
   };
   // repeated .PlayerBattleResultCurrency currencies = 10;
@@ -881,6 +882,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
   void _internal_set_battle_config_id(::uint32_t value);
 
   public:
+  // uint64 exp_gain = 18;
+  void clear_exp_gain() ;
+  [[nodiscard]] ::uint64_t exp_gain() const;
+  void set_exp_gain(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_exp_gain() const;
+  void _internal_set_exp_gain(::uint64_t value);
+
+  public:
   // bool items_mailed = 17;
   void clear_items_mailed() ;
   [[nodiscard]] bool items_mailed() const;
@@ -895,7 +906,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
+      ::google::protobuf::internal::TcParseTable<5, 18,
                           3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -940,6 +951,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     bool seen_;
     ::uint32_t match_mode_;
     ::uint32_t battle_config_id_;
+    ::uint64_t exp_gain_;
     bool items_mailed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1772,7 +1784,7 @@ inline void PlayerBattleResult::_internal_set_battle_config_id(::uint32_t value)
 inline void PlayerBattleResult::clear_items_mailed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.items_mailed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline bool PlayerBattleResult::items_mailed() const {
   // @@protoc_insertion_point(field_get:PlayerBattleResult.items_mailed)
@@ -1780,7 +1792,7 @@ inline bool PlayerBattleResult::items_mailed() const {
 }
 inline void PlayerBattleResult::set_items_mailed(bool value) {
   _internal_set_items_mailed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:PlayerBattleResult.items_mailed)
 }
 inline bool PlayerBattleResult::_internal_items_mailed() const {
@@ -1790,6 +1802,30 @@ inline bool PlayerBattleResult::_internal_items_mailed() const {
 inline void PlayerBattleResult::_internal_set_items_mailed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.items_mailed_ = value;
+}
+
+// uint64 exp_gain = 18;
+inline void PlayerBattleResult::clear_exp_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_gain_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t PlayerBattleResult::exp_gain() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.exp_gain)
+  return _internal_exp_gain();
+}
+inline void PlayerBattleResult::set_exp_gain(::uint64_t value) {
+  _internal_set_exp_gain(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.exp_gain)
+}
+inline ::uint64_t PlayerBattleResult::_internal_exp_gain() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.exp_gain_;
+}
+inline void PlayerBattleResult::_internal_set_exp_gain(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_gain_ = value;
 }
 
 // -------------------------------------------------------------------

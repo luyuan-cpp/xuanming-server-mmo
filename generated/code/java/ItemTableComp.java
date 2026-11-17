@@ -95,4 +95,28 @@ public final class ItemTableComp {
         }
     }
 
+    public record Equip_profile(int value) {
+        public static Equip_profile from(ItemTable row) {
+            return new Equip_profile(row.getEquipProfile());
+        }
+    }
+
+    public record Forge_material_id(int value) {
+        public static Forge_material_id from(ItemTable row) {
+            return new Forge_material_id(row.getForgeMaterialId());
+        }
+    }
+
+    public record Forge_material_count(int value) {
+        public static Forge_material_count from(ItemTable row) {
+            return new Forge_material_count(row.getForgeMaterialCount());
+        }
+    }
+
+    public record Artifact_id(int value) {
+        public static Artifact_id from(ItemTable row) {
+            return new Artifact_id(row.getArtifactId());
+        }
+    }
+
 }

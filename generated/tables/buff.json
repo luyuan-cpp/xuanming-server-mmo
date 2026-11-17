@@ -672,6 +672,851 @@
     "Debuff": true
    },
    "time": 0
+  },
+  {
+   "battle_op": 1,
+   "id": 100020,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 100030,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 5,
+   "id": 100031,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 1,
+   "ratio": -0.2,
+   "tag": {
+    "Debuff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 100060,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 100070,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 3,
+   "id": 100071,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 4,
+   "ratio": -0.25,
+   "tag": {
+    "Slow": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 100080,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 2,
+   "id": 100100,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 20.0,
+   "ratio": 0.0,
+   "value_basis": 0
+  },
+  {
+   "battle_op": 2,
+   "id": 100120,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 17.5,
+   "ratio": 0.0,
+   "value_basis": 0
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 5,
+   "id": 100140,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 3,
+   "ratio": 0.25,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 3,
+   "id": 100150,
+   "level": 1,
+   "max_layer": 1,
+   "ratio": 0.25,
+   "value_basis": 4
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 3,
+   "id": 100160,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 4,
+   "ratio": 0.25,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 100170,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 100180,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 3,
+   "id": 100181,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 3,
+   "ratio": -0.25,
+   "refresh_policy": 1,
+   "stack_key": 100181,
+   "tag": {
+    "Break": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "application_chance": 0.75,
+   "battle_op": 7,
+   "duration_rounds": 3,
+   "id": 100190,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 2.0,
+   "ratio": 0.25,
+   "refresh_policy": 1,
+   "stack_key": 100190,
+   "state_kind": 7,
+   "tag": {
+    "Debuff": true,
+    "Poison": true
+   },
+   "tick_count": 3,
+   "tick_on_apply": 1,
+   "value_basis": 2
+  },
+  {
+   "application_chance": 0.65,
+   "battle_op": 13,
+   "duration_rounds": 1,
+   "id": 100200,
+   "level": 1,
+   "max_layer": 1,
+   "refresh_policy": 1,
+   "state_kind": 1,
+   "tag": {
+    "Control": true,
+    "Debuff": true,
+    "SealActive": true
+   },
+   "tick_on_apply": 0
+  },
+  {
+   "application_chance": 0.75,
+   "battle_op": 13,
+   "duration_rounds": 2,
+   "id": 100210,
+   "level": 1,
+   "max_layer": 1,
+   "refresh_policy": 1,
+   "state_kind": 2,
+   "tag": {
+    "Control": true,
+    "Debuff": true,
+    "SealMagic": true
+   },
+   "tick_on_apply": 0
+  },
+  {
+   "application_chance": 0.75,
+   "battle_op": 13,
+   "duration_rounds": 2,
+   "id": 100220,
+   "level": 1,
+   "max_layer": 1,
+   "refresh_policy": 1,
+   "state_kind": 3,
+   "tag": {
+    "Control": true,
+    "Debuff": true,
+    "SealPhysical": true
+   },
+   "tick_on_apply": 0
+  },
+  {
+   "application_chance": 0.65,
+   "battle_op": 13,
+   "duration_rounds": 1,
+   "id": 100230,
+   "level": 1,
+   "max_layer": 1,
+   "refresh_policy": 1,
+   "state_kind": 4,
+   "tag": {
+    "Confusion": true,
+    "Control": true,
+    "Debuff": true
+   },
+   "tick_on_apply": 0
+  },
+  {
+   "application_chance": 0.65,
+   "battle_op": 13,
+   "duration_rounds": 2,
+   "id": 100240,
+   "level": 1,
+   "max_layer": 1,
+   "refresh_policy": 1,
+   "state_kind": 5,
+   "tag": {
+    "Control": true,
+    "Debuff": true,
+    "Sleep": true
+   },
+   "tick_on_apply": 0
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 5,
+   "id": 100250,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 15,
+   "ratio": 0.2,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 8,
+   "duration_rounds": 5,
+   "id": 100260,
+   "keep_on_death": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 6.0,
+   "ratio": 0.0,
+   "refresh_policy": 1,
+   "secondary_ratio": 0.2,
+   "tag": {
+    "Buff": true,
+    "Revive": true
+   },
+   "tick_count": 5,
+   "tick_on_apply": 1,
+   "value_basis": 0
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 3,
+   "id": 100270,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 7,
+   "ratio": 0.15,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 14,
+   "effect_count": 2,
+   "id": 100280,
+   "level": 1,
+   "max_layer": 1,
+   "required_tag": "Poison"
+  },
+  {
+   "battle_op": 15,
+   "effect_count": 1,
+   "id": 100290,
+   "level": 1,
+   "max_layer": 1,
+   "required_tag": "Poison"
+  },
+  {
+   "battle_op": 1,
+   "id": 100300,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "application_chance": 0.8,
+   "battle_op": 7,
+   "duration_rounds": 3,
+   "id": 100301,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 2.0,
+   "ratio": 0.2,
+   "refresh_policy": 1,
+   "state_kind": 8,
+   "tag": {
+    "Burn": true,
+    "Debuff": true
+   },
+   "tick_count": 3,
+   "tick_on_apply": 1,
+   "value_basis": 2
+  },
+  {
+   "battle_op": 1,
+   "id": 100310,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 14,
+   "effect_count": 1,
+   "id": 100311,
+   "level": 1,
+   "max_layer": 1,
+   "required_tag": "Poison",
+   "second_required_tag": "Burn"
+  },
+  {
+   "battle_op": 1,
+   "conditional_bonus": 0.75,
+   "id": 100320,
+   "level": 1,
+   "max_layer": 1,
+   "required_tag": "Sleep"
+  },
+  {
+   "battle_op": 4,
+   "effect_count": 1,
+   "id": 100330,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 5,
+   "effect_count": 1,
+   "id": 100340,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "application_chance": 0.8,
+   "battle_op": 6,
+   "duration_rounds": 5,
+   "id": 100350,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 6,
+   "ratio": -0.35,
+   "tag": {
+    "Debuff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 11,
+   "duration_rounds": 3,
+   "effect_priority": 40,
+   "id": 100360,
+   "level": 1,
+   "max_layer": 1,
+   "ratio": 0.25,
+   "require_living_caster": 1,
+   "secondary_ratio": 0.3,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1,
+   "value_basis": 3
+  },
+  {
+   "battle_op": 1,
+   "conditional_bonus": 0.5,
+   "id": 100370,
+   "level": 1,
+   "max_layer": 1,
+   "required_tag": "Break"
+  },
+  {
+   "application_chance": 0.55,
+   "battle_op": 13,
+   "duration_rounds": 1,
+   "id": 100380,
+   "level": 1,
+   "max_layer": 1,
+   "refresh_policy": 1,
+   "state_kind": 6,
+   "tag": {
+    "Control": true,
+    "Debuff": true,
+    "Freeze": true
+   },
+   "tick_on_apply": 0
+  },
+  {
+   "battle_op": 1,
+   "id": 100390,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 9,
+   "duration_rounds": 2,
+   "effect_priority": 20,
+   "id": 100400,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 16.0,
+   "ratio": 0.0,
+   "refresh_policy": 2,
+   "tag": {
+    "Buff": true,
+    "Shield": true
+   },
+   "tick_on_apply": 1,
+   "value_basis": 0
+  },
+  {
+   "battle_op": 9,
+   "damage_filter": 2,
+   "duration_rounds": 3,
+   "effect_priority": 10,
+   "hit_limit": 2,
+   "id": 110050,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 6.0,
+   "ratio": 1.2,
+   "refresh_policy": 2,
+   "tag": {
+    "Buff": true,
+    "Shield": true
+   },
+   "tick_on_apply": 1,
+   "value_basis": 2
+  },
+  {
+   "battle_op": 9,
+   "damage_filter": 1,
+   "duration_rounds": 3,
+   "effect_priority": 10,
+   "hit_limit": 2,
+   "id": 110060,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 6.0,
+   "ratio": 1.2,
+   "refresh_policy": 2,
+   "tag": {
+    "Buff": true,
+    "Shield": true
+   },
+   "tick_on_apply": 1,
+   "value_basis": 2
+  },
+  {
+   "battle_op": 12,
+   "damage_filter": 1,
+   "duration_rounds": 3,
+   "effect_priority": 50,
+   "id": 110070,
+   "level": 1,
+   "max_layer": 1,
+   "secondary_ratio": 0.25,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1,
+   "trigger_event": 3
+  },
+  {
+   "battle_op": 12,
+   "damage_filter": 2,
+   "duration_rounds": 3,
+   "effect_priority": 50,
+   "id": 110080,
+   "level": 1,
+   "max_layer": 1,
+   "secondary_ratio": 0.25,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1,
+   "trigger_event": 3
+  },
+  {
+   "application_chance": 0.5,
+   "battle_op": 17,
+   "duration_rounds": 2,
+   "id": 110090,
+   "level": 1,
+   "max_layer": 1,
+   "state_kind": 9
+  },
+  {
+   "battle_op": 20,
+   "damage_filter": 1,
+   "duration_rounds": 2,
+   "hit_limit": 1,
+   "id": 110110,
+   "level": 1,
+   "max_layer": 1,
+   "pet_target_count": 1,
+   "ratio": 0.5,
+   "tag": {
+    "Buff": true
+   },
+   "target_count": 1,
+   "tick_on_apply": 0,
+   "trigger_event": 1
+  },
+  {
+   "battle_op": 1,
+   "id": 110120,
+   "level": 1,
+   "max_layer": 1,
+   "secondary_ratio": 0.3
+  },
+  {
+   "battle_op": 16,
+   "id": 110130,
+   "level": 1,
+   "max_layer": 1,
+   "ratio": 1.25,
+   "value_basis": 5
+  },
+  {
+   "battle_op": 10,
+   "duration_rounds": 3,
+   "effect_priority": 30,
+   "id": 110140,
+   "level": 1,
+   "max_layer": 1,
+   "ratio": 0.5,
+   "secondary_ratio": 1.0,
+   "tag": {
+    "Buff": true,
+    "Shield": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 18,
+   "duration_rounds": 3,
+   "id": 110150,
+   "level": 1,
+   "max_layer": 1,
+   "ratio": 2.0,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1,
+   "value_basis": 6
+  },
+  {
+   "battle_op": 2,
+   "id": 110160,
+   "level": 1,
+   "max_layer": 1,
+   "ratio": 0.6,
+   "value_basis": 3
+  },
+  {
+   "battle_op": 4,
+   "effect_count": 3,
+   "id": 110161,
+   "level": 1,
+   "max_layer": 1
+  },
+  {
+   "battle_op": 6,
+   "id": 120050,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 8,
+   "ratio": 0.15
+  },
+  {
+   "battle_op": 6,
+   "id": 120070,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 9,
+   "ratio": -0.15
+  },
+  {
+   "battle_op": 22,
+   "id": 120080,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "ratio": 0.04,
+   "required_tag": "Poison",
+   "trigger_event": 4,
+   "value_basis": 3
+  },
+  {
+   "battle_op": 19,
+   "damage_filter": 1,
+   "id": 120090,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "ratio": 1.0,
+   "trigger_chance": 0.2,
+   "trigger_event": 3
+  },
+  {
+   "battle_op": 24,
+   "id": 120100,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "sub_buff": [
+    120101
+   ],
+   "trigger_event": 5
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 2,
+   "hit_limit": 1,
+   "id": 120101,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 14,
+   "ratio": 0.3,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 0
+  },
+  {
+   "battle_op": 6,
+   "id": 120140,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 10,
+   "ratio": 0.15
+  },
+  {
+   "battle_op": 6,
+   "id": 120150,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 11,
+   "ratio": 0.25
+  },
+  {
+   "battle_op": 6,
+   "id": 120160,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 12,
+   "ratio": 0.2
+  },
+  {
+   "battle_op": 6,
+   "id": 120170,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 13,
+   "ratio": 0.3
+  },
+  {
+   "battle_op": 23,
+   "id": 120180,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "ratio": 0.05,
+   "trigger_event": 3,
+   "value_basis": 4
+  },
+  {
+   "battle_op": 19,
+   "damage_filter": 2,
+   "id": 120190,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "ratio": 1.0,
+   "trigger_chance": 0.2,
+   "trigger_event": 3
+  },
+  {
+   "battle_op": 20,
+   "damage_filter": 1,
+   "id": 130010,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "pet_target_count": 2,
+   "ratio": 0.5,
+   "target_count": 1,
+   "trigger_chance": 0.35,
+   "trigger_event": 1
+  },
+  {
+   "battle_op": 20,
+   "damage_filter": 1,
+   "id": 130020,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "ratio": 0.65,
+   "required_tag": "Break",
+   "second_required_tag": "Slow",
+   "target_count": 1,
+   "trigger_event": 1
+  },
+  {
+   "battle_op": 16,
+   "id": 130030,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "ratio": 0.1,
+   "trigger_event": 1,
+   "value_basis": 4
+  },
+  {
+   "battle_op": 21,
+   "id": 130050,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "target_sub_buff": [
+    130051
+   ],
+   "trigger_event": 1
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 3,
+   "id": 130051,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 3,
+   "ratio": -0.2,
+   "refresh_policy": 1,
+   "stack_key": 100181,
+   "tag": {
+    "Break": true,
+    "Debuff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 20,
+   "damage_filter": 2,
+   "id": 130060,
+   "infinite_duration": 1,
+   "level": 1,
+   "max_layer": 1,
+   "per_round_limit": 1,
+   "pet_target_count": 2,
+   "ratio": 0.4,
+   "target_count": 2,
+   "trigger_chance": 0.35,
+   "trigger_event": 2
+  },
+  {
+   "battle_op": 25,
+   "id": 140010,
+   "infinite_duration": 1,
+   "keep_on_death": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 5,
+   "ratio": 0.05,
+   "refresh_policy": 1,
+   "require_living_caster": 1,
+   "stack_limit": 3,
+   "start_round": 3,
+   "tag": {
+    "Buff": true
+   },
+   "trigger_event": 6
+  },
+  {
+   "battle_op": 6,
+   "duration_rounds": 2,
+   "id": 140020,
+   "keep_on_death": 1,
+   "level": 1,
+   "max_layer": 1,
+   "modifier_stat": 16,
+   "ratio": -0.2,
+   "refresh_policy": 1,
+   "require_living_caster": 1,
+   "tag": {
+    "Buff": true
+   },
+   "tick_on_apply": 1
+  },
+  {
+   "battle_op": 9,
+   "duration_rounds": 2,
+   "effect_priority": 20,
+   "id": 140030,
+   "level": 1,
+   "max_layer": 1,
+   "per_level": 5.0,
+   "ratio": 1.0,
+   "refresh_policy": 2,
+   "tag": {
+    "Buff": true,
+    "Shield": true
+   },
+   "tick_on_apply": 1,
+   "value_basis": 2
   }
  ]
 }

@@ -152,6 +152,38 @@ message GmGrantPetResponse {
   uint64 pet_id = 3;
 }
 
+// 普通玩家商店。价格、上架种类、下一购买序号由服务端给出。
+message PetShopOffer {
+  uint32 pet_table_id = 1;
+  string name = 2;
+  uint32 model_id = 3;
+  uint32 unlock_level = 4;
+  uint64 price_gold = 5;
+  string desc = 6;
+}
+
+message GetPetShopRequest {}
+message GetPetShopResponse {
+  TipInfoMessage error_message = 1;
+  repeated PetShopOffer offers = 2;
+  uint64 gold = 3;
+  uint64 next_purchase_sequence = 4;
+}
+
+message BuyPetRequest {
+  uint32 pet_table_id = 1;
+  uint64 purchase_sequence = 2;
+  uint64 price_gold = 3; // 用户确认的报价；过期报价拒绝，不按新价格扣款。
+}
+
+message BuyPetResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+  uint64 pet_id = 3;
+  uint64 gold = 4;
+  uint64 next_purchase_sequence = 5;
+}
+
 service ScenePetClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -165,4 +197,6 @@ service ScenePetClientPlayer {
   rpc RenamePet (RenamePetRequest) returns (RenamePetResponse);
   rpc NotifyPetListChanged (PetListChangedS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc GmGrantPet (GmGrantPetRequest) returns (GmGrantPetResponse);
+  rpc GetPetShop (GetPetShopRequest) returns (GetPetShopResponse);
+  rpc BuyPet (BuyPetRequest) returns (BuyPetResponse);
 }

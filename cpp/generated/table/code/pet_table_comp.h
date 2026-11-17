@@ -54,6 +54,14 @@ struct PetInit_speedComp {
     uint64_t value;
 };
 
+struct PetShop_price_goldComp {
+    uint64_t value;
+};
+
+struct PetAcquisition_tierComp {
+    uint32_t value;
+};
+
 struct PetAptitude_minComp {
     std::span<const uint32_t> values;
 };
@@ -100,6 +108,12 @@ inline PetInit_manaComp MakePetInit_manaComp(const PetTable& row) {
 }
 inline PetInit_speedComp MakePetInit_speedComp(const PetTable& row) {
     return { row.init_speed() };
+}
+inline PetShop_price_goldComp MakePetShop_price_goldComp(const PetTable& row) {
+    return { row.shop_price_gold() };
+}
+inline PetAcquisition_tierComp MakePetAcquisition_tierComp(const PetTable& row) {
+    return { row.acquisition_tier() };
 }
 inline PetAptitude_minComp MakePetAptitude_minComp(const PetTable& row) {
     const auto& rf = row.aptitude_min();

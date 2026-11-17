@@ -38,3 +38,11 @@ constexpr uint32_t ScenePetClientPlayerNotifyPetListChangedIndex = 7;
 constexpr uint32_t ScenePetClientPlayerGmGrantPetMessageId = 187;
 constexpr uint32_t ScenePetClientPlayerGmGrantPetIndex = 8;
 #define ScenePetClientPlayerGmGrantPetMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(8)
+
+constexpr uint32_t ScenePetClientPlayerGetPetShopMessageId = 402;
+constexpr uint32_t ScenePetClientPlayerGetPetShopIndex = 9;
+#define ScenePetClientPlayerGetPetShopMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(9)
+
+constexpr uint32_t ScenePetClientPlayerBuyPetMessageId = 403;
+constexpr uint32_t ScenePetClientPlayerBuyPetIndex = 10;
+#define ScenePetClientPlayerBuyPetMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(10)

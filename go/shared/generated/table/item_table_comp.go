@@ -65,6 +65,22 @@ type ItemAffix_ruleComp struct {
     Value uint32
 }
 
+type ItemEquip_profileComp struct {
+    Value uint32
+}
+
+type ItemForge_material_idComp struct {
+    Value uint32
+}
+
+type ItemForge_material_countComp struct {
+    Value uint32
+}
+
+type ItemArtifact_idComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -120,5 +136,21 @@ func MakeItemAffix_poolComp(row *pb.ItemTable) ItemAffix_poolComp {
 
 func MakeItemAffix_ruleComp(row *pb.ItemTable) ItemAffix_ruleComp {
     return ItemAffix_ruleComp{Value: row.AffixRule}
+}
+
+func MakeItemEquip_profileComp(row *pb.ItemTable) ItemEquip_profileComp {
+    return ItemEquip_profileComp{Value: row.EquipProfile}
+}
+
+func MakeItemForge_material_idComp(row *pb.ItemTable) ItemForge_material_idComp {
+    return ItemForge_material_idComp{Value: row.ForgeMaterialId}
+}
+
+func MakeItemForge_material_countComp(row *pb.ItemTable) ItemForge_material_countComp {
+    return ItemForge_material_countComp{Value: row.ForgeMaterialCount}
+}
+
+func MakeItemArtifact_idComp(row *pb.ItemTable) ItemArtifact_idComp {
+    return ItemArtifact_idComp{Value: row.ArtifactId}
 }
 

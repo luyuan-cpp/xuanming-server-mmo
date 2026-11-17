@@ -1,6 +1,7 @@
 # 宝宝(宠物)系统 —— 核心线
 
-> 落地日期:2026-09-09(**未编译,待 Codex 验证**,见 §9)。实现分布:
+> 核心线落地日期:2026-09-09；2026-11-16 已补齐普通商店与野外捕捉，并通过本机 Docker 严格获取冒烟。
+> §9 保留原始交接清单，当前实现与实际验证边界见 §10、§11。实现分布:
 > `proto/common/component/player_pet_comp.proto`、`proto/scene/player_pet.proto`、
 > `proto/battle/battle_data.proto`(宝宝快照 / 参战单位 / 结算)、
 > `cpp/libs/services/scene/player/system/player_pet.{h,cpp}`、
@@ -16,7 +17,9 @@
 (体质 / 灵力 / 力量 / 敏捷)+ 资质、按宝宝等级发点的手动加点与自动加点、
 召唤 / 收回、以及**作为独立行动单位参加回合制战斗**。
 
-**非目标(核心线不做,二期见 §8)**:战斗中捕捉、宠物店购买、合宠、洗资质 / 洗成长、
+2026-11-15/16 补齐普通宠物商店与战斗内野外捕捉，入口和限制见 §10。
+
+**非目标(二期见 §8)**:合宠、洗资质 / 洗成长、
 放生、宝宝技能书学习、宝宝独立经验曲线、宝宝的服务器权威跟随位置(AOI 实体)。
 
 ## 2. 与角色属性加点的关系:复用同一套表和同一套纯规则
@@ -65,7 +68,7 @@ AutoAllocate)现在都过 `IsPlayerPool()`,拿到宝宝池一律按"池不存在
 宝宝等级 = min(主人等级, PetTable.level_cap)
 ```
 
-经验系统全仓未接(角色等级也只能 `GmSetPlayerLevel`),给宝宝单开一条经验曲线就是造第二份
+角色战斗经验已累计入账，但升级曲线仍未接(角色等级只能 `GmSetPlayerLevel`)，给宝宝单开一条经验曲线就是造第二份
 "等级从哪来"的真相。因此核心线让宝宝等级完全派生:主人升级 → `PlayerUpgradeEvent` →
 `PetSystem::RecalculateAll(kLevelChanged)` → 推列表。宝宝的独立经验是二期(§8)。
 
@@ -118,19 +121,21 @@ AutoAllocate)现在都过 `IsPlayerPool()`,拿到宝宝池一律按"池不存在
 | rpc | 语义 |
 |---|---|
 | `GetPetList` | 拉全量列表(客户端零配表:维度名 / 说明 / 上限 / 剩余点 / 资质 / 成长率全在里面) |
+| `GetPetShop`（402） | 普通宠物商品、银两价格、当前余额与下一购买序号 |
+| `BuyPet`（403） | 按服务端报价与单调序号购买，返回实例、余额和全量列表；原号原参数重试复用回执 |
 | `SummonPet` / `RecallPet` | 出战 / 收回(同时只能出战 1 只) |
 | `AllocatePetPoints` | 确认加点:提交该宝宝的"目标已分配值"(全量、幂等) |
 | `ResetPetPoints` | 洗点,按 `AttributePool.reset_cost_gold` 扣金币 |
 | `AutoAllocatePetPoints` | 算推荐分配,**只算不落** |
 | `RenamePet` | 改名,按 `PetRule.rename_cost_gold` 扣金币 |
 | `NotifyPetListChanged` | 服务器主动推列表(主人升级 / 结算回写) |
-| `GmGrantPet` | GM 发宝宝(核心线唯一获取入口;**仅 dev/test 可用**,见 §8 第 1 条与 `cpp/nodes/gate/SECURITY.md` §3) |
+| `GmGrantPet` | GM 测试发宝宝，**仅 dev/test 可用**，普通获取不依赖它；见 §8 第 1 条与 `cpp/nodes/gate/SECURITY.md` §3 |
 
 **写口径与角色一致**:每个写操作成功后回全量列表,客户端整体覆盖,不做增量合并。
-所有写操作在**跨 zone 冻结(`PlayerFrozenComp`)与战斗在途(`InBattleComp`)期间一律拒绝** ——
+所有面板写操作在**跨 zone 冻结(`PlayerFrozenComp`)与战斗在途(`InBattleComp`)期间一律拒绝** ——
 快照已经出去了,这时候改宝宝会让局内单位和面板分叉。
 
-**消息号与限流**:消息号由导表/生成流程发号(`proto/message_id.txt`,预计 180+)。
+**消息号与限流**:消息号以正式生成的 `proto/message_id.txt` 为准，新增商店两条为 402/403，已加入 `MessageLimiter`。
 新协议上线前必须给 `data/MessageLimiter.xlsx` 加行,否则吃默认档(3 次/窗口),
 UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"而不是错误提示。
 改表后要重启 gate。**这一步依赖生成后的实际号,见 §9 交接清单第 3 条。**
@@ -184,7 +189,8 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
 ## 6. 表
 
 - **`Pet`** —— 种类:`name` / `desc` / `model_id` / `quality` / `unlock_level`(可携带的最低主人等级)/
-  `level_cap` / `init_health` / `init_mana` / `init_speed` / `aptitude_min[4]` / `aptitude_max[4]` / `skill[4]`。
+  `level_cap` / `init_health` / `init_mana` / `init_speed` / `aptitude_min[4]` / `aptitude_max[4]` / `skill[4]`，
+  2026-11-15 新增 `shop_price_gold` 与 `acquisition_tier`（获取档次独立于品质，见 §10）。
   资质区间按维度顺序 401 体质 / 402 灵力 / 403 力量 / 404 敏捷 排。原四行:灵狐(快 / 法)、
   石灵(肉)、金猊(物理)、云鹤(法系)。2026-10-13 接入归档宠物时保留原种类 ID 与数值,
   新增18种类;灵狐/云鹤沿用原1/4身份绑定灵玥/云啾啾美术,石灵/金猊保持原无技能行为。
@@ -225,16 +231,16 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
 
 ## 8. 已知缺口 / 二期
 
-1. **获取渠道只有 GM**(`GmGrantPet`):战斗中捕捉、宠物店购买未做。
-   `PetSystem::GrantPet` 就是为这两条路准备的公共入口,接的时候不需要改内部逻辑。
+1. **普通获取渠道已接入（2026-11-15）**：银两商店及开放模板内的野外捕捉见文末。
+   变异令牌兑换和神兽充值抽奖的名单、数量与概率尚未制定，当前只预留分类并关闭发放。
+   以下为此前 GM 入口的收口记录：
    ~~**`GmGrantPet` 今天没有任何鉴权**,任何客户端都能自助发宝宝~~
    **2026-09-18 已收口(未编译)**:gate 侧有了「按消息号的 GM 白名单」
    (`cpp/nodes/gate/gate_gm_client_messages.h`),六条客户端 GM 消息(含 187 `GmGrantPet`)
    在 `GATE_RUN_MODE` 非 dev/test 时一律拒绝;scene 侧另有第二道锁
    (`player_gm_guard.h`,判据 `SCENE_RUN_MODE`)。默认(未设置)= prod = 关闭,
    部署链从不注入这两个变量。见 `cpp/nodes/gate/SECURITY.md` §3。
-   **注意这是"关掉",不是"给 GM 发宝宝做了鉴权"** —— 线上没有发宝宝的通道,
-   等捕捉 / 宠物店接上才有正规获取渠道。
+   **注意这是"关掉",不是"给 GM 发宝宝做了鉴权"**；新普通渠道不依赖该 GM 开关。
 2. **宝宝不可指挥**:见 §5。
 3. **宝宝没有服务器权威位置**:召唤只是一个状态位 + 下发给客户端,场景里不生 AOI 实体,
    跟随表现由各自客户端推算。别的玩家看到的宝宝位置因此不是权威的。
@@ -248,9 +254,9 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
    脚本在满槽时自动改为复用既有宝宝(所以永远可重复),但 `GmGrantPet` 那条断言会被跳过。
    接了放生之后应改成"跑完自己收拾"。
 
-## 9. 交接给 Codex 的验证清单(§10.1)
+## 9. 2026-09-09 原始交接清单（历史，当前证据见 §11）
 
-Claude 未执行任何编译 / 测试命令,以下全部**未验证**:
+以下保留初次交接时尚未验证的清单，不代表当前验证结论；2026-11-16 已执行的构建、测试与实机获取验收见 §11。
 
 1. **导表**(必须最先跑,后面全都依赖它):`dev.bat gen`。
    产出应包含 `pet_table` / `petrule_table` 的三语言管理器、
@@ -289,3 +295,31 @@ Claude 未执行任何编译 / 测试命令,以下全部**未验证**:
 9. **手动端到端**(最后的观感确认):登录 → HUD 右侧「宝宝」入口 → GM 发一只 →
    看资质/成长率/剩余点 → 自动加点 → 确认 → 出战 → 排一场 PVE,
    确认战报里有宝宝的普攻事件、战后面板里宝宝血量已回写。
+
+## 10. 普通玩家获取渠道（2026-11-15/16）
+
+### 10.1 商店、档次与持久回执
+
+宝宝面板的「商店」读取服务端商品、价格、当前银两与最低携带等级。所有现有 22 种暂按普通宠物配置；`Pet.acquisition_tier` 的 0/1/2 分别表示普通/变异/神兽，独立于已有 `quality`。首版银两售价为 `1000 × quality × unlock_level`，由 `shop_price_gold` 控制，0 表示停售。变异令牌兑换、神兽充值抽奖的分类、令牌数量、充值额度和概率尚未制定，两类均拒绝普通商店与野外捕捉，未实现付费抽奖发放。
+
+`BuyPet` 携带服务端下发的单调 `purchase_sequence`、种类和原报价 `price_gold`。最近成功的序号、种类、实例 ID、价格（`PlayerPetComp` 字段 3–6；Java 私有 `PetState` 对应字段）与银两、宠物一同持久化。原号原参数重试返回原实例；更旧序号、同号改参数或新购买报价不符时拒绝，不重复扣款或发放。Unity 超时、断线及刷新后保留待确认的原购买请求，重试不用新序号。
+
+服务端在扣款前校验获取档次、价格、余额、等级、容量、宠物状态与未知表语义，并准备完整实例。战斗中和跨区冻结时拒绝购买。C++ 使用既有货币系统扣款，Java 在同一领域提交中写钱包、宠物和回执；审计仍按正式资产流水路径记录。Java 持久 schema 台账只追加 `0003.schema`，旧代原件和未知字段保留。
+
+### 10.2 野外捕捉与结算
+
+宝宝面板「捕捉」进入 `PVE_SOLO` 配置 4（`PlayMode` 行 7）；有未确认购买、匹配/战斗在途或携带位已满时不进入。`Dungeon.allow_pet_capture` 明确开放捕捉，`Monster.capture_pet_table_id/capture_rate` 指向普通宠物与概率。首版 Monster 1/2 对应宠物种类 1/2：满血 25%，按损失气血比例升至最多 75%。原副本档、活动、PvP、缺失怪物数据的兜底以及非普通宠物均不开放。
+
+战斗命令环选择「捕捉」后选择符合条件的野怪，消耗本人本回合行动。服务器再次校验目标仍存活、种类、等级及进场快照中的 `pet_capture_slots`；同回合目标已被别人捕捉或击杀，不自动改选目标。成功后标记归属并使目标离场，不计击杀或产生该怪物掉落；客户端按正式捕捉事件显示结果，不自行发宠物。
+
+`captured_pet_table_ids` 随本人战斗结算提交。scene 先准备整批实例并复核容量、表语义、号源与原宠物状态，所有资产预检成功后沿既有战斗结果账本一次提交。失败时保留结果等待重试，重复结算不会重复发宠物。C++ 与 Java 均已实现，默认旧快照的可捕捉数量为 0。
+
+## 11. 2026-11-16 实际验证与部署边界
+
+- **普通获取实机通过**：严格 robot 使用新建独立开发账号，仅用 GM 准备等级和银两，宠物全部由普通 RPC/战斗取得。读取 22 个商品，以 1,000 银两购买一只；立即原号重试未重复扣款或发宠；配置 4 实际捕捉成功，`SIDE_A_WIN` 后 scene 结算为两只；退出重登列表完全相同，持久购买回执重试仍不扣款。进程退出 0，日志含 `PET_ACQUISITION_SMOKE_OK`：`build/verification/pet-acquisition-live-20261116-strict-final.log`。
+- **客户端**：Unity 原生 EditMode 78/78，零失败、零跳过；当前 Editor Play 已加载新版功能并从 `127.0.0.1:8081` 读到 zone-1。独立 release 在资源打包阶段中断，没有可用 exe；本次实际测试客户端为 Editor。证据在客户端 `.codex-artifacts/pet-acquisition-20261115/native-tests.xml` 与 `current-test-client-status.json`，机器人端到端不冒充 Unity 人工点击验收。
+- **Java 完整游戏服**：版本 `0.1.0-SNAPSHOT`，ContractSync 通过。battle-engine 2,395（跳过 1）、player-store 211（跳过 8）、audit 38（跳过 1）、scene 1,975（跳过 9）均零失败/错误，合计 4,619 项、19 跳过；capture 最终定向 5/5。缺该版本 TiDB fixture 的 `AuthorityPoolTiDbTest`、`SceneMaintenanceDrainTiDbTest` 明确排除，不算通过。日志与两版对齐记录在 Java 仓 `.codex-artifacts/pet-acquisition/`、`PARITY.md`。
+- **Docker 构建**：C++ 三节点、Go 11 个服务/构建目标、Java gateway 全部构建成功。最终 C++ 镜像 `local/xuanming-node:debug-20261116t054035.765162z`，ID `sha256:dd6057beda2f6f610a0b9fe62f27f4fe239dd7c98a6ae9b012dc72702d2a1afc`；它修复了将内部 `kSuccess=1000` 错写为客户端错误码的问题，成功回包保留 0/无 `error_message`。正式构建回执在 `build/verification/docker-rebuild-cpp-20261116T053755.815540Z/build/result.json`。C++ native 测试套件本轮未完整执行，不能用镜像编译成功代替测试通过。
+- **Docker Java 网关测试与 Java 游戏服分开计数**：统一恢复批 `build/verification/docker-rebuild-all-20261116T050548.859818Z/java/` 共 469 项，464 通过、5 项既有外部 DB 测试跳过、0 失败/错误/异常跳过；authority_jdbc 32/32 含真实 owned TiDB 权限测试，Redis 14 项实际执行。没有放宽跳过名单，fixture 经正式新 boot 验证后关闭。
+- **运行数据**：活动地图原覆盖目录保留旧表，不能只更新镜像。新批 `build/verification/authored-festival-pet-acquisition-20261116/` 由 `tools/navmesh_baker/refresh_authored_runtime_tables.py` 调正式沙盒导表产生；保留旧 BaseScene/World 四产物，仅更新 Pet/Monster/Dungeon/PlayMode/MessageLimiter 十产物及真实 manifest。旧批、正式源表未改；4 项保护测试、现有 receipt/overlay 校验及独立只读审查通过。最终六消费者已运行健康并使用新覆盖表；match 镜像内表原已是本次版本，不额外挂载。
+- **恢复与最终校验**：统一构建后首次更新曾因一次性注册容器临时占用静态地址、gateway 注册未知结果而失败；正式注册/串行重建后恢复，业务数据、密钥与卷保留。旧失败回执不改写，后续表部署原回执还保留了未重建服务标签使用旧 overlay 导致的快照校验失败；只读补验收精确区分新旧标签后确认部署成功。最终六消费者源码、运行产物、新表只读挂载与导航 SHA 全部匹配：gate/scene/battle 各 22,078 个源码输入，login 774、scene-manager 752、player-locator 704，均无差异；其他服务的容器 ID 与启动时间保持。证据为 `build/verification/pet-acquisition-apply-20261116/verification-result.json`（`DEPLOYED_AND_VERIFIED`）及 `source-and-runtime-data-check.json`，均 `success=true`。独立临时 Redis 测试容器已删除，现有 Redis Cluster 和玩家数据保留。

@@ -57,4 +57,13 @@ message ItemTable {
   uint32 affix_rule = 13 [(cfg_fk) = "EquipAffixRule"];
   // 基础属性:每槽 (EquipAttribute.id, 数值),最多 3 条;用不到的槽留空,不要填 0
   repeated Itembase_attr base_attr = 14 [(cfg_slots) = 3];
+  // 装备规则版本：0 保留旧随机属性及强化规则，1 首发基础装，2 首发首饰，3 首发法宝。
+  // 同一模板的版本不修改；新增版本使用新物品 id，避免静默改变已有实例。
+  uint32 equip_profile = 15;
+  // 定向打造材料。0 表示本模板未开放打造；材料数量必须同时为 0。
+  uint32 forge_material_id = 16 [(cfg_fk) = "Item"];
+  // 打造一个本体所需数量；不含后续首次安装词条的费用。
+  uint32 forge_material_count = 17;
+  // 固定法宝效果。0 表示不是法宝；两件同名法宝仍是两个独立实例。
+  uint32 artifact_id = 18 [(cfg_fk) = "EquipArtifact"];
 }

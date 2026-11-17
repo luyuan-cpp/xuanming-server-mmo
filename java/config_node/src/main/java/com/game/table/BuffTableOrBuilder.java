@@ -264,4 +264,202 @@ public interface BuffTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getBonusDamageBytes();
+
+  /**
+   * <code>uint32 battle_op = 23;</code>
+   * @return The battleOp.
+   */
+  int getBattleOp();
+
+  /**
+   * <code>uint32 trigger_event = 24;</code>
+   * @return The triggerEvent.
+   */
+  int getTriggerEvent();
+
+  /**
+   * <code>uint32 effect_target = 25;</code>
+   * @return The effectTarget.
+   */
+  int getEffectTarget();
+
+  /**
+   * <code>double flat_value = 26;</code>
+   * @return The flatValue.
+   */
+  double getFlatValue();
+
+  /**
+   * <code>double per_level = 27;</code>
+   * @return The perLevel.
+   */
+  double getPerLevel();
+
+  /**
+   * <code>double ratio = 28;</code>
+   * @return The ratio.
+   */
+  double getRatio();
+
+  /**
+   * <code>uint32 value_basis = 29;</code>
+   * @return The valueBasis.
+   */
+  int getValueBasis();
+
+  /**
+   * <code>uint32 damage_filter = 30;</code>
+   * @return The damageFilter.
+   */
+  int getDamageFilter();
+
+  /**
+   * <code>uint32 duration_rounds = 31;</code>
+   * @return The durationRounds.
+   */
+  int getDurationRounds();
+
+  /**
+   * <code>uint32 tick_count = 32;</code>
+   * @return The tickCount.
+   */
+  int getTickCount();
+
+  /**
+   * <code>double trigger_chance = 33;</code>
+   * @return The triggerChance.
+   */
+  double getTriggerChance();
+
+  /**
+   * <code>uint32 per_round_limit = 34;</code>
+   * @return The perRoundLimit.
+   */
+  int getPerRoundLimit();
+
+  /**
+   * <code>uint32 hit_limit = 35;</code>
+   * @return The hitLimit.
+   */
+  int getHitLimit();
+
+  /**
+   * <code>uint32 modifier_stat = 36;</code>
+   * @return The modifierStat.
+   */
+  int getModifierStat();
+
+  /**
+   * <code>uint32 state_kind = 37;</code>
+   * @return The stateKind.
+   */
+  int getStateKind();
+
+  /**
+   * <code>double application_chance = 38;</code>
+   * @return The applicationChance.
+   */
+  double getApplicationChance();
+
+  /**
+   * <code>string required_tag = 39;</code>
+   * @return The requiredTag.
+   */
+  java.lang.String getRequiredTag();
+  /**
+   * <code>string required_tag = 39;</code>
+   * @return The bytes for requiredTag.
+   */
+  com.google.protobuf.ByteString
+      getRequiredTagBytes();
+
+  /**
+   * <code>string second_required_tag = 40;</code>
+   * @return The secondRequiredTag.
+   */
+  java.lang.String getSecondRequiredTag();
+  /**
+   * <code>string second_required_tag = 40;</code>
+   * @return The bytes for secondRequiredTag.
+   */
+  com.google.protobuf.ByteString
+      getSecondRequiredTagBytes();
+
+  /**
+   * <code>double conditional_bonus = 41;</code>
+   * @return The conditionalBonus.
+   */
+  double getConditionalBonus();
+
+  /**
+   * <code>double secondary_ratio = 42;</code>
+   * @return The secondaryRatio.
+   */
+  double getSecondaryRatio();
+
+  /**
+   * <code>uint32 effect_count = 43;</code>
+   * @return The effectCount.
+   */
+  int getEffectCount();
+
+  /**
+   * <code>uint32 target_count = 44;</code>
+   * @return The targetCount.
+   */
+  int getTargetCount();
+
+  /**
+   * <code>uint32 pet_target_count = 45;</code>
+   * @return The petTargetCount.
+   */
+  int getPetTargetCount();
+
+  /**
+   * <code>uint32 stack_key = 46;</code>
+   * @return The stackKey.
+   */
+  int getStackKey();
+
+  /**
+   * <code>uint32 refresh_policy = 47;</code>
+   * @return The refreshPolicy.
+   */
+  int getRefreshPolicy();
+
+  /**
+   * <code>uint32 keep_on_death = 48;</code>
+   * @return The keepOnDeath.
+   */
+  int getKeepOnDeath();
+
+  /**
+   * <code>uint32 effect_priority = 49;</code>
+   * @return The effectPriority.
+   */
+  int getEffectPriority();
+
+  /**
+   * <code>uint32 start_round = 50;</code>
+   * @return The startRound.
+   */
+  int getStartRound();
+
+  /**
+   * <code>uint32 stack_limit = 51;</code>
+   * @return The stackLimit.
+   */
+  int getStackLimit();
+
+  /**
+   * <code>uint32 require_living_caster = 52;</code>
+   * @return The requireLivingCaster.
+   */
+  int getRequireLivingCaster();
+
+  /**
+   * <code>uint32 tick_on_apply = 53;</code>
+   * @return The tickOnApply.
+   */
+  int getTickOnApply();
 }

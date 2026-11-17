@@ -1,0 +1,92 @@
+{
+ "data": [
+  {
+   "active_rounds": 0,
+   "battle_limit": 0,
+   "bonus_bps": 2000,
+   "cap_bps": 0,
+   "description": "正常动作主目标的首段物理伤害结算后，额外削减伤害20%的剩余合格护盾，不伤气血。每回合1次。",
+   "health_threshold_bps": 0,
+   "id": 1,
+   "name": "破阵刃",
+   "per_round_limit": 1
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 0,
+   "bonus_bps": 2000,
+   "cap_bps": 0,
+   "description": "正常动作主目标的首段法术伤害结算后，额外削减伤害20%的剩余合格护盾，不伤气血。每回合1次。",
+   "health_threshold_bps": 0,
+   "id": 2,
+   "name": "照影镜",
+   "per_round_limit": 1
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 2,
+   "bonus_bps": 600,
+   "cap_bps": 0,
+   "description": "正常动作主目标的主障碍被概率抵抗后，下一回合同类主目标命中增加6个百分点。每回合至多生成1份，每场2份。",
+   "health_threshold_bps": 0,
+   "id": 3,
+   "name": "回响铃",
+   "per_round_limit": 1
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 0,
+   "bonus_bps": 1200,
+   "cap_bps": 0,
+   "description": "正常动作主目标气血不高于30%时，第一段即时治疗的施放修正增加12个百分点。每回合1次。",
+   "health_threshold_bps": 3000,
+   "id": 4,
+   "name": "济生佩",
+   "per_round_limit": 1
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 0,
+   "bonus_bps": 1200,
+   "cap_bps": 0,
+   "description": "正常施放独立主动护盾时，仅主目标的新护盾容量修正增加12个百分点。每回合1次。",
+   "health_threshold_bps": 0,
+   "id": 5,
+   "name": "固元印",
+   "per_round_limit": 1
+  },
+  {
+   "active_rounds": 2,
+   "battle_limit": 1,
+   "bonus_bps": 2000,
+   "cap_bps": 600,
+   "description": "前两回合首次将扣气血的敌方直接伤害减少20%，最多减免入战最大气血的6%。每场1次。",
+   "health_threshold_bps": 0,
+   "id": 6,
+   "name": "护心珠",
+   "per_round_limit": 0
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 3,
+   "bonus_bps": 500,
+   "cap_bps": 0,
+   "description": "实际执行普通防御后，回复入战最大法力的5%，按缺口封顶。每回合1次，每场实际回复3次。",
+   "health_threshold_bps": 0,
+   "id": 7,
+   "name": "归元葫",
+   "per_round_limit": 1
+  },
+  {
+   "active_rounds": 0,
+   "battle_limit": 2,
+   "bonus_bps": 800,
+   "cap_bps": 0,
+   "description": "首次受到敌方正常动作的合法硬控制判定时，该次抵抗增加8个百分点，进入判定即消费。每回合1次，每场2次。",
+   "health_threshold_bps": 0,
+   "id": 8,
+   "name": "清心符",
+   "per_round_limit": 1
+  }
+ ]
+}

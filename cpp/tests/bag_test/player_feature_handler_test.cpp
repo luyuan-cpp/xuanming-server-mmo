@@ -1076,4 +1076,98 @@ TEST_F(PetAllocationTest, AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys)
     suggested.clear();
     EXPECT_EQ(kPetNothingToChange, PetSystem::AutoAllocate(player, kPetId, suggested));
 }
+class PetShopTest : public PetAllocationTest {
+protected:
+    void SetUp() override {
+        PetAllocationTest::SetUp();
+        auto& segment = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+        segment.Reset();
+        GuidSegmentClient::Options options;
+        options.mixIds = false;
+        options.kindName = "item";
+        options.initialStep = 100000;
+        ASSERT_TRUE(segment.Enable(options, [](const std::string&, uint32_t) { return true; },
+            [](GuidSegmentClient::TimerKind, double, std::function<void()>) {}, [] { return 0.0; }));
+        segment.Warm();
+        segment.OnResponse(0, 700000, 800000);
+        ASSERT_EQ(kSuccess, PetSystem::BuildShop(player, shop));
+        ASSERT_GT(shop.offers_size(), 0);
+        offer = shop.offers(0);
+    }
+    GetPetShopResponse shop;
+    PetShopOffer offer;
+};
+
+TEST_F(PetShopTest, ClientHandlersUseZeroSuccessAndPreservePurchaseReceipt) {
+    GetPetShopRequest shopRequest;
+    GetPetShopResponse shopResponse;
+    ScenePetClientPlayerHandler::GetPetShop(player, &shopRequest, &shopResponse);
+    EXPECT_EQ(0u, shopResponse.error_message().id());
+    ASSERT_GT(shopResponse.offers_size(), 0);
+    BuyPetRequest request;
+    request.set_pet_table_id(offer.pet_table_id());
+    request.set_purchase_sequence(shopResponse.next_purchase_sequence());
+    request.set_price_gold(offer.price_gold());
+    BuyPetResponse purchased;
+    ScenePetClientPlayerHandler::BuyPet(player, &request, &purchased);
+    EXPECT_EQ(0u, purchased.error_message().id());
+    ASSERT_NE(0u, purchased.pet_id());
+    BuyPetResponse replay;
+    ScenePetClientPlayerHandler::BuyPet(player, &request, &replay);
+    EXPECT_EQ(0u, replay.error_message().id());
+    EXPECT_EQ(purchased.pet_id(), replay.pet_id());
+    EXPECT_EQ(purchased.gold(), replay.gold());
+    EXPECT_EQ(purchased.pets().pets_size(), replay.pets().pets_size());
+    request.set_price_gold(offer.price_gold() + 1);
+    BuyPetResponse rejected;
+    ScenePetClientPlayerHandler::BuyPet(player, &request, &rejected);
+    EXPECT_EQ(kInvalidParameter, rejected.error_message().id());
+}
+
+TEST_F(PetShopTest, PurchaseAndReloadedRetryChargeAndGrantExactlyOnce) {
+    const auto gold = Gold();
+    const auto count = Comp().pets_size();
+    uint64_t id = 0;
+    ASSERT_EQ(kSuccess, PetSystem::BuyPet(player, offer.pet_table_id(), 1, offer.price_gold(), id));
+    EXPECT_NE(0u, id);
+    EXPECT_EQ(gold - offer.price_gold(), Gold());
+    EXPECT_EQ(count + 1, Comp().pets_size());
+    PlayerPetComp restored;
+    ASSERT_TRUE(restored.ParseFromString(Comp().SerializeAsString()));
+    Comp().Swap(&restored);
+    uint64_t replay = 0;
+    EXPECT_EQ(kSuccess, PetSystem::BuyPet(player, offer.pet_table_id(), 1, offer.price_gold(), replay));
+    EXPECT_EQ(id, replay);
+    EXPECT_EQ(gold - offer.price_gold(), Gold());
+    EXPECT_EQ(count + 1, Comp().pets_size());
+    EXPECT_EQ(2u, PetSystem::NextPurchaseSequence(player));
+    EXPECT_EQ(kInvalidParameter, PetSystem::BuyPet(player, offer.pet_table_id(), 1, offer.price_gold() + 1, replay));
+}
+
+TEST_F(PetShopTest, InvalidSequenceQuoteAndMissingIdsDoNotConsumeAssets) {
+    const auto before = Comp().SerializeAsString();
+    const auto gold = Gold();
+    uint64_t id = 0;
+    EXPECT_EQ(kInvalidParameter, PetSystem::BuyPet(player, offer.pet_table_id(), 2, offer.price_gold(), id));
+    EXPECT_EQ(kInvalidParameter, PetSystem::BuyPet(player, offer.pet_table_id(), 1, offer.price_gold() + 1, id));
+    tlsGuidSegmentRegistry.Get(GuidKind::kItem).Reset();
+    EXPECT_EQ(kPetIdGenerateFailed, PetSystem::BuyPet(player, offer.pet_table_id(), 1, offer.price_gold(), id));
+    EXPECT_EQ(0u, id);
+    EXPECT_EQ(gold, Gold());
+    EXPECT_EQ(before, Comp().SerializeAsString());
+}
+
+TEST_F(PetShopTest, CaptureCandidatesDoNotModifyPetsUntilCommit) {
+    const auto count = Comp().pets_size();
+    google::protobuf::RepeatedField<uint32_t> ids;
+    ids.Add(offer.pet_table_id());
+    std::vector<PetInstance> prepared;
+    ASSERT_EQ(kSuccess, PetSystem::PrepareCapturedPets(player, ids, prepared));
+    ASSERT_EQ(1u, prepared.size());
+    EXPECT_EQ(count, Comp().pets_size());
+    PetSystem::CommitCapturedPets(player, prepared);
+    EXPECT_EQ(count + 1, Comp().pets_size());
+    EXPECT_EQ(prepared.front().pet_id(), Comp().pets(count).pet_id());
+}
+
 } // namespace

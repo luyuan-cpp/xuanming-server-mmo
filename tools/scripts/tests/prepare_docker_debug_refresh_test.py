@@ -194,6 +194,15 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(manifest, prepare.source_hashes(list(manifest)))
         self.assertFalse((self.state / "config").exists())
         self.assertTrue((self.run / "config/base_deploy_config.yaml").is_file())
+        configs = self.run / "config"
+        match = prepare.yaml.safe_load((configs / "match.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(match["GlobalMatch"]["RankEndpoint"], "rank:51100")
+        rank = prepare.yaml.safe_load((configs / "rank.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(rank["DataServiceRpc"]["Endpoints"], ["data-service:9000"])
+        self.assertEqual(rank["MailRpc"]["Endpoints"], ["mail:50900"])
+        self.assertTrue(rank["MailRpc"]["NonBlock"])
+        self.assertEqual(rank["TableDir"], "/generated/tables")
+        self.assertEqual(rank["Backend"], "mysql")
 
 
 if __name__ == "__main__":

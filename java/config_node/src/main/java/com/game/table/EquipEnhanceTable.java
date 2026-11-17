@@ -125,6 +125,28 @@ private static final long serialVersionUID = 0L;
     return materialCount_;
   }
 
+  public static final int PROFILE_ID_FIELD_NUMBER = 8;
+  private int profileId_ = 0;
+  /**
+   * <code>uint32 profile_id = 8;</code>
+   * @return The profileId.
+   */
+  @java.lang.Override
+  public int getProfileId() {
+    return profileId_;
+  }
+
+  public static final int LEVEL_FIELD_NUMBER = 9;
+  private int level_ = 0;
+  /**
+   * <code>uint32 level = 9;</code>
+   * @return The level.
+   */
+  @java.lang.Override
+  public int getLevel() {
+    return level_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -160,6 +182,12 @@ private static final long serialVersionUID = 0L;
     if (materialCount_ != 0) {
       output.writeUInt32(7, materialCount_);
     }
+    if (profileId_ != 0) {
+      output.writeUInt32(8, profileId_);
+    }
+    if (level_ != 0) {
+      output.writeUInt32(9, level_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -191,6 +219,14 @@ private static final long serialVersionUID = 0L;
     if (materialCount_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(7, materialCount_);
+    }
+    if (profileId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, profileId_);
+    }
+    if (level_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, level_);
     }
     return size;
   }
@@ -230,6 +266,10 @@ private static final long serialVersionUID = 0L;
         != other.getMaterialId()) return false;
     if (getMaterialCount()
         != other.getMaterialCount()) return false;
+    if (getProfileId()
+        != other.getProfileId()) return false;
+    if (getLevel()
+        != other.getLevel()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -256,6 +296,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getMaterialId();
     hash = (37 * hash) + MATERIAL_COUNT_FIELD_NUMBER;
     hash = (53 * hash) + getMaterialCount();
+    hash = (37 * hash) + PROFILE_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getProfileId();
+    hash = (37 * hash) + LEVEL_FIELD_NUMBER;
+    hash = (53 * hash) + getLevel();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -394,6 +438,8 @@ private static final long serialVersionUID = 0L;
       costGold_ = 0L;
       materialId_ = 0;
       materialCount_ = 0;
+      profileId_ = 0;
+      level_ = 0;
       return this;
     }
 
@@ -448,6 +494,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000040) != 0)) {
         result.materialCount_ = materialCount_;
       }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.profileId_ = profileId_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.level_ = level_;
+      }
     }
 
     @java.lang.Override
@@ -482,6 +534,12 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getMaterialCount() != 0) {
         setMaterialCount(other.getMaterialCount());
+      }
+      if (other.getProfileId() != 0) {
+        setProfileId(other.getProfileId());
+      }
+      if (other.getLevel() != 0) {
+        setLevel(other.getLevel());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -544,6 +602,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000040;
               break;
             } // case 56
+            case 64: {
+              profileId_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              level_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -781,6 +849,70 @@ private static final long serialVersionUID = 0L;
     public Builder clearMaterialCount() {
       bitField0_ = (bitField0_ & ~0x00000040);
       materialCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int profileId_ ;
+    /**
+     * <code>uint32 profile_id = 8;</code>
+     * @return The profileId.
+     */
+    @java.lang.Override
+    public int getProfileId() {
+      return profileId_;
+    }
+    /**
+     * <code>uint32 profile_id = 8;</code>
+     * @param value The profileId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setProfileId(int value) {
+
+      profileId_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 profile_id = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearProfileId() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      profileId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int level_ ;
+    /**
+     * <code>uint32 level = 9;</code>
+     * @return The level.
+     */
+    @java.lang.Override
+    public int getLevel() {
+      return level_;
+    }
+    /**
+     * <code>uint32 level = 9;</code>
+     * @param value The level to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLevel(int value) {
+
+      level_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 level = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLevel() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      level_ = 0;
       onChanged();
       return this;
     }

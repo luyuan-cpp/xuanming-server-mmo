@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "backend-smoke",
+  "title": "双后端离线基础验证",
+  "goal": "以现有工程契约和 Go/Java 游戏日单测验证统一执行、失败判定与本轮证据；不启动服务、不修改玩法。",
+  "repositories": ["server_cpp", "server_java"],
+  "scope": {
+    "server_cpp": ["tools/scripts/ai_pipeline", "tools/scripts/tests", "go/shared/gameday"],
+    "server_java": ["game-common/src/main/java/com/game/common/time", "game-common/src/test/java/com/game/common/time"]
+  },
+  "checks": [
+    {"id": "cpp-script-contract", "required": true},
+    {"id": "log-guard-unit", "required": true},
+    {"id": "release-contract", "required": true},
+    {"id": "go-gameday", "required": true},
+    {"id": "java-gameday", "required": true}
+  ],
+  "acceptance": [
+    {"id": "cpp-contracts", "description": "现有 C++ 工程边界、日志守卫及发布制品契约回归实际执行并通过。", "checks": ["cpp-script-contract", "log-guard-unit", "release-contract"]},
+    {"id": "game-day-boundaries", "description": "Go 与 Java 各自的游戏日边界回归均执行，结果属于本轮，零失败、零跳过；不推断整个业务实现已对齐。", "checks": ["go-gameday", "java-gameday"]}
+  ],
+  "test_matrix": {
+    "static": {"checks": ["cpp-script-contract"]},
+    "build": {"checks": ["go-gameday", "java-gameday"]},
+    "unit": {"checks": ["log-guard-unit", "go-gameday", "java-gameday"]},
+    "contract": {"checks": ["cpp-script-contract", "release-contract"]},
+    "integration": {"not_applicable": "本任务只验证离线执行链；未连接 MySQL、Redis、Kafka 或完整后端。"},
+    "e2e": {"not_applicable": "不启动客户端、机器人或服务；不声明登录入场及战斗结算链路通过。"},
+    "visual": {"not_applicable": "未变更客户端 UI、美术与场景。"},
+    "performance": {"not_applicable": "未变更运行时逻辑；不以本轮时长推断游戏性能。"}
+  },
+  "delivery": {"kind": "development", "notes": "这是统一管线的基础演练，不是全量服务器验收。任一必需检查失败或未执行，任务都不能判定完成。"}
+}

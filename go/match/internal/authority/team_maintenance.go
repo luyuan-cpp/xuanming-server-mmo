@@ -48,10 +48,15 @@ func (s *Store) maintainQueuedTeamOnce(ctx context.Context, observed *teampb.Tea
 		if err != nil {
 			return false, err
 		}
-		if ticket.Ticket != member.Ticket || ticket.State != 1 || ticket.TeamId != current.TeamId {
+		if ticket.Ticket != member.Ticket || ticket.TeamId != current.TeamId ||
+			ticket.OwnerAccount != member.Original.OwnerAccount || ticket.OwnerRevision != member.Original.OwnerRevision ||
+			ticket.Mode != TeamLaunchMode(current) || ticket.ConfigId != current.ConfigId || ticket.TeamSize != current.TargetSize ||
+			ticket.FormationId != 0 || (ticket.State != 1 && ticket.State != 4) {
 			return false, ErrDirectConflict
 		}
-		expired = expired || ticket.ExpiresMs <= stamp
+		// Ticket/GetQueueStatus 可先把一名成员的到期票结为终态。此时原票号、原角色和未成局身份都已核对，
+		// 应关闭这支已不可能成局的整队，而不能让 state2 launch 永久挡住下一次匹配。
+		expired = expired || ticket.State == 4 || ticket.ExpiresMs <= stamp
 		group = append(group, ticket)
 	}
 	if expired {

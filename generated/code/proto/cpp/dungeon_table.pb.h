@@ -233,6 +233,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
     kSceneIdFieldNumber = 2,
     kMaxTeamSizeFieldNumber = 3,
     kTimeLimitFieldNumber = 4,
+    kAllowPetCaptureFieldNumber = 6,
   };
   // repeated uint32 monster = 5;
   [[nodiscard]] int monster_size()
@@ -294,11 +295,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
   void _internal_set_time_limit(::uint32_t value);
 
   public:
+  // uint32 allow_pet_capture = 6;
+  void clear_allow_pet_capture() ;
+  [[nodiscard]] ::uint32_t allow_pet_capture() const;
+  void set_allow_pet_capture(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_allow_pet_capture() const;
+  void _internal_set_allow_pet_capture(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:DungeonTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -333,6 +344,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
     ::uint32_t scene_id_;
     ::uint32_t max_team_size_;
     ::uint32_t time_limit_;
+    ::uint32_t allow_pet_capture_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -712,6 +724,30 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 DungeonTable::_internal_mutable_monster() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.monster_;
+}
+
+// uint32 allow_pet_capture = 6;
+inline void DungeonTable::clear_allow_pet_capture() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_pet_capture_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t DungeonTable::allow_pet_capture() const {
+  // @@protoc_insertion_point(field_get:DungeonTable.allow_pet_capture)
+  return _internal_allow_pet_capture();
+}
+inline void DungeonTable::set_allow_pet_capture(::uint32_t value) {
+  _internal_set_allow_pet_capture(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:DungeonTable.allow_pet_capture)
+}
+inline ::uint32_t DungeonTable::_internal_allow_pet_capture() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allow_pet_capture_;
+}
+inline void DungeonTable::_internal_set_allow_pet_capture(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allow_pet_capture_ = value;
 }
 
 // -------------------------------------------------------------------

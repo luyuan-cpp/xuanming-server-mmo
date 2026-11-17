@@ -1,0 +1,10 @@
+--- a/deploy/debug/compose.game.yml
++++ b/deploy/debug/compose.game.yml
+@@ -679,6 +679,7 @@
+       MMORPG_PLAYER_STORE_SECRET_SCENE: ${PLAYER_STORE_SCENE_SECRET:?请先准备配置}
+       MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE:?请先准备配置}
+       MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE: ${MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE:?请先准备配置}
++      MMORPG_ASSET_OP_SECRET_MAIL: ${MMORPG_ASSET_OP_SECRET_MAIL:?请先加载 GM 邮件私有配置}
+     volumes:
+       - ${DEBUG_RUN_DIR:?请先准备配置}/config/base_deploy_config.yaml:/app/bin/etc/base_deploy_config.yaml:ro
+       - ${DEBUG_RUN_DIR:?请先准备配置}/config/game_config.yaml:/app/bin/etc/game_config.yaml:ro

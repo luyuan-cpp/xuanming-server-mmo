@@ -1,0 +1,83 @@
+# 只管理新增的四个 mail 容器；现有基础设施仅以 external network 连接。
+name: xuanming-gm-mail
+x-app: &app
+  pull_policy: never
+  restart: "no"
+  networks: [game]
+  stop_grace_period: 30s
+x-boot: &boot
+  <<: *app
+  image: ${GM_MAIL_SQL_BOOT_IMAGE:?prepare first}
+  user: "0:0"
+  entrypoint: [/bin/sh, -ec, 'umask 077; exec pwsh -NoLogo -NoProfile -NonInteractive -File /app/sql-boot/deploy/gm-admin/mail-sql-boot.ps1 "$$@"', --]
+  env_file:
+    - path: ${GM_MAIL_PRIVATE:?prepare first}/sql.env
+      format: raw
+  volumes:
+    - ${GM_MAIL_REPO:?prepare first}:/app/sql-boot:ro
+    - ${GM_MAIL_PRIVATE:?prepare first}/config:/app/sql-boot-config:ro
+    - original-private:/run/original-sql-boot:ro
+    - mail-private:/run/sql-boot/private
+    - mail-writer:/run/sql-boot/boot/mail
+    - mail-consume:/run/sql-boot/boot/mail/consume
+services:
+  mail-prepare:
+    <<: *boot
+    command: [-Step, prepare]
+  mail-migrate:
+    <<: *app
+    image: ${GM_MAIL_IMAGE:?build first}
+    entrypoint: [/app/service]
+    command: [-f, /app/etc/service.yaml, -migrate]
+    env_file:
+      - path: ${GM_MAIL_PRIVATE:?prepare first}/migrate.env
+        format: raw
+    volumes:
+      - ${GM_MAIL_PRIVATE:?prepare first}/config/mail.yaml:/app/etc/service.yaml:ro
+    depends_on:
+      mail-prepare:
+        condition: service_completed_successfully
+  mail-register:
+    <<: *boot
+    command: [-Step, register]
+    depends_on:
+      mail-migrate:
+        condition: service_completed_successfully
+  mail:
+    <<: *app
+    image: ${GM_MAIL_IMAGE:?build first}
+    entrypoint: [/bin/sh, /sql-writer-entry.sh]
+    command: [/app/service, -f, /run/sql-writer/runtime/mail.yaml]
+    env_file:
+      - path: ${GM_MAIL_PRIVATE:?prepare first}/runtime.env
+        format: raw
+    volumes:
+      - ${GM_MAIL_SQL_ENTRY:?prepare first}:/sql-writer-entry.sh:ro
+      - mail-writer:/run/sql-writer:ro
+      - mail-consume:/run/sql-writer/consume
+    ports:
+      - 127.0.0.1:2354:50900
+      - 127.0.0.1:9244:9240
+    networks:
+      game:
+        ipv4_address: 172.29.220.19
+    depends_on:
+      mail-register:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD-SHELL, 'wget -q -O /dev/null http://127.0.0.1:9240/healthz']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+networks:
+  game:
+    external: true
+    name: xuanming-debug-current_default
+volumes:
+  original-private:
+    external: true
+    name: ${GM_MAIL_ORIGINAL_PRIVATE:?prepare first}
+  mail-private:
+  mail-writer:
+  mail-consume:

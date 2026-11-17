@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "client-compile-isolation",
+  "title": "客户端编译检查支持多任务并发",
+  "goal": "消除快速编译检查共享 poll.rsp 和 check.dll 的覆盖问题，并用真实编译器及当前客户端验证新入口。",
+  "repositories": ["server_cpp", "client"],
+  "scope": {
+    "server_cpp": ["tools/scripts/ai_pipeline", "tools/scripts/dev_tools.ps1", "tools/scripts/tests/test_ai_pipeline.py"],
+    "client": ["tools/client_compile_check.ps1", "tools/tests/test_client_compile_check.ps1", "Assets/Scripts", "ProjectSettings/ProjectVersion.txt", "Packages/manifest.json", "Packages/packages-lock.json"]
+  },
+  "checks": [
+    {"id": "pipeline-selftest", "required": true},
+    {"id": "client-compile-isolation-tests", "required": true},
+    {"id": "client-compile-check", "required": true}
+  ],
+  "acceptance": [
+    {"id": "A1", "description": "统一入口的失败、超时、缺失、跳过、并发锁和版本漂移不产生假通过。", "checks": ["pipeline-selftest"]},
+    {"id": "A2", "description": "正常源码编译成功、错误源码保持失败，空格路径和原调用方式兼容，成功与失败项目并发互不覆盖。", "checks": ["client-compile-isolation-tests"]},
+    {"id": "A3", "description": "默认只清理自己的目录，显式保留时有独立参数、日志和结果；真实客户端本轮 Roslyn 体检通过且没有跳过引用。", "checks": ["client-compile-isolation-tests", "client-compile-check"]}
+  ],
+  "test_matrix": {
+    "static": {"not_applicable": "本任务使用真实编译和行为回归，不把语法扫描另算独立验收。"},
+    "build": {"checks": ["client-compile-check"]},
+    "unit": {"checks": ["pipeline-selftest"]},
+    "contract": {"checks": ["pipeline-selftest", "client-compile-isolation-tests"]},
+    "integration": {"checks": ["client-compile-isolation-tests"]},
+    "e2e": {"not_applicable": "修改工程编译脚本，不改玩法或协议；本轮不启动真实游戏服务和 Player。脚本流程的黑盒测试归入 integration。"},
+    "visual": {"not_applicable": "没有改变 UI、场景或美术；不宣称画面验收通过。"},
+    "performance": {"not_applicable": "验证并发产物隔离，不衡量游戏性能，不执行清库压测。"}
+  },
+  "delivery": {
+    "kind": "development",
+    "notes": "首条完整开发工具流程：任务→修复→独立回归→当前客户端体检→证据清单。Java 与 C++/Go 的业务行为、协议和配置未改，双版本玩法对齐不适用。Python 服务端明确排除。只有本任务范围可判定通过；没有生成正式 Unity Player、部署、提交或推送。"
+  }
+}

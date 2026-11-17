@@ -142,13 +142,52 @@ def process_environment(environment):
         os.environ.update(original)
 
 
-def compose_command():
-    return startup.DOCKER + ['compose', '--project-name', startup.PROJECT, '--env-file', str(STATE / '.env'),
-                            '-f', str(startup.COMPOSE_FILES[0]), '-f', str(startup.COMPOSE_FILES[1])]
+def compose_command(overlay_path=None):
+    command = startup.DOCKER + ['compose', '--project-name', startup.PROJECT, '--env-file', str(STATE / '.env'),
+                               '-f', str(startup.COMPOSE_FILES[0]), '-f', str(startup.COMPOSE_FILES[1])]
+    if overlay_path is not None:
+        command += ['-f', str(overlay_path)]
+    return command
 
 
-def compose_config(environment):
-    return json.loads(startup.run(compose_command() + ['config', '--format', 'json'], env=environment))
+def compose_config(environment, overlay_input=None):
+    options = {'env': environment}
+    if overlay_input is not None:
+        options['input_text'] = overlay_input
+    return json.loads(startup.run(compose_command('-' if overlay_input is not None else None)
+                                  + ['config', '--format', 'json'], **options))
+
+
+def authored_contract(rows):
+    path, original, content, allowed = startup.authored_overlay(rows)
+    return {'path': path, 'original': original, 'input': content, 'allowed': allowed}
+
+
+def unchanged_authored(baseline, rows):
+    require(authored_contract(rows) == baseline['authoredOverlay'],
+            'Authored Compose overlay changed during this invocation')
+
+
+def validate_authored_mounts(services, allowed):
+    # 只允许保留已经部署的挂载；缺失或可写时不能等重建后才发现配置被改变。
+    for name, targets in allowed.items():
+        mounts = services[name]['Mounts']
+        for target, source in targets.items():
+            selected = [mount for mount in mounts if mount['Destination'] == target]
+            require(len(selected) == 1 and selected[0]['Type'] == 'bind' and selected[0]['RW'] is False
+                    and startup.host_bind_path(selected[0]['Source'], source) == source,
+                    'Existing authored bind mount differs: ' + name)
+
+
+def unchanged_authored_binds(baseline, rows, hashes):
+    # staged 配置会在 refresh 时更新，外部手绘数据必须仍保持预检时的内容。
+    allowed = baseline['authoredOverlay']['allowed']
+    for row in rows:
+        targets = allowed.get(row['Config']['Labels'].get('com.docker.compose.service'), {})
+        for mount in row['Mounts']:
+            if mount['Type'] == 'bind' and mount['Destination'] in targets:
+                key = startup.sha(mount['Source'].encode())
+                require(hashes[key] == baseline['bindHashes'][key], 'Authored bind files changed during this invocation')
 
 
 def current_containers(config):
@@ -252,6 +291,11 @@ def preflight(languages, environment):
     config = compose_config(environment)
     require(config.get('name') == startup.PROJECT, 'Only the existing local debug project is supported')
     services, historical = current_containers(config)
+    all_rows = list(services.values()) + historical
+    overlay = authored_contract(all_rows)
+    if overlay['input'] is not None:
+        config = compose_config(environment, overlay['input'])
+        validate_authored_mounts(services, overlay['allowed'])
     selected_apps = {name for language in languages for name in SERVICES[language]} - set(rebuild.ONE_SHOT)
     for name in startup.APPS:
         row = services[name]
@@ -297,13 +341,14 @@ def preflight(languages, environment):
         entrypoint = json.loads(startup.run(startup.DOCKER + ['image', 'inspect', '--format', '{{json .Config.Entrypoint}}', identity]))
         require(user == '10001:10001' and entrypoint == ['java', '-jar', '/app/service.jar'],
                 'Java gateway base image contract differs from the builder')
-    all_rows = list(services.values()) + historical
     mounts = {row['Id']: startup.signature(row) for row in all_rows}
     baseline = {'services': services, 'historical': historical, 'bases': bases, 'baseIds': base_ids,
                 'pendingResume': pending, 'infraVolumes': volumes, 'sqlBootImageId': base_ids[sql_boot_reference],
                 'signatures': mounts, 'envSha256': env_digest, 'states': {row['Id']: startup.state(row) for row in all_rows},
-                'refreshInputs': refresh_sources(), 'bindHashes': startup.binding_hashes(all_rows),
+                'refreshInputs': refresh_sources(), 'bindHashes': startup.binding_hashes(all_rows, overlay['allowed']),
+                'authoredOverlay': overlay,
                 'projectVolumes': startup.project_volumes()}
+    unchanged_authored(baseline, all_rows)
     require(env_digest == startup.sha((STATE / '.env').read_bytes()), 'Canonical environment changed during preflight')
     confirm_infrastructure_rows([services[name] for name in startup.INFRA])
     return config, baseline
@@ -455,7 +500,7 @@ def go_resume_contract(old, built, baseline):
                 and receipt['baseImageId'] == baseline['baseIds'][base], 'Go image receipt mismatch: ' + service)
 
 
-def resumed_builds(requested, languages, root, baseline):
+def resume_run(requested, root):
     verification = root.parent
     old = Path(requested)
     if not old.is_absolute():
@@ -473,23 +518,47 @@ def resumed_builds(requested, languages, root, baseline):
     selected = old_preflight['languages']
     require(list(select_languages(','.join(selected))) == selected and stage_names == selected[:len(stages)],
             'Invalid old stage order')
+    origins = {stage['language']: stage['reused_from'] for stage in stages if 'reused_from' in stage}
+    require(result.get('reused_from', {}) == origins and old_preflight.get('reused_from', {}) == origins,
+            'Inconsistent old stage origin receipts')
+    return old, result, old_preflight, stages
+
+
+def resumed_builds(requested, languages, root, baseline):
+    old, _, old_preflight, stages = resume_run(requested, root)
     builds = {}
     for stage, language in zip(stages, languages):
         if language == 'java' or stage['language'] != language or type(stage.get('exitCode')) is not int or stage['exitCode'] != 0:
             break
-        require(Path(stage['output']) == old / language and Path(stage['log']) == receipt_file(old, language + '.log')
-                and not stage.get('reused_from') and language in old_preflight['languages'], 'Unexpected old stage origin')
+        origin, origin_preflight, original_stage = old, old_preflight, stage
+        if 'reused_from' in stage:
+            reference = stage['reused_from']
+            require(isinstance(reference, str) and reference and Path(reference).is_absolute()
+                    and Path(reference).name < old.name, 'Invalid reused stage origin')
+            origin, _, origin_preflight, original_stages = resume_run(reference, root)
+            require(language in origin_preflight['languages'], 'Missing reused stage origin')
+            index = origin_preflight['languages'].index(language)
+            prefix = original_stages[:index + 1]
+            require(len(prefix) == index + 1 and all(type(item.get('exitCode')) is int and item['exitCode'] == 0
+                                                   for item in prefix), 'Unsuccessful reused stage origin')
+            original_stage = prefix[-1]
+            # 回执始终直接指向真正构建镜像的批次；不接受转引、环或伪造中间产物。
+            require('reused_from' not in original_stage, 'Reused stage origin must be an original build')
+        for recorded in (stage, original_stage):
+            require(Path(recorded['output']) == origin / language
+                    and Path(recorded['log']) == receipt_file(origin, language + '.log'), 'Unexpected old stage origin')
         bases = {service: baseline['bases'][service] for service in SERVICES[language]}
-        require(read_receipt(old, language + '-base-images.json') == bases and all(
-            old_preflight['baseIds'].get(ref) == baseline['baseIds'][ref] for ref in bases.values()),
+        require(read_receipt(origin, language + '-base-images.json') == bases and all(
+            receipt['baseIds'].get(ref) == baseline['baseIds'][ref]
+            for receipt in (old_preflight, origin_preflight) for ref in bases.values()),
             'Old base references or image IDs differ: ' + language)
-        receipt_file(old, Path(language) / 'result.json')
-        built = validate_build(language, old / language)
+        receipt_file(origin, Path(language) / 'result.json')
+        built = validate_build(language, origin / language)
         if language == 'cpp':
-            cpp_resume_contract(old, built, baseline)
+            cpp_resume_contract(origin, built, baseline)
         else:
-            go_resume_contract(old, built, baseline)
-        built['reused_from'] = str(old)
+            go_resume_contract(origin, built, baseline)
+        built['reused_from'] = str(origin)
         built['manifestDigests'] = {p: rebuild.digest(Path(p)) for p in set(built['manifestPaths'].values())}
         builds[language] = built
     require(builds, 'No successful C++ or Go prefix to resume')
@@ -538,11 +607,12 @@ def verify_sources(builds):
 
 
 def unchanged_runtime(baseline, environment):
-    services, historical = current_containers(compose_config(environment))
+    services, historical = current_containers(compose_config(environment, baseline['authoredOverlay']['input']))
     rows = list(services.values()) + historical
     require({r['Id']: startup.signature(r) for r in rows} == baseline['signatures']
             and {r['Id']: startup.state(r) for r in rows} == baseline['states']
             and startup.project_volumes() == baseline['projectVolumes'], 'Runtime changed during builds or refresh')
+    unchanged_authored(baseline, rows)
     require(refresh_sources() == baseline['refreshInputs'], 'Configuration or build tools changed during this invocation')
     volumes = mounted_volumes(baseline['infraVolumes'])
     require({name: startup.hashed(value) for name, value in volumes.items()} == baseline['infraVolumes'],
@@ -552,10 +622,11 @@ def unchanged_runtime(baseline, environment):
 
 def unchanged_before_apply(config, baseline, environment):
     rows = unchanged_runtime(baseline, environment)
-    require(startup.binding_hashes(rows) == baseline['bindHashes']
+    require(startup.binding_hashes(rows, baseline['authoredOverlay']['allowed']) == baseline['bindHashes']
             and startup.sha((STATE / '.env').read_bytes()) == baseline['envSha256'],
             'Runtime configuration changed during builds')
-    require(compose_config(environment) == config, 'Resolved Compose configuration changed during builds')
+    require(compose_config(environment, baseline['authoredOverlay']['input']) == config,
+            'Resolved Compose configuration changed during builds')
     for reference, expected in baseline['baseIds'].items():
         require(startup.run(startup.DOCKER + ['image', 'inspect', '--format', '{{.Id}}', reference]).strip() == expected,
                 'A base image reference changed during builds')
@@ -622,21 +693,26 @@ def refreshed_contract(original, config, baseline, environment):
     allowed_additions = set(ADDITIVE_SECRET_NAMES) | set(DEV_INTERNAL_IDENTITY) | derived
     allowed_additions.update(name.upper() + '_IP' for name in SERVICE_IP_OFFSETS)
     require(set(actual) - set(original) <= allowed_additions, 'Unexpected canonical setting after refresh')
-    current = compose_config(child_environment(actual, environment))
+    rows = list(baseline['services'].values()) + baseline['historical']
+    unchanged_authored(baseline, rows)
+    current = compose_config(child_environment(actual, environment), baseline['authoredOverlay']['input'])
     require(current.get('volumes') == config.get('volumes') and current.get('networks') == config.get('networks'),
             'Refresh changed the existing volume or network contract')
     for name, service in config['services'].items():
         require(all(current['services'][name].get(key) == service.get(key) for key in ('volumes', 'ports')),
                 'Refresh changed existing mounts or ports: ' + name)
-    rows = list(baseline['services'].values()) + baseline['historical']
-    return actual, startup.binding_hashes(rows)
+    hashes = startup.binding_hashes(rows, baseline['authoredOverlay']['allowed'])
+    unchanged_authored_binds(baseline, rows, hashes)
+    return actual, hashes
 
 
 def unchanged_refreshed(expected_environment, expected_binds, baseline):
     require(startup.env_values((STATE / '.env').read_bytes()) == expected_environment,
             'Canonical environment changed after refresh')
     rows = list(baseline['services'].values()) + baseline['historical']
-    require(startup.binding_hashes(rows) == expected_binds, 'Runtime files changed after refresh')
+    unchanged_authored(baseline, rows)
+    require(startup.binding_hashes(rows, baseline['authoredOverlay']['allowed']) == expected_binds,
+            'Runtime files changed after refresh')
 
 
 def java_test_environment(environment):
@@ -677,9 +753,12 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
         if builds:
             result['reused_from'] = {lang: built['reused_from'] for lang, built in builds.items()}
         pending = baseline['pendingResume']
+        overlay = baseline['authoredOverlay']
         result.update(infraReady=not pending, pendingResume=pending)
         write_json(root / 'preflight.json', {'passed': True, 'languages': languages, 'services': SERVICES,
                    'envSha256': baseline['envSha256'], 'baseIds': baseline['baseIds'],
+                   'authoredOverlay': ({'path': str(overlay['path']), 'sha256': startup.sha(overlay['original'])}
+                                       if overlay['path'] is not None else None),
                    'infraReady': not pending, 'pendingResume': pending,
                    'configurationRefreshAfterBuilds': True, 'reused_from': result.get('reused_from', {}),
                    'buildRecipeHashes': {
@@ -757,15 +836,19 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
             unchanged_refreshed(canonical, refreshed_binds, baseline)
             targets = [name for service in running for name in
                        ((service + '-sql-boot', service) if service in rebuild.SQL_WRITERS else (service,))]
+            # 重建必须保留原文件路径标签，供下次启动识别白名单；原件已逐字节复核。
+            command = compose_command(baseline['authoredOverlay']['path'])
             result['phase'] = 'recreate-services'
             result['containerUpdateStarted'] = True
-            code = run_stage(compose_command() + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
+            code = run_stage(command + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
                              '--force-recreate', '--wait', '--wait-timeout', '300', *targets],
                              root / 'recreate.log', environment, 600)
             require(code == 0, 'Container update failed; inspect recreate.log; completed changes remain applied')
             result['phase'] = 'verify-runtime'
-            final_config = compose_config(environment)
+            unchanged_refreshed(canonical, refreshed_binds, baseline)
+            final_config = compose_config(environment, baseline['authoredOverlay']['input'])
             final, historical = current_containers(final_config)
+            unchanged_authored(baseline, list(final.values()) + historical)
             require(startup.project_volumes() == baseline['projectVolumes'], 'Project volume set changed')
             for service, row in final.items():
                 original = baseline['services'][service]

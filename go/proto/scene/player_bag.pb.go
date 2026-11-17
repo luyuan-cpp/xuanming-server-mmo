@@ -24,6 +24,104 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type EquipmentCraftChoice_Operation int32
+
+const (
+	EquipmentCraftChoice_UNSPECIFIED   EquipmentCraftChoice_Operation = 0
+	EquipmentCraftChoice_CREATE_ITEM   EquipmentCraftChoice_Operation = 1
+	EquipmentCraftChoice_INSTALL_AFFIX EquipmentCraftChoice_Operation = 2
+)
+
+// Enum value maps for EquipmentCraftChoice_Operation.
+var (
+	EquipmentCraftChoice_Operation_name = map[int32]string{
+		0: "UNSPECIFIED",
+		1: "CREATE_ITEM",
+		2: "INSTALL_AFFIX",
+	}
+	EquipmentCraftChoice_Operation_value = map[string]int32{
+		"UNSPECIFIED":   0,
+		"CREATE_ITEM":   1,
+		"INSTALL_AFFIX": 2,
+	}
+)
+
+func (x EquipmentCraftChoice_Operation) Enum() *EquipmentCraftChoice_Operation {
+	p := new(EquipmentCraftChoice_Operation)
+	*p = x
+	return p
+}
+
+func (x EquipmentCraftChoice_Operation) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EquipmentCraftChoice_Operation) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_bag_proto_enumTypes[0].Descriptor()
+}
+
+func (EquipmentCraftChoice_Operation) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_bag_proto_enumTypes[0]
+}
+
+func (x EquipmentCraftChoice_Operation) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EquipmentCraftChoice_Operation.Descriptor instead.
+func (EquipmentCraftChoice_Operation) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{30, 0}
+}
+
+type CommitEquipmentCraftResponse_Outcome int32
+
+const (
+	CommitEquipmentCraftResponse_UNKNOWN  CommitEquipmentCraftResponse_Outcome = 0 // 包括旧水位回执已淘汰，不能解释为首次失败。
+	CommitEquipmentCraftResponse_REJECTED CommitEquipmentCraftResponse_Outcome = 1 // 本意图在提交前明确拒绝，无资产变更。
+	CommitEquipmentCraftResponse_APPLIED  CommitEquipmentCraftResponse_Outcome = 2
+)
+
+// Enum value maps for CommitEquipmentCraftResponse_Outcome.
+var (
+	CommitEquipmentCraftResponse_Outcome_name = map[int32]string{
+		0: "UNKNOWN",
+		1: "REJECTED",
+		2: "APPLIED",
+	}
+	CommitEquipmentCraftResponse_Outcome_value = map[string]int32{
+		"UNKNOWN":  0,
+		"REJECTED": 1,
+		"APPLIED":  2,
+	}
+)
+
+func (x CommitEquipmentCraftResponse_Outcome) Enum() *CommitEquipmentCraftResponse_Outcome {
+	p := new(CommitEquipmentCraftResponse_Outcome)
+	*p = x
+	return p
+}
+
+func (x CommitEquipmentCraftResponse_Outcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CommitEquipmentCraftResponse_Outcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_bag_proto_enumTypes[1].Descriptor()
+}
+
+func (CommitEquipmentCraftResponse_Outcome) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_bag_proto_enumTypes[1]
+}
+
+func (x CommitEquipmentCraftResponse_Outcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CommitEquipmentCraftResponse_Outcome.Descriptor instead.
+func (CommitEquipmentCraftResponse_Outcome) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{39, 0}
+}
+
 // 装备 tooltip 的一行属性(设计文档 docs/design/equipment-attributes.md §3.2)。
 // 客户端零配表:名称、上限、是否百分比全部由服务器下发。
 type EquipAttrLineInfo struct {
@@ -420,13 +518,16 @@ type BagItemInfo struct {
 	BaseAttrs      []*EquipAttrLineInfo `protobuf:"bytes,12,rep,name=base_attrs,json=baseAttrs,proto3" json:"base_attrs,omitempty"`                  // 基础属性,seq 升序
 	Affixes        []*EquipAttrLineInfo `protobuf:"bytes,13,rep,name=affixes,proto3" json:"affixes,omitempty"`                                       // 随机属性,已按 (tier, seq) 排好
 	// ── 强化与镶嵌(docs/design/equipment-enhance-inlay.md §3.3)。14–17、20 仅装备;18、19 仅宝石物品 ──
-	EnhanceLevel          uint32                `protobuf:"varint,14,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`                              // 装备:当前强化等级(已按表上限夹取)
-	EnhanceMaxLevel       uint32                `protobuf:"varint,15,opt,name=enhance_max_level,json=enhanceMaxLevel,proto3" json:"enhance_max_level,omitempty"`                   // 装备:强化上限;0 = 强化未开放
-	EnhanceNext           *EquipEnhancePreview  `protobuf:"bytes,16,opt,name=enhance_next,json=enhanceNext,proto3" json:"enhance_next,omitempty"`                                  // 装备:下一级预览;已满级 / 未开放 / 实例未初始化 / 下一级的行不可用时不带
-	GemSockets            []*EquipGemSocketInfo `protobuf:"bytes,17,rep,name=gem_sockets,json=gemSockets,proto3" json:"gem_sockets,omitempty"`                                     // 装备:该部位的全部孔位(含空孔),按 socket 升序;实例未初始化时不带
-	GemType               uint32                `protobuf:"varint,18,opt,name=gem_type,json=gemType,proto3" json:"gem_type,omitempty"`                                             // 宝石物品:宝石类型(≥ 1);不是宝石 = 0
-	GemAttr               *EquipAttrLineInfo    `protobuf:"bytes,19,opt,name=gem_attr,json=gemAttr,proto3" json:"gem_attr,omitempty"`                                              // 宝石物品:这颗宝石提供的属性(不是宝石、或属性行不可用时不带)。tier / cap / seq 恒 0
-	EnhanceBonusPermyriad uint32                `protobuf:"varint,20,opt,name=enhance_bonus_permyriad,json=enhanceBonusPermyriad,proto3" json:"enhance_bonus_permyriad,omitempty"` // 装备:当前有效等级的基础属性总加成(万分比);0 级为 0,满级也写
+	EnhanceLevel          uint32                     `protobuf:"varint,14,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`                              // 装备:当前强化等级(已按表上限夹取)
+	EnhanceMaxLevel       uint32                     `protobuf:"varint,15,opt,name=enhance_max_level,json=enhanceMaxLevel,proto3" json:"enhance_max_level,omitempty"`                   // 装备:强化上限;0 = 强化未开放
+	EnhanceNext           *EquipEnhancePreview       `protobuf:"bytes,16,opt,name=enhance_next,json=enhanceNext,proto3" json:"enhance_next,omitempty"`                                  // 装备:下一级预览;已满级 / 未开放 / 实例未初始化 / 下一级的行不可用时不带
+	GemSockets            []*EquipGemSocketInfo      `protobuf:"bytes,17,rep,name=gem_sockets,json=gemSockets,proto3" json:"gem_sockets,omitempty"`                                     // 装备:该部位的全部孔位(含空孔),按 socket 升序;实例未初始化时不带
+	GemType               uint32                     `protobuf:"varint,18,opt,name=gem_type,json=gemType,proto3" json:"gem_type,omitempty"`                                             // 宝石物品:宝石类型(≥ 1);不是宝石 = 0
+	GemAttr               *EquipAttrLineInfo         `protobuf:"bytes,19,opt,name=gem_attr,json=gemAttr,proto3" json:"gem_attr,omitempty"`                                              // 宝石物品:这颗宝石提供的属性(不是宝石、或属性行不可用时不带)。tier / cap / seq 恒 0
+	EnhanceBonusPermyriad uint32                     `protobuf:"varint,20,opt,name=enhance_bonus_permyriad,json=enhanceBonusPermyriad,proto3" json:"enhance_bonus_permyriad,omitempty"` // 装备:当前有效等级的基础属性总加成(万分比);0 级为 0,满级也写
+	EquipProfile          uint32                     `protobuf:"varint,21,opt,name=equip_profile,json=equipProfile,proto3" json:"equip_profile,omitempty"`
+	FixedAffixSlots       []*EquipFixedAffixSlotInfo `protobuf:"bytes,22,rep,name=fixed_affix_slots,json=fixedAffixSlots,proto3" json:"fixed_affix_slots,omitempty"`
+	Artifact              *EquipArtifactInfo         `protobuf:"bytes,23,opt,name=artifact,proto3" json:"artifact,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -599,6 +700,27 @@ func (x *BagItemInfo) GetEnhanceBonusPermyriad() uint32 {
 		return x.EnhanceBonusPermyriad
 	}
 	return 0
+}
+
+func (x *BagItemInfo) GetEquipProfile() uint32 {
+	if x != nil {
+		return x.EquipProfile
+	}
+	return 0
+}
+
+func (x *BagItemInfo) GetFixedAffixSlots() []*EquipFixedAffixSlotInfo {
+	if x != nil {
+		return x.FixedAffixSlots
+	}
+	return nil
+}
+
+func (x *BagItemInfo) GetArtifact() *EquipArtifactInfo {
+	if x != nil {
+		return x.Artifact
+	}
+	return nil
 }
 
 type BagSlotInfo struct {
@@ -1071,11 +1193,14 @@ func (x *SortBagResponse) GetChanged() bool {
 	return false
 }
 
-// 穿上:物品必须在人物背包里。取接受该部位的槽位里第一个空槽;都占着就替换
-// 槽号最小的那个,旧装备回背包。成功回两个包的全量,客户端整体覆盖。
+// 穿上:物品必须在人物背包里。同名不同实例允许占用两个同类槽。
+// target_slot有值时只操作该槽,须在容量内且接受装备类型；槽0也是合法显式值。
+// 未指定时兼容旧客户端:先找第一个接受该部位的空槽,都占着则替换槽号最小的那个。
+// 旧装备回背包。成功回两个包的全量,客户端整体覆盖。
 type EquipItemRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ItemId        uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	TargetSlot    *uint32                `protobuf:"varint,2,opt,name=target_slot,json=targetSlot,proto3,oneof" json:"target_slot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1113,6 +1238,13 @@ func (*EquipItemRequest) Descriptor() ([]byte, []int) {
 func (x *EquipItemRequest) GetItemId() uint64 {
 	if x != nil {
 		return x.ItemId
+	}
+	return 0
+}
+
+func (x *EquipItemRequest) GetTargetSlot() uint32 {
+	if x != nil && x.TargetSlot != nil {
+		return *x.TargetSlot
 	}
 	return 0
 }
@@ -1909,6 +2041,1004 @@ func (x *RetrieveTemporaryItemsResponse) GetTemporary() *BagInfo {
 	return nil
 }
 
+// 固定词条数值统一为万分比；unit区分相对百分比与概率百分点。
+type EquipFixedAffixInfo struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	AffixId          uint32                 `protobuf:"varint,1,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"`
+	Pool             uint32                 `protobuf:"varint,2,opt,name=pool,proto3" json:"pool,omitempty"` // 1方向、2效能、3通用。
+	Name             string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description      string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	ValueBps         uint32                 `protobuf:"varint,5,opt,name=value_bps,json=valueBps,proto3" json:"value_bps,omitempty"`
+	SourceCapBps     uint32                 `protobuf:"varint,6,opt,name=source_cap_bps,json=sourceCapBps,proto3" json:"source_cap_bps,omitempty"`
+	Effect           uint32                 `protobuf:"varint,7,opt,name=effect,proto3" json:"effect,omitempty"`
+	EffectParam      uint32                 `protobuf:"varint,8,opt,name=effect_param,json=effectParam,proto3" json:"effect_param,omitempty"`
+	Unit             uint32                 `protobuf:"varint,9,opt,name=unit,proto3" json:"unit,omitempty"` // 1相对百分比、2概率/抗性百分点。
+	MaterialConfigId uint32                 `protobuf:"varint,10,opt,name=material_config_id,json=materialConfigId,proto3" json:"material_config_id,omitempty"`
+	MaterialCount    uint32                 `protobuf:"varint,11,opt,name=material_count,json=materialCount,proto3" json:"material_count,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EquipFixedAffixInfo) Reset() {
+	*x = EquipFixedAffixInfo{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipFixedAffixInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipFixedAffixInfo) ProtoMessage() {}
+
+func (x *EquipFixedAffixInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipFixedAffixInfo.ProtoReflect.Descriptor instead.
+func (*EquipFixedAffixInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *EquipFixedAffixInfo) GetAffixId() uint32 {
+	if x != nil {
+		return x.AffixId
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetPool() uint32 {
+	if x != nil {
+		return x.Pool
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EquipFixedAffixInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *EquipFixedAffixInfo) GetValueBps() uint32 {
+	if x != nil {
+		return x.ValueBps
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetSourceCapBps() uint32 {
+	if x != nil {
+		return x.SourceCapBps
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetEffect() uint32 {
+	if x != nil {
+		return x.Effect
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetEffectParam() uint32 {
+	if x != nil {
+		return x.EffectParam
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetUnit() uint32 {
+	if x != nil {
+		return x.Unit
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetMaterialConfigId() uint32 {
+	if x != nil {
+		return x.MaterialConfigId
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixInfo) GetMaterialCount() uint32 {
+	if x != nil {
+		return x.MaterialCount
+	}
+	return 0
+}
+
+type EquipFixedAffixSlotInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`
+	Pool          uint32                 `protobuf:"varint,2,opt,name=pool,proto3" json:"pool,omitempty"`
+	Selected      *EquipFixedAffixInfo   `protobuf:"bytes,3,opt,name=selected,proto3" json:"selected,omitempty"` // 无此段表示有效空位，不自动补条。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipFixedAffixSlotInfo) Reset() {
+	*x = EquipFixedAffixSlotInfo{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipFixedAffixSlotInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipFixedAffixSlotInfo) ProtoMessage() {}
+
+func (x *EquipFixedAffixSlotInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipFixedAffixSlotInfo.ProtoReflect.Descriptor instead.
+func (*EquipFixedAffixSlotInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *EquipFixedAffixSlotInfo) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixSlotInfo) GetPool() uint32 {
+	if x != nil {
+		return x.Pool
+	}
+	return 0
+}
+
+func (x *EquipFixedAffixSlotInfo) GetSelected() *EquipFixedAffixInfo {
+	if x != nil {
+		return x.Selected
+	}
+	return nil
+}
+
+type EquipArtifactInfo struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	EffectId           uint32                 `protobuf:"varint,1,opt,name=effect_id,json=effectId,proto3" json:"effect_id,omitempty"`
+	Name               string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description        string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	BonusBps           uint32                 `protobuf:"varint,4,opt,name=bonus_bps,json=bonusBps,proto3" json:"bonus_bps,omitempty"`
+	CapBps             uint32                 `protobuf:"varint,5,opt,name=cap_bps,json=capBps,proto3" json:"cap_bps,omitempty"`
+	PerRoundLimit      uint32                 `protobuf:"varint,6,opt,name=per_round_limit,json=perRoundLimit,proto3" json:"per_round_limit,omitempty"`
+	BattleLimit        uint32                 `protobuf:"varint,7,opt,name=battle_limit,json=battleLimit,proto3" json:"battle_limit,omitempty"`
+	ActiveRounds       uint32                 `protobuf:"varint,8,opt,name=active_rounds,json=activeRounds,proto3" json:"active_rounds,omitempty"`
+	HealthThresholdBps uint32                 `protobuf:"varint,9,opt,name=health_threshold_bps,json=healthThresholdBps,proto3" json:"health_threshold_bps,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *EquipArtifactInfo) Reset() {
+	*x = EquipArtifactInfo{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipArtifactInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipArtifactInfo) ProtoMessage() {}
+
+func (x *EquipArtifactInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipArtifactInfo.ProtoReflect.Descriptor instead.
+func (*EquipArtifactInfo) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *EquipArtifactInfo) GetEffectId() uint32 {
+	if x != nil {
+		return x.EffectId
+	}
+	return 0
+}
+
+func (x *EquipArtifactInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EquipArtifactInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *EquipArtifactInfo) GetBonusBps() uint32 {
+	if x != nil {
+		return x.BonusBps
+	}
+	return 0
+}
+
+func (x *EquipArtifactInfo) GetCapBps() uint32 {
+	if x != nil {
+		return x.CapBps
+	}
+	return 0
+}
+
+func (x *EquipArtifactInfo) GetPerRoundLimit() uint32 {
+	if x != nil {
+		return x.PerRoundLimit
+	}
+	return 0
+}
+
+func (x *EquipArtifactInfo) GetBattleLimit() uint32 {
+	if x != nil {
+		return x.BattleLimit
+	}
+	return 0
+}
+
+func (x *EquipArtifactInfo) GetActiveRounds() uint32 {
+	if x != nil {
+		return x.ActiveRounds
+	}
+	return 0
+}
+
+func (x *EquipArtifactInfo) GetHealthThresholdBps() uint32 {
+	if x != nil {
+		return x.HealthThresholdBps
+	}
+	return 0
+}
+
+type EquipmentCraftChoice struct {
+	state         protoimpl.MessageState         `protogen:"open.v1"`
+	Operation     EquipmentCraftChoice_Operation `protobuf:"varint,1,opt,name=operation,proto3,enum=EquipmentCraftChoice_Operation" json:"operation,omitempty"`
+	ConfigId      uint32                         `protobuf:"varint,2,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"` // CREATE_ITEM使用；INSTALL_AFFIX必须为0。
+	ItemId        uint64                         `protobuf:"varint,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`       // INSTALL_AFFIX使用；CREATE_ITEM必须为0。
+	AffixSlot     uint32                         `protobuf:"varint,4,opt,name=affix_slot,json=affixSlot,proto3" json:"affix_slot,omitempty"`
+	AffixId       uint32                         `protobuf:"varint,5,opt,name=affix_id,json=affixId,proto3" json:"affix_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipmentCraftChoice) Reset() {
+	*x = EquipmentCraftChoice{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipmentCraftChoice) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipmentCraftChoice) ProtoMessage() {}
+
+func (x *EquipmentCraftChoice) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipmentCraftChoice.ProtoReflect.Descriptor instead.
+func (*EquipmentCraftChoice) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *EquipmentCraftChoice) GetOperation() EquipmentCraftChoice_Operation {
+	if x != nil {
+		return x.Operation
+	}
+	return EquipmentCraftChoice_UNSPECIFIED
+}
+
+func (x *EquipmentCraftChoice) GetConfigId() uint32 {
+	if x != nil {
+		return x.ConfigId
+	}
+	return 0
+}
+
+func (x *EquipmentCraftChoice) GetItemId() uint64 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *EquipmentCraftChoice) GetAffixSlot() uint32 {
+	if x != nil {
+		return x.AffixSlot
+	}
+	return 0
+}
+
+func (x *EquipmentCraftChoice) GetAffixId() uint32 {
+	if x != nil {
+		return x.AffixId
+	}
+	return 0
+}
+
+type EquipmentCraftMaterial struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ConfigId      uint32                 `protobuf:"varint,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	IconKey       string                 `protobuf:"bytes,3,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
+	Count         uint32                 `protobuf:"varint,4,opt,name=count,proto3" json:"count,omitempty"`
+	Owned         uint64                 `protobuf:"varint,5,opt,name=owned,proto3" json:"owned,omitempty"`
+	Available     uint64                 `protobuf:"varint,6,opt,name=available,proto3" json:"available,omitempty"` // 不含战斗预留和本版本不可扣的实例。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipmentCraftMaterial) Reset() {
+	*x = EquipmentCraftMaterial{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipmentCraftMaterial) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipmentCraftMaterial) ProtoMessage() {}
+
+func (x *EquipmentCraftMaterial) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipmentCraftMaterial.ProtoReflect.Descriptor instead.
+func (*EquipmentCraftMaterial) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *EquipmentCraftMaterial) GetConfigId() uint32 {
+	if x != nil {
+		return x.ConfigId
+	}
+	return 0
+}
+
+func (x *EquipmentCraftMaterial) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EquipmentCraftMaterial) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
+func (x *EquipmentCraftMaterial) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *EquipmentCraftMaterial) GetOwned() uint64 {
+	if x != nil {
+		return x.Owned
+	}
+	return 0
+}
+
+func (x *EquipmentCraftMaterial) GetAvailable() uint64 {
+	if x != nil {
+		return x.Available
+	}
+	return 0
+}
+
+type EquipmentCraftRecipe struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Product          *BagItemInfo           `protobuf:"bytes,1,opt,name=product,proto3" json:"product,omitempty"`
+	MaterialConfigId uint32                 `protobuf:"varint,2,opt,name=material_config_id,json=materialConfigId,proto3" json:"material_config_id,omitempty"`
+	MaterialCount    uint32                 `protobuf:"varint,3,opt,name=material_count,json=materialCount,proto3" json:"material_count,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EquipmentCraftRecipe) Reset() {
+	*x = EquipmentCraftRecipe{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipmentCraftRecipe) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipmentCraftRecipe) ProtoMessage() {}
+
+func (x *EquipmentCraftRecipe) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipmentCraftRecipe.ProtoReflect.Descriptor instead.
+func (*EquipmentCraftRecipe) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *EquipmentCraftRecipe) GetProduct() *BagItemInfo {
+	if x != nil {
+		return x.Product
+	}
+	return nil
+}
+
+func (x *EquipmentCraftRecipe) GetMaterialConfigId() uint32 {
+	if x != nil {
+		return x.MaterialConfigId
+	}
+	return 0
+}
+
+func (x *EquipmentCraftRecipe) GetMaterialCount() uint32 {
+	if x != nil {
+		return x.MaterialCount
+	}
+	return 0
+}
+
+type GetEquipmentCraftRulesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetEquipmentCraftRulesRequest) Reset() {
+	*x = GetEquipmentCraftRulesRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEquipmentCraftRulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEquipmentCraftRulesRequest) ProtoMessage() {}
+
+func (x *GetEquipmentCraftRulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEquipmentCraftRulesRequest.ProtoReflect.Descriptor instead.
+func (*GetEquipmentCraftRulesRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{33}
+}
+
+type GetEquipmentCraftRulesResponse struct {
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage    `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	RulesFingerprint []byte                  `protobuf:"bytes,2,opt,name=rules_fingerprint,json=rulesFingerprint,proto3" json:"rules_fingerprint,omitempty"` // 权威配置的确定性摘要；客户端只原样携带。
+	ForgeRevision    uint64                  `protobuf:"varint,3,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`
+	Recipes          []*EquipmentCraftRecipe `protobuf:"bytes,4,rep,name=recipes,proto3" json:"recipes,omitempty"`
+	Affixes          []*EquipFixedAffixInfo  `protobuf:"bytes,5,rep,name=affixes,proto3" json:"affixes,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetEquipmentCraftRulesResponse) Reset() {
+	*x = GetEquipmentCraftRulesResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetEquipmentCraftRulesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetEquipmentCraftRulesResponse) ProtoMessage() {}
+
+func (x *GetEquipmentCraftRulesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetEquipmentCraftRulesResponse.ProtoReflect.Descriptor instead.
+func (*GetEquipmentCraftRulesResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *GetEquipmentCraftRulesResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetEquipmentCraftRulesResponse) GetRulesFingerprint() []byte {
+	if x != nil {
+		return x.RulesFingerprint
+	}
+	return nil
+}
+
+func (x *GetEquipmentCraftRulesResponse) GetForgeRevision() uint64 {
+	if x != nil {
+		return x.ForgeRevision
+	}
+	return 0
+}
+
+func (x *GetEquipmentCraftRulesResponse) GetRecipes() []*EquipmentCraftRecipe {
+	if x != nil {
+		return x.Recipes
+	}
+	return nil
+}
+
+func (x *GetEquipmentCraftRulesResponse) GetAffixes() []*EquipFixedAffixInfo {
+	if x != nil {
+		return x.Affixes
+	}
+	return nil
+}
+
+type EquipmentCraftPreview struct {
+	state                 protoimpl.MessageState  `protogen:"open.v1"`
+	Choice                *EquipmentCraftChoice   `protobuf:"bytes,1,opt,name=choice,proto3" json:"choice,omitempty"`
+	RulesFingerprint      []byte                  `protobuf:"bytes,2,opt,name=rules_fingerprint,json=rulesFingerprint,proto3" json:"rules_fingerprint,omitempty"`
+	ExpectedForgeRevision uint64                  `protobuf:"varint,3,opt,name=expected_forge_revision,json=expectedForgeRevision,proto3" json:"expected_forge_revision,omitempty"`
+	Result                *BagItemInfo            `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	Material              *EquipmentCraftMaterial `protobuf:"bytes,5,opt,name=material,proto3" json:"material,omitempty"`
+	Available             bool                    `protobuf:"varint,6,opt,name=available,proto3" json:"available,omitempty"`
+	UnavailableTip        uint32                  `protobuf:"varint,7,opt,name=unavailable_tip,json=unavailableTip,proto3" json:"unavailable_tip,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *EquipmentCraftPreview) Reset() {
+	*x = EquipmentCraftPreview{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipmentCraftPreview) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipmentCraftPreview) ProtoMessage() {}
+
+func (x *EquipmentCraftPreview) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipmentCraftPreview.ProtoReflect.Descriptor instead.
+func (*EquipmentCraftPreview) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *EquipmentCraftPreview) GetChoice() *EquipmentCraftChoice {
+	if x != nil {
+		return x.Choice
+	}
+	return nil
+}
+
+func (x *EquipmentCraftPreview) GetRulesFingerprint() []byte {
+	if x != nil {
+		return x.RulesFingerprint
+	}
+	return nil
+}
+
+func (x *EquipmentCraftPreview) GetExpectedForgeRevision() uint64 {
+	if x != nil {
+		return x.ExpectedForgeRevision
+	}
+	return 0
+}
+
+func (x *EquipmentCraftPreview) GetResult() *BagItemInfo {
+	if x != nil {
+		return x.Result
+	}
+	return nil
+}
+
+func (x *EquipmentCraftPreview) GetMaterial() *EquipmentCraftMaterial {
+	if x != nil {
+		return x.Material
+	}
+	return nil
+}
+
+func (x *EquipmentCraftPreview) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *EquipmentCraftPreview) GetUnavailableTip() uint32 {
+	if x != nil {
+		return x.UnavailableTip
+	}
+	return 0
+}
+
+type PreviewEquipmentCraftRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Choice        *EquipmentCraftChoice  `protobuf:"bytes,1,opt,name=choice,proto3" json:"choice,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PreviewEquipmentCraftRequest) Reset() {
+	*x = PreviewEquipmentCraftRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreviewEquipmentCraftRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreviewEquipmentCraftRequest) ProtoMessage() {}
+
+func (x *PreviewEquipmentCraftRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreviewEquipmentCraftRequest.ProtoReflect.Descriptor instead.
+func (*PreviewEquipmentCraftRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *PreviewEquipmentCraftRequest) GetChoice() *EquipmentCraftChoice {
+	if x != nil {
+		return x.Choice
+	}
+	return nil
+}
+
+type PreviewEquipmentCraftResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Preview       *EquipmentCraftPreview `protobuf:"bytes,2,opt,name=preview,proto3" json:"preview,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PreviewEquipmentCraftResponse) Reset() {
+	*x = PreviewEquipmentCraftResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreviewEquipmentCraftResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreviewEquipmentCraftResponse) ProtoMessage() {}
+
+func (x *PreviewEquipmentCraftResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreviewEquipmentCraftResponse.ProtoReflect.Descriptor instead.
+func (*PreviewEquipmentCraftResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *PreviewEquipmentCraftResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *PreviewEquipmentCraftResponse) GetPreview() *EquipmentCraftPreview {
+	if x != nil {
+		return x.Preview
+	}
+	return nil
+}
+
+// 发送前持久保存整份请求；超时/断线只重放原字节，不替换水位、选项或摘要。
+type CommitEquipmentCraftRequest struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Choice                *EquipmentCraftChoice  `protobuf:"bytes,1,opt,name=choice,proto3" json:"choice,omitempty"`
+	RulesFingerprint      []byte                 `protobuf:"bytes,2,opt,name=rules_fingerprint,json=rulesFingerprint,proto3" json:"rules_fingerprint,omitempty"`
+	ExpectedForgeRevision uint64                 `protobuf:"varint,3,opt,name=expected_forge_revision,json=expectedForgeRevision,proto3" json:"expected_forge_revision,omitempty"`
+	ClientRequestId       uint64                 `protobuf:"varint,4,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非0。
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *CommitEquipmentCraftRequest) Reset() {
+	*x = CommitEquipmentCraftRequest{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitEquipmentCraftRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitEquipmentCraftRequest) ProtoMessage() {}
+
+func (x *CommitEquipmentCraftRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitEquipmentCraftRequest.ProtoReflect.Descriptor instead.
+func (*CommitEquipmentCraftRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *CommitEquipmentCraftRequest) GetChoice() *EquipmentCraftChoice {
+	if x != nil {
+		return x.Choice
+	}
+	return nil
+}
+
+func (x *CommitEquipmentCraftRequest) GetRulesFingerprint() []byte {
+	if x != nil {
+		return x.RulesFingerprint
+	}
+	return nil
+}
+
+func (x *CommitEquipmentCraftRequest) GetExpectedForgeRevision() uint64 {
+	if x != nil {
+		return x.ExpectedForgeRevision
+	}
+	return 0
+}
+
+func (x *CommitEquipmentCraftRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+type CommitEquipmentCraftResponse struct {
+	state                protoimpl.MessageState               `protogen:"open.v1"`
+	ErrorMessage         *base.TipInfoMessage                 `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ClientRequestId      uint64                               `protobuf:"varint,2,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	Outcome              CommitEquipmentCraftResponse_Outcome `protobuf:"varint,3,opt,name=outcome,proto3,enum=CommitEquipmentCraftResponse_Outcome" json:"outcome,omitempty"`
+	Durable              bool                                 `protobuf:"varint,4,opt,name=durable,proto3" json:"durable,omitempty"` // 仅确认提交的完整存档含该成功水位时为true。
+	Replayed             bool                                 `protobuf:"varint,5,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	ItemId               uint64                               `protobuf:"varint,6,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	ResultForgeRevision  uint64                               `protobuf:"varint,7,opt,name=result_forge_revision,json=resultForgeRevision,proto3" json:"result_forge_revision,omitempty"`
+	CurrentForgeRevision uint64                               `protobuf:"varint,8,opt,name=current_forge_revision,json=currentForgeRevision,proto3" json:"current_forge_revision,omitempty"`
+	Bag                  *BagInfo                             `protobuf:"bytes,9,opt,name=bag,proto3" json:"bag,omitempty"`
+	Equipment            *BagInfo                             `protobuf:"bytes,10,opt,name=equipment,proto3" json:"equipment,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *CommitEquipmentCraftResponse) Reset() {
+	*x = CommitEquipmentCraftResponse{}
+	mi := &file_proto_scene_player_bag_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CommitEquipmentCraftResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CommitEquipmentCraftResponse) ProtoMessage() {}
+
+func (x *CommitEquipmentCraftResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_bag_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CommitEquipmentCraftResponse.ProtoReflect.Descriptor instead.
+func (*CommitEquipmentCraftResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_bag_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *CommitEquipmentCraftResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *CommitEquipmentCraftResponse) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *CommitEquipmentCraftResponse) GetOutcome() CommitEquipmentCraftResponse_Outcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return CommitEquipmentCraftResponse_UNKNOWN
+}
+
+func (x *CommitEquipmentCraftResponse) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
+func (x *CommitEquipmentCraftResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *CommitEquipmentCraftResponse) GetItemId() uint64 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *CommitEquipmentCraftResponse) GetResultForgeRevision() uint64 {
+	if x != nil {
+		return x.ResultForgeRevision
+	}
+	return 0
+}
+
+func (x *CommitEquipmentCraftResponse) GetCurrentForgeRevision() uint64 {
+	if x != nil {
+		return x.CurrentForgeRevision
+	}
+	return 0
+}
+
+func (x *CommitEquipmentCraftResponse) GetBag() *BagInfo {
+	if x != nil {
+		return x.Bag
+	}
+	return nil
+}
+
+func (x *CommitEquipmentCraftResponse) GetEquipment() *BagInfo {
+	if x != nil {
+		return x.Equipment
+	}
+	return nil
+}
+
 var File_proto_scene_player_bag_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_bag_proto_rawDesc = "" +
@@ -1948,7 +3078,7 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x0ematerial_count\x18\x06 \x01(\rR\rmaterialCount\x12'\n" +
 	"\x0fbonus_permyriad\x18\a \x01(\rR\x0ebonusPermyriad\x12&\n" +
 	"\x0ffail_level_loss\x18\b \x01(\rR\rfailLevelLoss\x12*\n" +
-	"\x11material_icon_key\x18\t \x01(\tR\x0fmaterialIconKey\"\xf5\x05\n" +
+	"\x11material_icon_key\x18\t \x01(\tR\x0fmaterialIconKey\"\x90\a\n" +
 	"\vBagItemInfo\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x14\n" +
@@ -1975,7 +3105,10 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"gemSockets\x12\x19\n" +
 	"\bgem_type\x18\x12 \x01(\rR\agemType\x12-\n" +
 	"\bgem_attr\x18\x13 \x01(\v2\x12.EquipAttrLineInfoR\agemAttr\x126\n" +
-	"\x17enhance_bonus_permyriad\x18\x14 \x01(\rR\x15enhanceBonusPermyriad\"h\n" +
+	"\x17enhance_bonus_permyriad\x18\x14 \x01(\rR\x15enhanceBonusPermyriad\x12#\n" +
+	"\requip_profile\x18\x15 \x01(\rR\fequipProfile\x12D\n" +
+	"\x11fixed_affix_slots\x18\x16 \x03(\v2\x18.EquipFixedAffixSlotInfoR\x0ffixedAffixSlots\x12.\n" +
+	"\bartifact\x18\x17 \x01(\v2\x12.EquipArtifactInfoR\bartifact\"h\n" +
 	"\vBagSlotInfo\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x17\n" +
 	"\aitem_id\x18\x02 \x01(\x04R\x06itemId\x12\x14\n" +
@@ -2007,9 +3140,12 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x0fSortBagResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
 	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12\x18\n" +
-	"\achanged\x18\x03 \x01(\bR\achanged\"+\n" +
+	"\achanged\x18\x03 \x01(\bR\achanged\"a\n" +
 	"\x10EquipItemRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\"\x8d\x01\n" +
+	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12$\n" +
+	"\vtarget_slot\x18\x02 \x01(\rH\x00R\n" +
+	"targetSlot\x88\x01\x01B\x0e\n" +
+	"\f_target_slot\"\x8d\x01\n" +
 	"\x11EquipItemResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
 	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
@@ -2058,7 +3194,97 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x1eRetrieveTemporaryItemsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
 	"\x03bag\x18\x02 \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
-	"\ttemporary\x18\x03 \x01(\v2\b.BagInfoR\ttemporary2\xa0\x04\n" +
+	"\ttemporary\x18\x03 \x01(\v2\b.BagInfoR\ttemporary\"\xe1\x02\n" +
+	"\x13EquipFixedAffixInfo\x12\x19\n" +
+	"\baffix_id\x18\x01 \x01(\rR\aaffixId\x12\x12\n" +
+	"\x04pool\x18\x02 \x01(\rR\x04pool\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x1b\n" +
+	"\tvalue_bps\x18\x05 \x01(\rR\bvalueBps\x12$\n" +
+	"\x0esource_cap_bps\x18\x06 \x01(\rR\fsourceCapBps\x12\x16\n" +
+	"\x06effect\x18\a \x01(\rR\x06effect\x12!\n" +
+	"\feffect_param\x18\b \x01(\rR\veffectParam\x12\x12\n" +
+	"\x04unit\x18\t \x01(\rR\x04unit\x12,\n" +
+	"\x12material_config_id\x18\n" +
+	" \x01(\rR\x10materialConfigId\x12%\n" +
+	"\x0ematerial_count\x18\v \x01(\rR\rmaterialCount\"s\n" +
+	"\x17EquipFixedAffixSlotInfo\x12\x12\n" +
+	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x12\n" +
+	"\x04pool\x18\x02 \x01(\rR\x04pool\x120\n" +
+	"\bselected\x18\x03 \x01(\v2\x14.EquipFixedAffixInfoR\bselected\"\xbe\x02\n" +
+	"\x11EquipArtifactInfo\x12\x1b\n" +
+	"\teffect_id\x18\x01 \x01(\rR\beffectId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1b\n" +
+	"\tbonus_bps\x18\x04 \x01(\rR\bbonusBps\x12\x17\n" +
+	"\acap_bps\x18\x05 \x01(\rR\x06capBps\x12&\n" +
+	"\x0fper_round_limit\x18\x06 \x01(\rR\rperRoundLimit\x12!\n" +
+	"\fbattle_limit\x18\a \x01(\rR\vbattleLimit\x12#\n" +
+	"\ractive_rounds\x18\b \x01(\rR\factiveRounds\x120\n" +
+	"\x14health_threshold_bps\x18\t \x01(\rR\x12healthThresholdBps\"\x87\x02\n" +
+	"\x14EquipmentCraftChoice\x12=\n" +
+	"\toperation\x18\x01 \x01(\x0e2\x1f.EquipmentCraftChoice.OperationR\toperation\x12\x1b\n" +
+	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x17\n" +
+	"\aitem_id\x18\x03 \x01(\x04R\x06itemId\x12\x1d\n" +
+	"\n" +
+	"affix_slot\x18\x04 \x01(\rR\taffixSlot\x12\x19\n" +
+	"\baffix_id\x18\x05 \x01(\rR\aaffixId\"@\n" +
+	"\tOperation\x12\x0f\n" +
+	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vCREATE_ITEM\x10\x01\x12\x11\n" +
+	"\rINSTALL_AFFIX\x10\x02\"\xae\x01\n" +
+	"\x16EquipmentCraftMaterial\x12\x1b\n" +
+	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
+	"\bicon_key\x18\x03 \x01(\tR\aiconKey\x12\x14\n" +
+	"\x05count\x18\x04 \x01(\rR\x05count\x12\x14\n" +
+	"\x05owned\x18\x05 \x01(\x04R\x05owned\x12\x1c\n" +
+	"\tavailable\x18\x06 \x01(\x04R\tavailable\"\x93\x01\n" +
+	"\x14EquipmentCraftRecipe\x12&\n" +
+	"\aproduct\x18\x01 \x01(\v2\f.BagItemInfoR\aproduct\x12,\n" +
+	"\x12material_config_id\x18\x02 \x01(\rR\x10materialConfigId\x12%\n" +
+	"\x0ematerial_count\x18\x03 \x01(\rR\rmaterialCount\"\x1f\n" +
+	"\x1dGetEquipmentCraftRulesRequest\"\x8b\x02\n" +
+	"\x1eGetEquipmentCraftRulesResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12+\n" +
+	"\x11rules_fingerprint\x18\x02 \x01(\fR\x10rulesFingerprint\x12%\n" +
+	"\x0eforge_revision\x18\x03 \x01(\x04R\rforgeRevision\x12/\n" +
+	"\arecipes\x18\x04 \x03(\v2\x15.EquipmentCraftRecipeR\arecipes\x12.\n" +
+	"\aaffixes\x18\x05 \x03(\v2\x14.EquipFixedAffixInfoR\aaffixes\"\xcd\x02\n" +
+	"\x15EquipmentCraftPreview\x12-\n" +
+	"\x06choice\x18\x01 \x01(\v2\x15.EquipmentCraftChoiceR\x06choice\x12+\n" +
+	"\x11rules_fingerprint\x18\x02 \x01(\fR\x10rulesFingerprint\x126\n" +
+	"\x17expected_forge_revision\x18\x03 \x01(\x04R\x15expectedForgeRevision\x12$\n" +
+	"\x06result\x18\x04 \x01(\v2\f.BagItemInfoR\x06result\x123\n" +
+	"\bmaterial\x18\x05 \x01(\v2\x17.EquipmentCraftMaterialR\bmaterial\x12\x1c\n" +
+	"\tavailable\x18\x06 \x01(\bR\tavailable\x12'\n" +
+	"\x0funavailable_tip\x18\a \x01(\rR\x0eunavailableTip\"M\n" +
+	"\x1cPreviewEquipmentCraftRequest\x12-\n" +
+	"\x06choice\x18\x01 \x01(\v2\x15.EquipmentCraftChoiceR\x06choice\"\x87\x01\n" +
+	"\x1dPreviewEquipmentCraftResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x120\n" +
+	"\apreview\x18\x02 \x01(\v2\x16.EquipmentCraftPreviewR\apreview\"\xdd\x01\n" +
+	"\x1bCommitEquipmentCraftRequest\x12-\n" +
+	"\x06choice\x18\x01 \x01(\v2\x15.EquipmentCraftChoiceR\x06choice\x12+\n" +
+	"\x11rules_fingerprint\x18\x02 \x01(\fR\x10rulesFingerprint\x126\n" +
+	"\x17expected_forge_revision\x18\x03 \x01(\x04R\x15expectedForgeRevision\x12*\n" +
+	"\x11client_request_id\x18\x04 \x01(\x04R\x0fclientRequestId\"\xf1\x03\n" +
+	"\x1cCommitEquipmentCraftResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x11client_request_id\x18\x02 \x01(\x04R\x0fclientRequestId\x12?\n" +
+	"\aoutcome\x18\x03 \x01(\x0e2%.CommitEquipmentCraftResponse.OutcomeR\aoutcome\x12\x18\n" +
+	"\adurable\x18\x04 \x01(\bR\adurable\x12\x1a\n" +
+	"\breplayed\x18\x05 \x01(\bR\breplayed\x12\x17\n" +
+	"\aitem_id\x18\x06 \x01(\x04R\x06itemId\x122\n" +
+	"\x15result_forge_revision\x18\a \x01(\x04R\x13resultForgeRevision\x124\n" +
+	"\x16current_forge_revision\x18\b \x01(\x04R\x14currentForgeRevision\x12\x1a\n" +
+	"\x03bag\x18\t \x01(\v2\b.BagInfoR\x03bag\x12&\n" +
+	"\tequipment\x18\n" +
+	" \x01(\v2\b.BagInfoR\tequipment\"1\n" +
+	"\aOutcome\x12\v\n" +
+	"\aUNKNOWN\x10\x00\x12\f\n" +
+	"\bREJECTED\x10\x01\x12\v\n" +
+	"\aAPPLIED\x10\x022\xa8\x06\n" +
 	"\x14SceneBagClientPlayer\x12)\n" +
 	"\x06GetBag\x12\x0e.GetBagRequest\x1a\x0f.GetBagResponse\x12,\n" +
 	"\aSortBag\x12\x0f.SortBagRequest\x1a\x10.SortBagResponse\x122\n" +
@@ -2068,7 +3294,10 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\fEnhanceEquip\x12\x14.EnhanceEquipRequest\x1a\x15.EnhanceEquipResponse\x12/\n" +
 	"\bInlayGem\x12\x10.InlayGemRequest\x1a\x11.InlayGemResponse\x122\n" +
 	"\tRemoveGem\x12\x11.RemoveGemRequest\x1a\x12.RemoveGemResponse\x12Y\n" +
-	"\x16RetrieveTemporaryItems\x12\x1e.RetrieveTemporaryItemsRequest\x1a\x1f.RetrieveTemporaryItemsResponse\x1a\n" +
+	"\x16RetrieveTemporaryItems\x12\x1e.RetrieveTemporaryItemsRequest\x1a\x1f.RetrieveTemporaryItemsResponse\x12Y\n" +
+	"\x16GetEquipmentCraftRules\x12\x1e.GetEquipmentCraftRulesRequest\x1a\x1f.GetEquipmentCraftRulesResponse\x12V\n" +
+	"\x15PreviewEquipmentCraft\x12\x1d.PreviewEquipmentCraftRequest\x1a\x1e.PreviewEquipmentCraftResponse\x12S\n" +
+	"\x14CommitEquipmentCraft\x12\x1c.CommitEquipmentCraftRequest\x1a\x1d.CommitEquipmentCraftResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -2083,98 +3312,139 @@ func file_proto_scene_player_bag_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_bag_proto_rawDescData
 }
 
-var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_proto_scene_player_bag_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_scene_player_bag_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_proto_scene_player_bag_proto_goTypes = []any{
-	(*EquipAttrLineInfo)(nil),              // 0: EquipAttrLineInfo
-	(*EquipSlotInfo)(nil),                  // 1: EquipSlotInfo
-	(*EquipGemSocketInfo)(nil),             // 2: EquipGemSocketInfo
-	(*EquipEnhancePreview)(nil),            // 3: EquipEnhancePreview
-	(*BagItemInfo)(nil),                    // 4: BagItemInfo
-	(*BagSlotInfo)(nil),                    // 5: BagSlotInfo
-	(*BagLayoutInfo)(nil),                  // 6: BagLayoutInfo
-	(*BagHeldItemInfo)(nil),                // 7: BagHeldItemInfo
-	(*BagInfo)(nil),                        // 8: BagInfo
-	(*GetBagRequest)(nil),                  // 9: GetBagRequest
-	(*GetBagResponse)(nil),                 // 10: GetBagResponse
-	(*SortBagRequest)(nil),                 // 11: SortBagRequest
-	(*SortBagResponse)(nil),                // 12: SortBagResponse
-	(*EquipItemRequest)(nil),               // 13: EquipItemRequest
-	(*EquipItemResponse)(nil),              // 14: EquipItemResponse
-	(*UnequipItemRequest)(nil),             // 15: UnequipItemRequest
-	(*UnequipItemResponse)(nil),            // 16: UnequipItemResponse
-	(*GmGrantItemRequest)(nil),             // 17: GmGrantItemRequest
-	(*GmGrantItemResponse)(nil),            // 18: GmGrantItemResponse
-	(*EnhanceEquipRequest)(nil),            // 19: EnhanceEquipRequest
-	(*EnhanceEquipResponse)(nil),           // 20: EnhanceEquipResponse
-	(*InlayGemRequest)(nil),                // 21: InlayGemRequest
-	(*InlayGemResponse)(nil),               // 22: InlayGemResponse
-	(*RemoveGemRequest)(nil),               // 23: RemoveGemRequest
-	(*RemoveGemResponse)(nil),              // 24: RemoveGemResponse
-	(*RetrieveTemporaryItemsRequest)(nil),  // 25: RetrieveTemporaryItemsRequest
-	(*RetrieveTemporaryItemsResponse)(nil), // 26: RetrieveTemporaryItemsResponse
-	(*component.CurrencyComp)(nil),         // 27: CurrencyComp
-	(*base.TipInfoMessage)(nil),            // 28: TipInfoMessage
+	(EquipmentCraftChoice_Operation)(0),       // 0: EquipmentCraftChoice.Operation
+	(CommitEquipmentCraftResponse_Outcome)(0), // 1: CommitEquipmentCraftResponse.Outcome
+	(*EquipAttrLineInfo)(nil),                 // 2: EquipAttrLineInfo
+	(*EquipSlotInfo)(nil),                     // 3: EquipSlotInfo
+	(*EquipGemSocketInfo)(nil),                // 4: EquipGemSocketInfo
+	(*EquipEnhancePreview)(nil),               // 5: EquipEnhancePreview
+	(*BagItemInfo)(nil),                       // 6: BagItemInfo
+	(*BagSlotInfo)(nil),                       // 7: BagSlotInfo
+	(*BagLayoutInfo)(nil),                     // 8: BagLayoutInfo
+	(*BagHeldItemInfo)(nil),                   // 9: BagHeldItemInfo
+	(*BagInfo)(nil),                           // 10: BagInfo
+	(*GetBagRequest)(nil),                     // 11: GetBagRequest
+	(*GetBagResponse)(nil),                    // 12: GetBagResponse
+	(*SortBagRequest)(nil),                    // 13: SortBagRequest
+	(*SortBagResponse)(nil),                   // 14: SortBagResponse
+	(*EquipItemRequest)(nil),                  // 15: EquipItemRequest
+	(*EquipItemResponse)(nil),                 // 16: EquipItemResponse
+	(*UnequipItemRequest)(nil),                // 17: UnequipItemRequest
+	(*UnequipItemResponse)(nil),               // 18: UnequipItemResponse
+	(*GmGrantItemRequest)(nil),                // 19: GmGrantItemRequest
+	(*GmGrantItemResponse)(nil),               // 20: GmGrantItemResponse
+	(*EnhanceEquipRequest)(nil),               // 21: EnhanceEquipRequest
+	(*EnhanceEquipResponse)(nil),              // 22: EnhanceEquipResponse
+	(*InlayGemRequest)(nil),                   // 23: InlayGemRequest
+	(*InlayGemResponse)(nil),                  // 24: InlayGemResponse
+	(*RemoveGemRequest)(nil),                  // 25: RemoveGemRequest
+	(*RemoveGemResponse)(nil),                 // 26: RemoveGemResponse
+	(*RetrieveTemporaryItemsRequest)(nil),     // 27: RetrieveTemporaryItemsRequest
+	(*RetrieveTemporaryItemsResponse)(nil),    // 28: RetrieveTemporaryItemsResponse
+	(*EquipFixedAffixInfo)(nil),               // 29: EquipFixedAffixInfo
+	(*EquipFixedAffixSlotInfo)(nil),           // 30: EquipFixedAffixSlotInfo
+	(*EquipArtifactInfo)(nil),                 // 31: EquipArtifactInfo
+	(*EquipmentCraftChoice)(nil),              // 32: EquipmentCraftChoice
+	(*EquipmentCraftMaterial)(nil),            // 33: EquipmentCraftMaterial
+	(*EquipmentCraftRecipe)(nil),              // 34: EquipmentCraftRecipe
+	(*GetEquipmentCraftRulesRequest)(nil),     // 35: GetEquipmentCraftRulesRequest
+	(*GetEquipmentCraftRulesResponse)(nil),    // 36: GetEquipmentCraftRulesResponse
+	(*EquipmentCraftPreview)(nil),             // 37: EquipmentCraftPreview
+	(*PreviewEquipmentCraftRequest)(nil),      // 38: PreviewEquipmentCraftRequest
+	(*PreviewEquipmentCraftResponse)(nil),     // 39: PreviewEquipmentCraftResponse
+	(*CommitEquipmentCraftRequest)(nil),       // 40: CommitEquipmentCraftRequest
+	(*CommitEquipmentCraftResponse)(nil),      // 41: CommitEquipmentCraftResponse
+	(*component.CurrencyComp)(nil),            // 42: CurrencyComp
+	(*base.TipInfoMessage)(nil),               // 43: TipInfoMessage
 }
 var file_proto_scene_player_bag_proto_depIdxs = []int32{
-	0,  // 0: EquipGemSocketInfo.attr:type_name -> EquipAttrLineInfo
-	0,  // 1: BagItemInfo.base_attrs:type_name -> EquipAttrLineInfo
-	0,  // 2: BagItemInfo.affixes:type_name -> EquipAttrLineInfo
-	3,  // 3: BagItemInfo.enhance_next:type_name -> EquipEnhancePreview
-	2,  // 4: BagItemInfo.gem_sockets:type_name -> EquipGemSocketInfo
-	0,  // 5: BagItemInfo.gem_attr:type_name -> EquipAttrLineInfo
-	5,  // 6: BagLayoutInfo.slots:type_name -> BagSlotInfo
-	1,  // 7: BagLayoutInfo.equip_slots:type_name -> EquipSlotInfo
-	4,  // 8: BagInfo.items:type_name -> BagItemInfo
-	6,  // 9: BagInfo.layout:type_name -> BagLayoutInfo
-	27, // 10: BagInfo.currency:type_name -> CurrencyComp
-	7,  // 11: BagInfo.held_items:type_name -> BagHeldItemInfo
-	28, // 12: GetBagResponse.error_message:type_name -> TipInfoMessage
-	8,  // 13: GetBagResponse.bag:type_name -> BagInfo
-	28, // 14: SortBagResponse.error_message:type_name -> TipInfoMessage
-	8,  // 15: SortBagResponse.bag:type_name -> BagInfo
-	28, // 16: EquipItemResponse.error_message:type_name -> TipInfoMessage
-	8,  // 17: EquipItemResponse.bag:type_name -> BagInfo
-	8,  // 18: EquipItemResponse.equipment:type_name -> BagInfo
-	28, // 19: UnequipItemResponse.error_message:type_name -> TipInfoMessage
-	8,  // 20: UnequipItemResponse.bag:type_name -> BagInfo
-	8,  // 21: UnequipItemResponse.equipment:type_name -> BagInfo
-	28, // 22: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
-	8,  // 23: GmGrantItemResponse.bag:type_name -> BagInfo
-	28, // 24: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
-	8,  // 25: EnhanceEquipResponse.bag:type_name -> BagInfo
-	8,  // 26: EnhanceEquipResponse.equipment:type_name -> BagInfo
-	28, // 27: InlayGemResponse.error_message:type_name -> TipInfoMessage
-	8,  // 28: InlayGemResponse.bag:type_name -> BagInfo
-	8,  // 29: InlayGemResponse.equipment:type_name -> BagInfo
-	28, // 30: RemoveGemResponse.error_message:type_name -> TipInfoMessage
-	8,  // 31: RemoveGemResponse.bag:type_name -> BagInfo
-	8,  // 32: RemoveGemResponse.equipment:type_name -> BagInfo
-	28, // 33: RetrieveTemporaryItemsResponse.error_message:type_name -> TipInfoMessage
-	8,  // 34: RetrieveTemporaryItemsResponse.bag:type_name -> BagInfo
-	8,  // 35: RetrieveTemporaryItemsResponse.temporary:type_name -> BagInfo
-	9,  // 36: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
-	11, // 37: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
-	13, // 38: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
-	15, // 39: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
-	17, // 40: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
-	19, // 41: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
-	21, // 42: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
-	23, // 43: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
-	25, // 44: SceneBagClientPlayer.RetrieveTemporaryItems:input_type -> RetrieveTemporaryItemsRequest
-	10, // 45: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
-	12, // 46: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
-	14, // 47: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
-	16, // 48: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
-	18, // 49: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
-	20, // 50: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
-	22, // 51: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
-	24, // 52: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
-	26, // 53: SceneBagClientPlayer.RetrieveTemporaryItems:output_type -> RetrieveTemporaryItemsResponse
-	45, // [45:54] is the sub-list for method output_type
-	36, // [36:45] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	2,  // 0: EquipGemSocketInfo.attr:type_name -> EquipAttrLineInfo
+	2,  // 1: BagItemInfo.base_attrs:type_name -> EquipAttrLineInfo
+	2,  // 2: BagItemInfo.affixes:type_name -> EquipAttrLineInfo
+	5,  // 3: BagItemInfo.enhance_next:type_name -> EquipEnhancePreview
+	4,  // 4: BagItemInfo.gem_sockets:type_name -> EquipGemSocketInfo
+	2,  // 5: BagItemInfo.gem_attr:type_name -> EquipAttrLineInfo
+	30, // 6: BagItemInfo.fixed_affix_slots:type_name -> EquipFixedAffixSlotInfo
+	31, // 7: BagItemInfo.artifact:type_name -> EquipArtifactInfo
+	7,  // 8: BagLayoutInfo.slots:type_name -> BagSlotInfo
+	3,  // 9: BagLayoutInfo.equip_slots:type_name -> EquipSlotInfo
+	6,  // 10: BagInfo.items:type_name -> BagItemInfo
+	8,  // 11: BagInfo.layout:type_name -> BagLayoutInfo
+	42, // 12: BagInfo.currency:type_name -> CurrencyComp
+	9,  // 13: BagInfo.held_items:type_name -> BagHeldItemInfo
+	43, // 14: GetBagResponse.error_message:type_name -> TipInfoMessage
+	10, // 15: GetBagResponse.bag:type_name -> BagInfo
+	43, // 16: SortBagResponse.error_message:type_name -> TipInfoMessage
+	10, // 17: SortBagResponse.bag:type_name -> BagInfo
+	43, // 18: EquipItemResponse.error_message:type_name -> TipInfoMessage
+	10, // 19: EquipItemResponse.bag:type_name -> BagInfo
+	10, // 20: EquipItemResponse.equipment:type_name -> BagInfo
+	43, // 21: UnequipItemResponse.error_message:type_name -> TipInfoMessage
+	10, // 22: UnequipItemResponse.bag:type_name -> BagInfo
+	10, // 23: UnequipItemResponse.equipment:type_name -> BagInfo
+	43, // 24: GmGrantItemResponse.error_message:type_name -> TipInfoMessage
+	10, // 25: GmGrantItemResponse.bag:type_name -> BagInfo
+	43, // 26: EnhanceEquipResponse.error_message:type_name -> TipInfoMessage
+	10, // 27: EnhanceEquipResponse.bag:type_name -> BagInfo
+	10, // 28: EnhanceEquipResponse.equipment:type_name -> BagInfo
+	43, // 29: InlayGemResponse.error_message:type_name -> TipInfoMessage
+	10, // 30: InlayGemResponse.bag:type_name -> BagInfo
+	10, // 31: InlayGemResponse.equipment:type_name -> BagInfo
+	43, // 32: RemoveGemResponse.error_message:type_name -> TipInfoMessage
+	10, // 33: RemoveGemResponse.bag:type_name -> BagInfo
+	10, // 34: RemoveGemResponse.equipment:type_name -> BagInfo
+	43, // 35: RetrieveTemporaryItemsResponse.error_message:type_name -> TipInfoMessage
+	10, // 36: RetrieveTemporaryItemsResponse.bag:type_name -> BagInfo
+	10, // 37: RetrieveTemporaryItemsResponse.temporary:type_name -> BagInfo
+	29, // 38: EquipFixedAffixSlotInfo.selected:type_name -> EquipFixedAffixInfo
+	0,  // 39: EquipmentCraftChoice.operation:type_name -> EquipmentCraftChoice.Operation
+	6,  // 40: EquipmentCraftRecipe.product:type_name -> BagItemInfo
+	43, // 41: GetEquipmentCraftRulesResponse.error_message:type_name -> TipInfoMessage
+	34, // 42: GetEquipmentCraftRulesResponse.recipes:type_name -> EquipmentCraftRecipe
+	29, // 43: GetEquipmentCraftRulesResponse.affixes:type_name -> EquipFixedAffixInfo
+	32, // 44: EquipmentCraftPreview.choice:type_name -> EquipmentCraftChoice
+	6,  // 45: EquipmentCraftPreview.result:type_name -> BagItemInfo
+	33, // 46: EquipmentCraftPreview.material:type_name -> EquipmentCraftMaterial
+	32, // 47: PreviewEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
+	43, // 48: PreviewEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
+	37, // 49: PreviewEquipmentCraftResponse.preview:type_name -> EquipmentCraftPreview
+	32, // 50: CommitEquipmentCraftRequest.choice:type_name -> EquipmentCraftChoice
+	43, // 51: CommitEquipmentCraftResponse.error_message:type_name -> TipInfoMessage
+	1,  // 52: CommitEquipmentCraftResponse.outcome:type_name -> CommitEquipmentCraftResponse.Outcome
+	10, // 53: CommitEquipmentCraftResponse.bag:type_name -> BagInfo
+	10, // 54: CommitEquipmentCraftResponse.equipment:type_name -> BagInfo
+	11, // 55: SceneBagClientPlayer.GetBag:input_type -> GetBagRequest
+	13, // 56: SceneBagClientPlayer.SortBag:input_type -> SortBagRequest
+	15, // 57: SceneBagClientPlayer.EquipItem:input_type -> EquipItemRequest
+	17, // 58: SceneBagClientPlayer.UnequipItem:input_type -> UnequipItemRequest
+	19, // 59: SceneBagClientPlayer.GmGrantItem:input_type -> GmGrantItemRequest
+	21, // 60: SceneBagClientPlayer.EnhanceEquip:input_type -> EnhanceEquipRequest
+	23, // 61: SceneBagClientPlayer.InlayGem:input_type -> InlayGemRequest
+	25, // 62: SceneBagClientPlayer.RemoveGem:input_type -> RemoveGemRequest
+	27, // 63: SceneBagClientPlayer.RetrieveTemporaryItems:input_type -> RetrieveTemporaryItemsRequest
+	35, // 64: SceneBagClientPlayer.GetEquipmentCraftRules:input_type -> GetEquipmentCraftRulesRequest
+	38, // 65: SceneBagClientPlayer.PreviewEquipmentCraft:input_type -> PreviewEquipmentCraftRequest
+	40, // 66: SceneBagClientPlayer.CommitEquipmentCraft:input_type -> CommitEquipmentCraftRequest
+	12, // 67: SceneBagClientPlayer.GetBag:output_type -> GetBagResponse
+	14, // 68: SceneBagClientPlayer.SortBag:output_type -> SortBagResponse
+	16, // 69: SceneBagClientPlayer.EquipItem:output_type -> EquipItemResponse
+	18, // 70: SceneBagClientPlayer.UnequipItem:output_type -> UnequipItemResponse
+	20, // 71: SceneBagClientPlayer.GmGrantItem:output_type -> GmGrantItemResponse
+	22, // 72: SceneBagClientPlayer.EnhanceEquip:output_type -> EnhanceEquipResponse
+	24, // 73: SceneBagClientPlayer.InlayGem:output_type -> InlayGemResponse
+	26, // 74: SceneBagClientPlayer.RemoveGem:output_type -> RemoveGemResponse
+	28, // 75: SceneBagClientPlayer.RetrieveTemporaryItems:output_type -> RetrieveTemporaryItemsResponse
+	36, // 76: SceneBagClientPlayer.GetEquipmentCraftRules:output_type -> GetEquipmentCraftRulesResponse
+	39, // 77: SceneBagClientPlayer.PreviewEquipmentCraft:output_type -> PreviewEquipmentCraftResponse
+	41, // 78: SceneBagClientPlayer.CommitEquipmentCraft:output_type -> CommitEquipmentCraftResponse
+	67, // [67:79] is the sub-list for method output_type
+	55, // [55:67] is the sub-list for method input_type
+	55, // [55:55] is the sub-list for extension type_name
+	55, // [55:55] is the sub-list for extension extendee
+	0,  // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_bag_proto_init() }
@@ -2182,18 +3452,20 @@ func file_proto_scene_player_bag_proto_init() {
 	if File_proto_scene_player_bag_proto != nil {
 		return
 	}
+	file_proto_scene_player_bag_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_bag_proto_rawDesc), len(file_proto_scene_player_bag_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   27,
+			NumEnums:      2,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_scene_player_bag_proto_goTypes,
 		DependencyIndexes: file_proto_scene_player_bag_proto_depIdxs,
+		EnumInfos:         file_proto_scene_player_bag_proto_enumTypes,
 		MessageInfos:      file_proto_scene_player_bag_proto_msgTypes,
 	}.Build()
 	File_proto_scene_player_bag_proto = out.File

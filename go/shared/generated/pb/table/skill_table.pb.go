@@ -222,6 +222,16 @@ type SkillTable struct {
 	PassiveStat          string                   `protobuf:"bytes,44,opt,name=passive_stat,json=passiveStat,proto3" json:"passive_stat,omitempty"`
 	PassivePercent       float64                  `protobuf:"fixed64,45,opt,name=passive_percent,json=passivePercent,proto3" json:"passive_percent,omitempty"`
 	BuffPercent          float64                  `protobuf:"fixed64,46,opt,name=buff_percent,json=buffPercent,proto3" json:"buff_percent,omitempty"`
+	BattleModel          uint32                   `protobuf:"varint,47,opt,name=battle_model,json=battleModel,proto3" json:"battle_model,omitempty"`
+	CasterMask           uint32                   `protobuf:"varint,48,opt,name=caster_mask,json=casterMask,proto3" json:"caster_mask,omitempty"`
+	AbilityKind          uint32                   `protobuf:"varint,49,opt,name=ability_kind,json=abilityKind,proto3" json:"ability_kind,omitempty"`
+	PetMaxTargets        uint32                   `protobuf:"varint,50,opt,name=pet_max_targets,json=petMaxTargets,proto3" json:"pet_max_targets,omitempty"`
+	InitEffect           []uint32                 `protobuf:"varint,51,rep,packed,name=init_effect,json=initEffect,proto3" json:"init_effect,omitempty"`
+	PrototypeCode        string                   `protobuf:"bytes,52,opt,name=prototype_code,json=prototypeCode,proto3" json:"prototype_code,omitempty"`
+	MaxBattleUses        uint32                   `protobuf:"varint,53,opt,name=max_battle_uses,json=maxBattleUses,proto3" json:"max_battle_uses,omitempty"`
+	HealthCostMode       uint32                   `protobuf:"varint,54,opt,name=health_cost_mode,json=healthCostMode,proto3" json:"health_cost_mode,omitempty"`
+	ActionTags           uint32                   `protobuf:"varint,55,opt,name=action_tags,json=actionTags,proto3" json:"action_tags,omitempty"`
+	AllowDeadTarget      uint32                   `protobuf:"varint,56,opt,name=allow_dead_target,json=allowDeadTarget,proto3" json:"allow_dead_target,omitempty"`
 	RequiredItem         []*SkillrequiredItem     `protobuf:"bytes,21,rep,name=required_item,json=requiredItem,proto3" json:"required_item,omitempty"`
 	RequiredResource     []*SkillrequiredResource `protobuf:"bytes,22,rep,name=required_resource,json=requiredResource,proto3" json:"required_resource,omitempty"`
 	CostResource         []*SkillcostResource     `protobuf:"bytes,23,rep,name=cost_resource,json=costResource,proto3" json:"cost_resource,omitempty"`
@@ -560,6 +570,76 @@ func (x *SkillTable) GetBuffPercent() float64 {
 	return 0
 }
 
+func (x *SkillTable) GetBattleModel() uint32 {
+	if x != nil {
+		return x.BattleModel
+	}
+	return 0
+}
+
+func (x *SkillTable) GetCasterMask() uint32 {
+	if x != nil {
+		return x.CasterMask
+	}
+	return 0
+}
+
+func (x *SkillTable) GetAbilityKind() uint32 {
+	if x != nil {
+		return x.AbilityKind
+	}
+	return 0
+}
+
+func (x *SkillTable) GetPetMaxTargets() uint32 {
+	if x != nil {
+		return x.PetMaxTargets
+	}
+	return 0
+}
+
+func (x *SkillTable) GetInitEffect() []uint32 {
+	if x != nil {
+		return x.InitEffect
+	}
+	return nil
+}
+
+func (x *SkillTable) GetPrototypeCode() string {
+	if x != nil {
+		return x.PrototypeCode
+	}
+	return ""
+}
+
+func (x *SkillTable) GetMaxBattleUses() uint32 {
+	if x != nil {
+		return x.MaxBattleUses
+	}
+	return 0
+}
+
+func (x *SkillTable) GetHealthCostMode() uint32 {
+	if x != nil {
+		return x.HealthCostMode
+	}
+	return 0
+}
+
+func (x *SkillTable) GetActionTags() uint32 {
+	if x != nil {
+		return x.ActionTags
+	}
+	return 0
+}
+
+func (x *SkillTable) GetAllowDeadTarget() uint32 {
+	if x != nil {
+		return x.AllowDeadTarget
+	}
+	return 0
+}
+
 func (x *SkillTable) GetRequiredItem() []*SkillrequiredItem {
 	if x != nil {
 		return x.RequiredItem
@@ -638,7 +718,7 @@ const file_skill_table_proto_rawDesc = "" +
 	"\x17required_resource_value\x18\x02 \x01(\rR\x15requiredResourceValue\"l\n" +
 	"\x12Skillcost_resource\x12(\n" +
 	"\x10cost_resource_id\x18\x01 \x01(\rR\x0ecostResourceId\x12,\n" +
-	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\x84\r\n" +
+	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\xfa\x0f\n" +
 	"\n" +
 	"SkillTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1d\n" +
@@ -693,7 +773,20 @@ const file_skill_table_proto_rawDesc = "" +
 	"initiative\x12!\n" +
 	"\fpassive_stat\x18, \x01(\tR\vpassiveStat\x12'\n" +
 	"\x0fpassive_percent\x18- \x01(\x01R\x0epassivePercent\x12!\n" +
-	"\fbuff_percent\x18. \x01(\x01R\vbuffPercent\x128\n" +
+	"\fbuff_percent\x18. \x01(\x01R\vbuffPercent\x12!\n" +
+	"\fbattle_model\x18/ \x01(\rR\vbattleModel\x12\x1f\n" +
+	"\vcaster_mask\x180 \x01(\rR\n" +
+	"casterMask\x12!\n" +
+	"\fability_kind\x181 \x01(\rR\vabilityKind\x12&\n" +
+	"\x0fpet_max_targets\x182 \x01(\rR\rpetMaxTargets\x12\x1f\n" +
+	"\vinit_effect\x183 \x03(\rR\n" +
+	"initEffect\x12%\n" +
+	"\x0eprototype_code\x184 \x01(\tR\rprototypeCode\x12&\n" +
+	"\x0fmax_battle_uses\x185 \x01(\rR\rmaxBattleUses\x12(\n" +
+	"\x10health_cost_mode\x186 \x01(\rR\x0ehealthCostMode\x12\x1f\n" +
+	"\vaction_tags\x187 \x01(\rR\n" +
+	"actionTags\x12*\n" +
+	"\x11allow_dead_target\x188 \x01(\rR\x0fallowDeadTarget\x128\n" +
 	"\rrequired_item\x18\x15 \x03(\v2\x13.Skillrequired_itemR\frequiredItem\x12D\n" +
 	"\x11required_resource\x18\x16 \x03(\v2\x17.Skillrequired_resourceR\x10requiredResource\x128\n" +
 	"\rcost_resource\x18\x17 \x03(\v2\x13.Skillcost_resourceR\fcostResource\"1\n" +

@@ -33,10 +33,11 @@ type PetInstance struct {
 	// aptitude_min/aptitude_max 之间随机,之后不变(洗资质是二期)。
 	// 缺键按 10000 处理,老存档与改表都能自愈。
 	Aptitude      map[uint32]uint32 `protobuf:"bytes,6,rep,name=aptitude,proto3" json:"aptitude,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	Health        uint64            `protobuf:"varint,7,opt,name=health,proto3" json:"health,omitempty"`                                              // 当前气血(战斗结算回写,残血跨登录保留)
-	Mana          uint64            `protobuf:"varint,8,opt,name=mana,proto3" json:"mana,omitempty"`                                                  // 当前法力
-	CreatedAt     uint64            `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                       // 获得时间(Unix 秒)
-	SkillTableIds []uint32          `protobuf:"varint,10,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"` // 宝宝技能(SkillTable id),核心线来自 PetTable
+	Health        uint64            `protobuf:"varint,7,opt,name=health,proto3" json:"health,omitempty"`                                                                                                       // 当前气血(战斗结算回写,残血跨登录保留)
+	Mana          uint64            `protobuf:"varint,8,opt,name=mana,proto3" json:"mana,omitempty"`                                                                                                           // 当前法力
+	CreatedAt     uint64            `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                                                                                // 获得时间(Unix 秒)
+	SkillTableIds []uint32          `protobuf:"varint,10,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`                                                          // 宝宝技能(SkillTable id),核心线来自 PetTable
+	SkillRanks    map[uint32]uint32 `protobuf:"bytes,11,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 公共技能原型的已学等级，由 PetSystem 唯一写入。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -141,13 +142,25 @@ func (x *PetInstance) GetSkillTableIds() []uint32 {
 	return nil
 }
 
+func (x *PetInstance) GetSkillRanks() map[uint32]uint32 {
+	if x != nil {
+		return x.SkillRanks
+	}
+	return nil
+}
+
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 type PlayerPetComp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pets          []*PetInstance         `protobuf:"bytes,1,rep,name=pets,proto3" json:"pets,omitempty"`
-	ActivePetId   uint64                 `protobuf:"varint,2,opt,name=active_pet_id,json=activePetId,proto3" json:"active_pet_id,omitempty"` // 出战中的宝宝 pet_id;0 = 未出战
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Pets        []*PetInstance         `protobuf:"bytes,1,rep,name=pets,proto3" json:"pets,omitempty"`
+	ActivePetId uint64                 `protobuf:"varint,2,opt,name=active_pet_id,json=activePetId,proto3" json:"active_pet_id,omitempty"` // 出战中的宝宝 pet_id;0 = 未出战
+	// 商店购买的单调序号与最近成功回执，和扣款、宠物实例一起存盘。
+	LastPurchaseSequence   uint64 `protobuf:"varint,3,opt,name=last_purchase_sequence,json=lastPurchaseSequence,proto3" json:"last_purchase_sequence,omitempty"`
+	LastPurchasePetTableId uint32 `protobuf:"varint,4,opt,name=last_purchase_pet_table_id,json=lastPurchasePetTableId,proto3" json:"last_purchase_pet_table_id,omitempty"`
+	LastPurchasePetId      uint64 `protobuf:"varint,5,opt,name=last_purchase_pet_id,json=lastPurchasePetId,proto3" json:"last_purchase_pet_id,omitempty"`
+	LastPurchasePriceGold  uint64 `protobuf:"varint,6,opt,name=last_purchase_price_gold,json=lastPurchasePriceGold,proto3" json:"last_purchase_price_gold,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PlayerPetComp) Reset() {
@@ -194,11 +207,39 @@ func (x *PlayerPetComp) GetActivePetId() uint64 {
 	return 0
 }
 
+func (x *PlayerPetComp) GetLastPurchaseSequence() uint64 {
+	if x != nil {
+		return x.LastPurchaseSequence
+	}
+	return 0
+}
+
+func (x *PlayerPetComp) GetLastPurchasePetTableId() uint32 {
+	if x != nil {
+		return x.LastPurchasePetTableId
+	}
+	return 0
+}
+
+func (x *PlayerPetComp) GetLastPurchasePetId() uint64 {
+	if x != nil {
+		return x.LastPurchasePetId
+	}
+	return 0
+}
+
+func (x *PlayerPetComp) GetLastPurchasePriceGold() uint64 {
+	if x != nil {
+		return x.LastPurchasePriceGold
+	}
+	return 0
+}
+
 var File_proto_common_component_player_pet_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\n" +
-	",proto/common/component/player_pet_comp.proto\"\xd1\x03\n" +
+	",proto/common/component/player_pet_comp.proto\"\xcf\x04\n" +
 	"\vPetInstance\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12 \n" +
 	"\fpet_table_id\x18\x02 \x01(\rR\n" +
@@ -212,16 +253,25 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\t \x01(\x04R\tcreatedAt\x12&\n" +
 	"\x0fskill_table_ids\x18\n" +
-	" \x03(\rR\rskillTableIds\x1a<\n" +
+	" \x03(\rR\rskillTableIds\x12=\n" +
+	"\vskill_ranks\x18\v \x03(\v2\x1c.PetInstance.SkillRanksEntryR\n" +
+	"skillRanks\x1a<\n" +
 	"\x0eAllocatedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a;\n" +
 	"\rAptitudeEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"U\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
+	"\x0fSkillRanksEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xb1\x02\n" +
 	"\rPlayerPetComp\x12 \n" +
 	"\x04pets\x18\x01 \x03(\v2\f.PetInstanceR\x04pets\x12\"\n" +
-	"\ractive_pet_id\x18\x02 \x01(\x04R\vactivePetIdB\x18Z\x16proto/common/componentb\x06proto3"
+	"\ractive_pet_id\x18\x02 \x01(\x04R\vactivePetId\x124\n" +
+	"\x16last_purchase_sequence\x18\x03 \x01(\x04R\x14lastPurchaseSequence\x12:\n" +
+	"\x1alast_purchase_pet_table_id\x18\x04 \x01(\rR\x16lastPurchasePetTableId\x12/\n" +
+	"\x14last_purchase_pet_id\x18\x05 \x01(\x04R\x11lastPurchasePetId\x127\n" +
+	"\x18last_purchase_price_gold\x18\x06 \x01(\x04R\x15lastPurchasePriceGoldB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_pet_comp_proto_rawDescOnce sync.Once
@@ -235,22 +285,24 @@ func file_proto_common_component_player_pet_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_pet_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_common_component_player_pet_comp_proto_goTypes = []any{
 	(*PetInstance)(nil),   // 0: PetInstance
 	(*PlayerPetComp)(nil), // 1: PlayerPetComp
 	nil,                   // 2: PetInstance.AllocatedEntry
 	nil,                   // 3: PetInstance.AptitudeEntry
+	nil,                   // 4: PetInstance.SkillRanksEntry
 }
 var file_proto_common_component_player_pet_comp_proto_depIdxs = []int32{
 	2, // 0: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
 	3, // 1: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
-	0, // 2: PlayerPetComp.pets:type_name -> PetInstance
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 2: PetInstance.skill_ranks:type_name -> PetInstance.SkillRanksEntry
+	0, // 3: PlayerPetComp.pets:type_name -> PetInstance
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_pet_comp_proto_init() }
@@ -264,7 +316,7 @@ func file_proto_common_component_player_pet_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_pet_comp_proto_rawDesc), len(file_proto_common_component_player_pet_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

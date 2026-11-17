@@ -132,4 +132,16 @@ public interface PetTableOrBuilder extends
    * @return The skill at the given index.
    */
   int getSkill(int index);
+
+  /**
+   * <code>uint64 shop_price_gold = 14;</code>
+   * @return The shopPriceGold.
+   */
+  long getShopPriceGold();
+
+  /**
+   * <code>uint32 acquisition_tier = 15;</code>
+   * @return The acquisitionTier.
+   */
+  int getAcquisitionTier();
 }

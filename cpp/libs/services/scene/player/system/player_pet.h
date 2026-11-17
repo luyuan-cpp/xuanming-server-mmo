@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
+#include <google/protobuf/repeated_field.h>
 
 #include <entt/src/entt/entity/entity.hpp>
 
@@ -10,6 +12,10 @@ class PetListInfo;
 class PetInstance;
 class BattlePetSnapshot;
 class BattlePetSettlementData;
+class GetPetShopResponse;
+class ListSkillsResponse;
+class UpgradeSkillRequest;
+class UpgradeSkillResponse;
 
 // 宝宝(宠物)系统,设计文档 docs/design/player-pet.md。
 //
@@ -48,7 +54,7 @@ public:
 	//   kLevelChanged 宝宝升级(主人升级带动):上限抬高按绝对增量补当前值,降级只夹;
 	//   其它:按比例保持,一升一降往返不净得(不能把加点/洗点变成宝宝的治疗手段;
 	//         极低血量因"至少留 1"有上界的回升例外,见 attributerules::RescaleCurrent)。
-	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kReset };
+	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kReset, kSkillChanged };
 
 	// 重算全部宝宝(同步等级 + 处理当前 HP/MP);不落库,不改写已分配点。
 	// 只有 kLevelChanged 会因主人等级低于出战宝宝而取消出战;kLoad 不写 active_pet_id
@@ -59,6 +65,9 @@ public:
 	// 返回值:kSuccess;实体无效 kEntityIsNull;缺 PlayerPetComp(加载链路故障)kServiceUnavailable。
 	// 非 kSuccess 时 list 是清空的 —— 调用方必须回错误码,不能把空列表当成功发给客户端。只读,不改变组件集合。
 	static uint32_t BuildList(entt::entity player, PetListInfo& list);
+	// 宠物技能的唯一写入口；只允许主人操作，沿用技能修习的等级比较与银两路径。
+	static uint32_t BuildSkillBook(entt::entity player, uint64_t petId, ListSkillsResponse& response);
+	static void UpgradeSkill(entt::entity player, const UpgradeSkillRequest& request, UpgradeSkillResponse& response);
 
 	// 出战 / 收回。出战同时只能有一只(PetRule.max_pets 管的是携带量,不是出战量)。
 	static uint32_t Summon(entt::entity player, uint64_t petId);
@@ -83,6 +92,18 @@ public:
 	// GM / 未来的捕捉与购买共用的发放入口:铸 pet_id、掷资质、落 PlayerPetComp。
 	// petIdOut 仅在返回 kSuccess 时有效。
 	static uint32_t GrantPet(entt::entity player, uint32_t petTableId, uint64_t& petIdOut);
+
+	// 普通玩家商店：序号来自只读列表，最近一次成功请求原样重试不重复扣费。
+	static uint32_t BuildShop(entt::entity player, GetPetShopResponse& response);
+	static uint32_t BuyPet(entt::entity player, uint32_t petTableId, uint64_t sequence,
+		uint64_t priceGold, uint64_t& petIdOut);
+	static uint64_t NextPurchaseSequence(entt::entity player);
+
+	// 结算候选只预留号源和掷资质，调用方在整笔结算校验后同步提交。
+	static uint32_t AvailableCaptureSlots(entt::entity player);
+	static uint32_t PrepareCapturedPets(entt::entity player,
+		const google::protobuf::RepeatedField<uint32_t>& petTableIds, std::vector<PetInstance>& out);
+	static void CommitCapturedPets(entt::entity player, const std::vector<PetInstance>& pets);
 
 	// —— 交易资产原语(聚宝斋 P2;通用资产通道 docs/design/guild-phase2/04-asset-channel.md §4.9)——
 	//

@@ -71,4 +71,8 @@ struct FCfgDungeonRow : public FTableRowBase
 	/** FK -> Monster.id(重复列,占 3 格)。源表 opts 写的是 fk:Monster。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
 	TArray<int32> monster;
+
+	/** 仅普通野外遭遇档开启捕捉，活动与竞技仍拒绝。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
+	int32 allow_pet_capture = 0;
 };

@@ -51,12 +51,14 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	DungeonTable = NewObject<UDungeonTable>(this);
 	EquipAffixPoolTable = NewObject<UEquipAffixPoolTable>(this);
 	EquipAffixRuleTable = NewObject<UEquipAffixRuleTable>(this);
+	EquipArtifactTable = NewObject<UEquipArtifactTable>(this);
 	EquipAttributeTable = NewObject<UEquipAttributeTable>(this);
 	EquipAttributeCapTable = NewObject<UEquipAttributeCapTable>(this);
 	EquipEnhanceTable = NewObject<UEquipEnhanceTable>(this);
 	EquipGemTable = NewObject<UEquipGemTable>(this);
 	EquipGemSocketTable = NewObject<UEquipGemSocketTable>(this);
 	EquipSlotTable = NewObject<UEquipSlotTable>(this);
+	EquipV1AffixTable = NewObject<UEquipV1AffixTable>(this);
 	GlobalVariableTable = NewObject<UGlobalVariableTable>(this);
 	GuildActivityTable = NewObject<UGuildActivityTable>(this);
 	GuildDonateTable = NewObject<UGuildDonateTable>(this);
@@ -104,12 +106,14 @@ void UConfigSubsystem::Deinitialize()
 	DungeonTable = nullptr;
 	EquipAffixPoolTable = nullptr;
 	EquipAffixRuleTable = nullptr;
+	EquipArtifactTable = nullptr;
 	EquipAttributeTable = nullptr;
 	EquipAttributeCapTable = nullptr;
 	EquipEnhanceTable = nullptr;
 	EquipGemTable = nullptr;
 	EquipGemSocketTable = nullptr;
 	EquipSlotTable = nullptr;
+	EquipV1AffixTable = nullptr;
 	GlobalVariableTable = nullptr;
 	GuildActivityTable = nullptr;
 	GuildDonateTable = nullptr;
@@ -162,12 +166,14 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UDungeonTable::FileName(),
 		UEquipAffixPoolTable::FileName(),
 		UEquipAffixRuleTable::FileName(),
+		UEquipArtifactTable::FileName(),
 		UEquipAttributeTable::FileName(),
 		UEquipAttributeCapTable::FileName(),
 		UEquipEnhanceTable::FileName(),
 		UEquipGemTable::FileName(),
 		UEquipGemSocketTable::FileName(),
 		UEquipSlotTable::FileName(),
+		UEquipV1AffixTable::FileName(),
 		UGlobalVariableTable::FileName(),
 		UGuildActivityTable::FileName(),
 		UGuildDonateTable::FileName(),
@@ -456,6 +462,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (EquipArtifactTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipArtifact] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!EquipArtifactTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (EquipAttributeTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[EquipAttribute] 管理器未创建"));
@@ -532,6 +552,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!EquipSlotTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (EquipV1AffixTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipV1Affix] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!EquipV1AffixTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1284,6 +1318,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAnySwapped = true;
 	}
 	JsonText.Reset();
+	if (EquipArtifactTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipArtifact] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UEquipArtifactTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipArtifact] 取不到 %s"), UEquipArtifactTable::FileName());
+		bAllOk = false;
+	}
+	else if (!EquipArtifactTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
 	if (EquipAttributeTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[EquipAttribute] 管理器未创建"));
@@ -1395,6 +1449,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!EquipSlotTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (EquipV1AffixTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipV1Affix] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UEquipV1AffixTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[EquipV1Affix] 取不到 %s"), UEquipV1AffixTable::FileName());
+		bAllOk = false;
+	}
+	else if (!EquipV1AffixTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

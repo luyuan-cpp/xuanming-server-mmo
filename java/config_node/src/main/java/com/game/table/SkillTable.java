@@ -37,6 +37,8 @@ private static final long serialVersionUID = 0L;
     iconKey_ = "";
     category_ = "";
     passiveStat_ = "";
+    initEffect_ = emptyIntList();
+    prototypeCode_ = "";
     requiredItem_ = java.util.Collections.emptyList();
     requiredResource_ = java.util.Collections.emptyList();
     costResource_ = java.util.Collections.emptyList();
@@ -758,6 +760,163 @@ private static final long serialVersionUID = 0L;
     return buffPercent_;
   }
 
+  public static final int BATTLE_MODEL_FIELD_NUMBER = 47;
+  private int battleModel_ = 0;
+  /**
+   * <code>uint32 battle_model = 47;</code>
+   * @return The battleModel.
+   */
+  @java.lang.Override
+  public int getBattleModel() {
+    return battleModel_;
+  }
+
+  public static final int CASTER_MASK_FIELD_NUMBER = 48;
+  private int casterMask_ = 0;
+  /**
+   * <code>uint32 caster_mask = 48;</code>
+   * @return The casterMask.
+   */
+  @java.lang.Override
+  public int getCasterMask() {
+    return casterMask_;
+  }
+
+  public static final int ABILITY_KIND_FIELD_NUMBER = 49;
+  private int abilityKind_ = 0;
+  /**
+   * <code>uint32 ability_kind = 49;</code>
+   * @return The abilityKind.
+   */
+  @java.lang.Override
+  public int getAbilityKind() {
+    return abilityKind_;
+  }
+
+  public static final int PET_MAX_TARGETS_FIELD_NUMBER = 50;
+  private int petMaxTargets_ = 0;
+  /**
+   * <code>uint32 pet_max_targets = 50;</code>
+   * @return The petMaxTargets.
+   */
+  @java.lang.Override
+  public int getPetMaxTargets() {
+    return petMaxTargets_;
+  }
+
+  public static final int INIT_EFFECT_FIELD_NUMBER = 51;
+  @SuppressWarnings("serial")
+  private com.google.protobuf.Internal.IntList initEffect_ =
+      emptyIntList();
+  /**
+   * <code>repeated uint32 init_effect = 51;</code>
+   * @return A list containing the initEffect.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.Integer>
+      getInitEffectList() {
+    return initEffect_;
+  }
+  /**
+   * <code>repeated uint32 init_effect = 51;</code>
+   * @return The count of initEffect.
+   */
+  public int getInitEffectCount() {
+    return initEffect_.size();
+  }
+  /**
+   * <code>repeated uint32 init_effect = 51;</code>
+   * @param index The index of the element to return.
+   * @return The initEffect at the given index.
+   */
+  public int getInitEffect(int index) {
+    return initEffect_.getInt(index);
+  }
+  private int initEffectMemoizedSerializedSize = -1;
+
+  public static final int PROTOTYPE_CODE_FIELD_NUMBER = 52;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object prototypeCode_ = "";
+  /**
+   * <code>string prototype_code = 52;</code>
+   * @return The prototypeCode.
+   */
+  @java.lang.Override
+  public java.lang.String getPrototypeCode() {
+    java.lang.Object ref = prototypeCode_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      prototypeCode_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string prototype_code = 52;</code>
+   * @return The bytes for prototypeCode.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPrototypeCodeBytes() {
+    java.lang.Object ref = prototypeCode_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      prototypeCode_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int MAX_BATTLE_USES_FIELD_NUMBER = 53;
+  private int maxBattleUses_ = 0;
+  /**
+   * <code>uint32 max_battle_uses = 53;</code>
+   * @return The maxBattleUses.
+   */
+  @java.lang.Override
+  public int getMaxBattleUses() {
+    return maxBattleUses_;
+  }
+
+  public static final int HEALTH_COST_MODE_FIELD_NUMBER = 54;
+  private int healthCostMode_ = 0;
+  /**
+   * <code>uint32 health_cost_mode = 54;</code>
+   * @return The healthCostMode.
+   */
+  @java.lang.Override
+  public int getHealthCostMode() {
+    return healthCostMode_;
+  }
+
+  public static final int ACTION_TAGS_FIELD_NUMBER = 55;
+  private int actionTags_ = 0;
+  /**
+   * <code>uint32 action_tags = 55;</code>
+   * @return The actionTags.
+   */
+  @java.lang.Override
+  public int getActionTags() {
+    return actionTags_;
+  }
+
+  public static final int ALLOW_DEAD_TARGET_FIELD_NUMBER = 56;
+  private int allowDeadTarget_ = 0;
+  /**
+   * <code>uint32 allow_dead_target = 56;</code>
+   * @return The allowDeadTarget.
+   */
+  @java.lang.Override
+  public int getAllowDeadTarget() {
+    return allowDeadTarget_;
+  }
+
   public static final int REQUIRED_ITEM_FIELD_NUMBER = 21;
   @SuppressWarnings("serial")
   private java.util.List<com.game.table.Skillrequired_item> requiredItem_;
@@ -1046,6 +1205,40 @@ private static final long serialVersionUID = 0L;
     if (java.lang.Double.doubleToRawLongBits(buffPercent_) != 0) {
       output.writeDouble(46, buffPercent_);
     }
+    if (battleModel_ != 0) {
+      output.writeUInt32(47, battleModel_);
+    }
+    if (casterMask_ != 0) {
+      output.writeUInt32(48, casterMask_);
+    }
+    if (abilityKind_ != 0) {
+      output.writeUInt32(49, abilityKind_);
+    }
+    if (petMaxTargets_ != 0) {
+      output.writeUInt32(50, petMaxTargets_);
+    }
+    if (getInitEffectList().size() > 0) {
+      output.writeUInt32NoTag(410);
+      output.writeUInt32NoTag(initEffectMemoizedSerializedSize);
+    }
+    for (int i = 0; i < initEffect_.size(); i++) {
+      output.writeUInt32NoTag(initEffect_.getInt(i));
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(prototypeCode_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 52, prototypeCode_);
+    }
+    if (maxBattleUses_ != 0) {
+      output.writeUInt32(53, maxBattleUses_);
+    }
+    if (healthCostMode_ != 0) {
+      output.writeUInt32(54, healthCostMode_);
+    }
+    if (actionTags_ != 0) {
+      output.writeUInt32(55, actionTags_);
+    }
+    if (allowDeadTarget_ != 0) {
+      output.writeUInt32(56, allowDeadTarget_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -1277,6 +1470,55 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeDoubleSize(46, buffPercent_);
     }
+    if (battleModel_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(47, battleModel_);
+    }
+    if (casterMask_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(48, casterMask_);
+    }
+    if (abilityKind_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(49, abilityKind_);
+    }
+    if (petMaxTargets_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(50, petMaxTargets_);
+    }
+    {
+      int dataSize = 0;
+      for (int i = 0; i < initEffect_.size(); i++) {
+        dataSize += com.google.protobuf.CodedOutputStream
+          .computeUInt32SizeNoTag(initEffect_.getInt(i));
+      }
+      size += dataSize;
+      if (!getInitEffectList().isEmpty()) {
+        size += 2;
+        size += com.google.protobuf.CodedOutputStream
+            .computeInt32SizeNoTag(dataSize);
+      }
+      initEffectMemoizedSerializedSize = dataSize;
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(prototypeCode_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(52, prototypeCode_);
+    }
+    if (maxBattleUses_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(53, maxBattleUses_);
+    }
+    if (healthCostMode_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(54, healthCostMode_);
+    }
+    if (actionTags_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(55, actionTags_);
+    }
+    if (allowDeadTarget_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(56, allowDeadTarget_);
+    }
     return size;
   }
   @java.lang.Override
@@ -1402,6 +1644,26 @@ private static final long serialVersionUID = 0L;
     if (java.lang.Double.doubleToLongBits(getBuffPercent())
         != java.lang.Double.doubleToLongBits(
             other.getBuffPercent())) return false;
+    if (getBattleModel()
+        != other.getBattleModel()) return false;
+    if (getCasterMask()
+        != other.getCasterMask()) return false;
+    if (getAbilityKind()
+        != other.getAbilityKind()) return false;
+    if (getPetMaxTargets()
+        != other.getPetMaxTargets()) return false;
+    if (!getInitEffectList()
+        .equals(other.getInitEffectList())) return false;
+    if (!getPrototypeCode()
+        .equals(other.getPrototypeCode())) return false;
+    if (getMaxBattleUses()
+        != other.getMaxBattleUses()) return false;
+    if (getHealthCostMode()
+        != other.getHealthCostMode()) return false;
+    if (getActionTags()
+        != other.getActionTags()) return false;
+    if (getAllowDeadTarget()
+        != other.getAllowDeadTarget()) return false;
     if (!getRequiredItemList()
         .equals(other.getRequiredItemList())) return false;
     if (!getRequiredResourceList()
@@ -1525,6 +1787,28 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + BUFF_PERCENT_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         java.lang.Double.doubleToLongBits(getBuffPercent()));
+    hash = (37 * hash) + BATTLE_MODEL_FIELD_NUMBER;
+    hash = (53 * hash) + getBattleModel();
+    hash = (37 * hash) + CASTER_MASK_FIELD_NUMBER;
+    hash = (53 * hash) + getCasterMask();
+    hash = (37 * hash) + ABILITY_KIND_FIELD_NUMBER;
+    hash = (53 * hash) + getAbilityKind();
+    hash = (37 * hash) + PET_MAX_TARGETS_FIELD_NUMBER;
+    hash = (53 * hash) + getPetMaxTargets();
+    if (getInitEffectCount() > 0) {
+      hash = (37 * hash) + INIT_EFFECT_FIELD_NUMBER;
+      hash = (53 * hash) + getInitEffectList().hashCode();
+    }
+    hash = (37 * hash) + PROTOTYPE_CODE_FIELD_NUMBER;
+    hash = (53 * hash) + getPrototypeCode().hashCode();
+    hash = (37 * hash) + MAX_BATTLE_USES_FIELD_NUMBER;
+    hash = (53 * hash) + getMaxBattleUses();
+    hash = (37 * hash) + HEALTH_COST_MODE_FIELD_NUMBER;
+    hash = (53 * hash) + getHealthCostMode();
+    hash = (37 * hash) + ACTION_TAGS_FIELD_NUMBER;
+    hash = (53 * hash) + getActionTags();
+    hash = (37 * hash) + ALLOW_DEAD_TARGET_FIELD_NUMBER;
+    hash = (53 * hash) + getAllowDeadTarget();
     if (getRequiredItemCount() > 0) {
       hash = (37 * hash) + REQUIRED_ITEM_FIELD_NUMBER;
       hash = (53 * hash) + getRequiredItemList().hashCode();
@@ -1712,27 +1996,37 @@ private static final long serialVersionUID = 0L;
       passiveStat_ = "";
       passivePercent_ = 0D;
       buffPercent_ = 0D;
+      battleModel_ = 0;
+      casterMask_ = 0;
+      abilityKind_ = 0;
+      petMaxTargets_ = 0;
+      initEffect_ = emptyIntList();
+      prototypeCode_ = "";
+      maxBattleUses_ = 0;
+      healthCostMode_ = 0;
+      actionTags_ = 0;
+      allowDeadTarget_ = 0;
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
       } else {
         requiredItem_ = null;
         requiredItemBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x00000800);
+      bitField1_ = (bitField1_ & ~0x00200000);
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
       } else {
         requiredResource_ = null;
         requiredResourceBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x00001000);
+      bitField1_ = (bitField1_ & ~0x00400000);
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
       } else {
         costResource_ = null;
         costResourceBuilder_.clear();
       }
-      bitField1_ = (bitField1_ & ~0x00002000);
+      bitField1_ = (bitField1_ & ~0x00800000);
       return this;
     }
 
@@ -1768,27 +2062,27 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartialRepeatedFields(com.game.table.SkillTable result) {
       if (requiredItemBuilder_ == null) {
-        if (((bitField1_ & 0x00000800) != 0)) {
+        if (((bitField1_ & 0x00200000) != 0)) {
           requiredItem_ = java.util.Collections.unmodifiableList(requiredItem_);
-          bitField1_ = (bitField1_ & ~0x00000800);
+          bitField1_ = (bitField1_ & ~0x00200000);
         }
         result.requiredItem_ = requiredItem_;
       } else {
         result.requiredItem_ = requiredItemBuilder_.build();
       }
       if (requiredResourceBuilder_ == null) {
-        if (((bitField1_ & 0x00001000) != 0)) {
+        if (((bitField1_ & 0x00400000) != 0)) {
           requiredResource_ = java.util.Collections.unmodifiableList(requiredResource_);
-          bitField1_ = (bitField1_ & ~0x00001000);
+          bitField1_ = (bitField1_ & ~0x00400000);
         }
         result.requiredResource_ = requiredResource_;
       } else {
         result.requiredResource_ = requiredResourceBuilder_.build();
       }
       if (costResourceBuilder_ == null) {
-        if (((bitField1_ & 0x00002000) != 0)) {
+        if (((bitField1_ & 0x00800000) != 0)) {
           costResource_ = java.util.Collections.unmodifiableList(costResource_);
-          bitField1_ = (bitField1_ & ~0x00002000);
+          bitField1_ = (bitField1_ & ~0x00800000);
         }
         result.costResource_ = costResource_;
       } else {
@@ -1933,6 +2227,37 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField1_ & 0x00000400) != 0)) {
         result.buffPercent_ = buffPercent_;
+      }
+      if (((from_bitField1_ & 0x00000800) != 0)) {
+        result.battleModel_ = battleModel_;
+      }
+      if (((from_bitField1_ & 0x00001000) != 0)) {
+        result.casterMask_ = casterMask_;
+      }
+      if (((from_bitField1_ & 0x00002000) != 0)) {
+        result.abilityKind_ = abilityKind_;
+      }
+      if (((from_bitField1_ & 0x00004000) != 0)) {
+        result.petMaxTargets_ = petMaxTargets_;
+      }
+      if (((from_bitField1_ & 0x00008000) != 0)) {
+        initEffect_.makeImmutable();
+        result.initEffect_ = initEffect_;
+      }
+      if (((from_bitField1_ & 0x00010000) != 0)) {
+        result.prototypeCode_ = prototypeCode_;
+      }
+      if (((from_bitField1_ & 0x00020000) != 0)) {
+        result.maxBattleUses_ = maxBattleUses_;
+      }
+      if (((from_bitField1_ & 0x00040000) != 0)) {
+        result.healthCostMode_ = healthCostMode_;
+      }
+      if (((from_bitField1_ & 0x00080000) != 0)) {
+        result.actionTags_ = actionTags_;
+      }
+      if (((from_bitField1_ & 0x00100000) != 0)) {
+        result.allowDeadTarget_ = allowDeadTarget_;
       }
     }
 
@@ -2113,11 +2438,51 @@ private static final long serialVersionUID = 0L;
       if (java.lang.Double.doubleToRawLongBits(other.getBuffPercent()) != 0) {
         setBuffPercent(other.getBuffPercent());
       }
+      if (other.getBattleModel() != 0) {
+        setBattleModel(other.getBattleModel());
+      }
+      if (other.getCasterMask() != 0) {
+        setCasterMask(other.getCasterMask());
+      }
+      if (other.getAbilityKind() != 0) {
+        setAbilityKind(other.getAbilityKind());
+      }
+      if (other.getPetMaxTargets() != 0) {
+        setPetMaxTargets(other.getPetMaxTargets());
+      }
+      if (!other.initEffect_.isEmpty()) {
+        if (initEffect_.isEmpty()) {
+          initEffect_ = other.initEffect_;
+          initEffect_.makeImmutable();
+          bitField1_ |= 0x00008000;
+        } else {
+          ensureInitEffectIsMutable();
+          initEffect_.addAll(other.initEffect_);
+        }
+        onChanged();
+      }
+      if (!other.getPrototypeCode().isEmpty()) {
+        prototypeCode_ = other.prototypeCode_;
+        bitField1_ |= 0x00010000;
+        onChanged();
+      }
+      if (other.getMaxBattleUses() != 0) {
+        setMaxBattleUses(other.getMaxBattleUses());
+      }
+      if (other.getHealthCostMode() != 0) {
+        setHealthCostMode(other.getHealthCostMode());
+      }
+      if (other.getActionTags() != 0) {
+        setActionTags(other.getActionTags());
+      }
+      if (other.getAllowDeadTarget() != 0) {
+        setAllowDeadTarget(other.getAllowDeadTarget());
+      }
       if (requiredItemBuilder_ == null) {
         if (!other.requiredItem_.isEmpty()) {
           if (requiredItem_.isEmpty()) {
             requiredItem_ = other.requiredItem_;
-            bitField1_ = (bitField1_ & ~0x00000800);
+            bitField1_ = (bitField1_ & ~0x00200000);
           } else {
             ensureRequiredItemIsMutable();
             requiredItem_.addAll(other.requiredItem_);
@@ -2130,7 +2495,7 @@ private static final long serialVersionUID = 0L;
             requiredItemBuilder_.dispose();
             requiredItemBuilder_ = null;
             requiredItem_ = other.requiredItem_;
-            bitField1_ = (bitField1_ & ~0x00000800);
+            bitField1_ = (bitField1_ & ~0x00200000);
             requiredItemBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredItemFieldBuilder() : null;
@@ -2143,7 +2508,7 @@ private static final long serialVersionUID = 0L;
         if (!other.requiredResource_.isEmpty()) {
           if (requiredResource_.isEmpty()) {
             requiredResource_ = other.requiredResource_;
-            bitField1_ = (bitField1_ & ~0x00001000);
+            bitField1_ = (bitField1_ & ~0x00400000);
           } else {
             ensureRequiredResourceIsMutable();
             requiredResource_.addAll(other.requiredResource_);
@@ -2156,7 +2521,7 @@ private static final long serialVersionUID = 0L;
             requiredResourceBuilder_.dispose();
             requiredResourceBuilder_ = null;
             requiredResource_ = other.requiredResource_;
-            bitField1_ = (bitField1_ & ~0x00001000);
+            bitField1_ = (bitField1_ & ~0x00400000);
             requiredResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredResourceFieldBuilder() : null;
@@ -2169,7 +2534,7 @@ private static final long serialVersionUID = 0L;
         if (!other.costResource_.isEmpty()) {
           if (costResource_.isEmpty()) {
             costResource_ = other.costResource_;
-            bitField1_ = (bitField1_ & ~0x00002000);
+            bitField1_ = (bitField1_ & ~0x00800000);
           } else {
             ensureCostResourceIsMutable();
             costResource_.addAll(other.costResource_);
@@ -2182,7 +2547,7 @@ private static final long serialVersionUID = 0L;
             costResourceBuilder_.dispose();
             costResourceBuilder_ = null;
             costResource_ = other.costResource_;
-            bitField1_ = (bitField1_ & ~0x00002000);
+            bitField1_ = (bitField1_ & ~0x00800000);
             costResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetCostResourceFieldBuilder() : null;
@@ -2504,6 +2869,67 @@ private static final long serialVersionUID = 0L;
               bitField1_ |= 0x00000400;
               break;
             } // case 369
+            case 376: {
+              battleModel_ = input.readUInt32();
+              bitField1_ |= 0x00000800;
+              break;
+            } // case 376
+            case 384: {
+              casterMask_ = input.readUInt32();
+              bitField1_ |= 0x00001000;
+              break;
+            } // case 384
+            case 392: {
+              abilityKind_ = input.readUInt32();
+              bitField1_ |= 0x00002000;
+              break;
+            } // case 392
+            case 400: {
+              petMaxTargets_ = input.readUInt32();
+              bitField1_ |= 0x00004000;
+              break;
+            } // case 400
+            case 408: {
+              int v = input.readUInt32();
+              ensureInitEffectIsMutable();
+              initEffect_.addInt(v);
+              break;
+            } // case 408
+            case 410: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              ensureInitEffectIsMutable();
+              while (input.getBytesUntilLimit() > 0) {
+                initEffect_.addInt(input.readUInt32());
+              }
+              input.popLimit(limit);
+              break;
+            } // case 410
+            case 418: {
+              prototypeCode_ = input.readStringRequireUtf8();
+              bitField1_ |= 0x00010000;
+              break;
+            } // case 418
+            case 424: {
+              maxBattleUses_ = input.readUInt32();
+              bitField1_ |= 0x00020000;
+              break;
+            } // case 424
+            case 432: {
+              healthCostMode_ = input.readUInt32();
+              bitField1_ |= 0x00040000;
+              break;
+            } // case 432
+            case 440: {
+              actionTags_ = input.readUInt32();
+              bitField1_ |= 0x00080000;
+              break;
+            } // case 440
+            case 448: {
+              allowDeadTarget_ = input.readUInt32();
+              bitField1_ |= 0x00100000;
+              break;
+            } // case 448
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -4294,12 +4720,424 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private int battleModel_ ;
+    /**
+     * <code>uint32 battle_model = 47;</code>
+     * @return The battleModel.
+     */
+    @java.lang.Override
+    public int getBattleModel() {
+      return battleModel_;
+    }
+    /**
+     * <code>uint32 battle_model = 47;</code>
+     * @param value The battleModel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBattleModel(int value) {
+
+      battleModel_ = value;
+      bitField1_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 battle_model = 47;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBattleModel() {
+      bitField1_ = (bitField1_ & ~0x00000800);
+      battleModel_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int casterMask_ ;
+    /**
+     * <code>uint32 caster_mask = 48;</code>
+     * @return The casterMask.
+     */
+    @java.lang.Override
+    public int getCasterMask() {
+      return casterMask_;
+    }
+    /**
+     * <code>uint32 caster_mask = 48;</code>
+     * @param value The casterMask to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCasterMask(int value) {
+
+      casterMask_ = value;
+      bitField1_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 caster_mask = 48;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCasterMask() {
+      bitField1_ = (bitField1_ & ~0x00001000);
+      casterMask_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int abilityKind_ ;
+    /**
+     * <code>uint32 ability_kind = 49;</code>
+     * @return The abilityKind.
+     */
+    @java.lang.Override
+    public int getAbilityKind() {
+      return abilityKind_;
+    }
+    /**
+     * <code>uint32 ability_kind = 49;</code>
+     * @param value The abilityKind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAbilityKind(int value) {
+
+      abilityKind_ = value;
+      bitField1_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 ability_kind = 49;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAbilityKind() {
+      bitField1_ = (bitField1_ & ~0x00002000);
+      abilityKind_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int petMaxTargets_ ;
+    /**
+     * <code>uint32 pet_max_targets = 50;</code>
+     * @return The petMaxTargets.
+     */
+    @java.lang.Override
+    public int getPetMaxTargets() {
+      return petMaxTargets_;
+    }
+    /**
+     * <code>uint32 pet_max_targets = 50;</code>
+     * @param value The petMaxTargets to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPetMaxTargets(int value) {
+
+      petMaxTargets_ = value;
+      bitField1_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 pet_max_targets = 50;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPetMaxTargets() {
+      bitField1_ = (bitField1_ & ~0x00004000);
+      petMaxTargets_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private com.google.protobuf.Internal.IntList initEffect_ = emptyIntList();
+    private void ensureInitEffectIsMutable() {
+      if (!initEffect_.isModifiable()) {
+        initEffect_ = makeMutableCopy(initEffect_);
+      }
+      bitField1_ |= 0x00008000;
+    }
+    /**
+     * <code>repeated uint32 init_effect = 51;</code>
+     * @return A list containing the initEffect.
+     */
+    public java.util.List<java.lang.Integer>
+        getInitEffectList() {
+      initEffect_.makeImmutable();
+      return initEffect_;
+    }
+    /**
+     * <code>repeated uint32 init_effect = 51;</code>
+     * @return The count of initEffect.
+     */
+    public int getInitEffectCount() {
+      return initEffect_.size();
+    }
+    /**
+     * <code>repeated uint32 init_effect = 51;</code>
+     * @param index The index of the element to return.
+     * @return The initEffect at the given index.
+     */
+    public int getInitEffect(int index) {
+      return initEffect_.getInt(index);
+    }
+    /**
+     * <code>repeated uint32 init_effect = 51;</code>
+     * @param index The index to set the value at.
+     * @param value The initEffect to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitEffect(
+        int index, int value) {
+
+      ensureInitEffectIsMutable();
+      initEffect_.setInt(index, value);
+      bitField1_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 init_effect = 51;</code>
+     * @param value The initEffect to add.
+     * @return This builder for chaining.
+     */
+    public Builder addInitEffect(int value) {
+
+      ensureInitEffectIsMutable();
+      initEffect_.addInt(value);
+      bitField1_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 init_effect = 51;</code>
+     * @param values The initEffect to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllInitEffect(
+        java.lang.Iterable<? extends java.lang.Integer> values) {
+      ensureInitEffectIsMutable();
+      com.google.protobuf.AbstractMessageLite.Builder.addAll(
+          values, initEffect_);
+      bitField1_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 init_effect = 51;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitEffect() {
+      initEffect_ = emptyIntList();
+      bitField1_ = (bitField1_ & ~0x00008000);
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object prototypeCode_ = "";
+    /**
+     * <code>string prototype_code = 52;</code>
+     * @return The prototypeCode.
+     */
+    public java.lang.String getPrototypeCode() {
+      java.lang.Object ref = prototypeCode_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        prototypeCode_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string prototype_code = 52;</code>
+     * @return The bytes for prototypeCode.
+     */
+    public com.google.protobuf.ByteString
+        getPrototypeCodeBytes() {
+      java.lang.Object ref = prototypeCode_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        prototypeCode_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string prototype_code = 52;</code>
+     * @param value The prototypeCode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPrototypeCode(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      prototypeCode_ = value;
+      bitField1_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string prototype_code = 52;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPrototypeCode() {
+      prototypeCode_ = getDefaultInstance().getPrototypeCode();
+      bitField1_ = (bitField1_ & ~0x00010000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string prototype_code = 52;</code>
+     * @param value The bytes for prototypeCode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPrototypeCodeBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      prototypeCode_ = value;
+      bitField1_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+
+    private int maxBattleUses_ ;
+    /**
+     * <code>uint32 max_battle_uses = 53;</code>
+     * @return The maxBattleUses.
+     */
+    @java.lang.Override
+    public int getMaxBattleUses() {
+      return maxBattleUses_;
+    }
+    /**
+     * <code>uint32 max_battle_uses = 53;</code>
+     * @param value The maxBattleUses to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMaxBattleUses(int value) {
+
+      maxBattleUses_ = value;
+      bitField1_ |= 0x00020000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 max_battle_uses = 53;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMaxBattleUses() {
+      bitField1_ = (bitField1_ & ~0x00020000);
+      maxBattleUses_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int healthCostMode_ ;
+    /**
+     * <code>uint32 health_cost_mode = 54;</code>
+     * @return The healthCostMode.
+     */
+    @java.lang.Override
+    public int getHealthCostMode() {
+      return healthCostMode_;
+    }
+    /**
+     * <code>uint32 health_cost_mode = 54;</code>
+     * @param value The healthCostMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHealthCostMode(int value) {
+
+      healthCostMode_ = value;
+      bitField1_ |= 0x00040000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 health_cost_mode = 54;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHealthCostMode() {
+      bitField1_ = (bitField1_ & ~0x00040000);
+      healthCostMode_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int actionTags_ ;
+    /**
+     * <code>uint32 action_tags = 55;</code>
+     * @return The actionTags.
+     */
+    @java.lang.Override
+    public int getActionTags() {
+      return actionTags_;
+    }
+    /**
+     * <code>uint32 action_tags = 55;</code>
+     * @param value The actionTags to set.
+     * @return This builder for chaining.
+     */
+    public Builder setActionTags(int value) {
+
+      actionTags_ = value;
+      bitField1_ |= 0x00080000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 action_tags = 55;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearActionTags() {
+      bitField1_ = (bitField1_ & ~0x00080000);
+      actionTags_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int allowDeadTarget_ ;
+    /**
+     * <code>uint32 allow_dead_target = 56;</code>
+     * @return The allowDeadTarget.
+     */
+    @java.lang.Override
+    public int getAllowDeadTarget() {
+      return allowDeadTarget_;
+    }
+    /**
+     * <code>uint32 allow_dead_target = 56;</code>
+     * @param value The allowDeadTarget to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowDeadTarget(int value) {
+
+      allowDeadTarget_ = value;
+      bitField1_ |= 0x00100000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 allow_dead_target = 56;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowDeadTarget() {
+      bitField1_ = (bitField1_ & ~0x00100000);
+      allowDeadTarget_ = 0;
+      onChanged();
+      return this;
+    }
+
     private java.util.List<com.game.table.Skillrequired_item> requiredItem_ =
       java.util.Collections.emptyList();
     private void ensureRequiredItemIsMutable() {
-      if (!((bitField1_ & 0x00000800) != 0)) {
+      if (!((bitField1_ & 0x00200000) != 0)) {
         requiredItem_ = new java.util.ArrayList<com.game.table.Skillrequired_item>(requiredItem_);
-        bitField1_ |= 0x00000800;
+        bitField1_ |= 0x00200000;
        }
     }
 
@@ -4449,7 +5287,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredItem() {
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x00000800);
+        bitField1_ = (bitField1_ & ~0x00200000);
         onChanged();
       } else {
         requiredItemBuilder_.clear();
@@ -4526,7 +5364,7 @@ private static final long serialVersionUID = 0L;
         requiredItemBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_item, com.game.table.Skillrequired_item.Builder, com.game.table.Skillrequired_itemOrBuilder>(
                 requiredItem_,
-                ((bitField1_ & 0x00000800) != 0),
+                ((bitField1_ & 0x00200000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredItem_ = null;
@@ -4537,9 +5375,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillrequired_resource> requiredResource_ =
       java.util.Collections.emptyList();
     private void ensureRequiredResourceIsMutable() {
-      if (!((bitField1_ & 0x00001000) != 0)) {
+      if (!((bitField1_ & 0x00400000) != 0)) {
         requiredResource_ = new java.util.ArrayList<com.game.table.Skillrequired_resource>(requiredResource_);
-        bitField1_ |= 0x00001000;
+        bitField1_ |= 0x00400000;
        }
     }
 
@@ -4689,7 +5527,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredResource() {
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x00001000);
+        bitField1_ = (bitField1_ & ~0x00400000);
         onChanged();
       } else {
         requiredResourceBuilder_.clear();
@@ -4766,7 +5604,7 @@ private static final long serialVersionUID = 0L;
         requiredResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_resource, com.game.table.Skillrequired_resource.Builder, com.game.table.Skillrequired_resourceOrBuilder>(
                 requiredResource_,
-                ((bitField1_ & 0x00001000) != 0),
+                ((bitField1_ & 0x00400000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredResource_ = null;
@@ -4777,9 +5615,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillcost_resource> costResource_ =
       java.util.Collections.emptyList();
     private void ensureCostResourceIsMutable() {
-      if (!((bitField1_ & 0x00002000) != 0)) {
+      if (!((bitField1_ & 0x00800000) != 0)) {
         costResource_ = new java.util.ArrayList<com.game.table.Skillcost_resource>(costResource_);
-        bitField1_ |= 0x00002000;
+        bitField1_ |= 0x00800000;
        }
     }
 
@@ -4929,7 +5767,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearCostResource() {
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
-        bitField1_ = (bitField1_ & ~0x00002000);
+        bitField1_ = (bitField1_ & ~0x00800000);
         onChanged();
       } else {
         costResourceBuilder_.clear();
@@ -5006,7 +5844,7 @@ private static final long serialVersionUID = 0L;
         costResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillcost_resource, com.game.table.Skillcost_resource.Builder, com.game.table.Skillcost_resourceOrBuilder>(
                 costResource_,
-                ((bitField1_ & 0x00002000) != 0),
+                ((bitField1_ & 0x00800000) != 0),
                 getParentForChildren(),
                 isClean());
         costResource_ = null;

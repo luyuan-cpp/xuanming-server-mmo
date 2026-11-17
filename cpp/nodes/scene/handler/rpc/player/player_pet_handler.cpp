@@ -2,6 +2,8 @@
 #include "player_pet_handler.h"
 
 ///<<< BEGIN WRITING YOUR CODE
+#include "modules/currency/system/currency_system.h"
+
 #include <map>
 
 #include "player/system/player_pet.h"
@@ -184,6 +186,36 @@ void ScenePetClientPlayerHandler::GmGrantPet(entt::entity player,const ::GmGrant
 		response->clear_pets();
 		response->mutable_error_message()->set_id(err);
 	}
+///<<< END WRITING YOUR CODE
+
+}
+
+void ScenePetClientPlayerHandler::GetPetShop(entt::entity player,const ::GetPetShopRequest* request,
+	::GetPetShopResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto error = PetSystem::BuildShop(player, *response);
+    if (error != kSuccess) response->mutable_error_message()->set_id(error);
+///<<< END WRITING YOUR CODE
+
+}
+
+void ScenePetClientPlayerHandler::BuyPet(entt::entity player,const ::BuyPetRequest* request,
+	::BuyPetResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    uint64_t petId = 0;
+    const auto error = PetSystem::BuyPet(player, request->pet_table_id(), request->purchase_sequence(),
+        request->price_gold(), petId);
+    if (error != kSuccess) response->mutable_error_message()->set_id(error);
+    response->set_next_purchase_sequence(PetSystem::NextPurchaseSequence(player));
+    response->set_gold(CurrencySystem::GetBalance(player, kCurrencyGold));
+    if (error != kSuccess) return;
+    response->set_pet_id(petId);
+    if (const auto err = PetSystem::BuildList(player, *response->mutable_pets()); err != kSuccess) {
+        response->clear_pets();
+        response->mutable_error_message()->set_id(err);
+    }
 ///<<< END WRITING YOUR CODE
 
 }

@@ -68,6 +68,7 @@ namespace MmorpgClient.Table
             public readonly RepeatedField<EquipEnhanceTable> Rows;
             public readonly Dictionary<uint, EquipEnhanceTable> KvData;
             public readonly Dictionary<uint, IReadOnlyList<EquipEnhanceTable>> IdxMaterialId;
+            public readonly Dictionary<uint, IReadOnlyList<EquipEnhanceTable>> IdxProfileId;
 
             public Snapshot(EquipEnhanceTableData container, int capacity)
             {
@@ -75,6 +76,7 @@ namespace MmorpgClient.Table
                 Rows = container.Data;
                 KvData = new Dictionary<uint, EquipEnhanceTable>(capacity);
                 IdxMaterialId = new Dictionary<uint, IReadOnlyList<EquipEnhanceTable>>();
+                IdxProfileId = new Dictionary<uint, IReadOnlyList<EquipEnhanceTable>>();
             }
         }
 
@@ -122,10 +124,12 @@ namespace MmorpgClient.Table
                 EquipEnhanceTable row = rows[i];
                 snap.KvData[row.Id] = row;
                 Index(snap.IdxMaterialId, row.MaterialId, row);
+                Index(snap.IdxProfileId, row.ProfileId, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
             Freeze(snap.IdxMaterialId);
+            Freeze(snap.IdxProfileId);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
             _snapshot = snap;
@@ -174,6 +178,13 @@ namespace MmorpgClient.Table
             Snapshot snap = _snapshot;
             return Bucket(snap.IdxMaterialId, key);
         }
+
+        /// <summary>Secondary index lookup on profile_id; 未命中返回空集合。</summary>
+        public IReadOnlyList<EquipEnhanceTable> GetByProfileId(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxProfileId, key);
+        }
         // FK: material_id → Item.id
 
         // ---- Exists ----
@@ -197,6 +208,12 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return Bucket(snap.IdxMaterialId, key).Count;
+        }
+
+        public int CountByProfileIdIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxProfileId, key).Count;
         }
 
         // ---- FindByIds (IN) ----

@@ -92,7 +92,7 @@ message PlayerBattleResultComp {
 
 `player_database` 加 `PlayerBattleResultComp battle_results = 23 [(OptionPersistGroup) = 4];`。
 
-- **只记实际入账**:货币取整笔预检通过、实际调用 `AddCurrency` 的金额;掉落取剔除了被获得封禁项之后的清单(被封的项另记 `metric=battle_settlement_item_blocked`,不补发);消耗取 `min(要求, 实际持有)`。掉落或消耗里有本节点 Item 表查不到的配置号时整笔延后、这一局什么都不记(2026-11-11 起,`mixed-version-persist-field-protection.md` §13 第 10 条;此前是剔除这一项后照记)。经验系统还没接入(`exp_gain` 只记日志),所以不记经验,接入时在同一写入点加字段。
+- **只记实际入账**:货币取整笔预检通过、实际调用 `AddCurrency` 的金额;掉落取剔除了被获得封禁项之后的清单(被封的项另记 `metric=battle_settlement_item_blocked`,不补发);消耗取 `min(要求, 实际持有)`。掉落或消耗里有本节点 Item 表查不到的配置号时整笔延后、这一局什么都不记(2026-11-11 起,`mixed-version-persist-field-protection.md` §13 第 10 条;此前是剔除这一项后照记)。2026-11-15 起，`PlayerBattleResult.exp_gain`（字段 18）记录实际计入 `LevelComp.total_exp` 的经验，与账本及奖励同次持久化；存档确认之前也不公开。旧结果缺字段为 0，不伪装成已入账。
 - **改投邮件的掉落照常记**(2026-11-12,[战斗掉落改投邮件](battle-overflow-mail.md)):人物背包与临时格都放不下时,掉落整批进玩家存档的待寄队列、
   之后寄成个人邮件。`items_gained` 照常列出这一批(玩家确实得到了,只是去处是邮箱),`items_mailed = true` 说明去处;
   `BattleEndS2C.items_mailed` 取自同一条记录,客户端在结算界面道具行之后加一句提示。两个字段同一帧写、随同一次存档提交。
@@ -215,7 +215,7 @@ scene 进程没有 Prometheus 端点,计数从结构化日志提取。player_id 
 
 ## 9. 不做与后续
 
-- 经验系统接入时,在 `RecordBattleResult` 同一处把实际入账的经验写进记录(新字段)。
+- 经验累计入账已接入；自动升级仍待策划提供升级曲线，不在战果恢复层编造经验阈值。
 - 长历史不在本列表里做,见 §3 对 (b) 的说明。PVP 战报回放由[战报回放](battle-report-replay.md)另做。
 - robot 冒烟场景本轮不写,冒烟步骤见 §10,由 Codex 用改好的客户端或补 robot 场景执行。
 - Java 版待做(§11)。

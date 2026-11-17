@@ -1,0 +1,10 @@
+# 只复用已经存在且固定摘要的运行层；业务二进制和策划表全部覆盖为本次源码产物。
+FROM local/gm-mail-runtime:pin-f926d34c6fe6c1cc
+USER 0:0
+COPY service /app/service
+COPY runtime_assets/ /
+COPY BUILD_INFO /app/BUILD_INFO
+RUN chmod 0555 /app/service
+USER 10001:10001
+WORKDIR /app
+ENTRYPOINT ["/app/service"]

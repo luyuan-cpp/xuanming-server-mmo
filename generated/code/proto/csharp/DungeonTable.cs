@@ -22,16 +22,17 @@ public static partial class DungeonTableReflection {
   static DungeonTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChNkdW5nZW9uX3RhYmxlLnByb3RvImgKDER1bmdlb25UYWJsZRIKCgJpZBgB",
-          "IAEoDRIQCghzY2VuZV9pZBgCIAEoDRIVCg1tYXhfdGVhbV9zaXplGAMgASgN",
-          "EhIKCnRpbWVfbGltaXQYBCABKA0SDwoHbW9uc3RlchgFIAMoDSIvChBEdW5n",
-          "ZW9uVGFibGVEYXRhEhsKBGRhdGEYASADKAsyDS5EdW5nZW9uVGFibGVCPgoO",
-          "Y29tLmdhbWUudGFibGVCFkR1bmdlb25UYWJsZU91dGVyQ2xhc3NQAVoSZ2Vu",
-          "ZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "ChNkdW5nZW9uX3RhYmxlLnByb3RvIoMBCgxEdW5nZW9uVGFibGUSCgoCaWQY",
+          "ASABKA0SEAoIc2NlbmVfaWQYAiABKA0SFQoNbWF4X3RlYW1fc2l6ZRgDIAEo",
+          "DRISCgp0aW1lX2xpbWl0GAQgASgNEg8KB21vbnN0ZXIYBSADKA0SGQoRYWxs",
+          "b3dfcGV0X2NhcHR1cmUYBiABKA0iLwoQRHVuZ2VvblRhYmxlRGF0YRIbCgRk",
+          "YXRhGAEgAygLMg0uRHVuZ2VvblRhYmxlQj4KDmNvbS5nYW1lLnRhYmxlQhZE",
+          "dW5nZW9uVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIG",
+          "cHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::DungeonTable), global::DungeonTable.Parser, new[]{ "Id", "SceneId", "MaxTeamSize", "TimeLimit", "Monster" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::DungeonTable), global::DungeonTable.Parser, new[]{ "Id", "SceneId", "MaxTeamSize", "TimeLimit", "Monster", "AllowPetCapture" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DungeonTableData), global::DungeonTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -79,6 +80,7 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
     maxTeamSize_ = other.maxTeamSize_;
     timeLimit_ = other.timeLimit_;
     monster_ = other.monster_.Clone();
+    allowPetCapture_ = other.allowPetCapture_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -147,6 +149,18 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
     get { return monster_; }
   }
 
+  /// <summary>Field number for the "allow_pet_capture" field.</summary>
+  public const int AllowPetCaptureFieldNumber = 6;
+  private uint allowPetCapture_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint AllowPetCapture {
+    get { return allowPetCapture_; }
+    set {
+      allowPetCapture_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -167,6 +181,7 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
     if (MaxTeamSize != other.MaxTeamSize) return false;
     if (TimeLimit != other.TimeLimit) return false;
     if(!monster_.Equals(other.monster_)) return false;
+    if (AllowPetCapture != other.AllowPetCapture) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -179,6 +194,7 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
     if (MaxTeamSize != 0) hash ^= MaxTeamSize.GetHashCode();
     if (TimeLimit != 0) hash ^= TimeLimit.GetHashCode();
     hash ^= monster_.GetHashCode();
+    if (AllowPetCapture != 0) hash ^= AllowPetCapture.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -214,6 +230,10 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
       output.WriteUInt32(TimeLimit);
     }
     monster_.WriteTo(output, _repeated_monster_codec);
+    if (AllowPetCapture != 0) {
+      output.WriteRawTag(48);
+      output.WriteUInt32(AllowPetCapture);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -241,6 +261,10 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
       output.WriteUInt32(TimeLimit);
     }
     monster_.WriteTo(ref output, _repeated_monster_codec);
+    if (AllowPetCapture != 0) {
+      output.WriteRawTag(48);
+      output.WriteUInt32(AllowPetCapture);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -264,6 +288,9 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(TimeLimit);
     }
     size += monster_.CalculateSize(_repeated_monster_codec);
+    if (AllowPetCapture != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AllowPetCapture);
+    }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
     }
@@ -289,6 +316,9 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
       TimeLimit = other.TimeLimit;
     }
     monster_.Add(other.monster_);
+    if (other.AllowPetCapture != 0) {
+      AllowPetCapture = other.AllowPetCapture;
+    }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
 
@@ -329,6 +359,10 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
           monster_.AddEntriesFrom(input, _repeated_monster_codec);
           break;
         }
+        case 48: {
+          AllowPetCapture = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -367,6 +401,10 @@ public sealed partial class DungeonTable : pb::IMessage<DungeonTable>
         case 42:
         case 40: {
           monster_.AddEntriesFrom(ref input, _repeated_monster_codec);
+          break;
+        }
+        case 48: {
+          AllowPetCapture = input.ReadUInt32();
           break;
         }
       }

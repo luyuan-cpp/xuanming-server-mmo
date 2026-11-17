@@ -27,7 +27,7 @@ public static partial class SkillTableReflection {
           "dWUYAiABKAQiWQoWU2tpbGxyZXF1aXJlZF9yZXNvdXJjZRIeChZyZXF1aXJl",
           "ZF9yZXNvdXJjZV90eXBlGAEgASgNEh8KF3JlcXVpcmVkX3Jlc291cmNlX3Zh",
           "bHVlGAIgASgNIkoKElNraWxsY29zdF9yZXNvdXJjZRIYChBjb3N0X3Jlc291",
-          "cmNlX2lkGAEgASgNEhoKEmNvc3RfcmVzb3VyY2VfY29zdBgCIAEoDSK2CAoK",
+          "cmNlX2lkGAEgASgNEhoKEmNvc3RfcmVzb3VyY2VfY29zdBgCIAEoDSKgCgoK",
           "U2tpbGxUYWJsZRIKCgJpZBgBIAEoDRISCgpza2lsbF90eXBlGAIgAygNEhYK",
           "DnRhcmdldGluZ19tb2RlGAMgAygNEhYKDnJlcXVpcmVfdGFyZ2V0GAQgASgN",
           "EhUKDXRhcmdldF9zdGF0dXMYBSABKA0SEgoKY2FzdF9wb2ludBgGIAEoARIV",
@@ -48,20 +48,25 @@ public static partial class SkillTableReflection {
           "KAESGgoSZXhlY3V0ZV9oZWFsX2JvbnVzGCggASgBEhwKFHJlc3RvcmVfbWFu",
           "YV9wZXJjZW50GCkgASgBEhQKDGRpc3BlbF9jb3VudBgqIAEoDRISCgppbml0",
           "aWF0aXZlGCsgASgFEhQKDHBhc3NpdmVfc3RhdBgsIAEoCRIXCg9wYXNzaXZl",
-          "X3BlcmNlbnQYLSABKAESFAoMYnVmZl9wZXJjZW50GC4gASgBEioKDXJlcXVp",
-          "cmVkX2l0ZW0YFSADKAsyEy5Ta2lsbHJlcXVpcmVkX2l0ZW0SMgoRcmVxdWly",
-          "ZWRfcmVzb3VyY2UYFiADKAsyFy5Ta2lsbHJlcXVpcmVkX3Jlc291cmNlEioK",
-          "DWNvc3RfcmVzb3VyY2UYFyADKAsyEy5Ta2lsbGNvc3RfcmVzb3VyY2UiKwoO",
-          "U2tpbGxUYWJsZURhdGESGQoEZGF0YRgBIAMoCzILLlNraWxsVGFibGVCPAoO",
-          "Y29tLmdhbWUudGFibGVCFFNraWxsVGFibGVPdXRlckNsYXNzUAFaEmdlbmVy",
-          "YXRlZC9wYi90YWJsZWIGcHJvdG8z"));
+          "X3BlcmNlbnQYLSABKAESFAoMYnVmZl9wZXJjZW50GC4gASgBEhQKDGJhdHRs",
+          "ZV9tb2RlbBgvIAEoDRITCgtjYXN0ZXJfbWFzaxgwIAEoDRIUCgxhYmlsaXR5",
+          "X2tpbmQYMSABKA0SFwoPcGV0X21heF90YXJnZXRzGDIgASgNEhMKC2luaXRf",
+          "ZWZmZWN0GDMgAygNEhYKDnByb3RvdHlwZV9jb2RlGDQgASgJEhcKD21heF9i",
+          "YXR0bGVfdXNlcxg1IAEoDRIYChBoZWFsdGhfY29zdF9tb2RlGDYgASgNEhMK",
+          "C2FjdGlvbl90YWdzGDcgASgNEhkKEWFsbG93X2RlYWRfdGFyZ2V0GDggASgN",
+          "EioKDXJlcXVpcmVkX2l0ZW0YFSADKAsyEy5Ta2lsbHJlcXVpcmVkX2l0ZW0S",
+          "MgoRcmVxdWlyZWRfcmVzb3VyY2UYFiADKAsyFy5Ta2lsbHJlcXVpcmVkX3Jl",
+          "c291cmNlEioKDWNvc3RfcmVzb3VyY2UYFyADKAsyEy5Ta2lsbGNvc3RfcmVz",
+          "b3VyY2UiKwoOU2tpbGxUYWJsZURhdGESGQoEZGF0YRgBIAMoCzILLlNraWxs",
+          "VGFibGVCPAoOY29tLmdhbWUudGFibGVCFFNraWxsVGFibGVPdXRlckNsYXNz",
+          "UAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillrequired_item), global::Skillrequired_item.Parser, new[]{ "RequiredItemType", "RequiredItemValue" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillrequired_resource), global::Skillrequired_resource.Parser, new[]{ "RequiredResourceType", "RequiredResourceValue" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillcost_resource), global::Skillcost_resource.Parser, new[]{ "CostResourceId", "CostResourceCost" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::SkillTable), global::SkillTable.Parser, new[]{ "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "ClassId", "Name", "Description", "IconKey", "Category", "UnlockLevel", "MaxRank", "TargetTeam", "MaxTargets", "ManaPercent", "CooldownRounds", "HealMultiplier", "HealPerLevel", "ExecuteHealThreshold", "ExecuteHealBonus", "RestoreManaPercent", "DispelCount", "Initiative", "PassiveStat", "PassivePercent", "BuffPercent", "RequiredItem", "RequiredResource", "CostResource" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::SkillTable), global::SkillTable.Parser, new[]{ "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "ClassId", "Name", "Description", "IconKey", "Category", "UnlockLevel", "MaxRank", "TargetTeam", "MaxTargets", "ManaPercent", "CooldownRounds", "HealMultiplier", "HealPerLevel", "ExecuteHealThreshold", "ExecuteHealBonus", "RestoreManaPercent", "DispelCount", "Initiative", "PassiveStat", "PassivePercent", "BuffPercent", "BattleModel", "CasterMask", "AbilityKind", "PetMaxTargets", "InitEffect", "PrototypeCode", "MaxBattleUses", "HealthCostMode", "ActionTags", "AllowDeadTarget", "RequiredItem", "RequiredResource", "CostResource" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::SkillTableData), global::SkillTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -852,6 +857,16 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     passiveStat_ = other.passiveStat_;
     passivePercent_ = other.passivePercent_;
     buffPercent_ = other.buffPercent_;
+    battleModel_ = other.battleModel_;
+    casterMask_ = other.casterMask_;
+    abilityKind_ = other.abilityKind_;
+    petMaxTargets_ = other.petMaxTargets_;
+    initEffect_ = other.initEffect_.Clone();
+    prototypeCode_ = other.prototypeCode_;
+    maxBattleUses_ = other.maxBattleUses_;
+    healthCostMode_ = other.healthCostMode_;
+    actionTags_ = other.actionTags_;
+    allowDeadTarget_ = other.allowDeadTarget_;
     requiredItem_ = other.requiredItem_.Clone();
     requiredResource_ = other.requiredResource_.Clone();
     costResource_ = other.costResource_.Clone();
@@ -1377,6 +1392,125 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
   }
 
+  /// <summary>Field number for the "battle_model" field.</summary>
+  public const int BattleModelFieldNumber = 47;
+  private uint battleModel_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BattleModel {
+    get { return battleModel_; }
+    set {
+      battleModel_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "caster_mask" field.</summary>
+  public const int CasterMaskFieldNumber = 48;
+  private uint casterMask_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint CasterMask {
+    get { return casterMask_; }
+    set {
+      casterMask_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "ability_kind" field.</summary>
+  public const int AbilityKindFieldNumber = 49;
+  private uint abilityKind_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint AbilityKind {
+    get { return abilityKind_; }
+    set {
+      abilityKind_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "pet_max_targets" field.</summary>
+  public const int PetMaxTargetsFieldNumber = 50;
+  private uint petMaxTargets_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint PetMaxTargets {
+    get { return petMaxTargets_; }
+    set {
+      petMaxTargets_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "init_effect" field.</summary>
+  public const int InitEffectFieldNumber = 51;
+  private static readonly pb::FieldCodec<uint> _repeated_initEffect_codec
+      = pb::FieldCodec.ForUInt32(410);
+  private readonly pbc::RepeatedField<uint> initEffect_ = new pbc::RepeatedField<uint>();
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public pbc::RepeatedField<uint> InitEffect {
+    get { return initEffect_; }
+  }
+
+  /// <summary>Field number for the "prototype_code" field.</summary>
+  public const int PrototypeCodeFieldNumber = 52;
+  private string prototypeCode_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string PrototypeCode {
+    get { return prototypeCode_; }
+    set {
+      prototypeCode_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "max_battle_uses" field.</summary>
+  public const int MaxBattleUsesFieldNumber = 53;
+  private uint maxBattleUses_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint MaxBattleUses {
+    get { return maxBattleUses_; }
+    set {
+      maxBattleUses_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "health_cost_mode" field.</summary>
+  public const int HealthCostModeFieldNumber = 54;
+  private uint healthCostMode_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint HealthCostMode {
+    get { return healthCostMode_; }
+    set {
+      healthCostMode_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "action_tags" field.</summary>
+  public const int ActionTagsFieldNumber = 55;
+  private uint actionTags_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ActionTags {
+    get { return actionTags_; }
+    set {
+      actionTags_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "allow_dead_target" field.</summary>
+  public const int AllowDeadTargetFieldNumber = 56;
+  private uint allowDeadTarget_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint AllowDeadTarget {
+    get { return allowDeadTarget_; }
+    set {
+      allowDeadTarget_ = value;
+    }
+  }
+
   /// <summary>Field number for the "required_item" field.</summary>
   public const int RequiredItemFieldNumber = 21;
   private static readonly pb::FieldCodec<global::Skillrequired_item> _repeated_requiredItem_codec
@@ -1468,6 +1602,16 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     if (PassiveStat != other.PassiveStat) return false;
     if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(PassivePercent, other.PassivePercent)) return false;
     if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(BuffPercent, other.BuffPercent)) return false;
+    if (BattleModel != other.BattleModel) return false;
+    if (CasterMask != other.CasterMask) return false;
+    if (AbilityKind != other.AbilityKind) return false;
+    if (PetMaxTargets != other.PetMaxTargets) return false;
+    if(!initEffect_.Equals(other.initEffect_)) return false;
+    if (PrototypeCode != other.PrototypeCode) return false;
+    if (MaxBattleUses != other.MaxBattleUses) return false;
+    if (HealthCostMode != other.HealthCostMode) return false;
+    if (ActionTags != other.ActionTags) return false;
+    if (AllowDeadTarget != other.AllowDeadTarget) return false;
     if(!requiredItem_.Equals(other.requiredItem_)) return false;
     if(!requiredResource_.Equals(other.requiredResource_)) return false;
     if(!costResource_.Equals(other.costResource_)) return false;
@@ -1521,6 +1665,16 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     if (PassiveStat.Length != 0) hash ^= PassiveStat.GetHashCode();
     if (PassivePercent != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(PassivePercent);
     if (BuffPercent != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(BuffPercent);
+    if (BattleModel != 0) hash ^= BattleModel.GetHashCode();
+    if (CasterMask != 0) hash ^= CasterMask.GetHashCode();
+    if (AbilityKind != 0) hash ^= AbilityKind.GetHashCode();
+    if (PetMaxTargets != 0) hash ^= PetMaxTargets.GetHashCode();
+    hash ^= initEffect_.GetHashCode();
+    if (PrototypeCode.Length != 0) hash ^= PrototypeCode.GetHashCode();
+    if (MaxBattleUses != 0) hash ^= MaxBattleUses.GetHashCode();
+    if (HealthCostMode != 0) hash ^= HealthCostMode.GetHashCode();
+    if (ActionTags != 0) hash ^= ActionTags.GetHashCode();
+    if (AllowDeadTarget != 0) hash ^= AllowDeadTarget.GetHashCode();
     hash ^= requiredItem_.GetHashCode();
     hash ^= requiredResource_.GetHashCode();
     hash ^= costResource_.GetHashCode();
@@ -1708,6 +1862,43 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
       output.WriteRawTag(241, 2);
       output.WriteDouble(BuffPercent);
     }
+    if (BattleModel != 0) {
+      output.WriteRawTag(248, 2);
+      output.WriteUInt32(BattleModel);
+    }
+    if (CasterMask != 0) {
+      output.WriteRawTag(128, 3);
+      output.WriteUInt32(CasterMask);
+    }
+    if (AbilityKind != 0) {
+      output.WriteRawTag(136, 3);
+      output.WriteUInt32(AbilityKind);
+    }
+    if (PetMaxTargets != 0) {
+      output.WriteRawTag(144, 3);
+      output.WriteUInt32(PetMaxTargets);
+    }
+    initEffect_.WriteTo(output, _repeated_initEffect_codec);
+    if (PrototypeCode.Length != 0) {
+      output.WriteRawTag(162, 3);
+      output.WriteString(PrototypeCode);
+    }
+    if (MaxBattleUses != 0) {
+      output.WriteRawTag(168, 3);
+      output.WriteUInt32(MaxBattleUses);
+    }
+    if (HealthCostMode != 0) {
+      output.WriteRawTag(176, 3);
+      output.WriteUInt32(HealthCostMode);
+    }
+    if (ActionTags != 0) {
+      output.WriteRawTag(184, 3);
+      output.WriteUInt32(ActionTags);
+    }
+    if (AllowDeadTarget != 0) {
+      output.WriteRawTag(192, 3);
+      output.WriteUInt32(AllowDeadTarget);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -1884,6 +2075,43 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
       output.WriteRawTag(241, 2);
       output.WriteDouble(BuffPercent);
     }
+    if (BattleModel != 0) {
+      output.WriteRawTag(248, 2);
+      output.WriteUInt32(BattleModel);
+    }
+    if (CasterMask != 0) {
+      output.WriteRawTag(128, 3);
+      output.WriteUInt32(CasterMask);
+    }
+    if (AbilityKind != 0) {
+      output.WriteRawTag(136, 3);
+      output.WriteUInt32(AbilityKind);
+    }
+    if (PetMaxTargets != 0) {
+      output.WriteRawTag(144, 3);
+      output.WriteUInt32(PetMaxTargets);
+    }
+    initEffect_.WriteTo(ref output, _repeated_initEffect_codec);
+    if (PrototypeCode.Length != 0) {
+      output.WriteRawTag(162, 3);
+      output.WriteString(PrototypeCode);
+    }
+    if (MaxBattleUses != 0) {
+      output.WriteRawTag(168, 3);
+      output.WriteUInt32(MaxBattleUses);
+    }
+    if (HealthCostMode != 0) {
+      output.WriteRawTag(176, 3);
+      output.WriteUInt32(HealthCostMode);
+    }
+    if (ActionTags != 0) {
+      output.WriteRawTag(184, 3);
+      output.WriteUInt32(ActionTags);
+    }
+    if (AllowDeadTarget != 0) {
+      output.WriteRawTag(192, 3);
+      output.WriteUInt32(AllowDeadTarget);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -2016,6 +2244,34 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
     if (BuffPercent != 0D) {
       size += 2 + 8;
+    }
+    if (BattleModel != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(BattleModel);
+    }
+    if (CasterMask != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(CasterMask);
+    }
+    if (AbilityKind != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(AbilityKind);
+    }
+    if (PetMaxTargets != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(PetMaxTargets);
+    }
+    size += initEffect_.CalculateSize(_repeated_initEffect_codec);
+    if (PrototypeCode.Length != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeStringSize(PrototypeCode);
+    }
+    if (MaxBattleUses != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(MaxBattleUses);
+    }
+    if (HealthCostMode != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(HealthCostMode);
+    }
+    if (ActionTags != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ActionTags);
+    }
+    if (AllowDeadTarget != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(AllowDeadTarget);
     }
     size += requiredItem_.CalculateSize(_repeated_requiredItem_codec);
     size += requiredResource_.CalculateSize(_repeated_requiredResource_codec);
@@ -2154,6 +2410,34 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
     if (other.BuffPercent != 0D) {
       BuffPercent = other.BuffPercent;
+    }
+    if (other.BattleModel != 0) {
+      BattleModel = other.BattleModel;
+    }
+    if (other.CasterMask != 0) {
+      CasterMask = other.CasterMask;
+    }
+    if (other.AbilityKind != 0) {
+      AbilityKind = other.AbilityKind;
+    }
+    if (other.PetMaxTargets != 0) {
+      PetMaxTargets = other.PetMaxTargets;
+    }
+    initEffect_.Add(other.initEffect_);
+    if (other.PrototypeCode.Length != 0) {
+      PrototypeCode = other.PrototypeCode;
+    }
+    if (other.MaxBattleUses != 0) {
+      MaxBattleUses = other.MaxBattleUses;
+    }
+    if (other.HealthCostMode != 0) {
+      HealthCostMode = other.HealthCostMode;
+    }
+    if (other.ActionTags != 0) {
+      ActionTags = other.ActionTags;
+    }
+    if (other.AllowDeadTarget != 0) {
+      AllowDeadTarget = other.AllowDeadTarget;
     }
     requiredItem_.Add(other.requiredItem_);
     requiredResource_.Add(other.requiredResource_);
@@ -2364,6 +2648,47 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
           BuffPercent = input.ReadDouble();
           break;
         }
+        case 376: {
+          BattleModel = input.ReadUInt32();
+          break;
+        }
+        case 384: {
+          CasterMask = input.ReadUInt32();
+          break;
+        }
+        case 392: {
+          AbilityKind = input.ReadUInt32();
+          break;
+        }
+        case 400: {
+          PetMaxTargets = input.ReadUInt32();
+          break;
+        }
+        case 410:
+        case 408: {
+          initEffect_.AddEntriesFrom(input, _repeated_initEffect_codec);
+          break;
+        }
+        case 418: {
+          PrototypeCode = input.ReadString();
+          break;
+        }
+        case 424: {
+          MaxBattleUses = input.ReadUInt32();
+          break;
+        }
+        case 432: {
+          HealthCostMode = input.ReadUInt32();
+          break;
+        }
+        case 440: {
+          ActionTags = input.ReadUInt32();
+          break;
+        }
+        case 448: {
+          AllowDeadTarget = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -2568,6 +2893,47 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
         }
         case 369: {
           BuffPercent = input.ReadDouble();
+          break;
+        }
+        case 376: {
+          BattleModel = input.ReadUInt32();
+          break;
+        }
+        case 384: {
+          CasterMask = input.ReadUInt32();
+          break;
+        }
+        case 392: {
+          AbilityKind = input.ReadUInt32();
+          break;
+        }
+        case 400: {
+          PetMaxTargets = input.ReadUInt32();
+          break;
+        }
+        case 410:
+        case 408: {
+          initEffect_.AddEntriesFrom(ref input, _repeated_initEffect_codec);
+          break;
+        }
+        case 418: {
+          PrototypeCode = input.ReadString();
+          break;
+        }
+        case 424: {
+          MaxBattleUses = input.ReadUInt32();
+          break;
+        }
+        case 432: {
+          HealthCostMode = input.ReadUInt32();
+          break;
+        }
+        case 440: {
+          ActionTags = input.ReadUInt32();
+          break;
+        }
+        case 448: {
+          AllowDeadTarget = input.ReadUInt32();
           break;
         }
       }

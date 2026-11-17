@@ -22,22 +22,24 @@ const (
 )
 
 type PetTable struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Desc          string                 `protobuf:"bytes,3,opt,name=desc,proto3" json:"desc,omitempty"`
-	ModelId       uint32                 `protobuf:"varint,4,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
-	Quality       uint32                 `protobuf:"varint,5,opt,name=quality,proto3" json:"quality,omitempty"`
-	UnlockLevel   uint32                 `protobuf:"varint,6,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
-	LevelCap      uint32                 `protobuf:"varint,7,opt,name=level_cap,json=levelCap,proto3" json:"level_cap,omitempty"`
-	InitHealth    uint64                 `protobuf:"varint,8,opt,name=init_health,json=initHealth,proto3" json:"init_health,omitempty"`
-	InitMana      uint64                 `protobuf:"varint,9,opt,name=init_mana,json=initMana,proto3" json:"init_mana,omitempty"`
-	InitSpeed     uint64                 `protobuf:"varint,10,opt,name=init_speed,json=initSpeed,proto3" json:"init_speed,omitempty"`
-	AptitudeMin   []uint32               `protobuf:"varint,11,rep,packed,name=aptitude_min,json=aptitudeMin,proto3" json:"aptitude_min,omitempty"`
-	AptitudeMax   []uint32               `protobuf:"varint,12,rep,packed,name=aptitude_max,json=aptitudeMax,proto3" json:"aptitude_max,omitempty"`
-	Skill         []uint32               `protobuf:"varint,13,rep,packed,name=skill,proto3" json:"skill,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Desc            string                 `protobuf:"bytes,3,opt,name=desc,proto3" json:"desc,omitempty"`
+	ModelId         uint32                 `protobuf:"varint,4,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	Quality         uint32                 `protobuf:"varint,5,opt,name=quality,proto3" json:"quality,omitempty"`
+	UnlockLevel     uint32                 `protobuf:"varint,6,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
+	LevelCap        uint32                 `protobuf:"varint,7,opt,name=level_cap,json=levelCap,proto3" json:"level_cap,omitempty"`
+	InitHealth      uint64                 `protobuf:"varint,8,opt,name=init_health,json=initHealth,proto3" json:"init_health,omitempty"`
+	InitMana        uint64                 `protobuf:"varint,9,opt,name=init_mana,json=initMana,proto3" json:"init_mana,omitempty"`
+	InitSpeed       uint64                 `protobuf:"varint,10,opt,name=init_speed,json=initSpeed,proto3" json:"init_speed,omitempty"`
+	AptitudeMin     []uint32               `protobuf:"varint,11,rep,packed,name=aptitude_min,json=aptitudeMin,proto3" json:"aptitude_min,omitempty"`
+	AptitudeMax     []uint32               `protobuf:"varint,12,rep,packed,name=aptitude_max,json=aptitudeMax,proto3" json:"aptitude_max,omitempty"`
+	Skill           []uint32               `protobuf:"varint,13,rep,packed,name=skill,proto3" json:"skill,omitempty"`
+	ShopPriceGold   uint64                 `protobuf:"varint,14,opt,name=shop_price_gold,json=shopPriceGold,proto3" json:"shop_price_gold,omitempty"`
+	AcquisitionTier uint32                 `protobuf:"varint,15,opt,name=acquisition_tier,json=acquisitionTier,proto3" json:"acquisition_tier,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *PetTable) Reset() {
@@ -161,6 +163,20 @@ func (x *PetTable) GetSkill() []uint32 {
 	return nil
 }
 
+func (x *PetTable) GetShopPriceGold() uint64 {
+	if x != nil {
+		return x.ShopPriceGold
+	}
+	return 0
+}
+
+func (x *PetTable) GetAcquisitionTier() uint32 {
+	if x != nil {
+		return x.AcquisitionTier
+	}
+	return 0
+}
+
 type PetTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*PetTable            `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -209,7 +225,7 @@ var File_pet_table_proto protoreflect.FileDescriptor
 
 const file_pet_table_proto_rawDesc = "" +
 	"\n" +
-	"\x0fpet_table.proto\"\xf0\x02\n" +
+	"\x0fpet_table.proto\"\xc3\x03\n" +
 	"\bPetTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -226,7 +242,9 @@ const file_pet_table_proto_rawDesc = "" +
 	" \x01(\x04R\tinitSpeed\x12!\n" +
 	"\faptitude_min\x18\v \x03(\rR\vaptitudeMin\x12!\n" +
 	"\faptitude_max\x18\f \x03(\rR\vaptitudeMax\x12\x14\n" +
-	"\x05skill\x18\r \x03(\rR\x05skill\"-\n" +
+	"\x05skill\x18\r \x03(\rR\x05skill\x12&\n" +
+	"\x0fshop_price_gold\x18\x0e \x01(\x04R\rshopPriceGold\x12)\n" +
+	"\x10acquisition_tier\x18\x0f \x01(\rR\x0facquisitionTier\"-\n" +
 	"\fPetTableData\x12\x1d\n" +
 	"\x04data\x18\x01 \x03(\v2\t.PetTableR\x04dataB:\n" +
 	"\x0ecom.game.tableB\x12PetTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

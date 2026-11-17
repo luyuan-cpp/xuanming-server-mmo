@@ -24,6 +24,8 @@ message MonsterTable {
 	uint64 speed = 7;
 	uint64 exp_reward = 8;
 	uint64 gold_reward = 9;
+	uint32 capture_pet_table_id = 11;
+	uint32 capture_rate = 12;
 	repeated Monsterdrop drop = 10;
 }
 

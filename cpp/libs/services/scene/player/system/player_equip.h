@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 
 #include <entt/src/entt/entity/entity.hpp>
@@ -17,6 +18,8 @@ class BagLayoutInfo;
 // 装备系统(新装备掷随机属性 + 穿脱 + 强化 + 宝石镶嵌 / 取下 + 装备加成汇总 + tooltip 显示数据),设计文档
 // docs/design/equipment-attributes.md §4.3(一期:随机属性 + 穿脱)与
 // docs/design/equipment-enhance-inlay.md §4.3(二期:强化 + 镶嵌;下文「二期 §N」指它)。
+// V1 规则见 docs/design/equipment-eight-slot-implementation.md：Item.equip_profile 选择养成规则，
+// 旧 profile=0 的资产不转换。所有位置仍共用一个装备包，profile 不参与布局或槽位准入。
 //
 // 分层(AGENTS §11.6):
 //   * 容器层(modules/bag)不认识「属性」「强化」「宝石」,只搬整份实例;本类是唯一认识 EquipAttribute /
@@ -93,7 +96,7 @@ public:
 	//     (可堆叠会把不同属性的实例并成一堆);affix_pool != 0 时 EquipAffixPool 里有该池的行;
 	//     affix_rule != 0 时 EquipAffixRule 里有该行;base_attr 的每个 base_attr_id 在 EquipAttribute 里。
 	// 二期三张表(二期 §4.3「表校验」;下面每个分号隔开的条件恰好计一条):
-	//   * EquipEnhance(逐行):id == 0 或 id > MaxEnhanceLevel()(不在从 1 起的连续等级里);
+	//   * EquipEnhance(逐行):该 profile 的等级为0或超出连续上限；未知profile、V1规则违反必成/零金币/2%约束；
 	//     success_rate 不在 1..10000;连续等级内 bonus_permyriad 小于上一级;cost_gold > INT64_MAX;
 	//     material_id != 0 且 Item 行不存在(该行不再查后两项);material_id != 0、Item 行存在且是装备;
 	//     material_id != 0、Item 行存在且 battle_usable != 0(强化石不能是战斗道具:战斗结算按 config 扣物,
@@ -139,6 +142,8 @@ public:
 	//
 	// 槽位规则:取装备栏里接受该部位的槽(Bag::SlotsAcceptingKind,槽号升序)中**第一个空槽**;
 	// 都占着就**替换槽号最小的那个**,旧装备回人物背包(新装备刚腾出一格,必然放得下)。
+	// requestedSlot 有值时只穿入该槽,仅替换该槽的占用者;槽 0 也是有效的显式选择。
+	// 指定槽必须在当前容量内且接受该部位,否则返回 kEquipNoSlot,不会回退为自动选槽。
 	//
 	// 校验顺序(全部纯校验,在任何修改之前完成)与返回的 tip:
 	//   统一前置(见类注释)                             kEntityIsNull / kEquipFrozen / kEquipInBattle
@@ -164,7 +169,8 @@ public:
 	//   + PlayerAttributeSystem::PushPanel(player)。当前气血 / 法力按比例保持(穿脱不能当治疗)。
 	//   装到空槽时人物背包空出一格,再调 BagService::NotifySpaceFreed(「腾位通知」;替换时格数不变,不调)。
 	// 不写流水(同一 guid 换包)、不过发放封禁闸、不重掷属性、不推背包(由 handler 回两个包的全量)。
-	static uint32_t Equip(entt::entity player, Guid itemId);
+	static uint32_t Equip(entt::entity player, Guid itemId,
+		std::optional<uint32_t> requestedSlot = std::nullopt);
 
 	// 卸下:itemId 必须在装备栏(bags[kEquipment])里,回到人物背包。
 	//
@@ -387,10 +393,11 @@ public:
 	// 纯读;供本类各入口、表校验与单测共用,别处不要自己再写一遍 equip_kind 判断。
 	static bool IsEquipment(uint32_t configId);
 
-	// 强化上限:EquipEnhance 表里从 1 起**连续**的最大 id(第 N 行 = 「从 +(N−1) 强化到 +N」)。
-	// 表为空、或没有 id = 1 的行 → 0 = 强化未开放。中间缺一行则上限停在缺口之前(缺口之后的行由表校验报)。
-	// 纯读、静默;每次现算(几次哈希查找),不缓存 —— 改表 / 热更立即生效,存量装备的等级按它夹取。
-	static uint32_t MaxEnhanceLevel();
+	// 强化上限:该profile从1起连续的最大等级。缺首级返回0；中间缺行则停在缺口之前。
+	// 纯读、静默、每次现算、不缓存；V1基础装最多10级，不受旧profile的12级影响。
+	// profile=0 为旧装备；V1 基础装为1；首饰/法宝及未知 profile 返回0。
+	// 同一 profile 按显式 level 从1连续；旧表 level=0 时兼容以 id 为等级。
+	static uint32_t MaxEnhanceLevel(uint32_t profile = 0);
 
 	// 该 config 是不是宝石:EquipGem 表有这一行,且它的 Item 行存在、不是装备(equip_kind == 0)。
 	// 后一半不能省:镶嵌 / 取下按 config 扣发数量,指向装备的「宝石」嵌进去吃掉的是一件装备实例,取下来

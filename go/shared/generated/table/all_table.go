@@ -66,6 +66,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := EquipAffixRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load EquipAffixRule table: %v", err)
     }
+    if err := EquipArtifactTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load EquipArtifact table: %v", err)
+    }
     if err := EquipAttributeTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load EquipAttribute table: %v", err)
     }
@@ -83,6 +86,9 @@ func LoadTables(configDir string, useBinary bool) {
     }
     if err := EquipSlotTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load EquipSlot table: %v", err)
+    }
+    if err := EquipV1AffixTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load EquipV1Affix table: %v", err)
     }
     if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GlobalVariable table: %v", err)
@@ -169,7 +175,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(49)
+    wg.Add(51)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -280,6 +286,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
     }()
     go func() {
         defer wg.Done()
+        if err := EquipArtifactTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load EquipArtifact table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
         if err := EquipAttributeTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load EquipAttribute table: %v", err)
         }
@@ -312,6 +324,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := EquipSlotTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load EquipSlot table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := EquipV1AffixTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load EquipV1Affix table: %v", err)
         }
     }()
     go func() {
@@ -552,6 +570,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newEquipAffixRule.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload EquipAffixRule failed: %w", err)
     }
+    newEquipArtifact := NewEquipArtifactTableManager()
+    if err := newEquipArtifact.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload EquipArtifact failed: %w", err)
+    }
     newEquipAttribute := NewEquipAttributeTableManager()
     if err := newEquipAttribute.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload EquipAttribute failed: %w", err)
@@ -575,6 +597,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     newEquipSlot := NewEquipSlotTableManager()
     if err := newEquipSlot.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload EquipSlot failed: %w", err)
+    }
+    newEquipV1Affix := NewEquipV1AffixTableManager()
+    if err := newEquipV1Affix.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload EquipV1Affix failed: %w", err)
     }
     newGlobalVariable := NewGlobalVariableTableManager()
     if err := newGlobalVariable.Load(configDir, useBinary); err != nil {
@@ -696,12 +722,14 @@ func ReloadTables(configDir string, useBinary bool) error {
     DungeonTableManagerInstance = newDungeon
     EquipAffixPoolTableManagerInstance = newEquipAffixPool
     EquipAffixRuleTableManagerInstance = newEquipAffixRule
+    EquipArtifactTableManagerInstance = newEquipArtifact
     EquipAttributeTableManagerInstance = newEquipAttribute
     EquipAttributeCapTableManagerInstance = newEquipAttributeCap
     EquipEnhanceTableManagerInstance = newEquipEnhance
     EquipGemTableManagerInstance = newEquipGem
     EquipGemSocketTableManagerInstance = newEquipGemSocket
     EquipSlotTableManagerInstance = newEquipSlot
+    EquipV1AffixTableManagerInstance = newEquipV1Affix
     GlobalVariableTableManagerInstance = newGlobalVariable
     GuildActivityTableManagerInstance = newGuildActivity
     GuildDonateTableManagerInstance = newGuildDonate

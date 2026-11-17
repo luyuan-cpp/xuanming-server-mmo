@@ -1406,8 +1406,19 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelComp final : public ::google::
 
   // accessors -------------------------------------------------------
   enum : int {
+    kTotalExpFieldNumber = 2,
     kLevelFieldNumber = 1,
   };
+  // uint64 total_exp = 2;
+  void clear_total_exp() ;
+  [[nodiscard]] ::uint64_t total_exp() const;
+  void set_total_exp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_total_exp() const;
+  void _internal_set_total_exp(::uint64_t value);
+
+  public:
   // uint32 level = 1;
   void clear_level() ;
   [[nodiscard]] ::uint32_t level() const;
@@ -1422,7 +1433,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelComp final : public ::google::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1451,6 +1462,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LevelComp final : public ::google::
         const LevelComp& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t total_exp_;
     ::uint32_t level_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3384,7 +3396,7 @@ inline void BaseAttributesComp::_internal_set_speed(::uint64_t value) {
 inline void LevelComp::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint32_t LevelComp::level() const {
   // @@protoc_insertion_point(field_get:LevelComp.level)
@@ -3392,7 +3404,7 @@ inline ::uint32_t LevelComp::level() const {
 }
 inline void LevelComp::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:LevelComp.level)
 }
 inline ::uint32_t LevelComp::_internal_level() const {
@@ -3402,6 +3414,30 @@ inline ::uint32_t LevelComp::_internal_level() const {
 inline void LevelComp::_internal_set_level(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = value;
+}
+
+// uint64 total_exp = 2;
+inline void LevelComp::clear_total_exp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t LevelComp::total_exp() const {
+  // @@protoc_insertion_point(field_get:LevelComp.total_exp)
+  return _internal_total_exp();
+}
+inline void LevelComp::set_total_exp(::uint64_t value) {
+  _internal_set_total_exp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:LevelComp.total_exp)
+}
+inline ::uint64_t LevelComp::_internal_total_exp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_exp_;
+}
+inline void LevelComp::_internal_set_total_exp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_ = value;
 }
 
 // -------------------------------------------------------------------

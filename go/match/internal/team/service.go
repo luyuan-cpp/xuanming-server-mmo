@@ -143,17 +143,15 @@ func (s *Service) createTeam(ctx context.Context, caller uint64, _ *teampb.Creat
 func (s *Service) GetMyTeam(ctx context.Context, caller uint64, in *teampb.GetMyTeamRequest) *teampb.TeamResponse {
 	resp := s.getMyTeam(ctx, caller, in)
 	if in.MatchRequestId != "" {
-		key, e := authority.DirectUUIDKey(1, caller, in.MatchRequestId)
+		_, e := authority.DirectUUIDKey(1, caller, in.MatchRequestId)
 		if e != nil {
 			return s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
 		}
-		f, _, e := s.svcCtx.Authority.FindDirect(ctx, key)
+		intent, e := s.svcCtx.Authority.TeamMatchIntent(ctx, caller, in.MatchRequestId)
 		if e != nil {
 			return s.respond(ctx, caller, ErrInternal, 0)
 		}
-		if f != nil {
-			resp.MatchIntent = &teampb.TeamMatchIntent{RequestId: in.MatchRequestId, BattleId: f.BattleId, State: f.State}
-		}
+		resp.MatchIntent = intent
 	}
 	return resp
 }
@@ -198,18 +196,18 @@ func (s *Service) applyJoinTeam(ctx context.Context, caller uint64, in *teampb.A
 	if self.PlayerTeamId != 0 {
 		return s.snapshotResponse(ctx, caller, ErrMemberInTeam, 0, self)
 	}
-	other, err := s.readFree(ctx, methodApplyJoinTeam, target)
+	teamID, err := s.targetTeamID(ctx, methodApplyJoinTeam, target)
 	if err != nil {
 		return s.snapshotResponse(ctx, caller, ErrInternal, 0, self)
 	}
-	if other.PlayerTeamId == 0 {
+	if teamID == 0 {
 		return s.snapshotResponse(ctx, caller, ErrNoTeam, 0, self)
 	}
 	zone, code := s.homeZoneOf(ctx, caller)
 	if code != 0 {
 		return s.snapshotResponse(ctx, caller, code, 0, self)
 	}
-	resp, _ := s.runMutate(ctx, caller, BindTarget(caller, other.PlayerTeamId), ApplyOp(caller, zone),
+	resp, _ := s.runMutate(ctx, caller, BindTarget(caller, teamID), ApplyOp(caller, zone),
 		mutateSpec{method: methodApplyJoinTeam})
 	return resp
 }
@@ -236,11 +234,11 @@ func (s *Service) inviteToTeam(ctx context.Context, caller uint64, in *teampb.In
 	if !playercontract.IsSessionOnline(session) {
 		return s.respond(ctx, caller, ErrTargetOffline, 0)
 	}
-	other, err := s.readFree(ctx, methodInviteToTeam, target)
+	teamID, err := s.targetTeamID(ctx, methodInviteToTeam, target)
 	if err != nil {
 		return s.respond(ctx, caller, ErrInternal, 0)
 	}
-	if other.PlayerTeamId != 0 {
+	if teamID != 0 {
 		return s.respond(ctx, caller, ErrMemberInTeam, target)
 	}
 	zone, code := s.homeZoneOf(ctx, target)
@@ -542,6 +540,15 @@ func (s *Service) readFree(ctx context.Context, method string, playerId uint64) 
 		logx.WithContext(ctx).Errorf("[team] %s unlocked read failed player=%d: %v", method, playerId, err)
 	}
 	return snap, err
+}
+
+// 申请与邀请只查对方的队伍编号；私有名册的 ReadFree 要求原会话属于被查玩家。
+func (s *Service) targetTeamID(ctx context.Context, method string, target uint64) (uint64, error) {
+	index, err := s.store.sql.targetMembership(ctx, target)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("[team] %s target membership lookup failed player=%d: %v", method, target, err)
+	}
+	return index.TeamId, err
 }
 
 // homeZoneOf 查单个玩家 home zone,返回 (zone, tip);tip≠0 时 zone 无意义(§D.3 fail-closed)。

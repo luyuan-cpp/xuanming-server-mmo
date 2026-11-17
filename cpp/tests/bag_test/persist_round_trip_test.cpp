@@ -383,6 +383,7 @@ protected:
         db.mutable_derived_attributes_component()->set_health(100); // 活着:不走职业初值 / 复活修补
         db.mutable_derived_attributes_component()->set_mana(40);
         db.mutable_level_component()->set_level(30);
+        db.mutable_level_component()->set_total_exp((uint64_t{1} << 50) + 123);
 
         auto &currency = *db.mutable_currency();
         currency.add_values(1000);
@@ -705,6 +706,30 @@ TEST_F(PersistRoundTripTest, MarshalIntoReusedOutputDoesNotDuplicateCarriedField
     std::sort(expected.begin(), expected.end());
     std::sort(found.begin(), found.end());
     EXPECT_EQ(expected, found) << DescribeProbeDiff(expected, found);
+}
+
+// 购买去重回执与更高版本的宠物字段一起携带；加载/重存不能把已付款请求变回可执行。
+TEST_F(PersistRoundTripTest, PetPurchaseReceiptAndUnknownFieldsSurviveLoadAndResave)
+{
+    PlayerAllData baseline;
+    ASSERT_TRUE(LoadAndMarshal(BuildEveryPersistedType(0), baseline));
+    auto &pets = *baseline.mutable_player_database_data()->mutable_pet_component();
+    ASSERT_GT(pets.pets_size(), 0);
+    pets.set_last_purchase_sequence((uint64_t{1} << 45) + 9);
+    pets.set_last_purchase_pet_table_id(pets.pets(0).pet_table_id());
+    pets.set_last_purchase_pet_id(pets.pets(0).pet_id());
+    pets.set_last_purchase_price_gold((uint64_t{1} << 40) + 777);
+    pets.GetReflection()->MutableUnknownFields(&pets)->AddVarint(kProbeFieldNumber, 8675309);
+    const auto expected = pets;
+
+    PlayerAllData decoded;
+    ASSERT_TRUE(decoded.ParseFromString(baseline.SerializeAsString()));
+    PlayerAllData resaved;
+    ASSERT_TRUE(LoadAndMarshal(decoded, resaved));
+    EXPECT_TRUE(DiffAgainst(expected, resaved.player_database_data().pet_component()).empty());
+    PlayerAllData resavedAgain;
+    ASSERT_TRUE(LoadAndMarshal(resaved, resavedAgain));
+    EXPECT_TRUE(DiffAgainst(expected, resavedAgain.player_database_data().pet_component()).empty());
 }
 
 // 盖戳:取 max(本二进制世代, 加载世代);未盖戳(0)按 1。

@@ -31,6 +31,37 @@ message BuffTable {
 	double combat_idle_seconds = 20;
 	uint32 time = 21;
 	string bonus_damage = 22;
+	uint32 battle_op = 23;
+	uint32 trigger_event = 24;
+	uint32 effect_target = 25;
+	double flat_value = 26;
+	double per_level = 27;
+	double ratio = 28;
+	uint32 value_basis = 29;
+	uint32 damage_filter = 30;
+	uint32 duration_rounds = 31;
+	uint32 tick_count = 32;
+	double trigger_chance = 33;
+	uint32 per_round_limit = 34;
+	uint32 hit_limit = 35;
+	uint32 modifier_stat = 36;
+	uint32 state_kind = 37;
+	double application_chance = 38;
+	string required_tag = 39;
+	string second_required_tag = 40;
+	double conditional_bonus = 41;
+	double secondary_ratio = 42;
+	uint32 effect_count = 43;
+	uint32 target_count = 44;
+	uint32 pet_target_count = 45;
+	uint32 stack_key = 46;
+	uint32 refresh_policy = 47;
+	uint32 keep_on_death = 48;
+	uint32 effect_priority = 49;
+	uint32 start_round = 50;
+	uint32 stack_limit = 51;
+	uint32 require_living_caster = 52;
+	uint32 tick_on_apply = 53;
 }
 
 message BuffTableData {

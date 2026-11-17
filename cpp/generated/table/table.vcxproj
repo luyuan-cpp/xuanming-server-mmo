@@ -77,6 +77,7 @@
     <ClInclude Include="code\mission_table_fk.h" />
     <ClInclude Include="code\monster_table.h" />
     <ClInclude Include="code\monster_table_comp.h" />
+    <ClInclude Include="code\monster_table_fk.h" />
     <ClInclude Include="code\attributeautoplan_table.h" />
     <ClInclude Include="code\attributeautoplan_table_comp.h" />
     <ClInclude Include="code\attributeautoplan_table_fk.h" />
@@ -242,6 +243,7 @@
     <ClCompile Include="code\mission_table.cpp" />
     <ClCompile Include="code\mission_table_fk.cpp" />
     <ClCompile Include="code\monster_table.cpp" />
+    <ClCompile Include="code\monster_table_fk.cpp" />
     <ClCompile Include="code\attributeautoplan_table.cpp" />
     <ClCompile Include="code\attributedimension_table.cpp" />
     <ClCompile Include="code\attributepool_table.cpp" />
@@ -518,5 +520,19 @@
     <ClInclude Include="code\activityschedule_table_fk.h" />
     <ClInclude Include="code\activityschedule_table_comp.h" />
     <ClInclude Include="proto\activityschedule_table.pb.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="code\equipartifact_table.cpp" />
+    <ClInclude Include="code\equipartifact_table.h" />
+    <ClInclude Include="code\equipartifact_table_comp.h" />
+    <ClCompile Include="code\equipv1affix_table.cpp" />
+    <ClInclude Include="code\equipv1affix_table.h" />
+    <ClInclude Include="code\equipv1affix_table_comp.h" />
+    <ClCompile Include="code\equipv1affix_table_fk.cpp" />
+    <ClInclude Include="code\equipv1affix_table_fk.h" />
+    <ClCompile Include="proto\equipartifact_table.pb.cc" />
+    <ClInclude Include="proto\equipartifact_table.pb.h" />
+    <ClCompile Include="proto\equipv1affix_table.pb.cc" />
+    <ClInclude Include="proto\equipv1affix_table.pb.h" />
   </ItemGroup>
 </Project>

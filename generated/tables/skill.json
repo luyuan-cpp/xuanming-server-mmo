@@ -3714,6 +3714,1913 @@
    "target_team": 3,
    "think_interval": 0,
    "unlock_level": 40
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 0,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "常规物理群攻；承接普通物理输出及宝宝猛击原型；首测参数，待平衡。",
+   "effect": [
+    100020
+   ],
+   "id": 10002,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "横戈裂岳",
+   "pet_max_targets": 2,
+   "prototype_code": "A02",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.7,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "物理群攻并降低目标物理攻击，用于压制物理输出和物理宝宝；首测参数，待平衡。",
+   "effect": [
+    100030,
+    100031
+   ],
+   "id": 10003,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "戈鸣断势",
+   "pet_max_targets": 1,
+   "prototype_code": "A03",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 0,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "常规法术群攻；承接普通法术输出及宝宝灵弹原型；首测参数，待平衡。",
+   "effect": [
+    100060
+   ],
+   "id": 10006,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "紫霄雷阵",
+   "pet_max_targets": 2,
+   "prototype_code": "A06",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.9,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "法术伤害并减速；首测参数，待平衡。",
+   "effect": [
+    100070,
+    100071
+   ],
+   "id": 10007,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "寒星凝魄",
+   "pet_max_targets": 1,
+   "prototype_code": "A07",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 1.6,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 4,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "高耗蓝、长冷却的法术群体爆发；首测参数，待平衡。",
+   "effect": [
+    100080
+   ],
+   "id": 10008,
+   "mana_percent": 0.15,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "九霄归墟",
+   "pet_max_targets": 1,
+   "prototype_code": "A08",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 0,
+   "description": "普通即时治疗；承接 A09、B04；首测参数，待平衡。",
+   "effect": [
+    100100
+   ],
+   "id": 10010,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "青莲润生",
+   "pet_max_targets": 1,
+   "prototype_code": "A10",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "即时治疗，对残血目标额外提高治疗效果；首测参数，待平衡。",
+   "effect": [
+    100120
+   ],
+   "execute_heal_bonus": 0.6,
+   "execute_heal_threshold": 0.35,
+   "id": 10012,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "丹心返照",
+   "pet_max_targets": 1,
+   "prototype_code": "A12",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "提高物防、法防；承接 A13、B03；首测参数，待平衡。",
+   "effect": [
+    100140
+   ],
+   "id": 10014,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "灵鼎护元",
+   "pet_max_targets": 1,
+   "prototype_code": "A14",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "消耗行动恢复自身法力；首测参数，待平衡。",
+   "effect": [
+    100150
+   ],
+   "id": 10015,
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "太虚澄心",
+   "pet_max_targets": 1,
+   "prototype_code": "A15",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "提高速度；首测参数，待平衡。",
+   "effect": [
+    100160
+   ],
+   "id": 10016,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "青羽催行",
+   "pet_max_targets": 1,
+   "prototype_code": "A16",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.9,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "先手优先级的物理攻击；首测参数，待平衡。",
+   "effect": [
+    100170
+   ],
+   "id": 10017,
+   "initiative": 1,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "长风先至",
+   "pet_max_targets": 1,
+   "prototype_code": "A17",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.55,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "少量物理伤害并降低防御；首测参数，待平衡。",
+   "effect": [
+    100180,
+    100181
+   ],
+   "id": 10018,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "碎甲击",
+   "pet_max_targets": 2,
+   "prototype_code": "A18",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 18,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "逐目标判定中毒，按回合持续伤害；首测参数，待平衡。",
+   "effect": [
+    100190
+   ],
+   "id": 10019,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "蚀骨毒",
+   "pet_max_targets": 2,
+   "prototype_code": "A19",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "逐目标判定，限制所有主动技能；仍可普攻、防御、道具为草案；首测参数，待平衡。",
+   "effect": [
+    100200
+   ],
+   "id": 10020,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "封灵咒",
+   "pet_max_targets": 1,
+   "prototype_code": "A20",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "逐目标条目判定，封锁法术攻击；首测参数，待平衡。",
+   "effect": [
+    100210
+   ],
+   "id": 10021,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "闭灵锁魄",
+   "pet_max_targets": 1,
+   "prototype_code": "A21",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "逐目标条目判定，封锁物理攻击；首测参数，待平衡。",
+   "effect": [
+    100220
+   ],
+   "id": 10022,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "禁武缚刃",
+   "pet_max_targets": 1,
+   "prototype_code": "A22",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "中混乱者行动时，仅以物理或法术攻击自己随机一名存活队友，按所用攻击正常耗蓝；首测参数，待平衡。",
+   "effect": [
+    100230
+   ],
+   "id": 10023,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "乱心惑神",
+   "pet_max_targets": 1,
+   "prototype_code": "A23",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "昏睡，无法正常行动；受到伤害会醒；首测参数，待平衡。",
+   "effect": [
+    100240
+   ],
+   "id": 10024,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "七魄入梦",
+   "pet_max_targets": 1,
+   "prototype_code": "A24",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "按每个目标的物理/法术输出倾向提高对应伤害；首测参数，待平衡。",
+   "effect": [
+    100250
+   ],
+   "id": 10025,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "战意昂扬",
+   "pet_max_targets": 1,
+   "prototype_code": "A25",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "allow_dead_target": 1,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "五次回合末持续恢复；持印目标倒地可复活；首测参数，待平衡。",
+   "effect": [
+    100260
+   ],
+   "id": 10026,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "生生不息",
+   "pet_max_targets": 1,
+   "prototype_code": "A26",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "提高直接攻击闪避；首测参数，待平衡。",
+   "effect": [
+    100270
+   ],
+   "id": 10027,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "幻影迷踪",
+   "pet_max_targets": 1,
+   "prototype_code": "A27",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "description": "提前结算已有毒的部分剩余伤害，扣掉对应次数；首测参数，待平衡。",
+   "effect": [
+    100280
+   ],
+   "id": 10028,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "催毒诀",
+   "pet_max_targets": 1,
+   "prototype_code": "A28",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "延长已有毒的剩余结算次数，不凭空新上毒；首测参数，待平衡。",
+   "effect": [
+    100290
+   ],
+   "id": 10029,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "蔓毒术",
+   "pet_max_targets": 1,
+   "prototype_code": "A29",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.5,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "少量法术伤害并附加灼烧；首测参数，待平衡。",
+   "effect": [
+    100300,
+    100301
+   ],
+   "id": 10030,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "焚心炎",
+   "pet_max_targets": 1,
+   "prototype_code": "A30",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.85,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "法术群攻；同时有毒/灼烧时消费各部分剩余伤害，转为额外爆发；首测参数，待平衡。",
+   "effect": [
+    100310,
+    100311
+   ],
+   "id": 10031,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "毒火交攻",
+   "pet_max_targets": 1,
+   "prototype_code": "A31",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "对睡眠目标具有额外伤害的物理单攻；首测参数，待平衡。",
+   "effect": [
+    100320
+   ],
+   "id": 10032,
+   "mana_percent": 0.07,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "碎梦一击",
+   "pet_max_targets": 1,
+   "prototype_code": "A32",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "description": "清除可净化有害状态；承接 A11；首测参数，待平衡。",
+   "effect": [
+    100330
+   ],
+   "id": 10033,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "清心荡秽",
+   "pet_max_targets": 1,
+   "prototype_code": "A33",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "清除可驱散有益状态；承接 B10；首测参数，待平衡。",
+   "effect": [
+    100340
+   ],
+   "id": 10034,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "驱灵散势",
+   "pet_max_targets": 1,
+   "prototype_code": "A34",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "降低受到的治疗，压制持续恢复，本身不禁止复活；首测参数，待平衡。",
+   "effect": [
+    100350
+   ],
+   "id": 10035,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "断脉咒",
+   "pet_max_targets": 1,
+   "prototype_code": "A35",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "施法者为受保护友方分担部分单体直接伤害；首测参数，待平衡。",
+   "effect": [
+    100360
+   ],
+   "id": 10036,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "同袍共济",
+   "pet_max_targets": 1,
+   "prototype_code": "A36",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.0,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "对处于破防状态的目标额外增伤；首测参数，待平衡。",
+   "effect": [
+    100370
+   ],
+   "id": 10037,
+   "mana_percent": 0.07,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "趁隙追斩",
+   "pet_max_targets": 1,
+   "prototype_code": "A37",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "冰冻期间不能行动、不能受到伤害、不能新增其他障碍；首测参数，待平衡。",
+   "effect": [
+    100380
+   ],
+   "id": 10038,
+   "mana_percent": 0.12,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "冰封玄狱",
+   "pet_max_targets": 1,
+   "prototype_code": "A38",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.6,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 4,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "高耗蓝、长冷却的物理群体爆发；承接 A04 普通物理爆发；首测参数，待平衡。",
+   "effect": [
+    100390
+   ],
+   "id": 10039,
+   "mana_percent": 0.15,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "天崩裂岳",
+   "pet_max_targets": 1,
+   "prototype_code": "A39",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "独立主动施放，为各目标创建独立的伤害吸收容量；不恢复气血、不由过量治疗触发；首测参数，待平衡。",
+   "effect": [
+    100400
+   ],
+   "id": 10040,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "独立护盾（名称待定）",
+   "pet_max_targets": 1,
+   "prototype_code": "A40",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "给目标施加抵挡直接法术伤害的护罩。；首测参数，待平衡。",
+   "effect": [
+    110050
+   ],
+   "id": 11005,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "如意灵环",
+   "pet_max_targets": 1,
+   "prototype_code": "B05",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "给目标施加抵挡直接物理伤害的护罩。；首测参数，待平衡。",
+   "effect": [
+    110060
+   ],
+   "id": 11006,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "神龙护体",
+   "pet_max_targets": 1,
+   "prototype_code": "B06",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "使其受物理攻击时对攻击者造成物理反伤。；首测参数，待平衡。",
+   "effect": [
+    110070
+   ],
+   "id": 11007,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "乾坤反震",
+   "pet_max_targets": 1,
+   "prototype_code": "B07",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "使其受法术攻击时对攻击者造成法术反伤。；首测参数，待平衡。",
+   "effect": [
+    110080
+   ],
+   "id": 11008,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "五色返照",
+   "pet_max_targets": 1,
+   "prototype_code": "B08",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 16,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 3,
+   "description": "按劝退命中与目标抗劝退条目直接判定，成功则使目标离阵。；首测参数，待平衡。",
+   "effect": [
+    110090
+   ],
+   "id": 11009,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "游说退敌",
+   "pet_max_targets": 1,
+   "prototype_code": "B09",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "挂上印记，强化受益者下一次普攻，使其附带一次弱追加攻击。；首测参数，待平衡。",
+   "effect": [
+    110110
+   ],
+   "id": 11011,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "连战之印",
+   "pet_max_targets": 1,
+   "prototype_code": "B11",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "攻击目标，并根据实际造成的伤害给施法宝宝自身恢复气血。；首测参数，待平衡。",
+   "effect": [
+    110120
+   ],
+   "id": 11012,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "摄魂汲血",
+   "pet_max_targets": 1,
+   "prototype_code": "B12",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 4,
+   "description": "将宝宝自身气血降至 1，大量削减目标法力。自身气血已是 1 时无法施放。；首测参数，待平衡。",
+   "effect": [
+    110130
+   ],
+   "health_cost_mode": 1,
+   "id": 11013,
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "舍命破灵",
+   "pet_max_targets": 1,
+   "prototype_code": "B13",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "给目标施加法力盾。受护目标用自己的法力承受部分伤害。；首测参数，待平衡。",
+   "effect": [
+    110140
+   ],
+   "id": 11014,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "法力护盾",
+   "pet_max_targets": 1,
+   "prototype_code": "B14",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 4,
+   "description": "消耗自身法力，暂时提高自身气血上限，并补回相应气血。到期恢复原气血上限，当前气血按恢复后的上限封顶。；首测参数，待平衡。",
+   "effect": [
+    110150
+   ],
+   "id": 11015,
+   "mana_percent": 0.25,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "移灵养元",
+   "pet_max_targets": 1,
+   "prototype_code": "B15",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "主动",
+   "cooldown_rounds": 0,
+   "description": "宝宝牺牲自身，使自身倒地，为目标大量治疗并清除可净化有害状态。；首测参数，待平衡。",
+   "effect": [
+    110160,
+    110161
+   ],
+   "health_cost_mode": 2,
+   "id": 11016,
+   "mana_percent": 0.0,
+   "max_battle_uses": 1,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "舍身救主",
+   "pet_max_targets": 1,
+   "prototype_code": "B16",
+   "require_target": 1,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "常驻提升物理攻击属性。；首测参数，待平衡。",
+   "id": 12001,
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "砺刃藏锋",
+   "passive_percent": 0.12,
+   "passive_stat": "physicalAttack",
+   "pet_max_targets": 1,
+   "prototype_code": "P01",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "常驻提升法术攻击属性。；首测参数，待平衡。",
+   "id": 12002,
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "灵台凝元",
+   "passive_percent": 0.12,
+   "passive_stat": "magicAttack",
+   "pet_max_targets": 1,
+   "prototype_code": "P02",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "常驻提升防御。；首测参数，待平衡。",
+   "id": 12003,
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "铁骨铸魂",
+   "passive_percent": 0.12,
+   "passive_stat": "defense",
+   "pet_max_targets": 1,
+   "prototype_code": "P03",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "提高自身气血上限。；首测参数，待平衡。",
+   "id": 12004,
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "百战归元",
+   "passive_percent": 0.15,
+   "passive_stat": "maxHp",
+   "pet_max_targets": 1,
+   "prototype_code": "P04",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "提高自己施放的治疗效果。；首测参数，待平衡。",
+   "id": 12005,
+   "init_effect": [
+    120050
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "悬壶济世",
+   "pet_max_targets": 1,
+   "prototype_code": "P05",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "提高自身速度。；首测参数，待平衡。",
+   "id": 12006,
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "流云轻身",
+   "passive_percent": 0.1,
+   "passive_stat": "speed",
+   "pet_max_targets": 1,
+   "prototype_code": "P06",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "降低技能法力消耗。；首测参数，待平衡。",
+   "id": 12007,
+   "init_effect": [
+    120070
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "凝神节用",
+   "pet_max_targets": 1,
+   "prototype_code": "P07",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "恢复自己的气血。；首测参数，待平衡。",
+   "id": 12008,
+   "init_effect": [
+    120080
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "借毒养元",
+   "pet_max_targets": 1,
+   "prototype_code": "P08",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "使用自己的物理属性，零耗蓝释放来袭的同一个技能。；首测参数，待平衡。",
+   "id": 12009,
+   "init_effect": [
+    120090
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "反戈一击",
+   "pet_max_targets": 1,
+   "prototype_code": "P09",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "强化下一次单体直接伤害，最多储存 1 层。；首测参数，待平衡。",
+   "id": 12010,
+   "init_effect": [
+    120100
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "闪影回锋",
+   "pet_max_targets": 1,
+   "prototype_code": "P10",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "降低自己承受的法术伤害。；首测参数，待平衡。",
+   "id": 12014,
+   "init_effect": [
+    120140
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "灵障",
+   "pet_max_targets": 1,
+   "prototype_code": "P14",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "提升自身抗劝退，参与 B09 游说退敌的条目判定。；首测参数，待平衡。",
+   "id": 12015,
+   "init_effect": [
+    120150
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "忠心护主",
+   "pet_max_targets": 1,
+   "prototype_code": "P15",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "提升抗混乱、抗昏睡条目。；首测参数，待平衡。",
+   "id": 12016,
+   "init_effect": [
+    120160
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "凝心守神",
+   "pet_max_targets": 1,
+   "prototype_code": "P16",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "降低该次攻击中这些后续段的伤害。；首测参数，待平衡。",
+   "id": 12017,
+   "init_effect": [
+    120170
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "卸力护身",
+   "pet_max_targets": 1,
+   "prototype_code": "P17",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "给自身恢复法力。；首测参数，待平衡。",
+   "id": 12018,
+   "init_effect": [
+    120180
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "灵息回转",
+   "pet_max_targets": 1,
+   "prototype_code": "P18",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "使用自己的法术属性，零耗蓝释放来袭的同一个技能。；首测参数，待平衡。",
+   "id": 12019,
+   "init_effect": [
+    120190
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "法术反击",
+   "pet_max_targets": 1,
+   "prototype_code": "P19",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "人物对原目标接一次较弱物理追击；宝宝物理追击最多作用2个敌方。；首测参数，待平衡。",
+   "id": 13001,
+   "init_effect": [
+    130010
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "乘胜追击",
+   "pet_max_targets": 1,
+   "prototype_code": "T01",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "对该目标追加一次攻击。；首测参数，待平衡。",
+   "id": 13002,
+   "init_effect": [
+    130020
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "顺势追击",
+   "pet_max_targets": 1,
+   "prototype_code": "T02",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "削减命中目标的法力。；首测参数，待平衡。",
+   "id": 13003,
+   "init_effect": [
+    130030
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "破法追击",
+   "pet_max_targets": 1,
+   "prototype_code": "T03",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "给原命中的1名敌方施加破防，不含额外伤害。；首测参数，待平衡。",
+   "id": 13005,
+   "init_effect": [
+    130050
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "裂甲追击",
+   "pet_max_targets": 1,
+   "prototype_code": "T05",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "追加法术伤害，宝宝攻击上限为最多2个敌方。；首测参数，待平衡。",
+   "id": 13006,
+   "init_effect": [
+    130060
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "灵术回响",
+   "pet_max_targets": 1,
+   "prototype_code": "T06",
+   "require_target": 1,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 4,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "开场",
+   "cooldown_rounds": 0,
+   "description": "第 3 轮起逐轮提高受益者的直接伤害，最多叠 3 层。来源阵亡暂停，复活恢复已有层。；首测参数，待平衡。",
+   "id": 14001,
+   "init_effect": [
+    140010
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "后发制人",
+   "pet_max_targets": 1,
+   "prototype_code": "O01",
+   "require_target": 1,
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 4,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "开场",
+   "cooldown_rounds": 0,
+   "description": "开场前两轮减免直接伤害。来源阵亡时暂停，复活后恢复剩余时长。；首测参数，待平衡。",
+   "id": 14002,
+   "init_effect": [
+    140020
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 7,
+   "name": "固阵待敌",
+   "pet_max_targets": 1,
+   "prototype_code": "O02",
+   "require_target": 1,
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 4,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "开场",
+   "cooldown_rounds": 0,
+   "description": "前两轮给选定友方提供有容量的护盾。；首测参数，待平衡。",
+   "id": 14003,
+   "init_effect": [
+    140030
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "守主灵契",
+   "pet_max_targets": 1,
+   "prototype_code": "O03",
+   "require_target": 1,
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
   }
  ]
 }

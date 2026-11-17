@@ -293,6 +293,13 @@ state=bootstrap
 1=PlayerMailOutboxComp#1 repeated MailOutboxEntry entries
 1=player_database#27 optional PlayerMailOutboxComp mail_outbox group=7
 1=PlayerBattleResult#17 optional bool items_mailed
+1=LevelComp#2 optional uint64 total_exp
+1=PlayerBattleResult#18 optional uint64 exp_gain
+1=PlayerPetComp#3 optional uint64 last_purchase_sequence
+1=PlayerPetComp#4 optional uint32 last_purchase_pet_table_id
+1=PlayerPetComp#5 optional uint64 last_purchase_pet_id
+1=PlayerPetComp#6 optional uint64 last_purchase_price_gold
+1=PetInstance#11 map map<uint32,uint32> skill_ranks
 
 retired=player_database#10
 retired=player_database#17

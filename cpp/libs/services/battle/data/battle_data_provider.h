@@ -10,6 +10,7 @@
 #include "table/proto/dungeon_table.pb.h"
 #include "table/proto/monster_table.pb.h"
 #include "table/proto/item_table.pb.h"
+#include "table/proto/pet_table.pb.h"
 
 // 回合制战斗引擎的表数据供给接口(设计文档 §5.1)。
 //
@@ -33,6 +34,7 @@ public:
     // 物品行:引擎只读 battle_usable / battle_heal_hp / battle_heal_mp 三列,
     // 用于 ITEM 行动的合法性与效果。查不到 = 配置缺失,ITEM 一律拒绝。
     virtual const ItemTable* FindItem(uint32_t itemTableId) const = 0;
+    virtual const PetTable* FindPet(uint32_t petTableId) const { return nullptr; }
 
     // 按副本与服务端识别的战斗策略选档；返回值复制进引擎，整场不受后续配置变化影响。
     virtual const BattleRewardProfile* FindBattleReward(uint32_t battleConfigId,

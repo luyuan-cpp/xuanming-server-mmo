@@ -74,23 +74,27 @@ func (x *ItembaseAttr) GetBaseAttrValue() uint32 {
 }
 
 type ItemTable struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	MaxStackSize  uint32                 `protobuf:"varint,2,opt,name=max_stack_size,json=maxStackSize,proto3" json:"max_stack_size,omitempty"`
-	EquipKind     uint32                 `protobuf:"varint,3,opt,name=equip_kind,json=equipKind,proto3" json:"equip_kind,omitempty"`
-	BattleUsable  uint32                 `protobuf:"varint,4,opt,name=battle_usable,json=battleUsable,proto3" json:"battle_usable,omitempty"`
-	BattleHealHp  uint64                 `protobuf:"varint,5,opt,name=battle_heal_hp,json=battleHealHp,proto3" json:"battle_heal_hp,omitempty"`
-	BattleHealMp  uint64                 `protobuf:"varint,6,opt,name=battle_heal_mp,json=battleHealMp,proto3" json:"battle_heal_mp,omitempty"`
-	Name          string                 `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`
-	IconKey       string                 `protobuf:"bytes,9,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
-	EquipLevel    uint32                 `protobuf:"varint,10,opt,name=equip_level,json=equipLevel,proto3" json:"equip_level,omitempty"`
-	EquipClass    uint32                 `protobuf:"varint,11,opt,name=equip_class,json=equipClass,proto3" json:"equip_class,omitempty"`
-	AffixPool     uint32                 `protobuf:"varint,12,opt,name=affix_pool,json=affixPool,proto3" json:"affix_pool,omitempty"`
-	AffixRule     uint32                 `protobuf:"varint,13,opt,name=affix_rule,json=affixRule,proto3" json:"affix_rule,omitempty"`
-	BaseAttr      []*ItembaseAttr        `protobuf:"bytes,14,rep,name=base_attr,json=baseAttr,proto3" json:"base_attr,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Id                 uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	MaxStackSize       uint32                 `protobuf:"varint,2,opt,name=max_stack_size,json=maxStackSize,proto3" json:"max_stack_size,omitempty"`
+	EquipKind          uint32                 `protobuf:"varint,3,opt,name=equip_kind,json=equipKind,proto3" json:"equip_kind,omitempty"`
+	BattleUsable       uint32                 `protobuf:"varint,4,opt,name=battle_usable,json=battleUsable,proto3" json:"battle_usable,omitempty"`
+	BattleHealHp       uint64                 `protobuf:"varint,5,opt,name=battle_heal_hp,json=battleHealHp,proto3" json:"battle_heal_hp,omitempty"`
+	BattleHealMp       uint64                 `protobuf:"varint,6,opt,name=battle_heal_mp,json=battleHealMp,proto3" json:"battle_heal_mp,omitempty"`
+	Name               string                 `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
+	Description        string                 `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`
+	IconKey            string                 `protobuf:"bytes,9,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
+	EquipLevel         uint32                 `protobuf:"varint,10,opt,name=equip_level,json=equipLevel,proto3" json:"equip_level,omitempty"`
+	EquipClass         uint32                 `protobuf:"varint,11,opt,name=equip_class,json=equipClass,proto3" json:"equip_class,omitempty"`
+	AffixPool          uint32                 `protobuf:"varint,12,opt,name=affix_pool,json=affixPool,proto3" json:"affix_pool,omitempty"`
+	AffixRule          uint32                 `protobuf:"varint,13,opt,name=affix_rule,json=affixRule,proto3" json:"affix_rule,omitempty"`
+	EquipProfile       uint32                 `protobuf:"varint,15,opt,name=equip_profile,json=equipProfile,proto3" json:"equip_profile,omitempty"`
+	ForgeMaterialId    uint32                 `protobuf:"varint,16,opt,name=forge_material_id,json=forgeMaterialId,proto3" json:"forge_material_id,omitempty"`
+	ForgeMaterialCount uint32                 `protobuf:"varint,17,opt,name=forge_material_count,json=forgeMaterialCount,proto3" json:"forge_material_count,omitempty"`
+	ArtifactId         uint32                 `protobuf:"varint,18,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	BaseAttr           []*ItembaseAttr        `protobuf:"bytes,14,rep,name=base_attr,json=baseAttr,proto3" json:"base_attr,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ItemTable) Reset() {
@@ -214,6 +218,34 @@ func (x *ItemTable) GetAffixRule() uint32 {
 	return 0
 }
 
+func (x *ItemTable) GetEquipProfile() uint32 {
+	if x != nil {
+		return x.EquipProfile
+	}
+	return 0
+}
+
+func (x *ItemTable) GetForgeMaterialId() uint32 {
+	if x != nil {
+		return x.ForgeMaterialId
+	}
+	return 0
+}
+
+func (x *ItemTable) GetForgeMaterialCount() uint32 {
+	if x != nil {
+		return x.ForgeMaterialCount
+	}
+	return 0
+}
+
+func (x *ItemTable) GetArtifactId() uint32 {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return 0
+}
+
 func (x *ItemTable) GetBaseAttr() []*ItembaseAttr {
 	if x != nil {
 		return x.BaseAttr
@@ -273,7 +305,7 @@ const file_item_table_proto_rawDesc = "" +
 	"\rItembase_attr\x12 \n" +
 	"\fbase_attr_id\x18\x01 \x01(\rR\n" +
 	"baseAttrId\x12&\n" +
-	"\x0fbase_attr_value\x18\x02 \x01(\rR\rbaseAttrValue\"\xcf\x03\n" +
+	"\x0fbase_attr_value\x18\x02 \x01(\rR\rbaseAttrValue\"\xf3\x04\n" +
 	"\tItemTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12$\n" +
 	"\x0emax_stack_size\x18\x02 \x01(\rR\fmaxStackSize\x12\x1d\n" +
@@ -293,7 +325,12 @@ const file_item_table_proto_rawDesc = "" +
 	"\n" +
 	"affix_pool\x18\f \x01(\rR\taffixPool\x12\x1d\n" +
 	"\n" +
-	"affix_rule\x18\r \x01(\rR\taffixRule\x12+\n" +
+	"affix_rule\x18\r \x01(\rR\taffixRule\x12#\n" +
+	"\requip_profile\x18\x0f \x01(\rR\fequipProfile\x12*\n" +
+	"\x11forge_material_id\x18\x10 \x01(\rR\x0fforgeMaterialId\x120\n" +
+	"\x14forge_material_count\x18\x11 \x01(\rR\x12forgeMaterialCount\x12\x1f\n" +
+	"\vartifact_id\x18\x12 \x01(\rR\n" +
+	"artifactId\x12+\n" +
 	"\tbase_attr\x18\x0e \x03(\v2\x0e.Itembase_attrR\bbaseAttr\"/\n" +
 	"\rItemTableData\x12\x1e\n" +
 	"\x04data\x18\x01 \x03(\v2\n" +

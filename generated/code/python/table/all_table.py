@@ -25,7 +25,7 @@ sys.path 说明
 为什么加载是「先全读、后全换」
 ==============================
 每个管理器把「读盘建索引」（``build_snapshot``）和「换上去」（``apply_snapshot``）
-拆成了两步。这里先把 49 张表全部读完，一张都没换；
+拆成了两步。这里先把 51 张表全部读完，一张都没换；
 中途任何一张读失败，异常直接抛出去，**一张表都不会被换掉** ——
 进程继续跑在上一批完整的配置上，而不是半新半旧。
 """
@@ -55,12 +55,14 @@ from .cooldown_table import CooldownTableManager
 from .dungeon_table import DungeonTableManager
 from .equipaffixpool_table import EquipAffixPoolTableManager
 from .equipaffixrule_table import EquipAffixRuleTableManager
+from .equipartifact_table import EquipArtifactTableManager
 from .equipattribute_table import EquipAttributeTableManager
 from .equipattributecap_table import EquipAttributeCapTableManager
 from .equipenhance_table import EquipEnhanceTableManager
 from .equipgem_table import EquipGemTableManager
 from .equipgemsocket_table import EquipGemSocketTableManager
 from .equipslot_table import EquipSlotTableManager
+from .equipv1affix_table import EquipV1AffixTableManager
 from .globalvariable_table import GlobalVariableTableManager
 from .guildactivity_table import GuildActivityTableManager
 from .guilddonate_table import GuildDonateTableManager
@@ -116,12 +118,14 @@ MANAGERS: dict[str, TableManager] = {
     "Dungeon": DungeonTableManager.instance(),
     "EquipAffixPool": EquipAffixPoolTableManager.instance(),
     "EquipAffixRule": EquipAffixRuleTableManager.instance(),
+    "EquipArtifact": EquipArtifactTableManager.instance(),
     "EquipAttribute": EquipAttributeTableManager.instance(),
     "EquipAttributeCap": EquipAttributeCapTableManager.instance(),
     "EquipEnhance": EquipEnhanceTableManager.instance(),
     "EquipGem": EquipGemTableManager.instance(),
     "EquipGemSocket": EquipGemSocketTableManager.instance(),
     "EquipSlot": EquipSlotTableManager.instance(),
+    "EquipV1Affix": EquipV1AffixTableManager.instance(),
     "GlobalVariable": GlobalVariableTableManager.instance(),
     "GuildActivity": GuildActivityTableManager.instance(),
     "GuildDonate": GuildDonateTableManager.instance(),
@@ -166,7 +170,7 @@ def _apply(staged: list[tuple[TableManager, Any]]) -> None:
 
 
 def load_tables(config_dir: str | Path, use_binary: bool = False) -> None:
-    """串行加载全部 49 张表。
+    """串行加载全部 51 张表。
 
     :param use_binary: True 读 ``*.pb``（proto 二进制），False 读 ``*.json``。
         口径与 Go/Java 的 ``useBinary`` 一致。

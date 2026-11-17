@@ -60,7 +60,7 @@ public final class BuffTableOuterClass extends com.google.protobuf.GeneratedFile
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\020buff_table.proto\"\301\005\n\tBuffTable\022\n\n\002id\030\001" +
+      "\n\020buff_table.proto\"\204\013\n\tBuffTable\022\n\n\002id\030\001" +
       " \001(\r\022\021\n\tno_caster\030\002 \001(\r\022\021\n\tbuff_type\030\003 \001" +
       "(\r\022 \n\003tag\030\004 \003(\0132\023.BuffTable.TagEntry\022-\n\n" +
       "immune_tag\030\005 \003(\0132\031.BuffTable.ImmuneTagEn" +
@@ -74,13 +74,31 @@ public final class BuffTableOuterClass extends com.google.protobuf.GeneratedFile
       "\020 \001(\001\022\033\n\023health_regeneration\030\021 \001(\t\022\020\n\010su" +
       "b_buff\030\022 \003(\r\022\027\n\017target_sub_buff\030\023 \003(\r\022\033\n" +
       "\023combat_idle_seconds\030\024 \001(\001\022\014\n\004time\030\025 \001(\r" +
-      "\022\024\n\014bonus_damage\030\026 \001(\t\032*\n\010TagEntry\022\013\n\003ke" +
-      "y\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n\016ImmuneTagE" +
-      "ntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n\016" +
-      "DispelTagEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001" +
-      "(\010:\0028\001\")\n\rBuffTableData\022\030\n\004data\030\001 \003(\0132\n." +
-      "BuffTableB;\n\016com.game.tableB\023BuffTableOu" +
-      "terClassP\001Z\022generated/pb/tableb\006proto3"
+      "\022\024\n\014bonus_damage\030\026 \001(\t\022\021\n\tbattle_op\030\027 \001(" +
+      "\r\022\025\n\rtrigger_event\030\030 \001(\r\022\025\n\reffect_targe" +
+      "t\030\031 \001(\r\022\022\n\nflat_value\030\032 \001(\001\022\021\n\tper_level" +
+      "\030\033 \001(\001\022\r\n\005ratio\030\034 \001(\001\022\023\n\013value_basis\030\035 \001" +
+      "(\r\022\025\n\rdamage_filter\030\036 \001(\r\022\027\n\017duration_ro" +
+      "unds\030\037 \001(\r\022\022\n\ntick_count\030  \001(\r\022\026\n\016trigge" +
+      "r_chance\030! \001(\001\022\027\n\017per_round_limit\030\" \001(\r\022" +
+      "\021\n\thit_limit\030# \001(\r\022\025\n\rmodifier_stat\030$ \001(" +
+      "\r\022\022\n\nstate_kind\030% \001(\r\022\032\n\022application_cha" +
+      "nce\030& \001(\001\022\024\n\014required_tag\030\' \001(\t\022\033\n\023secon" +
+      "d_required_tag\030( \001(\t\022\031\n\021conditional_bonu" +
+      "s\030) \001(\001\022\027\n\017secondary_ratio\030* \001(\001\022\024\n\014effe" +
+      "ct_count\030+ \001(\r\022\024\n\014target_count\030, \001(\r\022\030\n\020" +
+      "pet_target_count\030- \001(\r\022\021\n\tstack_key\030. \001(" +
+      "\r\022\026\n\016refresh_policy\030/ \001(\r\022\025\n\rkeep_on_dea" +
+      "th\0300 \001(\r\022\027\n\017effect_priority\0301 \001(\r\022\023\n\013sta" +
+      "rt_round\0302 \001(\r\022\023\n\013stack_limit\0303 \001(\r\022\035\n\025r" +
+      "equire_living_caster\0304 \001(\r\022\025\n\rtick_on_ap" +
+      "ply\0305 \001(\r\032*\n\010TagEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005va" +
+      "lue\030\002 \001(\010:\0028\001\0320\n\016ImmuneTagEntry\022\013\n\003key\030\001" +
+      " \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n\016DispelTagEntr" +
+      "y\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\")\n\rBuf" +
+      "fTableData\022\030\n\004data\030\001 \003(\0132\n.BuffTableB;\n\016" +
+      "com.game.tableB\023BuffTableOuterClassP\001Z\022g" +
+      "enerated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -91,7 +109,7 @@ public final class BuffTableOuterClass extends com.google.protobuf.GeneratedFile
     internal_static_BuffTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_BuffTable_descriptor,
-        new java.lang.String[] { "Id", "NoCaster", "BuffType", "Tag", "ImmuneTag", "DispelTag", "Level", "MaxLayer", "InfiniteDuration", "Duration", "ForceInterrupt", "Interval", "IntervalCount", "IntervalEffect", "MovementSpeedBoost", "MovementSpeedReduction", "HealthRegeneration", "SubBuff", "TargetSubBuff", "CombatIdleSeconds", "Time", "BonusDamage", });
+        new java.lang.String[] { "Id", "NoCaster", "BuffType", "Tag", "ImmuneTag", "DispelTag", "Level", "MaxLayer", "InfiniteDuration", "Duration", "ForceInterrupt", "Interval", "IntervalCount", "IntervalEffect", "MovementSpeedBoost", "MovementSpeedReduction", "HealthRegeneration", "SubBuff", "TargetSubBuff", "CombatIdleSeconds", "Time", "BonusDamage", "BattleOp", "TriggerEvent", "EffectTarget", "FlatValue", "PerLevel", "Ratio", "ValueBasis", "DamageFilter", "DurationRounds", "TickCount", "TriggerChance", "PerRoundLimit", "HitLimit", "ModifierStat", "StateKind", "ApplicationChance", "RequiredTag", "SecondRequiredTag", "ConditionalBonus", "SecondaryRatio", "EffectCount", "TargetCount", "PetTargetCount", "StackKey", "RefreshPolicy", "KeepOnDeath", "EffectPriority", "StartRound", "StackLimit", "RequireLivingCaster", "TickOnApply", });
     internal_static_BuffTable_TagEntry_descriptor =
       internal_static_BuffTable_descriptor.getNestedType(0);
     internal_static_BuffTable_TagEntry_fieldAccessorTable = new

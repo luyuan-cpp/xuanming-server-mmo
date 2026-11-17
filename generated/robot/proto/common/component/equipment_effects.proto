@@ -1,0 +1,34 @@
+syntax = "proto3";
+option go_package = "robot/proto/common/component";
+
+// 装备已汇总的静态修正，比例统一使用万分比。四项面板修正在 scene 已结算，战斗不再乘。
+message EquipmentEffects {
+  uint32 physical_attack_bps = 1;
+  uint32 magic_attack_bps = 2;
+  uint32 max_health_bps = 3;
+  uint32 speed_bps = 4;
+  uint32 outgoing_heal_bps = 5;
+  uint32 shield_capacity_bps = 6;
+  uint32 physical_crit_bps = 7;
+  uint32 magic_crit_bps = 8;
+  uint32 physical_resist_bps = 9;
+  uint32 magic_resist_bps = 10;
+  // 类型：1封灵、2封法、3封物、4混乱、5昏睡、6冰冻、7中毒。
+  map<uint32, uint32> ailment_hit_bps = 11;
+  map<uint32, uint32> ailment_resist_bps = 12;
+  // 类别：1物攻、2法攻、3治疗、4护盾、5封灵、6封法、7封物、8混乱、9昏睡、10冰冻、11毒、12辅助。
+  map<uint32, uint32> mana_reduction_bps = 13;
+  // 每件实物单独携带。同名允许重复，item_id 不允许重复；顺序不承载槽位语义。
+  repeated EquipmentArtifactSource artifacts = 14;
+}
+
+message EquipmentArtifactSource {
+  uint64 item_id = 1;
+  uint32 effect_id = 2; // F01..F08 对应 1..8。
+  uint32 bonus_bps = 3;
+  uint32 cap_bps = 4;
+  uint32 per_round_limit = 5; // 0 不限。
+  uint32 battle_limit = 6; // 0 不限。
+  uint32 active_rounds = 7; // 0 不限。
+  uint32 health_threshold_bps = 8;
+}

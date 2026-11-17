@@ -148,6 +148,28 @@ private static final long serialVersionUID = 0L;
     return goldReward_;
   }
 
+  public static final int CAPTURE_PET_TABLE_ID_FIELD_NUMBER = 11;
+  private int capturePetTableId_ = 0;
+  /**
+   * <code>uint32 capture_pet_table_id = 11;</code>
+   * @return The capturePetTableId.
+   */
+  @java.lang.Override
+  public int getCapturePetTableId() {
+    return capturePetTableId_;
+  }
+
+  public static final int CAPTURE_RATE_FIELD_NUMBER = 12;
+  private int captureRate_ = 0;
+  /**
+   * <code>uint32 capture_rate = 12;</code>
+   * @return The captureRate.
+   */
+  @java.lang.Override
+  public int getCaptureRate() {
+    return captureRate_;
+  }
+
   public static final int DROP_FIELD_NUMBER = 10;
   @SuppressWarnings("serial")
   private java.util.List<com.game.table.Monsterdrop> drop_;
@@ -233,6 +255,12 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < drop_.size(); i++) {
       output.writeMessage(10, drop_.get(i));
     }
+    if (capturePetTableId_ != 0) {
+      output.writeUInt32(11, capturePetTableId_);
+    }
+    if (captureRate_ != 0) {
+      output.writeUInt32(12, captureRate_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -282,6 +310,14 @@ private static final long serialVersionUID = 0L;
           }
           size += 1 * count;
         }
+    if (capturePetTableId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(11, capturePetTableId_);
+    }
+    if (captureRate_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(12, captureRate_);
+    }
     return size;
   }
   @java.lang.Override
@@ -324,6 +360,10 @@ private static final long serialVersionUID = 0L;
         != other.getExpReward()) return false;
     if (getGoldReward()
         != other.getGoldReward()) return false;
+    if (getCapturePetTableId()
+        != other.getCapturePetTableId()) return false;
+    if (getCaptureRate()
+        != other.getCaptureRate()) return false;
     if (!getDropList()
         .equals(other.getDropList())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
@@ -363,6 +403,10 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + GOLD_REWARD_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getGoldReward());
+    hash = (37 * hash) + CAPTURE_PET_TABLE_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getCapturePetTableId();
+    hash = (37 * hash) + CAPTURE_RATE_FIELD_NUMBER;
+    hash = (53 * hash) + getCaptureRate();
     if (getDropCount() > 0) {
       hash = (37 * hash) + DROP_FIELD_NUMBER;
       hash = (53 * hash) + getDropList().hashCode();
@@ -507,13 +551,15 @@ private static final long serialVersionUID = 0L;
       speed_ = 0L;
       expReward_ = 0L;
       goldReward_ = 0L;
+      capturePetTableId_ = 0;
+      captureRate_ = 0;
       if (dropBuilder_ == null) {
         drop_ = java.util.Collections.emptyList();
       } else {
         drop_ = null;
         dropBuilder_.clear();
       }
-      bitField0_ = (bitField0_ & ~0x00000200);
+      bitField0_ = (bitField0_ & ~0x00000800);
       return this;
     }
 
@@ -548,9 +594,9 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartialRepeatedFields(com.game.table.MonsterTable result) {
       if (dropBuilder_ == null) {
-        if (((bitField0_ & 0x00000200) != 0)) {
+        if (((bitField0_ & 0x00000800) != 0)) {
           drop_ = java.util.Collections.unmodifiableList(drop_);
-          bitField0_ = (bitField0_ & ~0x00000200);
+          bitField0_ = (bitField0_ & ~0x00000800);
         }
         result.drop_ = drop_;
       } else {
@@ -586,6 +632,12 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField0_ & 0x00000100) != 0)) {
         result.goldReward_ = goldReward_;
+      }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.capturePetTableId_ = capturePetTableId_;
+      }
+      if (((from_bitField0_ & 0x00000400) != 0)) {
+        result.captureRate_ = captureRate_;
       }
     }
 
@@ -628,11 +680,17 @@ private static final long serialVersionUID = 0L;
       if (other.getGoldReward() != 0L) {
         setGoldReward(other.getGoldReward());
       }
+      if (other.getCapturePetTableId() != 0) {
+        setCapturePetTableId(other.getCapturePetTableId());
+      }
+      if (other.getCaptureRate() != 0) {
+        setCaptureRate(other.getCaptureRate());
+      }
       if (dropBuilder_ == null) {
         if (!other.drop_.isEmpty()) {
           if (drop_.isEmpty()) {
             drop_ = other.drop_;
-            bitField0_ = (bitField0_ & ~0x00000200);
+            bitField0_ = (bitField0_ & ~0x00000800);
           } else {
             ensureDropIsMutable();
             drop_.addAll(other.drop_);
@@ -645,7 +703,7 @@ private static final long serialVersionUID = 0L;
             dropBuilder_.dispose();
             dropBuilder_ = null;
             drop_ = other.drop_;
-            bitField0_ = (bitField0_ & ~0x00000200);
+            bitField0_ = (bitField0_ & ~0x00000800);
             dropBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetDropFieldBuilder() : null;
@@ -738,6 +796,16 @@ private static final long serialVersionUID = 0L;
               }
               break;
             } // case 82
+            case 88: {
+              capturePetTableId_ = input.readUInt32();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 88
+            case 96: {
+              captureRate_ = input.readUInt32();
+              bitField0_ |= 0x00000400;
+              break;
+            } // case 96
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1043,12 +1111,76 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private int capturePetTableId_ ;
+    /**
+     * <code>uint32 capture_pet_table_id = 11;</code>
+     * @return The capturePetTableId.
+     */
+    @java.lang.Override
+    public int getCapturePetTableId() {
+      return capturePetTableId_;
+    }
+    /**
+     * <code>uint32 capture_pet_table_id = 11;</code>
+     * @param value The capturePetTableId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCapturePetTableId(int value) {
+
+      capturePetTableId_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 capture_pet_table_id = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCapturePetTableId() {
+      bitField0_ = (bitField0_ & ~0x00000200);
+      capturePetTableId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int captureRate_ ;
+    /**
+     * <code>uint32 capture_rate = 12;</code>
+     * @return The captureRate.
+     */
+    @java.lang.Override
+    public int getCaptureRate() {
+      return captureRate_;
+    }
+    /**
+     * <code>uint32 capture_rate = 12;</code>
+     * @param value The captureRate to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCaptureRate(int value) {
+
+      captureRate_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 capture_rate = 12;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCaptureRate() {
+      bitField0_ = (bitField0_ & ~0x00000400);
+      captureRate_ = 0;
+      onChanged();
+      return this;
+    }
+
     private java.util.List<com.game.table.Monsterdrop> drop_ =
       java.util.Collections.emptyList();
     private void ensureDropIsMutable() {
-      if (!((bitField0_ & 0x00000200) != 0)) {
+      if (!((bitField0_ & 0x00000800) != 0)) {
         drop_ = new java.util.ArrayList<com.game.table.Monsterdrop>(drop_);
-        bitField0_ |= 0x00000200;
+        bitField0_ |= 0x00000800;
        }
     }
 
@@ -1198,7 +1330,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearDrop() {
       if (dropBuilder_ == null) {
         drop_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00000200);
+        bitField0_ = (bitField0_ & ~0x00000800);
         onChanged();
       } else {
         dropBuilder_.clear();
@@ -1275,7 +1407,7 @@ private static final long serialVersionUID = 0L;
         dropBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Monsterdrop, com.game.table.Monsterdrop.Builder, com.game.table.MonsterdropOrBuilder>(
                 drop_,
-                ((bitField0_ & 0x00000200) != 0),
+                ((bitField0_ & 0x00000800) != 0),
                 getParentForChildren(),
                 isClean());
         drop_ = null;

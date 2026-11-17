@@ -291,6 +291,7 @@ func (x *SkillUsedS2C) GetTimeStamp() uint64 {
 // List skills request
 type ListSkillsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	PetId         uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"` // 0 查人物；非 0 查会话所属宝宝的完整技能目录。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -325,6 +326,13 @@ func (*ListSkillsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_scene_player_skill_proto_rawDescGZIP(), []int{4}
 }
 
+func (x *ListSkillsRequest) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
 // List skills response
 // 3..6 是四职业技能书(2026-10-19,docs/design/class-skills.md §4):服务端按当前职业现算的完整目录 + 角色等级 + 余额。
 // skill_list 仍是"已拥有"的原样列表(robot / 旧客户端只读它);catalog 只列当前职业的职业技能,未学的也在里面(rank = 0)。
@@ -336,6 +344,7 @@ type ListSkillsResponse struct {
 	PlayerLevel     uint32                         `protobuf:"varint,4,opt,name=player_level,json=playerLevel,proto3" json:"player_level,omitempty"`
 	ClassId         uint32                         `protobuf:"varint,5,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
 	CurrencyBalance uint64                         `protobuf:"varint,6,opt,name=currency_balance,json=currencyBalance,proto3" json:"currency_balance,omitempty"` // 修习货币余额(CurrencySystem kCurrencyGold,客户端称"银两")
+	PetId           uint64                         `protobuf:"varint,7,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                               // 返回本次目录主体，防止切换人物/宝宝后的迟到响应覆盖界面。
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -412,6 +421,13 @@ func (x *ListSkillsResponse) GetCurrencyBalance() uint64 {
 	return 0
 }
 
+func (x *ListSkillsResponse) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
 // 技能书的一行:配置表的展示投影 + 本角色的等级与可修习性。数值真源是 Skill 表与服务端规则,
 // 客户端只展示,不得据此推算、也不回传这些派生值。
 type SkillCatalogEntry struct {
@@ -434,6 +450,10 @@ type SkillCatalogEntry struct {
 	NextRankCost      uint64                 `protobuf:"varint,16,opt,name=next_rank_cost,json=nextRankCost,proto3" json:"next_rank_cost,omitempty"`                  // 再修一重的价格;已满重为 0
 	UpgradeBlockTipId uint32                 `protobuf:"varint,17,opt,name=upgrade_block_tip_id,json=upgradeBlockTipId,proto3" json:"upgrade_block_tip_id,omitempty"` // 0 = 现在可以修习一重;否则为不能修习的原因(tip 码,skill_error 段)
 	DurationRounds    uint32                 `protobuf:"varint,18,opt,name=duration_rounds,json=durationRounds,proto3" json:"duration_rounds,omitempty"`              // 附带增益 / 减益的持续回合;没有为 0
+	AllowDeadTarget   bool                   `protobuf:"varint,19,opt,name=allow_dead_target,json=allowDeadTarget,proto3" json:"allow_dead_target,omitempty"`         // 仅复生类配置允许选择倒地单位，普通治疗不能选尸体。
+	AbilityKind       uint32                 `protobuf:"varint,20,opt,name=ability_kind,json=abilityKind,proto3" json:"ability_kind,omitempty"`                       // 1主动、2被动、3追击、4开场。
+	CasterMask        uint32                 `protobuf:"varint,21,opt,name=caster_mask,json=casterMask,proto3" json:"caster_mask,omitempty"`                          // 1人物、2宝宝；按施法者资格区分。
+	ActionTags        uint32                 `protobuf:"varint,22,opt,name=action_tags,json=actionTags,proto3" json:"action_tags,omitempty"`                          // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -594,12 +614,41 @@ func (x *SkillCatalogEntry) GetDurationRounds() uint32 {
 	return 0
 }
 
+func (x *SkillCatalogEntry) GetAllowDeadTarget() bool {
+	if x != nil {
+		return x.AllowDeadTarget
+	}
+	return false
+}
+
+func (x *SkillCatalogEntry) GetAbilityKind() uint32 {
+	if x != nil {
+		return x.AbilityKind
+	}
+	return 0
+}
+
+func (x *SkillCatalogEntry) GetCasterMask() uint32 {
+	if x != nil {
+		return x.CasterMask
+	}
+	return 0
+}
+
+func (x *SkillCatalogEntry) GetActionTags() uint32 {
+	if x != nil {
+		return x.ActionTags
+	}
+	return 0
+}
+
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。
 type UpgradeSkillRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SkillTableId  uint32                 `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
 	ExpectedRank  uint32                 `protobuf:"varint,2,opt,name=expected_rank,json=expectedRank,proto3" json:"expected_rank,omitempty"` // 客户端看到的当前等级;与服务端不一致整笔拒绝(旧请求重放不会再扣一次)
 	Count         uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`                                   // 只收 1 或 10;10 次在满重 / 等级上限 / 余额不足处提前停
+	PetId         uint64                 `protobuf:"varint,4,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`                      // 0 修习人物技能；非 0 必须属于当前会话玩家。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -651,6 +700,13 @@ func (x *UpgradeSkillRequest) GetExpectedRank() uint32 {
 func (x *UpgradeSkillRequest) GetCount() uint32 {
 	if x != nil {
 		return x.Count
+	}
+	return 0
+}
+
+func (x *UpgradeSkillRequest) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
 	}
 	return 0
 }
@@ -748,8 +804,9 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x0eskill_table_id\x18\x03 \x01(\rR\fskillTableId\x12$\n" +
 	"\bposition\x18\x04 \x01(\v2\b.Vector3R\bposition\x12\x1d\n" +
 	"\n" +
-	"time_stamp\x18\x05 \x01(\x04R\ttimeStamp\"\x13\n" +
-	"\x11ListSkillsRequest\"\x96\x02\n" +
+	"time_stamp\x18\x05 \x01(\x04R\ttimeStamp\"*\n" +
+	"\x11ListSkillsRequest\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\"\xad\x02\n" +
 	"\x12ListSkillsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x123\n" +
 	"\n" +
@@ -757,7 +814,8 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\acatalog\x18\x03 \x03(\v2\x12.SkillCatalogEntryR\acatalog\x12!\n" +
 	"\fplayer_level\x18\x04 \x01(\rR\vplayerLevel\x12\x19\n" +
 	"\bclass_id\x18\x05 \x01(\rR\aclassId\x12)\n" +
-	"\x10currency_balance\x18\x06 \x01(\x04R\x0fcurrencyBalance\"\xda\x04\n" +
+	"\x10currency_balance\x18\x06 \x01(\x04R\x0fcurrencyBalance\x12\x15\n" +
+	"\x06pet_id\x18\a \x01(\x04R\x05petId\"\xeb\x05\n" +
 	"\x11SkillCatalogEntry\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -780,11 +838,18 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\x0fcooldown_rounds\x18\x0f \x01(\rR\x0ecooldownRounds\x12$\n" +
 	"\x0enext_rank_cost\x18\x10 \x01(\x04R\fnextRankCost\x12/\n" +
 	"\x14upgrade_block_tip_id\x18\x11 \x01(\rR\x11upgradeBlockTipId\x12'\n" +
-	"\x0fduration_rounds\x18\x12 \x01(\rR\x0edurationRounds\"v\n" +
+	"\x0fduration_rounds\x18\x12 \x01(\rR\x0edurationRounds\x12*\n" +
+	"\x11allow_dead_target\x18\x13 \x01(\bR\x0fallowDeadTarget\x12!\n" +
+	"\fability_kind\x18\x14 \x01(\rR\vabilityKind\x12\x1f\n" +
+	"\vcaster_mask\x18\x15 \x01(\rR\n" +
+	"casterMask\x12\x1f\n" +
+	"\vaction_tags\x18\x16 \x01(\rR\n" +
+	"actionTags\"\x8d\x01\n" +
 	"\x13UpgradeSkillRequest\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12#\n" +
 	"\rexpected_rank\x18\x02 \x01(\rR\fexpectedRank\x12\x14\n" +
-	"\x05count\x18\x03 \x01(\rR\x05count\"\xbe\x01\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count\x12\x15\n" +
+	"\x06pet_id\x18\x04 \x01(\x04R\x05petId\"\xbe\x01\n" +
 	"\x14UpgradeSkillResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
 	"\x05state\x18\x02 \x01(\v2\x13.ListSkillsResponseR\x05state\x12%\n" +

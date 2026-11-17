@@ -691,6 +691,8 @@ type SubmitBattleActionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
 	Action        *BattleAction          `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	ActorId       uint64                 `protobuf:"varint,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`          // 0 兼容人物指令；宝宝填局内 actor_id，服务端复核主人。
+	RoundIndex    uint32                 `protobuf:"varint,4,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"` // 新客户端必须填写，拒绝上一回合迟到指令；旧人物指令 0 兼容。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -737,6 +739,20 @@ func (x *SubmitBattleActionRequest) GetAction() *BattleAction {
 		return x.Action
 	}
 	return nil
+}
+
+func (x *SubmitBattleActionRequest) GetActorId() uint64 {
+	if x != nil {
+		return x.ActorId
+	}
+	return 0
+}
+
+func (x *SubmitBattleActionRequest) GetRoundIndex() uint32 {
+	if x != nil {
+		return x.RoundIndex
+	}
+	return 0
 }
 
 type SubmitBattleActionResponse struct {
@@ -1690,10 +1706,13 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x0eSpectateEndS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12)\n" +
 	"\aoutcome\x18\x02 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x12+\n" +
-	"\x06reason\x18\x03 \x01(\x0e2\x13.eSpectateEndReasonR\x06reason\"_\n" +
+	"\x06reason\x18\x03 \x01(\x0e2\x13.eSpectateEndReasonR\x06reason\"\x9b\x01\n" +
 	"\x19SubmitBattleActionRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12%\n" +
-	"\x06action\x18\x02 \x01(\v2\r.BattleActionR\x06action\"R\n" +
+	"\x06action\x18\x02 \x01(\v2\r.BattleActionR\x06action\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\x04R\aactorId\x12\x1f\n" +
+	"\vround_index\x18\x04 \x01(\rR\n" +
+	"roundIndex\"R\n" +
 	"\x1aSubmitBattleActionResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"4\n" +
 	"\x15GetBattleStateRequest\x12\x1b\n" +

@@ -68,6 +68,8 @@ namespace bag_marshal
     // from Redis, and on rollback when restoring a snapshot.
     //
     // get_or_emplace's the component, so it works on a fresh entity.
+    // 装备栏容量至少为 kEquipmentCapacity 与正式命名槽最大 id + 1;旧档只补足容量,不重排已有槽。
+    // 大于此下限的存档容量原样保留,其它固定包仍按存档容量恢复。
     // bag_type 越界的条目(本版本不认识的包类型)与下标 ≥ kBagTypeCount 的容量不进运行时包,
     // 存进 PlayerBagsComp::unsupportedBagTypes 原样携带,Marshal 时原样写回(打一行汇总 WARN,不丢)。
     // An entry whose recorded pos is unusable (out of range, or already

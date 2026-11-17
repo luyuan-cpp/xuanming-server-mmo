@@ -861,7 +861,7 @@ K8s沿既有迁移门禁接`match-migrate`：ConfigMap先于Job，全球模式�
 5. 复用 Inbox 前必须补主 C++ 的 SQL 确认：当前 `AllDecisionsDurable` 看 `PlayerLastPersistedSnapshotComp`，而该快照仅证明 Redis 写成功；紧跟 PING 不能证明两张玩家 SQL 行提交。业务快照为 dirty 比较清掉 `last_save_seq`，子表 fence 字段也不是 C++ 的保存版本来源，不能从当前 owner 或可变下限拼原版本。新确认须由原次不可变存盘成功 hook 绑定精确 owner/seq、原实体和同一快照，再核两张 SQL ACK；旧回调不得给新实体或替换快照补证明。owner 变更但业务字节相同时也须能触发真实新版本保存，不能因 dirty 快路径永久停在旧证明。Java 的 `StoragePlayerRepository → PlayerStore.saveStateHeld → SceneWorld.SAVED → Inbox.onPersisted` 已以 SQL 事务成功为前提，保留该实现。
 6. 不另造永久 battle-id 集合：现 BattleLedger 在销账后可裁剪，任意 Redis 丢失后不能仅凭它启用 SQL 重投；Inbox 已有不会裁剪的域水位和永久 SQL 原收据。新 Battle 类型应保护已投递奖励不被通用运维 VOID 或超时清理绕过；未知／损坏状态保留原件并告警。
 
-当前已实现的金币、消耗、掉落等效果必须在副作用前整笔规划；主包和临时格都不能接收时保留待执行，不能沿旧路径记一条丢失日志就登记 APPLIED。经验值组件／升级曲线尚未实现，是现有 `player-attribute-allocation.md` 与 `turn-based-battle-server.md` 已记录的产品边界，本项不另造经验系统；完整来源保留 `exp_gain`，但不得将该字段的日志留痕报告为经验已到账。
+当前已实现的金币、消耗、掉落与累计经验等效果必须在副作用前整笔规划；主包和临时格都不能接收时保留待执行，不能沿旧路径记一条丢失日志就登记 APPLIED。2026-11-15 起，`exp_gain` 计入 `LevelComp.total_exp` 并与账本同次存盘，近期结果同时记录实得经验；缺组件或累计溢出时整笔延后。自动升级仍等待策划曲线，累计经验不自动改写等级。
 
 涉及的接线范围为主仓 proto、Go Match/Inbox、C++ Battle/Scene、独立 Java Match/Battle/Inbox/Scene 及对应配置、迁移、两版回归，按用户已授权的 76 个手写路径上限统一核对。Go 负责唯一正规协议源和生成；各实现保留修改前原件，基于当前最新代码接线，不修改客户端 CurrentMaps。C++ 已补单次存盘的 SQL 确认，其余新链路继续收口；已有普通构建证据单独保留，不能覆盖本项新源。
 

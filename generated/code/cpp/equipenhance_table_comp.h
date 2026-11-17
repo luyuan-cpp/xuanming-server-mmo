@@ -42,6 +42,14 @@ struct EquipEnhanceMaterial_countComp {
     uint32_t value;
 };
 
+struct EquipEnhanceProfile_idComp {
+    uint32_t value;
+};
+
+struct EquipEnhanceLevelComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -67,4 +75,10 @@ inline EquipEnhanceMaterial_idComp MakeEquipEnhanceMaterial_idComp(const EquipEn
 }
 inline EquipEnhanceMaterial_countComp MakeEquipEnhanceMaterial_countComp(const EquipEnhanceTable& row) {
     return { row.material_count() };
+}
+inline EquipEnhanceProfile_idComp MakeEquipEnhanceProfile_idComp(const EquipEnhanceTable& row) {
+    return { row.profile_id() };
+}
+inline EquipEnhanceLevelComp MakeEquipEnhanceLevelComp(const EquipEnhanceTable& row) {
+    return { row.level() };
 }

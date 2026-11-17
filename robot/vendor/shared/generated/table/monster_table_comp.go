@@ -49,6 +49,14 @@ type MonsterGold_rewardComp struct {
     Value uint64
 }
 
+type MonsterCapture_pet_table_idComp struct {
+    Value uint32
+}
+
+type MonsterCapture_rateComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -88,5 +96,13 @@ func MakeMonsterExp_rewardComp(row *pb.MonsterTable) MonsterExp_rewardComp {
 
 func MakeMonsterGold_rewardComp(row *pb.MonsterTable) MonsterGold_rewardComp {
     return MonsterGold_rewardComp{Value: row.GoldReward}
+}
+
+func MakeMonsterCapture_pet_table_idComp(row *pb.MonsterTable) MonsterCapture_pet_table_idComp {
+    return MonsterCapture_pet_table_idComp{Value: row.CapturePetTableId}
+}
+
+func MakeMonsterCapture_rateComp(row *pb.MonsterTable) MonsterCapture_rateComp {
+    return MonsterCapture_rateComp{Value: row.CaptureRate}
 }
 

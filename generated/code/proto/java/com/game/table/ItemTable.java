@@ -279,6 +279,50 @@ private static final long serialVersionUID = 0L;
     return affixRule_;
   }
 
+  public static final int EQUIP_PROFILE_FIELD_NUMBER = 15;
+  private int equipProfile_ = 0;
+  /**
+   * <code>uint32 equip_profile = 15;</code>
+   * @return The equipProfile.
+   */
+  @java.lang.Override
+  public int getEquipProfile() {
+    return equipProfile_;
+  }
+
+  public static final int FORGE_MATERIAL_ID_FIELD_NUMBER = 16;
+  private int forgeMaterialId_ = 0;
+  /**
+   * <code>uint32 forge_material_id = 16;</code>
+   * @return The forgeMaterialId.
+   */
+  @java.lang.Override
+  public int getForgeMaterialId() {
+    return forgeMaterialId_;
+  }
+
+  public static final int FORGE_MATERIAL_COUNT_FIELD_NUMBER = 17;
+  private int forgeMaterialCount_ = 0;
+  /**
+   * <code>uint32 forge_material_count = 17;</code>
+   * @return The forgeMaterialCount.
+   */
+  @java.lang.Override
+  public int getForgeMaterialCount() {
+    return forgeMaterialCount_;
+  }
+
+  public static final int ARTIFACT_ID_FIELD_NUMBER = 18;
+  private int artifactId_ = 0;
+  /**
+   * <code>uint32 artifact_id = 18;</code>
+   * @return The artifactId.
+   */
+  @java.lang.Override
+  public int getArtifactId() {
+    return artifactId_;
+  }
+
   public static final int BASE_ATTR_FIELD_NUMBER = 14;
   @SuppressWarnings("serial")
   private java.util.List<com.game.table.Itembase_attr> baseAttr_;
@@ -376,6 +420,18 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < baseAttr_.size(); i++) {
       output.writeMessage(14, baseAttr_.get(i));
     }
+    if (equipProfile_ != 0) {
+      output.writeUInt32(15, equipProfile_);
+    }
+    if (forgeMaterialId_ != 0) {
+      output.writeUInt32(16, forgeMaterialId_);
+    }
+    if (forgeMaterialCount_ != 0) {
+      output.writeUInt32(17, forgeMaterialCount_);
+    }
+    if (artifactId_ != 0) {
+      output.writeUInt32(18, artifactId_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -438,6 +494,22 @@ private static final long serialVersionUID = 0L;
           }
           size += 1 * count;
         }
+    if (equipProfile_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(15, equipProfile_);
+    }
+    if (forgeMaterialId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(16, forgeMaterialId_);
+    }
+    if (forgeMaterialCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(17, forgeMaterialCount_);
+    }
+    if (artifactId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(18, artifactId_);
+    }
     return size;
   }
   @java.lang.Override
@@ -488,6 +560,14 @@ private static final long serialVersionUID = 0L;
         != other.getAffixPool()) return false;
     if (getAffixRule()
         != other.getAffixRule()) return false;
+    if (getEquipProfile()
+        != other.getEquipProfile()) return false;
+    if (getForgeMaterialId()
+        != other.getForgeMaterialId()) return false;
+    if (getForgeMaterialCount()
+        != other.getForgeMaterialCount()) return false;
+    if (getArtifactId()
+        != other.getArtifactId()) return false;
     if (!getBaseAttrList()
         .equals(other.getBaseAttrList())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
@@ -529,6 +609,14 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getAffixPool();
     hash = (37 * hash) + AFFIX_RULE_FIELD_NUMBER;
     hash = (53 * hash) + getAffixRule();
+    hash = (37 * hash) + EQUIP_PROFILE_FIELD_NUMBER;
+    hash = (53 * hash) + getEquipProfile();
+    hash = (37 * hash) + FORGE_MATERIAL_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getForgeMaterialId();
+    hash = (37 * hash) + FORGE_MATERIAL_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getForgeMaterialCount();
+    hash = (37 * hash) + ARTIFACT_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getArtifactId();
     if (getBaseAttrCount() > 0) {
       hash = (37 * hash) + BASE_ATTR_FIELD_NUMBER;
       hash = (53 * hash) + getBaseAttrList().hashCode();
@@ -677,13 +765,17 @@ private static final long serialVersionUID = 0L;
       equipClass_ = 0;
       affixPool_ = 0;
       affixRule_ = 0;
+      equipProfile_ = 0;
+      forgeMaterialId_ = 0;
+      forgeMaterialCount_ = 0;
+      artifactId_ = 0;
       if (baseAttrBuilder_ == null) {
         baseAttr_ = java.util.Collections.emptyList();
       } else {
         baseAttr_ = null;
         baseAttrBuilder_.clear();
       }
-      bitField0_ = (bitField0_ & ~0x00002000);
+      bitField0_ = (bitField0_ & ~0x00020000);
       return this;
     }
 
@@ -718,9 +810,9 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartialRepeatedFields(com.game.table.ItemTable result) {
       if (baseAttrBuilder_ == null) {
-        if (((bitField0_ & 0x00002000) != 0)) {
+        if (((bitField0_ & 0x00020000) != 0)) {
           baseAttr_ = java.util.Collections.unmodifiableList(baseAttr_);
-          bitField0_ = (bitField0_ & ~0x00002000);
+          bitField0_ = (bitField0_ & ~0x00020000);
         }
         result.baseAttr_ = baseAttr_;
       } else {
@@ -768,6 +860,18 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField0_ & 0x00001000) != 0)) {
         result.affixRule_ = affixRule_;
+      }
+      if (((from_bitField0_ & 0x00002000) != 0)) {
+        result.equipProfile_ = equipProfile_;
+      }
+      if (((from_bitField0_ & 0x00004000) != 0)) {
+        result.forgeMaterialId_ = forgeMaterialId_;
+      }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.forgeMaterialCount_ = forgeMaterialCount_;
+      }
+      if (((from_bitField0_ & 0x00010000) != 0)) {
+        result.artifactId_ = artifactId_;
       }
     }
 
@@ -828,11 +932,23 @@ private static final long serialVersionUID = 0L;
       if (other.getAffixRule() != 0) {
         setAffixRule(other.getAffixRule());
       }
+      if (other.getEquipProfile() != 0) {
+        setEquipProfile(other.getEquipProfile());
+      }
+      if (other.getForgeMaterialId() != 0) {
+        setForgeMaterialId(other.getForgeMaterialId());
+      }
+      if (other.getForgeMaterialCount() != 0) {
+        setForgeMaterialCount(other.getForgeMaterialCount());
+      }
+      if (other.getArtifactId() != 0) {
+        setArtifactId(other.getArtifactId());
+      }
       if (baseAttrBuilder_ == null) {
         if (!other.baseAttr_.isEmpty()) {
           if (baseAttr_.isEmpty()) {
             baseAttr_ = other.baseAttr_;
-            bitField0_ = (bitField0_ & ~0x00002000);
+            bitField0_ = (bitField0_ & ~0x00020000);
           } else {
             ensureBaseAttrIsMutable();
             baseAttr_.addAll(other.baseAttr_);
@@ -845,7 +961,7 @@ private static final long serialVersionUID = 0L;
             baseAttrBuilder_.dispose();
             baseAttrBuilder_ = null;
             baseAttr_ = other.baseAttr_;
-            bitField0_ = (bitField0_ & ~0x00002000);
+            bitField0_ = (bitField0_ & ~0x00020000);
             baseAttrBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetBaseAttrFieldBuilder() : null;
@@ -958,6 +1074,26 @@ private static final long serialVersionUID = 0L;
               }
               break;
             } // case 114
+            case 120: {
+              equipProfile_ = input.readUInt32();
+              bitField0_ |= 0x00002000;
+              break;
+            } // case 120
+            case 128: {
+              forgeMaterialId_ = input.readUInt32();
+              bitField0_ |= 0x00004000;
+              break;
+            } // case 128
+            case 136: {
+              forgeMaterialCount_ = input.readUInt32();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 136
+            case 144: {
+              artifactId_ = input.readUInt32();
+              bitField0_ |= 0x00010000;
+              break;
+            } // case 144
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1511,12 +1647,140 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private int equipProfile_ ;
+    /**
+     * <code>uint32 equip_profile = 15;</code>
+     * @return The equipProfile.
+     */
+    @java.lang.Override
+    public int getEquipProfile() {
+      return equipProfile_;
+    }
+    /**
+     * <code>uint32 equip_profile = 15;</code>
+     * @param value The equipProfile to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEquipProfile(int value) {
+
+      equipProfile_ = value;
+      bitField0_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 equip_profile = 15;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEquipProfile() {
+      bitField0_ = (bitField0_ & ~0x00002000);
+      equipProfile_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int forgeMaterialId_ ;
+    /**
+     * <code>uint32 forge_material_id = 16;</code>
+     * @return The forgeMaterialId.
+     */
+    @java.lang.Override
+    public int getForgeMaterialId() {
+      return forgeMaterialId_;
+    }
+    /**
+     * <code>uint32 forge_material_id = 16;</code>
+     * @param value The forgeMaterialId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setForgeMaterialId(int value) {
+
+      forgeMaterialId_ = value;
+      bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 forge_material_id = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearForgeMaterialId() {
+      bitField0_ = (bitField0_ & ~0x00004000);
+      forgeMaterialId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int forgeMaterialCount_ ;
+    /**
+     * <code>uint32 forge_material_count = 17;</code>
+     * @return The forgeMaterialCount.
+     */
+    @java.lang.Override
+    public int getForgeMaterialCount() {
+      return forgeMaterialCount_;
+    }
+    /**
+     * <code>uint32 forge_material_count = 17;</code>
+     * @param value The forgeMaterialCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setForgeMaterialCount(int value) {
+
+      forgeMaterialCount_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 forge_material_count = 17;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearForgeMaterialCount() {
+      bitField0_ = (bitField0_ & ~0x00008000);
+      forgeMaterialCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int artifactId_ ;
+    /**
+     * <code>uint32 artifact_id = 18;</code>
+     * @return The artifactId.
+     */
+    @java.lang.Override
+    public int getArtifactId() {
+      return artifactId_;
+    }
+    /**
+     * <code>uint32 artifact_id = 18;</code>
+     * @param value The artifactId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setArtifactId(int value) {
+
+      artifactId_ = value;
+      bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 artifact_id = 18;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearArtifactId() {
+      bitField0_ = (bitField0_ & ~0x00010000);
+      artifactId_ = 0;
+      onChanged();
+      return this;
+    }
+
     private java.util.List<com.game.table.Itembase_attr> baseAttr_ =
       java.util.Collections.emptyList();
     private void ensureBaseAttrIsMutable() {
-      if (!((bitField0_ & 0x00002000) != 0)) {
+      if (!((bitField0_ & 0x00020000) != 0)) {
         baseAttr_ = new java.util.ArrayList<com.game.table.Itembase_attr>(baseAttr_);
-        bitField0_ |= 0x00002000;
+        bitField0_ |= 0x00020000;
        }
     }
 
@@ -1666,7 +1930,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearBaseAttr() {
       if (baseAttrBuilder_ == null) {
         baseAttr_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00002000);
+        bitField0_ = (bitField0_ & ~0x00020000);
         onChanged();
       } else {
         baseAttrBuilder_.clear();
@@ -1743,7 +2007,7 @@ private static final long serialVersionUID = 0L;
         baseAttrBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Itembase_attr, com.game.table.Itembase_attr.Builder, com.game.table.Itembase_attrOrBuilder>(
                 baseAttr_,
-                ((bitField0_ & 0x00002000) != 0),
+                ((bitField0_ & 0x00020000) != 0),
                 getParentForChildren(),
                 isClean());
         baseAttr_ = null;

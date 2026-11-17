@@ -75,6 +75,16 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
         // ::GmGrantPetResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::PetShopOffer
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::GetPetShopRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::GetPetShopResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::BuyPetRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::BuyPetResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -637,6 +647,192 @@ const ::_pbi::ClassData* RecallPetRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class PetShopOffer::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PetShopOffer>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_._has_bits_);
+};
+
+constexpr PetShopOffer::ParseTableT_ PetShopOffer::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PetShopOffer>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 pet_table_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetShopOffer, _impl_.pet_table_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.pet_table_id_)}},
+      // string name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.name_)}},
+      // uint32 model_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetShopOffer, _impl_.model_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.model_id_)}},
+      // uint32 unlock_level = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetShopOffer, _impl_.unlock_level_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.unlock_level_)}},
+      // uint64 price_gold = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetShopOffer, _impl_.price_gold_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.price_gold_)}},
+      // string desc = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.desc_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 pet_table_id = 1;
+      {PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.pet_table_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 2;
+      {PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 model_id = 3;
+      {PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.model_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 unlock_level = 4;
+      {PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.unlock_level_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 price_gold = 5;
+      {PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.price_gold_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string desc = 6;
+      {PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.desc_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\14\0\4\0\0\0\4\0"
+      "PetShopOffer"
+      "name"
+      "desc"
+    }},
+  };
+}
+
+
+inline constexpr PetShopOffer::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        desc_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        pet_table_id_{0u},
+        model_id_{0u},
+        price_gold_{::uint64_t{0u}},
+        unlock_level_{0u} {}
+
+template <typename>
+constexpr PetShopOffer::PetShopOffer(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PetShopOffer::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PetShopOffer(arena);
+}
+constexpr auto PetShopOffer::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PetShopOffer), alignof(PetShopOffer));
+}
+constexpr auto PetShopOffer::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PetShopOffer::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PetShopOffer>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PetShopOffer::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PetShopOffer>(), &PetShopOffer::ByteSizeLong,
+              &PetShopOffer::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[23],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PetShopOfferGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PetShopOfferGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PetShopOffer_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PetShopOffer::InternalGenerateClassData_(
+            _default, &PetShopOffer_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PetShopOffer>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PetShopOfferGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PetShopOffer _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PetShopOffer>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PetShopOfferGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PetShopOfferGlobalsTypeInternal PetShopOffer_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PetShopOffer_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PetShopOffer_globals_.GetClassData();
+#else
+  return PetShopOffer_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PetDimensionInfo::_Internal {
  public:
   using HasBits = decltype(::std::declval<PetDimensionInfo>()._impl_._has_bits_);
@@ -1180,6 +1376,130 @@ const ::_pbi::ClassData* GmGrantPetRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPetShopRequest::_Internal {
+ public:
+};
+
+constexpr GetPetShopRequest::ParseTableT_ GetPetShopRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPetShopRequest,
+                            _impl_._cached_size_),  // no hasbits
+      0, // no _extensions_
+      0, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967295,  // skipmap
+      offsetof(ParseTableT_, field_names),  // no field_entries
+      0,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetPetShopRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, // no field_entries, or aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr GetPetShopRequest::GetPetShopRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::internal::ZeroFieldsBase(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL GetPetShopRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPetShopRequest(arena);
+}
+constexpr auto GetPetShopRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetPetShopRequest), alignof(GetPetShopRequest));
+}
+constexpr auto GetPetShopRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPetShopRequest::MergeImpl,
+          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<GetPetShopRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPetShopRequest::SharedDtor,
+          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<GetPetShopRequest>(), &GetPetShopRequest::ByteSizeLong,
+              &GetPetShopRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPetShopRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[24],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPetShopRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPetShopRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPetShopRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPetShopRequest::InternalGenerateClassData_(
+            _default, &GetPetShopRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPetShopRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPetShopRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPetShopRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPetShopRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPetShopRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPetShopRequestGlobalsTypeInternal GetPetShopRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPetShopRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPetShopRequest_globals_.GetClassData();
+#else
+  return GetPetShopRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GetPetListRequest::_Internal {
  public:
 };
@@ -1300,6 +1620,162 @@ const ::_pbi::ClassData* GetPetListRequest_get_class_data() {
   return GetPetListRequest_globals_.GetClassData();
 #else
   return GetPetListRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class BuyPetRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BuyPetRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_._has_bits_);
+};
+
+constexpr BuyPetRequest::ParseTableT_ BuyPetRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BuyPetRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 pet_table_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BuyPetRequest, _impl_.pet_table_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.pet_table_id_)}},
+      // uint64 purchase_sequence = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyPetRequest, _impl_.purchase_sequence_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.purchase_sequence_)}},
+      // uint64 price_gold = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyPetRequest, _impl_.price_gold_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.price_gold_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 pet_table_id = 1;
+      {PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.pet_table_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 purchase_sequence = 2;
+      {PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.purchase_sequence_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 price_gold = 3;
+      {PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.price_gold_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BuyPetRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        purchase_sequence_{::uint64_t{0u}},
+        price_gold_{::uint64_t{0u}},
+        pet_table_id_{0u} {}
+
+template <typename>
+constexpr BuyPetRequest::BuyPetRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BuyPetRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BuyPetRequest(arena);
+}
+constexpr auto BuyPetRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BuyPetRequest), alignof(BuyPetRequest));
+}
+constexpr auto BuyPetRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BuyPetRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BuyPetRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BuyPetRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BuyPetRequest>(), &BuyPetRequest::ByteSizeLong,
+              &BuyPetRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[26],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BuyPetRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BuyPetRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BuyPetRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BuyPetRequest::InternalGenerateClassData_(
+            _default, &BuyPetRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BuyPetRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BuyPetRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BuyPetRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BuyPetRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BuyPetRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BuyPetRequestGlobalsTypeInternal BuyPetRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BuyPetRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BuyPetRequest_globals_.GetClassData();
+#else
+  return BuyPetRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1981,6 +2457,183 @@ const ::_pbi::ClassData* PetInfo_get_class_data() {
   return PetInfo_globals_.GetClassData();
 #else
   return PetInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetPetShopResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetPetShopResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_._has_bits_);
+};
+
+constexpr GetPetShopResponse::ParseTableT_ GetPetShopResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetPetShopResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 next_purchase_sequence = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPetShopResponse, _impl_.next_purchase_sequence_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.next_purchase_sequence_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.error_message_)}},
+      // repeated .PetShopOffer offers = 2;
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 1,
+        PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.offers_)}},
+      // uint64 gold = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPetShopResponse, _impl_.gold_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.gold_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .PetShopOffer offers = 2;
+      {PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.offers_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 gold = 3;
+      {PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.gold_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 next_purchase_sequence = 4;
+      {PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.next_purchase_sequence_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PetShopOffer>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PetShopOffer_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetPetShopResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        offers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::GetPetShopResponse,
+            PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_.offers_)>()
+         }
+        ,
+        error_message_{nullptr},
+        gold_{::uint64_t{0u}},
+        next_purchase_sequence_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GetPetShopResponse::GetPetShopResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetPetShopResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetPetShopResponse(arena);
+}
+constexpr auto GetPetShopResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetPetShopResponse), alignof(GetPetShopResponse));
+}
+constexpr auto GetPetShopResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetPetShopResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetPetShopResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetPetShopResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetPetShopResponse>(), &GetPetShopResponse::ByteSizeLong,
+              &GetPetShopResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[25],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetPetShopResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetPetShopResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetPetShopResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetPetShopResponse::InternalGenerateClassData_(
+            _default, &GetPetShopResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetPetShopResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetPetShopResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetPetShopResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetPetShopResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetPetShopResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetPetShopResponseGlobalsTypeInternal GetPetShopResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetPetShopResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetPetShopResponse_globals_.GetClassData();
+#else
+  return GetPetShopResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3580,6 +4233,189 @@ const ::_pbi::ClassData* GetPetListResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class BuyPetResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BuyPetResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_._has_bits_);
+};
+
+constexpr BuyPetResponse::ParseTableT_ BuyPetResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BuyPetResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.error_message_)}},
+      // .PetListInfo pets = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.pets_)}},
+      // uint64 pet_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyPetResponse, _impl_.pet_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.pet_id_)}},
+      // uint64 gold = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyPetResponse, _impl_.gold_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.gold_)}},
+      // uint64 next_purchase_sequence = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyPetResponse, _impl_.next_purchase_sequence_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.next_purchase_sequence_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .PetListInfo pets = 2;
+      {PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.pets_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 pet_id = 3;
+      {PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.pet_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 gold = 4;
+      {PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.gold_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 next_purchase_sequence = 5;
+      {PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.next_purchase_sequence_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PetListInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PetListInfo_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BuyPetResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        pets_{nullptr},
+        pet_id_{::uint64_t{0u}},
+        gold_{::uint64_t{0u}},
+        next_purchase_sequence_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr BuyPetResponse::BuyPetResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BuyPetResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BuyPetResponse(arena);
+}
+constexpr auto BuyPetResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BuyPetResponse), alignof(BuyPetResponse));
+}
+constexpr auto BuyPetResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BuyPetResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BuyPetResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BuyPetResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BuyPetResponse>(), &BuyPetResponse::ByteSizeLong,
+              &BuyPetResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[27],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BuyPetResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BuyPetResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BuyPetResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BuyPetResponse::InternalGenerateClassData_(
+            _default, &BuyPetResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BuyPetResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BuyPetResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BuyPetResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BuyPetResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BuyPetResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BuyPetResponseGlobalsTypeInternal BuyPetResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BuyPetResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BuyPetResponse_globals_.GetClassData();
+#else
+  return BuyPetResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class AllocatePetPointsResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<AllocatePetPointsResponse>()._impl_._has_bits_);
@@ -3947,6 +4783,55 @@ const ::uint32_t
         0,
         1,
         2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PetShopOffer, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PetShopOffer, _impl_.pet_table_id_),
+        PROTOBUF_FIELD_OFFSET(::PetShopOffer, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::PetShopOffer, _impl_.model_id_),
+        PROTOBUF_FIELD_OFFSET(::PetShopOffer, _impl_.unlock_level_),
+        PROTOBUF_FIELD_OFFSET(::PetShopOffer, _impl_.price_gold_),
+        PROTOBUF_FIELD_OFFSET(::PetShopOffer, _impl_.desc_),
+        2,
+        0,
+        3,
+        5,
+        4,
+        1,
+        0x000, // bitmap
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_.offers_),
+        PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_.gold_),
+        PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_.next_purchase_sequence_),
+        1,
+        0,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BuyPetRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BuyPetRequest, _impl_.pet_table_id_),
+        PROTOBUF_FIELD_OFFSET(::BuyPetRequest, _impl_.purchase_sequence_),
+        PROTOBUF_FIELD_OFFSET(::BuyPetRequest, _impl_.price_gold_),
+        2,
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BuyPetResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BuyPetResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::BuyPetResponse, _impl_.pets_),
+        PROTOBUF_FIELD_OFFSET(::BuyPetResponse, _impl_.pet_id_),
+        PROTOBUF_FIELD_OFFSET(::BuyPetResponse, _impl_.gold_),
+        PROTOBUF_FIELD_OFFSET(::BuyPetResponse, _impl_.next_purchase_sequence_),
+        0,
+        1,
+        2,
+        3,
+        4,
 };
 
 static const ::_pbi::MigrationSchema
@@ -3974,6 +4859,11 @@ static const ::_pbi::MigrationSchema
         {182, sizeof(::PetListChangedS2C)},
         {187, sizeof(::GmGrantPetRequest)},
         {192, sizeof(::GmGrantPetResponse)},
+        {201, sizeof(::PetShopOffer)},
+        {216, sizeof(::GetPetShopRequest)},
+        {217, sizeof(::GetPetShopResponse)},
+        {228, sizeof(::BuyPetRequest)},
+        {237, sizeof(::BuyPetResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4000,6 +4890,11 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::PetListChangedS2C_globals_,
         &::GmGrantPetRequest_globals_,
         &::GmGrantPetResponse_globals_,
+        &::PetShopOffer_globals_,
+        &::GetPetShopRequest_globals_,
+        &::GetPetShopResponse_globals_,
+        &::BuyPetRequest_globals_,
+        &::BuyPetResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -4058,23 +4953,38 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto[] ABSL
     "Info\")\n\021GmGrantPetRequest\022\024\n\014pet_table_i"
     "d\030\001 \001(\r\"h\n\022GmGrantPetResponse\022&\n\rerror_m"
     "essage\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 "
-    "\001(\0132\014.PetListInfo\022\016\n\006pet_id\030\003 \001(\0042\316\004\n\024Sc"
-    "enePetClientPlayer\0225\n\nGetPetList\022\022.GetPe"
-    "tListRequest\032\023.GetPetListResponse\0222\n\tSum"
-    "monPet\022\021.SummonPetRequest\032\022.SummonPetRes"
-    "ponse\0222\n\tRecallPet\022\021.RecallPetRequest\032\022."
-    "RecallPetResponse\022J\n\021AllocatePetPoints\022\031"
-    ".AllocatePetPointsRequest\032\032.AllocatePetP"
-    "ointsResponse\022A\n\016ResetPetPoints\022\026.ResetP"
-    "etPointsRequest\032\027.ResetPetPointsResponse"
-    "\022V\n\025AutoAllocatePetPoints\022\035.AutoAllocate"
-    "PetPointsRequest\032\036.AutoAllocatePetPoints"
-    "Response\0222\n\tRenamePet\022\021.RenamePetRequest"
-    "\032\022.RenamePetResponse\0229\n\024NotifyPetListCha"
-    "nged\022\022.PetListChangedS2C\032\006.Empty\"\005\210\231\310\001\002\022"
-    "5\n\nGmGrantPet\022\022.GmGrantPetRequest\032\023.GmGr"
-    "antPetResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324"
-    "a\003b\006proto3"
+    "\001(\0132\014.PetListInfo\022\016\n\006pet_id\030\003 \001(\004\"|\n\014Pet"
+    "ShopOffer\022\024\n\014pet_table_id\030\001 \001(\r\022\014\n\004name\030"
+    "\002 \001(\t\022\020\n\010model_id\030\003 \001(\r\022\024\n\014unlock_level\030"
+    "\004 \001(\r\022\022\n\nprice_gold\030\005 \001(\004\022\014\n\004desc\030\006 \001(\t\""
+    "\023\n\021GetPetShopRequest\"\211\001\n\022GetPetShopRespo"
+    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
+    "age\022\035\n\006offers\030\002 \003(\0132\r.PetShopOffer\022\014\n\004go"
+    "ld\030\003 \001(\004\022\036\n\026next_purchase_sequence\030\004 \001(\004"
+    "\"T\n\rBuyPetRequest\022\024\n\014pet_table_id\030\001 \001(\r\022"
+    "\031\n\021purchase_sequence\030\002 \001(\004\022\022\n\nprice_gold"
+    "\030\003 \001(\004\"\222\001\n\016BuyPetResponse\022&\n\rerror_messa"
+    "ge\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132"
+    "\014.PetListInfo\022\016\n\006pet_id\030\003 \001(\004\022\014\n\004gold\030\004 "
+    "\001(\004\022\036\n\026next_purchase_sequence\030\005 \001(\0042\260\005\n\024"
+    "ScenePetClientPlayer\0225\n\nGetPetList\022\022.Get"
+    "PetListRequest\032\023.GetPetListResponse\0222\n\tS"
+    "ummonPet\022\021.SummonPetRequest\032\022.SummonPetR"
+    "esponse\0222\n\tRecallPet\022\021.RecallPetRequest\032"
+    "\022.RecallPetResponse\022J\n\021AllocatePetPoints"
+    "\022\031.AllocatePetPointsRequest\032\032.AllocatePe"
+    "tPointsResponse\022A\n\016ResetPetPoints\022\026.Rese"
+    "tPetPointsRequest\032\027.ResetPetPointsRespon"
+    "se\022V\n\025AutoAllocatePetPoints\022\035.AutoAlloca"
+    "tePetPointsRequest\032\036.AutoAllocatePetPoin"
+    "tsResponse\0222\n\tRenamePet\022\021.RenamePetReque"
+    "st\032\022.RenamePetResponse\0229\n\024NotifyPetListC"
+    "hanged\022\022.PetListChangedS2C\032\006.Empty\"\005\210\231\310\001"
+    "\002\0225\n\nGmGrantPet\022\022.GmGrantPetRequest\032\023.Gm"
+    "GrantPetResponse\0225\n\nGetPetShop\022\022.GetPetS"
+    "hopRequest\032\023.GetPetShopResponse\022)\n\006BuyPe"
+    "t\022\016.BuyPetRequest\032\017.BuyPetResponse\032\n\200\250\303\001"
+    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_deps[3] = {
@@ -4086,13 +4996,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto = {
     false,
     false,
-    2850,
+    3470,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto,
     "proto/scene/player_pet.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_deps,
     3,
-    23,
+    28,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fpet_2eproto::offsets,
@@ -9631,6 +10541,1338 @@ void GmGrantPetResponse::InternalSwap(GmGrantPetResponse* PROTOBUF_RESTRICT PROT
 }
 // ===================================================================
 
+PetShopOffer::PetShopOffer(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PetShopOffer_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:PetShopOffer)
+}
+PROTOBUF_NDEBUG_INLINE PetShopOffer::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::PetShopOffer& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_),
+        desc_(arena, from.desc_) {}
+
+PetShopOffer::PetShopOffer(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PetShopOffer& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PetShopOffer_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PetShopOffer* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, pet_table_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, pet_table_id_),
+           offsetof(Impl_, unlock_level_) -
+               offsetof(Impl_, pet_table_id_) +
+               sizeof(Impl_::unlock_level_));
+
+  // @@protoc_insertion_point(copy_constructor:PetShopOffer)
+}
+PROTOBUF_NDEBUG_INLINE PetShopOffer::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena),
+        desc_(arena) {}
+
+inline void PetShopOffer::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, pet_table_id_),
+           0,
+           offsetof(Impl_, unlock_level_) -
+               offsetof(Impl_, pet_table_id_) +
+               sizeof(Impl_::unlock_level_));
+}
+PetShopOffer::~PetShopOffer() {
+  // @@protoc_insertion_point(destructor:PetShopOffer)
+  SharedDtor(*this);
+}
+inline void PetShopOffer::SharedDtor(MessageLite& self) {
+  PetShopOffer& this_ = static_cast<PetShopOffer&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.desc_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PetShopOffer_class_data_ =
+        PetShopOffer::InternalGenerateClassData_(PetShopOffer_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PetShopOffer::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PetShopOffer_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PetShopOffer_class_data_.tc_table);
+  return PetShopOffer_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PetShopOffer::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PetShopOffer_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PetShopOffer_globals_));
+  return PetShopOffer_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PetShopOffer::ParseTableT_
+    PetShopOffer::_table_ =
+        PetShopOffer::InternalGenerateParseTable_(PetShopOffer_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PetShopOffer::Clear() {
+// @@protoc_insertion_point(message_clear_start:PetShopOffer)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.desc_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+    ::memset(&_impl_.pet_table_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.unlock_level_) -
+        reinterpret_cast<char*>(&_impl_.pet_table_id_)) + sizeof(_impl_.unlock_level_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PetShopOffer::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PetShopOffer& this_ = static_cast<const PetShopOffer&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PetShopOffer::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PetShopOffer& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:PetShopOffer)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 pet_table_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_pet_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_pet_table_id(), target);
+    }
+  }
+
+  // string name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PetShopOffer.name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 model_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_model_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_model_id(), target);
+    }
+  }
+
+  // uint32 unlock_level = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_unlock_level() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_unlock_level(), target);
+    }
+  }
+
+  // uint64 price_gold = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_price_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_price_gold(), target);
+    }
+  }
+
+  // string desc = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_desc().empty()) {
+      const ::std::string& _s = this_._internal_desc();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PetShopOffer.desc");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:PetShopOffer)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PetShopOffer::ByteSizeLong(const MessageLite& base) {
+  const PetShopOffer& this_ = static_cast<const PetShopOffer&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PetShopOffer::ByteSizeLong() const {
+  const PetShopOffer& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:PetShopOffer)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // string desc = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_desc().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_desc());
+      }
+    }
+    // uint32 pet_table_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_pet_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pet_table_id());
+      }
+    }
+    // uint32 model_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_model_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_model_id());
+      }
+    }
+    // uint64 price_gold = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_price_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_price_gold());
+      }
+    }
+    // uint32 unlock_level = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_unlock_level() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unlock_level());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PetShopOffer::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PetShopOffer*>(&to_msg);
+  auto& from = static_cast<const PetShopOffer&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:PetShopOffer)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_desc().empty()) {
+        _this->_internal_set_desc(from._internal_desc());
+      } else {
+        if (_this->_impl_.desc_.IsDefault()) {
+          _this->_internal_set_desc("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_pet_table_id() != 0) {
+        _this->_impl_.pet_table_id_ = from._impl_.pet_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_model_id() != 0) {
+        _this->_impl_.model_id_ = from._impl_.model_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_price_gold() != 0) {
+        _this->_impl_.price_gold_ = from._impl_.price_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_unlock_level() != 0) {
+        _this->_impl_.unlock_level_ = from._impl_.unlock_level_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PetShopOffer::CopyFrom(const PetShopOffer& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:PetShopOffer)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PetShopOffer::InternalSwap(PetShopOffer* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.unlock_level_)
+      + sizeof(PetShopOffer::_impl_.unlock_level_)
+      - PROTOBUF_FIELD_OFFSET(PetShopOffer, _impl_.pet_table_id_)>(
+          reinterpret_cast<char*>(&_impl_.pet_table_id_),
+          reinterpret_cast<char*>(&other->_impl_.pet_table_id_));
+}
+
+::google::protobuf::Metadata PetShopOffer::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetPetShopRequest::GetPetShopRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetPetShopRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:GetPetShopRequest)
+}
+GetPetShopRequest::GetPetShopRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetPetShopRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetPetShopRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetPetShopRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:GetPetShopRequest)
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPetShopRequest_class_data_ =
+        GetPetShopRequest::InternalGenerateClassData_(GetPetShopRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPetShopRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPetShopRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPetShopRequest_class_data_.tc_table);
+  return GetPetShopRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPetShopRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPetShopRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPetShopRequest_globals_));
+  return GetPetShopRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPetShopRequest::ParseTableT_
+    GetPetShopRequest::_table_ =
+        GetPetShopRequest::InternalGenerateParseTable_(GetPetShopRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+
+
+
+
+
+
+
+::google::protobuf::Metadata GetPetShopRequest::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetPetShopResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+GetPetShopResponse::GetPetShopResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPetShopResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:GetPetShopResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPetShopResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::GetPetShopResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        offers_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::GetPetShopResponse,
+              PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_.offers_)>()
+          , from.offers_
+        }
+     {}
+
+GetPetShopResponse::GetPetShopResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetPetShopResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetPetShopResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetPetShopResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, gold_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, gold_),
+           offsetof(Impl_, next_purchase_sequence_) -
+               offsetof(Impl_, gold_) +
+               sizeof(Impl_::next_purchase_sequence_));
+
+  // @@protoc_insertion_point(copy_constructor:GetPetShopResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetPetShopResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        offers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::GetPetShopResponse,
+            PROTOBUF_FIELD_OFFSET(::GetPetShopResponse, _impl_.offers_)>()
+         }
+     {}
+
+inline void GetPetShopResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, next_purchase_sequence_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::next_purchase_sequence_));
+}
+GetPetShopResponse::~GetPetShopResponse() {
+  // @@protoc_insertion_point(destructor:GetPetShopResponse)
+  SharedDtor(*this);
+}
+inline void GetPetShopResponse::SharedDtor(MessageLite& self) {
+  GetPetShopResponse& this_ = static_cast<GetPetShopResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetPetShopResponse_class_data_ =
+        GetPetShopResponse::InternalGenerateClassData_(GetPetShopResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPetShopResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPetShopResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetPetShopResponse_class_data_.tc_table);
+  return GetPetShopResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetPetShopResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetPetShopResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetPetShopResponse_globals_));
+  return GetPetShopResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetPetShopResponse::ParseTableT_
+    GetPetShopResponse::_table_ =
+        GetPetShopResponse::InternalGenerateParseTable_(GetPetShopResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetPetShopResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:GetPetShopResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.offers_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+    ::memset(&_impl_.gold_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.next_purchase_sequence_) -
+        reinterpret_cast<char*>(&_impl_.gold_)) + sizeof(_impl_.next_purchase_sequence_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetPetShopResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetPetShopResponse& this_ = static_cast<const GetPetShopResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetPetShopResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetPetShopResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:GetPetShopResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .PetShopOffer offers = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_offers_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_offers().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              2, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint64 gold = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_gold(), target);
+    }
+  }
+
+  // uint64 next_purchase_sequence = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_next_purchase_sequence() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_next_purchase_sequence(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:GetPetShopResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetPetShopResponse::ByteSizeLong(const MessageLite& base) {
+  const GetPetShopResponse& this_ = static_cast<const GetPetShopResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetPetShopResponse::ByteSizeLong() const {
+  const GetPetShopResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:GetPetShopResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // repeated .PetShopOffer offers = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_offers_size();
+      for (const auto& msg : this_._internal_offers()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // uint64 gold = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gold());
+      }
+    }
+    // uint64 next_purchase_sequence = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_next_purchase_sequence() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_purchase_sequence());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetPetShopResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetPetShopResponse*>(&to_msg);
+  auto& from = static_cast<const GetPetShopResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:GetPetShopResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_offers()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_offers());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_gold() != 0) {
+        _this->_impl_.gold_ = from._impl_.gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_next_purchase_sequence() != 0) {
+        _this->_impl_.next_purchase_sequence_ = from._impl_.next_purchase_sequence_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetPetShopResponse::CopyFrom(const GetPetShopResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:GetPetShopResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetPetShopResponse::InternalSwap(GetPetShopResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.offers_.InternalSwap(&other->_impl_.offers_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.next_purchase_sequence_)
+      + sizeof(GetPetShopResponse::_impl_.next_purchase_sequence_)
+      - PROTOBUF_FIELD_OFFSET(GetPetShopResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GetPetShopResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+BuyPetRequest::BuyPetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BuyPetRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BuyPetRequest)
+}
+BuyPetRequest::BuyPetRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BuyPetRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BuyPetRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE BuyPetRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BuyPetRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, purchase_sequence_),
+           0,
+           offsetof(Impl_, pet_table_id_) -
+               offsetof(Impl_, purchase_sequence_) +
+               sizeof(Impl_::pet_table_id_));
+}
+BuyPetRequest::~BuyPetRequest() {
+  // @@protoc_insertion_point(destructor:BuyPetRequest)
+  SharedDtor(*this);
+}
+inline void BuyPetRequest::SharedDtor(MessageLite& self) {
+  BuyPetRequest& this_ = static_cast<BuyPetRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BuyPetRequest_class_data_ =
+        BuyPetRequest::InternalGenerateClassData_(BuyPetRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BuyPetRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BuyPetRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BuyPetRequest_class_data_.tc_table);
+  return BuyPetRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BuyPetRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BuyPetRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BuyPetRequest_globals_));
+  return BuyPetRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BuyPetRequest::ParseTableT_
+    BuyPetRequest::_table_ =
+        BuyPetRequest::InternalGenerateParseTable_(BuyPetRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BuyPetRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:BuyPetRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.purchase_sequence_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.pet_table_id_) -
+        reinterpret_cast<char*>(&_impl_.purchase_sequence_)) + sizeof(_impl_.pet_table_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BuyPetRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BuyPetRequest& this_ = static_cast<const BuyPetRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BuyPetRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BuyPetRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BuyPetRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 pet_table_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_pet_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_pet_table_id(), target);
+    }
+  }
+
+  // uint64 purchase_sequence = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_purchase_sequence() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_purchase_sequence(), target);
+    }
+  }
+
+  // uint64 price_gold = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_price_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_price_gold(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BuyPetRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BuyPetRequest::ByteSizeLong(const MessageLite& base) {
+  const BuyPetRequest& this_ = static_cast<const BuyPetRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BuyPetRequest::ByteSizeLong() const {
+  const BuyPetRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BuyPetRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 purchase_sequence = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_purchase_sequence() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_purchase_sequence());
+      }
+    }
+    // uint64 price_gold = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_price_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_price_gold());
+      }
+    }
+    // uint32 pet_table_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_pet_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pet_table_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BuyPetRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BuyPetRequest*>(&to_msg);
+  auto& from = static_cast<const BuyPetRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:BuyPetRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_purchase_sequence() != 0) {
+        _this->_impl_.purchase_sequence_ = from._impl_.purchase_sequence_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_price_gold() != 0) {
+        _this->_impl_.price_gold_ = from._impl_.price_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_pet_table_id() != 0) {
+        _this->_impl_.pet_table_id_ = from._impl_.pet_table_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BuyPetRequest::CopyFrom(const BuyPetRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BuyPetRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BuyPetRequest::InternalSwap(BuyPetRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.pet_table_id_)
+      + sizeof(BuyPetRequest::_impl_.pet_table_id_)
+      - PROTOBUF_FIELD_OFFSET(BuyPetRequest, _impl_.purchase_sequence_)>(
+          reinterpret_cast<char*>(&_impl_.purchase_sequence_),
+          reinterpret_cast<char*>(&other->_impl_.purchase_sequence_));
+}
+
+::google::protobuf::Metadata BuyPetRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void BuyPetResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+BuyPetResponse::BuyPetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BuyPetResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BuyPetResponse)
+}
+PROTOBUF_NDEBUG_INLINE BuyPetResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::BuyPetResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+BuyPetResponse::BuyPetResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const BuyPetResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BuyPetResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  BuyPetResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.pets_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pets_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, pet_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, pet_id_),
+           offsetof(Impl_, next_purchase_sequence_) -
+               offsetof(Impl_, pet_id_) +
+               sizeof(Impl_::next_purchase_sequence_));
+
+  // @@protoc_insertion_point(copy_constructor:BuyPetResponse)
+}
+PROTOBUF_NDEBUG_INLINE BuyPetResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BuyPetResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, next_purchase_sequence_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::next_purchase_sequence_));
+}
+BuyPetResponse::~BuyPetResponse() {
+  // @@protoc_insertion_point(destructor:BuyPetResponse)
+  SharedDtor(*this);
+}
+inline void BuyPetResponse::SharedDtor(MessageLite& self) {
+  BuyPetResponse& this_ = static_cast<BuyPetResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.pets_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BuyPetResponse_class_data_ =
+        BuyPetResponse::InternalGenerateClassData_(BuyPetResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BuyPetResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BuyPetResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BuyPetResponse_class_data_.tc_table);
+  return BuyPetResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BuyPetResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BuyPetResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BuyPetResponse_globals_));
+  return BuyPetResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BuyPetResponse::ParseTableT_
+    BuyPetResponse::_table_ =
+        BuyPetResponse::InternalGenerateParseTable_(BuyPetResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BuyPetResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:BuyPetResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.pets_ != nullptr);
+      _impl_.pets_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+    ::memset(&_impl_.pet_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.next_purchase_sequence_) -
+        reinterpret_cast<char*>(&_impl_.pet_id_)) + sizeof(_impl_.next_purchase_sequence_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BuyPetResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BuyPetResponse& this_ = static_cast<const BuyPetResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BuyPetResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BuyPetResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BuyPetResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .PetListInfo pets = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.pets_, this_._impl_.pets_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 pet_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_pet_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_pet_id(), target);
+    }
+  }
+
+  // uint64 gold = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_gold(), target);
+    }
+  }
+
+  // uint64 next_purchase_sequence = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_next_purchase_sequence() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_next_purchase_sequence(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BuyPetResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BuyPetResponse::ByteSizeLong(const MessageLite& base) {
+  const BuyPetResponse& this_ = static_cast<const BuyPetResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BuyPetResponse::ByteSizeLong() const {
+  const BuyPetResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BuyPetResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .PetListInfo pets = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.pets_);
+    }
+    // uint64 pet_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_pet_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_pet_id());
+      }
+    }
+    // uint64 gold = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gold());
+      }
+    }
+    // uint64 next_purchase_sequence = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_next_purchase_sequence() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_purchase_sequence());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BuyPetResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BuyPetResponse*>(&to_msg);
+  auto& from = static_cast<const BuyPetResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:BuyPetResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.pets_ != nullptr);
+      if (_this->_impl_.pets_ == nullptr) {
+        _this->_impl_.pets_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pets_);
+      } else {
+        _this->_impl_.pets_->MergeFrom(*from._impl_.pets_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_pet_id() != 0) {
+        _this->_impl_.pet_id_ = from._impl_.pet_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_gold() != 0) {
+        _this->_impl_.gold_ = from._impl_.gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_next_purchase_sequence() != 0) {
+        _this->_impl_.next_purchase_sequence_ = from._impl_.next_purchase_sequence_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BuyPetResponse::CopyFrom(const BuyPetResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BuyPetResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BuyPetResponse::InternalSwap(BuyPetResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.next_purchase_sequence_)
+      + sizeof(BuyPetResponse::_impl_.next_purchase_sequence_)
+      - PROTOBUF_FIELD_OFFSET(BuyPetResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata BuyPetResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL ScenePetClientPlayer::descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto);
   return file_level_service_descriptors_proto_2fscene_2fplayer_5fpet_2eproto[0];
@@ -9703,6 +11945,20 @@ void ScenePetClientPlayer::GmGrantPet(::google::protobuf::RpcController* PROTOBU
   controller->SetFailed("Method GmGrantPet() not implemented.");
   done->Run();
 }
+void ScenePetClientPlayer::GetPetShop(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::GetPetShopRequest* PROTOBUF_NONNULL,
+                         ::GetPetShopResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method GetPetShop() not implemented.");
+  done->Run();
+}
+void ScenePetClientPlayer::BuyPet(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::BuyPetRequest* PROTOBUF_NONNULL,
+                         ::BuyPetResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method BuyPet() not implemented.");
+  done->Run();
+}
 
 void ScenePetClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -9747,6 +12003,14 @@ void ScenePetClientPlayer::CallMethod(
       this->GmGrantPet(controller, ::google::protobuf::DownCastMessage<::GmGrantPetRequest>(request),
                    ::google::protobuf::DownCastMessage<::GmGrantPetResponse>(response), done);
       break;
+    case 9:
+      this->GetPetShop(controller, ::google::protobuf::DownCastMessage<::GetPetShopRequest>(request),
+                   ::google::protobuf::DownCastMessage<::GetPetShopResponse>(response), done);
+      break;
+    case 10:
+      this->BuyPet(controller, ::google::protobuf::DownCastMessage<::BuyPetRequest>(request),
+                   ::google::protobuf::DownCastMessage<::BuyPetResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -9776,6 +12040,10 @@ const ::google::protobuf::Message& ScenePetClientPlayer::GetRequestPrototype(
       return ::PetListChangedS2C::default_instance();
     case 8:
       return ::GmGrantPetRequest::default_instance();
+    case 9:
+      return ::GetPetShopRequest::default_instance();
+    case 10:
+      return ::BuyPetRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -9806,6 +12074,10 @@ const ::google::protobuf::Message& ScenePetClientPlayer::GetResponsePrototype(
       return ::Empty::default_instance();
     case 8:
       return ::GmGrantPetResponse::default_instance();
+    case 9:
+      return ::GetPetShopResponse::default_instance();
+    case 10:
+      return ::BuyPetResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -9888,6 +12160,20 @@ void ScenePetClientPlayer_Stub::GmGrantPet(
     const ::GmGrantPetRequest* PROTOBUF_NONNULL request, ::GmGrantPetResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(8), controller,
+                       request, response, done);
+}
+void ScenePetClientPlayer_Stub::GetPetShop(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::GetPetShopRequest* PROTOBUF_NONNULL request, ::GetPetShopResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(9), controller,
+                       request, response, done);
+}
+void ScenePetClientPlayer_Stub::BuyPet(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::BuyPetRequest* PROTOBUF_NONNULL request, ::BuyPetResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(10), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

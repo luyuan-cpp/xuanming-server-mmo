@@ -32,6 +32,7 @@ inline constexpr const char* kOtlpInstrumentationScope = "mmorpg.cpp.tracing";
 //   * flags = W3C trace flags | SPAN_FLAGS_CONTEXT_HAS_IS_REMOTE_MASK |(父在别的进程时)SPAN_FLAGS_CONTEXT_IS_REMOTE_MASK;
 //   * status 为 kUnset 时不写 Status;
 //   * 按通道写 rpc.system(mmorpg_rpc0 / grpc / mmorpg_client)或 messaging.system(kafka),gRPC 另写 rpc.grpc.status_code。
+// 序列化失败返回空串;成功时固定含 ResourceSpans / ScopeSpans,结果不会为空。
 std::string EncodeExportTraceServiceRequest(const OtlpResource& resource, std::span<const SpanRecord> spans);
 
 } // namespace tracing

@@ -34,6 +34,8 @@ namespace MmorpgClient.Table
         private static readonly JsonParser s_jsonParser =
             new JsonParser(JsonParser.Settings.Default.WithIgnoreUnknownFields(true));
 
+        private static readonly MonsterTable[] s_emptyRows = new MonsterTable[0];
+
         [ThreadStatic]
         private static Random s_random;
 
@@ -65,12 +67,14 @@ namespace MmorpgClient.Table
             public readonly MonsterTableData Container;
             public readonly RepeatedField<MonsterTable> Rows;
             public readonly Dictionary<uint, MonsterTable> KvData;
+            public readonly Dictionary<uint, IReadOnlyList<MonsterTable>> IdxCapturePetTableId;
 
             public Snapshot(MonsterTableData container, int capacity)
             {
                 Container = container;
                 Rows = container.Data;
                 KvData = new Dictionary<uint, MonsterTable>(capacity);
+                IdxCapturePetTableId = new Dictionary<uint, IReadOnlyList<MonsterTable>>();
             }
         }
 
@@ -117,9 +121,11 @@ namespace MmorpgClient.Table
             {
                 MonsterTable row = rows[i];
                 snap.KvData[row.Id] = row;
+                Index(snap.IdxCapturePetTableId, row.CapturePetTableId, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
+            Freeze(snap.IdxCapturePetTableId);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
             _snapshot = snap;
@@ -162,6 +168,14 @@ namespace MmorpgClient.Table
             get { return _snapshot.KvData; }
         }
 
+        /// <summary>Secondary index lookup on capture_pet_table_id; 未命中返回空集合。</summary>
+        public IReadOnlyList<MonsterTable> GetByCapturePetTableId(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxCapturePetTableId, key);
+        }
+        // FK: capture_pet_table_id → Pet.id
+
         // ---- Exists ----
 
         public bool Exists(uint id)
@@ -177,6 +191,12 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return snap.Rows.Count;
+        }
+
+        public int CountByCapturePetTableIdIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxCapturePetTableId, key).Count;
         }
 
         // ---- FindByIds (IN) ----
@@ -243,6 +263,30 @@ namespace MmorpgClient.Table
         }
 
         // ---- internals ----
+
+        private static void Index<TKey>(Dictionary<TKey, IReadOnlyList<MonsterTable>> map, TKey key, MonsterTable row)
+        {
+            // 建索引期间桶是 List(要 Add);Rebuild 末尾 Freeze() 会把它换成数组。
+            // 这个向下转换只在 Freeze 之前成立,而 Index 只在 Rebuild 的循环里调用。
+            IReadOnlyList<MonsterTable> existing;
+            List<MonsterTable> bucket;
+            if (map.TryGetValue(key, out existing))
+            {
+                bucket = (List<MonsterTable>)existing;
+            }
+            else
+            {
+                bucket = new List<MonsterTable>();
+                map[key] = bucket;
+            }
+            bucket.Add(row);
+        }
+
+        private static IReadOnlyList<MonsterTable> Bucket<TKey>(Dictionary<TKey, IReadOnlyList<MonsterTable>> map, TKey key)
+        {
+            IReadOnlyList<MonsterTable> bucket;
+            return map.TryGetValue(key, out bucket) ? bucket : s_emptyRows;
+        }
 
         /// <summary>
         /// 把索引里的桶从可变 List 冻成数组。**必须在 Rebuild 的最后调用**。

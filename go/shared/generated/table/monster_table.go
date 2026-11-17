@@ -20,6 +20,7 @@ import (
 type monsterSnapshot struct {
     data   []*pb.MonsterTable
     kvData map[uint32]*pb.MonsterTable
+    idxCapturePetTableId map[uint32][]*pb.MonsterTable
 }
 
 type MonsterTableManager struct {
@@ -40,6 +41,7 @@ func NewMonsterTableManager() *MonsterTableManager {
     m := &MonsterTableManager{}
     m.snap.Store(&monsterSnapshot{
         kvData: make(map[uint32]*pb.MonsterTable),
+        idxCapturePetTableId: make(map[uint32][]*pb.MonsterTable),
     })
     return m
 }
@@ -69,10 +71,12 @@ func (m *MonsterTableManager) Load(configDir string, useBinary bool) error {
 
     snap := &monsterSnapshot{
         kvData: make(map[uint32]*pb.MonsterTable, len(container.Data)),
+        idxCapturePetTableId: make(map[uint32][]*pb.MonsterTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
+        snap.idxCapturePetTableId[row.CapturePetTableId] = append(snap.idxCapturePetTableId[row.CapturePetTableId], row)
     }
 
     snap.data = container.Data
@@ -92,6 +96,12 @@ func (m *MonsterTableManager) FindById(id uint32) (*pb.MonsterTable, bool) {
 }
 
 
+func (m *MonsterTableManager) GetByCapturePetTableId(key uint32) []*pb.MonsterTable {
+    snap := m.snap.Load()
+    return snap.idxCapturePetTableId[key]
+}
+
+
 
 // ---- Exists ----
 
@@ -108,6 +118,12 @@ func (m *MonsterTableManager) Exists(id uint32) bool {
 func (m *MonsterTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
+}
+
+
+func (m *MonsterTableManager) CountByCapturePetTableIdIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxCapturePetTableId[key])
 }
 
 
@@ -159,6 +175,8 @@ func (m *MonsterTableManager) First(pred func(*pb.MonsterTable) bool) (*pb.Monst
     }
     return nil, false
 }
+// FK: capture_pet_table_id → Pet.id
+
 
 // ---- Composite Key ----
 

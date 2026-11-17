@@ -79,12 +79,14 @@ func (EBattleActorType) EnumDescriptor() ([]byte, []int) {
 type EBattleActionType int32
 
 const (
-	EBattleActionType_BATTLE_ACTION_NONE   EBattleActionType = 0
-	EBattleActionType_BATTLE_ACTION_ATTACK EBattleActionType = 1 // 普攻
-	EBattleActionType_BATTLE_ACTION_SKILL  EBattleActionType = 2
-	EBattleActionType_BATTLE_ACTION_DEFEND EBattleActionType = 3 // 防御:本回合受伤减半
-	EBattleActionType_BATTLE_ACTION_ITEM   EBattleActionType = 4 // 使用战斗道具(从快照副本扣,结算回写)
-	EBattleActionType_BATTLE_ACTION_FLEE   EBattleActionType = 5 // 逃跑(PVE 可用;成功率基于速度差)
+	EBattleActionType_BATTLE_ACTION_NONE       EBattleActionType = 0
+	EBattleActionType_BATTLE_ACTION_ATTACK     EBattleActionType = 1 // 普攻
+	EBattleActionType_BATTLE_ACTION_SKILL      EBattleActionType = 2
+	EBattleActionType_BATTLE_ACTION_DEFEND     EBattleActionType = 3 // 防御:本回合受伤减半
+	EBattleActionType_BATTLE_ACTION_ITEM       EBattleActionType = 4 // 使用战斗道具(从快照副本扣,结算回写)
+	EBattleActionType_BATTLE_ACTION_FLEE       EBattleActionType = 5 // 逃跑(PVE 可用;成功率基于速度差)
+	EBattleActionType_BATTLE_ACTION_CAPTURE    EBattleActionType = 6 // 捕捉消耗本回合行动，由服务端判定。
+	EBattleActionType_BATTLE_ACTION_RECALL_PET EBattleActionType = 7 // 主人消耗正常行动，召回已过劝退等待期的本人宝宝。
 )
 
 // Enum value maps for EBattleActionType.
@@ -96,14 +98,18 @@ var (
 		3: "BATTLE_ACTION_DEFEND",
 		4: "BATTLE_ACTION_ITEM",
 		5: "BATTLE_ACTION_FLEE",
+		6: "BATTLE_ACTION_CAPTURE",
+		7: "BATTLE_ACTION_RECALL_PET",
 	}
 	EBattleActionType_value = map[string]int32{
-		"BATTLE_ACTION_NONE":   0,
-		"BATTLE_ACTION_ATTACK": 1,
-		"BATTLE_ACTION_SKILL":  2,
-		"BATTLE_ACTION_DEFEND": 3,
-		"BATTLE_ACTION_ITEM":   4,
-		"BATTLE_ACTION_FLEE":   5,
+		"BATTLE_ACTION_NONE":       0,
+		"BATTLE_ACTION_ATTACK":     1,
+		"BATTLE_ACTION_SKILL":      2,
+		"BATTLE_ACTION_DEFEND":     3,
+		"BATTLE_ACTION_ITEM":       4,
+		"BATTLE_ACTION_FLEE":       5,
+		"BATTLE_ACTION_CAPTURE":    6,
+		"BATTLE_ACTION_RECALL_PET": 7,
 	}
 )
 
@@ -154,6 +160,12 @@ const (
 	EBattleEventType_BATTLE_EVENT_BLOCK       EBattleEventType = 13 // 格挡(预留,一期不产出)
 	EBattleEventType_BATTLE_EVENT_MANA        EBattleEventType = 14 // 法力变化:value=变化绝对值,is_negative 由 target_health_after 之外的 mana_after 表达
 	EBattleEventType_BATTLE_EVENT_RESIST      EBattleEventType = 15 // 异常状态被抵抗:source=施加者,target=抵抗者,buff_table_id=被抵抗的 buff;老客户端忽略
+	EBattleEventType_BATTLE_EVENT_CAPTURE     EBattleEventType = 16 // success为成功结果；成功后目标离场，结算发放宠物。
+	EBattleEventType_BATTLE_EVENT_REVIVE      EBattleEventType = 17
+	EBattleEventType_BATTLE_EVENT_MAX_HEALTH  EBattleEventType = 18
+	EBattleEventType_BATTLE_EVENT_PET_RETREAT EBattleEventType = 19
+	EBattleEventType_BATTLE_EVENT_SHIELD      EBattleEventType = 20
+	EBattleEventType_BATTLE_EVENT_ARTIFACT    EBattleEventType = 21 // 法宝产生实际收益或消耗概率判定次数。
 )
 
 // Enum value maps for EBattleEventType.
@@ -175,6 +187,12 @@ var (
 		13: "BATTLE_EVENT_BLOCK",
 		14: "BATTLE_EVENT_MANA",
 		15: "BATTLE_EVENT_RESIST",
+		16: "BATTLE_EVENT_CAPTURE",
+		17: "BATTLE_EVENT_REVIVE",
+		18: "BATTLE_EVENT_MAX_HEALTH",
+		19: "BATTLE_EVENT_PET_RETREAT",
+		20: "BATTLE_EVENT_SHIELD",
+		21: "BATTLE_EVENT_ARTIFACT",
 	}
 	EBattleEventType_value = map[string]int32{
 		"BATTLE_EVENT_NONE":        0,
@@ -193,6 +211,12 @@ var (
 		"BATTLE_EVENT_BLOCK":       13,
 		"BATTLE_EVENT_MANA":        14,
 		"BATTLE_EVENT_RESIST":      15,
+		"BATTLE_EVENT_CAPTURE":     16,
+		"BATTLE_EVENT_REVIVE":      17,
+		"BATTLE_EVENT_MAX_HEALTH":  18,
+		"BATTLE_EVENT_PET_RETREAT": 19,
+		"BATTLE_EVENT_SHIELD":      20,
+		"BATTLE_EVENT_ARTIFACT":    21,
 	}
 )
 
@@ -231,6 +255,8 @@ const (
 	EBattleHitKind_BATTLE_HIT_COMBO   EBattleHitKind = 1 // 连击追加段(与首段同 group_id,hit_index 递增)
 	EBattleHitKind_BATTLE_HIT_COUNTER EBattleHitKind = 2 // 反击(受击者还手的 ATTACK / DAMAGE)
 	EBattleHitKind_BATTLE_HIT_REFLECT EBattleHitKind = 3 // 反震(DAMAGE:source=受击者,target=出手者)
+	EBattleHitKind_BATTLE_HIT_PURSUIT EBattleHitKind = 4
+	EBattleHitKind_BATTLE_HIT_MIRROR  EBattleHitKind = 5
 )
 
 // Enum value maps for EBattleHitKind.
@@ -240,12 +266,16 @@ var (
 		1: "BATTLE_HIT_COMBO",
 		2: "BATTLE_HIT_COUNTER",
 		3: "BATTLE_HIT_REFLECT",
+		4: "BATTLE_HIT_PURSUIT",
+		5: "BATTLE_HIT_MIRROR",
 	}
 	EBattleHitKind_value = map[string]int32{
 		"BATTLE_HIT_NORMAL":  0,
 		"BATTLE_HIT_COMBO":   1,
 		"BATTLE_HIT_COUNTER": 2,
 		"BATTLE_HIT_REFLECT": 3,
+		"BATTLE_HIT_PURSUIT": 4,
+		"BATTLE_HIT_MIRROR":  5,
 	}
 )
 
@@ -592,9 +622,22 @@ type BattleBuffEntry struct {
 	// 改的是哪一项由 Buff 表的 buff_type 决定(turn_battle_constants.h ClassSkillStatOfBuffType)。
 	StatPercent float64 `protobuf:"fixed64,6,opt,name=stat_percent,json=statPercent,proto3" json:"stat_percent,omitempty"`
 	// 施加(或刷新)它的回合号。回合末结算时不扣它这一回合,所以"持续 2 回合"是完整的 2 回合;0 = 老口径(当回合末就扣)。
-	AppliedRound  uint32 `protobuf:"varint,7,opt,name=applied_round,json=appliedRound,proto3" json:"applied_round,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	AppliedRound         uint32   `protobuf:"varint,7,opt,name=applied_round,json=appliedRound,proto3" json:"applied_round,omitempty"`
+	SourceSkillId        uint32   `protobuf:"varint,8,opt,name=source_skill_id,json=sourceSkillId,proto3" json:"source_skill_id,omitempty"`
+	SnapshotValue        uint64   `protobuf:"varint,9,opt,name=snapshot_value,json=snapshotValue,proto3" json:"snapshot_value,omitempty"` // 施加时的效果快照，催毒仍使用原来源强度。
+	RemainingCapacity    uint64   `protobuf:"varint,10,opt,name=remaining_capacity,json=remainingCapacity,proto3" json:"remaining_capacity,omitempty"`
+	RemainingHits        uint32   `protobuf:"varint,11,opt,name=remaining_hits,json=remainingHits,proto3" json:"remaining_hits,omitempty"`
+	RemainingTicks       uint32   `protobuf:"varint,12,opt,name=remaining_ticks,json=remainingTicks,proto3" json:"remaining_ticks,omitempty"`
+	ExtensionsUsed       uint32   `protobuf:"varint,13,opt,name=extensions_used,json=extensionsUsed,proto3" json:"extensions_used,omitempty"`
+	LastTriggerRound     uint32   `protobuf:"varint,14,opt,name=last_trigger_round,json=lastTriggerRound,proto3" json:"last_trigger_round,omitempty"`
+	TriggerCount         uint32   `protobuf:"varint,15,opt,name=trigger_count,json=triggerCount,proto3" json:"trigger_count,omitempty"`
+	TickRound            uint32   `protobuf:"varint,16,opt,name=tick_round,json=tickRound,proto3" json:"tick_round,omitempty"`
+	Stacks               uint32   `protobuf:"varint,17,opt,name=stacks,proto3" json:"stacks,omitempty"`
+	ChosenStat           uint32   `protobuf:"varint,18,opt,name=chosen_stat,json=chosenStat,proto3" json:"chosen_stat,omitempty"`
+	SecondaryValue       uint64   `protobuf:"varint,19,opt,name=secondary_value,json=secondaryValue,proto3" json:"secondary_value,omitempty"`
+	OutgoingHealSnapshot *float64 `protobuf:"fixed64,20,opt,name=outgoing_heal_snapshot,json=outgoingHealSnapshot,proto3,oneof" json:"outgoing_heal_snapshot,omitempty"` // 持续恢复施放时快照完整施放方修正，每跳只读受方修正。
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BattleBuffEntry) Reset() {
@@ -672,6 +715,97 @@ func (x *BattleBuffEntry) GetStatPercent() float64 {
 func (x *BattleBuffEntry) GetAppliedRound() uint32 {
 	if x != nil {
 		return x.AppliedRound
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetSourceSkillId() uint32 {
+	if x != nil {
+		return x.SourceSkillId
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetSnapshotValue() uint64 {
+	if x != nil {
+		return x.SnapshotValue
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetRemainingCapacity() uint64 {
+	if x != nil {
+		return x.RemainingCapacity
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetRemainingHits() uint32 {
+	if x != nil {
+		return x.RemainingHits
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetRemainingTicks() uint32 {
+	if x != nil {
+		return x.RemainingTicks
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetExtensionsUsed() uint32 {
+	if x != nil {
+		return x.ExtensionsUsed
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetLastTriggerRound() uint32 {
+	if x != nil {
+		return x.LastTriggerRound
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetTriggerCount() uint32 {
+	if x != nil {
+		return x.TriggerCount
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetTickRound() uint32 {
+	if x != nil {
+		return x.TickRound
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetStacks() uint32 {
+	if x != nil {
+		return x.Stacks
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetChosenStat() uint32 {
+	if x != nil {
+		return x.ChosenStat
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetSecondaryValue() uint64 {
+	if x != nil {
+		return x.SecondaryValue
+	}
+	return 0
+}
+
+func (x *BattleBuffEntry) GetOutgoingHealSnapshot() float64 {
+	if x != nil && x.OutgoingHealSnapshot != nil {
+		return *x.OutgoingHealSnapshot
 	}
 	return 0
 }
@@ -759,9 +893,11 @@ type BattlePlayerSnapshot struct {
 	// 已学职业技能的生效等级(skill_table_id -> 等级,含被动;docs/design/class-skills.md §6.1)。
 	// scene 按职业 / 角色等级夹好再填,引擎再按同一规则复核一次。旧通用技能不进这里。
 	// 被动的属性加成 scene 已算进上面的派生属性,引擎只消费战斗专用被动(治疗加成),不重复叠加。
-	SkillRanks    map[uint32]uint32 `protobuf:"bytes,21,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SkillRanks       map[uint32]uint32           `protobuf:"bytes,21,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	PetCaptureSlots  uint32                      `protobuf:"varint,22,opt,name=pet_capture_slots,json=petCaptureSlots,proto3" json:"pet_capture_slots,omitempty"` // scene 核定的本局可捕捉数量；旧快照缺省为0。
+	EquipmentEffects *component.EquipmentEffects `protobuf:"bytes,23,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"` // 仅人物装备，宝宝不继承。
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -941,6 +1077,20 @@ func (x *BattlePlayerSnapshot) GetSkillRanks() map[uint32]uint32 {
 	return nil
 }
 
+func (x *BattlePlayerSnapshot) GetPetCaptureSlots() uint32 {
+	if x != nil {
+		return x.PetCaptureSlots
+	}
+	return 0
+}
+
+func (x *BattlePlayerSnapshot) GetEquipmentEffects() *component.EquipmentEffects {
+	if x != nil {
+		return x.EquipmentEffects
+	}
+	return nil
+}
+
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
 // 属性口径与玩家快照逐项对齐:base_attributes 带 speed(出手序)与当前 HP/MP,
 // max_* 与物伤/法伤/防御来自 PetSystem 现算的二级属性。
@@ -961,6 +1111,7 @@ type BattlePetSnapshot struct {
 	MagicAttack    uint64                        `protobuf:"varint,10,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`
 	Defense        uint64                        `protobuf:"varint,11,opt,name=defense,proto3" json:"defense,omitempty"`
 	SkillTableIds  []uint32                      `protobuf:"varint,12,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`
+	SkillRanks     map[uint32]uint32             `protobuf:"bytes,13,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 公共原型的已学等级，开局再次校验宝宝资格。
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1079,6 +1230,13 @@ func (x *BattlePetSnapshot) GetSkillTableIds() []uint32 {
 	return nil
 }
 
+func (x *BattlePetSnapshot) GetSkillRanks() map[uint32]uint32 {
+	if x != nil {
+		return x.SkillRanks
+	}
+	return nil
+}
+
 type BattleActorState struct {
 	state               protoimpl.MessageState        `protogen:"open.v1"`
 	ActorId             uint64                        `protobuf:"varint,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // 玩家 = player_id;怪物 / 宝宝 = 引擎局内序号(bit63 打标,见 kEngineLocalActorIdFlag)
@@ -1111,9 +1269,20 @@ type BattleActorState struct {
 	// 下发给客户端的状态快照里会被清空,不暴露对手的装备概率。
 	Combat *component.CombatAttributes `protobuf:"bytes,27,opt,name=combat,proto3" json:"combat,omitempty"`
 	// 本局职业技能生效等级(来自快照 skill_ranks,引擎复核后的值;怪物 / 宝宝为空)。
-	SkillRanks    map[uint32]uint32 `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	SkillRanks         map[uint32]uint32           `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	CapturePetTableId  uint32                      `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
+	CapturedByPlayerId uint64                      `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
+	CaptureMinLevel    uint32                      `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
+	AbilityUseCounts   map[uint32]uint32           `protobuf:"bytes,32,rep,name=ability_use_counts,json=abilityUseCounts,proto3" json:"ability_use_counts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 本场限次；技能表定义上限。
+	RuntimeSkills      []uint32                    `protobuf:"varint,33,rep,packed,name=runtime_skills,json=runtimeSkills,proto3" json:"runtime_skills,omitempty"`                                                                                // 非主动技能也保留，供被动、追击、开场查询。
+	WithdrawUntilRound uint32                      `protobuf:"varint,34,opt,name=withdraw_until_round,json=withdrawUntilRound,proto3" json:"withdraw_until_round,omitempty"`                                                                      // 劝退返回边界；与阵亡分开。
+	RoundEffectUsage   map[uint32]uint64           `protobuf:"bytes,35,rep,name=round_effect_usage,json=roundEffectUsage,proto3" json:"round_effect_usage,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 来源技能的全体目标共享回合预算，下一回合清零。
+	EquipmentEffects   *component.EquipmentEffects `protobuf:"bytes,36,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`
+	ArtifactStates     []*BattleArtifactState      `protobuf:"bytes,37,rep,name=artifact_states,json=artifactStates,proto3" json:"artifact_states,omitempty"`
+	EntryMaxHealth     uint64                      `protobuf:"varint,38,opt,name=entry_max_health,json=entryMaxHealth,proto3" json:"entry_max_health,omitempty"` // 入战上限，临时上限变化不放大法宝预算。
+	EntryMaxMana       uint64                      `protobuf:"varint,39,opt,name=entry_max_mana,json=entryMaxMana,proto3" json:"entry_max_mana,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *BattleActorState) Reset() {
@@ -1342,6 +1511,168 @@ func (x *BattleActorState) GetSkillRanks() map[uint32]uint32 {
 	return nil
 }
 
+func (x *BattleActorState) GetCapturePetTableId() uint32 {
+	if x != nil {
+		return x.CapturePetTableId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetCapturedByPlayerId() uint64 {
+	if x != nil {
+		return x.CapturedByPlayerId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetCaptureMinLevel() uint32 {
+	if x != nil {
+		return x.CaptureMinLevel
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetAbilityUseCounts() map[uint32]uint32 {
+	if x != nil {
+		return x.AbilityUseCounts
+	}
+	return nil
+}
+
+func (x *BattleActorState) GetRuntimeSkills() []uint32 {
+	if x != nil {
+		return x.RuntimeSkills
+	}
+	return nil
+}
+
+func (x *BattleActorState) GetWithdrawUntilRound() uint32 {
+	if x != nil {
+		return x.WithdrawUntilRound
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetRoundEffectUsage() map[uint32]uint64 {
+	if x != nil {
+		return x.RoundEffectUsage
+	}
+	return nil
+}
+
+func (x *BattleActorState) GetEquipmentEffects() *component.EquipmentEffects {
+	if x != nil {
+		return x.EquipmentEffects
+	}
+	return nil
+}
+
+func (x *BattleActorState) GetArtifactStates() []*BattleArtifactState {
+	if x != nil {
+		return x.ArtifactStates
+	}
+	return nil
+}
+
+func (x *BattleActorState) GetEntryMaxHealth() uint64 {
+	if x != nil {
+		return x.EntryMaxHealth
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetEntryMaxMana() uint64 {
+	if x != nil {
+		return x.EntryMaxMana
+	}
+	return 0
+}
+
+// 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
+type BattleArtifactState struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ItemId             uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	UsedCount          uint32                 `protobuf:"varint,2,opt,name=used_count,json=usedCount,proto3" json:"used_count,omitempty"`
+	LastTriggerRound   uint32                 `protobuf:"varint,3,opt,name=last_trigger_round,json=lastTriggerRound,proto3" json:"last_trigger_round,omitempty"`
+	RoundTriggerCount  uint32                 `protobuf:"varint,4,opt,name=round_trigger_count,json=roundTriggerCount,proto3" json:"round_trigger_count,omitempty"`
+	PendingAilmentKind uint32                 `protobuf:"varint,5,opt,name=pending_ailment_kind,json=pendingAilmentKind,proto3" json:"pending_ailment_kind,omitempty"`
+	PendingRound       uint32                 `protobuf:"varint,6,opt,name=pending_round,json=pendingRound,proto3" json:"pending_round,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *BattleArtifactState) Reset() {
+	*x = BattleArtifactState{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleArtifactState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleArtifactState) ProtoMessage() {}
+
+func (x *BattleArtifactState) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleArtifactState.ProtoReflect.Descriptor instead.
+func (*BattleArtifactState) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *BattleArtifactState) GetItemId() uint64 {
+	if x != nil {
+		return x.ItemId
+	}
+	return 0
+}
+
+func (x *BattleArtifactState) GetUsedCount() uint32 {
+	if x != nil {
+		return x.UsedCount
+	}
+	return 0
+}
+
+func (x *BattleArtifactState) GetLastTriggerRound() uint32 {
+	if x != nil {
+		return x.LastTriggerRound
+	}
+	return 0
+}
+
+func (x *BattleArtifactState) GetRoundTriggerCount() uint32 {
+	if x != nil {
+		return x.RoundTriggerCount
+	}
+	return 0
+}
+
+func (x *BattleArtifactState) GetPendingAilmentKind() uint32 {
+	if x != nil {
+		return x.PendingAilmentKind
+	}
+	return 0
+}
+
+func (x *BattleArtifactState) GetPendingRound() uint32 {
+	if x != nil {
+		return x.PendingRound
+	}
+	return 0
+}
+
 type BattleAction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ActionType    EBattleActionType      `protobuf:"varint,1,opt,name=action_type,json=actionType,proto3,enum=EBattleActionType" json:"action_type,omitempty"`
@@ -1354,7 +1685,7 @@ type BattleAction struct {
 
 func (x *BattleAction) Reset() {
 	*x = BattleAction{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1366,7 +1697,7 @@ func (x *BattleAction) String() string {
 func (*BattleAction) ProtoMessage() {}
 
 func (x *BattleAction) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1379,7 +1710,7 @@ func (x *BattleAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleAction.ProtoReflect.Descriptor instead.
 func (*BattleAction) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{6}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *BattleAction) GetActionType() EBattleActionType {
@@ -1429,14 +1760,22 @@ type BattleEventItem struct {
 	// 法力的实际变化量(带符号):负 = 消耗,正 = 恢复,0 = 实际没变(例如满蓝回蓝)。
 	// 只在法力真的被结算过的事件上带(MANA / ITEM);value 仍是绝对值,老客户端不读本字段照旧。
 	// target_mana_after 才是权威终值,客户端演出与它不一致时以它为准。
-	ManaDelta     *int64 `protobuf:"zigzag64,15,opt,name=mana_delta,json=manaDelta,proto3,oneof" json:"mana_delta,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ManaDelta            *int64 `protobuf:"zigzag64,15,opt,name=mana_delta,json=manaDelta,proto3,oneof" json:"mana_delta,omitempty"`
+	BuffInstanceId       uint64 `protobuf:"varint,16,opt,name=buff_instance_id,json=buffInstanceId,proto3" json:"buff_instance_id,omitempty"`
+	Absorbed             uint64 `protobuf:"varint,17,opt,name=absorbed,proto3" json:"absorbed,omitempty"`
+	ShieldAfter          uint64 `protobuf:"varint,18,opt,name=shield_after,json=shieldAfter,proto3" json:"shield_after,omitempty"`
+	TargetMaxHealthAfter uint64 `protobuf:"varint,19,opt,name=target_max_health_after,json=targetMaxHealthAfter,proto3" json:"target_max_health_after,omitempty"`
+	DamageOrigin         uint32 `protobuf:"varint,20,opt,name=damage_origin,json=damageOrigin,proto3" json:"damage_origin,omitempty"` // 直接、持续、反弹、转伤等来源由公共战斗规则定义。
+	InstigatorId         uint64 `protobuf:"varint,21,opt,name=instigator_id,json=instigatorId,proto3" json:"instigator_id,omitempty"` // 催动者与原持续效果施加者分别保留。
+	ArtifactItemId       uint64 `protobuf:"varint,22,opt,name=artifact_item_id,json=artifactItemId,proto3" json:"artifact_item_id,omitempty"`
+	ArtifactEffectId     uint32 `protobuf:"varint,23,opt,name=artifact_effect_id,json=artifactEffectId,proto3" json:"artifact_effect_id,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BattleEventItem) Reset() {
 	*x = BattleEventItem{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1448,7 +1787,7 @@ func (x *BattleEventItem) String() string {
 func (*BattleEventItem) ProtoMessage() {}
 
 func (x *BattleEventItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1461,7 +1800,7 @@ func (x *BattleEventItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleEventItem.ProtoReflect.Descriptor instead.
 func (*BattleEventItem) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{7}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BattleEventItem) GetEventType() EBattleEventType {
@@ -1569,6 +1908,62 @@ func (x *BattleEventItem) GetManaDelta() int64 {
 	return 0
 }
 
+func (x *BattleEventItem) GetBuffInstanceId() uint64 {
+	if x != nil {
+		return x.BuffInstanceId
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetAbsorbed() uint64 {
+	if x != nil {
+		return x.Absorbed
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetShieldAfter() uint64 {
+	if x != nil {
+		return x.ShieldAfter
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetTargetMaxHealthAfter() uint64 {
+	if x != nil {
+		return x.TargetMaxHealthAfter
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetDamageOrigin() uint32 {
+	if x != nil {
+		return x.DamageOrigin
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetInstigatorId() uint64 {
+	if x != nil {
+		return x.InstigatorId
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetArtifactItemId() uint64 {
+	if x != nil {
+		return x.ArtifactItemId
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetArtifactEffectId() uint32 {
+	if x != nil {
+		return x.ArtifactEffectId
+	}
+	return 0
+}
+
 // ---- 单个玩家的结算数据(battle -> scene,scene 是唯一应用者) ----
 type BattleMonsterDefeat struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -1580,7 +1975,7 @@ type BattleMonsterDefeat struct {
 
 func (x *BattleMonsterDefeat) Reset() {
 	*x = BattleMonsterDefeat{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[8]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1592,7 +1987,7 @@ func (x *BattleMonsterDefeat) String() string {
 func (*BattleMonsterDefeat) ProtoMessage() {}
 
 func (x *BattleMonsterDefeat) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[8]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1605,7 +2000,7 @@ func (x *BattleMonsterDefeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleMonsterDefeat.ProtoReflect.Descriptor instead.
 func (*BattleMonsterDefeat) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{8}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *BattleMonsterDefeat) GetMonsterConfigId() uint32 {
@@ -1633,7 +2028,7 @@ type BattleCurrencyGain struct {
 
 func (x *BattleCurrencyGain) Reset() {
 	*x = BattleCurrencyGain{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[9]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1645,7 +2040,7 @@ func (x *BattleCurrencyGain) String() string {
 func (*BattleCurrencyGain) ProtoMessage() {}
 
 func (x *BattleCurrencyGain) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[9]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1658,7 +2053,7 @@ func (x *BattleCurrencyGain) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleCurrencyGain.ProtoReflect.Descriptor instead.
 func (*BattleCurrencyGain) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{9}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BattleCurrencyGain) GetCurrencyType() uint32 {
@@ -1687,7 +2082,7 @@ type BattleRandomItemReward struct {
 
 func (x *BattleRandomItemReward) Reset() {
 	*x = BattleRandomItemReward{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[10]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1699,7 +2094,7 @@ func (x *BattleRandomItemReward) String() string {
 func (*BattleRandomItemReward) ProtoMessage() {}
 
 func (x *BattleRandomItemReward) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[10]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1712,7 +2107,7 @@ func (x *BattleRandomItemReward) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleRandomItemReward.ProtoReflect.Descriptor instead.
 func (*BattleRandomItemReward) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{10}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *BattleRandomItemReward) GetItemTableId() uint32 {
@@ -1750,7 +2145,7 @@ type BattleRewardProfile struct {
 
 func (x *BattleRewardProfile) Reset() {
 	*x = BattleRewardProfile{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[11]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1762,7 +2157,7 @@ func (x *BattleRewardProfile) String() string {
 func (*BattleRewardProfile) ProtoMessage() {}
 
 func (x *BattleRewardProfile) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[11]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1775,7 +2170,7 @@ func (x *BattleRewardProfile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleRewardProfile.ProtoReflect.Descriptor instead.
 func (*BattleRewardProfile) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{11}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *BattleRewardProfile) GetBattleConfigId() uint32 {
@@ -1829,7 +2224,7 @@ type BattleRewardConfig struct {
 
 func (x *BattleRewardConfig) Reset() {
 	*x = BattleRewardConfig{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[12]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1841,7 +2236,7 @@ func (x *BattleRewardConfig) String() string {
 func (*BattleRewardConfig) ProtoMessage() {}
 
 func (x *BattleRewardConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[12]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1854,7 +2249,7 @@ func (x *BattleRewardConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleRewardConfig.ProtoReflect.Descriptor instead.
 func (*BattleRewardConfig) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{12}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *BattleRewardConfig) GetProfiles() []*BattleRewardProfile {
@@ -1890,15 +2285,16 @@ type BattleSettlementData struct {
 	FinishedAtMs uint64 `protobuf:"varint,17,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
 	// 这一局的匹配模式(MatchMode 数值)与战斗配置号:同样由 FreezeBattleSettlementSource 从 BattleResultEvent 盖进来,
 	// scene 写进本人近期战斗结果,供列表展示与按 battle_id 查回放;不参与任何结算判定。0 = 来源没盖。
-	MatchMode      uint32 `protobuf:"varint,18,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
-	BattleConfigId uint32 `protobuf:"varint,19,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	MatchMode           uint32   `protobuf:"varint,18,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`
+	BattleConfigId      uint32   `protobuf:"varint,19,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`
+	CapturedPetTableIds []uint32 `protobuf:"varint,20,rep,packed,name=captured_pet_table_ids,json=capturedPetTableIds,proto3" json:"captured_pet_table_ids,omitempty"` // 本人捕捉的宠物种类，随整笔结算原子落库和去重。
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
 	*x = BattleSettlementData{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[13]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1910,7 +2306,7 @@ func (x *BattleSettlementData) String() string {
 func (*BattleSettlementData) ProtoMessage() {}
 
 func (x *BattleSettlementData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[13]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1923,7 +2319,7 @@ func (x *BattleSettlementData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleSettlementData.ProtoReflect.Descriptor instead.
 func (*BattleSettlementData) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{13}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *BattleSettlementData) GetBattleId() uint64 {
@@ -2059,6 +2455,13 @@ func (x *BattleSettlementData) GetBattleConfigId() uint32 {
 	return 0
 }
 
+func (x *BattleSettlementData) GetCapturedPetTableIds() []uint32 {
+	if x != nil {
+		return x.CapturedPetTableIds
+	}
+	return nil
+}
+
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
 type BattlePetSettlementData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2072,7 +2475,7 @@ type BattlePetSettlementData struct {
 
 func (x *BattlePetSettlementData) Reset() {
 	*x = BattlePetSettlementData{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[14]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2084,7 +2487,7 @@ func (x *BattlePetSettlementData) String() string {
 func (*BattlePetSettlementData) ProtoMessage() {}
 
 func (x *BattlePetSettlementData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[14]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2097,7 +2500,7 @@ func (x *BattlePetSettlementData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattlePetSettlementData.ProtoReflect.Descriptor instead.
 func (*BattlePetSettlementData) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{14}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *BattlePetSettlementData) GetPetId() uint64 {
@@ -2143,7 +2546,7 @@ type BattleActivityContext struct {
 
 func (x *BattleActivityContext) Reset() {
 	*x = BattleActivityContext{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[15]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2155,7 +2558,7 @@ func (x *BattleActivityContext) String() string {
 func (*BattleActivityContext) ProtoMessage() {}
 
 func (x *BattleActivityContext) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[15]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2168,7 +2571,7 @@ func (x *BattleActivityContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleActivityContext.ProtoReflect.Descriptor instead.
 func (*BattleActivityContext) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{15}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *BattleActivityContext) GetKind() EBattleActivityKind {
@@ -2224,7 +2627,7 @@ var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/battle/battle_data.proto\x1a'proto/common/component/actor_comp.proto\x1a7proto/common/component/actor_attribute_state_comp.proto\"\xe3\x01\n" +
+	"\x1eproto/battle/battle_data.proto\x1a'proto/common/component/actor_comp.proto\x1a7proto/common/component/actor_attribute_state_comp.proto\x1a.proto/common/component/equipment_effects.proto\"\xe3\x01\n" +
 	"\rBattleRouting\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12 \n" +
@@ -2233,7 +2636,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x10gate_instance_id\x18\x03 \x01(\tR\x0egateInstanceId\x12\"\n" +
 	"\rscene_node_id\x18\x04 \x01(\rR\vsceneNodeId\x12*\n" +
 	"\x11scene_instance_id\x18\x05 \x01(\tR\x0fsceneInstanceId\x12\x17\n" +
-	"\azone_id\x18\x06 \x01(\rR\x06zoneId\"\xee\x01\n" +
+	"\azone_id\x18\x06 \x01(\rR\x06zoneId\"\x8f\x06\n" +
 	"\x0fBattleBuffEntry\x12\x17\n" +
 	"\abuff_id\x18\x01 \x01(\x04R\x06buffId\x12\"\n" +
 	"\rbuff_table_id\x18\x02 \x01(\rR\vbuffTableId\x12\x14\n" +
@@ -2241,10 +2644,27 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\rremain_rounds\x18\x04 \x01(\rR\fremainRounds\x12\x1b\n" +
 	"\tcaster_id\x18\x05 \x01(\x04R\bcasterId\x12!\n" +
 	"\fstat_percent\x18\x06 \x01(\x01R\vstatPercent\x12#\n" +
-	"\rapplied_round\x18\a \x01(\rR\fappliedRound\"K\n" +
+	"\rapplied_round\x18\a \x01(\rR\fappliedRound\x12&\n" +
+	"\x0fsource_skill_id\x18\b \x01(\rR\rsourceSkillId\x12%\n" +
+	"\x0esnapshot_value\x18\t \x01(\x04R\rsnapshotValue\x12-\n" +
+	"\x12remaining_capacity\x18\n" +
+	" \x01(\x04R\x11remainingCapacity\x12%\n" +
+	"\x0eremaining_hits\x18\v \x01(\rR\rremainingHits\x12'\n" +
+	"\x0fremaining_ticks\x18\f \x01(\rR\x0eremainingTicks\x12'\n" +
+	"\x0fextensions_used\x18\r \x01(\rR\x0eextensionsUsed\x12,\n" +
+	"\x12last_trigger_round\x18\x0e \x01(\rR\x10lastTriggerRound\x12#\n" +
+	"\rtrigger_count\x18\x0f \x01(\rR\ftriggerCount\x12\x1d\n" +
+	"\n" +
+	"tick_round\x18\x10 \x01(\rR\ttickRound\x12\x16\n" +
+	"\x06stacks\x18\x11 \x01(\rR\x06stacks\x12\x1f\n" +
+	"\vchosen_stat\x18\x12 \x01(\rR\n" +
+	"chosenStat\x12'\n" +
+	"\x0fsecondary_value\x18\x13 \x01(\x04R\x0esecondaryValue\x129\n" +
+	"\x16outgoing_heal_snapshot\x18\x14 \x01(\x01H\x00R\x14outgoingHealSnapshot\x88\x01\x01B\x19\n" +
+	"\x17_outgoing_heal_snapshot\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xe8\x06\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xd4\a\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -2271,10 +2691,12 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x06gender\x18\x13 \x01(\rR\x06gender\x12)\n" +
 	"\x06combat\x18\x14 \x01(\v2\x11.CombatAttributesR\x06combat\x12F\n" +
 	"\vskill_ranks\x18\x15 \x03(\v2%.BattlePlayerSnapshot.SkillRanksEntryR\n" +
-	"skillRanks\x1a=\n" +
+	"skillRanks\x12*\n" +
+	"\x11pet_capture_slots\x18\x16 \x01(\rR\x0fpetCaptureSlots\x12>\n" +
+	"\x11equipment_effects\x18\x17 \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xab\x03\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaf\x04\n" +
 	"\x11BattlePetSnapshot\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x19\n" +
@@ -2290,7 +2712,12 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fmagic_attack\x18\n" +
 	" \x01(\x04R\vmagicAttack\x12\x18\n" +
 	"\adefense\x18\v \x01(\x04R\adefense\x12&\n" +
-	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\"\x96\t\n" +
+	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\x12C\n" +
+	"\vskill_ranks\x18\r \x03(\v2\".BattlePetSnapshot.SkillRanksEntryR\n" +
+	"skillRanks\x1a=\n" +
+	"\x0fSkillRanksEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x86\x0f\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -2327,19 +2754,44 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x06gender\x18\x1a \x01(\rR\x06gender\x12)\n" +
 	"\x06combat\x18\x1b \x01(\v2\x11.CombatAttributesR\x06combat\x12B\n" +
 	"\vskill_ranks\x18\x1c \x03(\v2!.BattleActorState.SkillRanksEntryR\n" +
-	"skillRanks\x1aF\n" +
+	"skillRanks\x12/\n" +
+	"\x14capture_pet_table_id\x18\x1d \x01(\rR\x11capturePetTableId\x121\n" +
+	"\x15captured_by_player_id\x18\x1e \x01(\x04R\x12capturedByPlayerId\x12*\n" +
+	"\x11capture_min_level\x18\x1f \x01(\rR\x0fcaptureMinLevel\x12U\n" +
+	"\x12ability_use_counts\x18  \x03(\v2'.BattleActorState.AbilityUseCountsEntryR\x10abilityUseCounts\x12%\n" +
+	"\x0eruntime_skills\x18! \x03(\rR\rruntimeSkills\x120\n" +
+	"\x14withdraw_until_round\x18\" \x01(\rR\x12withdrawUntilRound\x12U\n" +
+	"\x12round_effect_usage\x18# \x03(\v2'.BattleActorState.RoundEffectUsageEntryR\x10roundEffectUsage\x12>\n" +
+	"\x11equipment_effects\x18$ \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x12=\n" +
+	"\x0fartifact_states\x18% \x03(\v2\x14.BattleArtifactStateR\x0eartifactStates\x12(\n" +
+	"\x10entry_max_health\x18& \x01(\x04R\x0eentryMaxHealth\x12$\n" +
+	"\x0eentry_max_mana\x18' \x01(\x04R\fentryMaxMana\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaa\x01\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
+	"\x15AbilityUseCountsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
+	"\x15RoundEffectUsageEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\x82\x02\n" +
+	"\x13BattleArtifactState\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1d\n" +
+	"\n" +
+	"used_count\x18\x02 \x01(\rR\tusedCount\x12,\n" +
+	"\x12last_trigger_round\x18\x03 \x01(\rR\x10lastTriggerRound\x12.\n" +
+	"\x13round_trigger_count\x18\x04 \x01(\rR\x11roundTriggerCount\x120\n" +
+	"\x14pending_ailment_kind\x18\x05 \x01(\rR\x12pendingAilmentKind\x12#\n" +
+	"\rpending_round\x18\x06 \x01(\rR\fpendingRound\"\xaa\x01\n" +
 	"\fBattleAction\x123\n" +
 	"\vaction_type\x18\x01 \x01(\x0e2\x12.eBattleActionTypeR\n" +
 	"actionType\x12$\n" +
 	"\x0eskill_table_id\x18\x02 \x01(\rR\fskillTableId\x12\x1b\n" +
 	"\ttarget_id\x18\x03 \x01(\x04R\btargetId\x12\"\n" +
-	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\"\xaf\x04\n" +
+	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\"\xf1\x06\n" +
 	"\x0fBattleEventItem\x120\n" +
 	"\n" +
 	"event_type\x18\x01 \x01(\x0e2\x11.eBattleEventTypeR\teventType\x12\x1b\n" +
@@ -2359,7 +2811,15 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11target_mana_after\x18\r \x01(\x04R\x0ftargetManaAfter\x12*\n" +
 	"\bhit_kind\x18\x0e \x01(\x0e2\x0f.eBattleHitKindR\ahitKind\x12\"\n" +
 	"\n" +
-	"mana_delta\x18\x0f \x01(\x12H\x00R\tmanaDelta\x88\x01\x01B\r\n" +
+	"mana_delta\x18\x0f \x01(\x12H\x00R\tmanaDelta\x88\x01\x01\x12(\n" +
+	"\x10buff_instance_id\x18\x10 \x01(\x04R\x0ebuffInstanceId\x12\x1a\n" +
+	"\babsorbed\x18\x11 \x01(\x04R\babsorbed\x12!\n" +
+	"\fshield_after\x18\x12 \x01(\x04R\vshieldAfter\x125\n" +
+	"\x17target_max_health_after\x18\x13 \x01(\x04R\x14targetMaxHealthAfter\x12#\n" +
+	"\rdamage_origin\x18\x14 \x01(\rR\fdamageOrigin\x12#\n" +
+	"\rinstigator_id\x18\x15 \x01(\x04R\finstigatorId\x12(\n" +
+	"\x10artifact_item_id\x18\x16 \x01(\x04R\x0eartifactItemId\x12,\n" +
+	"\x12artifact_effect_id\x18\x17 \x01(\rR\x10artifactEffectIdB\r\n" +
 	"\v_mana_delta\"W\n" +
 	"\x13BattleMonsterDefeat\x12*\n" +
 	"\x11monster_config_id\x18\x01 \x01(\rR\x0fmonsterConfigId\x12\x14\n" +
@@ -2382,7 +2842,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xe5\x05\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\x9a\x06\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -2404,7 +2864,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0efinished_at_ms\x18\x11 \x01(\x04R\ffinishedAtMs\x12\x1d\n" +
 	"\n" +
 	"match_mode\x18\x12 \x01(\rR\tmatchMode\x12(\n" +
-	"\x10battle_config_id\x18\x13 \x01(\rR\x0ebattleConfigId\"u\n" +
+	"\x10battle_config_id\x18\x13 \x01(\rR\x0ebattleConfigId\x123\n" +
+	"\x16captured_pet_table_ids\x18\x14 \x03(\rR\x13capturedPetTableIds\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -2424,14 +2885,16 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
 	"\x19BATTLE_ACTOR_TYPE_MONSTER\x10\x02\x12\x19\n" +
-	"\x15BATTLE_ACTOR_TYPE_PET\x10\x03*\xa8\x01\n" +
+	"\x15BATTLE_ACTOR_TYPE_PET\x10\x03*\xe1\x01\n" +
 	"\x11eBattleActionType\x12\x16\n" +
 	"\x12BATTLE_ACTION_NONE\x10\x00\x12\x18\n" +
 	"\x14BATTLE_ACTION_ATTACK\x10\x01\x12\x17\n" +
 	"\x13BATTLE_ACTION_SKILL\x10\x02\x12\x18\n" +
 	"\x14BATTLE_ACTION_DEFEND\x10\x03\x12\x16\n" +
 	"\x12BATTLE_ACTION_ITEM\x10\x04\x12\x16\n" +
-	"\x12BATTLE_ACTION_FLEE\x10\x05*\x9d\x03\n" +
+	"\x12BATTLE_ACTION_FLEE\x10\x05\x12\x19\n" +
+	"\x15BATTLE_ACTION_CAPTURE\x10\x06\x12\x1c\n" +
+	"\x18BATTLE_ACTION_RECALL_PET\x10\a*\xbf\x04\n" +
 	"\x10eBattleEventType\x12\x15\n" +
 	"\x11BATTLE_EVENT_NONE\x10\x00\x12\x17\n" +
 	"\x13BATTLE_EVENT_ATTACK\x10\x01\x12\x16\n" +
@@ -2449,12 +2912,20 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11BATTLE_EVENT_MISS\x10\f\x12\x16\n" +
 	"\x12BATTLE_EVENT_BLOCK\x10\r\x12\x15\n" +
 	"\x11BATTLE_EVENT_MANA\x10\x0e\x12\x17\n" +
-	"\x13BATTLE_EVENT_RESIST\x10\x0f*m\n" +
+	"\x13BATTLE_EVENT_RESIST\x10\x0f\x12\x18\n" +
+	"\x14BATTLE_EVENT_CAPTURE\x10\x10\x12\x17\n" +
+	"\x13BATTLE_EVENT_REVIVE\x10\x11\x12\x1b\n" +
+	"\x17BATTLE_EVENT_MAX_HEALTH\x10\x12\x12\x1c\n" +
+	"\x18BATTLE_EVENT_PET_RETREAT\x10\x13\x12\x17\n" +
+	"\x13BATTLE_EVENT_SHIELD\x10\x14\x12\x19\n" +
+	"\x15BATTLE_EVENT_ARTIFACT\x10\x15*\x9c\x01\n" +
 	"\x0eeBattleHitKind\x12\x15\n" +
 	"\x11BATTLE_HIT_NORMAL\x10\x00\x12\x14\n" +
 	"\x10BATTLE_HIT_COMBO\x10\x01\x12\x16\n" +
 	"\x12BATTLE_HIT_COUNTER\x10\x02\x12\x16\n" +
-	"\x12BATTLE_HIT_REFLECT\x10\x03*\x9c\x01\n" +
+	"\x12BATTLE_HIT_REFLECT\x10\x03\x12\x16\n" +
+	"\x12BATTLE_HIT_PURSUIT\x10\x04\x12\x15\n" +
+	"\x11BATTLE_HIT_MIRROR\x10\x05*\x9c\x01\n" +
 	"\x0eeBattleOutcome\x12\x1a\n" +
 	"\x16BATTLE_OUTCOME_ONGOING\x10\x00\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_A_WIN\x10\x01\x12\x1d\n" +
@@ -2486,7 +2957,7 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                // 0: eBattleActorType
 	(EBattleActionType)(0),               // 1: eBattleActionType
@@ -2502,55 +2973,66 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(*BattlePlayerSnapshot)(nil),         // 11: BattlePlayerSnapshot
 	(*BattlePetSnapshot)(nil),            // 12: BattlePetSnapshot
 	(*BattleActorState)(nil),             // 13: BattleActorState
-	(*BattleAction)(nil),                 // 14: BattleAction
-	(*BattleEventItem)(nil),              // 15: BattleEventItem
-	(*BattleMonsterDefeat)(nil),          // 16: BattleMonsterDefeat
-	(*BattleCurrencyGain)(nil),           // 17: BattleCurrencyGain
-	(*BattleRandomItemReward)(nil),       // 18: BattleRandomItemReward
-	(*BattleRewardProfile)(nil),          // 19: BattleRewardProfile
-	(*BattleRewardConfig)(nil),           // 20: BattleRewardConfig
-	(*BattleSettlementData)(nil),         // 21: BattleSettlementData
-	(*BattlePetSettlementData)(nil),      // 22: BattlePetSettlementData
-	(*BattleActivityContext)(nil),        // 23: BattleActivityContext
-	nil,                                  // 24: BattlePlayerSnapshot.SkillRanksEntry
-	nil,                                  // 25: BattleActorState.SkillCooldownRoundsEntry
-	nil,                                  // 26: BattleActorState.SkillRanksEntry
-	(*component.BaseAttributesComp)(nil), // 27: BaseAttributesComp
-	(*component.CombatAttributes)(nil),   // 28: CombatAttributes
+	(*BattleArtifactState)(nil),          // 14: BattleArtifactState
+	(*BattleAction)(nil),                 // 15: BattleAction
+	(*BattleEventItem)(nil),              // 16: BattleEventItem
+	(*BattleMonsterDefeat)(nil),          // 17: BattleMonsterDefeat
+	(*BattleCurrencyGain)(nil),           // 18: BattleCurrencyGain
+	(*BattleRandomItemReward)(nil),       // 19: BattleRandomItemReward
+	(*BattleRewardProfile)(nil),          // 20: BattleRewardProfile
+	(*BattleRewardConfig)(nil),           // 21: BattleRewardConfig
+	(*BattleSettlementData)(nil),         // 22: BattleSettlementData
+	(*BattlePetSettlementData)(nil),      // 23: BattlePetSettlementData
+	(*BattleActivityContext)(nil),        // 24: BattleActivityContext
+	nil,                                  // 25: BattlePlayerSnapshot.SkillRanksEntry
+	nil,                                  // 26: BattlePetSnapshot.SkillRanksEntry
+	nil,                                  // 27: BattleActorState.SkillCooldownRoundsEntry
+	nil,                                  // 28: BattleActorState.SkillRanksEntry
+	nil,                                  // 29: BattleActorState.AbilityUseCountsEntry
+	nil,                                  // 30: BattleActorState.RoundEffectUsageEntry
+	(*component.BaseAttributesComp)(nil), // 31: BaseAttributesComp
+	(*component.CombatAttributes)(nil),   // 32: CombatAttributes
+	(*component.EquipmentEffects)(nil),   // 33: EquipmentEffects
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	27, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	31, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
 	9,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
 	10, // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
 	8,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
 	12, // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
-	28, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
-	24, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
-	27, // 7: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
-	0,  // 8: BattleActorState.actor_type:type_name -> eBattleActorType
-	27, // 9: BattleActorState.attributes:type_name -> BaseAttributesComp
-	9,  // 10: BattleActorState.buffs:type_name -> BattleBuffEntry
-	25, // 11: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	28, // 12: BattleActorState.combat:type_name -> CombatAttributes
-	26, // 13: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
-	1,  // 14: BattleAction.action_type:type_name -> eBattleActionType
-	2,  // 15: BattleEventItem.event_type:type_name -> eBattleEventType
-	3,  // 16: BattleEventItem.hit_kind:type_name -> eBattleHitKind
-	17, // 17: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
-	18, // 18: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
-	19, // 19: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
-	4,  // 20: BattleSettlementData.outcome:type_name -> eBattleOutcome
-	10, // 21: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
-	10, // 22: BattleSettlementData.items_gained:type_name -> BattleItemEntry
-	22, // 23: BattleSettlementData.pets:type_name -> BattlePetSettlementData
-	16, // 24: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
-	17, // 25: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
-	5,  // 26: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	32, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
+	25, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
+	33, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
+	31, // 8: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	26, // 9: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
+	0,  // 10: BattleActorState.actor_type:type_name -> eBattleActorType
+	31, // 11: BattleActorState.attributes:type_name -> BaseAttributesComp
+	9,  // 12: BattleActorState.buffs:type_name -> BattleBuffEntry
+	27, // 13: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	32, // 14: BattleActorState.combat:type_name -> CombatAttributes
+	28, // 15: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	29, // 16: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
+	30, // 17: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
+	33, // 18: BattleActorState.equipment_effects:type_name -> EquipmentEffects
+	14, // 19: BattleActorState.artifact_states:type_name -> BattleArtifactState
+	1,  // 20: BattleAction.action_type:type_name -> eBattleActionType
+	2,  // 21: BattleEventItem.event_type:type_name -> eBattleEventType
+	3,  // 22: BattleEventItem.hit_kind:type_name -> eBattleHitKind
+	18, // 23: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
+	19, // 24: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
+	20, // 25: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
+	4,  // 26: BattleSettlementData.outcome:type_name -> eBattleOutcome
+	10, // 27: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
+	10, // 28: BattleSettlementData.items_gained:type_name -> BattleItemEntry
+	23, // 29: BattleSettlementData.pets:type_name -> BattlePetSettlementData
+	17, // 30: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
+	18, // 31: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
+	5,  // 32: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	33, // [33:33] is the sub-list for method output_type
+	33, // [33:33] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }
@@ -2558,14 +3040,15 @@ func file_proto_battle_battle_data_proto_init() {
 	if File_proto_battle_battle_data_proto != nil {
 		return
 	}
-	file_proto_battle_battle_data_proto_msgTypes[7].OneofWrappers = []any{}
+	file_proto_battle_battle_data_proto_msgTypes[1].OneofWrappers = []any{}
+	file_proto_battle_battle_data_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   19,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

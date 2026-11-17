@@ -11,6 +11,8 @@
 // (全局作用域、无 package、无 dllexport_decl),所以这行是合法的重复声明。
 class ItemTable;
 class EquipAffixRuleTable;
+class EquipArtifactTable;
+class ItemTable;
 
 // ---------------------------------------------------------------------------
 // Foreign key helpers for ItemTable
@@ -22,6 +24,18 @@ const EquipAffixRuleTable* GetItemAffixRuleRow(const ItemTable& row);
 /// Resolve Item.affix_rule -> EquipAffixRule row (by Item id).
 const EquipAffixRuleTable* GetItemAffixRuleRow(uint32_t tableId);
 
+/// Resolve Item.forge_material_id -> Item row.
+const ItemTable* GetItemForgeMaterialIdRow(const ItemTable& row);
+
+/// Resolve Item.forge_material_id -> Item row (by Item id).
+const ItemTable* GetItemForgeMaterialIdRow(uint32_t tableId);
+
+/// Resolve Item.artifact_id -> EquipArtifact row.
+const EquipArtifactTable* GetItemArtifactIdRow(const ItemTable& row);
+
+/// Resolve Item.artifact_id -> EquipArtifact row (by Item id).
+const EquipArtifactTable* GetItemArtifactIdRow(uint32_t tableId);
+
 // ---------------------------------------------------------------------------
 // Reverse FK (HasMany): find source rows by FK column value
 // 只碰本表的 manager,不需要任何目标表的类型。
@@ -29,3 +43,9 @@ const EquipAffixRuleTable* GetItemAffixRuleRow(uint32_t tableId);
 
 /// Reverse FK: find all Item rows whose affix_rule == key.
 const std::vector<const ItemTable*>& FindItemRowsByAffixRule(uint32_t key);
+
+/// Reverse FK: find all Item rows whose forge_material_id == key.
+const std::vector<const ItemTable*>& FindItemRowsByForgeMaterialId(uint32_t key);
+
+/// Reverse FK: find all Item rows whose artifact_id == key.
+const std::vector<const ItemTable*>& FindItemRowsByArtifactId(uint32_t key);

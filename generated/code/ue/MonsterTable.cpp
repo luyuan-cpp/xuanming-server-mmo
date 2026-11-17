@@ -116,6 +116,8 @@ static void MonsterTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObjec
 	MonsterTableCheckNarrowedField(RowObject, TEXT("speed"), TEXT("speed"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	MonsterTableCheckNarrowedField(RowObject, TEXT("exp_reward"), TEXT("exp_reward"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	MonsterTableCheckNarrowedField(RowObject, TEXT("gold_reward"), TEXT("gold_reward"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("capture_pet_table_id"), TEXT("capture_pet_table_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("capture_rate"), TEXT("capture_rate"), RowIndex, 2147483647.0, TEXT("uint32"));
 	// 子消息 drop[]:每个元素是一个对象,逐个元素查它的收窄列。
 	if (const TSharedPtr<FJsonValue>* DropField = RowObject->Values.Find(TEXT("drop")))
 	{
@@ -224,6 +226,7 @@ void UMonsterTable::BuildIndices(FSnapshot& Snap)
 				*LexToString(Row.id), *Existing, RowIndex);
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
+		Snap.CapturePetTableIdIndex.FindOrAdd(Row.capture_pet_table_id).Add(RowIndex);
 	}
 }
 
@@ -276,6 +279,29 @@ const FCfgMonsterRow* UMonsterTable::RandOne() const
 		return nullptr;
 	}
 	return &Snapshot->Rows[FMath::RandRange(0, Snapshot->Rows.Num() - 1)];
+}
+
+TArray<const FCfgMonsterRow*> UMonsterTable::GetByCapturePetTableId(int32 Key) const
+{
+	TArray<const FCfgMonsterRow*> Result;
+	const TArray<int32>& Indices = GetCapturePetTableIdIndices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& UMonsterTable::GetCapturePetTableIdIndices(int32 Key) const
+{
+	const TArray<int32>* Found = Snapshot->CapturePetTableIdIndex.Find(Key);
+	return Found != nullptr ? *Found : GMonsterEmptyIndices;
+}
+
+int32 UMonsterTable::CountByCapturePetTableIdIndex(int32 Key) const
+{
+	return GetCapturePetTableIdIndices(Key).Num();
 }
 
 TArray<const FCfgMonsterRow*> UMonsterTable::Where(TFunctionRef<bool(const FCfgMonsterRow&)> Pred) const

@@ -106,6 +106,8 @@ type Config struct {
 
 	// EquipForgeTopup 是 "equip-forge-topup" 模式的子开关(见 EquipForgeTopupConfig / equip_forge_topup_scenario.go)。
 	EquipForgeTopup EquipForgeTopupConfig `yaml:"equip_forge_topup"`
+	// CurrencyTopup 只给显式选定的已有开发角色补银两，不创建角色或发物品。
+	CurrencyTopup CurrencyTopupConfig `yaml:"currency_topup"`
 
 	// CurrencyCrash configures the "currency-crash-snapshot" mode used by
 	// docs/notes/currency-crash-window-verification.md. Driven by an external
@@ -156,6 +158,18 @@ type FeaturesSmokeConfig struct {
 	ClaimMissionID  uint32 `yaml:"claim_mission_id"`
 	VerifyRelogin   bool   `yaml:"verify_relogin"`
 	BattleConfigID  uint32 `yaml:"battle_config_id"` // 0=跳过；1=显式单人任务战斗验收
+}
+
+// CurrencyTopupConfig 的回执文件以独占方式创建，同一批次不得再次执行。
+type CurrencyTopupConfig struct {
+	Amount      int64                 `yaml:"amount"`
+	ReceiptPath string                `yaml:"receipt_path"`
+	Targets     []CurrencyTopupTarget `yaml:"targets"`
+}
+
+type CurrencyTopupTarget struct {
+	Account  string `yaml:"account" json:"account"`
+	PlayerID uint64 `yaml:"player_id" json:"player_id,string"`
 }
 
 // AssetArrivalPrepareConfig 没有默认账号或无限保活；买家可显式关闭装备准备。
@@ -1068,10 +1082,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "team-backfill-smoke", "pvp-team-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "heartbeat-idle-smoke", "gate-migrate-smoke", "equip-forge-topup", "asset-arrival-prepare":
+	case "", "stress", "login-test", "currency-crash-snapshot", "currency-topup", "battle-smoke", "attribute-smoke", "pet-smoke", "pet-acquisition-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "team-backfill-smoke", "pvp-team-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "heartbeat-idle-smoke", "gate-migrate-smoke", "equip-forge-topup", "asset-arrival-prepare":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, team-backfill-smoke, pvp-team-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, heartbeat-idle-smoke, gate-migrate-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, currency-crash-snapshot, currency-topup, battle-smoke, attribute-smoke, pet-smoke, pet-acquisition-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, team-backfill-smoke, pvp-team-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, heartbeat-idle-smoke, gate-migrate-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
 	}
 	if c.Mode == "asset-arrival-prepare" {
 		return c.ValidateAssetArrivalPrepare()

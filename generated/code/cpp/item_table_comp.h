@@ -66,6 +66,22 @@ struct ItemAffix_ruleComp {
     uint32_t value;
 };
 
+struct ItemEquip_profileComp {
+    uint32_t value;
+};
+
+struct ItemForge_material_idComp {
+    uint32_t value;
+};
+
+struct ItemForge_material_countComp {
+    uint32_t value;
+};
+
+struct ItemArtifact_idComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -109,4 +125,16 @@ inline ItemAffix_poolComp MakeItemAffix_poolComp(const ItemTable& row) {
 }
 inline ItemAffix_ruleComp MakeItemAffix_ruleComp(const ItemTable& row) {
     return { row.affix_rule() };
+}
+inline ItemEquip_profileComp MakeItemEquip_profileComp(const ItemTable& row) {
+    return { row.equip_profile() };
+}
+inline ItemForge_material_idComp MakeItemForge_material_idComp(const ItemTable& row) {
+    return { row.forge_material_id() };
+}
+inline ItemForge_material_countComp MakeItemForge_material_countComp(const ItemTable& row) {
+    return { row.forge_material_count() };
+}
+inline ItemArtifact_idComp MakeItemArtifact_idComp(const ItemTable& row) {
+    return { row.artifact_id() };
 }

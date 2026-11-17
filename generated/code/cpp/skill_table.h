@@ -24,6 +24,7 @@ public:
         std::unordered_multimap<uint32_t, const SkillTable*> skillTypeIndex;
         std::unordered_multimap<uint32_t, const SkillTable*> targetingModeIndex;
         std::unordered_multimap<uint32_t, const SkillTable*> effectIndex;
+        std::unordered_multimap<uint32_t, const SkillTable*> initEffectIndex;
     };
 
     static SkillTableManager& Instance() {
@@ -70,6 +71,7 @@ public:
     const std::unordered_multimap<uint32_t, const SkillTable*>& GetSkillTypeIndex() const { return snapshot->skillTypeIndex; }
     const std::unordered_multimap<uint32_t, const SkillTable*>& GetTargetingModeIndex() const { return snapshot->targetingModeIndex; }
     const std::unordered_multimap<uint32_t, const SkillTable*>& GetEffectIndex() const { return snapshot->effectIndex; }
+    const std::unordered_multimap<uint32_t, const SkillTable*>& GetInitEffectIndex() const { return snapshot->initEffectIndex; }
 
     // ---- Exists ----
 
@@ -81,6 +83,7 @@ public:
     std::size_t CountBySkillTypeIndex(uint32_t key) const { return snapshot->skillTypeIndex.count(key); }
     std::size_t CountByTargetingModeIndex(uint32_t key) const { return snapshot->targetingModeIndex.count(key); }
     std::size_t CountByEffectIndex(uint32_t key) const { return snapshot->effectIndex.count(key); }
+    std::size_t CountByInitEffectIndex(uint32_t key) const { return snapshot->initEffectIndex.count(key); }
 
     // ---- FindByIds (IN) ----
 

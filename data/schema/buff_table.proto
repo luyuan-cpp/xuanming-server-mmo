@@ -97,4 +97,53 @@ message BuffTable {
   uint32 time = 21;
   // 额外物理伤害
   string bonus_damage = 22 [(cfg_expr_type) = "double"];
+  // 事件回合模型的操作与枚举见battle_effect_constants.h;0完全沿用旧Buff。
+  uint32 battle_op = 23;
+  // 0挂载,1普攻后,2技能后,3受击后,4造成持续伤害后,5闪避后,6回合开始。
+  uint32 trigger_event = 24;
+  // 0技能目标/宿主,1自身,2事件对方,3施加者。
+  uint32 effect_target = 25;
+  // 值=flat+等级*per_level+value_basis*ratio,挂载时快照。
+  double flat_value = 26;
+  double per_level = 27;
+  double ratio = 28;
+  // 0无,1物攻,2法攻,3目标气血上限,4目标法力上限,5已付气血,6已付法力,7实际伤害。
+  uint32 value_basis = 29;
+  // 0不筛选,1物理,2法术。
+  uint32 damage_filter = 30;
+  uint32 duration_rounds = 31;
+  uint32 tick_count = 32;
+  // 比例0..1;0表示不随机、必触发。
+  double trigger_chance = 33;
+  uint32 per_round_limit = 34;
+  uint32 hit_limit = 35;
+  // 属性修改种类,见BattleModifier枚举。
+  uint32 modifier_stat = 36;
+  // 控制种类或持续状态类别:1封主动,2封法,3封物,4混乱,5昏睡,6冰冻,7毒,8灼烧,9劝退。
+  uint32 state_kind = 37;
+  // 控制基础成功率0..1;0表示必中。
+  double application_chance = 38;
+  // 如Poison/Burn/Break/Slow/Sleep;consume/extend操作按此筛选。
+  string required_tag = 39;
+  string second_required_tag = 40;
+  double conditional_bonus = 41;
+  // 额外参数:复活生命比例、法力盾换算比例、反弹比例等由操作定义。
+  double secondary_ratio = 42;
+  // 0不限;清除/催动次数/延长次数等离散预算。
+  uint32 effect_count = 43;
+  uint32 target_count = 44;
+  uint32 pet_target_count = 45;
+  // 同名覆盖键;0用表ID。跨来源只保留同键最强实例。
+  uint32 stack_key = 46;
+  // 0同源刷新,1跨来源强度覆盖,2跨来源剩余容量覆盖。
+  uint32 refresh_policy = 47;
+  uint32 keep_on_death = 48;
+  // 数值小的先结算,同优先级按实例ID。
+  uint32 effect_priority = 49;
+  uint32 start_round = 50;
+  uint32 stack_limit = 51;
+  // 来源死亡时暂停状态效果,时钟仍推进,复活不重新初始化。
+  uint32 require_living_caster = 52;
+  // 1表示当轮末可结算/扣时,0从下一轮开始。
+  uint32 tick_on_apply = 53;
 }

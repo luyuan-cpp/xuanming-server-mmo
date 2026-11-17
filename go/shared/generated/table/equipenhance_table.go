@@ -21,6 +21,7 @@ type equipenhanceSnapshot struct {
     data   []*pb.EquipEnhanceTable
     kvData map[uint32]*pb.EquipEnhanceTable
     idxMaterialId map[uint32][]*pb.EquipEnhanceTable
+    idxProfileId map[uint32][]*pb.EquipEnhanceTable
 }
 
 type EquipEnhanceTableManager struct {
@@ -42,6 +43,7 @@ func NewEquipEnhanceTableManager() *EquipEnhanceTableManager {
     m.snap.Store(&equipenhanceSnapshot{
         kvData: make(map[uint32]*pb.EquipEnhanceTable),
         idxMaterialId: make(map[uint32][]*pb.EquipEnhanceTable),
+        idxProfileId: make(map[uint32][]*pb.EquipEnhanceTable),
     })
     return m
 }
@@ -72,11 +74,13 @@ func (m *EquipEnhanceTableManager) Load(configDir string, useBinary bool) error 
     snap := &equipenhanceSnapshot{
         kvData: make(map[uint32]*pb.EquipEnhanceTable, len(container.Data)),
         idxMaterialId: make(map[uint32][]*pb.EquipEnhanceTable),
+        idxProfileId: make(map[uint32][]*pb.EquipEnhanceTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
         snap.idxMaterialId[row.MaterialId] = append(snap.idxMaterialId[row.MaterialId], row)
+        snap.idxProfileId[row.ProfileId] = append(snap.idxProfileId[row.ProfileId], row)
     }
 
     snap.data = container.Data
@@ -102,6 +106,12 @@ func (m *EquipEnhanceTableManager) GetByMaterialId(key uint32) []*pb.EquipEnhanc
 }
 
 
+func (m *EquipEnhanceTableManager) GetByProfileId(key uint32) []*pb.EquipEnhanceTable {
+    snap := m.snap.Load()
+    return snap.idxProfileId[key]
+}
+
+
 
 // ---- Exists ----
 
@@ -124,6 +134,12 @@ func (m *EquipEnhanceTableManager) Count() int {
 func (m *EquipEnhanceTableManager) CountByMaterialIdIndex(key uint32) int {
     snap := m.snap.Load()
     return len(snap.idxMaterialId[key])
+}
+
+
+func (m *EquipEnhanceTableManager) CountByProfileIdIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxProfileId[key])
 }
 
 

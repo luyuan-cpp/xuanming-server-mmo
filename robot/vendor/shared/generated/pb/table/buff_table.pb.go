@@ -45,6 +45,37 @@ type BuffTable struct {
 	CombatIdleSeconds      float64                `protobuf:"fixed64,20,opt,name=combat_idle_seconds,json=combatIdleSeconds,proto3" json:"combat_idle_seconds,omitempty"`
 	Time                   uint32                 `protobuf:"varint,21,opt,name=time,proto3" json:"time,omitempty"`
 	BonusDamage            string                 `protobuf:"bytes,22,opt,name=bonus_damage,json=bonusDamage,proto3" json:"bonus_damage,omitempty"`
+	BattleOp               uint32                 `protobuf:"varint,23,opt,name=battle_op,json=battleOp,proto3" json:"battle_op,omitempty"`
+	TriggerEvent           uint32                 `protobuf:"varint,24,opt,name=trigger_event,json=triggerEvent,proto3" json:"trigger_event,omitempty"`
+	EffectTarget           uint32                 `protobuf:"varint,25,opt,name=effect_target,json=effectTarget,proto3" json:"effect_target,omitempty"`
+	FlatValue              float64                `protobuf:"fixed64,26,opt,name=flat_value,json=flatValue,proto3" json:"flat_value,omitempty"`
+	PerLevel               float64                `protobuf:"fixed64,27,opt,name=per_level,json=perLevel,proto3" json:"per_level,omitempty"`
+	Ratio                  float64                `protobuf:"fixed64,28,opt,name=ratio,proto3" json:"ratio,omitempty"`
+	ValueBasis             uint32                 `protobuf:"varint,29,opt,name=value_basis,json=valueBasis,proto3" json:"value_basis,omitempty"`
+	DamageFilter           uint32                 `protobuf:"varint,30,opt,name=damage_filter,json=damageFilter,proto3" json:"damage_filter,omitempty"`
+	DurationRounds         uint32                 `protobuf:"varint,31,opt,name=duration_rounds,json=durationRounds,proto3" json:"duration_rounds,omitempty"`
+	TickCount              uint32                 `protobuf:"varint,32,opt,name=tick_count,json=tickCount,proto3" json:"tick_count,omitempty"`
+	TriggerChance          float64                `protobuf:"fixed64,33,opt,name=trigger_chance,json=triggerChance,proto3" json:"trigger_chance,omitempty"`
+	PerRoundLimit          uint32                 `protobuf:"varint,34,opt,name=per_round_limit,json=perRoundLimit,proto3" json:"per_round_limit,omitempty"`
+	HitLimit               uint32                 `protobuf:"varint,35,opt,name=hit_limit,json=hitLimit,proto3" json:"hit_limit,omitempty"`
+	ModifierStat           uint32                 `protobuf:"varint,36,opt,name=modifier_stat,json=modifierStat,proto3" json:"modifier_stat,omitempty"`
+	StateKind              uint32                 `protobuf:"varint,37,opt,name=state_kind,json=stateKind,proto3" json:"state_kind,omitempty"`
+	ApplicationChance      float64                `protobuf:"fixed64,38,opt,name=application_chance,json=applicationChance,proto3" json:"application_chance,omitempty"`
+	RequiredTag            string                 `protobuf:"bytes,39,opt,name=required_tag,json=requiredTag,proto3" json:"required_tag,omitempty"`
+	SecondRequiredTag      string                 `protobuf:"bytes,40,opt,name=second_required_tag,json=secondRequiredTag,proto3" json:"second_required_tag,omitempty"`
+	ConditionalBonus       float64                `protobuf:"fixed64,41,opt,name=conditional_bonus,json=conditionalBonus,proto3" json:"conditional_bonus,omitempty"`
+	SecondaryRatio         float64                `protobuf:"fixed64,42,opt,name=secondary_ratio,json=secondaryRatio,proto3" json:"secondary_ratio,omitempty"`
+	EffectCount            uint32                 `protobuf:"varint,43,opt,name=effect_count,json=effectCount,proto3" json:"effect_count,omitempty"`
+	TargetCount            uint32                 `protobuf:"varint,44,opt,name=target_count,json=targetCount,proto3" json:"target_count,omitempty"`
+	PetTargetCount         uint32                 `protobuf:"varint,45,opt,name=pet_target_count,json=petTargetCount,proto3" json:"pet_target_count,omitempty"`
+	StackKey               uint32                 `protobuf:"varint,46,opt,name=stack_key,json=stackKey,proto3" json:"stack_key,omitempty"`
+	RefreshPolicy          uint32                 `protobuf:"varint,47,opt,name=refresh_policy,json=refreshPolicy,proto3" json:"refresh_policy,omitempty"`
+	KeepOnDeath            uint32                 `protobuf:"varint,48,opt,name=keep_on_death,json=keepOnDeath,proto3" json:"keep_on_death,omitempty"`
+	EffectPriority         uint32                 `protobuf:"varint,49,opt,name=effect_priority,json=effectPriority,proto3" json:"effect_priority,omitempty"`
+	StartRound             uint32                 `protobuf:"varint,50,opt,name=start_round,json=startRound,proto3" json:"start_round,omitempty"`
+	StackLimit             uint32                 `protobuf:"varint,51,opt,name=stack_limit,json=stackLimit,proto3" json:"stack_limit,omitempty"`
+	RequireLivingCaster    uint32                 `protobuf:"varint,52,opt,name=require_living_caster,json=requireLivingCaster,proto3" json:"require_living_caster,omitempty"`
+	TickOnApply            uint32                 `protobuf:"varint,53,opt,name=tick_on_apply,json=tickOnApply,proto3" json:"tick_on_apply,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -233,6 +264,223 @@ func (x *BuffTable) GetBonusDamage() string {
 	return ""
 }
 
+func (x *BuffTable) GetBattleOp() uint32 {
+	if x != nil {
+		return x.BattleOp
+	}
+	return 0
+}
+
+func (x *BuffTable) GetTriggerEvent() uint32 {
+	if x != nil {
+		return x.TriggerEvent
+	}
+	return 0
+}
+
+func (x *BuffTable) GetEffectTarget() uint32 {
+	if x != nil {
+		return x.EffectTarget
+	}
+	return 0
+}
+
+func (x *BuffTable) GetFlatValue() float64 {
+	if x != nil {
+		return x.FlatValue
+	}
+	return 0
+}
+
+func (x *BuffTable) GetPerLevel() float64 {
+	if x != nil {
+		return x.PerLevel
+	}
+	return 0
+}
+
+func (x *BuffTable) GetRatio() float64 {
+	if x != nil {
+		return x.Ratio
+	}
+	return 0
+}
+
+func (x *BuffTable) GetValueBasis() uint32 {
+	if x != nil {
+		return x.ValueBasis
+	}
+	return 0
+}
+
+func (x *BuffTable) GetDamageFilter() uint32 {
+	if x != nil {
+		return x.DamageFilter
+	}
+	return 0
+}
+
+func (x *BuffTable) GetDurationRounds() uint32 {
+	if x != nil {
+		return x.DurationRounds
+	}
+	return 0
+}
+
+func (x *BuffTable) GetTickCount() uint32 {
+	if x != nil {
+		return x.TickCount
+	}
+	return 0
+}
+
+func (x *BuffTable) GetTriggerChance() float64 {
+	if x != nil {
+		return x.TriggerChance
+	}
+	return 0
+}
+
+func (x *BuffTable) GetPerRoundLimit() uint32 {
+	if x != nil {
+		return x.PerRoundLimit
+	}
+	return 0
+}
+
+func (x *BuffTable) GetHitLimit() uint32 {
+	if x != nil {
+		return x.HitLimit
+	}
+	return 0
+}
+
+func (x *BuffTable) GetModifierStat() uint32 {
+	if x != nil {
+		return x.ModifierStat
+	}
+	return 0
+}
+
+func (x *BuffTable) GetStateKind() uint32 {
+	if x != nil {
+		return x.StateKind
+	}
+	return 0
+}
+
+func (x *BuffTable) GetApplicationChance() float64 {
+	if x != nil {
+		return x.ApplicationChance
+	}
+	return 0
+}
+
+func (x *BuffTable) GetRequiredTag() string {
+	if x != nil {
+		return x.RequiredTag
+	}
+	return ""
+}
+
+func (x *BuffTable) GetSecondRequiredTag() string {
+	if x != nil {
+		return x.SecondRequiredTag
+	}
+	return ""
+}
+
+func (x *BuffTable) GetConditionalBonus() float64 {
+	if x != nil {
+		return x.ConditionalBonus
+	}
+	return 0
+}
+
+func (x *BuffTable) GetSecondaryRatio() float64 {
+	if x != nil {
+		return x.SecondaryRatio
+	}
+	return 0
+}
+
+func (x *BuffTable) GetEffectCount() uint32 {
+	if x != nil {
+		return x.EffectCount
+	}
+	return 0
+}
+
+func (x *BuffTable) GetTargetCount() uint32 {
+	if x != nil {
+		return x.TargetCount
+	}
+	return 0
+}
+
+func (x *BuffTable) GetPetTargetCount() uint32 {
+	if x != nil {
+		return x.PetTargetCount
+	}
+	return 0
+}
+
+func (x *BuffTable) GetStackKey() uint32 {
+	if x != nil {
+		return x.StackKey
+	}
+	return 0
+}
+
+func (x *BuffTable) GetRefreshPolicy() uint32 {
+	if x != nil {
+		return x.RefreshPolicy
+	}
+	return 0
+}
+
+func (x *BuffTable) GetKeepOnDeath() uint32 {
+	if x != nil {
+		return x.KeepOnDeath
+	}
+	return 0
+}
+
+func (x *BuffTable) GetEffectPriority() uint32 {
+	if x != nil {
+		return x.EffectPriority
+	}
+	return 0
+}
+
+func (x *BuffTable) GetStartRound() uint32 {
+	if x != nil {
+		return x.StartRound
+	}
+	return 0
+}
+
+func (x *BuffTable) GetStackLimit() uint32 {
+	if x != nil {
+		return x.StackLimit
+	}
+	return 0
+}
+
+func (x *BuffTable) GetRequireLivingCaster() uint32 {
+	if x != nil {
+		return x.RequireLivingCaster
+	}
+	return 0
+}
+
+func (x *BuffTable) GetTickOnApply() uint32 {
+	if x != nil {
+		return x.TickOnApply
+	}
+	return 0
+}
+
 type BuffTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*BuffTable           `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -281,7 +529,7 @@ var File_buff_table_proto protoreflect.FileDescriptor
 
 const file_buff_table_proto_rawDesc = "" +
 	"\n" +
-	"\x10buff_table.proto\"\xfc\a\n" +
+	"\x10buff_table.proto\"\xe6\x10\n" +
 	"\tBuffTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1b\n" +
 	"\tno_caster\x18\x02 \x01(\rR\bnoCaster\x12\x1b\n" +
@@ -307,7 +555,44 @@ const file_buff_table_proto_rawDesc = "" +
 	"\x0ftarget_sub_buff\x18\x13 \x03(\rR\rtargetSubBuff\x12.\n" +
 	"\x13combat_idle_seconds\x18\x14 \x01(\x01R\x11combatIdleSeconds\x12\x12\n" +
 	"\x04time\x18\x15 \x01(\rR\x04time\x12!\n" +
-	"\fbonus_damage\x18\x16 \x01(\tR\vbonusDamage\x1a6\n" +
+	"\fbonus_damage\x18\x16 \x01(\tR\vbonusDamage\x12\x1b\n" +
+	"\tbattle_op\x18\x17 \x01(\rR\bbattleOp\x12#\n" +
+	"\rtrigger_event\x18\x18 \x01(\rR\ftriggerEvent\x12#\n" +
+	"\reffect_target\x18\x19 \x01(\rR\feffectTarget\x12\x1d\n" +
+	"\n" +
+	"flat_value\x18\x1a \x01(\x01R\tflatValue\x12\x1b\n" +
+	"\tper_level\x18\x1b \x01(\x01R\bperLevel\x12\x14\n" +
+	"\x05ratio\x18\x1c \x01(\x01R\x05ratio\x12\x1f\n" +
+	"\vvalue_basis\x18\x1d \x01(\rR\n" +
+	"valueBasis\x12#\n" +
+	"\rdamage_filter\x18\x1e \x01(\rR\fdamageFilter\x12'\n" +
+	"\x0fduration_rounds\x18\x1f \x01(\rR\x0edurationRounds\x12\x1d\n" +
+	"\n" +
+	"tick_count\x18  \x01(\rR\ttickCount\x12%\n" +
+	"\x0etrigger_chance\x18! \x01(\x01R\rtriggerChance\x12&\n" +
+	"\x0fper_round_limit\x18\" \x01(\rR\rperRoundLimit\x12\x1b\n" +
+	"\thit_limit\x18# \x01(\rR\bhitLimit\x12#\n" +
+	"\rmodifier_stat\x18$ \x01(\rR\fmodifierStat\x12\x1d\n" +
+	"\n" +
+	"state_kind\x18% \x01(\rR\tstateKind\x12-\n" +
+	"\x12application_chance\x18& \x01(\x01R\x11applicationChance\x12!\n" +
+	"\frequired_tag\x18' \x01(\tR\vrequiredTag\x12.\n" +
+	"\x13second_required_tag\x18( \x01(\tR\x11secondRequiredTag\x12+\n" +
+	"\x11conditional_bonus\x18) \x01(\x01R\x10conditionalBonus\x12'\n" +
+	"\x0fsecondary_ratio\x18* \x01(\x01R\x0esecondaryRatio\x12!\n" +
+	"\feffect_count\x18+ \x01(\rR\veffectCount\x12!\n" +
+	"\ftarget_count\x18, \x01(\rR\vtargetCount\x12(\n" +
+	"\x10pet_target_count\x18- \x01(\rR\x0epetTargetCount\x12\x1b\n" +
+	"\tstack_key\x18. \x01(\rR\bstackKey\x12%\n" +
+	"\x0erefresh_policy\x18/ \x01(\rR\rrefreshPolicy\x12\"\n" +
+	"\rkeep_on_death\x180 \x01(\rR\vkeepOnDeath\x12'\n" +
+	"\x0feffect_priority\x181 \x01(\rR\x0eeffectPriority\x12\x1f\n" +
+	"\vstart_round\x182 \x01(\rR\n" +
+	"startRound\x12\x1f\n" +
+	"\vstack_limit\x183 \x01(\rR\n" +
+	"stackLimit\x122\n" +
+	"\x15require_living_caster\x184 \x01(\rR\x13requireLivingCaster\x12\"\n" +
+	"\rtick_on_apply\x185 \x01(\rR\vtickOnApply\x1a6\n" +
 	"\bTagEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a<\n" +

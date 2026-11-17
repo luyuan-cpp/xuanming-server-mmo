@@ -116,6 +116,28 @@ static void BuffTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, 
 	BuffTableCheckNarrowedField(RowObject, TEXT("force_interrupt"), TEXT("force_interrupt"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("interval_count"), TEXT("interval_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("time"), TEXT("time"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("battle_op"), TEXT("battle_op"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("trigger_event"), TEXT("trigger_event"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("effect_target"), TEXT("effect_target"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("value_basis"), TEXT("value_basis"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("damage_filter"), TEXT("damage_filter"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("duration_rounds"), TEXT("duration_rounds"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("tick_count"), TEXT("tick_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("per_round_limit"), TEXT("per_round_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("hit_limit"), TEXT("hit_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("modifier_stat"), TEXT("modifier_stat"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("state_kind"), TEXT("state_kind"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("effect_count"), TEXT("effect_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("target_count"), TEXT("target_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("pet_target_count"), TEXT("pet_target_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("stack_key"), TEXT("stack_key"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("refresh_policy"), TEXT("refresh_policy"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("keep_on_death"), TEXT("keep_on_death"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("effect_priority"), TEXT("effect_priority"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("start_round"), TEXT("start_round"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("stack_limit"), TEXT("stack_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("require_living_caster"), TEXT("require_living_caster"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("tick_on_apply"), TEXT("tick_on_apply"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("sub_buff"), TEXT("sub_buff[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("target_sub_buff"), TEXT("target_sub_buff[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 }

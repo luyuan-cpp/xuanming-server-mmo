@@ -82,19 +82,21 @@ func (x *Monsterdrop) GetDropRate() uint32 {
 }
 
 type MonsterTable struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Health        uint64                 `protobuf:"varint,2,opt,name=health,proto3" json:"health,omitempty"`
-	Strength      uint64                 `protobuf:"varint,3,opt,name=strength,proto3" json:"strength,omitempty"`
-	Armor         uint64                 `protobuf:"varint,4,opt,name=armor,proto3" json:"armor,omitempty"`
-	Resistance    uint64                 `protobuf:"varint,5,opt,name=resistance,proto3" json:"resistance,omitempty"`
-	Critchance    uint64                 `protobuf:"varint,6,opt,name=critchance,proto3" json:"critchance,omitempty"`
-	Speed         uint64                 `protobuf:"varint,7,opt,name=speed,proto3" json:"speed,omitempty"`
-	ExpReward     uint64                 `protobuf:"varint,8,opt,name=exp_reward,json=expReward,proto3" json:"exp_reward,omitempty"`
-	GoldReward    uint64                 `protobuf:"varint,9,opt,name=gold_reward,json=goldReward,proto3" json:"gold_reward,omitempty"`
-	Drop          []*Monsterdrop         `protobuf:"bytes,10,rep,name=drop,proto3" json:"drop,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Health            uint64                 `protobuf:"varint,2,opt,name=health,proto3" json:"health,omitempty"`
+	Strength          uint64                 `protobuf:"varint,3,opt,name=strength,proto3" json:"strength,omitempty"`
+	Armor             uint64                 `protobuf:"varint,4,opt,name=armor,proto3" json:"armor,omitempty"`
+	Resistance        uint64                 `protobuf:"varint,5,opt,name=resistance,proto3" json:"resistance,omitempty"`
+	Critchance        uint64                 `protobuf:"varint,6,opt,name=critchance,proto3" json:"critchance,omitempty"`
+	Speed             uint64                 `protobuf:"varint,7,opt,name=speed,proto3" json:"speed,omitempty"`
+	ExpReward         uint64                 `protobuf:"varint,8,opt,name=exp_reward,json=expReward,proto3" json:"exp_reward,omitempty"`
+	GoldReward        uint64                 `protobuf:"varint,9,opt,name=gold_reward,json=goldReward,proto3" json:"gold_reward,omitempty"`
+	CapturePetTableId uint32                 `protobuf:"varint,11,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`
+	CaptureRate       uint32                 `protobuf:"varint,12,opt,name=capture_rate,json=captureRate,proto3" json:"capture_rate,omitempty"`
+	Drop              []*Monsterdrop         `protobuf:"bytes,10,rep,name=drop,proto3" json:"drop,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MonsterTable) Reset() {
@@ -190,6 +192,20 @@ func (x *MonsterTable) GetGoldReward() uint64 {
 	return 0
 }
 
+func (x *MonsterTable) GetCapturePetTableId() uint32 {
+	if x != nil {
+		return x.CapturePetTableId
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetCaptureRate() uint32 {
+	if x != nil {
+		return x.CaptureRate
+	}
+	return 0
+}
+
 func (x *MonsterTable) GetDrop() []*Monsterdrop {
 	if x != nil {
 		return x.Drop
@@ -250,7 +266,7 @@ const file_monster_table_proto_rawDesc = "" +
 	"\tdrop_item\x18\x01 \x01(\rR\bdropItem\x12\x1d\n" +
 	"\n" +
 	"drop_count\x18\x02 \x01(\rR\tdropCount\x12\x1b\n" +
-	"\tdrop_rate\x18\x03 \x01(\rR\bdropRate\"\xa0\x02\n" +
+	"\tdrop_rate\x18\x03 \x01(\rR\bdropRate\"\xf4\x02\n" +
 	"\fMonsterTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x1a\n" +
@@ -266,7 +282,9 @@ const file_monster_table_proto_rawDesc = "" +
 	"\n" +
 	"exp_reward\x18\b \x01(\x04R\texpReward\x12\x1f\n" +
 	"\vgold_reward\x18\t \x01(\x04R\n" +
-	"goldReward\x12 \n" +
+	"goldReward\x12/\n" +
+	"\x14capture_pet_table_id\x18\v \x01(\rR\x11capturePetTableId\x12!\n" +
+	"\fcapture_rate\x18\f \x01(\rR\vcaptureRate\x12 \n" +
 	"\x04drop\x18\n" +
 	" \x03(\v2\f.MonsterdropR\x04drop\"5\n" +
 	"\x10MonsterTableData\x12!\n" +

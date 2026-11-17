@@ -77,6 +77,10 @@ func loadSQLMembership(ctx context.Context, reader teamSQLReader, player uint64,
 	return index, err
 }
 
+func (s *sqlTeamStore) targetMembership(ctx context.Context, target uint64) (IndexEntry, error) {
+	return loadSQLMembership(ctx, s.authority.DB, target, false)
+}
+
 func sqlTeamSnapshot(player, teamID, stamp uint64, index IndexEntry, row *sqlTeamRow) *Snapshot {
 	snap := &Snapshot{PlayerId: player, PlayerTeamId: index.TeamId, PlayerEpoch: index.Epoch, TeamId: teamID, Version: row.version, NowMs: stamp, RecordTTLSeconds: -2}
 	if row.state == 1 {

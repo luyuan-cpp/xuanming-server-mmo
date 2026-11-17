@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13\x64ungeon_table.proto\"h\n\x0c\x44ungeonTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x10\n\x08scene_id\x18\x02 \x01(\r\x12\x15\n\rmax_team_size\x18\x03 \x01(\r\x12\x12\n\ntime_limit\x18\x04 \x01(\r\x12\x0f\n\x07monster\x18\x05 \x03(\r\"/\n\x10\x44ungeonTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.DungeonTableB>\n\x0e\x63om.game.tableB\x16\x44ungeonTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13\x64ungeon_table.proto\"\x83\x01\n\x0c\x44ungeonTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x10\n\x08scene_id\x18\x02 \x01(\r\x12\x15\n\rmax_team_size\x18\x03 \x01(\r\x12\x12\n\ntime_limit\x18\x04 \x01(\r\x12\x0f\n\x07monster\x18\x05 \x03(\r\x12\x19\n\x11\x61llow_pet_capture\x18\x06 \x01(\r\"/\n\x10\x44ungeonTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.DungeonTableB>\n\x0e\x63om.game.tableB\x16\x44ungeonTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,8 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'dungeon_table_pb2', _global
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\026DungeonTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_DUNGEONTABLE']._serialized_start=23
-  _globals['_DUNGEONTABLE']._serialized_end=127
-  _globals['_DUNGEONTABLEDATA']._serialized_start=129
-  _globals['_DUNGEONTABLEDATA']._serialized_end=176
+  _globals['_DUNGEONTABLE']._serialized_start=24
+  _globals['_DUNGEONTABLE']._serialized_end=155
+  _globals['_DUNGEONTABLEDATA']._serialized_start=157
+  _globals['_DUNGEONTABLEDATA']._serialized_end=204
 # @@protoc_insertion_point(module_scope)

@@ -47,7 +47,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 constexpr std::size_t kDefaultCapacity{10};
-constexpr std::size_t kEquipmentCapacity{10};
+constexpr std::size_t kEquipmentCapacity{11}; // 旧夹具槽 0~2 与八个正式展示槽 3~10。
 constexpr std::size_t kBagMaxCapacity{100};
 constexpr std::size_t kTempBagMaxCapacity{200};
 constexpr std::size_t kWarehouseMaxCapacity{200};

@@ -5,7 +5,7 @@ option go_package = "proto/common/component";
 //
 // 落在 player_database.battle_results(字段 23,PROFILE 组)。结算应用的同一帧写入,与奖励、收件箱账本随同一次存档、
 // 同一个整笔序号提交(player-data-tidb-scaling-plan.md §4.3):要么一起在盘上,要么一起没有。
-// 记的是本人实际入账的结果,不是终局原件:消耗按实际持有夹紧,配置行已删掉的物品不记,经验系统没接入不记经验。
+// 记的是本人实际入账的结果,不是终局原件:消耗按实际持有夹紧,经验与角色累计经验在同一次存档提交。
 // 存档确认提交之前不对客户端公开(与 BattleEndS2C 同一个公开时机)。
 //
 // 持久数据:只在加载时创建(PlayerDatabaseMessageFieldsUnmarshal),存盘缺它整份拒存(docs/design/ecs-component-access-rules.md)。
@@ -47,6 +47,7 @@ message PlayerBattleResult {
   // 掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md)。items_gained 照常列出这批掉落
   // (它们已经是本人的,只是要去邮箱领);客户端据此在结算屏提示。
   bool items_mailed = 17;
+  uint64 exp_gain = 18;       // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
 }
 
 message PlayerBattleResultComp {

@@ -24,19 +24,20 @@ public static partial class MonsterTableReflection {
         string.Concat(
           "ChNtb25zdGVyX3RhYmxlLnByb3RvIkcKC01vbnN0ZXJkcm9wEhEKCWRyb3Bf",
           "aXRlbRgBIAEoDRISCgpkcm9wX2NvdW50GAIgASgNEhEKCWRyb3BfcmF0ZRgD",
-          "IAEoDSLHAQoMTW9uc3RlclRhYmxlEgoKAmlkGAEgASgNEg4KBmhlYWx0aBgC",
+          "IAEoDSL7AQoMTW9uc3RlclRhYmxlEgoKAmlkGAEgASgNEg4KBmhlYWx0aBgC",
           "IAEoBBIQCghzdHJlbmd0aBgDIAEoBBINCgVhcm1vchgEIAEoBBISCgpyZXNp",
           "c3RhbmNlGAUgASgEEhIKCmNyaXRjaGFuY2UYBiABKAQSDQoFc3BlZWQYByAB",
-          "KAQSEgoKZXhwX3Jld2FyZBgIIAEoBBITCgtnb2xkX3Jld2FyZBgJIAEoBBIa",
-          "CgRkcm9wGAogAygLMgwuTW9uc3RlcmRyb3AiLwoQTW9uc3RlclRhYmxlRGF0",
-          "YRIbCgRkYXRhGAEgAygLMg0uTW9uc3RlclRhYmxlQj4KDmNvbS5nYW1lLnRh",
-          "YmxlQhZNb25zdGVyVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90",
-          "YWJsZWIGcHJvdG8z"));
+          "KAQSEgoKZXhwX3Jld2FyZBgIIAEoBBITCgtnb2xkX3Jld2FyZBgJIAEoBBIc",
+          "ChRjYXB0dXJlX3BldF90YWJsZV9pZBgLIAEoDRIUCgxjYXB0dXJlX3JhdGUY",
+          "DCABKA0SGgoEZHJvcBgKIAMoCzIMLk1vbnN0ZXJkcm9wIi8KEE1vbnN0ZXJU",
+          "YWJsZURhdGESGwoEZGF0YRgBIAMoCzINLk1vbnN0ZXJUYWJsZUI+Cg5jb20u",
+          "Z2FtZS50YWJsZUIWTW9uc3RlclRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0",
+          "ZWQvcGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
           new pbr::GeneratedClrTypeInfo(typeof(global::Monsterdrop), global::Monsterdrop.Parser, new[]{ "DropItem", "DropCount", "DropRate" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "Drop" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "CapturePetTableId", "CaptureRate", "Drop" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTableData), global::MonsterTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -360,6 +361,8 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     speed_ = other.speed_;
     expReward_ = other.expReward_;
     goldReward_ = other.goldReward_;
+    capturePetTableId_ = other.capturePetTableId_;
+    captureRate_ = other.captureRate_;
     drop_ = other.drop_.Clone();
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
@@ -478,6 +481,30 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
   }
 
+  /// <summary>Field number for the "capture_pet_table_id" field.</summary>
+  public const int CapturePetTableIdFieldNumber = 11;
+  private uint capturePetTableId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint CapturePetTableId {
+    get { return capturePetTableId_; }
+    set {
+      capturePetTableId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "capture_rate" field.</summary>
+  public const int CaptureRateFieldNumber = 12;
+  private uint captureRate_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint CaptureRate {
+    get { return captureRate_; }
+    set {
+      captureRate_ = value;
+    }
+  }
+
   /// <summary>Field number for the "drop" field.</summary>
   public const int DropFieldNumber = 10;
   private static readonly pb::FieldCodec<global::Monsterdrop> _repeated_drop_codec
@@ -513,6 +540,8 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (Speed != other.Speed) return false;
     if (ExpReward != other.ExpReward) return false;
     if (GoldReward != other.GoldReward) return false;
+    if (CapturePetTableId != other.CapturePetTableId) return false;
+    if (CaptureRate != other.CaptureRate) return false;
     if(!drop_.Equals(other.drop_)) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
@@ -530,6 +559,8 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (Speed != 0UL) hash ^= Speed.GetHashCode();
     if (ExpReward != 0UL) hash ^= ExpReward.GetHashCode();
     if (GoldReward != 0UL) hash ^= GoldReward.GetHashCode();
+    if (CapturePetTableId != 0) hash ^= CapturePetTableId.GetHashCode();
+    if (CaptureRate != 0) hash ^= CaptureRate.GetHashCode();
     hash ^= drop_.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
@@ -586,6 +617,14 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteUInt64(GoldReward);
     }
     drop_.WriteTo(output, _repeated_drop_codec);
+    if (CapturePetTableId != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(CapturePetTableId);
+    }
+    if (CaptureRate != 0) {
+      output.WriteRawTag(96);
+      output.WriteUInt32(CaptureRate);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -633,6 +672,14 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteUInt64(GoldReward);
     }
     drop_.WriteTo(ref output, _repeated_drop_codec);
+    if (CapturePetTableId != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(CapturePetTableId);
+    }
+    if (CaptureRate != 0) {
+      output.WriteRawTag(96);
+      output.WriteUInt32(CaptureRate);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -669,6 +716,12 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
     if (GoldReward != 0UL) {
       size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GoldReward);
+    }
+    if (CapturePetTableId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CapturePetTableId);
+    }
+    if (CaptureRate != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(CaptureRate);
     }
     size += drop_.CalculateSize(_repeated_drop_codec);
     if (_unknownFields != null) {
@@ -709,6 +762,12 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
     if (other.GoldReward != 0UL) {
       GoldReward = other.GoldReward;
+    }
+    if (other.CapturePetTableId != 0) {
+      CapturePetTableId = other.CapturePetTableId;
+    }
+    if (other.CaptureRate != 0) {
+      CaptureRate = other.CaptureRate;
     }
     drop_.Add(other.drop_);
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -770,6 +829,14 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
           drop_.AddEntriesFrom(input, _repeated_drop_codec);
           break;
         }
+        case 88: {
+          CapturePetTableId = input.ReadUInt32();
+          break;
+        }
+        case 96: {
+          CaptureRate = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -827,6 +894,14 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
         }
         case 82: {
           drop_.AddEntriesFrom(ref input, _repeated_drop_codec);
+          break;
+        }
+        case 88: {
+          CapturePetTableId = input.ReadUInt32();
+          break;
+        }
+        case 96: {
+          CaptureRate = input.ReadUInt32();
           break;
         }
       }

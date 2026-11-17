@@ -126,9 +126,18 @@ static void SkillTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject,
 	SkillTableCheckNarrowedField(RowObject, TEXT("max_targets"), TEXT("max_targets"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("cooldown_rounds"), TEXT("cooldown_rounds"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("dispel_count"), TEXT("dispel_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("battle_model"), TEXT("battle_model"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("caster_mask"), TEXT("caster_mask"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("ability_kind"), TEXT("ability_kind"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("pet_max_targets"), TEXT("pet_max_targets"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("max_battle_uses"), TEXT("max_battle_uses"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("health_cost_mode"), TEXT("health_cost_mode"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("action_tags"), TEXT("action_tags"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("allow_dead_target"), TEXT("allow_dead_target"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("skill_type"), TEXT("skill_type[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("targeting_mode"), TEXT("targeting_mode[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SkillTableCheckNarrowedField(RowObject, TEXT("effect"), TEXT("effect[]"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SkillTableCheckNarrowedField(RowObject, TEXT("init_effect"), TEXT("init_effect[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	// 子消息 required_item[]:每个元素是一个对象,逐个元素查它的收窄列。
 	if (const TSharedPtr<FJsonValue>* RequiredItemField = RowObject->Values.Find(TEXT("required_item")))
 	{
@@ -306,6 +315,18 @@ void USkillTable::BuildIndices(FSnapshot& Snap)
 				Bucket.Add(RowIndex);
 			}
 		}
+		for (const int32& Element : Row.init_effect)
+		{
+			// 同一行同一个值只塞一次。定长数组补位、重复填同一个 id 在配置表里很常见,
+			// 不去重的话 GetRowsByInitEffect() 会把这一行返回 N 遍、
+			// CountByInitEffectIndex() 会数成 N 而不是 1。
+			// 行是按 RowIndex 递增处理的,所以本行的下标只可能在桶尾。
+			TArray<int32>& Bucket = Snap.InitEffectValueIndex.FindOrAdd(Element);
+			if (Bucket.Num() == 0 || Bucket.Last() != RowIndex)
+			{
+				Bucket.Add(RowIndex);
+			}
+		}
 	}
 }
 
@@ -420,6 +441,27 @@ int32 USkillTable::CountByEffectIndex(int32 Value) const
 {
 	// 桶里同一行只有一个下标(见 BuildIndices),所以这是**行数**。
 	const TArray<int32>* Indices = Snapshot->EffectValueIndex.Find(Value);
+	return Indices != nullptr ? Indices->Num() : 0;
+}
+
+TArray<const FCfgSkillRow*> USkillTable::GetRowsByInitEffect(int32 Value) const
+{
+	TArray<const FCfgSkillRow*> Result;
+	if (const TArray<int32>* Indices = Snapshot->InitEffectValueIndex.Find(Value))
+	{
+		Result.Reserve(Indices->Num());
+		for (const int32 RowIndex : *Indices)
+		{
+			Result.Add(&Snapshot->Rows[RowIndex]);
+		}
+	}
+	return Result;
+}
+
+int32 USkillTable::CountByInitEffectIndex(int32 Value) const
+{
+	// 桶里同一行只有一个下标(见 BuildIndices),所以这是**行数**。
+	const TArray<int32>* Indices = Snapshot->InitEffectValueIndex.Find(Value);
 	return Indices != nullptr ? Indices->Num() : 0;
 }
 
