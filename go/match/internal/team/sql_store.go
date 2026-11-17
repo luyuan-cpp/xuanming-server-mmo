@@ -77,8 +77,35 @@ func loadSQLMembership(ctx context.Context, reader teamSQLReader, player uint64,
 	return index, err
 }
 
-func (s *sqlTeamStore) targetMembership(ctx context.Context, target uint64) (IndexEntry, error) {
-	return loadSQLMembership(ctx, s.authority.DB, target, false)
+// peerTeamID 只返回对端的队伍编号；预检须验证调用者原身份，并检查索引与名册的一致性。
+// 正式变更仍在 mutateTx 中重新持角色围栏并检查当前队伍状态。
+func (s *sqlTeamStore) peerTeamID(ctx context.Context, caller, peer uint64) (teamID uint64, err error) {
+	err = s.authority.Fenced(ctx, func() error {
+		tx, err := s.authority.DB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if err = s.authority.LockTeamReadActor(ctx, tx, caller); err != nil {
+			return err
+		}
+		index, err := loadSQLMembership(ctx, tx, peer, false)
+		if err != nil {
+			return err
+		}
+		if index.TeamId != 0 {
+			row, err := loadSQLTeam(ctx, tx, index.TeamId, false)
+			if err != nil {
+				return err
+			}
+			if row.state != 1 || FindMember(row.data.Record, peer) == nil {
+				return errors.New("team: SQL成员索引与原记录不一致，拒绝缓存修复")
+			}
+		}
+		teamID = index.TeamId
+		return tx.Commit()
+	})
+	return teamID, err
 }
 
 func sqlTeamSnapshot(player, teamID, stamp uint64, index IndexEntry, row *sqlTeamRow) *Snapshot {

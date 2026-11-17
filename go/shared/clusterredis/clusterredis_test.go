@@ -45,6 +45,7 @@ func TestConfigValidate(t *testing.T) {
 	good := []Config{
 		{Addrs: []string{"a:1"}},
 		{Addrs: []string{"a:1"}, DB: 3},
+		{Addrs: []string{"a:1"}, PoolSizePerNode: 130},
 		{Addrs: []string{"a:1", "b:2", "c:3"}, Cluster: true, PoolSizePerNode: 2},
 	}
 	for i, c := range good {

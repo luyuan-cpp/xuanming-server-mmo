@@ -196,7 +196,7 @@ func (s *Service) applyJoinTeam(ctx context.Context, caller uint64, in *teampb.A
 	if self.PlayerTeamId != 0 {
 		return s.snapshotResponse(ctx, caller, ErrMemberInTeam, 0, self)
 	}
-	teamID, err := s.targetTeamID(ctx, methodApplyJoinTeam, target)
+	teamID, err := s.peerTeamID(ctx, methodApplyJoinTeam, caller, target)
 	if err != nil {
 		return s.snapshotResponse(ctx, caller, ErrInternal, 0, self)
 	}
@@ -234,7 +234,7 @@ func (s *Service) inviteToTeam(ctx context.Context, caller uint64, in *teampb.In
 	if !playercontract.IsSessionOnline(session) {
 		return s.respond(ctx, caller, ErrTargetOffline, 0)
 	}
-	teamID, err := s.targetTeamID(ctx, methodInviteToTeam, target)
+	teamID, err := s.peerTeamID(ctx, methodInviteToTeam, caller, target)
 	if err != nil {
 		return s.respond(ctx, caller, ErrInternal, 0)
 	}
@@ -542,13 +542,12 @@ func (s *Service) readFree(ctx context.Context, method string, playerId uint64) 
 	return snap, err
 }
 
-// 申请与邀请只查对方的队伍编号；私有名册的 ReadFree 要求原会话属于被查玩家。
-func (s *Service) targetTeamID(ctx context.Context, method string, target uint64) (uint64, error) {
-	index, err := s.store.sql.targetMembership(ctx, target)
+func (s *Service) peerTeamID(ctx context.Context, method string, caller, peer uint64) (uint64, error) {
+	teamID, err := s.store.sql.peerTeamID(ctx, caller, peer)
 	if err != nil {
-		logx.WithContext(ctx).Errorf("[team] %s target membership lookup failed player=%d: %v", method, target, err)
+		logx.WithContext(ctx).Errorf("[team] %s peer membership lookup failed peer=%d: %v", method, peer, err)
 	}
-	return index.TeamId, err
+	return teamID, err
 }
 
 // homeZoneOf 查单个玩家 home zone,返回 (zone, tip);tip≠0 时 zone 无意义(§D.3 fail-closed)。
