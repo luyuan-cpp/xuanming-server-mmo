@@ -25,7 +25,7 @@ sys.path 说明
 为什么加载是「先全读、后全换」
 ==============================
 每个管理器把「读盘建索引」（``build_snapshot``）和「换上去」（``apply_snapshot``）
-拆成了两步。这里先把 51 张表全部读完，一张都没换；
+拆成了两步。这里先把 53 张表全部读完，一张都没换；
 中途任何一张读失败，异常直接抛出去，**一张表都不会被换掉** ——
 进程继续跑在上一批完整的配置上，而不是半新半旧。
 """
@@ -78,7 +78,9 @@ from .mysterymerchantgoods_table import MysteryMerchantGoodsTableManager
 from .mysterymerchantrule_table import MysteryMerchantRuleTableManager
 from .mysterymerchantspot_table import MysteryMerchantSpotTableManager
 from .pet_table import PetTableManager
+from .petentry_table import PetEntryTableManager
 from .petrule_table import PetRuleTableManager
+from .pettier_table import PetTierTableManager
 from .playmode_table import PlayModeTableManager
 from .reward_table import RewardTableManager
 from .rolenamerule_table import RoleNameRuleTableManager
@@ -141,7 +143,9 @@ MANAGERS: dict[str, TableManager] = {
     "MysteryMerchantRule": MysteryMerchantRuleTableManager.instance(),
     "MysteryMerchantSpot": MysteryMerchantSpotTableManager.instance(),
     "Pet": PetTableManager.instance(),
+    "PetEntry": PetEntryTableManager.instance(),
     "PetRule": PetRuleTableManager.instance(),
+    "PetTier": PetTierTableManager.instance(),
     "PlayMode": PlayModeTableManager.instance(),
     "Reward": RewardTableManager.instance(),
     "RoleNameRule": RoleNameRuleTableManager.instance(),
@@ -170,7 +174,7 @@ def _apply(staged: list[tuple[TableManager, Any]]) -> None:
 
 
 def load_tables(config_dir: str | Path, use_binary: bool = False) -> None:
-    """串行加载全部 51 张表。
+    """串行加载全部 53 张表。
 
     :param use_binary: True 读 ``*.pb``（proto 二进制），False 读 ``*.json``。
         口径与 Go/Java 的 ``useBinary`` 一致。

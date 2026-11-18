@@ -476,4 +476,10 @@
     <ClCompile Include="common\component\equipment_effects.pb.cc" />
     <ClInclude Include="common\component\equipment_effects.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="common\component\pet_cultivation_effects.pb.cc" />
+    <ClCompile Include="common\component\support_effects.pb.cc" />
+    <ClInclude Include="common\component\pet_cultivation_effects.pb.h" />
+    <ClInclude Include="common\component\support_effects.pb.h" />
+  </ItemGroup>
 </Project>

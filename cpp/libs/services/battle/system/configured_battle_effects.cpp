@@ -1,6 +1,8 @@
 #include "system/turn_battle_engine.h"
 #include "system/combat_damage_rules.h"
 #include "system/equipment_battle_rules.h"
+#include "system/support_effect_rules.h"
+#include "system/pet_cultivation_rules.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
 #include <algorithm>
@@ -119,21 +121,35 @@ bool TurnBattleEngine::HasBuffTag(const BattleActorState& actor, const std::stri
     }
     return false;
 }
-double TurnBattleEngine::ConfiguredModifier(const BattleActorState& actor, BattleModifier kind) const {
-    double gain = 0, loss = 0;
+double TurnBattleEngine::ConfiguredModifier(const BattleActorState& actor, BattleModifier kind,
+                                             SupportEffectBreakdown* sources) const {
+    supportrules::ModifierSelection selected;
     for (const auto& entry : actor.buffs()) {
         const auto* row = dataProvider->FindBuff(entry.buff_table_id());
         if (row == nullptr || (row->battle_op() != static_cast<uint32_t>(BattleEffectOp::Modifier) &&
             row->battle_op() != static_cast<uint32_t>(BattleEffectOp::GrowingAura)) ||
             row->modifier_stat() != static_cast<uint32_t>(kind)) continue;
         const auto* source = FindActor(entry.caster_id());
-        if (row->require_living_caster() && (source == nullptr || !IsActorActive(*source))) continue;
+        const bool available = !row->require_living_caster() || (source != nullptr && IsActorActive(*source));
         const double value = row->ratio() * (row->battle_op() == static_cast<uint32_t>(BattleEffectOp::GrowingAura)
             ? entry.stacks() : 1u);
-        gain = std::max(gain, value);
-        loss = std::min(loss, value);
+        int index = -1;
+        if (sources != nullptr) {
+            index = sources->sources_size();
+            auto* detail = sources->add_sources();
+            detail->set_kind(IsConfiguredListenerBuff(entry) ? 2 : 3);
+            detail->set_effect_kind(kind == BattleModifier::OutgoingShield ? 2 : 1);
+            detail->set_buff_instance_id(entry.buff_id()); detail->set_skill_table_id(entry.source_skill_id());
+            const auto* skill = dataProvider->FindSkill(entry.source_skill_id());
+            detail->set_name(skill == nullptr ? "状态 #" + std::to_string(entry.buff_table_id()) : skill->name());
+            detail->set_raw_bonus_bps(value * 10000); detail->set_remain_rounds(entry.remain_rounds());
+            detail->set_infinite(row->infinite_duration() != 0);
+            detail->set_reason(available ? "同类更强修正优先生效" : "要求来源仍存活，当前未生效");
+        }
+        if (available) selected.Consider(value, index);
     }
-    return gain + loss;
+    if (sources != nullptr) selected.Project(*sources);
+    return selected.Total();
 }
 double TurnBattleEngine::ConfiguredValue(const BattleActorState& caster, const BattleActorState& target,
                                           const BuffTable& row, const EffectContext& context) const {
@@ -148,8 +164,7 @@ double TurnBattleEngine::ConfiguredValue(const BattleActorState& caster, const B
     case 7: basis = static_cast<double>(context.actualDamage); break;
     default: break;
     }
-    return std::max(0.0, row.flat_value() + row.per_level() * caster.level() + basis * row.ratio()) *
-        classskill::SupportRankFactor(context.rank);
+    return supportrules::BaseValue(row.flat_value(), row.per_level(), caster.level(), basis, row.ratio(), context.rank);
 }
 void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const BattleAction& action,
                                                const SkillTable& row, TurnResultS2C& result,
@@ -234,6 +249,8 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     const bool hostile = receiver.team_index() != caster.team_index();
     if (HasConfiguredState(receiver, BattleStateKind::Freeze) && hostile) return;
     double value = ConfiguredValue(caster, receiver, row, context);
+    if (op == BattleEffectOp::PeriodicDamage && row.state_kind() == static_cast<uint32_t>(BattleStateKind::Poison))
+        value = supportrules::ApplyBonus(value, petcultivation::PoisonBonus(caster));
     // 持续治疗的覆盖强度与每跳快照采用同一完整施放方值，避免旧印因施法者加成不同被弱覆盖。
     if (op == BattleEffectOp::ReviveMark) value *= std::max(0.0, 1 + EquipmentOutgoingHeal(caster));
     std::vector<int> shieldArtifacts;
@@ -268,7 +285,7 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
                 static_cast<double>(receiver.attributes().health()) / receiver.max_health() < skill->execute_heal_threshold())
                 healing *= 1 + skill->execute_heal_bonus();
             auto healingContext = context;
-            healingContext.equipmentHeal = caster.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && skill != nullptr && skill->battle_model() == 1;
+            healingContext.equipmentHeal = skill != nullptr && skill->battle_model() == 1;
             ResolveConfiguredHeal(caster, receiver, healing, healingContext, result); break;
         }
         case BattleEffectOp::RestoreMana: case BattleEffectOp::DrainMana: {
@@ -335,7 +352,8 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
         case BattleEffectOp::RetreatPet: {
             if (receiver.actor_type() != BATTLE_ACTOR_TYPE_PET || !hostile) break;
             const double chance = std::clamp((row.application_chance() > 0 ? row.application_chance() : 1.0) -
-                ConfiguredModifier(receiver, BattleModifier::RetreatResist), 0.0, 1.0);
+                ConfiguredModifier(receiver, BattleModifier::RetreatResist) + petcultivation::RetreatHit(caster) -
+                petcultivation::RetreatResist(receiver), 0.0, 1.0);
             const bool success = chance >= 1 || (chance > 0 && Rand01() < chance);
             auto* event = AppendEvent(result, BATTLE_EVENT_PET_RETREAT, caster.actor_id(), receiver.actor_id());
             event->set_success(success); event->set_value(1);
@@ -421,7 +439,7 @@ uint64_t TurnBattleEngine::ResolveConfiguredHeal(BattleActorState& source, Battl
             if (after > before) contributions.emplace_back(index, after - before);
         }
     }
-    const uint64_t healed = ApplyHeal(target, amount * std::max(0.0, 1 + bonus) * received);
+    const uint64_t healed = ApplyHeal(target, supportrules::ApplyBonus(amount, bonus) * received);
     for (const auto& [index, gain] : contributions) UseArtifact(source, index, target.actor_id(), gain, result);
     auto* event = AppendEvent(result, BATTLE_EVENT_HEAL, source.actor_id(), target.actor_id());
     event->set_skill_table_id(context.skillId); event->set_value(healed);
@@ -444,6 +462,7 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
             return 0;
         }
         damage *= std::max(0.0, 1 + ConfiguredModifier(source, BattleModifier::OutgoingDamage));
+        damage = supportrules::ApplyBonus(damage, petcultivation::DamageBonus(source, damageType, context.origin, hitKind));
         damage *= std::max(0.0, 1 + ConfiguredModifier(target, BattleModifier::IncomingDamage));
         if (damageType == combatdamage::kMagicDamage)
             damage *= std::max(0.0, 1 - ConfiguredModifier(target, BattleModifier::MagicReduction));

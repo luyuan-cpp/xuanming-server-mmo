@@ -20,4 +20,7 @@
   <ItemGroup>
     <ClInclude Include="memory_battle_data_provider.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pet_cultivation_test.cpp" />
+  </ItemGroup>
 </Project>

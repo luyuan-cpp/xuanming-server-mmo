@@ -45,14 +45,16 @@ public final class PetRuleTableOuterClass extends com.google.protobuf.GeneratedF
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023petrule_table.proto\"\213\001\n\014PetRuleTable\022\n" +
+      "\n\023petrule_table.proto\"\343\001\n\014PetRuleTable\022\n" +
       "\n\002id\030\001 \001(\r\022\020\n\010max_pets\030\002 \001(\r\022\024\n\014name_max" +
       "_len\030\003 \001(\r\022\030\n\020rename_cost_gold\030\004 \001(\004\022\037\n\027" +
       "summon_cooldown_seconds\030\005 \001(\r\022\014\n\004desc\030\006 " +
-      "\001(\t\"/\n\020PetRuleTableData\022\033\n\004data\030\001 \003(\0132\r." +
-      "PetRuleTableB>\n\016com.game.tableB\026PetRuleT" +
-      "ableOuterClassP\001Z\022generated/pb/tableb\006pr" +
-      "oto3"
+      "\001(\t\022\034\n\024entry_config_version\030\007 \001(\r\022\032\n\022ent" +
+      "ry_total_points\030\010 \001(\r\022\034\n\024entry_max_direc" +
+      "tions\030\t \001(\r\"/\n\020PetRuleTableData\022\033\n\004data\030" +
+      "\001 \003(\0132\r.PetRuleTableB>\n\016com.game.tableB\026" +
+      "PetRuleTableOuterClassP\001Z\022generated/pb/t" +
+      "ableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -63,7 +65,7 @@ public final class PetRuleTableOuterClass extends com.google.protobuf.GeneratedF
     internal_static_PetRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_PetRuleTable_descriptor,
-        new java.lang.String[] { "Id", "MaxPets", "NameMaxLen", "RenameCostGold", "SummonCooldownSeconds", "Desc", });
+        new java.lang.String[] { "Id", "MaxPets", "NameMaxLen", "RenameCostGold", "SummonCooldownSeconds", "Desc", "EntryConfigVersion", "EntryTotalPoints", "EntryMaxDirections", });
     internal_static_PetRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_PetRuleTableData_fieldAccessorTable = new

@@ -78,4 +78,16 @@ struct FCfgPetRuleRow : public FTableRowBase
 	/** 说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|PetRule")
 	FString desc;
+
+	/** 修改目录、预算、收益必须递增。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetRule")
+	int32 entry_config_version = 0;
+
+	/** 所有五阶统一，与四维点池独立。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetRule")
+	int32 entry_total_points = 0;
+
+	/** 0不限。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|PetRule")
+	int32 entry_max_directions = 0;
 };

@@ -9,6 +9,12 @@
 #include <entt/src/entt/entity/entity.hpp>
 
 class PetListInfo;
+class PetInfo;
+class PetEntriesInfo;
+class PreviewPetEntriesRequest;
+class PreviewPetEntriesResponse;
+class SavePetEntriesRequest;
+class SavePetEntriesResponse;
 class PetInstance;
 class BattlePetSnapshot;
 class BattlePetSettlementData;
@@ -45,6 +51,11 @@ class UpgradeSkillResponse;
 // 交易恢复保留快照等级,这两处不额外依赖主人 LevelComp。
 class PetSystem {
 public:
+    static uint32_t BuildEntriesInfo(const PetInstance& pet, PetEntriesInfo& info);
+    static uint32_t BuildEntries(entt::entity player, uint64_t petId, PetEntriesInfo& info);
+    static void FillCultivationTier(const PetInstance& pet, PetInfo& info);
+    static void PreviewEntries(entt::entity player, const PreviewPetEntriesRequest& request, PreviewPetEntriesResponse& response);
+    static void SaveEntries(entt::entity player, const SavePetEntriesRequest& request, SavePetEntriesResponse& response);
 	// 从 DB 加载 / 首登后调用:清理已失效引用、同步等级、按上限夹当前 HP/MP。
 	// 已分配点原样携带,不清理、不返还:本版本宝宝池之外的键是未知键(不生效、计入已用),超额的加点整池按 0 生效
 	// (加点统一规则,attribute_allocation_rules.h;docs/design/mixed-version-persist-field-protection.md §12.1 D3 / D4)。

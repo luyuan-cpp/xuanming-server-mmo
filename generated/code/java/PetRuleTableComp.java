@@ -53,4 +53,22 @@ public final class PetRuleTableComp {
         }
     }
 
+    public record Entry_config_version(int value) {
+        public static Entry_config_version from(PetRuleTable row) {
+            return new Entry_config_version(row.getEntryConfigVersion());
+        }
+    }
+
+    public record Entry_total_points(int value) {
+        public static Entry_total_points from(PetRuleTable row) {
+            return new Entry_total_points(row.getEntryTotalPoints());
+        }
+    }
+
+    public record Entry_max_directions(int value) {
+        public static Entry_max_directions from(PetRuleTable row) {
+            return new Entry_max_directions(row.getEntryMaxDirections());
+        }
+    }
+
 }

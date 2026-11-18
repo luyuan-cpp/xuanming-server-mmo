@@ -243,6 +243,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
     kLevelCapFieldNumber = 7,
     kAcquisitionTierFieldNumber = 15,
     kShopPriceGoldFieldNumber = 14,
+    kCultivationTierFieldNumber = 16,
   };
   // repeated uint32 aptitude_min = 11;
   [[nodiscard]] int aptitude_min_size()
@@ -434,12 +435,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
   void _internal_set_shop_price_gold(::uint64_t value);
 
   public:
+  // uint32 cultivation_tier = 16;
+  void clear_cultivation_tier() ;
+  [[nodiscard]] ::uint32_t cultivation_tier() const;
+  void set_cultivation_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cultivation_tier() const;
+  void _internal_set_cultivation_tier(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PetTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 33,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          0, 41,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -485,6 +496,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetTable final : public ::google::p
     ::uint32_t level_cap_;
     ::uint32_t acquisition_tier_;
     ::uint64_t shop_price_gold_;
+    ::uint32_t cultivation_tier_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1238,6 +1250,30 @@ inline ::uint32_t PetTable::_internal_acquisition_tier() const {
 inline void PetTable::_internal_set_acquisition_tier(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.acquisition_tier_ = value;
+}
+
+// uint32 cultivation_tier = 16;
+inline void PetTable::clear_cultivation_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t PetTable::cultivation_tier() const {
+  // @@protoc_insertion_point(field_get:PetTable.cultivation_tier)
+  return _internal_cultivation_tier();
+}
+inline void PetTable::set_cultivation_tier(::uint32_t value) {
+  _internal_set_cultivation_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:PetTable.cultivation_tier)
+}
+inline ::uint32_t PetTable::_internal_cultivation_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cultivation_tier_;
+}
+inline void PetTable::_internal_set_cultivation_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_tier_ = value;
 }
 
 // -------------------------------------------------------------------

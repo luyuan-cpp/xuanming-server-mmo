@@ -51,13 +51,14 @@ def formal_inputs():
 
 
 def compare_artifacts(previous, official, candidate, allowed):
-    require(set(previous) == set(official) == set(candidate), "Table artifact set changed")
+    require(previous.keys() <= official.keys() and official.keys() == candidate.keys(),
+            "Table artifact set changed: previous table removed or official export incomplete")
     require(MAP_ARTIFACTS.issubset(candidate), "Authored map artifacts are incomplete")
     for name in MAP_ARTIFACTS:
         require(candidate[name] == previous[name], "Authored map artifact changed: " + name)
     for name in candidate.keys() - MAP_ARTIFACTS - {"manifest.json"}:
         require(candidate[name] == official[name], "Export does not match current official table: " + name)
-    changed = {name for name in candidate if candidate[name] != previous[name]}
+    changed = {name for name in candidate if candidate[name] != previous.get(name)}
     approved = {f"{name.lower()}.{suffix}" for name in allowed for suffix in ("json", "pb")}
     require(changed <= approved | {"manifest.json"}, "Unapproved table changes: " + ", ".join(sorted(changed - approved - {"manifest.json"})))
     return sorted(changed)

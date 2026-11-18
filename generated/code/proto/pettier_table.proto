@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "PetTierTableOuterClass";
+option java_multiple_files = true;
+
+
+message PetTierTable {
+	uint32 id = 1;
+	string name = 2;
+	string art_key = 3;
+	string desc = 4;
+}
+
+message PetTierTableData {
+	repeated PetTierTable data = 1;
+}

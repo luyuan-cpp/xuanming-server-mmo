@@ -1,0 +1,19 @@
+syntax = "proto3";
+package mmorpg.cfgtable.v1;
+import "cfg_options.proto";
+message PetEntryTable {
+  option (cfg_sheet) = "PetEntry";
+  option (cfg_source_file) = "PetEntry.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_ids_permanent) = true;
+  uint32 id = 1;
+  string name = 2;
+  string desc = 3;
+  uint32 category = 4; // 1输出2障碍3辅助
+  uint32 channel = 5; // 1物伤2法伤3治疗4盾5分型命中6分型抗性7毒伤8劝退命中9抗劝退
+  uint32 state_kind = 6;
+  uint32 cap = 7;
+  uint32 per_point_bps = 8;
+  uint32 sort = 9;
+  string icon = 10;
+}

@@ -378,3 +378,6 @@ const SceneBagClientPlayerCommitEquipmentCraftMessageId = 406
 const SceneBagClientPlayerGetEquipmentMaterialRewardMessageId = 407
 const SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId = 408
 const SceneNodeGrpcGmExecutePlayerCommandMessageId = 409
+const ScenePetClientPlayerGetPetEntriesMessageId = 410
+const ScenePetClientPlayerPreviewPetEntriesMessageId = 411
+const ScenePetClientPlayerSavePetEntriesMessageId = 412

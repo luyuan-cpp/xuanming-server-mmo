@@ -32,14 +32,21 @@ type PetInstance struct {
 	// dimension_id -> 资质(万分比,10000 = 100%)。出生时在 PetTable 的
 	// aptitude_min/aptitude_max 之间随机,之后不变(洗资质是二期)。
 	// 缺键按 10000 处理,老存档与改表都能自愈。
-	Aptitude      map[uint32]uint32 `protobuf:"bytes,6,rep,name=aptitude,proto3" json:"aptitude,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	Health        uint64            `protobuf:"varint,7,opt,name=health,proto3" json:"health,omitempty"`                                                                                                       // 当前气血(战斗结算回写,残血跨登录保留)
-	Mana          uint64            `protobuf:"varint,8,opt,name=mana,proto3" json:"mana,omitempty"`                                                                                                           // 当前法力
-	CreatedAt     uint64            `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                                                                                // 获得时间(Unix 秒)
-	SkillTableIds []uint32          `protobuf:"varint,10,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`                                                          // 宝宝技能(SkillTable id),核心线来自 PetTable
-	SkillRanks    map[uint32]uint32 `protobuf:"bytes,11,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 公共技能原型的已学等级，由 PetSystem 唯一写入。
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Aptitude               map[uint32]uint32 `protobuf:"bytes,6,rep,name=aptitude,proto3" json:"aptitude,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	Health                 uint64            `protobuf:"varint,7,opt,name=health,proto3" json:"health,omitempty"`                                                                                                                   // 当前气血(战斗结算回写,残血跨登录保留)
+	Mana                   uint64            `protobuf:"varint,8,opt,name=mana,proto3" json:"mana,omitempty"`                                                                                                                       // 当前法力
+	CreatedAt              uint64            `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                                                                                            // 获得时间(Unix 秒)
+	SkillTableIds          []uint32          `protobuf:"varint,10,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`                                                                      // 宝宝技能(SkillTable id),核心线来自 PetTable
+	SkillRanks             map[uint32]uint32 `protobuf:"bytes,11,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`             // 公共技能原型的已学等级，由 PetSystem 唯一写入。
+	EntryAllocated         map[uint32]uint32 `protobuf:"bytes,12,rep,name=entry_allocated,json=entryAllocated,proto3" json:"entry_allocated,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 独立条目池；未知键保留并占预算。
+	EntryStateVersion      uint64            `protobuf:"varint,13,opt,name=entry_state_version,json=entryStateVersion,proto3" json:"entry_state_version,omitempty"`
+	EntryLastRequestId     string            `protobuf:"bytes,14,opt,name=entry_last_request_id,json=entryLastRequestId,proto3" json:"entry_last_request_id,omitempty"`
+	EntryLastBaseVersion   uint64            `protobuf:"varint,15,opt,name=entry_last_base_version,json=entryLastBaseVersion,proto3" json:"entry_last_base_version,omitempty"`
+	EntryLastConfigVersion uint32            `protobuf:"varint,16,opt,name=entry_last_config_version,json=entryLastConfigVersion,proto3" json:"entry_last_config_version,omitempty"`
+	EntryLastTarget        map[uint32]uint32 `protobuf:"bytes,17,rep,name=entry_last_target,json=entryLastTarget,proto3" json:"entry_last_target,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	CultivationTier        uint32            `protobuf:"varint,18,opt,name=cultivation_tier,json=cultivationTier,proto3" json:"cultivation_tier,omitempty"` // 独立五阶身份，非 quality/acquisition_tier。
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PetInstance) Reset() {
@@ -149,6 +156,55 @@ func (x *PetInstance) GetSkillRanks() map[uint32]uint32 {
 	return nil
 }
 
+func (x *PetInstance) GetEntryAllocated() map[uint32]uint32 {
+	if x != nil {
+		return x.EntryAllocated
+	}
+	return nil
+}
+
+func (x *PetInstance) GetEntryStateVersion() uint64 {
+	if x != nil {
+		return x.EntryStateVersion
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastRequestId() string {
+	if x != nil {
+		return x.EntryLastRequestId
+	}
+	return ""
+}
+
+func (x *PetInstance) GetEntryLastBaseVersion() uint64 {
+	if x != nil {
+		return x.EntryLastBaseVersion
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastConfigVersion() uint32 {
+	if x != nil {
+		return x.EntryLastConfigVersion
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastTarget() map[uint32]uint32 {
+	if x != nil {
+		return x.EntryLastTarget
+	}
+	return nil
+}
+
+func (x *PetInstance) GetCultivationTier() uint32 {
+	if x != nil {
+		return x.CultivationTier
+	}
+	return 0
+}
+
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 type PlayerPetComp struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -239,7 +295,7 @@ var File_proto_common_component_player_pet_comp_proto protoreflect.FileDescripto
 
 const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\n" +
-	",proto/common/component/player_pet_comp.proto\"\xcf\x04\n" +
+	",proto/common/component/player_pet_comp.proto\"\xf0\b\n" +
 	"\vPetInstance\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12 \n" +
 	"\fpet_table_id\x18\x02 \x01(\rR\n" +
@@ -255,7 +311,14 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\x0fskill_table_ids\x18\n" +
 	" \x03(\rR\rskillTableIds\x12=\n" +
 	"\vskill_ranks\x18\v \x03(\v2\x1c.PetInstance.SkillRanksEntryR\n" +
-	"skillRanks\x1a<\n" +
+	"skillRanks\x12I\n" +
+	"\x0fentry_allocated\x18\f \x03(\v2 .PetInstance.EntryAllocatedEntryR\x0eentryAllocated\x12.\n" +
+	"\x13entry_state_version\x18\r \x01(\x04R\x11entryStateVersion\x121\n" +
+	"\x15entry_last_request_id\x18\x0e \x01(\tR\x12entryLastRequestId\x125\n" +
+	"\x17entry_last_base_version\x18\x0f \x01(\x04R\x14entryLastBaseVersion\x129\n" +
+	"\x19entry_last_config_version\x18\x10 \x01(\rR\x16entryLastConfigVersion\x12M\n" +
+	"\x11entry_last_target\x18\x11 \x03(\v2!.PetInstance.EntryLastTargetEntryR\x0fentryLastTarget\x12)\n" +
+	"\x10cultivation_tier\x18\x12 \x01(\rR\x0fcultivationTier\x1a<\n" +
 	"\x0eAllocatedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a;\n" +
@@ -263,6 +326,12 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aA\n" +
+	"\x13EntryAllocatedEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aB\n" +
+	"\x14EntryLastTargetEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xb1\x02\n" +
 	"\rPlayerPetComp\x12 \n" +
@@ -285,24 +354,28 @@ func file_proto_common_component_player_pet_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_pet_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_common_component_player_pet_comp_proto_goTypes = []any{
 	(*PetInstance)(nil),   // 0: PetInstance
 	(*PlayerPetComp)(nil), // 1: PlayerPetComp
 	nil,                   // 2: PetInstance.AllocatedEntry
 	nil,                   // 3: PetInstance.AptitudeEntry
 	nil,                   // 4: PetInstance.SkillRanksEntry
+	nil,                   // 5: PetInstance.EntryAllocatedEntry
+	nil,                   // 6: PetInstance.EntryLastTargetEntry
 }
 var file_proto_common_component_player_pet_comp_proto_depIdxs = []int32{
 	2, // 0: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
 	3, // 1: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
 	4, // 2: PetInstance.skill_ranks:type_name -> PetInstance.SkillRanksEntry
-	0, // 3: PlayerPetComp.pets:type_name -> PetInstance
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 3: PetInstance.entry_allocated:type_name -> PetInstance.EntryAllocatedEntry
+	6, // 4: PetInstance.entry_last_target:type_name -> PetInstance.EntryLastTargetEntry
+	0, // 5: PlayerPetComp.pets:type_name -> PetInstance
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_pet_comp_proto_init() }
@@ -316,7 +389,7 @@ func file_proto_common_component_player_pet_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_pet_comp_proto_rawDesc), len(file_proto_common_component_player_pet_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

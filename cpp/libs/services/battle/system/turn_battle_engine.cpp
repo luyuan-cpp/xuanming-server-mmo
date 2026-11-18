@@ -437,6 +437,7 @@ bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
             }
             actor.set_owner_player_id(snapshot.player_id());
             actor.set_pet_table_id(pet.pet_table_id());
+            *actor.mutable_pet_cultivation() = pet.pet_cultivation();
             actor.set_name(pet.pet_name());
             actor.set_level(pet.level());
             *actor.mutable_attributes() = pet.base_attributes();
@@ -1494,7 +1495,7 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
         finalDamage = TriggerBeforeBasicAttackBuffs(attacker, target, finalDamage, result);
     }
     if (HasConfiguredBuffs(attacker) || HasConfiguredBuffs(target) ||
-        attacker.has_equipment_effects() || target.has_equipment_effects()) {
+        attacker.has_equipment_effects() || target.has_equipment_effects() || attacker.has_pet_cultivation()) {
         EffectContext context;
         context.critical = isCritical;
         context.origin = hitKind == BATTLE_HIT_COUNTER ? BattleDamageOrigin::Mirror : BattleDamageOrigin::Direct;
@@ -1744,7 +1745,7 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
         const double finalDamage =
             CalculateFinalDamage(actor, target, baseDamage, attack, skillRow.attack_multiplier(),
                                  skillRow.damage_type(), isCritical);
-        if (HasConfiguredBuffs(actor) || HasConfiguredBuffs(target) || actor.has_equipment_effects() || target.has_equipment_effects()) {
+        if (HasConfiguredBuffs(actor) || HasConfiguredBuffs(target) || actor.has_equipment_effects() || target.has_equipment_effects() || actor.has_pet_cultivation()) {
             EffectContext context; context.skillId = action.skill_table_id(); context.critical = isCritical;
             context.primaryTargetId = action.target_id() != 0 ? action.target_id() : currentHitIndex == 0 ? target.actor_id() : 0;
             ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
@@ -2010,7 +2011,7 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
                 CalculateFinalDamage(actor, target, baseDamage, attack, skillRow.attack_multiplier(),
                                      skillRow.damage_type(), isCritical) *
                 classskill::DamageRankFactor(rank);
-            if (HasConfiguredBuffs(actor) || HasConfiguredBuffs(target) || actor.has_equipment_effects() || target.has_equipment_effects()) {
+            if (HasConfiguredBuffs(actor) || HasConfiguredBuffs(target) || actor.has_equipment_effects() || target.has_equipment_effects() || actor.has_pet_cultivation()) {
                 EffectContext context; context.skillId = skillRow.id(); context.rank = rank; context.critical = isCritical;
                 context.primaryTargetId = primaryTargetId;
                 ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
@@ -2086,7 +2087,7 @@ int32_t TurnBattleEngine::ActionInitiative(const BattleActorState& actor) const 
     return CheckActionPrerequisites(actor, it->second) == kSuccess ? skillRow->initiative() : 0;
 }
 
-double TurnBattleEngine::OutgoingHealBonus(const BattleActorState& actor) const {
+double TurnBattleEngine::OutgoingHealBonus(const BattleActorState& actor, SupportEffectBreakdown* sources) const {
     // protobuf map 遍历序不固定;浮点求和按 skill_table_id 升序做,结果才逐位稳定
     const std::map<uint32_t, uint32_t> ranks(actor.skill_ranks().begin(), actor.skill_ranks().end());
     double bonus = 0.0;
@@ -2096,7 +2097,14 @@ double TurnBattleEngine::OutgoingHealBonus(const BattleActorState& actor) const 
             classskill::ParsePassiveStat(skillRow->passive_stat()) != classskill::PassiveStat::kOutgoingHeal) {
             continue;
         }
-        bonus += skillRow->passive_percent() * classskill::PassiveRankFactor(rank);
+        const double value = skillRow->passive_percent() * classskill::PassiveRankFactor(rank);
+        bonus += value;
+        if (sources != nullptr) {
+            auto* source = sources->add_sources(); source->set_kind(2); source->set_skill_table_id(skillTableId);
+            source->set_effect_kind(1);
+            source->set_name(skillRow->name()); source->set_infinite(true);
+            source->set_raw_bonus_bps(value * 10000); source->set_effective_bonus_bps(value * 10000);
+        }
     }
     return bonus;
 }
@@ -3333,7 +3341,10 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     state.set_action_deadline_ms(0);
 
     for (const auto& actor : actors) {
-        *state.add_actors() = actor;
+        auto* visible = state.add_actors();
+        *visible = actor;
+        if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER)
+            BuildSupportEffects(actor, *visible->mutable_support_effects());
     }
 
     if (outcome == BATTLE_OUTCOME_ONGOING) {
@@ -3362,6 +3373,7 @@ void TurnBattleEngine::StripEngineOnlyState(BattleStateS2C& state) {
         actor.clear_round_effect_usage();
         actor.clear_runtime_skills();
         actor.clear_equipment_effects();
+        actor.clear_pet_cultivation();
         actor.clear_artifact_states();
         actor.clear_entry_max_health();
         actor.clear_entry_max_mana();

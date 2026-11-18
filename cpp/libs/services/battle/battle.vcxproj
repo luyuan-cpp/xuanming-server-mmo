@@ -19,6 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+
+    <ClInclude Include="system\pet_cultivation_rules.h" />
     <ClInclude Include="constants\turn_battle_constants.h" />
     <ClInclude Include="constants\battle_effect_constants.h" />
     <ClInclude Include="system\battle_actor_command_rules.h" />
@@ -28,6 +30,7 @@
     <ClInclude Include="system\turn_battle_engine.h" />
     <ClInclude Include="system\combat_damage_rules.h" />
     <ClInclude Include="system\equipment_battle_rules.h" />
+    <ClInclude Include="system\support_effect_rules.h" />
     <ClInclude Include="system\class_skill_rules.h" />
     <ClInclude Include="system\battle_replay_recorder.h" />
     <ClInclude Include="system\battle_script.h" />

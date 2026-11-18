@@ -143,6 +143,39 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int ENTRY_CONFIG_VERSION_FIELD_NUMBER = 7;
+  private int entryConfigVersion_ = 0;
+  /**
+   * <code>uint32 entry_config_version = 7;</code>
+   * @return The entryConfigVersion.
+   */
+  @java.lang.Override
+  public int getEntryConfigVersion() {
+    return entryConfigVersion_;
+  }
+
+  public static final int ENTRY_TOTAL_POINTS_FIELD_NUMBER = 8;
+  private int entryTotalPoints_ = 0;
+  /**
+   * <code>uint32 entry_total_points = 8;</code>
+   * @return The entryTotalPoints.
+   */
+  @java.lang.Override
+  public int getEntryTotalPoints() {
+    return entryTotalPoints_;
+  }
+
+  public static final int ENTRY_MAX_DIRECTIONS_FIELD_NUMBER = 9;
+  private int entryMaxDirections_ = 0;
+  /**
+   * <code>uint32 entry_max_directions = 9;</code>
+   * @return The entryMaxDirections.
+   */
+  @java.lang.Override
+  public int getEntryMaxDirections() {
+    return entryMaxDirections_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -175,6 +208,15 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 6, desc_);
     }
+    if (entryConfigVersion_ != 0) {
+      output.writeUInt32(7, entryConfigVersion_);
+    }
+    if (entryTotalPoints_ != 0) {
+      output.writeUInt32(8, entryTotalPoints_);
+    }
+    if (entryMaxDirections_ != 0) {
+      output.writeUInt32(9, entryMaxDirections_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -201,6 +243,18 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(6, desc_);
+    }
+    if (entryConfigVersion_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(7, entryConfigVersion_);
+    }
+    if (entryTotalPoints_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, entryTotalPoints_);
+    }
+    if (entryMaxDirections_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, entryMaxDirections_);
     }
     return size;
   }
@@ -238,6 +292,12 @@ private static final long serialVersionUID = 0L;
         != other.getSummonCooldownSeconds()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getEntryConfigVersion()
+        != other.getEntryConfigVersion()) return false;
+    if (getEntryTotalPoints()
+        != other.getEntryTotalPoints()) return false;
+    if (getEntryMaxDirections()
+        != other.getEntryMaxDirections()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -262,6 +322,12 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getSummonCooldownSeconds();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + ENTRY_CONFIG_VERSION_FIELD_NUMBER;
+    hash = (53 * hash) + getEntryConfigVersion();
+    hash = (37 * hash) + ENTRY_TOTAL_POINTS_FIELD_NUMBER;
+    hash = (53 * hash) + getEntryTotalPoints();
+    hash = (37 * hash) + ENTRY_MAX_DIRECTIONS_FIELD_NUMBER;
+    hash = (53 * hash) + getEntryMaxDirections();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -399,6 +465,9 @@ private static final long serialVersionUID = 0L;
       renameCostGold_ = 0L;
       summonCooldownSeconds_ = 0;
       desc_ = "";
+      entryConfigVersion_ = 0;
+      entryTotalPoints_ = 0;
+      entryMaxDirections_ = 0;
       return this;
     }
 
@@ -450,6 +519,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000020) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.entryConfigVersion_ = entryConfigVersion_;
+      }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.entryTotalPoints_ = entryTotalPoints_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.entryMaxDirections_ = entryMaxDirections_;
+      }
     }
 
     @java.lang.Override
@@ -483,6 +561,15 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00000020;
         onChanged();
+      }
+      if (other.getEntryConfigVersion() != 0) {
+        setEntryConfigVersion(other.getEntryConfigVersion());
+      }
+      if (other.getEntryTotalPoints() != 0) {
+        setEntryTotalPoints(other.getEntryTotalPoints());
+      }
+      if (other.getEntryMaxDirections() != 0) {
+        setEntryMaxDirections(other.getEntryMaxDirections());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -540,6 +627,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000020;
               break;
             } // case 50
+            case 56: {
+              entryConfigVersion_ = input.readUInt32();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
+            case 64: {
+              entryTotalPoints_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              entryMaxDirections_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -785,6 +887,102 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+
+    private int entryConfigVersion_ ;
+    /**
+     * <code>uint32 entry_config_version = 7;</code>
+     * @return The entryConfigVersion.
+     */
+    @java.lang.Override
+    public int getEntryConfigVersion() {
+      return entryConfigVersion_;
+    }
+    /**
+     * <code>uint32 entry_config_version = 7;</code>
+     * @param value The entryConfigVersion to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEntryConfigVersion(int value) {
+
+      entryConfigVersion_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 entry_config_version = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEntryConfigVersion() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      entryConfigVersion_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int entryTotalPoints_ ;
+    /**
+     * <code>uint32 entry_total_points = 8;</code>
+     * @return The entryTotalPoints.
+     */
+    @java.lang.Override
+    public int getEntryTotalPoints() {
+      return entryTotalPoints_;
+    }
+    /**
+     * <code>uint32 entry_total_points = 8;</code>
+     * @param value The entryTotalPoints to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEntryTotalPoints(int value) {
+
+      entryTotalPoints_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 entry_total_points = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEntryTotalPoints() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      entryTotalPoints_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int entryMaxDirections_ ;
+    /**
+     * <code>uint32 entry_max_directions = 9;</code>
+     * @return The entryMaxDirections.
+     */
+    @java.lang.Override
+    public int getEntryMaxDirections() {
+      return entryMaxDirections_;
+    }
+    /**
+     * <code>uint32 entry_max_directions = 9;</code>
+     * @param value The entryMaxDirections to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEntryMaxDirections(int value) {
+
+      entryMaxDirections_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 entry_max_directions = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEntryMaxDirections() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      entryMaxDirections_ = 0;
       onChanged();
       return this;
     }

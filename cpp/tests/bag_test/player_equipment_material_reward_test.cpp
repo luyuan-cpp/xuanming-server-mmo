@@ -288,15 +288,15 @@ TEST_F(EquipmentMaterialRewardTest, CorruptPersistedMaterialLedgerAndReceiptFail
 }
 TEST_F(EquipmentMaterialRewardTest, InboxWatermarkBlocksReexecutingSourceEvenAfterRecentReceiptEviction) {
     PlayerInboxLedgerComp inbox;
-    auto& cursor = player_inbox_rules::MutableCursor(inbox, PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT);
+    auto& cursor = player_inbox_rules::MutableCursor(inbox, player_inbox::PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT);
     for (uint64_t seq = 1; seq <= 40; ++seq) {
         PlayerInboxDecision decision; decision.set_seq(seq); decision.set_request_id(7000 + seq);
-        decision.set_msg_type(PLAYER_INBOX_MSG_BATTLE_SETTLEMENT); decision.set_outcome(PLAYER_INBOX_OUTCOME_APPLIED);
+        decision.set_msg_type(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT); decision.set_outcome(player_inbox::PLAYER_INBOX_OUTCOME_APPLIED);
         ASSERT_TRUE(player_inbox_rules::RecordDecision(cursor, decision));
     }
     EXPECT_EQ(player_inbox_rules::DeliveryClass::kUnknown,
-        player_inbox_rules::ClassifyDelivery(&cursor, 1, 7001, PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, nullptr));
+        player_inbox_rules::ClassifyDelivery(&cursor, 1, 7001, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, nullptr));
     EXPECT_EQ(player_inbox_rules::DeliveryClass::kReplay,
-        player_inbox_rules::ClassifyDelivery(&cursor, 40, 7040, PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, nullptr));
+        player_inbox_rules::ClassifyDelivery(&cursor, 40, 7040, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, nullptr));
 }
 }

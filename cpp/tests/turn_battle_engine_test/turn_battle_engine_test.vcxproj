@@ -180,4 +180,7 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="pet_cultivation_test.cpp" />
+  </ItemGroup>
 </Project>

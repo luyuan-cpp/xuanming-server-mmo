@@ -373,7 +373,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 410,
+static_assert(kMaxRpcMethodCount == 413,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1804,6 +1804,21 @@ void InitMessageInfo()
         std::make_unique<::BuyPetRequest>(),
         std::make_unique<::BuyPetResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerGetPetEntriesMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "GetPetEntries",
+        std::make_unique<::GetPetEntriesRequest>(),
+        std::make_unique<::GetPetEntriesResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerPreviewPetEntriesMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "PreviewPetEntries",
+        std::make_unique<::PreviewPetEntriesRequest>(),
+        std::make_unique<::PreviewPetEntriesResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerSavePetEntriesMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "SavePetEntries",
+        std::make_unique<::SavePetEntriesRequest>(),
+        std::make_unique<::SavePetEntriesResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSceneClientPlayer ---
     gRpcMethodRegistry[SceneSceneClientPlayerEnterSceneMessageId] = RpcMethodMeta{
@@ -2485,6 +2500,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case ScenePetClientPlayerGmGrantPetMessageId:
 	case ScenePetClientPlayerGetPetShopMessageId:
 	case ScenePetClientPlayerBuyPetMessageId:
+	case ScenePetClientPlayerGetPetEntriesMessageId:
+	case ScenePetClientPlayerPreviewPetEntriesMessageId:
+	case ScenePetClientPlayerSavePetEntriesMessageId:
 	case SceneSceneClientPlayerEnterSceneMessageId:
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:
 	case SceneSceneClientPlayerTravelToZoneMessageId:

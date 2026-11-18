@@ -89,6 +89,12 @@ public final class PetTableComp {
         }
     }
 
+    public record Cultivation_tier(int value) {
+        public static Cultivation_tier from(PetTable row) {
+            return new Cultivation_tier(row.getCultivationTier());
+        }
+    }
+
     public record Aptitude_min(List<Integer> values) {
         public static Aptitude_min from(PetTable row) {
             return new Aptitude_min(row.getAptitudeMinList());

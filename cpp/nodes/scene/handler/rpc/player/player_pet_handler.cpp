@@ -219,3 +219,31 @@ void ScenePetClientPlayerHandler::BuyPet(entt::entity player,const ::BuyPetReque
 ///<<< END WRITING YOUR CODE
 
 }
+
+void ScenePetClientPlayerHandler::GetPetEntries(entt::entity player,const ::GetPetEntriesRequest* request,
+	::GetPetEntriesResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto error = PetSystem::BuildEntries(player, request->pet_id(), *response->mutable_entries());
+    if (error != kSuccess) { response->clear_entries(); response->mutable_error_message()->set_id(error); }
+///<<< END WRITING YOUR CODE
+
+}
+
+void ScenePetClientPlayerHandler::PreviewPetEntries(entt::entity player,const ::PreviewPetEntriesRequest* request,
+	::PreviewPetEntriesResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PetSystem::PreviewEntries(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void ScenePetClientPlayerHandler::SavePetEntries(entt::entity player,const ::SavePetEntriesRequest* request,
+	::SavePetEntriesResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PetSystem::SaveEntries(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

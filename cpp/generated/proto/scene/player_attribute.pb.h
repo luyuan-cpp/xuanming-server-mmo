@@ -40,6 +40,7 @@
 #include "proto/common/base/tip.pb.h"
 #include "proto/common/base/empty.pb.h"
 #include "proto/common/component/equipment_effects.pb.h"
+#include "proto/common/component/support_effects.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -3714,6 +3715,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public :
     kCombatFieldNumber = 10,
     kDerivedFieldNumber = 6,
     kEquipmentEffectsFieldNumber = 11,
+    kSupportEffectsFieldNumber = 12,
     kActiveSchemeIdFieldNumber = 4,
     kMaxSchemesFieldNumber = 5,
     kSwitchCooldownUntilFieldNumber = 8,
@@ -3836,6 +3838,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public :
   ::EquipmentEffects* PROTOBUF_NONNULL _internal_mutable_equipment_effects();
 
   public:
+  // .SupportEffectSummary support_effects = 12;
+  [[nodiscard]] bool has_support_effects()
+      const;
+  void clear_support_effects() ;
+  [[nodiscard]] const ::SupportEffectSummary& support_effects() const;
+  [[nodiscard]] ::SupportEffectSummary* PROTOBUF_NULLABLE release_support_effects();
+  ::SupportEffectSummary* PROTOBUF_NONNULL mutable_support_effects();
+  void set_allocated_support_effects(::SupportEffectSummary* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_support_effects(::SupportEffectSummary* PROTOBUF_NULLABLE value);
+  ::SupportEffectSummary* PROTOBUF_NULLABLE unsafe_arena_release_support_effects();
+
+  private:
+  const ::SupportEffectSummary& _internal_support_effects() const;
+  ::SupportEffectSummary* PROTOBUF_NONNULL _internal_mutable_support_effects();
+
+  public:
   // uint32 active_scheme_id = 4;
   void clear_active_scheme_id() ;
   [[nodiscard]] ::uint32_t active_scheme_id() const;
@@ -3890,8 +3908,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
-                          6, 0,
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          7, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3925,6 +3943,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public :
     ::google::protobuf::RepeatedPtrField< ::CombatAttributeInfo > combat_;
     ::DerivedAttributeInfo* PROTOBUF_NULLABLE derived_;
     ::EquipmentEffects* PROTOBUF_NULLABLE equipment_effects_;
+    ::SupportEffectSummary* PROTOBUF_NULLABLE support_effects_;
     ::uint32_t active_scheme_id_;
     ::uint32_t max_schemes_;
     ::uint64_t switch_cooldown_until_;
@@ -7042,7 +7061,7 @@ AttributePanelInfo::_internal_mutable_schemes() {
 inline void AttributePanelInfo::clear_active_scheme_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_scheme_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t AttributePanelInfo::active_scheme_id() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.active_scheme_id)
@@ -7050,7 +7069,7 @@ inline ::uint32_t AttributePanelInfo::active_scheme_id() const {
 }
 inline void AttributePanelInfo::set_active_scheme_id(::uint32_t value) {
   _internal_set_active_scheme_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.active_scheme_id)
 }
 inline ::uint32_t AttributePanelInfo::_internal_active_scheme_id() const {
@@ -7066,7 +7085,7 @@ inline void AttributePanelInfo::_internal_set_active_scheme_id(::uint32_t value)
 inline void AttributePanelInfo::clear_max_schemes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_schemes_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t AttributePanelInfo::max_schemes() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.max_schemes)
@@ -7074,7 +7093,7 @@ inline ::uint32_t AttributePanelInfo::max_schemes() const {
 }
 inline void AttributePanelInfo::set_max_schemes(::uint32_t value) {
   _internal_set_max_schemes(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.max_schemes)
 }
 inline ::uint32_t AttributePanelInfo::_internal_max_schemes() const {
@@ -7188,7 +7207,7 @@ inline void AttributePanelInfo::set_allocated_derived(::DerivedAttributeInfo* PR
 inline void AttributePanelInfo::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t AttributePanelInfo::level() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.level)
@@ -7196,7 +7215,7 @@ inline ::uint32_t AttributePanelInfo::level() const {
 }
 inline void AttributePanelInfo::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.level)
 }
 inline ::uint32_t AttributePanelInfo::_internal_level() const {
@@ -7212,7 +7231,7 @@ inline void AttributePanelInfo::_internal_set_level(::uint32_t value) {
 inline void AttributePanelInfo::clear_switch_cooldown_until() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.switch_cooldown_until_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t AttributePanelInfo::switch_cooldown_until() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.switch_cooldown_until)
@@ -7220,7 +7239,7 @@ inline ::uint64_t AttributePanelInfo::switch_cooldown_until() const {
 }
 inline void AttributePanelInfo::set_switch_cooldown_until(::uint64_t value) {
   _internal_set_switch_cooldown_until(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.switch_cooldown_until)
 }
 inline ::uint64_t AttributePanelInfo::_internal_switch_cooldown_until() const {
@@ -7236,7 +7255,7 @@ inline void AttributePanelInfo::_internal_set_switch_cooldown_until(::uint64_t v
 inline void AttributePanelInfo::clear_create_scheme_cost_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.create_scheme_cost_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t AttributePanelInfo::create_scheme_cost_gold() const {
   // @@protoc_insertion_point(field_get:AttributePanelInfo.create_scheme_cost_gold)
@@ -7244,7 +7263,7 @@ inline ::uint64_t AttributePanelInfo::create_scheme_cost_gold() const {
 }
 inline void AttributePanelInfo::set_create_scheme_cost_gold(::uint64_t value) {
   _internal_set_create_scheme_cost_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:AttributePanelInfo.create_scheme_cost_gold)
 }
 inline ::uint64_t AttributePanelInfo::_internal_create_scheme_cost_gold() const {
@@ -7402,6 +7421,99 @@ inline void AttributePanelInfo::set_allocated_equipment_effects(::EquipmentEffec
 
   _impl_.equipment_effects_ = reinterpret_cast<::EquipmentEffects*>(value);
   // @@protoc_insertion_point(field_set_allocated:AttributePanelInfo.equipment_effects)
+}
+
+// .SupportEffectSummary support_effects = 12;
+inline bool AttributePanelInfo::has_support_effects() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  PROTOBUF_ASSUME(!value || _impl_.support_effects_ != nullptr);
+  return value;
+}
+inline const ::SupportEffectSummary& AttributePanelInfo::_internal_support_effects() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SupportEffectSummary* p = _impl_.support_effects_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SupportEffectSummary>(&::SupportEffectSummary_globals_);
+}
+inline const ::SupportEffectSummary& AttributePanelInfo::support_effects() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AttributePanelInfo.support_effects)
+  return _internal_support_effects();
+}
+inline void AttributePanelInfo::unsafe_arena_set_allocated_support_effects(
+    ::SupportEffectSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.support_effects_);
+  }
+  _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AttributePanelInfo.support_effects)
+}
+inline ::SupportEffectSummary* PROTOBUF_NULLABLE AttributePanelInfo::release_support_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::SupportEffectSummary* released = _impl_.support_effects_;
+  _impl_.support_effects_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SupportEffectSummary* PROTOBUF_NULLABLE AttributePanelInfo::unsafe_arena_release_support_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AttributePanelInfo.support_effects)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::SupportEffectSummary* temp = _impl_.support_effects_;
+  _impl_.support_effects_ = nullptr;
+  return temp;
+}
+inline ::SupportEffectSummary* PROTOBUF_NONNULL AttributePanelInfo::_internal_mutable_support_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.support_effects_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SupportEffectSummary>(GetArena());
+    _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(p);
+  }
+  return _impl_.support_effects_;
+}
+inline ::SupportEffectSummary* PROTOBUF_NONNULL AttributePanelInfo::mutable_support_effects()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::SupportEffectSummary* _msg = _internal_mutable_support_effects();
+  // @@protoc_insertion_point(field_mutable:AttributePanelInfo.support_effects)
+  return _msg;
+}
+inline void AttributePanelInfo::set_allocated_support_effects(::SupportEffectSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.support_effects_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+
+  _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AttributePanelInfo.support_effects)
 }
 
 // -------------------------------------------------------------------

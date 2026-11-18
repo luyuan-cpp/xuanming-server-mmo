@@ -1,6 +1,8 @@
 #include "system/turn_battle_engine.h"
 #include "system/equipment_battle_rules.h"
 #include "system/combat_damage_rules.h"
+#include "system/support_effect_rules.h"
+#include "system/pet_cultivation_rules.h"
 
 #include <algorithm>
 #include <cmath>
@@ -43,6 +45,10 @@ bool TurnBattleEngine::InitializeEquipment(BattleActorState& actor, const Equipm
                 source.per_round_limit(), source.battle_limit(), source.active_rounds(), source.health_threshold_bps())) return false;
     }
     *actor.mutable_equipment_effects() = effects;
+    if (!supportrules::ValidEquipmentSources(effects)) {
+        actor.mutable_equipment_effects()->set_support_sources_complete(false);
+        actor.mutable_equipment_effects()->clear_support_sources();
+    }
     auto* sources = actor.mutable_equipment_effects()->mutable_artifacts();
     std::sort(sources->begin(), sources->end(), [](const auto& left, const auto& right) { return left.item_id() < right.item_id(); });
     for (const auto& source : *sources) actor.add_artifact_states()->set_item_id(source.item_id());
@@ -52,31 +58,7 @@ bool TurnBattleEngine::InitializeEquipment(BattleActorState& actor, const Equipm
 }
 
 uint32_t TurnBattleEngine::EquipmentManaCategory(const SkillTable& skill) const {
-    if (skill.battle_model() != 1) return 0;
-    for (const auto id : skill.effect()) {
-        const auto* row = dataProvider->FindBuff(id);
-        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Damage))
-            return skill.damage_type() == combatdamage::kPhysicalDamage ? 1u : 2u;
-    }
-    bool restoreMana = false;
-    for (const auto id : skill.effect()) {
-        const auto* row = dataProvider->FindBuff(id);
-        if (row == nullptr) continue;
-        switch (static_cast<BattleEffectOp>(row->battle_op())) {
-        case BattleEffectOp::Heal: case BattleEffectOp::ReviveMark: return 3;
-        case BattleEffectOp::Shield: return 4;
-        case BattleEffectOp::Control:
-            if (IsAilment(row->state_kind())) return row->state_kind() + 4;
-            break;
-        case BattleEffectOp::PeriodicDamage:
-            if (row->state_kind() == static_cast<uint32_t>(BattleStateKind::Poison)) return 11;
-            break;
-        case BattleEffectOp::ConsumePeriodic: case BattleEffectOp::ExtendPeriodic: return 11;
-        case BattleEffectOp::RestoreMana: restoreMana = true; break;
-        default: break;
-        }
-    }
-    return restoreMana ? 0 : 12;
+    return equipbattle::ManaCategory(skill, [this](uint32_t id) { return dataProvider->FindBuff(id); });
 }
 
 std::vector<int> TurnBattleEngine::AvailableArtifacts(const BattleActorState& actor, uint32_t effect) const {
@@ -176,11 +158,60 @@ void TurnBattleEngine::EquipmentBreakShields(BattleActorState& source, BattleAct
 
 double TurnBattleEngine::EquipmentOutgoingHeal(const BattleActorState& source) const {
     return OutgoingHealBonus(source) + ConfiguredModifier(source, BattleModifier::OutgoingHeal) +
-        source.equipment_effects().outgoing_heal_bps() / 10000.0;
+        source.equipment_effects().outgoing_heal_bps() / 10000.0 + petcultivation::HealBonus(source);
+}
+
+void TurnBattleEngine::BuildSupportEffects(const BattleActorState& actor, SupportEffectSummary& output) const {
+    supportrules::Begin(actor.equipment_effects(), output);
+    output.set_in_battle(true); output.set_round_index(roundIndex);
+    auto* healing = output.mutable_healing(); auto* shield = output.mutable_shield();
+    const double legacyHealing = OutgoingHealBonus(actor, healing);
+    const double healingModifier = ConfiguredModifier(actor, BattleModifier::OutgoingHeal, healing);
+    const double shieldModifier = ConfiguredModifier(actor, BattleModifier::OutgoingShield, shield);
+    const double healingBonus = legacyHealing + healingModifier + actor.equipment_effects().outgoing_heal_bps() / 10000.0;
+    const double shieldBonus = actor.equipment_effects().shield_capacity_bps() / 10000.0 + shieldModifier;
+    healing->set_total_bonus_bps(healingBonus * 10000);
+    shield->set_total_bonus_bps(shieldBonus * 10000);
+    bool complete = actor.equipment_effects().support_sources_complete();
+    for (const auto& buff : actor.buffs()) if (dataProvider->FindBuff(buff.buff_table_id()) == nullptr) complete = false;
+    for (const auto& [id, rank] : actor.skill_ranks()) if (rank > 0 && dataProvider->FindSkill(id) == nullptr) complete = false;
+    healing->set_complete(complete); shield->set_complete(complete);
+    for (const bool isShield : {false, true}) {
+        auto* part = isShield ? shield : healing;
+        const auto available = AvailableArtifacts(actor, isShield ? 5 : 4);
+        for (auto& source : *part->mutable_sources()) {
+            if (!source.conditional()) continue;
+            const bool usable = std::any_of(available.begin(), available.end(), [&](int index) {
+                return actor.equipment_effects().artifacts(index).item_id() == source.item_id();
+            });
+            if (!usable) source.set_reason("当前次数/回合或角色状态不满足法宝条件，不计常驻总计");
+        }
+    }
+    // 本局有效已学目录；未学的场景参考不能冒充战斗中可施放的实时预览。
+    const std::map<uint32_t, uint32_t> ranks(actor.skill_ranks().begin(), actor.skill_ranks().end());
+    for (const auto& [id, rank] : ranks) {
+        const auto* skill = dataProvider->FindSkill(id);
+        if (skill == nullptr || rank == 0 || skill->battle_model() != 1) continue;
+        const uint32_t category = EquipmentManaCategory(*skill);
+        const auto reduction = actor.equipment_effects().mana_reduction_bps().find(category);
+        const double discount = (reduction == actor.equipment_effects().mana_reduction_bps().end() ? 0 : reduction->second) -
+            ConfiguredModifier(actor, BattleModifier::ManaCost) * 10000;
+        for (const auto buffId : skill->effect()) {
+            const auto* buff = dataProvider->FindBuff(buffId); if (buff == nullptr) continue;
+            const bool isShield = buff->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield);
+            SupportSkillPreview preview;
+            if (supportrules::FillPreview(*skill, *buff, actor.level(), rank, actor.max_mana(),
+                isShield ? shieldBonus : healingBonus, discount, complete, preview)) {
+                *output.add_previews() = preview; break;
+            }
+        }
+    }
 }
 
 double TurnBattleEngine::EquipmentShield(BattleActorState& source, BattleActorState& target, double base,
                                          const EffectContext& context, std::vector<int>& contributions) const {
+    if (source.actor_type() == BATTLE_ACTOR_TYPE_PET)
+        return supportrules::ApplyBonus(base, petcultivation::ShieldBonus(source) + ConfiguredModifier(source, BattleModifier::OutgoingShield));
     if (source.actor_type() != BATTLE_ACTOR_TYPE_PLAYER) return base;
     double bonus = source.equipment_effects().shield_capacity_bps() / 10000.0 +
         ConfiguredModifier(source, BattleModifier::OutgoingShield);
@@ -192,7 +223,7 @@ double TurnBattleEngine::EquipmentShield(BattleActorState& source, BattleActorSt
             bonus += bps / 10000.0;
         }
     }
-    return base * std::max(0.0, 1 + bonus);
+    return supportrules::ApplyBonus(base, bonus);
 }
 void TurnBattleEngine::CommitEquipmentShield(BattleActorState& source, uint64_t targetId,
                                              const std::vector<int>& contributions, TurnResultS2C& result) {
@@ -215,8 +246,8 @@ bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActo
              candidate->battle_op() == static_cast<uint32_t>(BattleEffectOp::PeriodicDamage))) { primaryBuff = id; break; }
     }
     const bool primary = normal && context.primaryTargetId == target.actor_id() && primaryBuff == row.id();
-    double hit = Value(caster.equipment_effects().ailment_hit_bps(), kind);
-    double resist = Value(target.equipment_effects().ailment_resist_bps(), kind);
+    double hit = Value(caster.equipment_effects().ailment_hit_bps(), kind) + petcultivation::HitBps(caster, kind);
+    double resist = Value(target.equipment_effects().ailment_resist_bps(), kind) + petcultivation::ResistBps(target, kind);
     const auto& combat = target.combat();
     switch (static_cast<BattleStateKind>(kind)) {
     case BattleStateKind::Poison: resist += 100.0 * combat.resist_poison(); break;

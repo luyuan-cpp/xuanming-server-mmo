@@ -2,6 +2,9 @@
  "data": [
   {
    "desc": "宝宝系统全局规则(单行)",
+   "entry_config_version": 1,
+   "entry_max_directions": 0,
+   "entry_total_points": 20,
    "id": 1,
    "max_pets": 22,
    "name_max_len": 8,

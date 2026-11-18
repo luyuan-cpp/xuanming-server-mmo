@@ -261,3 +261,72 @@ func (scenePetClientPlayerRpc) decodeBuyPet(reply *base.MessageContent, err erro
 	}
 	return resp, nil
 }
+
+// GetPetEntries 异步调用 ScenePetClientPlayer.GetPetEntries(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) GetPetEntries(c *pkg.GameClient, req *scene.GetPetEntriesRequest, timeout time.Duration, done func(*scene.GetPetEntriesResponse, error)) {
+	c.Call(game.ScenePetClientPlayerGetPetEntriesMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetPetEntries(reply, err))
+	})
+}
+
+// GetPetEntriesSync 同步调用 ScenePetClientPlayer.GetPetEntries(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) GetPetEntriesSync(ctx context.Context, c *pkg.GameClient, req *scene.GetPetEntriesRequest, timeout time.Duration) (*scene.GetPetEntriesResponse, error) {
+	return r.decodeGetPetEntries(c.CallSync(ctx, game.ScenePetClientPlayerGetPetEntriesMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeGetPetEntries(reply *base.MessageContent, err error) (*scene.GetPetEntriesResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetPetEntriesResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.GetPetEntries reply: %w", err)
+	}
+	return resp, nil
+}
+
+// PreviewPetEntries 异步调用 ScenePetClientPlayer.PreviewPetEntries(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) PreviewPetEntries(c *pkg.GameClient, req *scene.PreviewPetEntriesRequest, timeout time.Duration, done func(*scene.PreviewPetEntriesResponse, error)) {
+	c.Call(game.ScenePetClientPlayerPreviewPetEntriesMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodePreviewPetEntries(reply, err))
+	})
+}
+
+// PreviewPetEntriesSync 同步调用 ScenePetClientPlayer.PreviewPetEntries(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) PreviewPetEntriesSync(ctx context.Context, c *pkg.GameClient, req *scene.PreviewPetEntriesRequest, timeout time.Duration) (*scene.PreviewPetEntriesResponse, error) {
+	return r.decodePreviewPetEntries(c.CallSync(ctx, game.ScenePetClientPlayerPreviewPetEntriesMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodePreviewPetEntries(reply *base.MessageContent, err error) (*scene.PreviewPetEntriesResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.PreviewPetEntriesResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.PreviewPetEntries reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SavePetEntries 异步调用 ScenePetClientPlayer.SavePetEntries(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) SavePetEntries(c *pkg.GameClient, req *scene.SavePetEntriesRequest, timeout time.Duration, done func(*scene.SavePetEntriesResponse, error)) {
+	c.Call(game.ScenePetClientPlayerSavePetEntriesMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSavePetEntries(reply, err))
+	})
+}
+
+// SavePetEntriesSync 同步调用 ScenePetClientPlayer.SavePetEntries(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) SavePetEntriesSync(ctx context.Context, c *pkg.GameClient, req *scene.SavePetEntriesRequest, timeout time.Duration) (*scene.SavePetEntriesResponse, error) {
+	return r.decodeSavePetEntries(c.CallSync(ctx, game.ScenePetClientPlayerSavePetEntriesMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeSavePetEntries(reply *base.MessageContent, err error) (*scene.SavePetEntriesResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SavePetEntriesResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.SavePetEntries reply: %w", err)
+	}
+	return resp, nil
+}

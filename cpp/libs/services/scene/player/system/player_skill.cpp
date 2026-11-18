@@ -1,4 +1,5 @@
 #include "player_skill.h"
+#include "player_support_effects.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -192,11 +193,12 @@ namespace
 		for (const auto buffId : row.effect())
 		{
 			const auto *buffRow = BuffTableManager::Instance().FindByIdSilent(buffId).first;
-			if (buffRow == nullptr || buffRow->infinite_duration() != 0 || buffRow->duration() <= 0)
+			if (buffRow == nullptr || buffRow->infinite_duration() != 0)
 			{
 				continue;
 			}
-			return turnbattle::RoundsFromSeconds(buffRow->duration());
+			if (buffRow->battle_op() != 0 && buffRow->duration_rounds() > 0) return buffRow->duration_rounds();
+			if (buffRow->duration() > 0) return turnbattle::RoundsFromSeconds(buffRow->duration());
 		}
 		return 0;
 	}
@@ -528,9 +530,15 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 			  [](const SkillTable *lhs, const SkillTable *rhs) { return lhs->id() < rhs->id(); });
 
 	const uint32_t busyTip = CheckSkillWritable(player);
+	SupportEffectSummary support;
+	PlayerSupportEffectSystem::Build(player, support);
 	for (const auto *row : rows)
 	{
-		FillCatalogEntry(*row, StoredRank(list, row->id()), level, balance, busyTip, false, *response.add_catalog());
+		auto* entry = response.add_catalog();
+		FillCatalogEntry(*row, StoredRank(list, row->id()), level, balance, busyTip, false, *entry);
+		for (const auto& preview : support.previews()) if (preview.skill_table_id() == row->id()) {
+			*entry->mutable_support_preview() = preview; break;
+		}
 	}
 	return kSuccess;
 }
@@ -673,8 +681,9 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 	if (IsPassiveSkill(*row))
 	{
 		PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSkillChanged);
-		PlayerAttributeSystem::PushPanel(player);
 	}
+	// 主动技能的重数也改变辅助基础预览；同一次修习同步刷新属性来源，避免常驻面板持有旧预览。
+	PlayerAttributeSystem::PushPanel(player);
 	finish(0);
 }
 

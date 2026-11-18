@@ -70,6 +70,7 @@ include_directories(
 )
 
 set(SOURCE_FILES
+    player/system/player_pet_entries.cpp
     actor/action_state/system/actor_action_state.cpp
     actor/attribute/system/actor_attribute_calculator.cpp
     actor/attribute/system/actor_state_attribute_sync.cpp
@@ -120,6 +121,7 @@ set(SOURCE_FILES
     player/system/afk_hosting.cpp
     player/system/player_landing.cpp
     player/system/player_skill.cpp
+    player/system/player_support_effects.cpp
     player/system/player_attribute.cpp
     player/system/player_pet.cpp
     player/system/player_equip.cpp

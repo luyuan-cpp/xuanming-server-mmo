@@ -11,6 +11,9 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_skill.h"
+#include "player/system/player_support_effects.h"
+#include "modules/bag/comp/player_bags_comp.h"
+#include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "player/system/player_pet.h"
 #include "player/system/attribute_allocation_rules.h"
 #include "proto/common/component/player_pet_comp.pb.h"
@@ -29,6 +32,7 @@
 #include "proto/scene/player_skill.pb.h"
 #include "services/battle/system/class_skill_rules.h"
 #include "table/code/skill_table.h"
+#include "table/code/buff_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
 #include <thread_context/ecs_context.h>
@@ -742,4 +746,41 @@ TEST_F(PlayerSkillBookTest, MissingClassComponentLeavesNoUsableSkills) {
     EXPECT_TRUE(snapshot.skill_ranks().empty());
     EXPECT_EQ(listBefore, tlsEcs.actorRegistry.get<PlayerSkillListComp>(player).SerializeAsString());
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerUint32Comp>(player)) << "读路径不补建持久组件";
+}
+
+// 使用当前正式69项目录运行本组；旧职业目录回归使用它自己的隔离表。
+TEST_F(PlayerSkillBookTest, SupportPreviewUsesAuthoritativeLevelCurvePassiveAndModernDuration) {
+    const auto* healing = Row(10010); const auto* shield = Row(10040);
+    ASSERT_NE(nullptr, healing); ASSERT_NE(nullptr, shield);
+    SkillCatalogEntry view; PlayerSkillSystem::FillCatalogEntry(*shield, 1, 60, 10000, 0, false, view);
+    EXPECT_EQ(2, view.duration_rounds());
+    const auto player = NewPlayer(1, 60, 10000);
+    tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
+    tlsEcs.actorRegistry.emplace<DerivedAttributesComp>(player).set_max_mana(2000);
+    Own(player, 10010, 1); Own(player, 12005, 10);
+    SupportEffectSummary summary; PlayerSupportEffectSystem::Build(player, summary);
+    ASSERT_TRUE(summary.healing().complete()); ASSERT_TRUE(summary.shield().complete());
+    EXPECT_DOUBLE_EQ(1500, summary.healing().total_bonus_bps());
+    EXPECT_DOUBLE_EQ(0, summary.shield().total_bonus_bps());
+    int healed = 0, shielded = 0;
+    for (const auto& preview : summary.previews()) {
+        if (preview.skill_table_id() == 10010) {
+            ++healed; EXPECT_TRUE(preview.learned()); EXPECT_DOUBLE_EQ(1200, preview.base_value());
+            EXPECT_EQ(1380, preview.reference_value()); EXPECT_EQ(120, preview.mana_cost());
+        } else if (preview.skill_table_id() == 10040) {
+            ++shielded; EXPECT_FALSE(preview.learned()); EXPECT_EQ(1, preview.reference_rank());
+            EXPECT_DOUBLE_EQ(960, preview.base_value()); EXPECT_EQ(960, preview.reference_value());
+        }
+    }
+    EXPECT_EQ(1, healed); EXPECT_EQ(1, shielded);
+    ListSkillsResponse book; ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, book));
+    for (const auto& row : book.catalog()) if (row.skill_table_id() == 10010) {
+        ASSERT_TRUE(row.has_support_preview()); EXPECT_EQ(1380, row.support_preview().reference_value());
+    }
+    Own(player, 999999999, 1);
+    PlayerSupportEffectSystem::Build(player, summary);
+    EXPECT_FALSE(summary.healing().complete()) << "未知已学技能不可冒充完整零贡献";
+    tlsEcs.actorRegistry.remove<PlayerBagsComp>(player);
+    PlayerSupportEffectSystem::Build(player, summary);
+    EXPECT_FALSE(summary.healing().complete());
 }

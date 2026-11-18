@@ -28,6 +28,13 @@ message PetInstance {
   uint64 created_at = 9;      // 获得时间(Unix 秒)
   repeated uint32 skill_table_ids = 10;  // 宝宝技能(SkillTable id),核心线来自 PetTable
   map<uint32, uint32> skill_ranks = 11; // 公共技能原型的已学等级，由 PetSystem 唯一写入。
+  map<uint32, uint32> entry_allocated = 12; // 独立条目池；未知键保留并占预算。
+  uint64 entry_state_version = 13;
+  string entry_last_request_id = 14;
+  uint64 entry_last_base_version = 15;
+  uint32 entry_last_config_version = 16;
+  map<uint32, uint32> entry_last_target = 17;
+  uint32 cultivation_tier = 18; // 独立五阶身份，非 quality/acquisition_tier。
 }
 
 // 玩家宝宝数据(持久化到 player_database.pet_component)

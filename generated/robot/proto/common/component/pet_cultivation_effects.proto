@@ -1,0 +1,14 @@
+syntax = "proto3";
+option go_package = "robot/proto/common/component";
+// 已保存的宝宝独立条目贡献。万分比100=1%；分型1封主动2封法3封物4混乱5睡6冰7毒。
+message PetCultivationEffects {
+  uint32 physical_damage_bps = 1;
+  uint32 magic_damage_bps = 2;
+  uint32 outgoing_heal_bps = 3;
+  uint32 shield_capacity_bps = 4;
+  map<uint32, uint32> ailment_hit_bps = 5;
+  map<uint32, uint32> ailment_resist_bps = 6;
+  uint32 poison_damage_bps = 7;
+  uint32 retreat_hit_bps = 8;
+  uint32 retreat_resist_bps = 9;
+}

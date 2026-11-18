@@ -1,0 +1,26 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "PetEntryTableOuterClass";
+option java_multiple_files = true;
+
+
+message PetEntryTable {
+	uint32 id = 1;
+	string name = 2;
+	string desc = 3;
+	uint32 category = 4;
+	uint32 channel = 5;
+	uint32 state_kind = 6;
+	uint32 cap = 7;
+	uint32 per_point_bps = 8;
+	uint32 sort = 9;
+	string icon = 10;
+}
+
+message PetEntryTableData {
+	repeated PetEntryTable data = 1;
+}

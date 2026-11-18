@@ -39,6 +39,7 @@
 #include "proto/db/proto_option.pb.h"
 #include "proto/common/base/tip.pb.h"
 #include "proto/common/base/empty.pb.h"
+#include "proto/common/component/pet_cultivation_effects.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -126,6 +127,22 @@ extern const ::google::protobuf::internal::ClassDataFull BuyPetResponse_class_da
 #else
 extern const BuyPetResponseGlobalsTypeInternal BuyPetResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPetEntriesRequest;
+struct GetPetEntriesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPetEntriesRequestGlobalsTypeInternal GetPetEntriesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPetEntriesRequest_class_data_;
+#else
+extern const GetPetEntriesRequestGlobalsTypeInternal GetPetEntriesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetPetEntriesResponse;
+struct GetPetEntriesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetPetEntriesResponseGlobalsTypeInternal GetPetEntriesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetPetEntriesResponse_class_data_;
+#else
+extern const GetPetEntriesResponseGlobalsTypeInternal GetPetEntriesResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetPetListRequest;
 struct GetPetListRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -190,6 +207,22 @@ extern const ::google::protobuf::internal::ClassDataFull PetDimensionInfo_class_
 #else
 extern const PetDimensionInfoGlobalsTypeInternal PetDimensionInfo_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PetEntriesInfo;
+struct PetEntriesInfoGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PetEntriesInfoGlobalsTypeInternal PetEntriesInfo_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PetEntriesInfo_class_data_;
+#else
+extern const PetEntriesInfoGlobalsTypeInternal PetEntriesInfo_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PetEntryInfo;
+struct PetEntryInfoGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PetEntryInfoGlobalsTypeInternal PetEntryInfo_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PetEntryInfo_class_data_;
+#else
+extern const PetEntryInfoGlobalsTypeInternal PetEntryInfo_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PetInfo;
 struct PetInfoGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -221,6 +254,30 @@ extern PetShopOfferGlobalsTypeInternal PetShopOffer_globals_;
 extern const ::google::protobuf::internal::ClassDataFull PetShopOffer_class_data_;
 #else
 extern const PetShopOfferGlobalsTypeInternal PetShopOffer_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PreviewPetEntriesRequest;
+struct PreviewPetEntriesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PreviewPetEntriesRequestGlobalsTypeInternal PreviewPetEntriesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PreviewPetEntriesRequest_class_data_;
+#else
+extern const PreviewPetEntriesRequestGlobalsTypeInternal PreviewPetEntriesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PreviewPetEntriesRequest_TargetEntry_DoNotUse;
+struct PreviewPetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PreviewPetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal PreviewPetEntriesRequest_TargetEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PreviewPetEntriesRequest_TargetEntry_DoNotUse_class_data_;
+#else
+extern const PreviewPetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal PreviewPetEntriesRequest_TargetEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PreviewPetEntriesResponse;
+struct PreviewPetEntriesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PreviewPetEntriesResponseGlobalsTypeInternal PreviewPetEntriesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PreviewPetEntriesResponse_class_data_;
+#else
+extern const PreviewPetEntriesResponseGlobalsTypeInternal PreviewPetEntriesResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class RecallPetRequest;
 struct RecallPetRequestGlobalsTypeInternal;
@@ -269,6 +326,30 @@ extern ResetPetPointsResponseGlobalsTypeInternal ResetPetPointsResponse_globals_
 extern const ::google::protobuf::internal::ClassDataFull ResetPetPointsResponse_class_data_;
 #else
 extern const ResetPetPointsResponseGlobalsTypeInternal ResetPetPointsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SavePetEntriesRequest;
+struct SavePetEntriesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SavePetEntriesRequestGlobalsTypeInternal SavePetEntriesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SavePetEntriesRequest_class_data_;
+#else
+extern const SavePetEntriesRequestGlobalsTypeInternal SavePetEntriesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SavePetEntriesRequest_TargetEntry_DoNotUse;
+struct SavePetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SavePetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal SavePetEntriesRequest_TargetEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SavePetEntriesRequest_TargetEntry_DoNotUse_class_data_;
+#else
+extern const SavePetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal SavePetEntriesRequest_TargetEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SavePetEntriesResponse;
+struct SavePetEntriesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SavePetEntriesResponseGlobalsTypeInternal SavePetEntriesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SavePetEntriesResponse_class_data_;
+#else
+extern const SavePetEntriesResponseGlobalsTypeInternal SavePetEntriesResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SummonPetRequest;
 struct SummonPetRequestGlobalsTypeInternal;
@@ -495,6 +576,55 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SummonPetRequest final : public ::g
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePetEntriesRequest_TargetEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  SavePetEntriesRequest_TargetEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr SavePetEntriesRequest_TargetEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit SavePetEntriesRequest_TargetEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &SavePetEntriesRequest_TargetEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend SavePetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
 };
 // -------------------------------------------------------------------
 
@@ -1055,6 +1185,55 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RecallPetRequest final : public ::g
 };
 // -------------------------------------------------------------------
 
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PreviewPetEntriesRequest_TargetEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  PreviewPetEntriesRequest_TargetEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr PreviewPetEntriesRequest_TargetEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit PreviewPetEntriesRequest_TargetEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &PreviewPetEntriesRequest_TargetEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend PreviewPetEntriesRequest_TargetEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetShopOffer final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:PetShopOffer) */ {
  public:
@@ -1319,6 +1498,354 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetShopOffer final : public ::googl
     ::uint32_t model_id_;
     ::uint64_t price_gold_;
     ::uint32_t unlock_level_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetEntryInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PetEntryInfo) */ {
+ public:
+  inline PetEntryInfo() : PetEntryInfo(nullptr) {}
+  ~PetEntryInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PetEntryInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PetEntryInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PetEntryInfo(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PetEntryInfo(const PetEntryInfo& from) : PetEntryInfo(nullptr, from) {}
+  inline PetEntryInfo(PetEntryInfo&& from) noexcept : PetEntryInfo(nullptr, ::std::move(from)) {}
+  inline PetEntryInfo& operator=(const PetEntryInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PetEntryInfo& operator=(PetEntryInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PetEntryInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PetEntryInfo>(&PetEntryInfo_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(PetEntryInfo& a, PetEntryInfo& b) { a.Swap(&b); }
+  inline void Swap(PetEntryInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PetEntryInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PetEntryInfo* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PetEntryInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PetEntryInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PetEntryInfo& from) { PetEntryInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PetEntryInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PetEntryInfo"; }
+
+  explicit PetEntryInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PetEntryInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PetEntryInfo& from);
+  PetEntryInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PetEntryInfo&& from) noexcept
+      : PetEntryInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 2,
+    kDescFieldNumber = 3,
+    kIconFieldNumber = 12,
+    kIdFieldNumber = 1,
+    kCategoryFieldNumber = 4,
+    kChannelFieldNumber = 5,
+    kStateKindFieldNumber = 6,
+    kCapFieldNumber = 7,
+    kPerPointBpsFieldNumber = 8,
+    kAllocatedFieldNumber = 9,
+    kEffectiveBpsFieldNumber = 10,
+    kSortFieldNumber = 11,
+  };
+  // string name = 2;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string desc = 3;
+  void clear_desc() ;
+  [[nodiscard]] const ::std::string& desc() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_desc(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_desc();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_desc();
+  void set_allocated_desc(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_desc() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_desc(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_desc();
+
+  public:
+  // string icon = 12;
+  void clear_icon() ;
+  [[nodiscard]] const ::std::string& icon() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_icon(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_icon();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_icon();
+  void set_allocated_icon(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_icon() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_icon(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_icon();
+
+  public:
+  // uint32 id = 1;
+  void clear_id() ;
+  [[nodiscard]] ::uint32_t id() const;
+  void set_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_id() const;
+  void _internal_set_id(::uint32_t value);
+
+  public:
+  // uint32 category = 4;
+  void clear_category() ;
+  [[nodiscard]] ::uint32_t category() const;
+  void set_category(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_category() const;
+  void _internal_set_category(::uint32_t value);
+
+  public:
+  // uint32 channel = 5;
+  void clear_channel() ;
+  [[nodiscard]] ::uint32_t channel() const;
+  void set_channel(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_channel() const;
+  void _internal_set_channel(::uint32_t value);
+
+  public:
+  // uint32 state_kind = 6;
+  void clear_state_kind() ;
+  [[nodiscard]] ::uint32_t state_kind() const;
+  void set_state_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state_kind() const;
+  void _internal_set_state_kind(::uint32_t value);
+
+  public:
+  // uint32 cap = 7;
+  void clear_cap() ;
+  [[nodiscard]] ::uint32_t cap() const;
+  void set_cap(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cap() const;
+  void _internal_set_cap(::uint32_t value);
+
+  public:
+  // uint32 per_point_bps = 8;
+  void clear_per_point_bps() ;
+  [[nodiscard]] ::uint32_t per_point_bps() const;
+  void set_per_point_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_per_point_bps() const;
+  void _internal_set_per_point_bps(::uint32_t value);
+
+  public:
+  // uint32 allocated = 9;
+  void clear_allocated() ;
+  [[nodiscard]] ::uint32_t allocated() const;
+  void set_allocated(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_allocated() const;
+  void _internal_set_allocated(::uint32_t value);
+
+  public:
+  // uint32 effective_bps = 10;
+  void clear_effective_bps() ;
+  [[nodiscard]] ::uint32_t effective_bps() const;
+  void set_effective_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_effective_bps() const;
+  void _internal_set_effective_bps(::uint32_t value);
+
+  public:
+  // uint32 sort = 11;
+  void clear_sort() ;
+  [[nodiscard]] ::uint32_t sort() const;
+  void set_sort(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_sort() const;
+  void _internal_set_sort(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:PetEntryInfo)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          0, 41,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PetEntryInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr desc_;
+    ::google::protobuf::internal::ArenaStringPtr icon_;
+    ::uint32_t id_;
+    ::uint32_t category_;
+    ::uint32_t channel_;
+    ::uint32_t state_kind_;
+    ::uint32_t cap_;
+    ::uint32_t per_point_bps_;
+    ::uint32_t allocated_;
+    ::uint32_t effective_bps_;
+    ::uint32_t sort_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2395,6 +2922,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPetListRequest final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPetEntriesRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GetPetEntriesRequest) */ {
+ public:
+  inline GetPetEntriesRequest() : GetPetEntriesRequest(nullptr) {}
+  ~GetPetEntriesRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPetEntriesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPetEntriesRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPetEntriesRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPetEntriesRequest(const GetPetEntriesRequest& from) : GetPetEntriesRequest(nullptr, from) {}
+  inline GetPetEntriesRequest(GetPetEntriesRequest&& from) noexcept : GetPetEntriesRequest(nullptr, ::std::move(from)) {}
+  inline GetPetEntriesRequest& operator=(const GetPetEntriesRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPetEntriesRequest& operator=(GetPetEntriesRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPetEntriesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPetEntriesRequest>(&GetPetEntriesRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 30;
+  friend void swap(GetPetEntriesRequest& a, GetPetEntriesRequest& b) { a.Swap(&b); }
+  inline void Swap(GetPetEntriesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPetEntriesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPetEntriesRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPetEntriesRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPetEntriesRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPetEntriesRequest& from) { GetPetEntriesRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPetEntriesRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetPetEntriesRequest"; }
+
+  explicit GetPetEntriesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPetEntriesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPetEntriesRequest& from);
+  GetPetEntriesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPetEntriesRequest&& from) noexcept
+      : GetPetEntriesRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPetIdFieldNumber = 1,
+  };
+  // uint64 pet_id = 1;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:GetPetEntriesRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPetEntriesRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t pet_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyPetRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:BuyPetRequest) */ {
  public:
@@ -2919,31 +3647,31 @@ class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocatePetPointsRequest_AllocatedEn
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:PetInfo) */ {
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePetEntriesRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SavePetEntriesRequest) */ {
  public:
-  inline PetInfo() : PetInfo(nullptr) {}
-  ~PetInfo() PROTOBUF_FINAL;
+  inline SavePetEntriesRequest() : SavePetEntriesRequest(nullptr) {}
+  ~SavePetEntriesRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(PetInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(SavePetEntriesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(PetInfo));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SavePetEntriesRequest));
   }
 #endif
 
   template <typename = void>
-  explicit constexpr PetInfo(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr SavePetEntriesRequest(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
 
-  inline PetInfo(const PetInfo& from) : PetInfo(nullptr, from) {}
-  inline PetInfo(PetInfo&& from) noexcept : PetInfo(nullptr, ::std::move(from)) {}
-  inline PetInfo& operator=(const PetInfo& from) {
+  inline SavePetEntriesRequest(const SavePetEntriesRequest& from) : SavePetEntriesRequest(nullptr, from) {}
+  inline SavePetEntriesRequest(SavePetEntriesRequest&& from) noexcept : SavePetEntriesRequest(nullptr, ::std::move(from)) {}
+  inline SavePetEntriesRequest& operator=(const SavePetEntriesRequest& from) {
     CopyFrom(from);
     return *this;
   }
-  inline PetInfo& operator=(PetInfo&& from) noexcept {
+  inline SavePetEntriesRequest& operator=(SavePetEntriesRequest&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -2972,12 +3700,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
   [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  [[nodiscard]] static const PetInfo& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PetInfo>(&PetInfo_globals_);
+  [[nodiscard]] static const SavePetEntriesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SavePetEntriesRequest>(&SavePetEntriesRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
-  friend void swap(PetInfo& a, PetInfo& b) { a.Swap(&b); }
-  inline void Swap(PetInfo* PROTOBUF_NONNULL other) {
+  static constexpr int kIndexInFileMessages = 36;
+  friend void swap(SavePetEntriesRequest& a, SavePetEntriesRequest& b) { a.Swap(&b); }
+  inline void Swap(SavePetEntriesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -2985,7 +3713,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(PetInfo* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(SavePetEntriesRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -2993,14 +3721,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
 
   // implements Message ----------------------------------------------
 
-  [[nodiscard]] PetInfo* PROTOBUF_NONNULL
+  [[nodiscard]] SavePetEntriesRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<PetInfo>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<SavePetEntriesRequest>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const PetInfo& from);
+  void CopyFrom(const SavePetEntriesRequest& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const PetInfo& from) { PetInfo::MergeImpl(*this, from); }
+  void MergeFrom(const SavePetEntriesRequest& from) { SavePetEntriesRequest::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -3038,17 +3766,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(PetInfo* PROTOBUF_NONNULL other);
+  void InternalSwap(SavePetEntriesRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "PetInfo"; }
+  static ::absl::string_view FullMessageName() { return "SavePetEntriesRequest"; }
 
-  explicit PetInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  PetInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PetInfo& from);
-  PetInfo(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PetInfo&& from) noexcept
-      : PetInfo(arena) {
+  explicit SavePetEntriesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SavePetEntriesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SavePetEntriesRequest& from);
+  SavePetEntriesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SavePetEntriesRequest&& from) noexcept
+      : SavePetEntriesRequest(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -3067,108 +3795,25 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
 
   // accessors -------------------------------------------------------
   enum : int {
-    kDimensionsFieldNumber = 13,
-    kSkillTableIdsFieldNumber = 15,
-    kNameFieldNumber = 3,
-    kDescFieldNumber = 16,
-    kDerivedFieldNumber = 14,
+    kRequestIdFieldNumber = 5,
     kPetIdFieldNumber = 1,
-    kPetTableIdFieldNumber = 2,
-    kLevelFieldNumber = 4,
-    kQualityFieldNumber = 5,
-    kModelIdFieldNumber = 6,
-    kIsActiveFieldNumber = 7,
-    kTotalPointsFieldNumber = 8,
-    kRemainingPointsFieldNumber = 9,
-    kPoolIdFieldNumber = 10,
-    kResetCostGoldFieldNumber = 11,
-    kGrowthFieldNumber = 12,
+    kStateVersionFieldNumber = 2,
+    kConfigVersionFieldNumber = 3,
+    kTargetFieldNumber = 4,
   };
-  // repeated .PetDimensionInfo dimensions = 13;
-  [[nodiscard]] int dimensions_size()
-      const;
-  private:
-  int _internal_dimensions_size() const;
-
-  public:
-  void clear_dimensions() ;
-  [[nodiscard]] const ::PetDimensionInfo& dimensions(int index) const;
-  [[nodiscard]] ::PetDimensionInfo* PROTOBUF_NONNULL mutable_dimensions(int index);
-  ::PetDimensionInfo* PROTOBUF_NONNULL add_dimensions();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>&
-  dimensions() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>* PROTOBUF_NONNULL
-  mutable_dimensions();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>& _internal_dimensions() const;
-  ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>* PROTOBUF_NONNULL _internal_mutable_dimensions();
-
-  public:
-  // repeated uint32 skill_table_ids = 15;
-  [[nodiscard]] int skill_table_ids_size()
-      const;
-  private:
-  int _internal_skill_table_ids_size() const;
-
-  public:
-  void clear_skill_table_ids() ;
-  [[nodiscard]] ::uint32_t skill_table_ids(int index) const;
-  void set_skill_table_ids(int index, ::uint32_t value);
-  void add_skill_table_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& skill_table_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_skill_table_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_skill_table_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_table_ids();
-
-  public:
-  // string name = 3;
-  void clear_name() ;
-  [[nodiscard]] const ::std::string& name() const;
+  // string request_id = 5;
+  void clear_request_id() ;
+  [[nodiscard]] const ::std::string& request_id() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
-  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+  void set_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_request_id();
+  void set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value);
 
   private:
-  const ::std::string& _internal_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
-
-  public:
-  // string desc = 16;
-  void clear_desc() ;
-  [[nodiscard]] const ::std::string& desc() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_desc(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_desc();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_desc();
-  void set_allocated_desc(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_desc() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_desc(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_desc();
-
-  public:
-  // .PetDerivedInfo derived = 14;
-  [[nodiscard]] bool has_derived()
-      const;
-  void clear_derived() ;
-  [[nodiscard]] const ::PetDerivedInfo& derived() const;
-  [[nodiscard]] ::PetDerivedInfo* PROTOBUF_NULLABLE release_derived();
-  ::PetDerivedInfo* PROTOBUF_NONNULL mutable_derived();
-  void set_allocated_derived(::PetDerivedInfo* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_derived(::PetDerivedInfo* PROTOBUF_NULLABLE value);
-  ::PetDerivedInfo* PROTOBUF_NULLABLE unsafe_arena_release_derived();
-
-  private:
-  const ::PetDerivedInfo& _internal_derived() const;
-  ::PetDerivedInfo* PROTOBUF_NONNULL _internal_mutable_derived();
+  const ::std::string& _internal_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
 
   public:
   // uint64 pet_id = 1;
@@ -3181,112 +3826,48 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
   void _internal_set_pet_id(::uint64_t value);
 
   public:
-  // uint32 pet_table_id = 2;
-  void clear_pet_table_id() ;
-  [[nodiscard]] ::uint32_t pet_table_id() const;
-  void set_pet_table_id(::uint32_t value);
+  // uint64 state_version = 2;
+  void clear_state_version() ;
+  [[nodiscard]] ::uint64_t state_version() const;
+  void set_state_version(::uint64_t value);
 
   private:
-  ::uint32_t _internal_pet_table_id() const;
-  void _internal_set_pet_table_id(::uint32_t value);
+  ::uint64_t _internal_state_version() const;
+  void _internal_set_state_version(::uint64_t value);
 
   public:
-  // uint32 level = 4;
-  void clear_level() ;
-  [[nodiscard]] ::uint32_t level() const;
-  void set_level(::uint32_t value);
+  // uint32 config_version = 3;
+  void clear_config_version() ;
+  [[nodiscard]] ::uint32_t config_version() const;
+  void set_config_version(::uint32_t value);
 
   private:
-  ::uint32_t _internal_level() const;
-  void _internal_set_level(::uint32_t value);
+  ::uint32_t _internal_config_version() const;
+  void _internal_set_config_version(::uint32_t value);
 
   public:
-  // uint32 quality = 5;
-  void clear_quality() ;
-  [[nodiscard]] ::uint32_t quality() const;
-  void set_quality(::uint32_t value);
+  // map<uint32, uint32> target = 4;
+  [[nodiscard]] int target_size()
+      const;
+  private:
+  int _internal_target_size() const;
+
+  public:
+  void clear_target() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& target() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_target();
 
   private:
-  ::uint32_t _internal_quality() const;
-  void _internal_set_quality(::uint32_t value);
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_target() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_target();
 
   public:
-  // uint32 model_id = 6;
-  void clear_model_id() ;
-  [[nodiscard]] ::uint32_t model_id() const;
-  void set_model_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_model_id() const;
-  void _internal_set_model_id(::uint32_t value);
-
-  public:
-  // bool is_active = 7;
-  void clear_is_active() ;
-  [[nodiscard]] bool is_active() const;
-  void set_is_active(bool value);
-
-  private:
-  bool _internal_is_active() const;
-  void _internal_set_is_active(bool value);
-
-  public:
-  // uint32 total_points = 8;
-  void clear_total_points() ;
-  [[nodiscard]] ::uint32_t total_points() const;
-  void set_total_points(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_total_points() const;
-  void _internal_set_total_points(::uint32_t value);
-
-  public:
-  // uint32 remaining_points = 9;
-  void clear_remaining_points() ;
-  [[nodiscard]] ::uint32_t remaining_points() const;
-  void set_remaining_points(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_remaining_points() const;
-  void _internal_set_remaining_points(::uint32_t value);
-
-  public:
-  // uint32 pool_id = 10;
-  void clear_pool_id() ;
-  [[nodiscard]] ::uint32_t pool_id() const;
-  void set_pool_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_pool_id() const;
-  void _internal_set_pool_id(::uint32_t value);
-
-  public:
-  // uint64 reset_cost_gold = 11;
-  void clear_reset_cost_gold() ;
-  [[nodiscard]] ::uint64_t reset_cost_gold() const;
-  void set_reset_cost_gold(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_reset_cost_gold() const;
-  void _internal_set_reset_cost_gold(::uint64_t value);
-
-  public:
-  // uint32 growth = 12;
-  void clear_growth() ;
-  [[nodiscard]] ::uint32_t growth() const;
-  void set_growth(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_growth() const;
-  void _internal_set_growth(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:PetInfo)
+  // @@protoc_insertion_point(class_scope:SavePetEntriesRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
-                          2, 40,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          1, 40,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3311,26 +3892,257 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::pr
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const PetInfo& from_msg);
+        const SavePetEntriesRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::PetDimensionInfo > dimensions_;
-    ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
-    ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
-    ::google::protobuf::internal::ArenaStringPtr desc_;
-    ::PetDerivedInfo* PROTOBUF_NULLABLE derived_;
+    ::google::protobuf::internal::ArenaStringPtr request_id_;
     ::uint64_t pet_id_;
-    ::uint32_t pet_table_id_;
-    ::uint32_t level_;
-    ::uint32_t quality_;
-    ::uint32_t model_id_;
-    bool is_active_;
-    ::uint32_t total_points_;
-    ::uint32_t remaining_points_;
-    ::uint32_t pool_id_;
-    ::uint64_t reset_cost_gold_;
-    ::uint32_t growth_;
+    ::uint64_t state_version_;
+    ::uint32_t config_version_;
+    ::google::protobuf::internal::MapField<SavePetEntriesRequest_TargetEntry_DoNotUse, ::uint32_t, ::uint32_t> target_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PreviewPetEntriesRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PreviewPetEntriesRequest) */ {
+ public:
+  inline PreviewPetEntriesRequest() : PreviewPetEntriesRequest(nullptr) {}
+  ~PreviewPetEntriesRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PreviewPetEntriesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PreviewPetEntriesRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PreviewPetEntriesRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PreviewPetEntriesRequest(const PreviewPetEntriesRequest& from) : PreviewPetEntriesRequest(nullptr, from) {}
+  inline PreviewPetEntriesRequest(PreviewPetEntriesRequest&& from) noexcept : PreviewPetEntriesRequest(nullptr, ::std::move(from)) {}
+  inline PreviewPetEntriesRequest& operator=(const PreviewPetEntriesRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PreviewPetEntriesRequest& operator=(PreviewPetEntriesRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PreviewPetEntriesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PreviewPetEntriesRequest>(&PreviewPetEntriesRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 33;
+  friend void swap(PreviewPetEntriesRequest& a, PreviewPetEntriesRequest& b) { a.Swap(&b); }
+  inline void Swap(PreviewPetEntriesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PreviewPetEntriesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PreviewPetEntriesRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PreviewPetEntriesRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PreviewPetEntriesRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PreviewPetEntriesRequest& from) { PreviewPetEntriesRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PreviewPetEntriesRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PreviewPetEntriesRequest"; }
+
+  explicit PreviewPetEntriesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PreviewPetEntriesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PreviewPetEntriesRequest& from);
+  PreviewPetEntriesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PreviewPetEntriesRequest&& from) noexcept
+      : PreviewPetEntriesRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPetIdFieldNumber = 1,
+    kStateVersionFieldNumber = 2,
+    kConfigVersionFieldNumber = 3,
+    kTargetFieldNumber = 4,
+  };
+  // uint64 pet_id = 1;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // uint64 state_version = 2;
+  void clear_state_version() ;
+  [[nodiscard]] ::uint64_t state_version() const;
+  void set_state_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_state_version() const;
+  void _internal_set_state_version(::uint64_t value);
+
+  public:
+  // uint32 config_version = 3;
+  void clear_config_version() ;
+  [[nodiscard]] ::uint32_t config_version() const;
+  void set_config_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_config_version() const;
+  void _internal_set_config_version(::uint32_t value);
+
+  public:
+  // map<uint32, uint32> target = 4;
+  [[nodiscard]] int target_size()
+      const;
+  private:
+  int _internal_target_size() const;
+
+  public:
+  void clear_target() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& target() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_target();
+
+  private:
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_target() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_target();
+
+  public:
+  // @@protoc_insertion_point(class_scope:PreviewPetEntriesRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PreviewPetEntriesRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t pet_id_;
+    ::uint64_t state_version_;
+    ::uint32_t config_version_;
+    ::google::protobuf::internal::MapField<PreviewPetEntriesRequest_TargetEntry_DoNotUse, ::uint32_t, ::uint32_t> target_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4041,6 +4853,1536 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocatePetPointsRequest final : pu
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t pet_id_;
     ::google::protobuf::internal::MapField<AllocatePetPointsRequest_AllocatedEntry_DoNotUse, ::uint32_t, ::uint32_t> allocated_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetEntriesInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PetEntriesInfo) */ {
+ public:
+  inline PetEntriesInfo() : PetEntriesInfo(nullptr) {}
+  ~PetEntriesInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PetEntriesInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PetEntriesInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PetEntriesInfo(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PetEntriesInfo(const PetEntriesInfo& from) : PetEntriesInfo(nullptr, from) {}
+  inline PetEntriesInfo(PetEntriesInfo&& from) noexcept : PetEntriesInfo(nullptr, ::std::move(from)) {}
+  inline PetEntriesInfo& operator=(const PetEntriesInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PetEntriesInfo& operator=(PetEntriesInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PetEntriesInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PetEntriesInfo>(&PetEntriesInfo_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 29;
+  friend void swap(PetEntriesInfo& a, PetEntriesInfo& b) { a.Swap(&b); }
+  inline void Swap(PetEntriesInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PetEntriesInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PetEntriesInfo* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PetEntriesInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PetEntriesInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PetEntriesInfo& from) { PetEntriesInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PetEntriesInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PetEntriesInfo"; }
+
+  explicit PetEntriesInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PetEntriesInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PetEntriesInfo& from);
+  PetEntriesInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PetEntriesInfo&& from) noexcept
+      : PetEntriesInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kEntriesFieldNumber = 7,
+    kLastRequestIdFieldNumber = 11,
+    kEffectsFieldNumber = 8,
+    kPetIdFieldNumber = 1,
+    kStateVersionFieldNumber = 2,
+    kConfigVersionFieldNumber = 3,
+    kTotalPointsFieldNumber = 4,
+    kRemainingPointsFieldNumber = 5,
+    kMaxDirectionsFieldNumber = 6,
+    kUnknownUsedPointsFieldNumber = 10,
+    kEffectiveFieldNumber = 9,
+  };
+  // repeated .PetEntryInfo entries = 7;
+  [[nodiscard]] int entries_size()
+      const;
+  private:
+  int _internal_entries_size() const;
+
+  public:
+  void clear_entries() ;
+  [[nodiscard]] const ::PetEntryInfo& entries(int index) const;
+  [[nodiscard]] ::PetEntryInfo* PROTOBUF_NONNULL mutable_entries(int index);
+  ::PetEntryInfo* PROTOBUF_NONNULL add_entries();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::PetEntryInfo>&
+  entries() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::PetEntryInfo>* PROTOBUF_NONNULL
+  mutable_entries();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::PetEntryInfo>& _internal_entries() const;
+  ::google::protobuf::RepeatedPtrField<::PetEntryInfo>* PROTOBUF_NONNULL _internal_mutable_entries();
+
+  public:
+  // string last_request_id = 11;
+  void clear_last_request_id() ;
+  [[nodiscard]] const ::std::string& last_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_request_id();
+  void set_allocated_last_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_request_id();
+
+  public:
+  // .PetCultivationEffects effects = 8;
+  [[nodiscard]] bool has_effects()
+      const;
+  void clear_effects() ;
+  [[nodiscard]] const ::PetCultivationEffects& effects() const;
+  [[nodiscard]] ::PetCultivationEffects* PROTOBUF_NULLABLE release_effects();
+  ::PetCultivationEffects* PROTOBUF_NONNULL mutable_effects();
+  void set_allocated_effects(::PetCultivationEffects* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_effects(::PetCultivationEffects* PROTOBUF_NULLABLE value);
+  ::PetCultivationEffects* PROTOBUF_NULLABLE unsafe_arena_release_effects();
+
+  private:
+  const ::PetCultivationEffects& _internal_effects() const;
+  ::PetCultivationEffects* PROTOBUF_NONNULL _internal_mutable_effects();
+
+  public:
+  // uint64 pet_id = 1;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // uint64 state_version = 2;
+  void clear_state_version() ;
+  [[nodiscard]] ::uint64_t state_version() const;
+  void set_state_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_state_version() const;
+  void _internal_set_state_version(::uint64_t value);
+
+  public:
+  // uint32 config_version = 3;
+  void clear_config_version() ;
+  [[nodiscard]] ::uint32_t config_version() const;
+  void set_config_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_config_version() const;
+  void _internal_set_config_version(::uint32_t value);
+
+  public:
+  // uint32 total_points = 4;
+  void clear_total_points() ;
+  [[nodiscard]] ::uint32_t total_points() const;
+  void set_total_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_points() const;
+  void _internal_set_total_points(::uint32_t value);
+
+  public:
+  // uint32 remaining_points = 5;
+  void clear_remaining_points() ;
+  [[nodiscard]] ::uint32_t remaining_points() const;
+  void set_remaining_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_remaining_points() const;
+  void _internal_set_remaining_points(::uint32_t value);
+
+  public:
+  // uint32 max_directions = 6;
+  void clear_max_directions() ;
+  [[nodiscard]] ::uint32_t max_directions() const;
+  void set_max_directions(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_directions() const;
+  void _internal_set_max_directions(::uint32_t value);
+
+  public:
+  // uint64 unknown_used_points = 10;
+  void clear_unknown_used_points() ;
+  [[nodiscard]] ::uint64_t unknown_used_points() const;
+  void set_unknown_used_points(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_unknown_used_points() const;
+  void _internal_set_unknown_used_points(::uint64_t value);
+
+  public:
+  // bool effective = 9;
+  void clear_effective() ;
+  [[nodiscard]] bool effective() const;
+  void set_effective(bool value);
+
+  private:
+  bool _internal_effective() const;
+  void _internal_set_effective(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:PetEntriesInfo)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          2, 46,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PetEntriesInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::PetEntryInfo > entries_;
+    ::google::protobuf::internal::ArenaStringPtr last_request_id_;
+    ::PetCultivationEffects* PROTOBUF_NULLABLE effects_;
+    ::uint64_t pet_id_;
+    ::uint64_t state_version_;
+    ::uint32_t config_version_;
+    ::uint32_t total_points_;
+    ::uint32_t remaining_points_;
+    ::uint32_t max_directions_;
+    ::uint64_t unknown_used_points_;
+    bool effective_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePetEntriesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SavePetEntriesResponse) */ {
+ public:
+  inline SavePetEntriesResponse() : SavePetEntriesResponse(nullptr) {}
+  ~SavePetEntriesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SavePetEntriesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SavePetEntriesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SavePetEntriesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SavePetEntriesResponse(const SavePetEntriesResponse& from) : SavePetEntriesResponse(nullptr, from) {}
+  inline SavePetEntriesResponse(SavePetEntriesResponse&& from) noexcept : SavePetEntriesResponse(nullptr, ::std::move(from)) {}
+  inline SavePetEntriesResponse& operator=(const SavePetEntriesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SavePetEntriesResponse& operator=(SavePetEntriesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SavePetEntriesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SavePetEntriesResponse>(&SavePetEntriesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 37;
+  friend void swap(SavePetEntriesResponse& a, SavePetEntriesResponse& b) { a.Swap(&b); }
+  inline void Swap(SavePetEntriesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SavePetEntriesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SavePetEntriesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SavePetEntriesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SavePetEntriesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SavePetEntriesResponse& from) { SavePetEntriesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SavePetEntriesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SavePetEntriesResponse"; }
+
+  explicit SavePetEntriesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SavePetEntriesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SavePetEntriesResponse& from);
+  SavePetEntriesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SavePetEntriesResponse&& from) noexcept
+      : SavePetEntriesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRequestIdFieldNumber = 3,
+    kErrorMessageFieldNumber = 1,
+    kEntriesFieldNumber = 2,
+    kReplayedFieldNumber = 4,
+  };
+  // string request_id = 3;
+  void clear_request_id() ;
+  [[nodiscard]] const ::std::string& request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_request_id();
+  void set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .PetEntriesInfo entries = 2;
+  [[nodiscard]] bool has_entries()
+      const;
+  void clear_entries() ;
+  [[nodiscard]] const ::PetEntriesInfo& entries() const;
+  [[nodiscard]] ::PetEntriesInfo* PROTOBUF_NULLABLE release_entries();
+  ::PetEntriesInfo* PROTOBUF_NONNULL mutable_entries();
+  void set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  ::PetEntriesInfo* PROTOBUF_NULLABLE unsafe_arena_release_entries();
+
+  private:
+  const ::PetEntriesInfo& _internal_entries() const;
+  ::PetEntriesInfo* PROTOBUF_NONNULL _internal_mutable_entries();
+
+  public:
+  // bool replayed = 4;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SavePetEntriesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          2, 41,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SavePetEntriesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr request_id_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::PetEntriesInfo* PROTOBUF_NULLABLE entries_;
+    bool replayed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PreviewPetEntriesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PreviewPetEntriesResponse) */ {
+ public:
+  inline PreviewPetEntriesResponse() : PreviewPetEntriesResponse(nullptr) {}
+  ~PreviewPetEntriesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PreviewPetEntriesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PreviewPetEntriesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PreviewPetEntriesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PreviewPetEntriesResponse(const PreviewPetEntriesResponse& from) : PreviewPetEntriesResponse(nullptr, from) {}
+  inline PreviewPetEntriesResponse(PreviewPetEntriesResponse&& from) noexcept : PreviewPetEntriesResponse(nullptr, ::std::move(from)) {}
+  inline PreviewPetEntriesResponse& operator=(const PreviewPetEntriesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PreviewPetEntriesResponse& operator=(PreviewPetEntriesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PreviewPetEntriesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PreviewPetEntriesResponse>(&PreviewPetEntriesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 34;
+  friend void swap(PreviewPetEntriesResponse& a, PreviewPetEntriesResponse& b) { a.Swap(&b); }
+  inline void Swap(PreviewPetEntriesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PreviewPetEntriesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PreviewPetEntriesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PreviewPetEntriesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PreviewPetEntriesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PreviewPetEntriesResponse& from) { PreviewPetEntriesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PreviewPetEntriesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PreviewPetEntriesResponse"; }
+
+  explicit PreviewPetEntriesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PreviewPetEntriesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PreviewPetEntriesResponse& from);
+  PreviewPetEntriesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PreviewPetEntriesResponse&& from) noexcept
+      : PreviewPetEntriesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kEntriesFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .PetEntriesInfo entries = 2;
+  [[nodiscard]] bool has_entries()
+      const;
+  void clear_entries() ;
+  [[nodiscard]] const ::PetEntriesInfo& entries() const;
+  [[nodiscard]] ::PetEntriesInfo* PROTOBUF_NULLABLE release_entries();
+  ::PetEntriesInfo* PROTOBUF_NONNULL mutable_entries();
+  void set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  ::PetEntriesInfo* PROTOBUF_NULLABLE unsafe_arena_release_entries();
+
+  private:
+  const ::PetEntriesInfo& _internal_entries() const;
+  ::PetEntriesInfo* PROTOBUF_NONNULL _internal_mutable_entries();
+
+  public:
+  // @@protoc_insertion_point(class_scope:PreviewPetEntriesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PreviewPetEntriesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::PetEntriesInfo* PROTOBUF_NULLABLE entries_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:PetInfo) */ {
+ public:
+  inline PetInfo() : PetInfo(nullptr) {}
+  ~PetInfo() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PetInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PetInfo));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PetInfo(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PetInfo(const PetInfo& from) : PetInfo(nullptr, from) {}
+  inline PetInfo(PetInfo&& from) noexcept : PetInfo(nullptr, ::std::move(from)) {}
+  inline PetInfo& operator=(const PetInfo& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PetInfo& operator=(PetInfo&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PetInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PetInfo>(&PetInfo_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(PetInfo& a, PetInfo& b) { a.Swap(&b); }
+  inline void Swap(PetInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PetInfo* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PetInfo* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PetInfo>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PetInfo& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PetInfo& from) { PetInfo::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PetInfo* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "PetInfo"; }
+
+  explicit PetInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PetInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PetInfo& from);
+  PetInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PetInfo&& from) noexcept
+      : PetInfo(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDimensionsFieldNumber = 13,
+    kSkillTableIdsFieldNumber = 15,
+    kNameFieldNumber = 3,
+    kDescFieldNumber = 16,
+    kCultivationTierNameFieldNumber = 18,
+    kCultivationArtKeyFieldNumber = 19,
+    kDerivedFieldNumber = 14,
+    kEntriesFieldNumber = 20,
+    kPetIdFieldNumber = 1,
+    kPetTableIdFieldNumber = 2,
+    kLevelFieldNumber = 4,
+    kQualityFieldNumber = 5,
+    kModelIdFieldNumber = 6,
+    kIsActiveFieldNumber = 7,
+    kTotalPointsFieldNumber = 8,
+    kRemainingPointsFieldNumber = 9,
+    kPoolIdFieldNumber = 10,
+    kResetCostGoldFieldNumber = 11,
+    kGrowthFieldNumber = 12,
+    kCultivationTierFieldNumber = 17,
+  };
+  // repeated .PetDimensionInfo dimensions = 13;
+  [[nodiscard]] int dimensions_size()
+      const;
+  private:
+  int _internal_dimensions_size() const;
+
+  public:
+  void clear_dimensions() ;
+  [[nodiscard]] const ::PetDimensionInfo& dimensions(int index) const;
+  [[nodiscard]] ::PetDimensionInfo* PROTOBUF_NONNULL mutable_dimensions(int index);
+  ::PetDimensionInfo* PROTOBUF_NONNULL add_dimensions();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>&
+  dimensions() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>* PROTOBUF_NONNULL
+  mutable_dimensions();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>& _internal_dimensions() const;
+  ::google::protobuf::RepeatedPtrField<::PetDimensionInfo>* PROTOBUF_NONNULL _internal_mutable_dimensions();
+
+  public:
+  // repeated uint32 skill_table_ids = 15;
+  [[nodiscard]] int skill_table_ids_size()
+      const;
+  private:
+  int _internal_skill_table_ids_size() const;
+
+  public:
+  void clear_skill_table_ids() ;
+  [[nodiscard]] ::uint32_t skill_table_ids(int index) const;
+  void set_skill_table_ids(int index, ::uint32_t value);
+  void add_skill_table_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& skill_table_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_skill_table_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_skill_table_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_table_ids();
+
+  public:
+  // string name = 3;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string desc = 16;
+  void clear_desc() ;
+  [[nodiscard]] const ::std::string& desc() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_desc(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_desc();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_desc();
+  void set_allocated_desc(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_desc() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_desc(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_desc();
+
+  public:
+  // string cultivation_tier_name = 18;
+  void clear_cultivation_tier_name() ;
+  [[nodiscard]] const ::std::string& cultivation_tier_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_cultivation_tier_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_cultivation_tier_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_cultivation_tier_name();
+  void set_allocated_cultivation_tier_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_cultivation_tier_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_cultivation_tier_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_cultivation_tier_name();
+
+  public:
+  // string cultivation_art_key = 19;
+  void clear_cultivation_art_key() ;
+  [[nodiscard]] const ::std::string& cultivation_art_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_cultivation_art_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_cultivation_art_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_cultivation_art_key();
+  void set_allocated_cultivation_art_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_cultivation_art_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_cultivation_art_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_cultivation_art_key();
+
+  public:
+  // .PetDerivedInfo derived = 14;
+  [[nodiscard]] bool has_derived()
+      const;
+  void clear_derived() ;
+  [[nodiscard]] const ::PetDerivedInfo& derived() const;
+  [[nodiscard]] ::PetDerivedInfo* PROTOBUF_NULLABLE release_derived();
+  ::PetDerivedInfo* PROTOBUF_NONNULL mutable_derived();
+  void set_allocated_derived(::PetDerivedInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_derived(::PetDerivedInfo* PROTOBUF_NULLABLE value);
+  ::PetDerivedInfo* PROTOBUF_NULLABLE unsafe_arena_release_derived();
+
+  private:
+  const ::PetDerivedInfo& _internal_derived() const;
+  ::PetDerivedInfo* PROTOBUF_NONNULL _internal_mutable_derived();
+
+  public:
+  // .PetEntriesInfo entries = 20;
+  [[nodiscard]] bool has_entries()
+      const;
+  void clear_entries() ;
+  [[nodiscard]] const ::PetEntriesInfo& entries() const;
+  [[nodiscard]] ::PetEntriesInfo* PROTOBUF_NULLABLE release_entries();
+  ::PetEntriesInfo* PROTOBUF_NONNULL mutable_entries();
+  void set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  ::PetEntriesInfo* PROTOBUF_NULLABLE unsafe_arena_release_entries();
+
+  private:
+  const ::PetEntriesInfo& _internal_entries() const;
+  ::PetEntriesInfo* PROTOBUF_NONNULL _internal_mutable_entries();
+
+  public:
+  // uint64 pet_id = 1;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // uint32 pet_table_id = 2;
+  void clear_pet_table_id() ;
+  [[nodiscard]] ::uint32_t pet_table_id() const;
+  void set_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_table_id() const;
+  void _internal_set_pet_table_id(::uint32_t value);
+
+  public:
+  // uint32 level = 4;
+  void clear_level() ;
+  [[nodiscard]] ::uint32_t level() const;
+  void set_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level() const;
+  void _internal_set_level(::uint32_t value);
+
+  public:
+  // uint32 quality = 5;
+  void clear_quality() ;
+  [[nodiscard]] ::uint32_t quality() const;
+  void set_quality(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_quality() const;
+  void _internal_set_quality(::uint32_t value);
+
+  public:
+  // uint32 model_id = 6;
+  void clear_model_id() ;
+  [[nodiscard]] ::uint32_t model_id() const;
+  void set_model_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_model_id() const;
+  void _internal_set_model_id(::uint32_t value);
+
+  public:
+  // bool is_active = 7;
+  void clear_is_active() ;
+  [[nodiscard]] bool is_active() const;
+  void set_is_active(bool value);
+
+  private:
+  bool _internal_is_active() const;
+  void _internal_set_is_active(bool value);
+
+  public:
+  // uint32 total_points = 8;
+  void clear_total_points() ;
+  [[nodiscard]] ::uint32_t total_points() const;
+  void set_total_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_points() const;
+  void _internal_set_total_points(::uint32_t value);
+
+  public:
+  // uint32 remaining_points = 9;
+  void clear_remaining_points() ;
+  [[nodiscard]] ::uint32_t remaining_points() const;
+  void set_remaining_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_remaining_points() const;
+  void _internal_set_remaining_points(::uint32_t value);
+
+  public:
+  // uint32 pool_id = 10;
+  void clear_pool_id() ;
+  [[nodiscard]] ::uint32_t pool_id() const;
+  void set_pool_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pool_id() const;
+  void _internal_set_pool_id(::uint32_t value);
+
+  public:
+  // uint64 reset_cost_gold = 11;
+  void clear_reset_cost_gold() ;
+  [[nodiscard]] ::uint64_t reset_cost_gold() const;
+  void set_reset_cost_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_reset_cost_gold() const;
+  void _internal_set_reset_cost_gold(::uint64_t value);
+
+  public:
+  // uint32 growth = 12;
+  void clear_growth() ;
+  [[nodiscard]] ::uint32_t growth() const;
+  void set_growth(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_growth() const;
+  void _internal_set_growth(::uint32_t value);
+
+  public:
+  // uint32 cultivation_tier = 17;
+  void clear_cultivation_tier() ;
+  [[nodiscard]] ::uint32_t cultivation_tier() const;
+  void set_cultivation_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cultivation_tier() const;
+  void _internal_set_cultivation_tier(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:PetInfo)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 20,
+                          3, 80,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PetInfo& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::PetDimensionInfo > dimensions_;
+    ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
+    ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr desc_;
+    ::google::protobuf::internal::ArenaStringPtr cultivation_tier_name_;
+    ::google::protobuf::internal::ArenaStringPtr cultivation_art_key_;
+    ::PetDerivedInfo* PROTOBUF_NULLABLE derived_;
+    ::PetEntriesInfo* PROTOBUF_NULLABLE entries_;
+    ::uint64_t pet_id_;
+    ::uint32_t pet_table_id_;
+    ::uint32_t level_;
+    ::uint32_t quality_;
+    ::uint32_t model_id_;
+    bool is_active_;
+    ::uint32_t total_points_;
+    ::uint32_t remaining_points_;
+    ::uint32_t pool_id_;
+    ::uint64_t reset_cost_gold_;
+    ::uint32_t growth_;
+    ::uint32_t cultivation_tier_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fpet_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPetEntriesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GetPetEntriesResponse) */ {
+ public:
+  inline GetPetEntriesResponse() : GetPetEntriesResponse(nullptr) {}
+  ~GetPetEntriesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetPetEntriesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetPetEntriesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetPetEntriesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetPetEntriesResponse(const GetPetEntriesResponse& from) : GetPetEntriesResponse(nullptr, from) {}
+  inline GetPetEntriesResponse(GetPetEntriesResponse&& from) noexcept : GetPetEntriesResponse(nullptr, ::std::move(from)) {}
+  inline GetPetEntriesResponse& operator=(const GetPetEntriesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetPetEntriesResponse& operator=(GetPetEntriesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetPetEntriesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPetEntriesResponse>(&GetPetEntriesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 31;
+  friend void swap(GetPetEntriesResponse& a, GetPetEntriesResponse& b) { a.Swap(&b); }
+  inline void Swap(GetPetEntriesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetPetEntriesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetPetEntriesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetPetEntriesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetPetEntriesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetPetEntriesResponse& from) { GetPetEntriesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetPetEntriesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetPetEntriesResponse"; }
+
+  explicit GetPetEntriesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetPetEntriesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPetEntriesResponse& from);
+  GetPetEntriesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetPetEntriesResponse&& from) noexcept
+      : GetPetEntriesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kEntriesFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .PetEntriesInfo entries = 2;
+  [[nodiscard]] bool has_entries()
+      const;
+  void clear_entries() ;
+  [[nodiscard]] const ::PetEntriesInfo& entries() const;
+  [[nodiscard]] ::PetEntriesInfo* PROTOBUF_NULLABLE release_entries();
+  ::PetEntriesInfo* PROTOBUF_NONNULL mutable_entries();
+  void set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value);
+  ::PetEntriesInfo* PROTOBUF_NULLABLE unsafe_arena_release_entries();
+
+  private:
+  const ::PetEntriesInfo& _internal_entries() const;
+  ::PetEntriesInfo* PROTOBUF_NONNULL _internal_mutable_entries();
+
+  public:
+  // @@protoc_insertion_point(class_scope:GetPetEntriesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetPetEntriesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::PetEntriesInfo* PROTOBUF_NULLABLE entries_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6413,6 +8755,18 @@ class ScenePetClientPlayer : public ::google::protobuf::Service {
                         const ::BuyPetRequest* PROTOBUF_NONNULL request,
                         ::BuyPetResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void GetPetEntries(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetPetEntriesRequest* PROTOBUF_NONNULL request,
+                        ::GetPetEntriesResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void PreviewPetEntries(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::PreviewPetEntriesRequest* PROTOBUF_NONNULL request,
+                        ::PreviewPetEntriesResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void SavePetEntries(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SavePetEntriesRequest* PROTOBUF_NONNULL request,
+                        ::SavePetEntriesResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -6488,6 +8842,18 @@ class ScenePetClientPlayer_Stub final : public ScenePetClientPlayer {
   void BuyPet(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::BuyPetRequest* PROTOBUF_NONNULL request,
                         ::BuyPetResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void GetPetEntries(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetPetEntriesRequest* PROTOBUF_NONNULL request,
+                        ::GetPetEntriesResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void PreviewPetEntries(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::PreviewPetEntriesRequest* PROTOBUF_NONNULL request,
+                        ::PreviewPetEntriesResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void SavePetEntries(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SavePetEntriesRequest* PROTOBUF_NONNULL request,
+                        ::SavePetEntriesResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -7009,7 +9375,7 @@ inline void PetDerivedInfo::_internal_set_mana(::uint64_t value) {
 inline void PetInfo::clear_pet_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t PetInfo::pet_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.pet_id)
@@ -7017,7 +9383,7 @@ inline ::uint64_t PetInfo::pet_id() const {
 }
 inline void PetInfo::set_pet_id(::uint64_t value) {
   _internal_set_pet_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:PetInfo.pet_id)
 }
 inline ::uint64_t PetInfo::_internal_pet_id() const {
@@ -7033,7 +9399,7 @@ inline void PetInfo::_internal_set_pet_id(::uint64_t value) {
 inline void PetInfo::clear_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t PetInfo::pet_table_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.pet_table_id)
@@ -7041,7 +9407,7 @@ inline ::uint32_t PetInfo::pet_table_id() const {
 }
 inline void PetInfo::set_pet_table_id(::uint32_t value) {
   _internal_set_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:PetInfo.pet_table_id)
 }
 inline ::uint32_t PetInfo::_internal_pet_table_id() const {
@@ -7121,7 +9487,7 @@ inline void PetInfo::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) 
 inline void PetInfo::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t PetInfo::level() const {
   // @@protoc_insertion_point(field_get:PetInfo.level)
@@ -7129,7 +9495,7 @@ inline ::uint32_t PetInfo::level() const {
 }
 inline void PetInfo::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:PetInfo.level)
 }
 inline ::uint32_t PetInfo::_internal_level() const {
@@ -7145,7 +9511,7 @@ inline void PetInfo::_internal_set_level(::uint32_t value) {
 inline void PetInfo::clear_quality() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.quality_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t PetInfo::quality() const {
   // @@protoc_insertion_point(field_get:PetInfo.quality)
@@ -7153,7 +9519,7 @@ inline ::uint32_t PetInfo::quality() const {
 }
 inline void PetInfo::set_quality(::uint32_t value) {
   _internal_set_quality(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PetInfo.quality)
 }
 inline ::uint32_t PetInfo::_internal_quality() const {
@@ -7169,7 +9535,7 @@ inline void PetInfo::_internal_set_quality(::uint32_t value) {
 inline void PetInfo::clear_model_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.model_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t PetInfo::model_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.model_id)
@@ -7177,7 +9543,7 @@ inline ::uint32_t PetInfo::model_id() const {
 }
 inline void PetInfo::set_model_id(::uint32_t value) {
   _internal_set_model_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:PetInfo.model_id)
 }
 inline ::uint32_t PetInfo::_internal_model_id() const {
@@ -7193,7 +9559,7 @@ inline void PetInfo::_internal_set_model_id(::uint32_t value) {
 inline void PetInfo::clear_is_active() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_active_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline bool PetInfo::is_active() const {
   // @@protoc_insertion_point(field_get:PetInfo.is_active)
@@ -7201,7 +9567,7 @@ inline bool PetInfo::is_active() const {
 }
 inline void PetInfo::set_is_active(bool value) {
   _internal_set_is_active(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:PetInfo.is_active)
 }
 inline bool PetInfo::_internal_is_active() const {
@@ -7217,7 +9583,7 @@ inline void PetInfo::_internal_set_is_active(bool value) {
 inline void PetInfo::clear_total_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t PetInfo::total_points() const {
   // @@protoc_insertion_point(field_get:PetInfo.total_points)
@@ -7225,7 +9591,7 @@ inline ::uint32_t PetInfo::total_points() const {
 }
 inline void PetInfo::set_total_points(::uint32_t value) {
   _internal_set_total_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:PetInfo.total_points)
 }
 inline ::uint32_t PetInfo::_internal_total_points() const {
@@ -7241,7 +9607,7 @@ inline void PetInfo::_internal_set_total_points(::uint32_t value) {
 inline void PetInfo::clear_remaining_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remaining_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t PetInfo::remaining_points() const {
   // @@protoc_insertion_point(field_get:PetInfo.remaining_points)
@@ -7249,7 +9615,7 @@ inline ::uint32_t PetInfo::remaining_points() const {
 }
 inline void PetInfo::set_remaining_points(::uint32_t value) {
   _internal_set_remaining_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:PetInfo.remaining_points)
 }
 inline ::uint32_t PetInfo::_internal_remaining_points() const {
@@ -7265,7 +9631,7 @@ inline void PetInfo::_internal_set_remaining_points(::uint32_t value) {
 inline void PetInfo::clear_pool_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pool_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t PetInfo::pool_id() const {
   // @@protoc_insertion_point(field_get:PetInfo.pool_id)
@@ -7273,7 +9639,7 @@ inline ::uint32_t PetInfo::pool_id() const {
 }
 inline void PetInfo::set_pool_id(::uint32_t value) {
   _internal_set_pool_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:PetInfo.pool_id)
 }
 inline ::uint32_t PetInfo::_internal_pool_id() const {
@@ -7289,7 +9655,7 @@ inline void PetInfo::_internal_set_pool_id(::uint32_t value) {
 inline void PetInfo::clear_reset_cost_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.reset_cost_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint64_t PetInfo::reset_cost_gold() const {
   // @@protoc_insertion_point(field_get:PetInfo.reset_cost_gold)
@@ -7297,7 +9663,7 @@ inline ::uint64_t PetInfo::reset_cost_gold() const {
 }
 inline void PetInfo::set_reset_cost_gold(::uint64_t value) {
   _internal_set_reset_cost_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:PetInfo.reset_cost_gold)
 }
 inline ::uint64_t PetInfo::_internal_reset_cost_gold() const {
@@ -7313,7 +9679,7 @@ inline void PetInfo::_internal_set_reset_cost_gold(::uint64_t value) {
 inline void PetInfo::clear_growth() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.growth_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t PetInfo::growth() const {
   // @@protoc_insertion_point(field_get:PetInfo.growth)
@@ -7321,7 +9687,7 @@ inline ::uint32_t PetInfo::growth() const {
 }
 inline void PetInfo::set_growth(::uint32_t value) {
   _internal_set_growth(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:PetInfo.growth)
 }
 inline ::uint32_t PetInfo::_internal_growth() const {
@@ -7390,14 +9756,14 @@ PetInfo::_internal_mutable_dimensions() {
 
 // .PetDerivedInfo derived = 14;
 inline bool PetInfo::has_derived() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
   PROTOBUF_ASSUME(!value || _impl_.derived_ != nullptr);
   return value;
 }
 inline void PetInfo::clear_derived() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.derived_ != nullptr) _impl_.derived_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline const ::PetDerivedInfo& PetInfo::_internal_derived() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -7416,16 +9782,16 @@ inline void PetInfo::unsafe_arena_set_allocated_derived(
   }
   _impl_.derived_ = reinterpret_cast<::PetDerivedInfo*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PetInfo.derived)
 }
 inline ::PetDerivedInfo* PROTOBUF_NULLABLE PetInfo::release_derived() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::PetDerivedInfo* released = _impl_.derived_;
   _impl_.derived_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -7445,7 +9811,7 @@ inline ::PetDerivedInfo* PROTOBUF_NULLABLE PetInfo::unsafe_arena_release_derived
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PetInfo.derived)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::PetDerivedInfo* temp = _impl_.derived_;
   _impl_.derived_ = nullptr;
   return temp;
@@ -7460,7 +9826,7 @@ inline ::PetDerivedInfo* PROTOBUF_NONNULL PetInfo::_internal_mutable_derived() {
 }
 inline ::PetDerivedInfo* PROTOBUF_NONNULL PetInfo::mutable_derived()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::PetDerivedInfo* _msg = _internal_mutable_derived();
   // @@protoc_insertion_point(field_mutable:PetInfo.derived)
   return _msg;
@@ -7477,9 +9843,9 @@ inline void PetInfo::set_allocated_derived(::PetDerivedInfo* PROTOBUF_NULLABLE v
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
 
   _impl_.derived_ = reinterpret_cast<::PetDerivedInfo*>(value);
@@ -7535,6 +9901,256 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 PetInfo::_internal_mutable_skill_table_ids() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.skill_table_ids_;
+}
+
+// uint32 cultivation_tier = 17;
+inline void PetInfo::clear_cultivation_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t PetInfo::cultivation_tier() const {
+  // @@protoc_insertion_point(field_get:PetInfo.cultivation_tier)
+  return _internal_cultivation_tier();
+}
+inline void PetInfo::set_cultivation_tier(::uint32_t value) {
+  _internal_set_cultivation_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:PetInfo.cultivation_tier)
+}
+inline ::uint32_t PetInfo::_internal_cultivation_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cultivation_tier_;
+}
+inline void PetInfo::_internal_set_cultivation_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_tier_ = value;
+}
+
+// string cultivation_tier_name = 18;
+inline void PetInfo::clear_cultivation_tier_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_tier_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& PetInfo::cultivation_tier_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetInfo.cultivation_tier_name)
+  return _internal_cultivation_tier_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PetInfo::set_cultivation_tier_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.cultivation_tier_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PetInfo.cultivation_tier_name)
+}
+inline ::std::string* PROTOBUF_NONNULL PetInfo::mutable_cultivation_tier_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_cultivation_tier_name();
+  // @@protoc_insertion_point(field_mutable:PetInfo.cultivation_tier_name)
+  return _s;
+}
+inline const ::std::string& PetInfo::_internal_cultivation_tier_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cultivation_tier_name_.Get();
+}
+inline void PetInfo::_internal_set_cultivation_tier_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_tier_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PetInfo::_internal_mutable_cultivation_tier_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.cultivation_tier_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PetInfo::release_cultivation_tier_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetInfo.cultivation_tier_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.cultivation_tier_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.cultivation_tier_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PetInfo::set_allocated_cultivation_tier_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.cultivation_tier_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.cultivation_tier_name_.IsDefault()) {
+    _impl_.cultivation_tier_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PetInfo.cultivation_tier_name)
+}
+
+// string cultivation_art_key = 19;
+inline void PetInfo::clear_cultivation_art_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_art_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline const ::std::string& PetInfo::cultivation_art_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetInfo.cultivation_art_key)
+  return _internal_cultivation_art_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PetInfo::set_cultivation_art_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  _impl_.cultivation_art_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PetInfo.cultivation_art_key)
+}
+inline ::std::string* PROTOBUF_NONNULL PetInfo::mutable_cultivation_art_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::std::string* _s = _internal_mutable_cultivation_art_key();
+  // @@protoc_insertion_point(field_mutable:PetInfo.cultivation_art_key)
+  return _s;
+}
+inline const ::std::string& PetInfo::_internal_cultivation_art_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cultivation_art_key_.Get();
+}
+inline void PetInfo::_internal_set_cultivation_art_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cultivation_art_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PetInfo::_internal_mutable_cultivation_art_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.cultivation_art_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PetInfo::release_cultivation_art_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetInfo.cultivation_art_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  auto* released = _impl_.cultivation_art_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.cultivation_art_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PetInfo::set_allocated_cultivation_art_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  _impl_.cultivation_art_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.cultivation_art_key_.IsDefault()) {
+    _impl_.cultivation_art_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PetInfo.cultivation_art_key)
+}
+
+// .PetEntriesInfo entries = 20;
+inline bool PetInfo::has_entries() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  PROTOBUF_ASSUME(!value || _impl_.entries_ != nullptr);
+  return value;
+}
+inline void PetInfo::clear_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ != nullptr) _impl_.entries_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::PetEntriesInfo& PetInfo::_internal_entries() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PetEntriesInfo* p = _impl_.entries_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PetEntriesInfo>(&::PetEntriesInfo_globals_);
+}
+inline const ::PetEntriesInfo& PetInfo::entries() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetInfo.entries)
+  return _internal_entries();
+}
+inline void PetInfo::unsafe_arena_set_allocated_entries(
+    ::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PetInfo.entries)
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE PetInfo::release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::PetEntriesInfo* released = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE PetInfo::unsafe_arena_release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetInfo.entries)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::PetEntriesInfo* temp = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  return temp;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL PetInfo::_internal_mutable_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PetEntriesInfo>(GetArena());
+    _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(p);
+  }
+  return _impl_.entries_;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL PetInfo::mutable_entries()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::PetEntriesInfo* _msg = _internal_mutable_entries();
+  // @@protoc_insertion_point(field_mutable:PetInfo.entries)
+  return _msg;
+}
+inline void PetInfo::set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:PetInfo.entries)
 }
 
 // string desc = 16;
@@ -10423,6 +13039,1809 @@ inline ::uint64_t BuyPetResponse::_internal_next_purchase_sequence() const {
 inline void BuyPetResponse::_internal_set_next_purchase_sequence(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_purchase_sequence_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// PetEntryInfo
+
+// uint32 id = 1;
+inline void PetEntryInfo::clear_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t PetEntryInfo::id() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.id)
+  return _internal_id();
+}
+inline void PetEntryInfo::set_id(::uint32_t value) {
+  _internal_set_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.id)
+}
+inline ::uint32_t PetEntryInfo::_internal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.id_;
+}
+inline void PetEntryInfo::_internal_set_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.id_ = value;
+}
+
+// string name = 2;
+inline void PetEntryInfo::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PetEntryInfo::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PetEntryInfo::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PetEntryInfo.name)
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntryInfo::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:PetEntryInfo.name)
+  return _s;
+}
+inline const ::std::string& PetEntryInfo::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void PetEntryInfo::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntryInfo::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PetEntryInfo::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetEntryInfo.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PetEntryInfo::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PetEntryInfo.name)
+}
+
+// string desc = 3;
+inline void PetEntryInfo::clear_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.desc_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& PetEntryInfo::desc() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.desc)
+  return _internal_desc();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PetEntryInfo::set_desc(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.desc_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PetEntryInfo.desc)
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntryInfo::mutable_desc()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_desc();
+  // @@protoc_insertion_point(field_mutable:PetEntryInfo.desc)
+  return _s;
+}
+inline const ::std::string& PetEntryInfo::_internal_desc() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.desc_.Get();
+}
+inline void PetEntryInfo::_internal_set_desc(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.desc_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntryInfo::_internal_mutable_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.desc_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PetEntryInfo::release_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetEntryInfo.desc)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.desc_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.desc_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PetEntryInfo::set_allocated_desc(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.desc_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.desc_.IsDefault()) {
+    _impl_.desc_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PetEntryInfo.desc)
+}
+
+// uint32 category = 4;
+inline void PetEntryInfo::clear_category() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.category_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t PetEntryInfo::category() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.category)
+  return _internal_category();
+}
+inline void PetEntryInfo::set_category(::uint32_t value) {
+  _internal_set_category(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.category)
+}
+inline ::uint32_t PetEntryInfo::_internal_category() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.category_;
+}
+inline void PetEntryInfo::_internal_set_category(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.category_ = value;
+}
+
+// uint32 channel = 5;
+inline void PetEntryInfo::clear_channel() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t PetEntryInfo::channel() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.channel)
+  return _internal_channel();
+}
+inline void PetEntryInfo::set_channel(::uint32_t value) {
+  _internal_set_channel(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.channel)
+}
+inline ::uint32_t PetEntryInfo::_internal_channel() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.channel_;
+}
+inline void PetEntryInfo::_internal_set_channel(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.channel_ = value;
+}
+
+// uint32 state_kind = 6;
+inline void PetEntryInfo::clear_state_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PetEntryInfo::state_kind() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.state_kind)
+  return _internal_state_kind();
+}
+inline void PetEntryInfo::set_state_kind(::uint32_t value) {
+  _internal_set_state_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.state_kind)
+}
+inline ::uint32_t PetEntryInfo::_internal_state_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_kind_;
+}
+inline void PetEntryInfo::_internal_set_state_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_kind_ = value;
+}
+
+// uint32 cap = 7;
+inline void PetEntryInfo::clear_cap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cap_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t PetEntryInfo::cap() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.cap)
+  return _internal_cap();
+}
+inline void PetEntryInfo::set_cap(::uint32_t value) {
+  _internal_set_cap(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.cap)
+}
+inline ::uint32_t PetEntryInfo::_internal_cap() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cap_;
+}
+inline void PetEntryInfo::_internal_set_cap(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cap_ = value;
+}
+
+// uint32 per_point_bps = 8;
+inline void PetEntryInfo::clear_per_point_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_point_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t PetEntryInfo::per_point_bps() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.per_point_bps)
+  return _internal_per_point_bps();
+}
+inline void PetEntryInfo::set_per_point_bps(::uint32_t value) {
+  _internal_set_per_point_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.per_point_bps)
+}
+inline ::uint32_t PetEntryInfo::_internal_per_point_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.per_point_bps_;
+}
+inline void PetEntryInfo::_internal_set_per_point_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.per_point_bps_ = value;
+}
+
+// uint32 allocated = 9;
+inline void PetEntryInfo::clear_allocated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocated_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t PetEntryInfo::allocated() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.allocated)
+  return _internal_allocated();
+}
+inline void PetEntryInfo::set_allocated(::uint32_t value) {
+  _internal_set_allocated(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.allocated)
+}
+inline ::uint32_t PetEntryInfo::_internal_allocated() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.allocated_;
+}
+inline void PetEntryInfo::_internal_set_allocated(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.allocated_ = value;
+}
+
+// uint32 effective_bps = 10;
+inline void PetEntryInfo::clear_effective_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t PetEntryInfo::effective_bps() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.effective_bps)
+  return _internal_effective_bps();
+}
+inline void PetEntryInfo::set_effective_bps(::uint32_t value) {
+  _internal_set_effective_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.effective_bps)
+}
+inline ::uint32_t PetEntryInfo::_internal_effective_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effective_bps_;
+}
+inline void PetEntryInfo::_internal_set_effective_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_bps_ = value;
+}
+
+// uint32 sort = 11;
+inline void PetEntryInfo::clear_sort() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t PetEntryInfo::sort() const {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.sort)
+  return _internal_sort();
+}
+inline void PetEntryInfo::set_sort(::uint32_t value) {
+  _internal_set_sort(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:PetEntryInfo.sort)
+}
+inline ::uint32_t PetEntryInfo::_internal_sort() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sort_;
+}
+inline void PetEntryInfo::_internal_set_sort(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_ = value;
+}
+
+// string icon = 12;
+inline void PetEntryInfo::clear_icon() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& PetEntryInfo::icon() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetEntryInfo.icon)
+  return _internal_icon();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PetEntryInfo::set_icon(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.icon_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PetEntryInfo.icon)
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntryInfo::mutable_icon()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_icon();
+  // @@protoc_insertion_point(field_mutable:PetEntryInfo.icon)
+  return _s;
+}
+inline const ::std::string& PetEntryInfo::_internal_icon() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.icon_.Get();
+}
+inline void PetEntryInfo::_internal_set_icon(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntryInfo::_internal_mutable_icon() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.icon_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PetEntryInfo::release_icon() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetEntryInfo.icon)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.icon_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.icon_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PetEntryInfo::set_allocated_icon(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.icon_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.icon_.IsDefault()) {
+    _impl_.icon_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PetEntryInfo.icon)
+}
+
+// -------------------------------------------------------------------
+
+// PetEntriesInfo
+
+// uint64 pet_id = 1;
+inline void PetEntriesInfo::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t PetEntriesInfo::pet_id() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.pet_id)
+  return _internal_pet_id();
+}
+inline void PetEntriesInfo::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.pet_id)
+}
+inline ::uint64_t PetEntriesInfo::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void PetEntriesInfo::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
+// uint64 state_version = 2;
+inline void PetEntriesInfo::clear_state_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t PetEntriesInfo::state_version() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.state_version)
+  return _internal_state_version();
+}
+inline void PetEntriesInfo::set_state_version(::uint64_t value) {
+  _internal_set_state_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.state_version)
+}
+inline ::uint64_t PetEntriesInfo::_internal_state_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_version_;
+}
+inline void PetEntriesInfo::_internal_set_state_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_version_ = value;
+}
+
+// uint32 config_version = 3;
+inline void PetEntriesInfo::clear_config_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t PetEntriesInfo::config_version() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.config_version)
+  return _internal_config_version();
+}
+inline void PetEntriesInfo::set_config_version(::uint32_t value) {
+  _internal_set_config_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.config_version)
+}
+inline ::uint32_t PetEntriesInfo::_internal_config_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.config_version_;
+}
+inline void PetEntriesInfo::_internal_set_config_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_version_ = value;
+}
+
+// uint32 total_points = 4;
+inline void PetEntriesInfo::clear_total_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PetEntriesInfo::total_points() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.total_points)
+  return _internal_total_points();
+}
+inline void PetEntriesInfo::set_total_points(::uint32_t value) {
+  _internal_set_total_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.total_points)
+}
+inline ::uint32_t PetEntriesInfo::_internal_total_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_points_;
+}
+inline void PetEntriesInfo::_internal_set_total_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_points_ = value;
+}
+
+// uint32 remaining_points = 5;
+inline void PetEntriesInfo::clear_remaining_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.remaining_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t PetEntriesInfo::remaining_points() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.remaining_points)
+  return _internal_remaining_points();
+}
+inline void PetEntriesInfo::set_remaining_points(::uint32_t value) {
+  _internal_set_remaining_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.remaining_points)
+}
+inline ::uint32_t PetEntriesInfo::_internal_remaining_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.remaining_points_;
+}
+inline void PetEntriesInfo::_internal_set_remaining_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.remaining_points_ = value;
+}
+
+// uint32 max_directions = 6;
+inline void PetEntriesInfo::clear_max_directions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_directions_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t PetEntriesInfo::max_directions() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.max_directions)
+  return _internal_max_directions();
+}
+inline void PetEntriesInfo::set_max_directions(::uint32_t value) {
+  _internal_set_max_directions(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.max_directions)
+}
+inline ::uint32_t PetEntriesInfo::_internal_max_directions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_directions_;
+}
+inline void PetEntriesInfo::_internal_set_max_directions(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_directions_ = value;
+}
+
+// repeated .PetEntryInfo entries = 7;
+inline int PetEntriesInfo::_internal_entries_size() const {
+  return _internal_entries().size();
+}
+inline int PetEntriesInfo::entries_size() const {
+  return _internal_entries_size();
+}
+inline void PetEntriesInfo::clear_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entries_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::PetEntryInfo& PetEntriesInfo::entries(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.entries)
+  return _internal_entries().Get(index);
+}
+inline ::PetEntryInfo* PROTOBUF_NONNULL PetEntriesInfo::mutable_entries(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:PetEntriesInfo.entries)
+  return _internal_mutable_entries()->Mutable(index);
+}
+inline ::PetEntryInfo* PROTOBUF_NONNULL PetEntriesInfo::add_entries()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::PetEntryInfo* _add =
+      _internal_mutable_entries()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:PetEntriesInfo.entries)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::PetEntryInfo>& PetEntriesInfo::entries() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:PetEntriesInfo.entries)
+  return _internal_entries();
+}
+inline ::google::protobuf::RepeatedPtrField<::PetEntryInfo>* PROTOBUF_NONNULL
+PetEntriesInfo::mutable_entries() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:PetEntriesInfo.entries)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_entries();
+}
+inline const ::google::protobuf::RepeatedPtrField<::PetEntryInfo>&
+PetEntriesInfo::_internal_entries() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entries_;
+}
+inline ::google::protobuf::RepeatedPtrField<::PetEntryInfo>* PROTOBUF_NONNULL
+PetEntriesInfo::_internal_mutable_entries() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.entries_;
+}
+
+// .PetCultivationEffects effects = 8;
+inline bool PetEntriesInfo::has_effects() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.effects_ != nullptr);
+  return value;
+}
+inline const ::PetCultivationEffects& PetEntriesInfo::_internal_effects() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PetCultivationEffects* p = _impl_.effects_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PetCultivationEffects>(&::PetCultivationEffects_globals_);
+}
+inline const ::PetCultivationEffects& PetEntriesInfo::effects() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.effects)
+  return _internal_effects();
+}
+inline void PetEntriesInfo::unsafe_arena_set_allocated_effects(
+    ::PetCultivationEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.effects_);
+  }
+  _impl_.effects_ = reinterpret_cast<::PetCultivationEffects*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PetEntriesInfo.effects)
+}
+inline ::PetCultivationEffects* PROTOBUF_NULLABLE PetEntriesInfo::release_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::PetCultivationEffects* released = _impl_.effects_;
+  _impl_.effects_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PetCultivationEffects* PROTOBUF_NULLABLE PetEntriesInfo::unsafe_arena_release_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetEntriesInfo.effects)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::PetCultivationEffects* temp = _impl_.effects_;
+  _impl_.effects_ = nullptr;
+  return temp;
+}
+inline ::PetCultivationEffects* PROTOBUF_NONNULL PetEntriesInfo::_internal_mutable_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.effects_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PetCultivationEffects>(GetArena());
+    _impl_.effects_ = reinterpret_cast<::PetCultivationEffects*>(p);
+  }
+  return _impl_.effects_;
+}
+inline ::PetCultivationEffects* PROTOBUF_NONNULL PetEntriesInfo::mutable_effects()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::PetCultivationEffects* _msg = _internal_mutable_effects();
+  // @@protoc_insertion_point(field_mutable:PetEntriesInfo.effects)
+  return _msg;
+}
+inline void PetEntriesInfo::set_allocated_effects(::PetCultivationEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.effects_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.effects_ = reinterpret_cast<::PetCultivationEffects*>(value);
+  // @@protoc_insertion_point(field_set_allocated:PetEntriesInfo.effects)
+}
+
+// bool effective = 9;
+inline void PetEntriesInfo::clear_effective() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline bool PetEntriesInfo::effective() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.effective)
+  return _internal_effective();
+}
+inline void PetEntriesInfo::set_effective(bool value) {
+  _internal_set_effective(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.effective)
+}
+inline bool PetEntriesInfo::_internal_effective() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.effective_;
+}
+inline void PetEntriesInfo::_internal_set_effective(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.effective_ = value;
+}
+
+// uint64 unknown_used_points = 10;
+inline void PetEntriesInfo::clear_unknown_used_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unknown_used_points_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t PetEntriesInfo::unknown_used_points() const {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.unknown_used_points)
+  return _internal_unknown_used_points();
+}
+inline void PetEntriesInfo::set_unknown_used_points(::uint64_t value) {
+  _internal_set_unknown_used_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.unknown_used_points)
+}
+inline ::uint64_t PetEntriesInfo::_internal_unknown_used_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unknown_used_points_;
+}
+inline void PetEntriesInfo::_internal_set_unknown_used_points(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unknown_used_points_ = value;
+}
+
+// string last_request_id = 11;
+inline void PetEntriesInfo::clear_last_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& PetEntriesInfo::last_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PetEntriesInfo.last_request_id)
+  return _internal_last_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PetEntriesInfo::set_last_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.last_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PetEntriesInfo.last_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntriesInfo::mutable_last_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_last_request_id();
+  // @@protoc_insertion_point(field_mutable:PetEntriesInfo.last_request_id)
+  return _s;
+}
+inline const ::std::string& PetEntriesInfo::_internal_last_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_request_id_.Get();
+}
+inline void PetEntriesInfo::_internal_set_last_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PetEntriesInfo::_internal_mutable_last_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PetEntriesInfo::release_last_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PetEntriesInfo.last_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.last_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.last_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PetEntriesInfo::set_allocated_last_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.last_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_request_id_.IsDefault()) {
+    _impl_.last_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PetEntriesInfo.last_request_id)
+}
+
+// -------------------------------------------------------------------
+
+// GetPetEntriesRequest
+
+// uint64 pet_id = 1;
+inline void GetPetEntriesRequest::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetPetEntriesRequest::pet_id() const {
+  // @@protoc_insertion_point(field_get:GetPetEntriesRequest.pet_id)
+  return _internal_pet_id();
+}
+inline void GetPetEntriesRequest::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:GetPetEntriesRequest.pet_id)
+}
+inline ::uint64_t GetPetEntriesRequest::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void GetPetEntriesRequest::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetPetEntriesResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetPetEntriesResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetPetEntriesResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetPetEntriesResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetPetEntriesResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetPetEntriesResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetPetEntriesResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetPetEntriesResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetPetEntriesResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetPetEntriesResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetPetEntriesResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetPetEntriesResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:GetPetEntriesResponse.error_message)
+  return _msg;
+}
+inline void GetPetEntriesResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetPetEntriesResponse.error_message)
+}
+
+// .PetEntriesInfo entries = 2;
+inline bool GetPetEntriesResponse::has_entries() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.entries_ != nullptr);
+  return value;
+}
+inline void GetPetEntriesResponse::clear_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ != nullptr) _impl_.entries_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::PetEntriesInfo& GetPetEntriesResponse::_internal_entries() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PetEntriesInfo* p = _impl_.entries_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PetEntriesInfo>(&::PetEntriesInfo_globals_);
+}
+inline const ::PetEntriesInfo& GetPetEntriesResponse::entries() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetPetEntriesResponse.entries)
+  return _internal_entries();
+}
+inline void GetPetEntriesResponse::unsafe_arena_set_allocated_entries(
+    ::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetPetEntriesResponse.entries)
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE GetPetEntriesResponse::release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PetEntriesInfo* released = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE GetPetEntriesResponse::unsafe_arena_release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetPetEntriesResponse.entries)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PetEntriesInfo* temp = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  return temp;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL GetPetEntriesResponse::_internal_mutable_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PetEntriesInfo>(GetArena());
+    _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(p);
+  }
+  return _impl_.entries_;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL GetPetEntriesResponse::mutable_entries()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PetEntriesInfo* _msg = _internal_mutable_entries();
+  // @@protoc_insertion_point(field_mutable:GetPetEntriesResponse.entries)
+  return _msg;
+}
+inline void GetPetEntriesResponse::set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetPetEntriesResponse.entries)
+}
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// PreviewPetEntriesRequest
+
+// uint64 pet_id = 1;
+inline void PreviewPetEntriesRequest::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t PreviewPetEntriesRequest::pet_id() const {
+  // @@protoc_insertion_point(field_get:PreviewPetEntriesRequest.pet_id)
+  return _internal_pet_id();
+}
+inline void PreviewPetEntriesRequest::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:PreviewPetEntriesRequest.pet_id)
+}
+inline ::uint64_t PreviewPetEntriesRequest::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void PreviewPetEntriesRequest::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
+// uint64 state_version = 2;
+inline void PreviewPetEntriesRequest::clear_state_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t PreviewPetEntriesRequest::state_version() const {
+  // @@protoc_insertion_point(field_get:PreviewPetEntriesRequest.state_version)
+  return _internal_state_version();
+}
+inline void PreviewPetEntriesRequest::set_state_version(::uint64_t value) {
+  _internal_set_state_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:PreviewPetEntriesRequest.state_version)
+}
+inline ::uint64_t PreviewPetEntriesRequest::_internal_state_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_version_;
+}
+inline void PreviewPetEntriesRequest::_internal_set_state_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_version_ = value;
+}
+
+// uint32 config_version = 3;
+inline void PreviewPetEntriesRequest::clear_config_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t PreviewPetEntriesRequest::config_version() const {
+  // @@protoc_insertion_point(field_get:PreviewPetEntriesRequest.config_version)
+  return _internal_config_version();
+}
+inline void PreviewPetEntriesRequest::set_config_version(::uint32_t value) {
+  _internal_set_config_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:PreviewPetEntriesRequest.config_version)
+}
+inline ::uint32_t PreviewPetEntriesRequest::_internal_config_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.config_version_;
+}
+inline void PreviewPetEntriesRequest::_internal_set_config_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_version_ = value;
+}
+
+// map<uint32, uint32> target = 4;
+inline int PreviewPetEntriesRequest::_internal_target_size() const {
+  return _internal_target().size();
+}
+inline int PreviewPetEntriesRequest::target_size() const {
+  return _internal_target_size();
+}
+inline void PreviewPetEntriesRequest::clear_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PreviewPetEntriesRequest::_internal_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PreviewPetEntriesRequest::target() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:PreviewPetEntriesRequest.target)
+  return _internal_target();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PreviewPetEntriesRequest::_internal_mutable_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PreviewPetEntriesRequest::mutable_target()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_mutable_map:PreviewPetEntriesRequest.target)
+  return _internal_mutable_target();
+}
+
+// -------------------------------------------------------------------
+
+// PreviewPetEntriesResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool PreviewPetEntriesResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& PreviewPetEntriesResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& PreviewPetEntriesResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PreviewPetEntriesResponse.error_message)
+  return _internal_error_message();
+}
+inline void PreviewPetEntriesResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PreviewPetEntriesResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE PreviewPetEntriesResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE PreviewPetEntriesResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PreviewPetEntriesResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL PreviewPetEntriesResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL PreviewPetEntriesResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:PreviewPetEntriesResponse.error_message)
+  return _msg;
+}
+inline void PreviewPetEntriesResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:PreviewPetEntriesResponse.error_message)
+}
+
+// .PetEntriesInfo entries = 2;
+inline bool PreviewPetEntriesResponse::has_entries() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.entries_ != nullptr);
+  return value;
+}
+inline void PreviewPetEntriesResponse::clear_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ != nullptr) _impl_.entries_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::PetEntriesInfo& PreviewPetEntriesResponse::_internal_entries() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PetEntriesInfo* p = _impl_.entries_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PetEntriesInfo>(&::PetEntriesInfo_globals_);
+}
+inline const ::PetEntriesInfo& PreviewPetEntriesResponse::entries() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PreviewPetEntriesResponse.entries)
+  return _internal_entries();
+}
+inline void PreviewPetEntriesResponse::unsafe_arena_set_allocated_entries(
+    ::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PreviewPetEntriesResponse.entries)
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE PreviewPetEntriesResponse::release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PetEntriesInfo* released = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE PreviewPetEntriesResponse::unsafe_arena_release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PreviewPetEntriesResponse.entries)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PetEntriesInfo* temp = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  return temp;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL PreviewPetEntriesResponse::_internal_mutable_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PetEntriesInfo>(GetArena());
+    _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(p);
+  }
+  return _impl_.entries_;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL PreviewPetEntriesResponse::mutable_entries()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::PetEntriesInfo* _msg = _internal_mutable_entries();
+  // @@protoc_insertion_point(field_mutable:PreviewPetEntriesResponse.entries)
+  return _msg;
+}
+inline void PreviewPetEntriesResponse::set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:PreviewPetEntriesResponse.entries)
+}
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// SavePetEntriesRequest
+
+// uint64 pet_id = 1;
+inline void SavePetEntriesRequest::clear_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t SavePetEntriesRequest::pet_id() const {
+  // @@protoc_insertion_point(field_get:SavePetEntriesRequest.pet_id)
+  return _internal_pet_id();
+}
+inline void SavePetEntriesRequest::set_pet_id(::uint64_t value) {
+  _internal_set_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:SavePetEntriesRequest.pet_id)
+}
+inline ::uint64_t SavePetEntriesRequest::_internal_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_id_;
+}
+inline void SavePetEntriesRequest::_internal_set_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_id_ = value;
+}
+
+// uint64 state_version = 2;
+inline void SavePetEntriesRequest::clear_state_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t SavePetEntriesRequest::state_version() const {
+  // @@protoc_insertion_point(field_get:SavePetEntriesRequest.state_version)
+  return _internal_state_version();
+}
+inline void SavePetEntriesRequest::set_state_version(::uint64_t value) {
+  _internal_set_state_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SavePetEntriesRequest.state_version)
+}
+inline ::uint64_t SavePetEntriesRequest::_internal_state_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_version_;
+}
+inline void SavePetEntriesRequest::_internal_set_state_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_version_ = value;
+}
+
+// uint32 config_version = 3;
+inline void SavePetEntriesRequest::clear_config_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t SavePetEntriesRequest::config_version() const {
+  // @@protoc_insertion_point(field_get:SavePetEntriesRequest.config_version)
+  return _internal_config_version();
+}
+inline void SavePetEntriesRequest::set_config_version(::uint32_t value) {
+  _internal_set_config_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SavePetEntriesRequest.config_version)
+}
+inline ::uint32_t SavePetEntriesRequest::_internal_config_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.config_version_;
+}
+inline void SavePetEntriesRequest::_internal_set_config_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.config_version_ = value;
+}
+
+// map<uint32, uint32> target = 4;
+inline int SavePetEntriesRequest::_internal_target_size() const {
+  return _internal_target().size();
+}
+inline int SavePetEntriesRequest::target_size() const {
+  return _internal_target_size();
+}
+inline void SavePetEntriesRequest::clear_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& SavePetEntriesRequest::_internal_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& SavePetEntriesRequest::target() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:SavePetEntriesRequest.target)
+  return _internal_target();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL SavePetEntriesRequest::_internal_mutable_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL SavePetEntriesRequest::mutable_target()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_mutable_map:SavePetEntriesRequest.target)
+  return _internal_mutable_target();
+}
+
+// string request_id = 5;
+inline void SavePetEntriesRequest::clear_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SavePetEntriesRequest::request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SavePetEntriesRequest.request_id)
+  return _internal_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SavePetEntriesRequest::set_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SavePetEntriesRequest.request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL SavePetEntriesRequest::mutable_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_request_id();
+  // @@protoc_insertion_point(field_mutable:SavePetEntriesRequest.request_id)
+  return _s;
+}
+inline const ::std::string& SavePetEntriesRequest::_internal_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.request_id_.Get();
+}
+inline void SavePetEntriesRequest::_internal_set_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SavePetEntriesRequest::_internal_mutable_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SavePetEntriesRequest::release_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SavePetEntriesRequest.request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SavePetEntriesRequest::set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.request_id_.IsDefault()) {
+    _impl_.request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SavePetEntriesRequest.request_id)
+}
+
+// -------------------------------------------------------------------
+
+// SavePetEntriesResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SavePetEntriesResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SavePetEntriesResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SavePetEntriesResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SavePetEntriesResponse.error_message)
+  return _internal_error_message();
+}
+inline void SavePetEntriesResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SavePetEntriesResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SavePetEntriesResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SavePetEntriesResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SavePetEntriesResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SavePetEntriesResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SavePetEntriesResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:SavePetEntriesResponse.error_message)
+  return _msg;
+}
+inline void SavePetEntriesResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SavePetEntriesResponse.error_message)
+}
+
+// .PetEntriesInfo entries = 2;
+inline bool SavePetEntriesResponse::has_entries() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.entries_ != nullptr);
+  return value;
+}
+inline void SavePetEntriesResponse::clear_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ != nullptr) _impl_.entries_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::PetEntriesInfo& SavePetEntriesResponse::_internal_entries() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PetEntriesInfo* p = _impl_.entries_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PetEntriesInfo>(&::PetEntriesInfo_globals_);
+}
+inline const ::PetEntriesInfo& SavePetEntriesResponse::entries() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SavePetEntriesResponse.entries)
+  return _internal_entries();
+}
+inline void SavePetEntriesResponse::unsafe_arena_set_allocated_entries(
+    ::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SavePetEntriesResponse.entries)
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE SavePetEntriesResponse::release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::PetEntriesInfo* released = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PetEntriesInfo* PROTOBUF_NULLABLE SavePetEntriesResponse::unsafe_arena_release_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SavePetEntriesResponse.entries)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::PetEntriesInfo* temp = _impl_.entries_;
+  _impl_.entries_ = nullptr;
+  return temp;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL SavePetEntriesResponse::_internal_mutable_entries() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.entries_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PetEntriesInfo>(GetArena());
+    _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(p);
+  }
+  return _impl_.entries_;
+}
+inline ::PetEntriesInfo* PROTOBUF_NONNULL SavePetEntriesResponse::mutable_entries()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::PetEntriesInfo* _msg = _internal_mutable_entries();
+  // @@protoc_insertion_point(field_mutable:SavePetEntriesResponse.entries)
+  return _msg;
+}
+inline void SavePetEntriesResponse::set_allocated_entries(::PetEntriesInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.entries_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.entries_ = reinterpret_cast<::PetEntriesInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SavePetEntriesResponse.entries)
+}
+
+// string request_id = 3;
+inline void SavePetEntriesResponse::clear_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SavePetEntriesResponse::request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SavePetEntriesResponse.request_id)
+  return _internal_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SavePetEntriesResponse::set_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SavePetEntriesResponse.request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL SavePetEntriesResponse::mutable_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_request_id();
+  // @@protoc_insertion_point(field_mutable:SavePetEntriesResponse.request_id)
+  return _s;
+}
+inline const ::std::string& SavePetEntriesResponse::_internal_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.request_id_.Get();
+}
+inline void SavePetEntriesResponse::_internal_set_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SavePetEntriesResponse::_internal_mutable_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SavePetEntriesResponse::release_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SavePetEntriesResponse.request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SavePetEntriesResponse::set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.request_id_.IsDefault()) {
+    _impl_.request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SavePetEntriesResponse.request_id)
+}
+
+// bool replayed = 4;
+inline void SavePetEntriesResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool SavePetEntriesResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:SavePetEntriesResponse.replayed)
+  return _internal_replayed();
+}
+inline void SavePetEntriesResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SavePetEntriesResponse.replayed)
+}
+inline bool SavePetEntriesResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void SavePetEntriesResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
 }
 
 #ifdef __GNUC__

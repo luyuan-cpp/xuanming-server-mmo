@@ -486,6 +486,8 @@ void FillPetInfo(entt::entity player, const PlayerPetComp& comp, const PetInstan
 	// 下发生效等级(存储等级按本版本种类上限封顶),与总点数、维度 value、二级属性同一口径。
 	const auto effectiveLevel = PetEffectiveLevel(pet, row);
 	info.set_pet_id(pet.pet_id());
+    PetSystem::FillCultivationTier(pet, info);
+    if (PetSystem::BuildEntriesInfo(pet, *info.mutable_entries()) != kSuccess) info.clear_entries();
 	info.set_pet_table_id(pet.pet_table_id());
 	info.set_level(effectiveLevel);
 	info.set_is_active(comp.active_pet_id() == pet.pet_id());
@@ -566,7 +568,11 @@ void PetSystem::InitializeOnLoad(entt::entity player) {
 				 << " active_pet_id=" << comp.active_pet_id();
 		comp.set_active_pet_id(0);
 	}
-	RecalculateAll(player, RecalcReason::kLoad);
+	// 仅旧存档缺少独立身份时采用种类表的显式迁移值；不读 quality/acquisition_tier。
+    for (auto& pet : *comp.mutable_pets()) if (pet.cultivation_tier() == 0) {
+        if (const auto* row = PetRow(pet.pet_table_id())) pet.set_cultivation_tier(row->cultivation_tier());
+    }
+    RecalculateAll(player, RecalcReason::kLoad);
 }
 
 void PetSystem::RecalculateAll(entt::entity player, RecalcReason reason) {
@@ -994,6 +1000,7 @@ uint32_t PrepareNewPet(entt::entity player, const PetTable& row, const Attribute
 	auto* pet = &candidate;
 	pet->set_pet_id(petId);
 	pet->set_pet_table_id(row.id());
+    pet->set_cultivation_tier(row.cultivation_tier());
 	pet->set_level(petrules::EffectiveLevel(ownerLevel, row.level_cap()));
 	pet->set_created_at(TimeSystem::NowSecondsUTC());
 
@@ -1296,7 +1303,10 @@ bool PetSystem::BuildBattleSnapshot(entt::entity player, ::BattlePetSnapshot& sn
 
 	// 快照里的数值与列表同一个来源(ComputeDerived 已按生效加点过门):不生效的加点、未知键都带不进战斗。
 	const auto derived = ComputeDerived(*pet, *row, *pool);
-	snapshot.set_pet_id(pet->pet_id());
+	PetEntriesInfo entries;
+    if (BuildEntriesInfo(*pet, entries) == kSuccess) *snapshot.mutable_pet_cultivation() = entries.effects();
+    else snapshot.clear_pet_cultivation(); // 旧表配置未接条目时不阻断原有宝宝参战。
+    snapshot.set_pet_id(pet->pet_id());
 	snapshot.set_owner_player_id(tlsEcs.GetPlayerId(player));
 	snapshot.set_pet_name(!pet->name().empty() ? pet->name() : row->name());
 	snapshot.set_pet_table_id(pet->pet_table_id());

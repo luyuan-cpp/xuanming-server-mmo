@@ -37,6 +37,18 @@ type PetRuleDescComp struct {
     Value string
 }
 
+type PetRuleEntry_config_versionComp struct {
+    Value uint32
+}
+
+type PetRuleEntry_total_pointsComp struct {
+    Value uint32
+}
+
+type PetRuleEntry_max_directionsComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -64,5 +76,17 @@ func MakePetRuleSummon_cooldown_secondsComp(row *pb.PetRuleTable) PetRuleSummon_
 
 func MakePetRuleDescComp(row *pb.PetRuleTable) PetRuleDescComp {
     return PetRuleDescComp{Value: row.Desc}
+}
+
+func MakePetRuleEntry_config_versionComp(row *pb.PetRuleTable) PetRuleEntry_config_versionComp {
+    return PetRuleEntry_config_versionComp{Value: row.EntryConfigVersion}
+}
+
+func MakePetRuleEntry_total_pointsComp(row *pb.PetRuleTable) PetRuleEntry_total_pointsComp {
+    return PetRuleEntry_total_pointsComp{Value: row.EntryTotalPoints}
+}
+
+func MakePetRuleEntry_max_directionsComp(row *pb.PetRuleTable) PetRuleEntry_max_directionsComp {
+    return PetRuleEntry_max_directionsComp{Value: row.EntryMaxDirections}
 }
 

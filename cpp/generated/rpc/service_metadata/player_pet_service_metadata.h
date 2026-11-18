@@ -46,3 +46,15 @@ constexpr uint32_t ScenePetClientPlayerGetPetShopIndex = 9;
 constexpr uint32_t ScenePetClientPlayerBuyPetMessageId = 403;
 constexpr uint32_t ScenePetClientPlayerBuyPetIndex = 10;
 #define ScenePetClientPlayerBuyPetMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(10)
+
+constexpr uint32_t ScenePetClientPlayerGetPetEntriesMessageId = 410;
+constexpr uint32_t ScenePetClientPlayerGetPetEntriesIndex = 11;
+#define ScenePetClientPlayerGetPetEntriesMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(11)
+
+constexpr uint32_t ScenePetClientPlayerPreviewPetEntriesMessageId = 411;
+constexpr uint32_t ScenePetClientPlayerPreviewPetEntriesIndex = 12;
+#define ScenePetClientPlayerPreviewPetEntriesMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(12)
+
+constexpr uint32_t ScenePetClientPlayerSavePetEntriesMessageId = 412;
+constexpr uint32_t ScenePetClientPlayerSavePetEntriesIndex = 13;
+#define ScenePetClientPlayerSavePetEntriesMethod  ::ScenePetClientPlayer_Stub::descriptor()->method(13)

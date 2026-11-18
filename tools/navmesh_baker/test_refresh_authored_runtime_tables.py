@@ -38,6 +38,16 @@ class RefreshAuthoredTablesTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "artifact set changed"):
             subject.compare_artifacts(self.previous, self.official, self.candidate, ["Pet"])
 
+    def test_new_tables_require_matching_official_artifacts_and_explicit_approval(self):
+        for ext in ("json", "pb"):
+            name = "petentry." + ext
+            self.candidate[name] = self.official[name] = ext
+        with self.assertRaisesRegex(RuntimeError, "Unapproved table changes"):
+            subject.compare_artifacts(self.previous, self.official, self.candidate, ["Pet"])
+        changed = subject.compare_artifacts(self.previous, self.official, self.candidate, ["Pet", "PetEntry"])
+        self.assertIn("petentry.json", changed)
+        self.assertIn("petentry.pb", changed)
+
 
 if __name__ == "__main__":
     unittest.main()

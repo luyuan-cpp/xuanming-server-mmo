@@ -1099,19 +1099,20 @@ type BattlePetSnapshot struct {
 	// 宝宝的永久 id(scene 从 item 号段取)。**不是**局内 actor_id:号段改造后 player_id 与
 	// pet_id 都从 1 起发,直接当 actor_id 会让 N 号玩家与 N 号宝宝同号。引擎给宝宝另发
 	// kPetActorIdBase 段的局内号,真实 pet_id 存进 BattleActorState.pet_id,结算回写只认它。
-	PetId          uint64                        `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
-	OwnerPlayerId  uint64                        `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"` // 主人;决定队伍与结算归属
-	PetName        string                        `protobuf:"bytes,3,opt,name=pet_name,json=petName,proto3" json:"pet_name,omitempty"`
-	PetTableId     uint32                        `protobuf:"varint,4,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`
-	Level          uint32                        `protobuf:"varint,5,opt,name=level,proto3" json:"level,omitempty"`
-	BaseAttributes *component.BaseAttributesComp `protobuf:"bytes,6,opt,name=base_attributes,json=baseAttributes,proto3" json:"base_attributes,omitempty"`
-	MaxHealth      uint64                        `protobuf:"varint,7,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"`
-	MaxMana        uint64                        `protobuf:"varint,8,opt,name=max_mana,json=maxMana,proto3" json:"max_mana,omitempty"`
-	PhysicalAttack uint64                        `protobuf:"varint,9,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"`
-	MagicAttack    uint64                        `protobuf:"varint,10,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`
-	Defense        uint64                        `protobuf:"varint,11,opt,name=defense,proto3" json:"defense,omitempty"`
-	SkillTableIds  []uint32                      `protobuf:"varint,12,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`
-	SkillRanks     map[uint32]uint32             `protobuf:"bytes,13,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 公共原型的已学等级，开局再次校验宝宝资格。
+	PetId          uint64                           `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	OwnerPlayerId  uint64                           `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"` // 主人;决定队伍与结算归属
+	PetName        string                           `protobuf:"bytes,3,opt,name=pet_name,json=petName,proto3" json:"pet_name,omitempty"`
+	PetTableId     uint32                           `protobuf:"varint,4,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`
+	Level          uint32                           `protobuf:"varint,5,opt,name=level,proto3" json:"level,omitempty"`
+	BaseAttributes *component.BaseAttributesComp    `protobuf:"bytes,6,opt,name=base_attributes,json=baseAttributes,proto3" json:"base_attributes,omitempty"`
+	MaxHealth      uint64                           `protobuf:"varint,7,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"`
+	MaxMana        uint64                           `protobuf:"varint,8,opt,name=max_mana,json=maxMana,proto3" json:"max_mana,omitempty"`
+	PhysicalAttack uint64                           `protobuf:"varint,9,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"`
+	MagicAttack    uint64                           `protobuf:"varint,10,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`
+	Defense        uint64                           `protobuf:"varint,11,opt,name=defense,proto3" json:"defense,omitempty"`
+	SkillTableIds  []uint32                         `protobuf:"varint,12,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`
+	SkillRanks     map[uint32]uint32                `protobuf:"bytes,13,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 公共原型的已学等级，开局再次校验宝宝资格。
+	PetCultivation *component.PetCultivationEffects `protobuf:"bytes,14,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1237,6 +1238,13 @@ func (x *BattlePetSnapshot) GetSkillRanks() map[uint32]uint32 {
 	return nil
 }
 
+func (x *BattlePetSnapshot) GetPetCultivation() *component.PetCultivationEffects {
+	if x != nil {
+		return x.PetCultivation
+	}
+	return nil
+}
+
 type BattleActorState struct {
 	state               protoimpl.MessageState        `protogen:"open.v1"`
 	ActorId             uint64                        `protobuf:"varint,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // 玩家 = player_id;怪物 / 宝宝 = 引擎局内序号(bit63 打标,见 kEngineLocalActorIdFlag)
@@ -1269,18 +1277,20 @@ type BattleActorState struct {
 	// 下发给客户端的状态快照里会被清空,不暴露对手的装备概率。
 	Combat *component.CombatAttributes `protobuf:"bytes,27,opt,name=combat,proto3" json:"combat,omitempty"`
 	// 本局职业技能生效等级(来自快照 skill_ranks,引擎复核后的值;怪物 / 宝宝为空)。
-	SkillRanks         map[uint32]uint32           `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	CapturePetTableId  uint32                      `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
-	CapturedByPlayerId uint64                      `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
-	CaptureMinLevel    uint32                      `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
-	AbilityUseCounts   map[uint32]uint32           `protobuf:"bytes,32,rep,name=ability_use_counts,json=abilityUseCounts,proto3" json:"ability_use_counts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 本场限次；技能表定义上限。
-	RuntimeSkills      []uint32                    `protobuf:"varint,33,rep,packed,name=runtime_skills,json=runtimeSkills,proto3" json:"runtime_skills,omitempty"`                                                                                // 非主动技能也保留，供被动、追击、开场查询。
-	WithdrawUntilRound uint32                      `protobuf:"varint,34,opt,name=withdraw_until_round,json=withdrawUntilRound,proto3" json:"withdraw_until_round,omitempty"`                                                                      // 劝退返回边界；与阵亡分开。
-	RoundEffectUsage   map[uint32]uint64           `protobuf:"bytes,35,rep,name=round_effect_usage,json=roundEffectUsage,proto3" json:"round_effect_usage,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 来源技能的全体目标共享回合预算，下一回合清零。
-	EquipmentEffects   *component.EquipmentEffects `protobuf:"bytes,36,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`
-	ArtifactStates     []*BattleArtifactState      `protobuf:"bytes,37,rep,name=artifact_states,json=artifactStates,proto3" json:"artifact_states,omitempty"`
-	EntryMaxHealth     uint64                      `protobuf:"varint,38,opt,name=entry_max_health,json=entryMaxHealth,proto3" json:"entry_max_health,omitempty"` // 入战上限，临时上限变化不放大法宝预算。
-	EntryMaxMana       uint64                      `protobuf:"varint,39,opt,name=entry_max_mana,json=entryMaxMana,proto3" json:"entry_max_mana,omitempty"`
+	SkillRanks         map[uint32]uint32                `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	CapturePetTableId  uint32                           `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
+	CapturedByPlayerId uint64                           `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
+	CaptureMinLevel    uint32                           `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
+	AbilityUseCounts   map[uint32]uint32                `protobuf:"bytes,32,rep,name=ability_use_counts,json=abilityUseCounts,proto3" json:"ability_use_counts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 本场限次；技能表定义上限。
+	RuntimeSkills      []uint32                         `protobuf:"varint,33,rep,packed,name=runtime_skills,json=runtimeSkills,proto3" json:"runtime_skills,omitempty"`                                                                                // 非主动技能也保留，供被动、追击、开场查询。
+	WithdrawUntilRound uint32                           `protobuf:"varint,34,opt,name=withdraw_until_round,json=withdrawUntilRound,proto3" json:"withdraw_until_round,omitempty"`                                                                      // 劝退返回边界；与阵亡分开。
+	RoundEffectUsage   map[uint32]uint64                `protobuf:"bytes,35,rep,name=round_effect_usage,json=roundEffectUsage,proto3" json:"round_effect_usage,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 来源技能的全体目标共享回合预算，下一回合清零。
+	EquipmentEffects   *component.EquipmentEffects      `protobuf:"bytes,36,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`
+	ArtifactStates     []*BattleArtifactState           `protobuf:"bytes,37,rep,name=artifact_states,json=artifactStates,proto3" json:"artifact_states,omitempty"`
+	EntryMaxHealth     uint64                           `protobuf:"varint,38,opt,name=entry_max_health,json=entryMaxHealth,proto3" json:"entry_max_health,omitempty"` // 入战上限，临时上限变化不放大法宝预算。
+	EntryMaxMana       uint64                           `protobuf:"varint,39,opt,name=entry_max_mana,json=entryMaxMana,proto3" json:"entry_max_mana,omitempty"`
+	PetCultivation     *component.PetCultivationEffects `protobuf:"bytes,41,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"` // 宝宝独立条目贡献，开局快照冻结。
+	SupportEffects     *component.SupportEffectSummary  `protobuf:"bytes,40,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"` // 仅本人可见；来源及中立预览由本轮真实状态生成。
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1586,6 +1596,20 @@ func (x *BattleActorState) GetEntryMaxMana() uint64 {
 		return x.EntryMaxMana
 	}
 	return 0
+}
+
+func (x *BattleActorState) GetPetCultivation() *component.PetCultivationEffects {
+	if x != nil {
+		return x.PetCultivation
+	}
+	return nil
+}
+
+func (x *BattleActorState) GetSupportEffects() *component.SupportEffectSummary {
+	if x != nil {
+		return x.SupportEffects
+	}
+	return nil
 }
 
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。
@@ -2627,7 +2651,7 @@ var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/battle/battle_data.proto\x1a'proto/common/component/actor_comp.proto\x1a7proto/common/component/actor_attribute_state_comp.proto\x1a.proto/common/component/equipment_effects.proto\"\xe3\x01\n" +
+	"\x1eproto/battle/battle_data.proto\x1a'proto/common/component/actor_comp.proto\x1a7proto/common/component/actor_attribute_state_comp.proto\x1a.proto/common/component/equipment_effects.proto\x1a,proto/common/component/support_effects.proto\x1a4proto/common/component/pet_cultivation_effects.proto\"\xe3\x01\n" +
 	"\rBattleRouting\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12 \n" +
@@ -2696,7 +2720,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11equipment_effects\x18\x17 \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaf\x04\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xf0\x04\n" +
 	"\x11BattlePetSnapshot\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x19\n" +
@@ -2714,10 +2738,11 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\adefense\x18\v \x01(\x04R\adefense\x12&\n" +
 	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\x12C\n" +
 	"\vskill_ranks\x18\r \x03(\v2\".BattlePetSnapshot.SkillRanksEntryR\n" +
-	"skillRanks\x1a=\n" +
+	"skillRanks\x12?\n" +
+	"\x0fpet_cultivation\x18\x0e \x01(\v2\x16.PetCultivationEffectsR\x0epetCultivation\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x86\x0f\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x87\x10\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -2765,7 +2790,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11equipment_effects\x18$ \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x12=\n" +
 	"\x0fartifact_states\x18% \x03(\v2\x14.BattleArtifactStateR\x0eartifactStates\x12(\n" +
 	"\x10entry_max_health\x18& \x01(\x04R\x0eentryMaxHealth\x12$\n" +
-	"\x0eentry_max_mana\x18' \x01(\x04R\fentryMaxMana\x1aF\n" +
+	"\x0eentry_max_mana\x18' \x01(\x04R\fentryMaxMana\x12?\n" +
+	"\x0fpet_cultivation\x18) \x01(\v2\x16.PetCultivationEffectsR\x0epetCultivation\x12>\n" +
+	"\x0fsupport_effects\x18( \x01(\v2\x15.SupportEffectSummaryR\x0esupportEffects\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
@@ -2959,40 +2986,42 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
 var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_proto_battle_battle_data_proto_goTypes = []any{
-	(EBattleActorType)(0),                // 0: eBattleActorType
-	(EBattleActionType)(0),               // 1: eBattleActionType
-	(EBattleEventType)(0),                // 2: eBattleEventType
-	(EBattleHitKind)(0),                  // 3: eBattleHitKind
-	(EBattleOutcome)(0),                  // 4: eBattleOutcome
-	(EBattleActivityKind)(0),             // 5: eBattleActivityKind
-	(ESpectateVisibility)(0),             // 6: eSpectateVisibility
-	(ESpectateTier)(0),                   // 7: eSpectateTier
-	(*BattleRouting)(nil),                // 8: BattleRouting
-	(*BattleBuffEntry)(nil),              // 9: BattleBuffEntry
-	(*BattleItemEntry)(nil),              // 10: BattleItemEntry
-	(*BattlePlayerSnapshot)(nil),         // 11: BattlePlayerSnapshot
-	(*BattlePetSnapshot)(nil),            // 12: BattlePetSnapshot
-	(*BattleActorState)(nil),             // 13: BattleActorState
-	(*BattleArtifactState)(nil),          // 14: BattleArtifactState
-	(*BattleAction)(nil),                 // 15: BattleAction
-	(*BattleEventItem)(nil),              // 16: BattleEventItem
-	(*BattleMonsterDefeat)(nil),          // 17: BattleMonsterDefeat
-	(*BattleCurrencyGain)(nil),           // 18: BattleCurrencyGain
-	(*BattleRandomItemReward)(nil),       // 19: BattleRandomItemReward
-	(*BattleRewardProfile)(nil),          // 20: BattleRewardProfile
-	(*BattleRewardConfig)(nil),           // 21: BattleRewardConfig
-	(*BattleSettlementData)(nil),         // 22: BattleSettlementData
-	(*BattlePetSettlementData)(nil),      // 23: BattlePetSettlementData
-	(*BattleActivityContext)(nil),        // 24: BattleActivityContext
-	nil,                                  // 25: BattlePlayerSnapshot.SkillRanksEntry
-	nil,                                  // 26: BattlePetSnapshot.SkillRanksEntry
-	nil,                                  // 27: BattleActorState.SkillCooldownRoundsEntry
-	nil,                                  // 28: BattleActorState.SkillRanksEntry
-	nil,                                  // 29: BattleActorState.AbilityUseCountsEntry
-	nil,                                  // 30: BattleActorState.RoundEffectUsageEntry
-	(*component.BaseAttributesComp)(nil), // 31: BaseAttributesComp
-	(*component.CombatAttributes)(nil),   // 32: CombatAttributes
-	(*component.EquipmentEffects)(nil),   // 33: EquipmentEffects
+	(EBattleActorType)(0),                   // 0: eBattleActorType
+	(EBattleActionType)(0),                  // 1: eBattleActionType
+	(EBattleEventType)(0),                   // 2: eBattleEventType
+	(EBattleHitKind)(0),                     // 3: eBattleHitKind
+	(EBattleOutcome)(0),                     // 4: eBattleOutcome
+	(EBattleActivityKind)(0),                // 5: eBattleActivityKind
+	(ESpectateVisibility)(0),                // 6: eSpectateVisibility
+	(ESpectateTier)(0),                      // 7: eSpectateTier
+	(*BattleRouting)(nil),                   // 8: BattleRouting
+	(*BattleBuffEntry)(nil),                 // 9: BattleBuffEntry
+	(*BattleItemEntry)(nil),                 // 10: BattleItemEntry
+	(*BattlePlayerSnapshot)(nil),            // 11: BattlePlayerSnapshot
+	(*BattlePetSnapshot)(nil),               // 12: BattlePetSnapshot
+	(*BattleActorState)(nil),                // 13: BattleActorState
+	(*BattleArtifactState)(nil),             // 14: BattleArtifactState
+	(*BattleAction)(nil),                    // 15: BattleAction
+	(*BattleEventItem)(nil),                 // 16: BattleEventItem
+	(*BattleMonsterDefeat)(nil),             // 17: BattleMonsterDefeat
+	(*BattleCurrencyGain)(nil),              // 18: BattleCurrencyGain
+	(*BattleRandomItemReward)(nil),          // 19: BattleRandomItemReward
+	(*BattleRewardProfile)(nil),             // 20: BattleRewardProfile
+	(*BattleRewardConfig)(nil),              // 21: BattleRewardConfig
+	(*BattleSettlementData)(nil),            // 22: BattleSettlementData
+	(*BattlePetSettlementData)(nil),         // 23: BattlePetSettlementData
+	(*BattleActivityContext)(nil),           // 24: BattleActivityContext
+	nil,                                     // 25: BattlePlayerSnapshot.SkillRanksEntry
+	nil,                                     // 26: BattlePetSnapshot.SkillRanksEntry
+	nil,                                     // 27: BattleActorState.SkillCooldownRoundsEntry
+	nil,                                     // 28: BattleActorState.SkillRanksEntry
+	nil,                                     // 29: BattleActorState.AbilityUseCountsEntry
+	nil,                                     // 30: BattleActorState.RoundEffectUsageEntry
+	(*component.BaseAttributesComp)(nil),    // 31: BaseAttributesComp
+	(*component.CombatAttributes)(nil),      // 32: CombatAttributes
+	(*component.EquipmentEffects)(nil),      // 33: EquipmentEffects
+	(*component.PetCultivationEffects)(nil), // 34: PetCultivationEffects
+	(*component.SupportEffectSummary)(nil),  // 35: SupportEffectSummary
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	31, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
@@ -3005,34 +3034,37 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	33, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
 	31, // 8: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
 	26, // 9: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
-	0,  // 10: BattleActorState.actor_type:type_name -> eBattleActorType
-	31, // 11: BattleActorState.attributes:type_name -> BaseAttributesComp
-	9,  // 12: BattleActorState.buffs:type_name -> BattleBuffEntry
-	27, // 13: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	32, // 14: BattleActorState.combat:type_name -> CombatAttributes
-	28, // 15: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
-	29, // 16: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
-	30, // 17: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
-	33, // 18: BattleActorState.equipment_effects:type_name -> EquipmentEffects
-	14, // 19: BattleActorState.artifact_states:type_name -> BattleArtifactState
-	1,  // 20: BattleAction.action_type:type_name -> eBattleActionType
-	2,  // 21: BattleEventItem.event_type:type_name -> eBattleEventType
-	3,  // 22: BattleEventItem.hit_kind:type_name -> eBattleHitKind
-	18, // 23: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
-	19, // 24: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
-	20, // 25: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
-	4,  // 26: BattleSettlementData.outcome:type_name -> eBattleOutcome
-	10, // 27: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
-	10, // 28: BattleSettlementData.items_gained:type_name -> BattleItemEntry
-	23, // 29: BattleSettlementData.pets:type_name -> BattlePetSettlementData
-	17, // 30: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
-	18, // 31: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
-	5,  // 32: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	33, // [33:33] is the sub-list for method output_type
-	33, // [33:33] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	34, // 10: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
+	0,  // 11: BattleActorState.actor_type:type_name -> eBattleActorType
+	31, // 12: BattleActorState.attributes:type_name -> BaseAttributesComp
+	9,  // 13: BattleActorState.buffs:type_name -> BattleBuffEntry
+	27, // 14: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	32, // 15: BattleActorState.combat:type_name -> CombatAttributes
+	28, // 16: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	29, // 17: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
+	30, // 18: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
+	33, // 19: BattleActorState.equipment_effects:type_name -> EquipmentEffects
+	14, // 20: BattleActorState.artifact_states:type_name -> BattleArtifactState
+	34, // 21: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
+	35, // 22: BattleActorState.support_effects:type_name -> SupportEffectSummary
+	1,  // 23: BattleAction.action_type:type_name -> eBattleActionType
+	2,  // 24: BattleEventItem.event_type:type_name -> eBattleEventType
+	3,  // 25: BattleEventItem.hit_kind:type_name -> eBattleHitKind
+	18, // 26: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
+	19, // 27: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
+	20, // 28: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
+	4,  // 29: BattleSettlementData.outcome:type_name -> eBattleOutcome
+	10, // 30: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
+	10, // 31: BattleSettlementData.items_gained:type_name -> BattleItemEntry
+	23, // 32: BattleSettlementData.pets:type_name -> BattlePetSettlementData
+	17, // 33: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
+	18, // 34: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
+	5,  // 35: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	36, // [36:36] is the sub-list for method output_type
+	36, // [36:36] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }

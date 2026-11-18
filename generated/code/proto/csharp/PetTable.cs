@@ -22,20 +22,21 @@ public static partial class PetTableReflection {
   static PetTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Cg9wZXRfdGFibGUucHJvdG8iqAIKCFBldFRhYmxlEgoKAmlkGAEgASgNEgwK",
+          "Cg9wZXRfdGFibGUucHJvdG8iwgIKCFBldFRhYmxlEgoKAmlkGAEgASgNEgwK",
           "BG5hbWUYAiABKAkSDAoEZGVzYxgDIAEoCRIQCghtb2RlbF9pZBgEIAEoDRIP",
           "CgdxdWFsaXR5GAUgASgNEhQKDHVubG9ja19sZXZlbBgGIAEoDRIRCglsZXZl",
           "bF9jYXAYByABKA0SEwoLaW5pdF9oZWFsdGgYCCABKAQSEQoJaW5pdF9tYW5h",
           "GAkgASgEEhIKCmluaXRfc3BlZWQYCiABKAQSFAoMYXB0aXR1ZGVfbWluGAsg",
           "AygNEhQKDGFwdGl0dWRlX21heBgMIAMoDRINCgVza2lsbBgNIAMoDRIXCg9z",
           "aG9wX3ByaWNlX2dvbGQYDiABKAQSGAoQYWNxdWlzaXRpb25fdGllchgPIAEo",
-          "DSInCgxQZXRUYWJsZURhdGESFwoEZGF0YRgBIAMoCzIJLlBldFRhYmxlQjoK",
-          "DmNvbS5nYW1lLnRhYmxlQhJQZXRUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJh",
-          "dGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "DRIYChBjdWx0aXZhdGlvbl90aWVyGBAgASgNIicKDFBldFRhYmxlRGF0YRIX",
+          "CgRkYXRhGAEgAygLMgkuUGV0VGFibGVCOgoOY29tLmdhbWUudGFibGVCElBl",
+          "dFRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
+          "Mw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::PetTable), global::PetTable.Parser, new[]{ "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill", "ShopPriceGold", "AcquisitionTier" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::PetTable), global::PetTable.Parser, new[]{ "Id", "Name", "Desc", "ModelId", "Quality", "UnlockLevel", "LevelCap", "InitHealth", "InitMana", "InitSpeed", "AptitudeMin", "AptitudeMax", "Skill", "ShopPriceGold", "AcquisitionTier", "CultivationTier" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::PetTableData), global::PetTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -93,6 +94,7 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     skill_ = other.skill_.Clone();
     shopPriceGold_ = other.shopPriceGold_;
     acquisitionTier_ = other.acquisitionTier_;
+    cultivationTier_ = other.cultivationTier_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -279,6 +281,18 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     }
   }
 
+  /// <summary>Field number for the "cultivation_tier" field.</summary>
+  public const int CultivationTierFieldNumber = 16;
+  private uint cultivationTier_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint CultivationTier {
+    get { return cultivationTier_; }
+    set {
+      cultivationTier_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -309,6 +323,7 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     if(!skill_.Equals(other.skill_)) return false;
     if (ShopPriceGold != other.ShopPriceGold) return false;
     if (AcquisitionTier != other.AcquisitionTier) return false;
+    if (CultivationTier != other.CultivationTier) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -331,6 +346,7 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     hash ^= skill_.GetHashCode();
     if (ShopPriceGold != 0UL) hash ^= ShopPriceGold.GetHashCode();
     if (AcquisitionTier != 0) hash ^= AcquisitionTier.GetHashCode();
+    if (CultivationTier != 0) hash ^= CultivationTier.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -400,6 +416,10 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
       output.WriteRawTag(120);
       output.WriteUInt32(AcquisitionTier);
     }
+    if (CultivationTier != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(CultivationTier);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -461,6 +481,10 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
       output.WriteRawTag(120);
       output.WriteUInt32(AcquisitionTier);
     }
+    if (CultivationTier != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(CultivationTier);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -509,6 +533,9 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     }
     if (AcquisitionTier != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(AcquisitionTier);
+    }
+    if (CultivationTier != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(CultivationTier);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -560,6 +587,9 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
     }
     if (other.AcquisitionTier != 0) {
       AcquisitionTier = other.AcquisitionTier;
+    }
+    if (other.CultivationTier != 0) {
+      CultivationTier = other.CultivationTier;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -643,6 +673,10 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
           AcquisitionTier = input.ReadUInt32();
           break;
         }
+        case 128: {
+          CultivationTier = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -723,6 +757,10 @@ public sealed partial class PetTable : pb::IMessage<PetTable>
         }
         case 120: {
           AcquisitionTier = input.ReadUInt32();
+          break;
+        }
+        case 128: {
+          CultivationTier = input.ReadUInt32();
           break;
         }
       }

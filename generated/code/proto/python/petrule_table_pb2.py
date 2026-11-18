@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13petrule_table.proto\"\x8b\x01\n\x0cPetRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x10\n\x08max_pets\x18\x02 \x01(\r\x12\x14\n\x0cname_max_len\x18\x03 \x01(\r\x12\x18\n\x10rename_cost_gold\x18\x04 \x01(\x04\x12\x1f\n\x17summon_cooldown_seconds\x18\x05 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x06 \x01(\t\"/\n\x10PetRuleTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.PetRuleTableB>\n\x0e\x63om.game.tableB\x16PetRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13petrule_table.proto\"\xe3\x01\n\x0cPetRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x10\n\x08max_pets\x18\x02 \x01(\r\x12\x14\n\x0cname_max_len\x18\x03 \x01(\r\x12\x18\n\x10rename_cost_gold\x18\x04 \x01(\x04\x12\x1f\n\x17summon_cooldown_seconds\x18\x05 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x06 \x01(\t\x12\x1c\n\x14\x65ntry_config_version\x18\x07 \x01(\r\x12\x1a\n\x12\x65ntry_total_points\x18\x08 \x01(\r\x12\x1c\n\x14\x65ntry_max_directions\x18\t \x01(\r\"/\n\x10PetRuleTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.PetRuleTableB>\n\x0e\x63om.game.tableB\x16PetRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\026PetRuleTableOuterClassP\001Z\022generated/pb/table'
   _globals['_PETRULETABLE']._serialized_start=24
-  _globals['_PETRULETABLE']._serialized_end=163
-  _globals['_PETRULETABLEDATA']._serialized_start=165
-  _globals['_PETRULETABLEDATA']._serialized_end=212
+  _globals['_PETRULETABLE']._serialized_end=251
+  _globals['_PETRULETABLEDATA']._serialized_start=253
+  _globals['_PETRULETABLEDATA']._serialized_end=300
 # @@protoc_insertion_point(module_scope)

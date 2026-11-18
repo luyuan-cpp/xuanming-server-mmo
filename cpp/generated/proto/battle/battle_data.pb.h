@@ -38,6 +38,8 @@
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/equipment_effects.pb.h"
+#include "proto/common/component/support_effects.pb.h"
+#include "proto/common/component/pet_cultivation_effects.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -4773,379 +4775,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRewardProfile final : public 
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSnapshot final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:BattlePetSnapshot) */ {
- public:
-  inline BattlePetSnapshot() : BattlePetSnapshot(nullptr) {}
-  ~BattlePetSnapshot() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BattlePetSnapshot* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattlePetSnapshot));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr BattlePetSnapshot(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline BattlePetSnapshot(const BattlePetSnapshot& from) : BattlePetSnapshot(nullptr, from) {}
-  inline BattlePetSnapshot(BattlePetSnapshot&& from) noexcept : BattlePetSnapshot(nullptr, ::std::move(from)) {}
-  inline BattlePetSnapshot& operator=(const BattlePetSnapshot& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BattlePetSnapshot& operator=(BattlePetSnapshot&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const BattlePetSnapshot& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePetSnapshot>(&BattlePetSnapshot_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 6;
-  friend void swap(BattlePetSnapshot& a, BattlePetSnapshot& b) { a.Swap(&b); }
-  inline void Swap(BattlePetSnapshot* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BattlePetSnapshot* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] BattlePetSnapshot* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<BattlePetSnapshot>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const BattlePetSnapshot& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const BattlePetSnapshot& from) { BattlePetSnapshot::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BattlePetSnapshot* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "BattlePetSnapshot"; }
-
-  explicit BattlePetSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BattlePetSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattlePetSnapshot& from);
-  BattlePetSnapshot(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattlePetSnapshot&& from) noexcept
-      : BattlePetSnapshot(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kSkillTableIdsFieldNumber = 12,
-    kPetNameFieldNumber = 3,
-    kBaseAttributesFieldNumber = 6,
-    kPetIdFieldNumber = 1,
-    kOwnerPlayerIdFieldNumber = 2,
-    kPetTableIdFieldNumber = 4,
-    kLevelFieldNumber = 5,
-    kMaxHealthFieldNumber = 7,
-    kMaxManaFieldNumber = 8,
-    kPhysicalAttackFieldNumber = 9,
-    kMagicAttackFieldNumber = 10,
-    kDefenseFieldNumber = 11,
-    kSkillRanksFieldNumber = 13,
-  };
-  // repeated uint32 skill_table_ids = 12;
-  [[nodiscard]] int skill_table_ids_size()
-      const;
-  private:
-  int _internal_skill_table_ids_size() const;
-
-  public:
-  void clear_skill_table_ids() ;
-  [[nodiscard]] ::uint32_t skill_table_ids(int index) const;
-  void set_skill_table_ids(int index, ::uint32_t value);
-  void add_skill_table_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& skill_table_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_skill_table_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_skill_table_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_table_ids();
-
-  public:
-  // string pet_name = 3;
-  void clear_pet_name() ;
-  [[nodiscard]] const ::std::string& pet_name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_pet_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_pet_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_pet_name();
-  void set_allocated_pet_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_pet_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_pet_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_pet_name();
-
-  public:
-  // .BaseAttributesComp base_attributes = 6;
-  [[nodiscard]] bool has_base_attributes()
-      const;
-  void clear_base_attributes() ;
-  [[nodiscard]] const ::BaseAttributesComp& base_attributes() const;
-  [[nodiscard]] ::BaseAttributesComp* PROTOBUF_NULLABLE release_base_attributes();
-  ::BaseAttributesComp* PROTOBUF_NONNULL mutable_base_attributes();
-  void set_allocated_base_attributes(::BaseAttributesComp* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_base_attributes(::BaseAttributesComp* PROTOBUF_NULLABLE value);
-  ::BaseAttributesComp* PROTOBUF_NULLABLE unsafe_arena_release_base_attributes();
-
-  private:
-  const ::BaseAttributesComp& _internal_base_attributes() const;
-  ::BaseAttributesComp* PROTOBUF_NONNULL _internal_mutable_base_attributes();
-
-  public:
-  // uint64 pet_id = 1;
-  void clear_pet_id() ;
-  [[nodiscard]] ::uint64_t pet_id() const;
-  void set_pet_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_pet_id() const;
-  void _internal_set_pet_id(::uint64_t value);
-
-  public:
-  // uint64 owner_player_id = 2;
-  void clear_owner_player_id() ;
-  [[nodiscard]] ::uint64_t owner_player_id() const;
-  void set_owner_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_owner_player_id() const;
-  void _internal_set_owner_player_id(::uint64_t value);
-
-  public:
-  // uint32 pet_table_id = 4;
-  void clear_pet_table_id() ;
-  [[nodiscard]] ::uint32_t pet_table_id() const;
-  void set_pet_table_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_pet_table_id() const;
-  void _internal_set_pet_table_id(::uint32_t value);
-
-  public:
-  // uint32 level = 5;
-  void clear_level() ;
-  [[nodiscard]] ::uint32_t level() const;
-  void set_level(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_level() const;
-  void _internal_set_level(::uint32_t value);
-
-  public:
-  // uint64 max_health = 7;
-  void clear_max_health() ;
-  [[nodiscard]] ::uint64_t max_health() const;
-  void set_max_health(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_max_health() const;
-  void _internal_set_max_health(::uint64_t value);
-
-  public:
-  // uint64 max_mana = 8;
-  void clear_max_mana() ;
-  [[nodiscard]] ::uint64_t max_mana() const;
-  void set_max_mana(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_max_mana() const;
-  void _internal_set_max_mana(::uint64_t value);
-
-  public:
-  // uint64 physical_attack = 9;
-  void clear_physical_attack() ;
-  [[nodiscard]] ::uint64_t physical_attack() const;
-  void set_physical_attack(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_physical_attack() const;
-  void _internal_set_physical_attack(::uint64_t value);
-
-  public:
-  // uint64 magic_attack = 10;
-  void clear_magic_attack() ;
-  [[nodiscard]] ::uint64_t magic_attack() const;
-  void set_magic_attack(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_magic_attack() const;
-  void _internal_set_magic_attack(::uint64_t value);
-
-  public:
-  // uint64 defense = 11;
-  void clear_defense() ;
-  [[nodiscard]] ::uint64_t defense() const;
-  void set_defense(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_defense() const;
-  void _internal_set_defense(::uint64_t value);
-
-  public:
-  // map<uint32, uint32> skill_ranks = 13;
-  [[nodiscard]] int skill_ranks_size()
-      const;
-  private:
-  int _internal_skill_ranks_size() const;
-
-  public:
-  void clear_skill_ranks() ;
-  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& skill_ranks() const;
-  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_skill_ranks();
-
-  private:
-  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_skill_ranks() const;
-  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_ranks();
-
-  public:
-  // @@protoc_insertion_point(class_scope:BattlePetSnapshot)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
-                          2, 42,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BattlePetSnapshot& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
-    ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
-    ::google::protobuf::internal::ArenaStringPtr pet_name_;
-    ::BaseAttributesComp* PROTOBUF_NULLABLE base_attributes_;
-    ::uint64_t pet_id_;
-    ::uint64_t owner_player_id_;
-    ::uint32_t pet_table_id_;
-    ::uint32_t level_;
-    ::uint64_t max_health_;
-    ::uint64_t max_mana_;
-    ::uint64_t physical_attack_;
-    ::uint64_t magic_attack_;
-    ::uint64_t defense_;
-    ::google::protobuf::internal::MapField<BattlePetSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRewardConfig final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:BattleRewardConfig) */ {
  public:
@@ -5351,6 +4980,397 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleRewardConfig final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::BattleRewardProfile > profiles_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fbattle_2fbattle_5fdata_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePetSnapshot final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattlePetSnapshot) */ {
+ public:
+  inline BattlePetSnapshot() : BattlePetSnapshot(nullptr) {}
+  ~BattlePetSnapshot() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattlePetSnapshot* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattlePetSnapshot));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattlePetSnapshot(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattlePetSnapshot(const BattlePetSnapshot& from) : BattlePetSnapshot(nullptr, from) {}
+  inline BattlePetSnapshot(BattlePetSnapshot&& from) noexcept : BattlePetSnapshot(nullptr, ::std::move(from)) {}
+  inline BattlePetSnapshot& operator=(const BattlePetSnapshot& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattlePetSnapshot& operator=(BattlePetSnapshot&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattlePetSnapshot& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattlePetSnapshot>(&BattlePetSnapshot_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(BattlePetSnapshot& a, BattlePetSnapshot& b) { a.Swap(&b); }
+  inline void Swap(BattlePetSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattlePetSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattlePetSnapshot* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattlePetSnapshot>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattlePetSnapshot& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattlePetSnapshot& from) { BattlePetSnapshot::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattlePetSnapshot* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattlePetSnapshot"; }
+
+  explicit BattlePetSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattlePetSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattlePetSnapshot& from);
+  BattlePetSnapshot(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattlePetSnapshot&& from) noexcept
+      : BattlePetSnapshot(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSkillTableIdsFieldNumber = 12,
+    kPetNameFieldNumber = 3,
+    kBaseAttributesFieldNumber = 6,
+    kPetCultivationFieldNumber = 14,
+    kPetIdFieldNumber = 1,
+    kOwnerPlayerIdFieldNumber = 2,
+    kPetTableIdFieldNumber = 4,
+    kLevelFieldNumber = 5,
+    kMaxHealthFieldNumber = 7,
+    kMaxManaFieldNumber = 8,
+    kPhysicalAttackFieldNumber = 9,
+    kMagicAttackFieldNumber = 10,
+    kDefenseFieldNumber = 11,
+    kSkillRanksFieldNumber = 13,
+  };
+  // repeated uint32 skill_table_ids = 12;
+  [[nodiscard]] int skill_table_ids_size()
+      const;
+  private:
+  int _internal_skill_table_ids_size() const;
+
+  public:
+  void clear_skill_table_ids() ;
+  [[nodiscard]] ::uint32_t skill_table_ids(int index) const;
+  void set_skill_table_ids(int index, ::uint32_t value);
+  void add_skill_table_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& skill_table_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_skill_table_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_skill_table_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_table_ids();
+
+  public:
+  // string pet_name = 3;
+  void clear_pet_name() ;
+  [[nodiscard]] const ::std::string& pet_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_pet_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_pet_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_pet_name();
+  void set_allocated_pet_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_pet_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_pet_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_pet_name();
+
+  public:
+  // .BaseAttributesComp base_attributes = 6;
+  [[nodiscard]] bool has_base_attributes()
+      const;
+  void clear_base_attributes() ;
+  [[nodiscard]] const ::BaseAttributesComp& base_attributes() const;
+  [[nodiscard]] ::BaseAttributesComp* PROTOBUF_NULLABLE release_base_attributes();
+  ::BaseAttributesComp* PROTOBUF_NONNULL mutable_base_attributes();
+  void set_allocated_base_attributes(::BaseAttributesComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_base_attributes(::BaseAttributesComp* PROTOBUF_NULLABLE value);
+  ::BaseAttributesComp* PROTOBUF_NULLABLE unsafe_arena_release_base_attributes();
+
+  private:
+  const ::BaseAttributesComp& _internal_base_attributes() const;
+  ::BaseAttributesComp* PROTOBUF_NONNULL _internal_mutable_base_attributes();
+
+  public:
+  // .PetCultivationEffects pet_cultivation = 14;
+  [[nodiscard]] bool has_pet_cultivation()
+      const;
+  void clear_pet_cultivation() ;
+  [[nodiscard]] const ::PetCultivationEffects& pet_cultivation() const;
+  [[nodiscard]] ::PetCultivationEffects* PROTOBUF_NULLABLE release_pet_cultivation();
+  ::PetCultivationEffects* PROTOBUF_NONNULL mutable_pet_cultivation();
+  void set_allocated_pet_cultivation(::PetCultivationEffects* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pet_cultivation(::PetCultivationEffects* PROTOBUF_NULLABLE value);
+  ::PetCultivationEffects* PROTOBUF_NULLABLE unsafe_arena_release_pet_cultivation();
+
+  private:
+  const ::PetCultivationEffects& _internal_pet_cultivation() const;
+  ::PetCultivationEffects* PROTOBUF_NONNULL _internal_mutable_pet_cultivation();
+
+  public:
+  // uint64 pet_id = 1;
+  void clear_pet_id() ;
+  [[nodiscard]] ::uint64_t pet_id() const;
+  void set_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pet_id() const;
+  void _internal_set_pet_id(::uint64_t value);
+
+  public:
+  // uint64 owner_player_id = 2;
+  void clear_owner_player_id() ;
+  [[nodiscard]] ::uint64_t owner_player_id() const;
+  void set_owner_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_owner_player_id() const;
+  void _internal_set_owner_player_id(::uint64_t value);
+
+  public:
+  // uint32 pet_table_id = 4;
+  void clear_pet_table_id() ;
+  [[nodiscard]] ::uint32_t pet_table_id() const;
+  void set_pet_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_table_id() const;
+  void _internal_set_pet_table_id(::uint32_t value);
+
+  public:
+  // uint32 level = 5;
+  void clear_level() ;
+  [[nodiscard]] ::uint32_t level() const;
+  void set_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level() const;
+  void _internal_set_level(::uint32_t value);
+
+  public:
+  // uint64 max_health = 7;
+  void clear_max_health() ;
+  [[nodiscard]] ::uint64_t max_health() const;
+  void set_max_health(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_max_health() const;
+  void _internal_set_max_health(::uint64_t value);
+
+  public:
+  // uint64 max_mana = 8;
+  void clear_max_mana() ;
+  [[nodiscard]] ::uint64_t max_mana() const;
+  void set_max_mana(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_max_mana() const;
+  void _internal_set_max_mana(::uint64_t value);
+
+  public:
+  // uint64 physical_attack = 9;
+  void clear_physical_attack() ;
+  [[nodiscard]] ::uint64_t physical_attack() const;
+  void set_physical_attack(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_physical_attack() const;
+  void _internal_set_physical_attack(::uint64_t value);
+
+  public:
+  // uint64 magic_attack = 10;
+  void clear_magic_attack() ;
+  [[nodiscard]] ::uint64_t magic_attack() const;
+  void set_magic_attack(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_magic_attack() const;
+  void _internal_set_magic_attack(::uint64_t value);
+
+  public:
+  // uint64 defense = 11;
+  void clear_defense() ;
+  [[nodiscard]] ::uint64_t defense() const;
+  void set_defense(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_defense() const;
+  void _internal_set_defense(::uint64_t value);
+
+  public:
+  // map<uint32, uint32> skill_ranks = 13;
+  [[nodiscard]] int skill_ranks_size()
+      const;
+  private:
+  int _internal_skill_ranks_size() const;
+
+  public:
+  void clear_skill_ranks() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& skill_ranks() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_skill_ranks();
+
+  private:
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_skill_ranks() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill_ranks();
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattlePetSnapshot)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          3, 42,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattlePetSnapshot& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
+    ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr pet_name_;
+    ::BaseAttributesComp* PROTOBUF_NULLABLE base_attributes_;
+    ::PetCultivationEffects* PROTOBUF_NULLABLE pet_cultivation_;
+    ::uint64_t pet_id_;
+    ::uint64_t owner_player_id_;
+    ::uint32_t pet_table_id_;
+    ::uint32_t level_;
+    ::uint64_t max_health_;
+    ::uint64_t max_mana_;
+    ::uint64_t physical_attack_;
+    ::uint64_t magic_attack_;
+    ::uint64_t defense_;
+    ::google::protobuf::internal::MapField<BattlePetSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6096,6 +6116,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     kRoundEffectUsageFieldNumber = 35,
     kArtifactStatesFieldNumber = 37,
     kEquipmentEffectsFieldNumber = 36,
+    kSupportEffectsFieldNumber = 40,
+    kPetCultivationFieldNumber = 41,
     kEntryMaxHealthFieldNumber = 38,
     kEntryMaxManaFieldNumber = 39,
     kWithdrawUntilRoundFieldNumber = 34,
@@ -6554,6 +6576,38 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   ::EquipmentEffects* PROTOBUF_NONNULL _internal_mutable_equipment_effects();
 
   public:
+  // .SupportEffectSummary support_effects = 40;
+  [[nodiscard]] bool has_support_effects()
+      const;
+  void clear_support_effects() ;
+  [[nodiscard]] const ::SupportEffectSummary& support_effects() const;
+  [[nodiscard]] ::SupportEffectSummary* PROTOBUF_NULLABLE release_support_effects();
+  ::SupportEffectSummary* PROTOBUF_NONNULL mutable_support_effects();
+  void set_allocated_support_effects(::SupportEffectSummary* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_support_effects(::SupportEffectSummary* PROTOBUF_NULLABLE value);
+  ::SupportEffectSummary* PROTOBUF_NULLABLE unsafe_arena_release_support_effects();
+
+  private:
+  const ::SupportEffectSummary& _internal_support_effects() const;
+  ::SupportEffectSummary* PROTOBUF_NONNULL _internal_mutable_support_effects();
+
+  public:
+  // .PetCultivationEffects pet_cultivation = 41;
+  [[nodiscard]] bool has_pet_cultivation()
+      const;
+  void clear_pet_cultivation() ;
+  [[nodiscard]] const ::PetCultivationEffects& pet_cultivation() const;
+  [[nodiscard]] ::PetCultivationEffects* PROTOBUF_NULLABLE release_pet_cultivation();
+  ::PetCultivationEffects* PROTOBUF_NONNULL mutable_pet_cultivation();
+  void set_allocated_pet_cultivation(::PetCultivationEffects* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pet_cultivation(::PetCultivationEffects* PROTOBUF_NULLABLE value);
+  ::PetCultivationEffects* PROTOBUF_NULLABLE unsafe_arena_release_pet_cultivation();
+
+  private:
+  const ::PetCultivationEffects& _internal_pet_cultivation() const;
+  ::PetCultivationEffects* PROTOBUF_NONNULL _internal_mutable_pet_cultivation();
+
+  public:
   // uint64 entry_max_health = 38;
   void clear_entry_max_health() ;
   [[nodiscard]] ::uint64_t entry_max_health() const;
@@ -6588,8 +6642,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 39,
-                          9, 74,
+      ::google::protobuf::internal::TcParseTable<5, 41,
+                          11, 82,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -6655,6 +6709,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     ::google::protobuf::internal::MapField<BattleActorState_RoundEffectUsageEntry_DoNotUse, ::uint32_t, ::uint64_t> round_effect_usage_;
     ::google::protobuf::RepeatedPtrField< ::BattleArtifactState > artifact_states_;
     ::EquipmentEffects* PROTOBUF_NULLABLE equipment_effects_;
+    ::SupportEffectSummary* PROTOBUF_NULLABLE support_effects_;
+    ::PetCultivationEffects* PROTOBUF_NULLABLE pet_cultivation_;
     ::uint64_t entry_max_health_;
     ::uint64_t entry_max_mana_;
     ::uint32_t withdraw_until_round_;
@@ -8540,7 +8596,7 @@ inline void BattlePlayerSnapshot::set_allocated_equipment_effects(::EquipmentEff
 inline void BattlePetSnapshot::clear_pet_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t BattlePetSnapshot::pet_id() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.pet_id)
@@ -8548,7 +8604,7 @@ inline ::uint64_t BattlePetSnapshot::pet_id() const {
 }
 inline void BattlePetSnapshot::set_pet_id(::uint64_t value) {
   _internal_set_pet_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.pet_id)
 }
 inline ::uint64_t BattlePetSnapshot::_internal_pet_id() const {
@@ -8564,7 +8620,7 @@ inline void BattlePetSnapshot::_internal_set_pet_id(::uint64_t value) {
 inline void BattlePetSnapshot::clear_owner_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t BattlePetSnapshot::owner_player_id() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.owner_player_id)
@@ -8572,7 +8628,7 @@ inline ::uint64_t BattlePetSnapshot::owner_player_id() const {
 }
 inline void BattlePetSnapshot::set_owner_player_id(::uint64_t value) {
   _internal_set_owner_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.owner_player_id)
 }
 inline ::uint64_t BattlePetSnapshot::_internal_owner_player_id() const {
@@ -8652,7 +8708,7 @@ inline void BattlePetSnapshot::set_allocated_pet_name(::std::string* PROTOBUF_NU
 inline void BattlePetSnapshot::clear_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t BattlePetSnapshot::pet_table_id() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.pet_table_id)
@@ -8660,7 +8716,7 @@ inline ::uint32_t BattlePetSnapshot::pet_table_id() const {
 }
 inline void BattlePetSnapshot::set_pet_table_id(::uint32_t value) {
   _internal_set_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.pet_table_id)
 }
 inline ::uint32_t BattlePetSnapshot::_internal_pet_table_id() const {
@@ -8676,7 +8732,7 @@ inline void BattlePetSnapshot::_internal_set_pet_table_id(::uint32_t value) {
 inline void BattlePetSnapshot::clear_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t BattlePetSnapshot::level() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.level)
@@ -8684,7 +8740,7 @@ inline ::uint32_t BattlePetSnapshot::level() const {
 }
 inline void BattlePetSnapshot::set_level(::uint32_t value) {
   _internal_set_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.level)
 }
 inline ::uint32_t BattlePetSnapshot::_internal_level() const {
@@ -8793,7 +8849,7 @@ inline void BattlePetSnapshot::set_allocated_base_attributes(::BaseAttributesCom
 inline void BattlePetSnapshot::clear_max_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t BattlePetSnapshot::max_health() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.max_health)
@@ -8801,7 +8857,7 @@ inline ::uint64_t BattlePetSnapshot::max_health() const {
 }
 inline void BattlePetSnapshot::set_max_health(::uint64_t value) {
   _internal_set_max_health(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.max_health)
 }
 inline ::uint64_t BattlePetSnapshot::_internal_max_health() const {
@@ -8817,7 +8873,7 @@ inline void BattlePetSnapshot::_internal_set_max_health(::uint64_t value) {
 inline void BattlePetSnapshot::clear_max_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t BattlePetSnapshot::max_mana() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.max_mana)
@@ -8825,7 +8881,7 @@ inline ::uint64_t BattlePetSnapshot::max_mana() const {
 }
 inline void BattlePetSnapshot::set_max_mana(::uint64_t value) {
   _internal_set_max_mana(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.max_mana)
 }
 inline ::uint64_t BattlePetSnapshot::_internal_max_mana() const {
@@ -8841,7 +8897,7 @@ inline void BattlePetSnapshot::_internal_set_max_mana(::uint64_t value) {
 inline void BattlePetSnapshot::clear_physical_attack() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_attack_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t BattlePetSnapshot::physical_attack() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.physical_attack)
@@ -8849,7 +8905,7 @@ inline ::uint64_t BattlePetSnapshot::physical_attack() const {
 }
 inline void BattlePetSnapshot::set_physical_attack(::uint64_t value) {
   _internal_set_physical_attack(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.physical_attack)
 }
 inline ::uint64_t BattlePetSnapshot::_internal_physical_attack() const {
@@ -8865,7 +8921,7 @@ inline void BattlePetSnapshot::_internal_set_physical_attack(::uint64_t value) {
 inline void BattlePetSnapshot::clear_magic_attack() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_attack_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t BattlePetSnapshot::magic_attack() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.magic_attack)
@@ -8873,7 +8929,7 @@ inline ::uint64_t BattlePetSnapshot::magic_attack() const {
 }
 inline void BattlePetSnapshot::set_magic_attack(::uint64_t value) {
   _internal_set_magic_attack(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.magic_attack)
 }
 inline ::uint64_t BattlePetSnapshot::_internal_magic_attack() const {
@@ -8889,7 +8945,7 @@ inline void BattlePetSnapshot::_internal_set_magic_attack(::uint64_t value) {
 inline void BattlePetSnapshot::clear_defense() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.defense_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t BattlePetSnapshot::defense() const {
   // @@protoc_insertion_point(field_get:BattlePetSnapshot.defense)
@@ -8897,7 +8953,7 @@ inline ::uint64_t BattlePetSnapshot::defense() const {
 }
 inline void BattlePetSnapshot::set_defense(::uint64_t value) {
   _internal_set_defense(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:BattlePetSnapshot.defense)
 }
 inline ::uint64_t BattlePetSnapshot::_internal_defense() const {
@@ -8970,7 +9026,7 @@ inline int BattlePetSnapshot::skill_ranks_size() const {
 inline void BattlePetSnapshot::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePetSnapshot::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -8986,9 +9042,102 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePetSnapshot::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_mutable_map:BattlePetSnapshot.skill_ranks)
   return _internal_mutable_skill_ranks();
+}
+
+// .PetCultivationEffects pet_cultivation = 14;
+inline bool BattlePetSnapshot::has_pet_cultivation() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.pet_cultivation_ != nullptr);
+  return value;
+}
+inline const ::PetCultivationEffects& BattlePetSnapshot::_internal_pet_cultivation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PetCultivationEffects* p = _impl_.pet_cultivation_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PetCultivationEffects>(&::PetCultivationEffects_globals_);
+}
+inline const ::PetCultivationEffects& BattlePetSnapshot::pet_cultivation() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattlePetSnapshot.pet_cultivation)
+  return _internal_pet_cultivation();
+}
+inline void BattlePetSnapshot::unsafe_arena_set_allocated_pet_cultivation(
+    ::PetCultivationEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pet_cultivation_);
+  }
+  _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattlePetSnapshot.pet_cultivation)
+}
+inline ::PetCultivationEffects* PROTOBUF_NULLABLE BattlePetSnapshot::release_pet_cultivation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::PetCultivationEffects* released = _impl_.pet_cultivation_;
+  _impl_.pet_cultivation_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PetCultivationEffects* PROTOBUF_NULLABLE BattlePetSnapshot::unsafe_arena_release_pet_cultivation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattlePetSnapshot.pet_cultivation)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::PetCultivationEffects* temp = _impl_.pet_cultivation_;
+  _impl_.pet_cultivation_ = nullptr;
+  return temp;
+}
+inline ::PetCultivationEffects* PROTOBUF_NONNULL BattlePetSnapshot::_internal_mutable_pet_cultivation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pet_cultivation_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PetCultivationEffects>(GetArena());
+    _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(p);
+  }
+  return _impl_.pet_cultivation_;
+}
+inline ::PetCultivationEffects* PROTOBUF_NONNULL BattlePetSnapshot::mutable_pet_cultivation()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::PetCultivationEffects* _msg = _internal_mutable_pet_cultivation();
+  // @@protoc_insertion_point(field_mutable:BattlePetSnapshot.pet_cultivation)
+  return _msg;
+}
+inline void BattlePetSnapshot::set_allocated_pet_cultivation(::PetCultivationEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pet_cultivation_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BattlePetSnapshot.pet_cultivation)
 }
 
 // -------------------------------------------------------------------
@@ -10123,7 +10272,7 @@ BattleActorState::_internal_mutable_runtime_skills() {
 inline void BattleActorState::clear_withdraw_until_round() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.withdraw_until_round_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
 }
 inline ::uint32_t BattleActorState::withdraw_until_round() const {
   // @@protoc_insertion_point(field_get:BattleActorState.withdraw_until_round)
@@ -10131,7 +10280,7 @@ inline ::uint32_t BattleActorState::withdraw_until_round() const {
 }
 inline void BattleActorState::set_withdraw_until_round(::uint32_t value) {
   _internal_set_withdraw_until_round(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleActorState.withdraw_until_round)
 }
 inline ::uint32_t BattleActorState::_internal_withdraw_until_round() const {
@@ -10326,7 +10475,7 @@ BattleActorState::_internal_mutable_artifact_states() {
 inline void BattleActorState::clear_entry_max_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_max_health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
 }
 inline ::uint64_t BattleActorState::entry_max_health() const {
   // @@protoc_insertion_point(field_get:BattleActorState.entry_max_health)
@@ -10334,7 +10483,7 @@ inline ::uint64_t BattleActorState::entry_max_health() const {
 }
 inline void BattleActorState::set_entry_max_health(::uint64_t value) {
   _internal_set_entry_max_health(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattleActorState.entry_max_health)
 }
 inline ::uint64_t BattleActorState::_internal_entry_max_health() const {
@@ -10350,7 +10499,7 @@ inline void BattleActorState::_internal_set_entry_max_health(::uint64_t value) {
 inline void BattleActorState::clear_entry_max_mana() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_max_mana_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline ::uint64_t BattleActorState::entry_max_mana() const {
   // @@protoc_insertion_point(field_get:BattleActorState.entry_max_mana)
@@ -10358,7 +10507,7 @@ inline ::uint64_t BattleActorState::entry_max_mana() const {
 }
 inline void BattleActorState::set_entry_max_mana(::uint64_t value) {
   _internal_set_entry_max_mana(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleActorState.entry_max_mana)
 }
 inline ::uint64_t BattleActorState::_internal_entry_max_mana() const {
@@ -10368,6 +10517,192 @@ inline ::uint64_t BattleActorState::_internal_entry_max_mana() const {
 inline void BattleActorState::_internal_set_entry_max_mana(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entry_max_mana_ = value;
+}
+
+// .PetCultivationEffects pet_cultivation = 41;
+inline bool BattleActorState::has_pet_cultivation() const {
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.pet_cultivation_ != nullptr);
+  return value;
+}
+inline const ::PetCultivationEffects& BattleActorState::_internal_pet_cultivation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PetCultivationEffects* p = _impl_.pet_cultivation_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PetCultivationEffects>(&::PetCultivationEffects_globals_);
+}
+inline const ::PetCultivationEffects& BattleActorState::pet_cultivation() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleActorState.pet_cultivation)
+  return _internal_pet_cultivation();
+}
+inline void BattleActorState::unsafe_arena_set_allocated_pet_cultivation(
+    ::PetCultivationEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pet_cultivation_);
+  }
+  _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleActorState.pet_cultivation)
+}
+inline ::PetCultivationEffects* PROTOBUF_NULLABLE BattleActorState::release_pet_cultivation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ::PetCultivationEffects* released = _impl_.pet_cultivation_;
+  _impl_.pet_cultivation_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PetCultivationEffects* PROTOBUF_NULLABLE BattleActorState::unsafe_arena_release_pet_cultivation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattleActorState.pet_cultivation)
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ::PetCultivationEffects* temp = _impl_.pet_cultivation_;
+  _impl_.pet_cultivation_ = nullptr;
+  return temp;
+}
+inline ::PetCultivationEffects* PROTOBUF_NONNULL BattleActorState::_internal_mutable_pet_cultivation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pet_cultivation_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PetCultivationEffects>(GetArena());
+    _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(p);
+  }
+  return _impl_.pet_cultivation_;
+}
+inline ::PetCultivationEffects* PROTOBUF_NONNULL BattleActorState::mutable_pet_cultivation()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ::PetCultivationEffects* _msg = _internal_mutable_pet_cultivation();
+  // @@protoc_insertion_point(field_mutable:BattleActorState.pet_cultivation)
+  return _msg;
+}
+inline void BattleActorState::set_allocated_pet_cultivation(::PetCultivationEffects* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pet_cultivation_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  }
+
+  _impl_.pet_cultivation_ = reinterpret_cast<::PetCultivationEffects*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BattleActorState.pet_cultivation)
+}
+
+// .SupportEffectSummary support_effects = 40;
+inline bool BattleActorState::has_support_effects() const {
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.support_effects_ != nullptr);
+  return value;
+}
+inline const ::SupportEffectSummary& BattleActorState::_internal_support_effects() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SupportEffectSummary* p = _impl_.support_effects_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SupportEffectSummary>(&::SupportEffectSummary_globals_);
+}
+inline const ::SupportEffectSummary& BattleActorState::support_effects() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleActorState.support_effects)
+  return _internal_support_effects();
+}
+inline void BattleActorState::unsafe_arena_set_allocated_support_effects(
+    ::SupportEffectSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.support_effects_);
+  }
+  _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BattleActorState.support_effects)
+}
+inline ::SupportEffectSummary* PROTOBUF_NULLABLE BattleActorState::release_support_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ::SupportEffectSummary* released = _impl_.support_effects_;
+  _impl_.support_effects_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SupportEffectSummary* PROTOBUF_NULLABLE BattleActorState::unsafe_arena_release_support_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattleActorState.support_effects)
+
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ::SupportEffectSummary* temp = _impl_.support_effects_;
+  _impl_.support_effects_ = nullptr;
+  return temp;
+}
+inline ::SupportEffectSummary* PROTOBUF_NONNULL BattleActorState::_internal_mutable_support_effects() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.support_effects_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SupportEffectSummary>(GetArena());
+    _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(p);
+  }
+  return _impl_.support_effects_;
+}
+inline ::SupportEffectSummary* PROTOBUF_NONNULL BattleActorState::mutable_support_effects()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ::SupportEffectSummary* _msg = _internal_mutable_support_effects();
+  // @@protoc_insertion_point(field_mutable:BattleActorState.support_effects)
+  return _msg;
+}
+inline void BattleActorState::set_allocated_support_effects(::SupportEffectSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.support_effects_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  }
+
+  _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BattleActorState.support_effects)
 }
 
 // -------------------------------------------------------------------

@@ -720,6 +720,17 @@ TEST_F(PersistRoundTripTest, PetPurchaseReceiptAndUnknownFieldsSurviveLoadAndRes
     pets.set_last_purchase_pet_id(pets.pets(0).pet_id());
     pets.set_last_purchase_price_gold((uint64_t{1} << 40) + 777);
     pets.GetReflection()->MutableUnknownFields(&pets)->AddVarint(kProbeFieldNumber, 8675309);
+    // 新条目池与五阶沿同一持久组件落盘；正式加载/重存必须完整保留请求去重上下文。
+    auto& cultivated = *pets.mutable_pets(0);
+    (*cultivated.mutable_entry_allocated())[503] = 2;
+    (*cultivated.mutable_entry_allocated())[9999] = 3; // 更新版本的条目不能被旧加载路径删掉。
+    cultivated.set_entry_state_version(7);
+    cultivated.set_entry_last_request_id("persist-pet-entries-0001");
+    cultivated.set_entry_last_base_version(6);
+    cultivated.set_entry_last_config_version(1);
+    *cultivated.mutable_entry_last_target() = cultivated.entry_allocated();
+    cultivated.set_cultivation_tier(4);
+    cultivated.GetReflection()->MutableUnknownFields(&cultivated)->AddVarint(kProbeFieldNumber, 445566);
     const auto expected = pets;
 
     PlayerAllData decoded;

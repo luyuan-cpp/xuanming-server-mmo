@@ -135,8 +135,14 @@ func LoadTables(configDir string, useBinary bool) {
     if err := PetTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Pet table: %v", err)
     }
+    if err := PetEntryTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load PetEntry table: %v", err)
+    }
     if err := PetRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load PetRule table: %v", err)
+    }
+    if err := PetTierTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load PetTier table: %v", err)
     }
     if err := PlayModeTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load PlayMode table: %v", err)
@@ -175,7 +181,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(51)
+    wg.Add(53)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -424,8 +430,20 @@ func LoadTablesAsync(configDir string, useBinary bool) {
     }()
     go func() {
         defer wg.Done()
+        if err := PetEntryTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load PetEntry table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
         if err := PetRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load PetRule table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := PetTierTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load PetTier table: %v", err)
         }
     }()
     go func() {
@@ -662,9 +680,17 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newPet.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload Pet failed: %w", err)
     }
+    newPetEntry := NewPetEntryTableManager()
+    if err := newPetEntry.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload PetEntry failed: %w", err)
+    }
     newPetRule := NewPetRuleTableManager()
     if err := newPetRule.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload PetRule failed: %w", err)
+    }
+    newPetTier := NewPetTierTableManager()
+    if err := newPetTier.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload PetTier failed: %w", err)
     }
     newPlayMode := NewPlayModeTableManager()
     if err := newPlayMode.Load(configDir, useBinary); err != nil {
@@ -745,7 +771,9 @@ func ReloadTables(configDir string, useBinary bool) error {
     MysteryMerchantRuleTableManagerInstance = newMysteryMerchantRule
     MysteryMerchantSpotTableManagerInstance = newMysteryMerchantSpot
     PetTableManagerInstance = newPet
+    PetEntryTableManagerInstance = newPetEntry
     PetRuleTableManagerInstance = newPetRule
+    PetTierTableManagerInstance = newPetTier
     PlayModeTableManagerInstance = newPlayMode
     RewardTableManagerInstance = newReward
     RoleNameRuleTableManagerInstance = newRoleNameRule

@@ -51,4 +51,22 @@ public interface PetRuleTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 entry_config_version = 7;</code>
+   * @return The entryConfigVersion.
+   */
+  int getEntryConfigVersion();
+
+  /**
+   * <code>uint32 entry_total_points = 8;</code>
+   * @return The entryTotalPoints.
+   */
+  int getEntryTotalPoints();
+
+  /**
+   * <code>uint32 entry_max_directions = 9;</code>
+   * @return The entryMaxDirections.
+   */
+  int getEntryMaxDirections();
 }

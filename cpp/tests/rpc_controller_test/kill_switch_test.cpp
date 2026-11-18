@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -454,28 +455,28 @@ protected:
     void SetUp() override
     {
         auto transport = std::make_unique<FakeEtcdTransport>();
-        transport_ = transport.get();
+        transport_.emplace(*transport);
         sync_.StartWithTransport(std::move(transport));
     }
 
     KillSwitch ks_;
     KillSwitchEtcdSync sync_{ks_, kPrefix};
-    FakeEtcdTransport *transport_{nullptr};
+    std::optional<std::reference_wrapper<FakeEtcdTransport>> transport_;
 };
 
 TEST_F(KillSwitchEtcdSyncTest, InitialRangeAppliesRulesAndCreatesWatchFromNextRevision)
 {
-    ASSERT_EQ(transport_->ranges.size(), 1u);
-    EXPECT_EQ(transport_->ranges[0].key(), kPrefix);
-    EXPECT_EQ(transport_->ranges[0].range_end(), "/mmorpg/killswitch0");
+    ASSERT_EQ(transport_->get().ranges.size(), 1u);
+    EXPECT_EQ(transport_->get().ranges[0].key(), kPrefix);
+    EXPECT_EQ(transport_->get().ranges[0].range_end(), "/mmorpg/killswitch0");
 
-    sync_.OnRange(&transport_->ranges[0], RangeReply(10, {{"ClientPlayerChat/SendChat", "true"}}));
+    sync_.OnRange(&transport_->get().ranges[0], RangeReply(10, {{"ClientPlayerChat/SendChat", "true"}}));
     EXPECT_TRUE(ks_.Check(kSendChat).has_value());
     EXPECT_EQ(sync_.AppliedThroughRevision(), 10);
-    ASSERT_EQ(transport_->watches.size(), 1u);
-    EXPECT_EQ(transport_->watches[0].create_request().key(), kPrefix);
-    EXPECT_EQ(transport_->watches[0].create_request().start_revision(), 11);
-    EXPECT_EQ(transport_->unexpectedWrites, 0) << "the kill switch connection only reads";
+    ASSERT_EQ(transport_->get().watches.size(), 1u);
+    EXPECT_EQ(transport_->get().watches[0].create_request().key(), kPrefix);
+    EXPECT_EQ(transport_->get().watches[0].create_request().start_revision(), 11);
+    EXPECT_EQ(transport_->get().unexpectedWrites, 0) << "the kill switch connection only reads";
 
     sync_.OnWatch(Created(0));
     EXPECT_TRUE(sync_.WatchEstablished());
@@ -483,7 +484,7 @@ TEST_F(KillSwitchEtcdSyncTest, InitialRangeAppliesRulesAndCreatesWatchFromNextRe
 
 TEST_F(KillSwitchEtcdSyncTest, WatchEventsApplyAndAnOlderRangeDoesNotRollBack)
 {
-    sync_.OnRange(&transport_->ranges[0], RangeReply(10, {{"ClientPlayerChat/SendChat", "true"}}));
+    sync_.OnRange(&transport_->get().ranges[0], RangeReply(10, {{"ClientPlayerChat/SendChat", "true"}}));
     sync_.OnWatch(Created(0));
 
     sync_.OnWatch(Event(0, mvccpb::Event_EventType::Event_EventType_DELETE, "ClientPlayerChat/SendChat", "", 12));
@@ -491,12 +492,12 @@ TEST_F(KillSwitchEtcdSyncTest, WatchEventsApplyAndAnOlderRangeDoesNotRollBack)
     EXPECT_EQ(sync_.AppliedThroughRevision(), 12);
 
     // 定期复核的 Range 在 revision 11 读到的旧快照晚到:不能把已删的规则加回来。
-    sync_.OnRange(&transport_->ranges[0], RangeReply(11, {{"ClientPlayerChat/SendChat", "true"}}));
+    sync_.OnRange(&transport_->get().ranges[0], RangeReply(11, {{"ClientPlayerChat/SendChat", "true"}}));
     EXPECT_FALSE(ks_.Check(kSendChat).has_value());
     EXPECT_EQ(sync_.AppliedThroughRevision(), 12);
 
     // 已经被更新快照覆盖的 watch 事件同样跳过。
-    sync_.OnRange(&transport_->ranges[0], RangeReply(20, {}));
+    sync_.OnRange(&transport_->get().ranges[0], RangeReply(20, {}));
     sync_.OnWatch(Event(0, mvccpb::Event_EventType::Event_EventType_PUT, "ClientPlayerChat/SendChat", "true", 15));
     EXPECT_FALSE(ks_.Check(kSendChat).has_value());
 
@@ -506,7 +507,7 @@ TEST_F(KillSwitchEtcdSyncTest, WatchEventsApplyAndAnOlderRangeDoesNotRollBack)
 
 TEST_F(KillSwitchEtcdSyncTest, CompactionTriggersAFullRangeAndANewWatch)
 {
-    sync_.OnRange(&transport_->ranges[0], RangeReply(10, {}));
+    sync_.OnRange(&transport_->get().ranges[0], RangeReply(10, {}));
     sync_.OnWatch(Created(0));
 
     etcdserverpb::WatchResponse canceled;
@@ -515,29 +516,29 @@ TEST_F(KillSwitchEtcdSyncTest, CompactionTriggersAFullRangeAndANewWatch)
     canceled.set_compact_revision(50);
     sync_.OnWatch(canceled);
     EXPECT_FALSE(sync_.WatchEstablished());
-    ASSERT_EQ(transport_->ranges.size(), 2u) << "compaction re-ranges immediately";
+    ASSERT_EQ(transport_->get().ranges.size(), 2u) << "compaction re-ranges immediately";
 
-    sync_.OnRange(&transport_->ranges[1], RangeReply(60, {{"*", "true"}}));
+    sync_.OnRange(&transport_->get().ranges[1], RangeReply(60, {{"*", "true"}}));
     EXPECT_TRUE(ks_.Check(kSendChat).has_value());
-    ASSERT_EQ(transport_->watches.size(), 2u);
-    EXPECT_EQ(transport_->watches[1].create_request().start_revision(), 61);
+    ASSERT_EQ(transport_->get().watches.size(), 2u);
+    EXPECT_EQ(transport_->get().watches[1].create_request().start_revision(), 61);
 }
 
 TEST_F(KillSwitchEtcdSyncTest, StreamRestartReRangesAndRecreatesTheWatchAfterAppliedState)
 {
-    sync_.OnRange(&transport_->ranges[0], RangeReply(10, {}));
+    sync_.OnRange(&transport_->get().ranges[0], RangeReply(10, {}));
     sync_.OnWatch(Created(0));
     sync_.OnWatch(Event(0, mvccpb::Event_EventType::Event_EventType_PUT, "ClientPlayerChat/SendChat", "true", 14));
 
     sync_.OnWatchStreamRestarted();
     EXPECT_FALSE(sync_.WatchEstablished());
-    ASSERT_EQ(transport_->ranges.size(), 2u);
+    ASSERT_EQ(transport_->get().ranges.size(), 2u);
 
     // 新流上第一份 Range 比 watch 已经应用到的旧:不替换,从已应用状态之后建 watch。
-    sync_.OnRange(&transport_->ranges[1], RangeReply(13, {}));
+    sync_.OnRange(&transport_->get().ranges[1], RangeReply(13, {}));
     EXPECT_TRUE(ks_.Check(kSendChat).has_value());
-    ASSERT_EQ(transport_->watches.size(), 2u);
-    EXPECT_EQ(transport_->watches[1].create_request().start_revision(), 15);
+    ASSERT_EQ(transport_->get().watches.size(), 2u);
+    EXPECT_EQ(transport_->get().watches[1].create_request().start_revision(), 15);
 
     // 旧流上 watch 的残留应答不再生效。
     sync_.OnWatch(Event(0, mvccpb::Event_EventType::Event_EventType_DELETE, "ClientPlayerChat/SendChat", "", 16));
@@ -546,9 +547,9 @@ TEST_F(KillSwitchEtcdSyncTest, StreamRestartReRangesAndRecreatesTheWatchAfterApp
 
 TEST_F(KillSwitchEtcdSyncTest, ShutdownStopsTheTransportAndIgnoresLateReplies)
 {
-    const auto shutdownObserved = transport_->shutdown;
+    const auto shutdownObserved = transport_->get().shutdown;
     sync_.Shutdown();
-    transport_ = nullptr; // 已随 Shutdown 释放
+    transport_.reset(); // 已随 Shutdown 释放
     EXPECT_TRUE(*shutdownObserved);
     sync_.OnRange(nullptr, RangeReply(10, {{"*", "true"}}));
     EXPECT_FALSE(ks_.Check(kSendChat).has_value());

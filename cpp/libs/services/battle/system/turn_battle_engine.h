@@ -153,7 +153,9 @@ private:
                                    const EffectContext& context, TurnResultS2C& result);
     void TriggerConfiguredBuffs(BattleActorState& owner, BattleActorState& other, BattleTrigger trigger,
                                 uint32_t damageType, const EffectContext& context, TurnResultS2C& result);
-    double ConfiguredModifier(const BattleActorState& actor, BattleModifier kind) const;
+    double ConfiguredModifier(const BattleActorState& actor, BattleModifier kind,
+                              SupportEffectBreakdown* sources = nullptr) const;
+    void BuildSupportEffects(const BattleActorState& actor, SupportEffectSummary& output) const;
     bool HasConfiguredBuffs(const BattleActorState& actor) const;
     bool HasConfiguredState(const BattleActorState& actor, BattleStateKind state) const;
     bool HasBuffTag(const BattleActorState& actor, const std::string& tag) const;
@@ -240,7 +242,7 @@ private:
     // 本回合行动的先手优先级:只有通过校验的职业技能行动才带 Skill.initiative,其余为 0
     int32_t ActionInitiative(const BattleActorState& actor) const;
     // 战斗专用被动"治疗加成"之和(按 skill_table_id 升序累加,浮点求和顺序固定)
-    double OutgoingHealBonus(const BattleActorState& actor) const;
+    double OutgoingHealBonus(const BattleActorState& actor, SupportEffectBreakdown* sources = nullptr) const;
     // 职业技能增减益对某项属性的倍率:1 + 同向最强增益 + 同向最强减益,下限 kMinClassBuffStatMultiplier。
     // 身上没有这类 buff 时恰好返回 1.0。extraPercent != 0 时按"再挂一个这么大幅度的"算,不改状态
     // (挂机选技比较挂上前后的差;已有同向等强或更强的效果时倍率不变)

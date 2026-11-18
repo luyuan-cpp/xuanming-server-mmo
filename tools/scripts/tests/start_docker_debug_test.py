@@ -20,7 +20,7 @@ class AuthoredComposeTest(unittest.TestCase):
         root_patch = patch.object(startup, 'ROOT', self.root)
         root_patch.start()
         self.addCleanup(root_patch.stop)
-        self.batch = self.root / 'build/verification/authored-festival-test'
+        self.batch = self.root / 'build/verification' / startup.AUTHORED_ORIGIN_BATCH
         self.tables = self.batch / 'tables/generated/tables'
         self.nav = self.root / 'data/scene_nav_bin/authored_maps'
         self.staged = self.root / 'build/docker-debug-current'
@@ -99,6 +99,97 @@ class AuthoredComposeTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'Bind source outside staged directory'):
                     startup.binding_hashes([self.container(name, [mount])], allowed)
 
+
+
+class AuthoredManifestChainTest(unittest.TestCase):
+    save_overlay = AuthoredComposeTest.save_overlay
+    container = AuthoredComposeTest.container
+
+    def setUp(self):
+        AuthoredComposeTest.setUp(self)
+        self.origin_overlay = self.overlay
+        self.origin = self.overlay.with_name('runtime-data-manifest.json')
+        self.original = self.manifest(self.overlay)
+        self.origin.write_text(json.dumps(self.original), encoding='utf-8')
+        fixed = patch.object(startup, 'AUTHORED_ORIGIN_SHA256', startup.sha(self.origin.read_bytes()))
+        fixed.start(); self.addCleanup(fixed.stop)
+        self.batch = self.root / 'build/verification/authored-festival-next'
+        self.tables = self.batch / 'tables/generated/tables'
+        self.tables.mkdir(parents=True)
+        self.overlay = self.batch / 'compose.authored.json'
+        for service in self.config['services'].values():
+            service['volumes'][0]['source'] = self.tables.as_posix()
+        self.save_overlay()
+        self.previous = {'path': str(self.origin), 'sha256': startup.sha(self.origin.read_bytes())}
+        self.report = {'predecessorRuntimeManifest': self.previous, 'refreshedTables': ['Pet']}
+        self.inputs = {'previousManifest': self.previous, 'allowedTables': ['Pet']}
+        self.current = self.manifest(self.overlay)
+        self.current['sourceExport'] = {'path': str(self.batch / 'authored-test-tables.json')}
+        self.current['tableSha256']['pet.pb'] = 'new-pet'
+        self.save_chain()
+        # 正式表完整性由既有 loader 的回归覆盖；此处只隔离 ancestry 与 Compose 策略。
+        loader = patch('rebuild_docker_debug.load_runtime_data_manifest',
+                       side_effect=lambda path: json.loads(path.read_bytes()))
+        loader.start(); self.addCleanup(loader.stop)
+
+    def manifest(self, overlay):
+        return {'composeOverlay': {'path': str(overlay), 'sha256': startup.sha(overlay.read_bytes())},
+                'tableDirectory': str(overlay.parent / 'tables/generated/tables'),
+                'services': dict.fromkeys(startup.AUTHORED_TABLE_TARGETS, {}),
+                'exportDelivery': {'sha256': 'delivery'}, 'navigationDirectory': str(self.nav),
+                'navigationReceipt': {'sha256': 'nav'}, 'navigationSha256': {'scene.bin': 'nav'},
+                'sourceWorkbooks': {'BaseScene.xlsx': {'sha256': 'base'}, 'World.xlsx': {'sha256': 'world'}},
+                'tableSha256': {'pet.pb': 'old-pet', 'basescene.pb': 'map'}}
+
+    def save_chain(self):
+        for name, data in [('runtime-data-manifest.json', self.current), ('refresh-inputs.json', self.inputs),
+                           ('authored-test-tables.json', self.report)]:
+            (self.batch / name).write_text(json.dumps(data), encoding='utf-8')
+
+    def rows(self):
+        rows = [self.container(name, []) for name in startup.AUTHORED_TABLE_TARGETS]
+        old = self.container('mysql', [])
+        old['Config']['Labels']['com.docker.compose.project.config_files'] = ','.join(map(str, [*startup.COMPOSE_FILES, self.origin_overlay]))
+        return rows + [old, self.container('db-migrate', [], overlay=False)]
+
+    def test_all_six_consumers_advance_while_nonconsumers_keep_old_labels(self):
+        overlay, _, equivalent, _ = startup.authored_overlay(self.rows())
+        self.assertEqual(overlay, self.overlay)
+        self.assertEqual(json.loads(equivalent), self.config)
+
+    def test_mixed_or_missing_consumer_batch_is_rejected(self):
+        rows = self.rows()
+        rows[0]['Config']['Labels']['com.docker.compose.project.config_files'] = ','.join(map(str, [*startup.COMPOSE_FILES, self.origin_overlay]))
+        with self.assertRaisesRegex(RuntimeError, 'Multiple authored Compose overlays'):
+            startup.authored_overlay(rows)
+        with self.assertRaisesRegex(RuntimeError, 'Incomplete authored table consumer batch'):
+            startup.authored_overlay(self.rows()[1:])
+
+    def test_changed_predecessor_or_forged_origin_digest_is_rejected(self):
+        self.origin.write_text(json.dumps(dict(self.original, unexpected=True)), encoding='utf-8')
+        with self.assertRaisesRegex(RuntimeError, 'predecessor manifest changed'):
+            startup.authored_overlay(self.rows())
+        self.previous['sha256'] = startup.sha(self.origin.read_bytes())
+        self.save_chain()
+        with self.assertRaisesRegex(RuntimeError, 'origin manifest changed'):
+            startup.authored_overlay(self.rows())
+
+    def test_cycles_and_unapproved_map_changes_are_rejected(self):
+        self.previous['path'] = str(self.batch / 'runtime-data-manifest.json')
+        self.save_chain()
+        with self.assertRaisesRegex(RuntimeError, 'Invalid authored manifest ancestry'):
+            startup.authored_overlay(self.rows())
+        self.previous['path'] = str(self.origin)
+        self.current['tableSha256']['basescene.pb'] = 'changed-map'
+        self.save_chain()
+        with self.assertRaisesRegex(RuntimeError, 'changed map artifacts'):
+            startup.authored_overlay(self.rows())
+
+    def test_refresh_input_cannot_disagree_with_bound_source_report(self):
+        self.inputs['previousManifest'] = dict(self.previous, sha256='a' * 64)
+        self.save_chain()
+        with self.assertRaisesRegex(RuntimeError, 'predecessor or table scope differs'):
+            startup.authored_overlay(self.rows())
 
 
 class InventoryDiagnosticsTest(unittest.TestCase):
@@ -314,6 +405,22 @@ class RecoveryProvenanceTest(unittest.TestCase):
             map(str, [*startup.COMPOSE_FILES, startup.recovery_path()]))
         with self.assertRaisesRegex(RuntimeError, 'Inconsistent recovery Compose provenance'):
             startup.recovery_contract(self.rows, '{"services":{}}')
+
+    def test_new_table_batch_preserves_original_recovery_evidence_and_nonconsumer_labels(self):
+        old = startup.authored_origin_overlay()
+        newer = self.root / 'build/verification/authored-festival-next/compose.authored.json'
+        for row in self.rows:
+            if row['Config']['Labels']['com.docker.compose.service'] in startup.AUTHORED_TABLE_TARGETS:
+                row['Config']['Labels']['com.docker.compose.project.config_files'] = ','.join(
+                    map(str, [*startup.COMPOSE_FILES, newer, startup.recovery_path()]))
+        with patch.object(startup, 'authored_selection', return_value=(newer, {old, newer})):
+            combined, proof = startup.recovery_contract(self.rows, '{"services":{}}')
+            self.assertEqual(json.loads(combined), self.overlay)
+            self.assertEqual(proof['anonymousVolumes']['/etc/kafka/secrets']['name'], 'a' * 64)
+            source = self.root / 'build/verification' / next(iter(startup.RECOVERY_SOURCES))
+            source.write_text('{"passed":true}', encoding='utf-8')
+            with self.assertRaisesRegex(RuntimeError, 'Approved recovery evidence changed'):
+                startup.recovery_contract(self.rows, '{"services":{}}')
 
     def test_new_rank_registrar_retains_shared_private_volume_at_original_target_only(self):
         # 旧完整快照尚无 rank，但共享私有卷已由旧注册器使用并记录真实身份。

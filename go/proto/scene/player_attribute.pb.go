@@ -466,18 +466,19 @@ func (x *CombatAttributeInfo) GetSort() uint32 {
 }
 
 type AttributePanelInfo struct {
-	state                protoimpl.MessageState      `protogen:"open.v1"`
-	Pools                []*AttributePoolInfo        `protobuf:"bytes,1,rep,name=pools,proto3" json:"pools,omitempty"`
-	Dimensions           []*AttributeDimensionInfo   `protobuf:"bytes,2,rep,name=dimensions,proto3" json:"dimensions,omitempty"`
-	Schemes              []*AttributeSchemeInfo      `protobuf:"bytes,3,rep,name=schemes,proto3" json:"schemes,omitempty"`
-	ActiveSchemeId       uint32                      `protobuf:"varint,4,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`
-	MaxSchemes           uint32                      `protobuf:"varint,5,opt,name=max_schemes,json=maxSchemes,proto3" json:"max_schemes,omitempty"`
-	Derived              *DerivedAttributeInfo       `protobuf:"bytes,6,opt,name=derived,proto3" json:"derived,omitempty"`
-	Level                uint32                      `protobuf:"varint,7,opt,name=level,proto3" json:"level,omitempty"`
-	SwitchCooldownUntil  uint64                      `protobuf:"varint,8,opt,name=switch_cooldown_until,json=switchCooldownUntil,proto3" json:"switch_cooldown_until,omitempty"`      // Unix 秒;<= now 表示可切换
-	CreateSchemeCostGold uint64                      `protobuf:"varint,9,opt,name=create_scheme_cost_gold,json=createSchemeCostGold,proto3" json:"create_scheme_cost_gold,omitempty"` // 再开一个方案要花的金币(0 = 免费)
-	Combat               []*CombatAttributeInfo      `protobuf:"bytes,10,rep,name=combat,proto3" json:"combat,omitempty"`                                                             // 战斗类属性全量,sort 升序
-	EquipmentEffects     *component.EquipmentEffects `protobuf:"bytes,11,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`                 // V1来源修正全量；含分类命中/抵抗/减耗与法宝，不由客户端自行累计。
+	state                protoimpl.MessageState          `protogen:"open.v1"`
+	Pools                []*AttributePoolInfo            `protobuf:"bytes,1,rep,name=pools,proto3" json:"pools,omitempty"`
+	Dimensions           []*AttributeDimensionInfo       `protobuf:"bytes,2,rep,name=dimensions,proto3" json:"dimensions,omitempty"`
+	Schemes              []*AttributeSchemeInfo          `protobuf:"bytes,3,rep,name=schemes,proto3" json:"schemes,omitempty"`
+	ActiveSchemeId       uint32                          `protobuf:"varint,4,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`
+	MaxSchemes           uint32                          `protobuf:"varint,5,opt,name=max_schemes,json=maxSchemes,proto3" json:"max_schemes,omitempty"`
+	Derived              *DerivedAttributeInfo           `protobuf:"bytes,6,opt,name=derived,proto3" json:"derived,omitempty"`
+	Level                uint32                          `protobuf:"varint,7,opt,name=level,proto3" json:"level,omitempty"`
+	SwitchCooldownUntil  uint64                          `protobuf:"varint,8,opt,name=switch_cooldown_until,json=switchCooldownUntil,proto3" json:"switch_cooldown_until,omitempty"`      // Unix 秒;<= now 表示可切换
+	CreateSchemeCostGold uint64                          `protobuf:"varint,9,opt,name=create_scheme_cost_gold,json=createSchemeCostGold,proto3" json:"create_scheme_cost_gold,omitempty"` // 再开一个方案要花的金币(0 = 免费)
+	Combat               []*CombatAttributeInfo          `protobuf:"bytes,10,rep,name=combat,proto3" json:"combat,omitempty"`                                                             // 战斗类属性全量,sort 升序
+	EquipmentEffects     *component.EquipmentEffects     `protobuf:"bytes,11,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`                 // V1来源修正全量；含分类命中/抵抗/减耗与法宝，不由客户端自行累计。
+	SupportEffects       *component.SupportEffectSummary `protobuf:"bytes,12,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"`                       // 人物治疗/护盾来源；战斗中临时来源由本人战斗快照提供。
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -585,6 +586,13 @@ func (x *AttributePanelInfo) GetCombat() []*CombatAttributeInfo {
 func (x *AttributePanelInfo) GetEquipmentEffects() *component.EquipmentEffects {
 	if x != nil {
 		return x.EquipmentEffects
+	}
+	return nil
+}
+
+func (x *AttributePanelInfo) GetSupportEffects() *component.SupportEffectSummary {
+	if x != nil {
+		return x.SupportEffects
 	}
 	return nil
 }
@@ -1461,7 +1469,7 @@ var File_proto_scene_player_attribute_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_attribute_proto_rawDesc = "" +
 	"\n" +
-	"\"proto/scene/player_attribute.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a.proto/common/component/equipment_effects.proto\"\xec\x01\n" +
+	"\"proto/scene/player_attribute.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a.proto/common/component/equipment_effects.proto\x1a,proto/common/component/support_effects.proto\"\xec\x01\n" +
 	"\x16AttributeDimensionInfo\x12!\n" +
 	"\fdimension_id\x18\x01 \x01(\rR\vdimensionId\x12\x17\n" +
 	"\apool_id\x18\x02 \x01(\rR\x06poolId\x12\x12\n" +
@@ -1499,7 +1507,7 @@ const file_proto_scene_player_attribute_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\x04R\x05value\x12\x18\n" +
 	"\apercent\x18\x04 \x01(\bR\apercent\x12\x12\n" +
-	"\x04sort\x18\x05 \x01(\rR\x04sort\"\x92\x04\n" +
+	"\x04sort\x18\x05 \x01(\rR\x04sort\"\xd2\x04\n" +
 	"\x12AttributePanelInfo\x12(\n" +
 	"\x05pools\x18\x01 \x03(\v2\x12.AttributePoolInfoR\x05pools\x127\n" +
 	"\n" +
@@ -1515,7 +1523,8 @@ const file_proto_scene_player_attribute_proto_rawDesc = "" +
 	"\x17create_scheme_cost_gold\x18\t \x01(\x04R\x14createSchemeCostGold\x12,\n" +
 	"\x06combat\x18\n" +
 	" \x03(\v2\x14.CombatAttributeInfoR\x06combat\x12>\n" +
-	"\x11equipment_effects\x18\v \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\"\x1a\n" +
+	"\x11equipment_effects\x18\v \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x12>\n" +
+	"\x0fsupport_effects\x18\f \x01(\v2\x15.SupportEffectSummaryR\x0esupportEffects\"\x1a\n" +
 	"\x18GetAttributePanelRequest\"|\n" +
 	"\x19GetAttributePanelResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
@@ -1621,8 +1630,9 @@ var file_proto_scene_player_attribute_proto_goTypes = []any{
 	nil,                                         // 23: AllocateAttributePointsRequest.AllocatedEntry
 	nil,                                         // 24: AutoAllocateAttributePointsResponse.SuggestedEntry
 	(*component.EquipmentEffects)(nil),          // 25: EquipmentEffects
-	(*base.TipInfoMessage)(nil),                 // 26: TipInfoMessage
-	(*base.Empty)(nil),                          // 27: Empty
+	(*component.SupportEffectSummary)(nil),      // 26: SupportEffectSummary
+	(*base.TipInfoMessage)(nil),                 // 27: TipInfoMessage
+	(*base.Empty)(nil),                          // 28: Empty
 }
 var file_proto_scene_player_attribute_proto_depIdxs = []int32{
 	1,  // 0: AttributePanelInfo.pools:type_name -> AttributePoolInfo
@@ -1631,47 +1641,48 @@ var file_proto_scene_player_attribute_proto_depIdxs = []int32{
 	3,  // 3: AttributePanelInfo.derived:type_name -> DerivedAttributeInfo
 	4,  // 4: AttributePanelInfo.combat:type_name -> CombatAttributeInfo
 	25, // 5: AttributePanelInfo.equipment_effects:type_name -> EquipmentEffects
-	26, // 6: GetAttributePanelResponse.error_message:type_name -> TipInfoMessage
-	5,  // 7: GetAttributePanelResponse.panel:type_name -> AttributePanelInfo
-	23, // 8: AllocateAttributePointsRequest.allocated:type_name -> AllocateAttributePointsRequest.AllocatedEntry
-	26, // 9: AllocateAttributePointsResponse.error_message:type_name -> TipInfoMessage
-	5,  // 10: AllocateAttributePointsResponse.panel:type_name -> AttributePanelInfo
-	26, // 11: ResetAttributePointsResponse.error_message:type_name -> TipInfoMessage
-	5,  // 12: ResetAttributePointsResponse.panel:type_name -> AttributePanelInfo
-	26, // 13: AutoAllocateAttributePointsResponse.error_message:type_name -> TipInfoMessage
-	24, // 14: AutoAllocateAttributePointsResponse.suggested:type_name -> AutoAllocateAttributePointsResponse.SuggestedEntry
-	26, // 15: CreateAttributeSchemeResponse.error_message:type_name -> TipInfoMessage
-	5,  // 16: CreateAttributeSchemeResponse.panel:type_name -> AttributePanelInfo
-	26, // 17: SwitchAttributeSchemeResponse.error_message:type_name -> TipInfoMessage
-	5,  // 18: SwitchAttributeSchemeResponse.panel:type_name -> AttributePanelInfo
-	26, // 19: RenameAttributeSchemeResponse.error_message:type_name -> TipInfoMessage
-	5,  // 20: RenameAttributeSchemeResponse.panel:type_name -> AttributePanelInfo
-	5,  // 21: AttributePanelChangedS2C.panel:type_name -> AttributePanelInfo
-	26, // 22: GmSetPlayerLevelResponse.error_message:type_name -> TipInfoMessage
-	5,  // 23: GmSetPlayerLevelResponse.panel:type_name -> AttributePanelInfo
-	6,  // 24: SceneAttributeClientPlayer.GetAttributePanel:input_type -> GetAttributePanelRequest
-	8,  // 25: SceneAttributeClientPlayer.AllocateAttributePoints:input_type -> AllocateAttributePointsRequest
-	10, // 26: SceneAttributeClientPlayer.ResetAttributePoints:input_type -> ResetAttributePointsRequest
-	12, // 27: SceneAttributeClientPlayer.AutoAllocateAttributePoints:input_type -> AutoAllocateAttributePointsRequest
-	14, // 28: SceneAttributeClientPlayer.CreateAttributeScheme:input_type -> CreateAttributeSchemeRequest
-	16, // 29: SceneAttributeClientPlayer.SwitchAttributeScheme:input_type -> SwitchAttributeSchemeRequest
-	18, // 30: SceneAttributeClientPlayer.RenameAttributeScheme:input_type -> RenameAttributeSchemeRequest
-	20, // 31: SceneAttributeClientPlayer.NotifyAttributePanelChanged:input_type -> AttributePanelChangedS2C
-	21, // 32: SceneAttributeClientPlayer.GmSetPlayerLevel:input_type -> GmSetPlayerLevelRequest
-	7,  // 33: SceneAttributeClientPlayer.GetAttributePanel:output_type -> GetAttributePanelResponse
-	9,  // 34: SceneAttributeClientPlayer.AllocateAttributePoints:output_type -> AllocateAttributePointsResponse
-	11, // 35: SceneAttributeClientPlayer.ResetAttributePoints:output_type -> ResetAttributePointsResponse
-	13, // 36: SceneAttributeClientPlayer.AutoAllocateAttributePoints:output_type -> AutoAllocateAttributePointsResponse
-	15, // 37: SceneAttributeClientPlayer.CreateAttributeScheme:output_type -> CreateAttributeSchemeResponse
-	17, // 38: SceneAttributeClientPlayer.SwitchAttributeScheme:output_type -> SwitchAttributeSchemeResponse
-	19, // 39: SceneAttributeClientPlayer.RenameAttributeScheme:output_type -> RenameAttributeSchemeResponse
-	27, // 40: SceneAttributeClientPlayer.NotifyAttributePanelChanged:output_type -> Empty
-	22, // 41: SceneAttributeClientPlayer.GmSetPlayerLevel:output_type -> GmSetPlayerLevelResponse
-	33, // [33:42] is the sub-list for method output_type
-	24, // [24:33] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	26, // 6: AttributePanelInfo.support_effects:type_name -> SupportEffectSummary
+	27, // 7: GetAttributePanelResponse.error_message:type_name -> TipInfoMessage
+	5,  // 8: GetAttributePanelResponse.panel:type_name -> AttributePanelInfo
+	23, // 9: AllocateAttributePointsRequest.allocated:type_name -> AllocateAttributePointsRequest.AllocatedEntry
+	27, // 10: AllocateAttributePointsResponse.error_message:type_name -> TipInfoMessage
+	5,  // 11: AllocateAttributePointsResponse.panel:type_name -> AttributePanelInfo
+	27, // 12: ResetAttributePointsResponse.error_message:type_name -> TipInfoMessage
+	5,  // 13: ResetAttributePointsResponse.panel:type_name -> AttributePanelInfo
+	27, // 14: AutoAllocateAttributePointsResponse.error_message:type_name -> TipInfoMessage
+	24, // 15: AutoAllocateAttributePointsResponse.suggested:type_name -> AutoAllocateAttributePointsResponse.SuggestedEntry
+	27, // 16: CreateAttributeSchemeResponse.error_message:type_name -> TipInfoMessage
+	5,  // 17: CreateAttributeSchemeResponse.panel:type_name -> AttributePanelInfo
+	27, // 18: SwitchAttributeSchemeResponse.error_message:type_name -> TipInfoMessage
+	5,  // 19: SwitchAttributeSchemeResponse.panel:type_name -> AttributePanelInfo
+	27, // 20: RenameAttributeSchemeResponse.error_message:type_name -> TipInfoMessage
+	5,  // 21: RenameAttributeSchemeResponse.panel:type_name -> AttributePanelInfo
+	5,  // 22: AttributePanelChangedS2C.panel:type_name -> AttributePanelInfo
+	27, // 23: GmSetPlayerLevelResponse.error_message:type_name -> TipInfoMessage
+	5,  // 24: GmSetPlayerLevelResponse.panel:type_name -> AttributePanelInfo
+	6,  // 25: SceneAttributeClientPlayer.GetAttributePanel:input_type -> GetAttributePanelRequest
+	8,  // 26: SceneAttributeClientPlayer.AllocateAttributePoints:input_type -> AllocateAttributePointsRequest
+	10, // 27: SceneAttributeClientPlayer.ResetAttributePoints:input_type -> ResetAttributePointsRequest
+	12, // 28: SceneAttributeClientPlayer.AutoAllocateAttributePoints:input_type -> AutoAllocateAttributePointsRequest
+	14, // 29: SceneAttributeClientPlayer.CreateAttributeScheme:input_type -> CreateAttributeSchemeRequest
+	16, // 30: SceneAttributeClientPlayer.SwitchAttributeScheme:input_type -> SwitchAttributeSchemeRequest
+	18, // 31: SceneAttributeClientPlayer.RenameAttributeScheme:input_type -> RenameAttributeSchemeRequest
+	20, // 32: SceneAttributeClientPlayer.NotifyAttributePanelChanged:input_type -> AttributePanelChangedS2C
+	21, // 33: SceneAttributeClientPlayer.GmSetPlayerLevel:input_type -> GmSetPlayerLevelRequest
+	7,  // 34: SceneAttributeClientPlayer.GetAttributePanel:output_type -> GetAttributePanelResponse
+	9,  // 35: SceneAttributeClientPlayer.AllocateAttributePoints:output_type -> AllocateAttributePointsResponse
+	11, // 36: SceneAttributeClientPlayer.ResetAttributePoints:output_type -> ResetAttributePointsResponse
+	13, // 37: SceneAttributeClientPlayer.AutoAllocateAttributePoints:output_type -> AutoAllocateAttributePointsResponse
+	15, // 38: SceneAttributeClientPlayer.CreateAttributeScheme:output_type -> CreateAttributeSchemeResponse
+	17, // 39: SceneAttributeClientPlayer.SwitchAttributeScheme:output_type -> SwitchAttributeSchemeResponse
+	19, // 40: SceneAttributeClientPlayer.RenameAttributeScheme:output_type -> RenameAttributeSchemeResponse
+	28, // 41: SceneAttributeClientPlayer.NotifyAttributePanelChanged:output_type -> Empty
+	22, // 42: SceneAttributeClientPlayer.GmSetPlayerLevel:output_type -> GmSetPlayerLevelResponse
+	34, // [34:43] is the sub-list for method output_type
+	25, // [25:34] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_attribute_proto_init() }

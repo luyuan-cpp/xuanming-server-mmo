@@ -203,6 +203,7 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
     if (!tlsEcs.actorRegistry.valid(player)) return;
     const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
     if (bags == nullptr) return;
+    effects.set_support_sources_complete(true);
     std::map<std::pair<uint32_t,uint32_t>, std::pair<uint64_t,uint32_t>> values;
     std::vector<std::pair<Guid,const ItemTable*>> artifacts;
     bags->bags[kEquipment].ForEachItem([&](Guid id, const ItemComp& item) {
@@ -214,6 +215,14 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
             auto& total = values[{affix.effect(),affix.effect_param()}];
             total.first += affix.value_permyriad();
             total.second = total.second == 0 ? affix.source_cap() : std::min(total.second,affix.source_cap());
+            if (affix.effect() == 5 || affix.effect() == 6) {
+                auto* source = effects.add_support_sources();
+                source->set_kind(1); source->set_item_id(id); source->set_affix_id(affix.id());
+                source->set_name(row->name() + " · " + affix.name());
+                source->set_effect_kind(affix.effect() == 6 ? 2 : 1);
+                source->set_raw_bonus_bps(affix.value_permyriad());
+                source->set_source_cap_bps(affix.source_cap());
+            }
         }
         if (row->equip_profile() == 3) artifacts.emplace_back(id,row);
     });
@@ -236,6 +245,17 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
         default: break;
         }
     }
+    auto* supportSources = effects.mutable_support_sources();
+    std::sort(supportSources->begin(), supportSources->end(), [](const auto& a, const auto& b) {
+        return a.item_id() != b.item_id() ? a.item_id() < b.item_id() : a.affix_id() < b.affix_id();
+    });
+    uint32_t healingLeft = effects.outgoing_heal_bps(), shieldLeft = effects.shield_capacity_bps();
+    for (auto& source : *supportSources) {
+        auto& left = source.effect_kind() == 2 ? shieldLeft : healingLeft;
+        const auto contribution = std::min(left, static_cast<uint32_t>(source.raw_bonus_bps()));
+        source.set_effective_bonus_bps(contribution); left -= contribution;
+        if (contribution < source.raw_bonus_bps()) source.set_reason("装备同类来源上限已截取");
+    }
     std::sort(artifacts.begin(), artifacts.end(), [](const auto& a,const auto& b) { return a.first < b.first; });
     for (const auto& [id, item] : artifacts) {
         const auto* row = EquipArtifactTableManager::Instance().FindByIdSilent(item->artifact_id()).first;
@@ -244,6 +264,7 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
         source->set_bonus_bps(row->bonus_bps()); source->set_cap_bps(row->cap_bps());
         source->set_per_round_limit(row->per_round_limit()); source->set_battle_limit(row->battle_limit());
         source->set_active_rounds(row->active_rounds()); source->set_health_threshold_bps(row->health_threshold_bps());
+        source->set_name(row->name());
     }
 }
 

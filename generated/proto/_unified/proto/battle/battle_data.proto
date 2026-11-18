@@ -4,6 +4,8 @@ option go_package = "proto/battle";
 import "proto/common/component/actor_comp.proto";
 import "proto/common/component/actor_attribute_state_comp.proto";
 import "proto/common/component/equipment_effects.proto";
+import "proto/common/component/support_effects.proto";
+import "proto/common/component/pet_cultivation_effects.proto";
 
 // 回合制战斗共享数据结构(快照/行动/事件/结算)。
 // 设计依据:docs/design/turn-based-battle-server.md §4。
@@ -111,6 +113,7 @@ message BattlePetSnapshot {
   uint64 defense = 11;
   repeated uint32 skill_table_ids = 12;
   map<uint32, uint32> skill_ranks = 13; // 公共原型的已学等级，开局再次校验宝宝资格。
+  PetCultivationEffects pet_cultivation = 14;
 }
 
 // ---- 战斗单位运行时状态(玩家与怪物统一;引擎状态用 proto 承载,宪法 §3) ----
@@ -164,6 +167,8 @@ message BattleActorState {
   repeated BattleArtifactState artifact_states = 37;
   uint64 entry_max_health = 38; // 入战上限，临时上限变化不放大法宝预算。
   uint64 entry_max_mana = 39;
+  PetCultivationEffects pet_cultivation = 41; // 宝宝独立条目贡献，开局快照冻结。
+  SupportEffectSummary support_effects = 40; // 仅本人可见；来源及中立预览由本轮真实状态生成。
 }
 
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。

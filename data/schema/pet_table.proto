@@ -50,4 +50,6 @@ message PetTable {
   uint64 shop_price_gold = 14;
   // 获取类别：0普通（银两/捕捉），1变异（令牌兑换），2神兽（充值抽奖）。
   uint32 acquisition_tier = 15;
+  // 独立五阶身份：1普通/2变异/3灵兽/4神兽/5圣兽。
+  uint32 cultivation_tier = 16;
 }

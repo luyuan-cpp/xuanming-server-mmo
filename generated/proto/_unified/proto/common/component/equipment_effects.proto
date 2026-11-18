@@ -1,5 +1,6 @@
 syntax = "proto3";
 option go_package = "proto/common/component";
+import "proto/common/component/support_effects.proto";
 
 // 装备已汇总的静态修正，比例统一使用万分比。四项面板修正在 scene 已结算，战斗不再乘。
 message EquipmentEffects {
@@ -20,6 +21,8 @@ message EquipmentEffects {
   map<uint32, uint32> mana_reduction_bps = 13;
   // 每件实物单独携带。同名允许重复，item_id 不允许重复；顺序不承载槽位语义。
   repeated EquipmentArtifactSource artifacts = 14;
+  repeated SupportEffectSource support_sources = 15; // 与同一轮聚合同时产生，禁止客户端再累计。
+  bool support_sources_complete = 16; // 旧快照/缺背包输入不能冒充完整来源。
 }
 
 message EquipmentArtifactSource {
@@ -31,4 +34,5 @@ message EquipmentArtifactSource {
   uint32 battle_limit = 6; // 0 不限。
   uint32 active_rounds = 7; // 0 不限。
   uint32 health_threshold_bps = 8;
+  string name = 9; // 只读来源显示名；效果仍由effect_id及已校验参数裁决。
 }

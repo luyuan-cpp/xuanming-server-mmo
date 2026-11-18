@@ -22,17 +22,19 @@ public static partial class PetruleTableReflection {
   static PetruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChNwZXRydWxlX3RhYmxlLnByb3RvIosBCgxQZXRSdWxlVGFibGUSCgoCaWQY",
+          "ChNwZXRydWxlX3RhYmxlLnByb3RvIuMBCgxQZXRSdWxlVGFibGUSCgoCaWQY",
           "ASABKA0SEAoIbWF4X3BldHMYAiABKA0SFAoMbmFtZV9tYXhfbGVuGAMgASgN",
           "EhgKEHJlbmFtZV9jb3N0X2dvbGQYBCABKAQSHwoXc3VtbW9uX2Nvb2xkb3du",
-          "X3NlY29uZHMYBSABKA0SDAoEZGVzYxgGIAEoCSIvChBQZXRSdWxlVGFibGVE",
-          "YXRhEhsKBGRhdGEYASADKAsyDS5QZXRSdWxlVGFibGVCPgoOY29tLmdhbWUu",
-          "dGFibGVCFlBldFJ1bGVUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3Bi",
-          "L3RhYmxlYgZwcm90bzM="));
+          "X3NlY29uZHMYBSABKA0SDAoEZGVzYxgGIAEoCRIcChRlbnRyeV9jb25maWdf",
+          "dmVyc2lvbhgHIAEoDRIaChJlbnRyeV90b3RhbF9wb2ludHMYCCABKA0SHAoU",
+          "ZW50cnlfbWF4X2RpcmVjdGlvbnMYCSABKA0iLwoQUGV0UnVsZVRhYmxlRGF0",
+          "YRIbCgRkYXRhGAEgAygLMg0uUGV0UnVsZVRhYmxlQj4KDmNvbS5nYW1lLnRh",
+          "YmxlQhZQZXRSdWxlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90",
+          "YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::PetRuleTable), global::PetRuleTable.Parser, new[]{ "Id", "MaxPets", "NameMaxLen", "RenameCostGold", "SummonCooldownSeconds", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::PetRuleTable), global::PetRuleTable.Parser, new[]{ "Id", "MaxPets", "NameMaxLen", "RenameCostGold", "SummonCooldownSeconds", "Desc", "EntryConfigVersion", "EntryTotalPoints", "EntryMaxDirections" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::PetRuleTableData), global::PetRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -81,6 +83,9 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
     renameCostGold_ = other.renameCostGold_;
     summonCooldownSeconds_ = other.summonCooldownSeconds_;
     desc_ = other.desc_;
+    entryConfigVersion_ = other.entryConfigVersion_;
+    entryTotalPoints_ = other.entryTotalPoints_;
+    entryMaxDirections_ = other.entryMaxDirections_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -162,6 +167,42 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
     }
   }
 
+  /// <summary>Field number for the "entry_config_version" field.</summary>
+  public const int EntryConfigVersionFieldNumber = 7;
+  private uint entryConfigVersion_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint EntryConfigVersion {
+    get { return entryConfigVersion_; }
+    set {
+      entryConfigVersion_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "entry_total_points" field.</summary>
+  public const int EntryTotalPointsFieldNumber = 8;
+  private uint entryTotalPoints_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint EntryTotalPoints {
+    get { return entryTotalPoints_; }
+    set {
+      entryTotalPoints_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "entry_max_directions" field.</summary>
+  public const int EntryMaxDirectionsFieldNumber = 9;
+  private uint entryMaxDirections_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint EntryMaxDirections {
+    get { return entryMaxDirections_; }
+    set {
+      entryMaxDirections_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -183,6 +224,9 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
     if (RenameCostGold != other.RenameCostGold) return false;
     if (SummonCooldownSeconds != other.SummonCooldownSeconds) return false;
     if (Desc != other.Desc) return false;
+    if (EntryConfigVersion != other.EntryConfigVersion) return false;
+    if (EntryTotalPoints != other.EntryTotalPoints) return false;
+    if (EntryMaxDirections != other.EntryMaxDirections) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -196,6 +240,9 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
     if (RenameCostGold != 0UL) hash ^= RenameCostGold.GetHashCode();
     if (SummonCooldownSeconds != 0) hash ^= SummonCooldownSeconds.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (EntryConfigVersion != 0) hash ^= EntryConfigVersion.GetHashCode();
+    if (EntryTotalPoints != 0) hash ^= EntryTotalPoints.GetHashCode();
+    if (EntryMaxDirections != 0) hash ^= EntryMaxDirections.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -238,6 +285,18 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
       output.WriteRawTag(50);
       output.WriteString(Desc);
     }
+    if (EntryConfigVersion != 0) {
+      output.WriteRawTag(56);
+      output.WriteUInt32(EntryConfigVersion);
+    }
+    if (EntryTotalPoints != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(EntryTotalPoints);
+    }
+    if (EntryMaxDirections != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(EntryMaxDirections);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -272,6 +331,18 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
       output.WriteRawTag(50);
       output.WriteString(Desc);
     }
+    if (EntryConfigVersion != 0) {
+      output.WriteRawTag(56);
+      output.WriteUInt32(EntryConfigVersion);
+    }
+    if (EntryTotalPoints != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(EntryTotalPoints);
+    }
+    if (EntryMaxDirections != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(EntryMaxDirections);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -299,6 +370,15 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (EntryConfigVersion != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(EntryConfigVersion);
+    }
+    if (EntryTotalPoints != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(EntryTotalPoints);
+    }
+    if (EntryMaxDirections != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(EntryMaxDirections);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -329,6 +409,15 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.EntryConfigVersion != 0) {
+      EntryConfigVersion = other.EntryConfigVersion;
+    }
+    if (other.EntryTotalPoints != 0) {
+      EntryTotalPoints = other.EntryTotalPoints;
+    }
+    if (other.EntryMaxDirections != 0) {
+      EntryMaxDirections = other.EntryMaxDirections;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -373,6 +462,18 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
           Desc = input.ReadString();
           break;
         }
+        case 56: {
+          EntryConfigVersion = input.ReadUInt32();
+          break;
+        }
+        case 64: {
+          EntryTotalPoints = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          EntryMaxDirections = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -414,6 +515,18 @@ public sealed partial class PetRuleTable : pb::IMessage<PetRuleTable>
         }
         case 50: {
           Desc = input.ReadString();
+          break;
+        }
+        case 56: {
+          EntryConfigVersion = input.ReadUInt32();
+          break;
+        }
+        case 64: {
+          EntryTotalPoints = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          EntryMaxDirections = input.ReadUInt32();
           break;
         }
       }

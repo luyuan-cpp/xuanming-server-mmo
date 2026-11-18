@@ -48,11 +48,11 @@ constexpr PetRuleTable::ParseTableT_ PetRuleTable::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -87,6 +87,23 @@ constexpr PetRuleTable::ParseTableT_ PetRuleTable::InternalGenerateParseTable_(c
       {::_pbi::TcParser::FastUS1,
        {50, 0, 0,
         PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.desc_)}},
+      // uint32 entry_config_version = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetRuleTable, _impl_.entry_config_version_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.entry_config_version_)}},
+      // uint32 entry_total_points = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetRuleTable, _impl_.entry_total_points_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.entry_total_points_)}},
+      // uint32 entry_max_directions = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetRuleTable, _impl_.entry_max_directions_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.entry_max_directions_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -103,10 +120,16 @@ constexpr PetRuleTable::ParseTableT_ PetRuleTable::InternalGenerateParseTable_(c
       {PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.summon_cooldown_seconds_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string desc = 6;
       {PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.desc_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 entry_config_version = 7;
+      {PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.entry_config_version_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 entry_total_points = 8;
+      {PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.entry_total_points_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 entry_max_directions = 9;
+      {PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.entry_max_directions_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\14\0\0\0\0\0\4\0"
+      "\14\0\0\0\0\0\4\0\0\0\0\0\0\0\0\0"
       "PetRuleTable"
       "desc"
     }},
@@ -125,7 +148,10 @@ inline constexpr PetRuleTable::Impl_::Impl_(
         max_pets_{0u},
         rename_cost_gold_{::uint64_t{0u}},
         name_max_len_{0u},
-        summon_cooldown_seconds_{0u} {}
+        summon_cooldown_seconds_{0u},
+        entry_config_version_{0u},
+        entry_total_points_{0u},
+        entry_max_directions_{0u} {}
 
 template <typename>
 constexpr PetRuleTable::PetRuleTable(::_pbi::ConstantInitialized,
@@ -379,19 +405,25 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_._has_bits_),
-        9, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.max_pets_),
         PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.name_max_len_),
         PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.rename_cost_gold_),
         PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.summon_cooldown_seconds_),
         PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.entry_config_version_),
+        PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.entry_total_points_),
+        PROTOBUF_FIELD_OFFSET(::PetRuleTable, _impl_.entry_max_directions_),
         1,
         2,
         4,
         3,
         5,
         0,
+        6,
+        7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -402,7 +434,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PetRuleTable)},
-        {15, sizeof(::PetRuleTableData)},
+        {21, sizeof(::PetRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -411,20 +443,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_petrule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023petrule_table.proto\"\213\001\n\014PetRuleTable\022\n"
+    "\n\023petrule_table.proto\"\343\001\n\014PetRuleTable\022\n"
     "\n\002id\030\001 \001(\r\022\020\n\010max_pets\030\002 \001(\r\022\024\n\014name_max"
     "_len\030\003 \001(\r\022\030\n\020rename_cost_gold\030\004 \001(\004\022\037\n\027"
     "summon_cooldown_seconds\030\005 \001(\r\022\014\n\004desc\030\006 "
-    "\001(\t\"/\n\020PetRuleTableData\022\033\n\004data\030\001 \003(\0132\r."
-    "PetRuleTableB>\n\016com.game.tableB\026PetRuleT"
-    "ableOuterClassP\001Z\022generated/pb/tableb\006pr"
-    "oto3"
+    "\001(\t\022\034\n\024entry_config_version\030\007 \001(\r\022\032\n\022ent"
+    "ry_total_points\030\010 \001(\r\022\034\n\024entry_max_direc"
+    "tions\030\t \001(\r\"/\n\020PetRuleTableData\022\033\n\004data\030"
+    "\001 \003(\0132\r.PetRuleTableB>\n\016com.game.tableB\026"
+    "PetRuleTableOuterClassP\001Z\022generated/pb/t"
+    "ableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_petrule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_petrule_5ftable_2eproto = {
     false,
     false,
-    284,
+    372,
     descriptor_table_protodef_petrule_5ftable_2eproto,
     "petrule_table.proto",
     &descriptor_table_petrule_5ftable_2eproto_once,
@@ -474,9 +508,9 @@ PetRuleTable::PetRuleTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, summon_cooldown_seconds_) -
+           offsetof(Impl_, entry_max_directions_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::summon_cooldown_seconds_));
+               sizeof(Impl_::entry_max_directions_));
 
   // @@protoc_insertion_point(copy_constructor:PetRuleTable)
 }
@@ -491,9 +525,9 @@ inline void PetRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, summon_cooldown_seconds_) -
+           offsetof(Impl_, entry_max_directions_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::summon_cooldown_seconds_));
+               sizeof(Impl_::entry_max_directions_));
 }
 PetRuleTable::~PetRuleTable() {
   // @@protoc_insertion_point(destructor:PetRuleTable)
@@ -547,11 +581,12 @@ PROTOBUF_NOINLINE void PetRuleTable::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.desc_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.summon_cooldown_seconds_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.summon_cooldown_seconds_));
+        reinterpret_cast<char*>(&_impl_.entry_total_points_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.entry_total_points_));
   }
+  _impl_.entry_max_directions_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -630,6 +665,33 @@ PROTOBUF_NOINLINE void PetRuleTable::Clear() {
     }
   }
 
+  // uint32 entry_config_version = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_entry_config_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_entry_config_version(), target);
+    }
+  }
+
+  // uint32 entry_total_points = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_entry_total_points() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_entry_total_points(), target);
+    }
+  }
+
+  // uint32 entry_max_directions = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_entry_max_directions() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_entry_max_directions(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -655,7 +717,7 @@ PROTOBUF_NOINLINE void PetRuleTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string desc = 6;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_desc().empty()) {
@@ -698,6 +760,29 @@ PROTOBUF_NOINLINE void PetRuleTable::Clear() {
             this_._internal_summon_cooldown_seconds());
       }
     }
+    // uint32 entry_config_version = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_entry_config_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_entry_config_version());
+      }
+    }
+    // uint32 entry_total_points = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_entry_total_points() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_entry_total_points());
+      }
+    }
+  }
+   {
+    // uint32 entry_max_directions = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_entry_max_directions() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_entry_max_directions());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -716,7 +801,7 @@ void PetRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_desc().empty()) {
         _this->_internal_set_desc(from._internal_desc());
@@ -751,6 +836,21 @@ void PetRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.summon_cooldown_seconds_ = from._impl_.summon_cooldown_seconds_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_entry_config_version() != 0) {
+        _this->_impl_.entry_config_version_ = from._impl_.entry_config_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_entry_total_points() != 0) {
+        _this->_impl_.entry_total_points_ = from._impl_.entry_total_points_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_entry_max_directions() != 0) {
+      _this->_impl_.entry_max_directions_ = from._impl_.entry_max_directions_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -773,8 +873,8 @@ void PetRuleTable::InternalSwap(PetRuleTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.summon_cooldown_seconds_)
-      + sizeof(PetRuleTable::_impl_.summon_cooldown_seconds_)
+      PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.entry_max_directions_)
+      + sizeof(PetRuleTable::_impl_.entry_max_directions_)
       - PROTOBUF_FIELD_OFFSET(PetRuleTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

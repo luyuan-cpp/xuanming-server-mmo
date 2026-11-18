@@ -4,6 +4,7 @@ option go_package = "scene";
 import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
 import "proto/common/base/empty.proto";
+import "proto/common/component/pet_cultivation_effects.proto";
 
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
@@ -55,6 +56,10 @@ message PetInfo {
   repeated PetDimensionInfo dimensions = 13;
   PetDerivedInfo derived = 14;
   repeated uint32 skill_table_ids = 15;
+  uint32 cultivation_tier = 17;
+  string cultivation_tier_name = 18;
+  string cultivation_art_key = 19;
+  PetEntriesInfo entries = 20;
   string desc = 16;                      // 种类说明(PetTable.desc),客户端 tooltip 用
 }
 
@@ -184,6 +189,64 @@ message BuyPetResponse {
   uint64 next_purchase_sequence = 5;
 }
 
+// 条目目录与快照。收益全由服务端计算，不从美术示例或客户端表推导。
+message PetEntryInfo {
+  uint32 id = 1;
+  string name = 2;
+  string desc = 3;
+  uint32 category = 4;
+  uint32 channel = 5;
+  uint32 state_kind = 6;
+  uint32 cap = 7;
+  uint32 per_point_bps = 8;
+  uint32 allocated = 9;
+  uint32 effective_bps = 10;
+  uint32 sort = 11;
+  string icon = 12;
+}
+message PetEntriesInfo {
+  uint64 pet_id = 1;
+  uint64 state_version = 2;
+  uint32 config_version = 3;
+  uint32 total_points = 4;
+  uint32 remaining_points = 5;
+  uint32 max_directions = 6;
+  repeated PetEntryInfo entries = 7;
+  PetCultivationEffects effects = 8;
+  bool effective = 9;
+  uint64 unknown_used_points = 10;
+  // 供断线重连确认最近成功请求；客户端仍须核完整目标和版本。
+  string last_request_id = 11;
+}
+message GetPetEntriesRequest { uint64 pet_id = 1; }
+message GetPetEntriesResponse {
+  TipInfoMessage error_message = 1;
+  PetEntriesInfo entries = 2;
+}
+message PreviewPetEntriesRequest {
+  uint64 pet_id = 1;
+  uint64 state_version = 2;
+  uint32 config_version = 3;
+  map<uint32, uint32> target = 4;
+}
+message PreviewPetEntriesResponse {
+  TipInfoMessage error_message = 1;
+  PetEntriesInfo entries = 2;
+}
+message SavePetEntriesRequest {
+  uint64 pet_id = 1;
+  uint64 state_version = 2;
+  uint32 config_version = 3;
+  map<uint32, uint32> target = 4;
+  string request_id = 5; // 16-64字节ASCII标识；同一结果未知请求重试必须原样。
+}
+message SavePetEntriesResponse {
+  TipInfoMessage error_message = 1;
+  PetEntriesInfo entries = 2;
+  string request_id = 3;
+  bool replayed = 4;
+}
+
 service ScenePetClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -199,4 +262,7 @@ service ScenePetClientPlayer {
   rpc GmGrantPet (GmGrantPetRequest) returns (GmGrantPetResponse);
   rpc GetPetShop (GetPetShopRequest) returns (GetPetShopResponse);
   rpc BuyPet (BuyPetRequest) returns (BuyPetResponse);
+  rpc GetPetEntries (GetPetEntriesRequest) returns (GetPetEntriesResponse);
+  rpc PreviewPetEntries (PreviewPetEntriesRequest) returns (PreviewPetEntriesResponse);
+  rpc SavePetEntries (SavePetEntriesRequest) returns (SavePetEntriesResponse);
 }

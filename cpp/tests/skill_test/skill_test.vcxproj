@@ -159,6 +159,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+
+    <ClCompile Include="pet_entries_test.cpp" />
     <ClCompile Include="skill_test.cpp" />
     <ClCompile Include="player_skill_book_test.cpp" />
   </ItemGroup>

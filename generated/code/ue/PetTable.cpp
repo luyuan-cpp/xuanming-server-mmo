@@ -117,6 +117,7 @@ static void PetTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, i
 	PetTableCheckNarrowedField(RowObject, TEXT("init_speed"), TEXT("init_speed"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	PetTableCheckNarrowedField(RowObject, TEXT("shop_price_gold"), TEXT("shop_price_gold"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	PetTableCheckNarrowedField(RowObject, TEXT("acquisition_tier"), TEXT("acquisition_tier"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetTableCheckNarrowedField(RowObject, TEXT("cultivation_tier"), TEXT("cultivation_tier"), RowIndex, 2147483647.0, TEXT("uint32"));
 	PetTableCheckNarrowedField(RowObject, TEXT("aptitude_min"), TEXT("aptitude_min[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	PetTableCheckNarrowedField(RowObject, TEXT("aptitude_max"), TEXT("aptitude_max[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	PetTableCheckNarrowedField(RowObject, TEXT("skill"), TEXT("skill[]"), RowIndex, 2147483647.0, TEXT("uint32"));

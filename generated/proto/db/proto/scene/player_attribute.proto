@@ -5,6 +5,7 @@ import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/component/equipment_effects.proto";
+import "proto/common/component/support_effects.proto";
 
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
@@ -82,6 +83,7 @@ message AttributePanelInfo {
   uint64 create_scheme_cost_gold = 9;   // 再开一个方案要花的金币(0 = 免费)
   repeated CombatAttributeInfo combat = 10; // 战斗类属性全量,sort 升序
   EquipmentEffects equipment_effects = 11; // V1来源修正全量；含分类命中/抵抗/减耗与法宝，不由客户端自行累计。
+  SupportEffectSummary support_effects = 12; // 人物治疗/护盾来源；战斗中临时来源由本人战斗快照提供。
 }
 
 message GetAttributePanelRequest {

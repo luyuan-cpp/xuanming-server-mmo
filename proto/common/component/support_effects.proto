@@ -1,0 +1,52 @@
+syntax = "proto3";
+option go_package = "common/component";
+
+// 施放方辅助效果的只读投影。比例单位为万分比，double保留技能表的小数精度。
+// 来源值不再交给客户端求和；总计与生效贡献由实际结算规则生成。
+message SupportEffectSource {
+  uint32 kind = 1; // 1装备词缀、2被动、3临时状态、4条件法宝。
+  string name = 2;
+  uint64 item_id = 3;
+  uint32 affix_id = 4;
+  uint32 skill_table_id = 5;
+  uint64 buff_instance_id = 6;
+  double raw_bonus_bps = 7;
+  double effective_bonus_bps = 8; // 已经过来源上限/最强同类择取；条件项不计入常驻总计。
+  bool conditional = 9;
+  string reason = 10; // 未生效原因，或条件法宝适用条件。
+  uint32 remain_rounds = 11;
+  bool infinite = 12;
+  uint32 effect_kind = 13; // 装备快照逐来源复用：1治疗、2护盾。
+  uint32 source_cap_bps = 14; // 该装备词缀定义的同类全身来源上限。
+}
+
+message SupportEffectBreakdown {
+  bool complete = 1; // false时总计未知；已有真实来源仍可展示。
+  double total_bonus_bps = 2;
+  uint32 equipment_cap_bps = 3; // 仅装备层上限，不是装备+被动+临时总上限。
+  repeated SupportEffectSource sources = 4;
+}
+
+// 无指定受益目标时的单目标参考值，不含缺血封顶、目标增减疗、条件增效及条件法宝。
+// 未学技能用第1重作学习参考，不表示可以施放；实际伤害/治疗仍由战斗结果裁决。
+message SupportSkillPreview {
+  uint32 skill_table_id = 1;
+  uint32 effect_kind = 2; // 1即时治疗、2独立容量盾、3持续治疗每次恢复。
+  uint32 reference_rank = 3;
+  bool learned = 4;
+  bool complete = 5;
+  double base_value = 6; // 已含等级及技能重数，尚未乘施放加成、尚未取整。
+  uint64 reference_value = 7; // 含适用施放加成后一次向下取整。
+  double outgoing_bonus_bps = 8;
+  uint64 original_mana_cost = 9;
+  uint64 mana_cost = 10;
+  string scope = 11;
+}
+
+message SupportEffectSummary {
+  SupportEffectBreakdown healing = 1;
+  SupportEffectBreakdown shield = 2;
+  repeated SupportSkillPreview previews = 3;
+  bool in_battle = 4;
+  uint32 round_index = 5;
+}

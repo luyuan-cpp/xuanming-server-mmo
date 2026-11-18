@@ -56,11 +56,19 @@ set(SOURCE_FILES
     log/system/console_log.cpp
     message_limiter/message_limiter.cpp
     network/codec/codec.cpp
+    async/loop_task_scope.cpp
     network/rpc_channel.cpp
     network/rpc_channel_stats.cpp
+    network/grpc_trace_hooks.cpp
+    tracing/log_context_suffix.cpp
+    tracing/span_export_queue.cpp
+    tracing/otlp_trace_encoder.cpp
+    tracing/otlp_http.cpp
+    tracing/otlp_span_exporter.cpp
     metrics/prometheus_text.cpp
     metrics/metrics_registry.cpp
     metrics/metrics_http_exporter.cpp
+    kill_switch/kill_switch.cpp
     network/message_statistics.cpp
     network/network_utils.cpp
     network/node_utils.cpp
@@ -71,6 +79,7 @@ set(SOURCE_FILES
     node/system/etcd/etcd_helper.cpp
     node/system/etcd/etcd_manager.cpp
     node/system/etcd/etcd_service.cpp
+    node/system/etcd/kill_switch_etcd_sync.cpp
     node/system/etcd/etcd_transport.cpp
     node/system/etcd/muduo_etcd_transport.cpp
     node/system/node/node.cpp

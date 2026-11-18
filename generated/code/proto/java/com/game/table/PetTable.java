@@ -331,6 +331,17 @@ private static final long serialVersionUID = 0L;
     return acquisitionTier_;
   }
 
+  public static final int CULTIVATION_TIER_FIELD_NUMBER = 16;
+  private int cultivationTier_ = 0;
+  /**
+   * <code>uint32 cultivation_tier = 16;</code>
+   * @return The cultivationTier.
+   */
+  @java.lang.Override
+  public int getCultivationTier() {
+    return cultivationTier_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -402,6 +413,9 @@ private static final long serialVersionUID = 0L;
     }
     if (acquisitionTier_ != 0) {
       output.writeUInt32(15, acquisitionTier_);
+    }
+    if (cultivationTier_ != 0) {
+      output.writeUInt32(16, cultivationTier_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -495,6 +509,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(15, acquisitionTier_);
     }
+    if (cultivationTier_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(16, cultivationTier_);
+    }
     return size;
   }
   @java.lang.Override
@@ -549,6 +567,8 @@ private static final long serialVersionUID = 0L;
         != other.getShopPriceGold()) return false;
     if (getAcquisitionTier()
         != other.getAcquisitionTier()) return false;
+    if (getCultivationTier()
+        != other.getCultivationTier()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -600,6 +620,8 @@ private static final long serialVersionUID = 0L;
         getShopPriceGold());
     hash = (37 * hash) + ACQUISITION_TIER_FIELD_NUMBER;
     hash = (53 * hash) + getAcquisitionTier();
+    hash = (37 * hash) + CULTIVATION_TIER_FIELD_NUMBER;
+    hash = (53 * hash) + getCultivationTier();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -746,6 +768,7 @@ private static final long serialVersionUID = 0L;
       skill_ = emptyIntList();
       shopPriceGold_ = 0L;
       acquisitionTier_ = 0;
+      cultivationTier_ = 0;
       return this;
     }
 
@@ -826,6 +849,9 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField0_ & 0x00004000) != 0)) {
         result.acquisitionTier_ = acquisitionTier_;
+      }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.cultivationTier_ = cultivationTier_;
       }
     }
 
@@ -913,6 +939,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getAcquisitionTier() != 0) {
         setAcquisitionTier(other.getAcquisitionTier());
+      }
+      if (other.getCultivationTier() != 0) {
+        setCultivationTier(other.getCultivationTier());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1048,6 +1077,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00004000;
               break;
             } // case 120
+            case 128: {
+              cultivationTier_ = input.readUInt32();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 128
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1777,6 +1811,38 @@ private static final long serialVersionUID = 0L;
     public Builder clearAcquisitionTier() {
       bitField0_ = (bitField0_ & ~0x00004000);
       acquisitionTier_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int cultivationTier_ ;
+    /**
+     * <code>uint32 cultivation_tier = 16;</code>
+     * @return The cultivationTier.
+     */
+    @java.lang.Override
+    public int getCultivationTier() {
+      return cultivationTier_;
+    }
+    /**
+     * <code>uint32 cultivation_tier = 16;</code>
+     * @param value The cultivationTier to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCultivationTier(int value) {
+
+      cultivationTier_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 cultivation_tier = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCultivationTier() {
+      bitField0_ = (bitField0_ & ~0x00008000);
+      cultivationTier_ = 0;
       onChanged();
       return this;
     }

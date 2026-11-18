@@ -42,6 +42,8 @@ RECOVERY_ADDED_VOLUMES = {
     'xuanming-debug-current_20261106_latest_r1_rank-sql-consume': '9a53868da6e4cb88c19ecd30473ea25500fa84b0107335a487684c4c14bef192',
     'xuanming-debug-current_20261106_latest_r1_rank-sql-writer': 'b3945684fcefc5de656d346b96c2e3bb29d79048f5c2826d36e72cc1a0e9f291',
 }
+AUTHORED_ORIGIN_BATCH = 'authored-festival-pet-acquisition-20261116'
+AUTHORED_ORIGIN_SHA256 = 'bbd55171a03a47ed732b84ac94c170090bbde93fa411844fe08514704a7c0f62'
 
 
 def recovery_path():
@@ -89,9 +91,74 @@ def hashed(value):
     return sha(json.dumps(value, sort_keys=True, separators=(',', ':')).encode())
 
 
-def authored_overlay(rows):
-    # 仅识别手绘节庆部署使用的第三份 Compose，不执行容器标签指定的任意配置。
-    candidates = set()
+def authored_origin_overlay():
+    return ROOT / 'build/verification' / AUTHORED_ORIGIN_BATCH / 'compose.authored.json'
+
+
+def authored_manifest_chain(overlay):
+    # 表批允许前移，恢复原点不能前移；每一级都重新核验不可变产物和前驱摘要。
+    from rebuild_docker_debug import load_runtime_data_manifest
+    origin = authored_origin_overlay().with_name('runtime-data-manifest.json')
+    path = overlay.with_name('runtime-data-manifest.json')
+    chain, child = {}, None
+    while True:
+        require(path.name == 'runtime-data-manifest.json'
+                and path.parent.parent == ROOT / 'build/verification'
+                and re.fullmatch(r'authored-festival-[A-Za-z0-9_.-]+', path.parent.name)
+                and path.is_file() and path.resolve() == path and path not in chain,
+                'Invalid authored manifest ancestry')
+        raw = path.read_bytes()
+        data = load_runtime_data_manifest(path)
+        require(sha(raw) == sha(path.read_bytes()), 'Authored manifest changed during validation')
+        compose = path.with_name('compose.authored.json')
+        require(Path(data['composeOverlay']['path']) == compose and compose.resolve() == compose
+                and sha(compose.read_bytes()) == data['composeOverlay']['sha256']
+                and Path(data['tableDirectory']) == path.parent / 'tables/generated/tables'
+                and set(data['services']) == set(AUTHORED_TABLE_TARGETS),
+                'Authored manifest overlay or consumer binding changed')
+        if child is not None:
+            require(sha(raw) == child['previous']['sha256'], 'Authored predecessor manifest changed')
+            newer = child['data']
+            for key in ('exportDelivery', 'navigationDirectory', 'navigationReceipt', 'navigationSha256'):
+                require(newer[key] == data[key], 'Authored refresh changed map provenance')
+            require({k: v['sha256'] for k, v in newer['sourceWorkbooks'].items()} ==
+                    {k: v['sha256'] for k, v in data['sourceWorkbooks'].items()},
+                    'Authored refresh changed map workbooks')
+            before, after = data['tableSha256'], newer['tableSha256']
+            require(before.keys() <= after.keys(), 'Authored refresh removed table artifacts')
+            require(all(after.get(name + '.' + suffix) == before.get(name + '.' + suffix)
+                        for name in ('basescene', 'world') for suffix in ('json', 'pb')),
+                    'Authored refresh changed map artifacts')
+            changed = {name for name in after if after[name] != before.get(name)}
+            allowed = {f'{name.lower()}.{suffix}' for name in child['allowed'] for suffix in ('json', 'pb')}
+            require(changed <= allowed | {'manifest.json'}, 'Authored refresh changed unapproved tables')
+        chain[path] = sha(raw)
+        if path == origin:
+            require(sha(raw) == AUTHORED_ORIGIN_SHA256, 'Approved authored origin manifest changed')
+            return {p.with_name('compose.authored.json') for p in chain}
+        inputs_path = path.with_name('refresh-inputs.json')
+        require(inputs_path.is_file() and inputs_path.resolve() == inputs_path,
+                'Authored refresh inputs missing or redirected')
+        inputs = json.loads(inputs_path.read_bytes())
+        source = Path(data['sourceExport']['path'])
+        require(source.parent == path.parent and source.resolve() == source,
+                'Authored refresh source is outside its batch')
+        report = json.loads(source.read_bytes())
+        previous = inputs.get('previousManifest')
+        allowed = inputs.get('allowedTables')
+        require(isinstance(previous, dict) and set(previous) == {'path', 'sha256'}
+                and re.fullmatch(r'[0-9a-f]{64}', previous.get('sha256', ''))
+                and previous == report.get('predecessorRuntimeManifest')
+                and isinstance(allowed, list) and allowed and allowed == report.get('refreshedTables')
+                and all(isinstance(name, str) and re.fullmatch(r'[A-Z][A-Za-z0-9]*', name)
+                        and name.lower() not in {'basescene', 'world'} for name in allowed),
+                'Authored refresh predecessor or table scope differs')
+        child = {'data': data, 'previous': previous, 'allowed': allowed}
+        path = Path(previous['path'])
+
+
+def authored_selection(rows):
+    candidates, consumers = set(), {}
     for row in rows:
         labels = row['Config']['Labels']
         files = compose_label_files(row)
@@ -100,14 +167,36 @@ def authored_overlay(rows):
         require(files[:-1] == COMPOSE_FILES and files[-1].name == 'compose.authored.json',
                 'Unexpected authored Compose file order')
         candidates.add(files[-1])
+        name = labels.get('com.docker.compose.service')
+        if name in AUTHORED_TABLE_TARGETS:
+            require(name not in consumers, 'Duplicate authored table consumer')
+            consumers[name] = files[-1]
     if not candidates:
-        return None, None, None, {}
-    require(len(candidates) == 1, 'Multiple authored Compose overlays')
-    overlay = candidates.pop()
+        return None, set()
+    active = set(consumers.values())
+    require(len(active) == 1, 'Multiple authored Compose overlays for table consumers')
+    overlay = next(iter(active))
+    if overlay == authored_origin_overlay():
+        require(candidates == {overlay}, 'Unrelated authored Compose overlay provenance')
+        return overlay, {overlay}
     require(overlay.parent.parent == ROOT / 'build/verification'
             and re.fullmatch(r'authored-festival-[A-Za-z0-9_.-]+', overlay.parent.name)
             and overlay.is_file() and overlay.resolve() == overlay,
             'Unexpected authored Compose overlay path')
+    ancestors = {overlay}
+    if overlay != authored_origin_overlay():
+        require(set(consumers) == set(AUTHORED_TABLE_TARGETS), 'Incomplete authored table consumer batch')
+        ancestors = authored_manifest_chain(overlay)
+    require(candidates <= ancestors, 'Unrelated authored Compose overlay provenance')
+    return overlay, ancestors
+
+
+def authored_overlay(rows):
+    # 仅识别手绘节庆部署使用的第三份 Compose，不执行容器标签指定的任意配置。
+    overlay, _ = authored_selection(rows)
+    if overlay is None:
+        return None, None, None, {}
+    require(overlay.is_file() and overlay.resolve() == overlay, 'Unexpected authored Compose overlay path')
 
     tables = overlay.parent / 'tables/generated/tables'
     navigation = ROOT / 'data/scene_nav_bin/authored_maps'
@@ -366,13 +455,15 @@ def recovery_contract(rows, authored_input, *, original_raw=None, original_signa
         return authored_input, None
     require(path.is_file() and path.resolve() == path, 'Recovery Compose overlay missing or redirected')
     selected = set(INFRA) | set(APPS) | {name + '-sql-boot' for name in WRITERS}
-    # 常驻和注册容器必须来自同一次明确恢复；历史容器可以仍保留。
+    # 原恢复重放仍锁旧批；当前六个表消费者可沿已核验的表批链前移。
+    active, ancestors = authored_selection(rows) if original_raw is None else (authored_origin_overlay(), {authored_origin_overlay()})
     for row in rows:
         labels = row['Config']['Labels']
         if labels.get('com.docker.compose.service') in selected:
             files = [Path(p) for p in labels.get('com.docker.compose.project.config_files', '').split(',')]
-            require(files == [*COMPOSE_FILES,
-                    ROOT / 'build/verification/authored-festival-pet-acquisition-20261116/compose.authored.json', path],
+            allowed = {active} if labels.get('com.docker.compose.service') in AUTHORED_TABLE_TARGETS else ancestors
+            require(len(files) == len(COMPOSE_FILES) + 2 and files[:-2] == COMPOSE_FILES
+                    and files[-2] in allowed and files[-1] == path,
                     'Inconsistent recovery Compose provenance')
     raw = original_raw if original_raw is not None else path.read_bytes()
     if original_raw is None:

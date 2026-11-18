@@ -1676,6 +1676,8 @@ void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
         {
             actor.clear_skill_cooldown_rounds();
         }
+        // 人物装备、被动和临时修正明细只给本人，队友、对手及录像/观战一律不下发。
+        if (viewerPlayerId == 0 || actor.actor_id() != viewerPlayerId) actor.clear_support_effects();
     }
 }
 

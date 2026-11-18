@@ -67,9 +67,17 @@ set(SOURCE_FILES
     handler/event/gate_event_handler.cpp
     handler/event/gate_kafka_command_router.cpp
     handler/gate_push_delivery.cpp
+    handler/gate_redirect_delivery.cpp
     handler/rpc/client_session_handler.cpp
+    handler/rpc/client_heartbeat.cpp
+    handler/rpc/client_entry_admission.cpp
     handler/rpc/client_request_lane.cpp
+    handler/rpc/client_scene_lane.cpp
+    handler/rpc/connection_admission.cpp
+    handler/rpc/drain_migration.cpp
+    handler/rpc/login_session_renewal.cpp
     handler/rpc/router_muduo_forward.cpp
+    handler/rpc/router_subset.cpp
     handler/rpc/rpc_reply_bridge.cpp
     handler/rpc/gate_service_handler.cpp
     handler/rpc/gate_client_spectate_handler.cpp

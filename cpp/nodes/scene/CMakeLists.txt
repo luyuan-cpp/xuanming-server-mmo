@@ -69,6 +69,7 @@ set(SOURCE_FILES
     handler/event/battle_event_handler.cpp
     handler/event/team_event_handler.cpp
     handler/event/player_inbox_event_handler.cpp
+    handler/event/player_placement_event_handler.cpp
     handler/rpc/player/player_movement_handler.cpp
     handler/rpc/scene_admin_handler.cpp
     handler/rpc/player/player_currency_handler.cpp
@@ -86,6 +87,7 @@ set(SOURCE_FILES
     handler/grpc/scene_node_service.cpp
     main.cpp
     id_segment_bootstrap.cpp
+    scene_planned_drain.cpp
     handler/rpc/player/player_bag_handler.cpp
     handler/rpc/player/player_mission_handler.cpp
     handler/rpc/player/player_activity_handler.cpp

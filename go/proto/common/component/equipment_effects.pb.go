@@ -40,9 +40,11 @@ type EquipmentEffects struct {
 	// 类别：1物攻、2法攻、3治疗、4护盾、5封灵、6封法、7封物、8混乱、9昏睡、10冰冻、11毒、12辅助。
 	ManaReductionBps map[uint32]uint32 `protobuf:"bytes,13,rep,name=mana_reduction_bps,json=manaReductionBps,proto3" json:"mana_reduction_bps,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// 每件实物单独携带。同名允许重复，item_id 不允许重复；顺序不承载槽位语义。
-	Artifacts     []*EquipmentArtifactSource `protobuf:"bytes,14,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Artifacts              []*EquipmentArtifactSource `protobuf:"bytes,14,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	SupportSources         []*SupportEffectSource     `protobuf:"bytes,15,rep,name=support_sources,json=supportSources,proto3" json:"support_sources,omitempty"`                            // 与同一轮聚合同时产生，禁止客户端再累计。
+	SupportSourcesComplete bool                       `protobuf:"varint,16,opt,name=support_sources_complete,json=supportSourcesComplete,proto3" json:"support_sources_complete,omitempty"` // 旧快照/缺背包输入不能冒充完整来源。
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *EquipmentEffects) Reset() {
@@ -173,6 +175,20 @@ func (x *EquipmentEffects) GetArtifacts() []*EquipmentArtifactSource {
 	return nil
 }
 
+func (x *EquipmentEffects) GetSupportSources() []*SupportEffectSource {
+	if x != nil {
+		return x.SupportSources
+	}
+	return nil
+}
+
+func (x *EquipmentEffects) GetSupportSourcesComplete() bool {
+	if x != nil {
+		return x.SupportSourcesComplete
+	}
+	return false
+}
+
 type EquipmentArtifactSource struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	ItemId             uint64                 `protobuf:"varint,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
@@ -183,6 +199,7 @@ type EquipmentArtifactSource struct {
 	BattleLimit        uint32                 `protobuf:"varint,6,opt,name=battle_limit,json=battleLimit,proto3" json:"battle_limit,omitempty"`         // 0 不限。
 	ActiveRounds       uint32                 `protobuf:"varint,7,opt,name=active_rounds,json=activeRounds,proto3" json:"active_rounds,omitempty"`      // 0 不限。
 	HealthThresholdBps uint32                 `protobuf:"varint,8,opt,name=health_threshold_bps,json=healthThresholdBps,proto3" json:"health_threshold_bps,omitempty"`
+	Name               string                 `protobuf:"bytes,9,opt,name=name,proto3" json:"name,omitempty"` // 只读来源显示名；效果仍由effect_id及已校验参数裁决。
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -273,11 +290,18 @@ func (x *EquipmentArtifactSource) GetHealthThresholdBps() uint32 {
 	return 0
 }
 
+func (x *EquipmentArtifactSource) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 var File_proto_common_component_equipment_effects_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\n" +
-	".proto/common/component/equipment_effects.proto\"\xb7\a\n" +
+	".proto/common/component/equipment_effects.proto\x1a,proto/common/component/support_effects.proto\"\xb0\b\n" +
 	"\x10EquipmentEffects\x12.\n" +
 	"\x13physical_attack_bps\x18\x01 \x01(\rR\x11physicalAttackBps\x12(\n" +
 	"\x10magic_attack_bps\x18\x02 \x01(\rR\x0emagicAttackBps\x12$\n" +
@@ -293,7 +317,9 @@ const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\x0failment_hit_bps\x18\v \x03(\v2$.EquipmentEffects.AilmentHitBpsEntryR\railmentHitBps\x12U\n" +
 	"\x12ailment_resist_bps\x18\f \x03(\v2'.EquipmentEffects.AilmentResistBpsEntryR\x10ailmentResistBps\x12U\n" +
 	"\x12mana_reduction_bps\x18\r \x03(\v2'.EquipmentEffects.ManaReductionBpsEntryR\x10manaReductionBps\x126\n" +
-	"\tartifacts\x18\x0e \x03(\v2\x18.EquipmentArtifactSourceR\tartifacts\x1a@\n" +
+	"\tartifacts\x18\x0e \x03(\v2\x18.EquipmentArtifactSourceR\tartifacts\x12=\n" +
+	"\x0fsupport_sources\x18\x0f \x03(\v2\x14.SupportEffectSourceR\x0esupportSources\x128\n" +
+	"\x18support_sources_complete\x18\x10 \x01(\bR\x16supportSourcesComplete\x1a@\n" +
 	"\x12AilmentHitBpsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
@@ -302,7 +328,7 @@ const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
 	"\x15ManaReductionBpsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xa7\x02\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xbb\x02\n" +
 	"\x17EquipmentArtifactSource\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\teffect_id\x18\x02 \x01(\rR\beffectId\x12\x1b\n" +
@@ -311,7 +337,8 @@ const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\x0fper_round_limit\x18\x05 \x01(\rR\rperRoundLimit\x12!\n" +
 	"\fbattle_limit\x18\x06 \x01(\rR\vbattleLimit\x12#\n" +
 	"\ractive_rounds\x18\a \x01(\rR\factiveRounds\x120\n" +
-	"\x14health_threshold_bps\x18\b \x01(\rR\x12healthThresholdBpsB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x14health_threshold_bps\x18\b \x01(\rR\x12healthThresholdBps\x12\x12\n" +
+	"\x04name\x18\t \x01(\tR\x04nameB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_equipment_effects_proto_rawDescOnce sync.Once
@@ -332,17 +359,19 @@ var file_proto_common_component_equipment_effects_proto_goTypes = []any{
 	nil,                             // 2: EquipmentEffects.AilmentHitBpsEntry
 	nil,                             // 3: EquipmentEffects.AilmentResistBpsEntry
 	nil,                             // 4: EquipmentEffects.ManaReductionBpsEntry
+	(*SupportEffectSource)(nil),     // 5: SupportEffectSource
 }
 var file_proto_common_component_equipment_effects_proto_depIdxs = []int32{
 	2, // 0: EquipmentEffects.ailment_hit_bps:type_name -> EquipmentEffects.AilmentHitBpsEntry
 	3, // 1: EquipmentEffects.ailment_resist_bps:type_name -> EquipmentEffects.AilmentResistBpsEntry
 	4, // 2: EquipmentEffects.mana_reduction_bps:type_name -> EquipmentEffects.ManaReductionBpsEntry
 	1, // 3: EquipmentEffects.artifacts:type_name -> EquipmentArtifactSource
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 4: EquipmentEffects.support_sources:type_name -> SupportEffectSource
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_equipment_effects_proto_init() }
@@ -350,6 +379,7 @@ func file_proto_common_component_equipment_effects_proto_init() {
 	if File_proto_common_component_equipment_effects_proto != nil {
 		return
 	}
+	file_proto_common_component_support_effects_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

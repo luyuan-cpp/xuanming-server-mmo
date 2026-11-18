@@ -34,6 +34,7 @@
 #include "google/protobuf/map_entry.h"
 #include "google/protobuf/map_field.h"
 #include "google/protobuf/unknown_field_set.h"
+#include "proto/common/component/support_effects.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -403,6 +404,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentArtifactSource final : pub
 
   // accessors -------------------------------------------------------
   enum : int {
+    kNameFieldNumber = 9,
     kItemIdFieldNumber = 1,
     kEffectIdFieldNumber = 2,
     kBonusBpsFieldNumber = 3,
@@ -412,6 +414,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentArtifactSource final : pub
     kActiveRoundsFieldNumber = 7,
     kHealthThresholdBpsFieldNumber = 8,
   };
+  // string name = 9;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
   // uint64 item_id = 1;
   void clear_item_id() ;
   [[nodiscard]] ::uint64_t item_id() const;
@@ -496,8 +513,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentArtifactSource final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 44,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -525,6 +542,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentArtifactSource final : pub
         const EquipmentArtifactSource& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
     ::uint64_t item_id_;
     ::uint32_t effect_id_;
     ::uint32_t bonus_bps_;
@@ -689,6 +707,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
   // accessors -------------------------------------------------------
   enum : int {
     kArtifactsFieldNumber = 14,
+    kSupportSourcesFieldNumber = 15,
     kPhysicalAttackBpsFieldNumber = 1,
     kMagicAttackBpsFieldNumber = 2,
     kMaxHealthBpsFieldNumber = 3,
@@ -699,6 +718,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
     kMagicCritBpsFieldNumber = 8,
     kPhysicalResistBpsFieldNumber = 9,
     kMagicResistBpsFieldNumber = 10,
+    kSupportSourcesCompleteFieldNumber = 16,
     kAilmentHitBpsFieldNumber = 11,
     kAilmentResistBpsFieldNumber = 12,
     kManaReductionBpsFieldNumber = 13,
@@ -722,6 +742,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
   private:
   const ::google::protobuf::RepeatedPtrField<::EquipmentArtifactSource>& _internal_artifacts() const;
   ::google::protobuf::RepeatedPtrField<::EquipmentArtifactSource>* PROTOBUF_NONNULL _internal_mutable_artifacts();
+
+  public:
+  // repeated .SupportEffectSource support_sources = 15;
+  [[nodiscard]] int support_sources_size()
+      const;
+  private:
+  int _internal_support_sources_size() const;
+
+  public:
+  void clear_support_sources() ;
+  [[nodiscard]] const ::SupportEffectSource& support_sources(int index) const;
+  [[nodiscard]] ::SupportEffectSource* PROTOBUF_NONNULL mutable_support_sources(int index);
+  ::SupportEffectSource* PROTOBUF_NONNULL add_support_sources();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SupportEffectSource>&
+  support_sources() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SupportEffectSource>* PROTOBUF_NONNULL
+  mutable_support_sources();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SupportEffectSource>& _internal_support_sources() const;
+  ::google::protobuf::RepeatedPtrField<::SupportEffectSource>* PROTOBUF_NONNULL _internal_mutable_support_sources();
 
   public:
   // uint32 physical_attack_bps = 1;
@@ -824,6 +865,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
   void _internal_set_magic_resist_bps(::uint32_t value);
 
   public:
+  // bool support_sources_complete = 16;
+  void clear_support_sources_complete() ;
+  [[nodiscard]] bool support_sources_complete() const;
+  void set_support_sources_complete(bool value);
+
+  private:
+  bool _internal_support_sources_complete() const;
+  void _internal_set_support_sources_complete(bool value);
+
+  public:
   // map<uint32, uint32> ailment_hit_bps = 11;
   [[nodiscard]] int ailment_hit_bps_size()
       const;
@@ -876,8 +927,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
-                          4, 0,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          5, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -906,6 +957,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::EquipmentArtifactSource > artifacts_;
+    ::google::protobuf::RepeatedPtrField< ::SupportEffectSource > support_sources_;
     ::uint32_t physical_attack_bps_;
     ::uint32_t magic_attack_bps_;
     ::uint32_t max_health_bps_;
@@ -916,6 +968,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
     ::uint32_t magic_crit_bps_;
     ::uint32_t physical_resist_bps_;
     ::uint32_t magic_resist_bps_;
+    bool support_sources_complete_;
     ::google::protobuf::internal::MapField<EquipmentEffects_AilmentHitBpsEntry_DoNotUse, ::uint32_t, ::uint32_t> ailment_hit_bps_;
     ::google::protobuf::internal::MapField<EquipmentEffects_AilmentResistBpsEntry_DoNotUse, ::uint32_t, ::uint32_t> ailment_resist_bps_;
     ::google::protobuf::internal::MapField<EquipmentEffects_ManaReductionBpsEntry_DoNotUse, ::uint32_t, ::uint32_t> mana_reduction_bps_;
@@ -951,7 +1004,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentEffects final : public ::g
 inline void EquipmentEffects::clear_physical_attack_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_attack_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t EquipmentEffects::physical_attack_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.physical_attack_bps)
@@ -959,7 +1012,7 @@ inline ::uint32_t EquipmentEffects::physical_attack_bps() const {
 }
 inline void EquipmentEffects::set_physical_attack_bps(::uint32_t value) {
   _internal_set_physical_attack_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.physical_attack_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_physical_attack_bps() const {
@@ -975,7 +1028,7 @@ inline void EquipmentEffects::_internal_set_physical_attack_bps(::uint32_t value
 inline void EquipmentEffects::clear_magic_attack_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_attack_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t EquipmentEffects::magic_attack_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.magic_attack_bps)
@@ -983,7 +1036,7 @@ inline ::uint32_t EquipmentEffects::magic_attack_bps() const {
 }
 inline void EquipmentEffects::set_magic_attack_bps(::uint32_t value) {
   _internal_set_magic_attack_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.magic_attack_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_magic_attack_bps() const {
@@ -999,7 +1052,7 @@ inline void EquipmentEffects::_internal_set_magic_attack_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_max_health_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_health_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t EquipmentEffects::max_health_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.max_health_bps)
@@ -1007,7 +1060,7 @@ inline ::uint32_t EquipmentEffects::max_health_bps() const {
 }
 inline void EquipmentEffects::set_max_health_bps(::uint32_t value) {
   _internal_set_max_health_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.max_health_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_max_health_bps() const {
@@ -1023,7 +1076,7 @@ inline void EquipmentEffects::_internal_set_max_health_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_speed_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.speed_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t EquipmentEffects::speed_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.speed_bps)
@@ -1031,7 +1084,7 @@ inline ::uint32_t EquipmentEffects::speed_bps() const {
 }
 inline void EquipmentEffects::set_speed_bps(::uint32_t value) {
   _internal_set_speed_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.speed_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_speed_bps() const {
@@ -1047,7 +1100,7 @@ inline void EquipmentEffects::_internal_set_speed_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_outgoing_heal_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outgoing_heal_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t EquipmentEffects::outgoing_heal_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.outgoing_heal_bps)
@@ -1055,7 +1108,7 @@ inline ::uint32_t EquipmentEffects::outgoing_heal_bps() const {
 }
 inline void EquipmentEffects::set_outgoing_heal_bps(::uint32_t value) {
   _internal_set_outgoing_heal_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.outgoing_heal_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_outgoing_heal_bps() const {
@@ -1071,7 +1124,7 @@ inline void EquipmentEffects::_internal_set_outgoing_heal_bps(::uint32_t value) 
 inline void EquipmentEffects::clear_shield_capacity_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.shield_capacity_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t EquipmentEffects::shield_capacity_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.shield_capacity_bps)
@@ -1079,7 +1132,7 @@ inline ::uint32_t EquipmentEffects::shield_capacity_bps() const {
 }
 inline void EquipmentEffects::set_shield_capacity_bps(::uint32_t value) {
   _internal_set_shield_capacity_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.shield_capacity_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_shield_capacity_bps() const {
@@ -1095,7 +1148,7 @@ inline void EquipmentEffects::_internal_set_shield_capacity_bps(::uint32_t value
 inline void EquipmentEffects::clear_physical_crit_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_crit_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t EquipmentEffects::physical_crit_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.physical_crit_bps)
@@ -1103,7 +1156,7 @@ inline ::uint32_t EquipmentEffects::physical_crit_bps() const {
 }
 inline void EquipmentEffects::set_physical_crit_bps(::uint32_t value) {
   _internal_set_physical_crit_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.physical_crit_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_physical_crit_bps() const {
@@ -1119,7 +1172,7 @@ inline void EquipmentEffects::_internal_set_physical_crit_bps(::uint32_t value) 
 inline void EquipmentEffects::clear_magic_crit_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_crit_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t EquipmentEffects::magic_crit_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.magic_crit_bps)
@@ -1127,7 +1180,7 @@ inline ::uint32_t EquipmentEffects::magic_crit_bps() const {
 }
 inline void EquipmentEffects::set_magic_crit_bps(::uint32_t value) {
   _internal_set_magic_crit_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.magic_crit_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_magic_crit_bps() const {
@@ -1143,7 +1196,7 @@ inline void EquipmentEffects::_internal_set_magic_crit_bps(::uint32_t value) {
 inline void EquipmentEffects::clear_physical_resist_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_resist_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t EquipmentEffects::physical_resist_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.physical_resist_bps)
@@ -1151,7 +1204,7 @@ inline ::uint32_t EquipmentEffects::physical_resist_bps() const {
 }
 inline void EquipmentEffects::set_physical_resist_bps(::uint32_t value) {
   _internal_set_physical_resist_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.physical_resist_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_physical_resist_bps() const {
@@ -1167,7 +1220,7 @@ inline void EquipmentEffects::_internal_set_physical_resist_bps(::uint32_t value
 inline void EquipmentEffects::clear_magic_resist_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.magic_resist_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t EquipmentEffects::magic_resist_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentEffects.magic_resist_bps)
@@ -1175,7 +1228,7 @@ inline ::uint32_t EquipmentEffects::magic_resist_bps() const {
 }
 inline void EquipmentEffects::set_magic_resist_bps(::uint32_t value) {
   _internal_set_magic_resist_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:EquipmentEffects.magic_resist_bps)
 }
 inline ::uint32_t EquipmentEffects::_internal_magic_resist_bps() const {
@@ -1197,7 +1250,7 @@ inline int EquipmentEffects::ailment_hit_bps_size() const {
 inline void EquipmentEffects::clear_ailment_hit_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ailment_hit_bps_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& EquipmentEffects::_internal_ailment_hit_bps() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1213,7 +1266,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL Equipme
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL EquipmentEffects::mutable_ailment_hit_bps()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_mutable_map:EquipmentEffects.ailment_hit_bps)
   return _internal_mutable_ailment_hit_bps();
 }
@@ -1228,7 +1281,7 @@ inline int EquipmentEffects::ailment_resist_bps_size() const {
 inline void EquipmentEffects::clear_ailment_resist_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ailment_resist_bps_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& EquipmentEffects::_internal_ailment_resist_bps() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1244,7 +1297,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL Equipme
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL EquipmentEffects::mutable_ailment_resist_bps()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_mutable_map:EquipmentEffects.ailment_resist_bps)
   return _internal_mutable_ailment_resist_bps();
 }
@@ -1259,7 +1312,7 @@ inline int EquipmentEffects::mana_reduction_bps_size() const {
 inline void EquipmentEffects::clear_mana_reduction_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mana_reduction_bps_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& EquipmentEffects::_internal_mana_reduction_bps() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1275,7 +1328,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL Equipme
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL EquipmentEffects::mutable_mana_reduction_bps()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_mutable_map:EquipmentEffects.mana_reduction_bps)
   return _internal_mutable_mana_reduction_bps();
 }
@@ -1335,6 +1388,80 @@ EquipmentEffects::_internal_mutable_artifacts() {
   return &_impl_.artifacts_;
 }
 
+// repeated .SupportEffectSource support_sources = 15;
+inline int EquipmentEffects::_internal_support_sources_size() const {
+  return _internal_support_sources().size();
+}
+inline int EquipmentEffects::support_sources_size() const {
+  return _internal_support_sources_size();
+}
+inline const ::SupportEffectSource& EquipmentEffects::support_sources(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipmentEffects.support_sources)
+  return _internal_support_sources().Get(index);
+}
+inline ::SupportEffectSource* PROTOBUF_NONNULL EquipmentEffects::mutable_support_sources(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:EquipmentEffects.support_sources)
+  return _internal_mutable_support_sources()->Mutable(index);
+}
+inline ::SupportEffectSource* PROTOBUF_NONNULL EquipmentEffects::add_support_sources()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SupportEffectSource* _add =
+      _internal_mutable_support_sources()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:EquipmentEffects.support_sources)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SupportEffectSource>& EquipmentEffects::support_sources() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:EquipmentEffects.support_sources)
+  return _internal_support_sources();
+}
+inline ::google::protobuf::RepeatedPtrField<::SupportEffectSource>* PROTOBUF_NONNULL
+EquipmentEffects::mutable_support_sources() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:EquipmentEffects.support_sources)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_support_sources();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SupportEffectSource>&
+EquipmentEffects::_internal_support_sources() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.support_sources_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SupportEffectSource>* PROTOBUF_NONNULL
+EquipmentEffects::_internal_mutable_support_sources() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.support_sources_;
+}
+
+// bool support_sources_complete = 16;
+inline void EquipmentEffects::clear_support_sources_complete() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.support_sources_complete_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline bool EquipmentEffects::support_sources_complete() const {
+  // @@protoc_insertion_point(field_get:EquipmentEffects.support_sources_complete)
+  return _internal_support_sources_complete();
+}
+inline void EquipmentEffects::set_support_sources_complete(bool value) {
+  _internal_set_support_sources_complete(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:EquipmentEffects.support_sources_complete)
+}
+inline bool EquipmentEffects::_internal_support_sources_complete() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.support_sources_complete_;
+}
+inline void EquipmentEffects::_internal_set_support_sources_complete(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.support_sources_complete_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // EquipmentArtifactSource
@@ -1343,7 +1470,7 @@ EquipmentEffects::_internal_mutable_artifacts() {
 inline void EquipmentArtifactSource::clear_item_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t EquipmentArtifactSource::item_id() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.item_id)
@@ -1351,7 +1478,7 @@ inline ::uint64_t EquipmentArtifactSource::item_id() const {
 }
 inline void EquipmentArtifactSource::set_item_id(::uint64_t value) {
   _internal_set_item_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.item_id)
 }
 inline ::uint64_t EquipmentArtifactSource::_internal_item_id() const {
@@ -1367,7 +1494,7 @@ inline void EquipmentArtifactSource::_internal_set_item_id(::uint64_t value) {
 inline void EquipmentArtifactSource::clear_effect_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.effect_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t EquipmentArtifactSource::effect_id() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.effect_id)
@@ -1375,7 +1502,7 @@ inline ::uint32_t EquipmentArtifactSource::effect_id() const {
 }
 inline void EquipmentArtifactSource::set_effect_id(::uint32_t value) {
   _internal_set_effect_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.effect_id)
 }
 inline ::uint32_t EquipmentArtifactSource::_internal_effect_id() const {
@@ -1391,7 +1518,7 @@ inline void EquipmentArtifactSource::_internal_set_effect_id(::uint32_t value) {
 inline void EquipmentArtifactSource::clear_bonus_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bonus_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t EquipmentArtifactSource::bonus_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.bonus_bps)
@@ -1399,7 +1526,7 @@ inline ::uint32_t EquipmentArtifactSource::bonus_bps() const {
 }
 inline void EquipmentArtifactSource::set_bonus_bps(::uint32_t value) {
   _internal_set_bonus_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.bonus_bps)
 }
 inline ::uint32_t EquipmentArtifactSource::_internal_bonus_bps() const {
@@ -1415,7 +1542,7 @@ inline void EquipmentArtifactSource::_internal_set_bonus_bps(::uint32_t value) {
 inline void EquipmentArtifactSource::clear_cap_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cap_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t EquipmentArtifactSource::cap_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.cap_bps)
@@ -1423,7 +1550,7 @@ inline ::uint32_t EquipmentArtifactSource::cap_bps() const {
 }
 inline void EquipmentArtifactSource::set_cap_bps(::uint32_t value) {
   _internal_set_cap_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.cap_bps)
 }
 inline ::uint32_t EquipmentArtifactSource::_internal_cap_bps() const {
@@ -1439,7 +1566,7 @@ inline void EquipmentArtifactSource::_internal_set_cap_bps(::uint32_t value) {
 inline void EquipmentArtifactSource::clear_per_round_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.per_round_limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t EquipmentArtifactSource::per_round_limit() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.per_round_limit)
@@ -1447,7 +1574,7 @@ inline ::uint32_t EquipmentArtifactSource::per_round_limit() const {
 }
 inline void EquipmentArtifactSource::set_per_round_limit(::uint32_t value) {
   _internal_set_per_round_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.per_round_limit)
 }
 inline ::uint32_t EquipmentArtifactSource::_internal_per_round_limit() const {
@@ -1463,7 +1590,7 @@ inline void EquipmentArtifactSource::_internal_set_per_round_limit(::uint32_t va
 inline void EquipmentArtifactSource::clear_battle_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t EquipmentArtifactSource::battle_limit() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.battle_limit)
@@ -1471,7 +1598,7 @@ inline ::uint32_t EquipmentArtifactSource::battle_limit() const {
 }
 inline void EquipmentArtifactSource::set_battle_limit(::uint32_t value) {
   _internal_set_battle_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.battle_limit)
 }
 inline ::uint32_t EquipmentArtifactSource::_internal_battle_limit() const {
@@ -1487,7 +1614,7 @@ inline void EquipmentArtifactSource::_internal_set_battle_limit(::uint32_t value
 inline void EquipmentArtifactSource::clear_active_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t EquipmentArtifactSource::active_rounds() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.active_rounds)
@@ -1495,7 +1622,7 @@ inline ::uint32_t EquipmentArtifactSource::active_rounds() const {
 }
 inline void EquipmentArtifactSource::set_active_rounds(::uint32_t value) {
   _internal_set_active_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.active_rounds)
 }
 inline ::uint32_t EquipmentArtifactSource::_internal_active_rounds() const {
@@ -1511,7 +1638,7 @@ inline void EquipmentArtifactSource::_internal_set_active_rounds(::uint32_t valu
 inline void EquipmentArtifactSource::clear_health_threshold_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_threshold_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t EquipmentArtifactSource::health_threshold_bps() const {
   // @@protoc_insertion_point(field_get:EquipmentArtifactSource.health_threshold_bps)
@@ -1519,7 +1646,7 @@ inline ::uint32_t EquipmentArtifactSource::health_threshold_bps() const {
 }
 inline void EquipmentArtifactSource::set_health_threshold_bps(::uint32_t value) {
   _internal_set_health_threshold_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:EquipmentArtifactSource.health_threshold_bps)
 }
 inline ::uint32_t EquipmentArtifactSource::_internal_health_threshold_bps() const {
@@ -1529,6 +1656,70 @@ inline ::uint32_t EquipmentArtifactSource::_internal_health_threshold_bps() cons
 inline void EquipmentArtifactSource::_internal_set_health_threshold_bps(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_threshold_bps_ = value;
+}
+
+// string name = 9;
+inline void EquipmentArtifactSource::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& EquipmentArtifactSource::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipmentArtifactSource.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EquipmentArtifactSource::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:EquipmentArtifactSource.name)
+}
+inline ::std::string* PROTOBUF_NONNULL EquipmentArtifactSource::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:EquipmentArtifactSource.name)
+  return _s;
+}
+inline const ::std::string& EquipmentArtifactSource::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void EquipmentArtifactSource::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EquipmentArtifactSource::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EquipmentArtifactSource::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipmentArtifactSource.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EquipmentArtifactSource::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:EquipmentArtifactSource.name)
 }
 
 #ifdef __GNUC__

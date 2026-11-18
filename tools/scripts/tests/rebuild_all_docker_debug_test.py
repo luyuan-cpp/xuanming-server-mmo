@@ -643,7 +643,7 @@ class RebuildAllTests(unittest.TestCase):
 
     def authored_fixture(self):
         self.mock(subject.startup, 'ROOT', new=self.root)
-        batch = self.root / 'build/verification/authored-festival-test'
+        batch = self.root / 'build/verification' / subject.startup.AUTHORED_ORIGIN_BATCH
         self.tables = batch / 'tables/generated/tables'
         self.navigation = self.root / 'data/scene_nav_bin/authored_maps'
         self.staged = self.root / 'build/docker-debug-current'

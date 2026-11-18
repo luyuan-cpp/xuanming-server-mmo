@@ -20,7 +20,8 @@ Skill ID分别为A10000、B11000、P12000、T13000、O14000加编号。Buff ID�
 - A19毒3次、A30烧3次；毒同名跨来源同强刷新、强者覆盖，弱者不替换。催毒最多提前2次；蔓毒每份延长1次且刷新保留已延长标记；毒火联动须同时有毒和烧，各提前1次，消费原状态及原施加者强度，不能在轮末重复跳伤。
 - A24实际扣血才唤醒；护盾全吸收、未命中不唤醒。A38冻结隔离伤害及新障碍，旧持续状态时钟继续；友方治疗/保护/净化允许，敌方抽蓝/驱散/劝退阻断。
 - A26死亡保留回生印，轮末持续伤害后结算印记再判胜负；复活20%最大气血并消费整印。重新施加新印可再次复活，没有每场一次限制。A33每目标净化1项，优先控制；不附加原A11候选少量治疗。A34每目标驱散1项。
-- A40仅独立施放、七目标。容量为0.64法攻＋3.2×等级（按A10普通治疗基础的80%编表，但运行时不调用治疗产生护盾）；持续2轮含当轮、耗蓝8%、CD3。同名容量按剩余容量择强，不因弱覆盖延时；目标死亡移除，来源死亡保留；可驱散。只吸收直接伤害，不吸收毒、反射、转伤及资源费用。
+- A10/A12/A26独立治疗基础分别为20/17.5/6×人物等级，再乘技能支持等级系数；不读取攻击面板。初始曲线锚定旧首测Lv30/法攻600/rank1强度，尚非平衡结论。
+- A40仅独立施放、七目标。容量为16×人物等级×技能支持等级系数（按A10普通治疗基础的80%编表，但运行时不调用治疗产生护盾）；持续2轮含当轮、耗蓝8%、CD3。同名容量按剩余容量择强，不因弱覆盖延时；目标死亡移除，来源死亡保留；可驱散。只吸收直接伤害，不吸收毒、反射、转伤及资源费用。
 - 类型护罩→普通容量盾→法力盾→援护预算→实际气血伤害→反射依次处理，优先级10/20/30/40/50。B05/B06最多吸收2次且有容量；B14受益者用自己的法力吸收50%伤害，每吸收1点耗1法力。A36分担25%单体直接伤害，来源每轮承担最多自身最大气血30%，不循环转伤。
 - B12首测法术、两目标、按实际扣血30%吸血给施法宝宝，不吃治疗修正、不从护罩吸收量获益。B13降至1气血后按已付气血125%削蓝，当前1气血不可施放。B15耗自身25%最大法力，按实际已付法力2倍临时增最大气血并回血，持续3轮，到期回归原上限。B16每战1次、牺牲自身，对其他存活友方治疗其最大气血60%并净化最多3项。
 - B09劝退不等于死亡，保留气血与单位身份。首测离场后等待2个完整回合：第1轮劝退，最早第4轮由其人物主人提交召回行动；主人消耗本轮正常行动，召回宝宝本轮不追加行动，下一轮恢复正常指令。不能召回别人的宝宝或死亡宝宝。返回截止为施放轮＋配置轮数＋1，`PET_RETREAT`事件值1表示退场、0表示召回。
@@ -118,8 +119,8 @@ Skill ID分别为A10000、B11000、P12000、T13000、O14000加编号。Buff ID�
 | 100070 | A07 | 直接伤害 | 施放/挂载 | `{}` |
 | 100071 | A07 | 属性修正 | 施放/挂载 | `{"modifier_stat":4,"ratio":-0.25,"duration_rounds":3,"tag":["Slow"],"tick_on_apply":1}` |
 | 100080 | A08 | 直接伤害 | 施放/挂载 | `{}` |
-| 100100 | A10 | 治疗 | 施放/挂载 | `{"value_basis":2,"ratio":0.8,"per_level":4}` |
-| 100120 | A12 | 治疗 | 施放/挂载 | `{"value_basis":2,"ratio":0.7,"per_level":3.5}` |
+| 100100 | A10 | 治疗 | 施放/挂载 | `{"value_basis":0,"per_level":20}` |
+| 100120 | A12 | 治疗 | 施放/挂载 | `{"value_basis":0,"per_level":17.5}` |
 | 100140 | A14 | 属性修正 | 施放/挂载 | `{"modifier_stat":3,"ratio":0.25,"duration_rounds":5,"tag":["Buff"],"tick_on_apply":1}` |
 | 100150 | A15 | 回蓝 | 施放/挂载 | `{"value_basis":4,"ratio":0.25}` |
 | 100160 | A16 | 属性修正 | 施放/挂载 | `{"modifier_stat":4,"ratio":0.25,"duration_rounds":3,"tag":["Buff"],"tick_on_apply":1}` |
@@ -133,7 +134,7 @@ Skill ID分别为A10000、B11000、P12000、T13000、O14000加编号。Buff ID�
 | 100230 | A23 | 控制 | 施放/挂载 | `{"state_kind":4,"duration_rounds":1,"application_chance":0.65,"tag":["Confusion","Control","Debuff"],"tick_on_apply":0,"refresh_policy":1}` |
 | 100240 | A24 | 控制 | 施放/挂载 | `{"state_kind":5,"duration_rounds":2,"application_chance":0.65,"tag":["Sleep","Control","Debuff"],"tick_on_apply":0,"refresh_policy":1}` |
 | 100250 | A25 | 属性修正 | 施放/挂载 | `{"modifier_stat":15,"ratio":0.2,"duration_rounds":5,"tag":["Buff"],"tick_on_apply":1}` |
-| 100260 | A26 | 回生印 | 施放/挂载 | `{"value_basis":2,"ratio":0.2,"per_level":2,"secondary_ratio":0.2,"duration_rounds":5,"tick_count":5,"tick_on_apply":1,"keep_on_death":1,"tag":["Buff","Revive"],"refresh_policy":1}` |
+| 100260 | A26 | 回生印 | 施放/挂载 | `{"value_basis":0,"per_level":6,"secondary_ratio":0.2,"duration_rounds":5,"tick_count":5,"tick_on_apply":1,"keep_on_death":1,"tag":["Buff","Revive"],"refresh_policy":1}` |
 | 100270 | A27 | 属性修正 | 施放/挂载 | `{"modifier_stat":7,"ratio":0.15,"duration_rounds":3,"tag":["Buff"],"tick_on_apply":1}` |
 | 100280 | A28 | 催动持续伤害 | 施放/挂载 | `{"required_tag":"Poison","effect_count":2}` |
 | 100290 | A29 | 延长持续伤害 | 施放/挂载 | `{"required_tag":"Poison","effect_count":1}` |
@@ -149,7 +150,7 @@ Skill ID分别为A10000、B11000、P12000、T13000、O14000加编号。Buff ID�
 | 100370 | A37 | 直接伤害 | 施放/挂载 | `{"required_tag":"Break","conditional_bonus":0.5}` |
 | 100380 | A38 | 控制 | 施放/挂载 | `{"state_kind":6,"duration_rounds":1,"application_chance":0.55,"tag":["Freeze","Control","Debuff"],"tick_on_apply":0,"refresh_policy":1}` |
 | 100390 | A39 | 直接伤害 | 施放/挂载 | `{}` |
-| 100400 | A40 | 容量盾 | 施放/挂载 | `{"value_basis":2,"ratio":0.64,"per_level":3.2,"duration_rounds":2,"tick_on_apply":1,"tag":["Buff","Shield"],"refresh_policy":2,"effect_priority":20}` |
+| 100400 | A40 | 容量盾 | 施放/挂载 | `{"value_basis":0,"per_level":16,"duration_rounds":2,"tick_on_apply":1,"tag":["Buff","Shield"],"refresh_policy":2,"effect_priority":20}` |
 | 110050 | B05 | 容量盾 | 施放/挂载 | `{"value_basis":2,"ratio":1.2,"per_level":6,"hit_limit":2,"damage_filter":2,"duration_rounds":3,"tick_on_apply":1,"refresh_policy":2,"tag":["Buff","Shield"],"effect_priority":10}` |
 | 110060 | B06 | 容量盾 | 施放/挂载 | `{"value_basis":2,"ratio":1.2,"per_level":6,"hit_limit":2,"damage_filter":1,"duration_rounds":3,"tick_on_apply":1,"refresh_policy":2,"tag":["Buff","Shield"],"effect_priority":10}` |
 | 110070 | B07 | 反射 | 受击后 | `{"damage_filter":1,"secondary_ratio":0.25,"duration_rounds":3,"tick_on_apply":1,"tag":["Buff"],"effect_priority":50}` |

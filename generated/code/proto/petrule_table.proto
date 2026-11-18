@@ -15,6 +15,9 @@ message PetRuleTable {
 	uint64 rename_cost_gold = 4;
 	uint32 summon_cooldown_seconds = 5;
 	string desc = 6;
+	uint32 entry_config_version = 7;
+	uint32 entry_total_points = 8;
+	uint32 entry_max_directions = 9;
 }
 
 message PetRuleTableData {

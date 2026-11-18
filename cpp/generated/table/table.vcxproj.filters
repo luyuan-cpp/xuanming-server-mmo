@@ -15,6 +15,18 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+
+    <ClInclude Include="proto\pettier_table.pb.h" />
+
+    <ClInclude Include="code\pettier_table_comp.h" />
+
+    <ClInclude Include="code\pettier_table.h" />
+
+    <ClInclude Include="proto\petentry_table.pb.h" />
+
+    <ClInclude Include="code\petentry_table_comp.h" />
+
+    <ClInclude Include="code\petentry_table.h" />
     <ClInclude Include="code\actoractioncombatstate_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -566,6 +578,14 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+
+    <ClCompile Include="proto\pettier_table.pb.cc" />
+
+    <ClCompile Include="code\pettier_table.cpp" />
+
+    <ClCompile Include="proto\petentry_table.pb.cc" />
+
+    <ClCompile Include="code\petentry_table.cpp" />
     <ClCompile Include="code\actoractioncombatstate_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>

@@ -580,6 +580,13 @@ TEST_F(PlayerEquipmentCraftTest, InstallingOnEquippedInstanceChangesEffectWithou
     EquipmentEffects effects;
     PlayerEquipmentV1System::CollectEffects(player, effects);
     EXPECT_EQ(800u, effects.outgoing_heal_bps());
+    ASSERT_TRUE(effects.support_sources_complete());
+    ASSERT_EQ(1, effects.support_sources_size());
+    const auto& source = effects.support_sources(0);
+    EXPECT_EQ(id, source.item_id()); EXPECT_EQ(103, source.affix_id());
+    EXPECT_EQ(1, source.effect_kind()); EXPECT_EQ(800, source.raw_bonus_bps());
+    EXPECT_EQ(effects.outgoing_heal_bps(), source.effective_bonus_bps());
+    EXPECT_EQ(3200, source.source_cap_bps());
 }
 
 TEST_F(PlayerEquipmentCraftTest, SameKeyReplaysFirstIdentityAndDifferentParametersAreRejected) {

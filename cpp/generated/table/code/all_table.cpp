@@ -45,7 +45,9 @@
 #include "mysterymerchantrule_table.h"
 #include "mysterymerchantspot_table.h"
 #include "pet_table.h"
+#include "petentry_table.h"
 #include "petrule_table.h"
+#include "pettier_table.h"
 #include "playmode_table.h"
 #include "reward_table.h"
 #include "rolenamerule_table.h"
@@ -143,7 +145,11 @@ void LoadTables() {
 
     PetTableManager::Instance().Load();
 
+    PetEntryTableManager::Instance().Load();
+
     PetRuleTableManager::Instance().Load();
+
+    PetTierTableManager::Instance().Load();
 
     PlayModeTableManager::Instance().Load();
 
@@ -247,7 +253,11 @@ void LoadTables() {
 
     PetTableManager::Instance().LoadSuccess();
 
+    PetEntryTableManager::Instance().LoadSuccess();
+
     PetRuleTableManager::Instance().LoadSuccess();
+
+    PetTierTableManager::Instance().LoadSuccess();
 
     PlayModeTableManager::Instance().LoadSuccess();
 
@@ -274,7 +284,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(51);
+    static muduo::CountDownLatch latch(53);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -604,6 +614,14 @@ void LoadTablesAsync() {
     });
     PetLoadThread.detach();
 
+    std::thread PetEntryLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        PetEntryTableManager::Instance().Load();
+        latch.countDown();
+    });
+    PetEntryLoadThread.detach();
+
     std::thread PetRuleLoadThread([]() {
         void InitThreadLocalConfig();
         InitThreadLocalConfig();
@@ -611,6 +629,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     PetRuleLoadThread.detach();
+
+    std::thread PetTierLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        PetTierTableManager::Instance().Load();
+        latch.countDown();
+    });
+    PetTierLoadThread.detach();
 
     std::thread PlayModeLoadThread([]() {
         void InitThreadLocalConfig();
@@ -769,7 +795,11 @@ void LoadTablesAsync() {
 
     PetTableManager::Instance().LoadSuccess();
 
+    PetEntryTableManager::Instance().LoadSuccess();
+
     PetRuleTableManager::Instance().LoadSuccess();
+
+    PetTierTableManager::Instance().LoadSuccess();
 
     PlayModeTableManager::Instance().LoadSuccess();
 

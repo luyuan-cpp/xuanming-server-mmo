@@ -60,6 +60,9 @@
 // 房间按生产合同只由 Match 的持久决定收尾(DestroyBattle 删不掉),这里直接走决定之后的收尾入口,不启动 match。
 class BattleRoomManagerTestAccess {
 public:
+    static void RedactSupport(BattleStateS2C& state, uint64_t viewer) {
+        BattleRoomManager::Instance().RedactStateForViewer(state, viewer);
+    }
     // Match 回了 COMPLETE。房间不存在返回 false。调用之后房间已删(来源校验不过时保留)。
     static bool Complete(const uint64_t battleId) {
         auto& manager = BattleRoomManager::Instance();
@@ -1842,6 +1845,7 @@ TEST_F(BattleObserverContract, EveryRoundSendsOneRelayFramePerAttachedGateOverCo
             EXPECT_EQ(2, turn.state().actors_size());
             for (const auto& actor : turn.state().actors()) {
                 EXPECT_FALSE(actor.has_combat());
+                EXPECT_FALSE(actor.has_support_effects());
                 EXPECT_EQ(0, actor.skill_cooldown_rounds_size());
             }
         }
@@ -2270,6 +2274,7 @@ TEST_F(BattleObserverContract, ReplayRecordedOnlyWhenRequestedAndSentWithOutcome
     for (const auto& actor : state.actors()) {
         EXPECT_EQ(0, actor.skill_cooldown_rounds_size()) << "观众版:不带冷却";
         EXPECT_FALSE(actor.has_combat()) << "观众版:不带装备概率";
+        EXPECT_FALSE(actor.has_support_effects()) << "录像观众版:不带人物私有来源";
     }
 }
 
@@ -2291,5 +2296,22 @@ TEST_F(BattleObserverContract, ReplayDeadlineDrawRecordsFinalState) {
     ASSERT_TRUE(replay.has_final_state());
     EXPECT_EQ(2, replay.final_state().actors_size());
     EXPECT_EQ(0u, replay.final_state().action_deadline_ms());
+    for (const auto& actor : replay.final_state().actors()) EXPECT_FALSE(actor.has_support_effects());
 }
 } // namespace
+
+TEST_F(BattleObserverContract, SupportSourcesArePrivateForOwnerAndRemovedFromObserverReplayProjection) {
+    BattleStateS2C original;
+    for (const uint64_t id : {101u, 102u}) {
+        auto* actor = original.add_actors(); actor->set_actor_id(id);
+        actor->mutable_support_effects()->mutable_healing()->set_complete(true);
+        actor->mutable_support_effects()->mutable_healing()->add_sources()->set_item_id(900 + id);
+    }
+    auto* pet = original.add_actors(); pet->set_actor_id(1001); pet->set_owner_player_id(101);
+    pet->mutable_support_effects()->mutable_healing()->set_complete(true);
+    auto self = original; BattleRoomManagerTestAccess::RedactSupport(self, 101);
+    EXPECT_TRUE(self.actors(0).has_support_effects());
+    EXPECT_FALSE(self.actors(1).has_support_effects()); EXPECT_FALSE(self.actors(2).has_support_effects());
+    auto observer = original; BattleRoomManagerTestAccess::RedactSupport(observer, 0);
+    for (const auto& actor : observer.actors()) EXPECT_FALSE(actor.has_support_effects());
+}

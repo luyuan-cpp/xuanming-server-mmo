@@ -1,4 +1,5 @@
 #include "player_attribute.h"
+#include "player_support_effects.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <algorithm>
@@ -992,6 +993,7 @@ uint32_t PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelIn
 	derivedInfo->set_mana(base.mana());
 
 	FillCombatPanel(player, panel);
+	PlayerSupportEffectSystem::Build(player, *panel.mutable_support_effects());
 	return kSuccess;
 }
 

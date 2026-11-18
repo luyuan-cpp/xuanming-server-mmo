@@ -47,6 +47,15 @@ public:
     static void BuyPet(entt::entity player,
         const ::BuyPetRequest* request,
         ::BuyPetResponse* response);
+    static void GetPetEntries(entt::entity player,
+        const ::GetPetEntriesRequest* request,
+        ::GetPetEntriesResponse* response);
+    static void PreviewPetEntries(entt::entity player,
+        const ::PreviewPetEntriesRequest* request,
+        ::PreviewPetEntriesResponse* response);
+    static void SavePetEntries(entt::entity player,
+        const ::SavePetEntriesRequest* request,
+        ::SavePetEntriesResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -150,6 +159,33 @@ public:
             BuyPet(player,
                 static_cast<const ::BuyPetRequest*>(request),
                 static_cast<::BuyPetResponse*>(response));
+			}
+            break;
+        case 11:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::GetPetEntriesResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            GetPetEntries(player,
+                static_cast<const ::GetPetEntriesRequest*>(request),
+                static_cast<::GetPetEntriesResponse*>(response));
+			}
+            break;
+        case 12:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::PreviewPetEntriesResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            PreviewPetEntries(player,
+                static_cast<const ::PreviewPetEntriesRequest*>(request),
+                static_cast<::PreviewPetEntriesResponse*>(response));
+			}
+            break;
+        case 13:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SavePetEntriesResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SavePetEntries(player,
+                static_cast<const ::SavePetEntriesRequest*>(request),
+                static_cast<::SavePetEntriesResponse*>(response));
 			}
             break;
         default:

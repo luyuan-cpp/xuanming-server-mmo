@@ -3,9 +3,41 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include "combat_damage_rules.h"
+#include "../constants/battle_effect_constants.h"
 
 // 装备计算纯规则：不查表、不掷骰、不修改状态。调用方负责来源资格与实际收益后的次数提交。
 namespace equipbattle {
+// 伤害效果优先，其余类别按配置效果顺序判定；场景预览与实际扣蓝共用。
+template<class Skill, class FindBuff>
+uint32_t ManaCategory(const Skill& skill, FindBuff findBuff) {
+    using turnbattle::BattleEffectOp;
+    if (skill.battle_model() != 1) return 0;
+    for (const auto id : skill.effect()) {
+        const auto* row = findBuff(id);
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Damage))
+            return skill.damage_type() == combatdamage::kPhysicalDamage ? 1u : 2u;
+    }
+    bool restoreMana = false;
+    for (const auto id : skill.effect()) {
+        const auto* row = findBuff(id); if (row == nullptr) continue;
+        switch (static_cast<BattleEffectOp>(row->battle_op())) {
+        case BattleEffectOp::Heal: case BattleEffectOp::ReviveMark: return 3;
+        case BattleEffectOp::Shield: return 4;
+        case BattleEffectOp::Control:
+            if (row->state_kind() >= 1 && row->state_kind() <= 7) return row->state_kind() + 4;
+            break;
+        case BattleEffectOp::PeriodicDamage:
+            if (row->state_kind() == static_cast<uint32_t>(turnbattle::BattleStateKind::Poison)) return 11;
+            break;
+        case BattleEffectOp::ConsumePeriodic: case BattleEffectOp::ExtendPeriodic: return 11;
+        case BattleEffectOp::RestoreMana: restoreMana = true; break;
+        default: break;
+        }
+    }
+    return restoreMana ? 0 : 12;
+}
+
 inline uint32_t MaximumSourceBps(uint32_t effect) {
     switch (effect) {
     case 1: case 2: case 5: case 6: return 3200;

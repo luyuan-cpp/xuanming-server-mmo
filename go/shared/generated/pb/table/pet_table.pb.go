@@ -38,6 +38,7 @@ type PetTable struct {
 	Skill           []uint32               `protobuf:"varint,13,rep,packed,name=skill,proto3" json:"skill,omitempty"`
 	ShopPriceGold   uint64                 `protobuf:"varint,14,opt,name=shop_price_gold,json=shopPriceGold,proto3" json:"shop_price_gold,omitempty"`
 	AcquisitionTier uint32                 `protobuf:"varint,15,opt,name=acquisition_tier,json=acquisitionTier,proto3" json:"acquisition_tier,omitempty"`
+	CultivationTier uint32                 `protobuf:"varint,16,opt,name=cultivation_tier,json=cultivationTier,proto3" json:"cultivation_tier,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -177,6 +178,13 @@ func (x *PetTable) GetAcquisitionTier() uint32 {
 	return 0
 }
 
+func (x *PetTable) GetCultivationTier() uint32 {
+	if x != nil {
+		return x.CultivationTier
+	}
+	return 0
+}
+
 type PetTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*PetTable            `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -225,7 +233,7 @@ var File_pet_table_proto protoreflect.FileDescriptor
 
 const file_pet_table_proto_rawDesc = "" +
 	"\n" +
-	"\x0fpet_table.proto\"\xc3\x03\n" +
+	"\x0fpet_table.proto\"\xee\x03\n" +
 	"\bPetTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -244,7 +252,8 @@ const file_pet_table_proto_rawDesc = "" +
 	"\faptitude_max\x18\f \x03(\rR\vaptitudeMax\x12\x14\n" +
 	"\x05skill\x18\r \x03(\rR\x05skill\x12&\n" +
 	"\x0fshop_price_gold\x18\x0e \x01(\x04R\rshopPriceGold\x12)\n" +
-	"\x10acquisition_tier\x18\x0f \x01(\rR\x0facquisitionTier\"-\n" +
+	"\x10acquisition_tier\x18\x0f \x01(\rR\x0facquisitionTier\x12)\n" +
+	"\x10cultivation_tier\x18\x10 \x01(\rR\x0fcultivationTier\"-\n" +
 	"\fPetTableData\x12\x1d\n" +
 	"\x04data\x18\x01 \x03(\v2\t.PetTableR\x04dataB:\n" +
 	"\x0ecom.game.tableB\x12PetTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

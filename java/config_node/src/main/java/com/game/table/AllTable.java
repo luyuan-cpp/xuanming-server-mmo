@@ -99,7 +99,11 @@ public class AllTable {
 
         PetTableManager.getInstance().load(configDir, useBinary);
 
+        PetEntryTableManager.getInstance().load(configDir, useBinary);
+
         PetRuleTableManager.getInstance().load(configDir, useBinary);
+
+        PetTierTableManager.getInstance().load(configDir, useBinary);
 
         PlayModeTableManager.getInstance().load(configDir, useBinary);
 
@@ -134,7 +138,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(51);
+        CountDownLatch latch = new CountDownLatch(53);
 
         new Thread(() -> {
             try {
@@ -548,9 +552,29 @@ public class AllTable {
 
         new Thread(() -> {
             try {
+                PetEntryTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load PetEntry table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 PetRuleTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load PetRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                PetTierTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load PetTier table", e);
             } finally {
                 latch.countDown();
             }
@@ -748,7 +772,11 @@ public class AllTable {
 
         PetTableManager.getInstance().load(configDir, useBinary);
 
+        PetEntryTableManager.getInstance().load(configDir, useBinary);
+
         PetRuleTableManager.getInstance().load(configDir, useBinary);
+
+        PetTierTableManager.getInstance().load(configDir, useBinary);
 
         PlayModeTableManager.getInstance().load(configDir, useBinary);
 

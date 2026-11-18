@@ -38,6 +38,18 @@ struct PetRuleDescComp {
     std::string_view value;
 };
 
+struct PetRuleEntry_config_versionComp {
+    uint32_t value;
+};
+
+struct PetRuleEntry_total_pointsComp {
+    uint32_t value;
+};
+
+struct PetRuleEntry_max_directionsComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -60,4 +72,13 @@ inline PetRuleSummon_cooldown_secondsComp MakePetRuleSummon_cooldown_secondsComp
 }
 inline PetRuleDescComp MakePetRuleDescComp(const PetRuleTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline PetRuleEntry_config_versionComp MakePetRuleEntry_config_versionComp(const PetRuleTable& row) {
+    return { row.entry_config_version() };
+}
+inline PetRuleEntry_total_pointsComp MakePetRuleEntry_total_pointsComp(const PetRuleTable& row) {
+    return { row.entry_total_points() };
+}
+inline PetRuleEntry_max_directionsComp MakePetRuleEntry_max_directionsComp(const PetRuleTable& row) {
+    return { row.entry_max_directions() };
 }

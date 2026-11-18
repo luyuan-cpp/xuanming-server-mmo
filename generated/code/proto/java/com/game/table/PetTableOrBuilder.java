@@ -144,4 +144,10 @@ public interface PetTableOrBuilder extends
    * @return The acquisitionTier.
    */
   int getAcquisitionTier();
+
+  /**
+   * <code>uint32 cultivation_tier = 16;</code>
+   * @return The cultivationTier.
+   */
+  int getCultivationTier();
 }

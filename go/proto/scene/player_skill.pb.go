@@ -431,29 +431,30 @@ func (x *ListSkillsResponse) GetPetId() uint64 {
 // 技能书的一行:配置表的展示投影 + 本角色的等级与可修习性。数值真源是 Skill 表与服务端规则,
 // 客户端只展示,不得据此推算、也不回传这些派生值。
 type SkillCatalogEntry struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	SkillTableId      uint32                 `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
-	Name              string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description       string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	IconKey           string                 `protobuf:"bytes,4,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"` // Unity Resources 相对键,不带扩展名、不带 Assets/Resources/ 前缀(如 "UI/Skills/1101")
-	ClassId           uint32                 `protobuf:"varint,5,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
-	Category          string                 `protobuf:"bytes,6,opt,name=category,proto3" json:"category,omitempty"` // 表里的分类文案(主动 / 被动 …),只用于展示
-	Passive           bool                   `protobuf:"varint,7,opt,name=passive,proto3" json:"passive,omitempty"`
-	TargetTeam        uint32                 `protobuf:"varint,8,opt,name=target_team,json=targetTeam,proto3" json:"target_team,omitempty"` // 1 = 敌方,2 = 友方,3 = 自身(class_skill_rules.h TargetTeam)
-	MaxTargets        uint32                 `protobuf:"varint,9,opt,name=max_targets,json=maxTargets,proto3" json:"max_targets,omitempty"`
-	UnlockLevel       uint32                 `protobuf:"varint,10,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
-	MaxRank           uint32                 `protobuf:"varint,11,opt,name=max_rank,json=maxRank,proto3" json:"max_rank,omitempty"`
-	Rank              uint32                 `protobuf:"varint,12,opt,name=rank,proto3" json:"rank,omitempty"`                                   // 已学等级;0 = 未学
-	RankLimit         uint32                 `protobuf:"varint,13,opt,name=rank_limit,json=rankLimit,proto3" json:"rank_limit,omitempty"`        // 按当前角色等级能修到的最高重;未到解锁等级为 0
-	ManaPercent       float64                `protobuf:"fixed64,14,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"` // 耗蓝比例(0.03 = 最大法力的 3%,战斗内向上取整、至少 1)
-	CooldownRounds    uint32                 `protobuf:"varint,15,opt,name=cooldown_rounds,json=cooldownRounds,proto3" json:"cooldown_rounds,omitempty"`
-	NextRankCost      uint64                 `protobuf:"varint,16,opt,name=next_rank_cost,json=nextRankCost,proto3" json:"next_rank_cost,omitempty"`                  // 再修一重的价格;已满重为 0
-	UpgradeBlockTipId uint32                 `protobuf:"varint,17,opt,name=upgrade_block_tip_id,json=upgradeBlockTipId,proto3" json:"upgrade_block_tip_id,omitempty"` // 0 = 现在可以修习一重;否则为不能修习的原因(tip 码,skill_error 段)
-	DurationRounds    uint32                 `protobuf:"varint,18,opt,name=duration_rounds,json=durationRounds,proto3" json:"duration_rounds,omitempty"`              // 附带增益 / 减益的持续回合;没有为 0
-	AllowDeadTarget   bool                   `protobuf:"varint,19,opt,name=allow_dead_target,json=allowDeadTarget,proto3" json:"allow_dead_target,omitempty"`         // 仅复生类配置允许选择倒地单位，普通治疗不能选尸体。
-	AbilityKind       uint32                 `protobuf:"varint,20,opt,name=ability_kind,json=abilityKind,proto3" json:"ability_kind,omitempty"`                       // 1主动、2被动、3追击、4开场。
-	CasterMask        uint32                 `protobuf:"varint,21,opt,name=caster_mask,json=casterMask,proto3" json:"caster_mask,omitempty"`                          // 1人物、2宝宝；按施法者资格区分。
-	ActionTags        uint32                 `protobuf:"varint,22,opt,name=action_tags,json=actionTags,proto3" json:"action_tags,omitempty"`                          // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
+	state             protoimpl.MessageState         `protogen:"open.v1"`
+	SkillTableId      uint32                         `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`
+	Name              string                         `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description       string                         `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	IconKey           string                         `protobuf:"bytes,4,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"` // Unity Resources 相对键,不带扩展名、不带 Assets/Resources/ 前缀(如 "UI/Skills/1101")
+	ClassId           uint32                         `protobuf:"varint,5,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"`
+	Category          string                         `protobuf:"bytes,6,opt,name=category,proto3" json:"category,omitempty"` // 表里的分类文案(主动 / 被动 …),只用于展示
+	Passive           bool                           `protobuf:"varint,7,opt,name=passive,proto3" json:"passive,omitempty"`
+	TargetTeam        uint32                         `protobuf:"varint,8,opt,name=target_team,json=targetTeam,proto3" json:"target_team,omitempty"` // 1 = 敌方,2 = 友方,3 = 自身(class_skill_rules.h TargetTeam)
+	MaxTargets        uint32                         `protobuf:"varint,9,opt,name=max_targets,json=maxTargets,proto3" json:"max_targets,omitempty"`
+	UnlockLevel       uint32                         `protobuf:"varint,10,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
+	MaxRank           uint32                         `protobuf:"varint,11,opt,name=max_rank,json=maxRank,proto3" json:"max_rank,omitempty"`
+	Rank              uint32                         `protobuf:"varint,12,opt,name=rank,proto3" json:"rank,omitempty"`                                   // 已学等级;0 = 未学
+	RankLimit         uint32                         `protobuf:"varint,13,opt,name=rank_limit,json=rankLimit,proto3" json:"rank_limit,omitempty"`        // 按当前角色等级能修到的最高重;未到解锁等级为 0
+	ManaPercent       float64                        `protobuf:"fixed64,14,opt,name=mana_percent,json=manaPercent,proto3" json:"mana_percent,omitempty"` // 耗蓝比例(0.03 = 最大法力的 3%,战斗内向上取整、至少 1)
+	CooldownRounds    uint32                         `protobuf:"varint,15,opt,name=cooldown_rounds,json=cooldownRounds,proto3" json:"cooldown_rounds,omitempty"`
+	NextRankCost      uint64                         `protobuf:"varint,16,opt,name=next_rank_cost,json=nextRankCost,proto3" json:"next_rank_cost,omitempty"`                  // 再修一重的价格;已满重为 0
+	UpgradeBlockTipId uint32                         `protobuf:"varint,17,opt,name=upgrade_block_tip_id,json=upgradeBlockTipId,proto3" json:"upgrade_block_tip_id,omitempty"` // 0 = 现在可以修习一重;否则为不能修习的原因(tip 码,skill_error 段)
+	DurationRounds    uint32                         `protobuf:"varint,18,opt,name=duration_rounds,json=durationRounds,proto3" json:"duration_rounds,omitempty"`              // 附带增益 / 减益的持续回合;没有为 0
+	AllowDeadTarget   bool                           `protobuf:"varint,19,opt,name=allow_dead_target,json=allowDeadTarget,proto3" json:"allow_dead_target,omitempty"`         // 仅复生类配置允许选择倒地单位，普通治疗不能选尸体。
+	AbilityKind       uint32                         `protobuf:"varint,20,opt,name=ability_kind,json=abilityKind,proto3" json:"ability_kind,omitempty"`                       // 1主动、2被动、3追击、4开场。
+	CasterMask        uint32                         `protobuf:"varint,21,opt,name=caster_mask,json=casterMask,proto3" json:"caster_mask,omitempty"`                          // 1人物、2宝宝；按施法者资格区分。
+	ActionTags        uint32                         `protobuf:"varint,22,opt,name=action_tags,json=actionTags,proto3" json:"action_tags,omitempty"`                          // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
+	SupportPreview    *component.SupportSkillPreview `protobuf:"bytes,23,opt,name=support_preview,json=supportPreview,proto3" json:"support_preview,omitempty"`               // 服务端中立参考值，缺省表示没有权威预览。
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -642,6 +643,13 @@ func (x *SkillCatalogEntry) GetActionTags() uint32 {
 	return 0
 }
 
+func (x *SkillCatalogEntry) GetSupportPreview() *component.SupportSkillPreview {
+	if x != nil {
+		return x.SupportPreview
+	}
+	return nil
+}
+
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。
 type UpgradeSkillRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -783,7 +791,7 @@ var File_proto_scene_player_skill_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/scene/player_skill.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a&proto/common/component/base_comp.proto\x1a\x1dproto/common/base/empty.proto\x1a.proto/common/component/player_skill_comp.proto\x1a'proto/common/component/actor_comp.proto\"\xa5\x01\n" +
+	"\x1eproto/scene/player_skill.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a&proto/common/component/base_comp.proto\x1a\x1dproto/common/base/empty.proto\x1a.proto/common/component/player_skill_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a,proto/common/component/support_effects.proto\"\xa5\x01\n" +
 	"\x13ReleaseSkillRequest\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x1b\n" +
 	"\ttarget_id\x18\x02 \x01(\x04R\btargetId\x12$\n" +
@@ -815,7 +823,7 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\fplayer_level\x18\x04 \x01(\rR\vplayerLevel\x12\x19\n" +
 	"\bclass_id\x18\x05 \x01(\rR\aclassId\x12)\n" +
 	"\x10currency_balance\x18\x06 \x01(\x04R\x0fcurrencyBalance\x12\x15\n" +
-	"\x06pet_id\x18\a \x01(\x04R\x05petId\"\xeb\x05\n" +
+	"\x06pet_id\x18\a \x01(\x04R\x05petId\"\xaa\x06\n" +
 	"\x11SkillCatalogEntry\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -844,7 +852,8 @@ const file_proto_scene_player_skill_proto_rawDesc = "" +
 	"\vcaster_mask\x18\x15 \x01(\rR\n" +
 	"casterMask\x12\x1f\n" +
 	"\vaction_tags\x18\x16 \x01(\rR\n" +
-	"actionTags\"\x8d\x01\n" +
+	"actionTags\x12=\n" +
+	"\x0fsupport_preview\x18\x17 \x01(\v2\x14.SupportSkillPreviewR\x0esupportPreview\"\x8d\x01\n" +
 	"\x13UpgradeSkillRequest\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12#\n" +
 	"\rexpected_rank\x18\x02 \x01(\rR\fexpectedRank\x12\x14\n" +
@@ -891,7 +900,8 @@ var file_proto_scene_player_skill_proto_goTypes = []any{
 	(*component.Rotation)(nil),            // 10: Rotation
 	(*base.TipInfoMessage)(nil),           // 11: TipInfoMessage
 	(*component.PlayerSkillListComp)(nil), // 12: PlayerSkillListComp
-	(*base.Empty)(nil),                    // 13: Empty
+	(*component.SupportSkillPreview)(nil), // 13: SupportSkillPreview
+	(*base.Empty)(nil),                    // 14: Empty
 }
 var file_proto_scene_player_skill_proto_depIdxs = []int32{
 	9,  // 0: ReleaseSkillRequest.position:type_name -> Vector3
@@ -901,23 +911,24 @@ var file_proto_scene_player_skill_proto_depIdxs = []int32{
 	11, // 4: ListSkillsResponse.error_message:type_name -> TipInfoMessage
 	12, // 5: ListSkillsResponse.skill_list:type_name -> PlayerSkillListComp
 	6,  // 6: ListSkillsResponse.catalog:type_name -> SkillCatalogEntry
-	11, // 7: UpgradeSkillResponse.error_message:type_name -> TipInfoMessage
-	5,  // 8: UpgradeSkillResponse.state:type_name -> ListSkillsResponse
-	0,  // 9: SceneSkillClientPlayer.ReleaseSkill:input_type -> ReleaseSkillRequest
-	3,  // 10: SceneSkillClientPlayer.NotifySkillUsed:input_type -> SkillUsedS2C
-	2,  // 11: SceneSkillClientPlayer.NotifySkillInterrupted:input_type -> SkillInterruptedS2C
-	4,  // 12: SceneSkillClientPlayer.ListSkills:input_type -> ListSkillsRequest
-	7,  // 13: SceneSkillClientPlayer.UpgradeSkill:input_type -> UpgradeSkillRequest
-	1,  // 14: SceneSkillClientPlayer.ReleaseSkill:output_type -> ReleaseSkillResponse
-	13, // 15: SceneSkillClientPlayer.NotifySkillUsed:output_type -> Empty
-	13, // 16: SceneSkillClientPlayer.NotifySkillInterrupted:output_type -> Empty
-	5,  // 17: SceneSkillClientPlayer.ListSkills:output_type -> ListSkillsResponse
-	8,  // 18: SceneSkillClientPlayer.UpgradeSkill:output_type -> UpgradeSkillResponse
-	14, // [14:19] is the sub-list for method output_type
-	9,  // [9:14] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	13, // 7: SkillCatalogEntry.support_preview:type_name -> SupportSkillPreview
+	11, // 8: UpgradeSkillResponse.error_message:type_name -> TipInfoMessage
+	5,  // 9: UpgradeSkillResponse.state:type_name -> ListSkillsResponse
+	0,  // 10: SceneSkillClientPlayer.ReleaseSkill:input_type -> ReleaseSkillRequest
+	3,  // 11: SceneSkillClientPlayer.NotifySkillUsed:input_type -> SkillUsedS2C
+	2,  // 12: SceneSkillClientPlayer.NotifySkillInterrupted:input_type -> SkillInterruptedS2C
+	4,  // 13: SceneSkillClientPlayer.ListSkills:input_type -> ListSkillsRequest
+	7,  // 14: SceneSkillClientPlayer.UpgradeSkill:input_type -> UpgradeSkillRequest
+	1,  // 15: SceneSkillClientPlayer.ReleaseSkill:output_type -> ReleaseSkillResponse
+	14, // 16: SceneSkillClientPlayer.NotifySkillUsed:output_type -> Empty
+	14, // 17: SceneSkillClientPlayer.NotifySkillInterrupted:output_type -> Empty
+	5,  // 18: SceneSkillClientPlayer.ListSkills:output_type -> ListSkillsResponse
+	8,  // 19: SceneSkillClientPlayer.UpgradeSkill:output_type -> UpgradeSkillResponse
+	15, // [15:20] is the sub-list for method output_type
+	10, // [10:15] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_skill_proto_init() }

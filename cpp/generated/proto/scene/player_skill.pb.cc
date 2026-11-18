@@ -384,318 +384,6 @@ const ::_pbi::ClassData* SkillInterruptedS2C_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class SkillCatalogEntry::_Internal {
- public:
-  using HasBits = decltype(::std::declval<SkillCatalogEntry>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_._has_bits_);
-};
-
-constexpr SkillCatalogEntry::ParseTableT_ SkillCatalogEntry::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_._has_bits_),
-      0, // no _extensions_
-      22, 248,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4290772992,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      22,  // num_field_entries
-      0,  // num_aux_entries
-      offsetof(ParseTableT_, field_names),  // no aux_entries
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::SkillCatalogEntry>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint32 skill_table_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.skill_table_id_), 4>(),
-       {8, 4, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.skill_table_id_)}},
-      // string name = 2;
-      {::_pbi::TcParser::FastUS1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.name_)}},
-      // string description = 3;
-      {::_pbi::TcParser::FastUS1,
-       {26, 1, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.description_)}},
-      // string icon_key = 4;
-      {::_pbi::TcParser::FastUS1,
-       {34, 2, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.icon_key_)}},
-      // uint32 class_id = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.class_id_), 5>(),
-       {40, 5, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.class_id_)}},
-      // string category = 6;
-      {::_pbi::TcParser::FastUS1,
-       {50, 3, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.category_)}},
-      // bool passive = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillCatalogEntry, _impl_.passive_), 12>(),
-       {56, 12, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.passive_)}},
-      // uint32 target_team = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.target_team_), 6>(),
-       {64, 6, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.target_team_)}},
-      // uint32 max_targets = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.max_targets_), 7>(),
-       {72, 7, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_targets_)}},
-      // uint32 unlock_level = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.unlock_level_), 8>(),
-       {80, 8, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.unlock_level_)}},
-      // uint32 max_rank = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.max_rank_), 9>(),
-       {88, 9, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_rank_)}},
-      // uint32 rank = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.rank_), 10>(),
-       {96, 10, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_)}},
-      // uint32 rank_limit = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.rank_limit_), 11>(),
-       {104, 11, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_limit_)}},
-      // double mana_percent = 14;
-      {::_pbi::TcParser::FastF64S1,
-       {113, 15, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.mana_percent_)}},
-      // uint32 cooldown_rounds = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.cooldown_rounds_), 14>(),
-       {120, 14, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.cooldown_rounds_)}},
-      // uint64 next_rank_cost = 16;
-      {::_pbi::TcParser::FastV64S2,
-       {384, 16, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.next_rank_cost_)}},
-      // uint32 upgrade_block_tip_id = 17;
-      {::_pbi::TcParser::FastV32S2,
-       {392, 17, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.upgrade_block_tip_id_)}},
-      // uint32 duration_rounds = 18;
-      {::_pbi::TcParser::FastV32S2,
-       {400, 18, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.duration_rounds_)}},
-      // bool allow_dead_target = 19;
-      {::_pbi::TcParser::FastV8S2,
-       {408, 13, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.allow_dead_target_)}},
-      // uint32 ability_kind = 20;
-      {::_pbi::TcParser::FastV32S2,
-       {416, 19, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.ability_kind_)}},
-      // uint32 caster_mask = 21;
-      {::_pbi::TcParser::FastV32S2,
-       {424, 20, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.caster_mask_)}},
-      // uint32 action_tags = 22;
-      {::_pbi::TcParser::FastV32S2,
-       {432, 21, 0,
-        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.action_tags_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // uint32 skill_table_id = 1;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.skill_table_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string name = 2;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // string description = 3;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.description_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // string icon_key = 4;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.icon_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // uint32 class_id = 5;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.class_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // string category = 6;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.category_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // bool passive = 7;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.passive_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-      // uint32 target_team = 8;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.target_team_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 max_targets = 9;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_targets_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 unlock_level = 10;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.unlock_level_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 max_rank = 11;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_rank_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 rank = 12;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 rank_limit = 13;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_limit_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // double mana_percent = 14;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.mana_percent_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
-      // uint32 cooldown_rounds = 15;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.cooldown_rounds_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 next_rank_cost = 16;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.next_rank_cost_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 upgrade_block_tip_id = 17;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.upgrade_block_tip_id_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 duration_rounds = 18;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.duration_rounds_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // bool allow_dead_target = 19;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.allow_dead_target_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-      // uint32 ability_kind = 20;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.ability_kind_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 caster_mask = 21;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.caster_mask_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint32 action_tags = 22;
-      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.action_tags_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-    }},
-    // no aux_entries
-    {{
-      "\21\0\4\13\10\0\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
-      "SkillCatalogEntry"
-      "name"
-      "description"
-      "icon_key"
-      "category"
-    }},
-  };
-}
-
-
-inline constexpr SkillCatalogEntry::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        name_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        description_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        icon_key_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        category_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        skill_table_id_{0u},
-        class_id_{0u},
-        target_team_{0u},
-        max_targets_{0u},
-        unlock_level_{0u},
-        max_rank_{0u},
-        rank_{0u},
-        rank_limit_{0u},
-        passive_{false},
-        allow_dead_target_{false},
-        cooldown_rounds_{0u},
-        mana_percent_{0},
-        next_rank_cost_{::uint64_t{0u}},
-        upgrade_block_tip_id_{0u},
-        duration_rounds_{0u},
-        ability_kind_{0u},
-        caster_mask_{0u},
-        action_tags_{0u} {}
-
-template <typename>
-constexpr SkillCatalogEntry::SkillCatalogEntry(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL SkillCatalogEntry::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) SkillCatalogEntry(arena);
-}
-constexpr auto SkillCatalogEntry::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SkillCatalogEntry), alignof(SkillCatalogEntry));
-}
-constexpr auto SkillCatalogEntry::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &SkillCatalogEntry::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<SkillCatalogEntry>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &SkillCatalogEntry::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<SkillCatalogEntry>(), &SkillCatalogEntry::ByteSizeLong,
-              &SkillCatalogEntry::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct SkillCatalogEntryGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr SkillCatalogEntryGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 SkillCatalogEntry_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(SkillCatalogEntry::InternalGenerateClassData_(
-            _default, &SkillCatalogEntry_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<SkillCatalogEntry>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~SkillCatalogEntryGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) SkillCatalogEntry _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<SkillCatalogEntry>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(SkillCatalogEntryGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SkillCatalogEntryGlobalsTypeInternal SkillCatalogEntry_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* SkillCatalogEntry_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return SkillCatalogEntry_globals_.GetClassData();
-#else
-  return SkillCatalogEntry_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
 class ListSkillsRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<ListSkillsRequest>()._impl_._has_bits_);
@@ -1016,6 +704,330 @@ const ::_pbi::ClassData* SkillUsedS2C_get_class_data() {
   return SkillUsedS2C_globals_.GetClassData();
 #else
   return SkillUsedS2C_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SkillCatalogEntry::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SkillCatalogEntry>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_._has_bits_);
+};
+
+constexpr SkillCatalogEntry::ParseTableT_ SkillCatalogEntry::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_._has_bits_),
+      0, // no _extensions_
+      23, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4286578688,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      23,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SkillCatalogEntry>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 skill_table_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.skill_table_id_), 5>(),
+       {8, 5, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.skill_table_id_)}},
+      // string name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.name_)}},
+      // string description = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.description_)}},
+      // string icon_key = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.icon_key_)}},
+      // uint32 class_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.class_id_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.class_id_)}},
+      // string category = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.category_)}},
+      // bool passive = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SkillCatalogEntry, _impl_.passive_), 13>(),
+       {56, 13, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.passive_)}},
+      // uint32 target_team = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.target_team_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.target_team_)}},
+      // uint32 max_targets = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.max_targets_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_targets_)}},
+      // uint32 unlock_level = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.unlock_level_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.unlock_level_)}},
+      // uint32 max_rank = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.max_rank_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_rank_)}},
+      // uint32 rank = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.rank_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_)}},
+      // uint32 rank_limit = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.rank_limit_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_limit_)}},
+      // double mana_percent = 14;
+      {::_pbi::TcParser::FastF64S1,
+       {113, 16, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.mana_percent_)}},
+      // uint32 cooldown_rounds = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SkillCatalogEntry, _impl_.cooldown_rounds_), 15>(),
+       {120, 15, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.cooldown_rounds_)}},
+      // uint64 next_rank_cost = 16;
+      {::_pbi::TcParser::FastV64S2,
+       {384, 17, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.next_rank_cost_)}},
+      // uint32 upgrade_block_tip_id = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 18, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.upgrade_block_tip_id_)}},
+      // uint32 duration_rounds = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 19, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.duration_rounds_)}},
+      // bool allow_dead_target = 19;
+      {::_pbi::TcParser::FastV8S2,
+       {408, 14, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.allow_dead_target_)}},
+      // uint32 ability_kind = 20;
+      {::_pbi::TcParser::FastV32S2,
+       {416, 20, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.ability_kind_)}},
+      // uint32 caster_mask = 21;
+      {::_pbi::TcParser::FastV32S2,
+       {424, 21, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.caster_mask_)}},
+      // uint32 action_tags = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 22, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.action_tags_)}},
+      // .SupportSkillPreview support_preview = 23;
+      {::_pbi::TcParser::FastMtS2,
+       {442, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.support_preview_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 skill_table_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.skill_table_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 2;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string description = 3;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.description_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string icon_key = 4;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.icon_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 class_id = 5;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.class_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string category = 6;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.category_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool passive = 7;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.passive_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 target_team = 8;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.target_team_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_targets = 9;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_targets_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 unlock_level = 10;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.unlock_level_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_rank = 11;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.max_rank_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rank = 12;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rank_limit = 13;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.rank_limit_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // double mana_percent = 14;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.mana_percent_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // uint32 cooldown_rounds = 15;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.cooldown_rounds_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 next_rank_cost = 16;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.next_rank_cost_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 upgrade_block_tip_id = 17;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.upgrade_block_tip_id_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 duration_rounds = 18;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.duration_rounds_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool allow_dead_target = 19;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.allow_dead_target_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 ability_kind = 20;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.ability_kind_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 caster_mask = 21;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.caster_mask_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 action_tags = 22;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.action_tags_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .SupportSkillPreview support_preview = 23;
+      {PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.support_preview_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SupportSkillPreview>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SupportSkillPreview_globals_},
+        #endif
+    }},
+    {{
+      "\21\0\4\13\10\0\10\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "SkillCatalogEntry"
+      "name"
+      "description"
+      "icon_key"
+      "category"
+    }},
+  };
+}
+
+
+inline constexpr SkillCatalogEntry::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        description_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        category_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        support_preview_{nullptr},
+        skill_table_id_{0u},
+        class_id_{0u},
+        target_team_{0u},
+        max_targets_{0u},
+        unlock_level_{0u},
+        max_rank_{0u},
+        rank_{0u},
+        rank_limit_{0u},
+        passive_{false},
+        allow_dead_target_{false},
+        cooldown_rounds_{0u},
+        mana_percent_{0},
+        next_rank_cost_{::uint64_t{0u}},
+        upgrade_block_tip_id_{0u},
+        duration_rounds_{0u},
+        ability_kind_{0u},
+        caster_mask_{0u},
+        action_tags_{0u} {}
+
+template <typename>
+constexpr SkillCatalogEntry::SkillCatalogEntry(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SkillCatalogEntry::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SkillCatalogEntry(arena);
+}
+constexpr auto SkillCatalogEntry::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SkillCatalogEntry), alignof(SkillCatalogEntry));
+}
+constexpr auto SkillCatalogEntry::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SkillCatalogEntry::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SkillCatalogEntry>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SkillCatalogEntry::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SkillCatalogEntry>(), &SkillCatalogEntry::ByteSizeLong,
+              &SkillCatalogEntry::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SkillCatalogEntryGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SkillCatalogEntryGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SkillCatalogEntry_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SkillCatalogEntry::InternalGenerateClassData_(
+            _default, &SkillCatalogEntry_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SkillCatalogEntry>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SkillCatalogEntryGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SkillCatalogEntry _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SkillCatalogEntry>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SkillCatalogEntryGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SkillCatalogEntryGlobalsTypeInternal SkillCatalogEntry_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SkillCatalogEntry_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SkillCatalogEntry_globals_.GetClassData();
+#else
+  return SkillCatalogEntry_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1790,7 +1802,7 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_._has_bits_),
-        25, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.skill_table_id_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.description_),
@@ -1813,28 +1825,30 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.ability_kind_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.caster_mask_),
         PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.action_tags_),
-        4,
+        PROTOBUF_FIELD_OFFSET(::SkillCatalogEntry, _impl_.support_preview_),
+        5,
         0,
         1,
         2,
-        5,
-        3,
-        12,
         6,
+        3,
+        13,
         7,
         8,
         9,
         10,
         11,
-        15,
-        14,
+        12,
         16,
+        15,
         17,
         18,
-        13,
         19,
+        14,
         20,
         21,
+        22,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::UpgradeSkillRequest, _impl_._has_bits_),
         7, // hasbit index offset
@@ -1868,8 +1882,8 @@ static const ::_pbi::MigrationSchema
         {42, sizeof(::ListSkillsRequest)},
         {47, sizeof(::ListSkillsResponse)},
         {64, sizeof(::SkillCatalogEntry)},
-        {111, sizeof(::UpgradeSkillRequest)},
-        {122, sizeof(::UpgradeSkillResponse)},
+        {113, sizeof(::UpgradeSkillRequest)},
+        {124, sizeof(::UpgradeSkillResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1891,71 +1905,75 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto[] AB
     "comp.proto\032\035proto/common/base/empty.prot"
     "o\032.proto/common/component/player_skill_c"
     "omp.proto\032\'proto/common/component/actor_"
-    "comp.proto\"y\n\023ReleaseSkillRequest\022\026\n\016ski"
-    "ll_table_id\030\001 \001(\r\022\021\n\ttarget_id\030\002 \001(\004\022\032\n\010"
-    "position\030\003 \001(\0132\010.Vector3\022\033\n\010rotation\030\004 \001"
-    "(\0132\t.Rotation\">\n\024ReleaseSkillResponse\022&\n"
-    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\"{\n"
-    "\023SkillInterruptedS2C\022\016\n\006entity\030\001 \001(\004\022\025\n\r"
-    "target_entity\030\002 \001(\004\022\026\n\016skill_table_id\030\003 "
-    "\001(\r\022\023\n\013reason_code\030\004 \001(\r\022\020\n\010skill_id\030\005 \001"
-    "(\004\"}\n\014SkillUsedS2C\022\016\n\006entity\030\001 \001(\004\022\025\n\rta"
-    "rget_entity\030\002 \003(\004\022\026\n\016skill_table_id\030\003 \001("
-    "\r\022\032\n\010position\030\004 \001(\0132\010.Vector3\022\022\n\ntime_st"
-    "amp\030\005 \001(\004\"#\n\021ListSkillsRequest\022\016\n\006pet_id"
-    "\030\001 \001(\004\"\335\001\n\022ListSkillsResponse\022&\n\rerror_m"
-    "essage\030\001 \001(\0132\017.TipInfoMessage\022(\n\nskill_l"
-    "ist\030\002 \001(\0132\024.PlayerSkillListComp\022#\n\007catal"
-    "og\030\003 \003(\0132\022.SkillCatalogEntry\022\024\n\014player_l"
-    "evel\030\004 \001(\r\022\020\n\010class_id\030\005 \001(\r\022\030\n\020currency"
-    "_balance\030\006 \001(\004\022\016\n\006pet_id\030\007 \001(\004\"\342\003\n\021Skill"
-    "CatalogEntry\022\026\n\016skill_table_id\030\001 \001(\r\022\014\n\004"
-    "name\030\002 \001(\t\022\023\n\013description\030\003 \001(\t\022\020\n\010icon_"
-    "key\030\004 \001(\t\022\020\n\010class_id\030\005 \001(\r\022\020\n\010category\030"
-    "\006 \001(\t\022\017\n\007passive\030\007 \001(\010\022\023\n\013target_team\030\010 "
-    "\001(\r\022\023\n\013max_targets\030\t \001(\r\022\024\n\014unlock_level"
-    "\030\n \001(\r\022\020\n\010max_rank\030\013 \001(\r\022\014\n\004rank\030\014 \001(\r\022\022"
-    "\n\nrank_limit\030\r \001(\r\022\024\n\014mana_percent\030\016 \001(\001"
-    "\022\027\n\017cooldown_rounds\030\017 \001(\r\022\026\n\016next_rank_c"
-    "ost\030\020 \001(\004\022\034\n\024upgrade_block_tip_id\030\021 \001(\r\022"
-    "\027\n\017duration_rounds\030\022 \001(\r\022\031\n\021allow_dead_t"
-    "arget\030\023 \001(\010\022\024\n\014ability_kind\030\024 \001(\r\022\023\n\013cas"
-    "ter_mask\030\025 \001(\r\022\023\n\013action_tags\030\026 \001(\r\"c\n\023U"
-    "pgradeSkillRequest\022\026\n\016skill_table_id\030\001 \001"
-    "(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r\n\005count\030\003 \001(\r"
-    "\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024UpgradeSkillRespons"
-    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
-    "e\022\"\n\005state\030\002 \001(\0132\023.ListSkillsResponse\022\026\n"
-    "\016upgraded_count\030\003 \001(\r\022\023\n\013stop_tip_id\030\004 \001"
-    "(\r2\305\002\n\026SceneSkillClientPlayer\022;\n\014Release"
-    "Skill\022\024.ReleaseSkillRequest\032\025.ReleaseSki"
-    "llResponse\022/\n\017NotifySkillUsed\022\r.SkillUse"
-    "dS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026NotifySkillInterr"
-    "upted\022\024.SkillInterruptedS2C\032\006.Empty\"\005\210\231\310"
-    "\001\002\0225\n\nListSkills\022\022.ListSkillsRequest\032\023.L"
-    "istSkillsResponse\022;\n\014UpgradeSkill\022\024.Upgr"
-    "adeSkillRequest\032\025.UpgradeSkillResponse\032\n"
-    "\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "comp.proto\032,proto/common/component/suppo"
+    "rt_effects.proto\"y\n\023ReleaseSkillRequest\022"
+    "\026\n\016skill_table_id\030\001 \001(\r\022\021\n\ttarget_id\030\002 \001"
+    "(\004\022\032\n\010position\030\003 \001(\0132\010.Vector3\022\033\n\010rotati"
+    "on\030\004 \001(\0132\t.Rotation\">\n\024ReleaseSkillRespo"
+    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
+    "age\"{\n\023SkillInterruptedS2C\022\016\n\006entity\030\001 \001"
+    "(\004\022\025\n\rtarget_entity\030\002 \001(\004\022\026\n\016skill_table"
+    "_id\030\003 \001(\r\022\023\n\013reason_code\030\004 \001(\r\022\020\n\010skill_"
+    "id\030\005 \001(\004\"}\n\014SkillUsedS2C\022\016\n\006entity\030\001 \001(\004"
+    "\022\025\n\rtarget_entity\030\002 \003(\004\022\026\n\016skill_table_i"
+    "d\030\003 \001(\r\022\032\n\010position\030\004 \001(\0132\010.Vector3\022\022\n\nt"
+    "ime_stamp\030\005 \001(\004\"#\n\021ListSkillsRequest\022\016\n\006"
+    "pet_id\030\001 \001(\004\"\335\001\n\022ListSkillsResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022(\n\ns"
+    "kill_list\030\002 \001(\0132\024.PlayerSkillListComp\022#\n"
+    "\007catalog\030\003 \003(\0132\022.SkillCatalogEntry\022\024\n\014pl"
+    "ayer_level\030\004 \001(\r\022\020\n\010class_id\030\005 \001(\r\022\030\n\020cu"
+    "rrency_balance\030\006 \001(\004\022\016\n\006pet_id\030\007 \001(\004\"\221\004\n"
+    "\021SkillCatalogEntry\022\026\n\016skill_table_id\030\001 \001"
+    "(\r\022\014\n\004name\030\002 \001(\t\022\023\n\013description\030\003 \001(\t\022\020\n"
+    "\010icon_key\030\004 \001(\t\022\020\n\010class_id\030\005 \001(\r\022\020\n\010cat"
+    "egory\030\006 \001(\t\022\017\n\007passive\030\007 \001(\010\022\023\n\013target_t"
+    "eam\030\010 \001(\r\022\023\n\013max_targets\030\t \001(\r\022\024\n\014unlock"
+    "_level\030\n \001(\r\022\020\n\010max_rank\030\013 \001(\r\022\014\n\004rank\030\014"
+    " \001(\r\022\022\n\nrank_limit\030\r \001(\r\022\024\n\014mana_percent"
+    "\030\016 \001(\001\022\027\n\017cooldown_rounds\030\017 \001(\r\022\026\n\016next_"
+    "rank_cost\030\020 \001(\004\022\034\n\024upgrade_block_tip_id\030"
+    "\021 \001(\r\022\027\n\017duration_rounds\030\022 \001(\r\022\031\n\021allow_"
+    "dead_target\030\023 \001(\010\022\024\n\014ability_kind\030\024 \001(\r\022"
+    "\023\n\013caster_mask\030\025 \001(\r\022\023\n\013action_tags\030\026 \001("
+    "\r\022-\n\017support_preview\030\027 \001(\0132\024.SupportSkil"
+    "lPreview\"c\n\023UpgradeSkillRequest\022\026\n\016skill"
+    "_table_id\030\001 \001(\r\022\025\n\rexpected_rank\030\002 \001(\r\022\r"
+    "\n\005count\030\003 \001(\r\022\016\n\006pet_id\030\004 \001(\004\"\217\001\n\024Upgrad"
+    "eSkillResponse\022&\n\rerror_message\030\001 \001(\0132\017."
+    "TipInfoMessage\022\"\n\005state\030\002 \001(\0132\023.ListSkil"
+    "lsResponse\022\026\n\016upgraded_count\030\003 \001(\r\022\023\n\013st"
+    "op_tip_id\030\004 \001(\r2\305\002\n\026SceneSkillClientPlay"
+    "er\022;\n\014ReleaseSkill\022\024.ReleaseSkillRequest"
+    "\032\025.ReleaseSkillResponse\022/\n\017NotifySkillUs"
+    "ed\022\r.SkillUsedS2C\032\006.Empty\"\005\210\231\310\001\002\022=\n\026Noti"
+    "fySkillInterrupted\022\024.SkillInterruptedS2C"
+    "\032\006.Empty\"\005\210\231\310\001\002\0225\n\nListSkills\022\022.ListSkil"
+    "lsRequest\032\023.ListSkillsResponse\022;\n\014Upgrad"
+    "eSkill\022\024.UpgradeSkillRequest\032\025.UpgradeSk"
+    "illResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps[6] = {
+    descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps[7] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fempty_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fbase_5fcomp_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fskill_5fcomp_2eproto,
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fsupport_5feffects_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto = {
     false,
     false,
-    2034,
+    2127,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fskill_2eproto,
     "proto/scene/player_skill.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fskill_2eproto_deps,
-    6,
+    7,
     9,
     schemas,
     file_message_globals,
@@ -3725,6 +3743,11 @@ void ListSkillsResponse::InternalSwap(ListSkillsResponse* PROTOBUF_RESTRICT PROT
 }
 // ===================================================================
 
+void SkillCatalogEntry::clear_support_preview() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.support_preview_ != nullptr) _impl_.support_preview_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
 SkillCatalogEntry::SkillCatalogEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, SkillCatalogEntry_get_class_data()) {
@@ -3759,6 +3782,10 @@ SkillCatalogEntry::SkillCatalogEntry(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.support_preview_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.support_preview_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, skill_table_id_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -3781,10 +3808,10 @@ PROTOBUF_NDEBUG_INLINE SkillCatalogEntry::Impl_::Impl_(
 inline void SkillCatalogEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, skill_table_id_),
+               offsetof(Impl_, support_preview_),
            0,
            offsetof(Impl_, action_tags_) -
-               offsetof(Impl_, skill_table_id_) +
+               offsetof(Impl_, support_preview_) +
                sizeof(Impl_::action_tags_));
 }
 SkillCatalogEntry::~SkillCatalogEntry() {
@@ -3802,6 +3829,7 @@ inline void SkillCatalogEntry::SharedDtor(MessageLite& self) {
   this_._impl_.description_.Destroy();
   this_._impl_.icon_key_.Destroy();
   this_._impl_.category_.Destroy();
+  delete this_._impl_.support_preview_;
   this_._impl_.~Impl_();
 }
 
@@ -3839,7 +3867,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
@@ -3852,21 +3880,25 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.category_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(_impl_.support_preview_ != nullptr);
+      _impl_.support_preview_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.skill_table_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.max_targets_) -
-        reinterpret_cast<char*>(&_impl_.skill_table_id_)) + sizeof(_impl_.max_targets_));
+        reinterpret_cast<char*>(&_impl_.target_team_) -
+        reinterpret_cast<char*>(&_impl_.skill_table_id_)) + sizeof(_impl_.target_team_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.unlock_level_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.mana_percent_) -
-        reinterpret_cast<char*>(&_impl_.unlock_level_)) + sizeof(_impl_.mana_percent_));
+    ::memset(&_impl_.max_targets_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.cooldown_rounds_) -
+        reinterpret_cast<char*>(&_impl_.max_targets_)) + sizeof(_impl_.cooldown_rounds_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
-    ::memset(&_impl_.next_rank_cost_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    ::memset(&_impl_.mana_percent_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.action_tags_) -
-        reinterpret_cast<char*>(&_impl_.next_rank_cost_)) + sizeof(_impl_.action_tags_));
+        reinterpret_cast<char*>(&_impl_.mana_percent_)) + sizeof(_impl_.action_tags_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3892,7 +3924,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 skill_table_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_skill_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3931,7 +3963,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 class_id = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_class_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3950,7 +3982,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // bool passive = 7;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_passive() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -3959,7 +3991,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 target_team = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_target_team() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3968,7 +4000,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 max_targets = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_max_targets() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3977,7 +4009,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 unlock_level = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_unlock_level() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3986,7 +4018,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 max_rank = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_max_rank() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3995,7 +4027,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 rank = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_rank() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4004,7 +4036,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 rank_limit = 13;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_rank_limit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4013,7 +4045,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // double mana_percent = 14;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (::absl::bit_cast<::uint64_t>(this_._internal_mana_percent()) != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteDoubleToArray(
@@ -4022,7 +4054,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 cooldown_rounds = 15;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_cooldown_rounds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4031,7 +4063,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint64 next_rank_cost = 16;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_next_rank_cost() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4040,7 +4072,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 upgrade_block_tip_id = 17;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_upgrade_block_tip_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4049,7 +4081,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 duration_rounds = 18;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_duration_rounds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4058,7 +4090,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // bool allow_dead_target = 19;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_allow_dead_target() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -4067,7 +4099,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 ability_kind = 20;
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_ability_kind() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4076,7 +4108,7 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 caster_mask = 21;
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (this_._internal_caster_mask() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4085,12 +4117,19 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
   }
 
   // uint32 action_tags = 22;
-  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
     if (this_._internal_action_tags() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           22, this_._internal_action_tags(), target);
     }
+  }
+
+  // .SupportSkillPreview support_preview = 23;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        23, *this_._impl_.support_preview_, this_._impl_.support_preview_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -4147,128 +4186,133 @@ PROTOBUF_NOINLINE void SkillCatalogEntry::Clear() {
                                         this_._internal_category());
       }
     }
-    // uint32 skill_table_id = 1;
+    // .SupportSkillPreview support_preview = 23;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.support_preview_);
+    }
+    // uint32 skill_table_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_skill_table_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_skill_table_id());
       }
     }
     // uint32 class_id = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_class_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_class_id());
       }
     }
     // uint32 target_team = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_target_team() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_target_team());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 max_targets = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_max_targets() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_targets());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 unlock_level = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_unlock_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_unlock_level());
       }
     }
     // uint32 max_rank = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_max_rank() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_rank());
       }
     }
     // uint32 rank = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_rank() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_rank());
       }
     }
     // uint32 rank_limit = 13;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_rank_limit() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_rank_limit());
       }
     }
     // bool passive = 7;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_passive() != 0) {
         total_size += 2;
       }
     }
     // bool allow_dead_target = 19;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_allow_dead_target() != 0) {
         total_size += 3;
       }
     }
     // uint32 cooldown_rounds = 15;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_cooldown_rounds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_cooldown_rounds());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     // double mana_percent = 14;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint64_t>(this_._internal_mana_percent()) != 0) {
         total_size += 9;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     // uint64 next_rank_cost = 16;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_next_rank_cost() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_next_rank_cost());
       }
     }
     // uint32 upgrade_block_tip_id = 17;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_upgrade_block_tip_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_upgrade_block_tip_id());
       }
     }
     // uint32 duration_rounds = 18;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_duration_rounds() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_duration_rounds());
       }
     }
     // uint32 ability_kind = 20;
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_ability_kind() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_ability_kind());
       }
     }
     // uint32 caster_mask = 21;
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (this_._internal_caster_mask() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_caster_mask());
       }
     }
     // uint32 action_tags = 22;
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (this_._internal_action_tags() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_action_tags());
@@ -4286,6 +4330,7 @@ void SkillCatalogEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
   if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
     from.CheckHasBitConsistency();
   }
+  ::google::protobuf::Arena* arena = _this->GetArena();
   // @@protoc_insertion_point(class_specific_merge_from_start:SkillCatalogEntry)
   ABSL_DCHECK_NE(&from, _this);
   ::uint32_t cached_has_bits = 0;
@@ -4330,95 +4375,103 @@ void SkillCatalogEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.support_preview_ != nullptr);
+      if (_this->_impl_.support_preview_ == nullptr) {
+        _this->_impl_.support_preview_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.support_preview_);
+      } else {
+        _this->_impl_.support_preview_->MergeFrom(*from._impl_.support_preview_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_skill_table_id() != 0) {
         _this->_impl_.skill_table_id_ = from._impl_.skill_table_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_class_id() != 0) {
         _this->_impl_.class_id_ = from._impl_.class_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_target_team() != 0) {
         _this->_impl_.target_team_ = from._impl_.target_team_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_max_targets() != 0) {
-        _this->_impl_.max_targets_ = from._impl_.max_targets_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_max_targets() != 0) {
+        _this->_impl_.max_targets_ = from._impl_.max_targets_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_unlock_level() != 0) {
         _this->_impl_.unlock_level_ = from._impl_.unlock_level_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_max_rank() != 0) {
         _this->_impl_.max_rank_ = from._impl_.max_rank_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_rank() != 0) {
         _this->_impl_.rank_ = from._impl_.rank_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_rank_limit() != 0) {
         _this->_impl_.rank_limit_ = from._impl_.rank_limit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_passive() != 0) {
         _this->_impl_.passive_ = from._impl_.passive_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_allow_dead_target() != 0) {
         _this->_impl_.allow_dead_target_ = from._impl_.allow_dead_target_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_cooldown_rounds() != 0) {
         _this->_impl_.cooldown_rounds_ = from._impl_.cooldown_rounds_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (::absl::bit_cast<::uint64_t>(from._internal_mana_percent()) != 0) {
         _this->_impl_.mana_percent_ = from._impl_.mana_percent_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_next_rank_cost() != 0) {
         _this->_impl_.next_rank_cost_ = from._impl_.next_rank_cost_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_upgrade_block_tip_id() != 0) {
         _this->_impl_.upgrade_block_tip_id_ = from._impl_.upgrade_block_tip_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_duration_rounds() != 0) {
         _this->_impl_.duration_rounds_ = from._impl_.duration_rounds_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_ability_kind() != 0) {
         _this->_impl_.ability_kind_ = from._impl_.ability_kind_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (from._internal_caster_mask() != 0) {
         _this->_impl_.caster_mask_ = from._impl_.caster_mask_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (from._internal_action_tags() != 0) {
         _this->_impl_.action_tags_ = from._impl_.action_tags_;
       }
@@ -4450,9 +4503,9 @@ void SkillCatalogEntry::InternalSwap(SkillCatalogEntry* PROTOBUF_RESTRICT PROTOB
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.action_tags_)
       + sizeof(SkillCatalogEntry::_impl_.action_tags_)
-      - PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.skill_table_id_)>(
-          reinterpret_cast<char*>(&_impl_.skill_table_id_),
-          reinterpret_cast<char*>(&other->_impl_.skill_table_id_));
+      - PROTOBUF_FIELD_OFFSET(SkillCatalogEntry, _impl_.support_preview_)>(
+          reinterpret_cast<char*>(&_impl_.support_preview_),
+          reinterpret_cast<char*>(&other->_impl_.support_preview_));
 }
 
 ::google::protobuf::Metadata SkillCatalogEntry::GetMetadata() const {

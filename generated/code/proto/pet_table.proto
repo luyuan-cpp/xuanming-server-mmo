@@ -24,6 +24,7 @@ message PetTable {
 	repeated uint32 skill = 13;
 	uint64 shop_price_gold = 14;
 	uint32 acquisition_tier = 15;
+	uint32 cultivation_tier = 16;
 }
 
 message PetTableData {

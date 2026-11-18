@@ -314,6 +314,13 @@ state=bootstrap
 1=EquipmentMaterialRewardLedger#2 optional uint32 earned_today
 1=EquipmentMaterialRewardLedger#3 optional uint64 available_units
 1=EquipmentMaterialRewardLedger#4 optional uint64 revision
+1=PetInstance#12 map map<uint32,uint32> entry_allocated
+1=PetInstance#13 optional uint64 entry_state_version
+1=PetInstance#14 optional string entry_last_request_id
+1=PetInstance#15 optional uint64 entry_last_base_version
+1=PetInstance#16 optional uint32 entry_last_config_version
+1=PetInstance#17 map map<uint32,uint32> entry_last_target
+1=PetInstance#18 optional uint32 cultivation_tier
 
 retired=player_database#10
 retired=player_database#17

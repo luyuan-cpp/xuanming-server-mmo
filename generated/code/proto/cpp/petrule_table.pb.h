@@ -234,6 +234,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetRuleTable final : public ::googl
     kRenameCostGoldFieldNumber = 4,
     kNameMaxLenFieldNumber = 3,
     kSummonCooldownSecondsFieldNumber = 5,
+    kEntryConfigVersionFieldNumber = 7,
+    kEntryTotalPointsFieldNumber = 8,
+    kEntryMaxDirectionsFieldNumber = 9,
   };
   // string desc = 6;
   void clear_desc() ;
@@ -300,12 +303,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetRuleTable final : public ::googl
   void _internal_set_summon_cooldown_seconds(::uint32_t value);
 
   public:
+  // uint32 entry_config_version = 7;
+  void clear_entry_config_version() ;
+  [[nodiscard]] ::uint32_t entry_config_version() const;
+  void set_entry_config_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_entry_config_version() const;
+  void _internal_set_entry_config_version(::uint32_t value);
+
+  public:
+  // uint32 entry_total_points = 8;
+  void clear_entry_total_points() ;
+  [[nodiscard]] ::uint32_t entry_total_points() const;
+  void set_entry_total_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_entry_total_points() const;
+  void _internal_set_entry_total_points(::uint32_t value);
+
+  public:
+  // uint32 entry_max_directions = 9;
+  void clear_entry_max_directions() ;
+  [[nodiscard]] ::uint32_t entry_max_directions() const;
+  void set_entry_max_directions(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_entry_max_directions() const;
+  void _internal_set_entry_max_directions(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PetRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          0, 25,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 33,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -339,6 +372,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PetRuleTable final : public ::googl
     ::uint64_t rename_cost_gold_;
     ::uint32_t name_max_len_;
     ::uint32_t summon_cooldown_seconds_;
+    ::uint32_t entry_config_version_;
+    ::uint32_t entry_total_points_;
+    ::uint32_t entry_max_directions_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -755,6 +791,78 @@ inline void PetRuleTable::set_allocated_desc(::std::string* PROTOBUF_NULLABLE va
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:PetRuleTable.desc)
+}
+
+// uint32 entry_config_version = 7;
+inline void PetRuleTable::clear_entry_config_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_config_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PetRuleTable::entry_config_version() const {
+  // @@protoc_insertion_point(field_get:PetRuleTable.entry_config_version)
+  return _internal_entry_config_version();
+}
+inline void PetRuleTable::set_entry_config_version(::uint32_t value) {
+  _internal_set_entry_config_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:PetRuleTable.entry_config_version)
+}
+inline ::uint32_t PetRuleTable::_internal_entry_config_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entry_config_version_;
+}
+inline void PetRuleTable::_internal_set_entry_config_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_config_version_ = value;
+}
+
+// uint32 entry_total_points = 8;
+inline void PetRuleTable::clear_entry_total_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_total_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t PetRuleTable::entry_total_points() const {
+  // @@protoc_insertion_point(field_get:PetRuleTable.entry_total_points)
+  return _internal_entry_total_points();
+}
+inline void PetRuleTable::set_entry_total_points(::uint32_t value) {
+  _internal_set_entry_total_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:PetRuleTable.entry_total_points)
+}
+inline ::uint32_t PetRuleTable::_internal_entry_total_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entry_total_points_;
+}
+inline void PetRuleTable::_internal_set_entry_total_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_total_points_ = value;
+}
+
+// uint32 entry_max_directions = 9;
+inline void PetRuleTable::clear_entry_max_directions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_max_directions_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t PetRuleTable::entry_max_directions() const {
+  // @@protoc_insertion_point(field_get:PetRuleTable.entry_max_directions)
+  return _internal_entry_max_directions();
+}
+inline void PetRuleTable::set_entry_max_directions(::uint32_t value) {
+  _internal_set_entry_max_directions(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:PetRuleTable.entry_max_directions)
+}
+inline ::uint32_t PetRuleTable::_internal_entry_max_directions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entry_max_directions_;
+}
+inline void PetRuleTable::_internal_set_entry_max_directions(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entry_max_directions_ = value;
 }
 
 // -------------------------------------------------------------------

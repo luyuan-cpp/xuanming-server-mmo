@@ -112,6 +112,9 @@ static void PetRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObjec
 	PetRuleTableCheckNarrowedField(RowObject, TEXT("name_max_len"), TEXT("name_max_len"), RowIndex, 2147483647.0, TEXT("uint32"));
 	PetRuleTableCheckNarrowedField(RowObject, TEXT("rename_cost_gold"), TEXT("rename_cost_gold"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	PetRuleTableCheckNarrowedField(RowObject, TEXT("summon_cooldown_seconds"), TEXT("summon_cooldown_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetRuleTableCheckNarrowedField(RowObject, TEXT("entry_config_version"), TEXT("entry_config_version"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetRuleTableCheckNarrowedField(RowObject, TEXT("entry_total_points"), TEXT("entry_total_points"), RowIndex, 2147483647.0, TEXT("uint32"));
+	PetRuleTableCheckNarrowedField(RowObject, TEXT("entry_max_directions"), TEXT("entry_max_directions"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UPetRuleTable::LoadFromJson(const FString& JsonText, FString& OutError)

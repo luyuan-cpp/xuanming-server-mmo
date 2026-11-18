@@ -408,3 +408,6 @@
 407=SceneBagClientPlayerGetEquipmentMaterialReward
 408=SceneBagClientPlayerClaimEquipmentMaterialReward
 409=SceneNodeGrpcGmExecutePlayerCommand
+410=ScenePetClientPlayerGetPetEntries
+411=ScenePetClientPlayerPreviewPetEntries
+412=ScenePetClientPlayerSavePetEntries

@@ -114,4 +114,8 @@ struct FCfgPetRow : public FTableRowBase
 	/** 获取类别：0普通（银两/捕捉），1变异（令牌兑换），2神兽（充值抽奖）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
 	int32 acquisition_tier = 0;
+
+	/** 独立五阶身份：1普通/2变异/3灵兽/4神兽/5圣兽。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Pet")
+	int32 cultivation_tier = 0;
 };

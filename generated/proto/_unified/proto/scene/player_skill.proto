@@ -7,6 +7,7 @@ import "proto/common/component/base_comp.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/component/player_skill_comp.proto";
 import "proto/common/component/actor_comp.proto";
+import "proto/common/component/support_effects.proto";
 
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
@@ -83,6 +84,7 @@ message SkillCatalogEntry {
   uint32 ability_kind = 20; // 1主动、2被动、3追击、4开场。
   uint32 caster_mask = 21; // 1人物、2宝宝；按施法者资格区分。
   uint32 action_tags = 22; // 攻击、治疗、辅助、障碍分类位，与 SkillTable 同源。
+  SupportSkillPreview support_preview = 23; // 服务端中立参考值，缺省表示没有权威预览。
 }
 
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。

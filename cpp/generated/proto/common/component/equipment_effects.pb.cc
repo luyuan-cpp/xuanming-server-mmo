@@ -453,11 +453,11 @@ constexpr EquipmentArtifactSource::ParseTableT_ EquipmentArtifactSource::Interna
     {
       PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -467,60 +467,76 @@ constexpr EquipmentArtifactSource::ParseTableT_ EquipmentArtifactSource::Interna
       ::_pbi::TcParser::GetTable<::EquipmentArtifactSource>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 health_threshold_bps = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.health_threshold_bps_), 7>(),
-       {64, 7, 0,
-        PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.health_threshold_bps_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 item_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentArtifactSource, _impl_.item_id_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentArtifactSource, _impl_.item_id_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.item_id_)}},
       // uint32 effect_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.effect_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.effect_id_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.effect_id_)}},
       // uint32 bonus_bps = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.bonus_bps_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.bonus_bps_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.bonus_bps_)}},
       // uint32 cap_bps = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.cap_bps_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.cap_bps_), 4>(),
+       {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.cap_bps_)}},
       // uint32 per_round_limit = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.per_round_limit_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.per_round_limit_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.per_round_limit_)}},
       // uint32 battle_limit = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.battle_limit_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.battle_limit_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.battle_limit_)}},
       // uint32 active_rounds = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.active_rounds_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.active_rounds_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.active_rounds_)}},
+      // uint32 health_threshold_bps = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentArtifactSource, _impl_.health_threshold_bps_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.health_threshold_bps_)}},
+      // string name = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.name_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 item_id = 1;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.item_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.item_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 effect_id = 2;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.effect_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.effect_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 bonus_bps = 3;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.bonus_bps_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.bonus_bps_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cap_bps = 4;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.cap_bps_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.cap_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 per_round_limit = 5;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.per_round_limit_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.per_round_limit_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 battle_limit = 6;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.battle_limit_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.battle_limit_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 active_rounds = 7;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.active_rounds_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.active_rounds_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 health_threshold_bps = 8;
-      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.health_threshold_bps_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.health_threshold_bps_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 9;
+      {PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
+      "\27\0\0\0\0\0\0\0\0\4\0\0\0\0\0\0"
+      "EquipmentArtifactSource"
+      "name"
     }},
   };
 }
@@ -530,6 +546,9 @@ inline constexpr EquipmentArtifactSource::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         item_id_{::uint64_t{0u}},
         effect_id_{0u},
         bonus_bps_{0u},
@@ -555,7 +574,7 @@ inline void* PROTOBUF_NONNULL EquipmentArtifactSource::PlacementNew_(
   return ::new (mem) EquipmentArtifactSource(arena);
 }
 constexpr auto EquipmentArtifactSource::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(EquipmentArtifactSource), alignof(EquipmentArtifactSource));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EquipmentArtifactSource), alignof(EquipmentArtifactSource));
 }
 constexpr auto EquipmentArtifactSource::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -643,12 +662,12 @@ constexpr EquipmentEffects::ParseTableT_ EquipmentEffects::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      16, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4294901760,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
-      4,  // num_aux_entries
+      16,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -657,46 +676,49 @@ constexpr EquipmentEffects::ParseTableT_ EquipmentEffects::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::EquipmentEffects>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool support_sources_complete = 16;
+      {::_pbi::TcParser::FastV8S2,
+       {384, 12, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_)}},
       // uint32 physical_attack_bps = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_attack_bps_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_attack_bps_), 2>(),
+       {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_)}},
       // uint32 magic_attack_bps = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_attack_bps_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_attack_bps_), 3>(),
+       {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_attack_bps_)}},
       // uint32 max_health_bps = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.max_health_bps_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.max_health_bps_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.max_health_bps_)}},
       // uint32 speed_bps = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.speed_bps_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.speed_bps_), 5>(),
+       {32, 5, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.speed_bps_)}},
       // uint32 outgoing_heal_bps = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.outgoing_heal_bps_), 5>(),
-       {40, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.outgoing_heal_bps_), 6>(),
+       {40, 6, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.outgoing_heal_bps_)}},
       // uint32 shield_capacity_bps = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.shield_capacity_bps_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.shield_capacity_bps_), 7>(),
+       {48, 7, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.shield_capacity_bps_)}},
       // uint32 physical_crit_bps = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_crit_bps_), 7>(),
-       {56, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_crit_bps_), 8>(),
+       {56, 8, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_crit_bps_)}},
       // uint32 magic_crit_bps = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_crit_bps_), 8>(),
-       {64, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_crit_bps_), 9>(),
+       {64, 9, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_crit_bps_)}},
       // uint32 physical_resist_bps = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_resist_bps_), 9>(),
-       {72, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.physical_resist_bps_), 10>(),
+       {72, 10, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_resist_bps_)}},
       // uint32 magic_resist_bps = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_resist_bps_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentEffects, _impl_.magic_resist_bps_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_resist_bps_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -705,44 +727,56 @@ constexpr EquipmentEffects::ParseTableT_ EquipmentEffects::InternalGenerateParse
       {::_pbi::TcParser::FastMtR1,
        {114, 0, 0,
         PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.artifacts_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // repeated .SupportEffectSource support_sources = 15;
+      {::_pbi::TcParser::FastMtR1,
+       {122, 1, 1,
+        PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 physical_attack_bps = 1;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 magic_attack_bps = 2;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_attack_bps_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_attack_bps_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_health_bps = 3;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.max_health_bps_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.max_health_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 speed_bps = 4;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.speed_bps_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.speed_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 outgoing_heal_bps = 5;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.outgoing_heal_bps_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.outgoing_heal_bps_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 shield_capacity_bps = 6;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.shield_capacity_bps_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.shield_capacity_bps_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 physical_crit_bps = 7;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_crit_bps_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_crit_bps_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 magic_crit_bps = 8;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_crit_bps_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_crit_bps_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 physical_resist_bps = 9;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_resist_bps_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_resist_bps_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 magic_resist_bps = 10;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_resist_bps_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_resist_bps_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // map<uint32, uint32> ailment_hit_bps = 11;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_hit_bps_), _Internal::kHasBitsOffset + 11, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_hit_bps_), _Internal::kHasBitsOffset + 13, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // map<uint32, uint32> ailment_resist_bps = 12;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_resist_bps_), _Internal::kHasBitsOffset + 12, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.ailment_resist_bps_), _Internal::kHasBitsOffset + 14, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // map<uint32, uint32> mana_reduction_bps = 13;
-      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.mana_reduction_bps_), _Internal::kHasBitsOffset + 13, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.mana_reduction_bps_), _Internal::kHasBitsOffset + 15, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // repeated .EquipmentArtifactSource artifacts = 14;
       {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.artifacts_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .SupportEffectSource support_sources = 15;
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool support_sources_complete = 16;
+      {PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::EquipmentArtifactSource>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::EquipmentArtifactSource_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SupportEffectSource>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SupportEffectSource_globals_},
         #endif
         {::_pbi::TcParser::GetMapAuxInfo(
             0, 0, 13, 13, 0)},
@@ -766,6 +800,11 @@ inline constexpr EquipmentEffects::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.artifacts_)>()
          }
         ,
+        support_sources_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::EquipmentEffects,
+            PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_)>()
+         }
+        ,
         physical_attack_bps_{0u},
         magic_attack_bps_{0u},
         max_health_bps_{0u},
@@ -776,6 +815,7 @@ inline constexpr EquipmentEffects::Impl_::Impl_(
         magic_crit_bps_{0u},
         physical_resist_bps_{0u},
         magic_resist_bps_{0u},
+        support_sources_complete_{false},
         ailment_hit_bps_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::EquipmentEffects,
             PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.ailment_hit_bps_)>()
@@ -914,7 +954,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_._has_bits_),
-        17, // hasbit index offset
+        19, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.physical_attack_bps_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.magic_attack_bps_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.max_health_bps_),
@@ -929,7 +969,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.ailment_resist_bps_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.mana_reduction_bps_),
         PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.artifacts_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_complete_),
         2,
         3,
         4,
@@ -940,12 +981,15 @@ const ::uint32_t
         9,
         10,
         11,
-        12,
         13,
+        14,
+        15,
         0,
+        1,
+        12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_.item_id_),
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_.effect_id_),
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_.bonus_bps_),
@@ -954,7 +998,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_.battle_limit_),
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_.active_rounds_),
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_.health_threshold_bps_),
-        0,
+        PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_.name_),
         1,
         2,
         3,
@@ -962,6 +1006,8 @@ const ::uint32_t
         5,
         6,
         7,
+        8,
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -970,7 +1016,7 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::EquipmentEffects_AilmentResistBpsEntry_DoNotUse)},
         {14, sizeof(::EquipmentEffects_ManaReductionBpsEntry_DoNotUse)},
         {21, sizeof(::EquipmentEffects)},
-        {52, sizeof(::EquipmentArtifactSource)},
+        {56, sizeof(::EquipmentArtifactSource)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -983,41 +1029,48 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n.proto/common/component/equipment_effec"
-    "ts.proto\"\264\005\n\020EquipmentEffects\022\033\n\023physica"
-    "l_attack_bps\030\001 \001(\r\022\030\n\020magic_attack_bps\030\002"
-    " \001(\r\022\026\n\016max_health_bps\030\003 \001(\r\022\021\n\tspeed_bp"
-    "s\030\004 \001(\r\022\031\n\021outgoing_heal_bps\030\005 \001(\r\022\033\n\023sh"
-    "ield_capacity_bps\030\006 \001(\r\022\031\n\021physical_crit"
-    "_bps\030\007 \001(\r\022\026\n\016magic_crit_bps\030\010 \001(\r\022\033\n\023ph"
-    "ysical_resist_bps\030\t \001(\r\022\030\n\020magic_resist_"
-    "bps\030\n \001(\r\022=\n\017ailment_hit_bps\030\013 \003(\0132$.Equ"
-    "ipmentEffects.AilmentHitBpsEntry\022C\n\022ailm"
-    "ent_resist_bps\030\014 \003(\0132\'.EquipmentEffects."
-    "AilmentResistBpsEntry\022C\n\022mana_reduction_"
-    "bps\030\r \003(\0132\'.EquipmentEffects.ManaReducti"
-    "onBpsEntry\022+\n\tartifacts\030\016 \003(\0132\030.Equipmen"
-    "tArtifactSource\0324\n\022AilmentHitBpsEntry\022\013\n"
-    "\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0327\n\025Ailment"
-    "ResistBpsEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001"
-    "(\r:\0028\001\0327\n\025ManaReductionBpsEntry\022\013\n\003key\030\001"
-    " \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\305\001\n\027EquipmentArt"
-    "ifactSource\022\017\n\007item_id\030\001 \001(\004\022\021\n\teffect_i"
-    "d\030\002 \001(\r\022\021\n\tbonus_bps\030\003 \001(\r\022\017\n\007cap_bps\030\004 "
-    "\001(\r\022\027\n\017per_round_limit\030\005 \001(\r\022\024\n\014battle_l"
-    "imit\030\006 \001(\r\022\025\n\ractive_rounds\030\007 \001(\r\022\034\n\024hea"
-    "lth_threshold_bps\030\010 \001(\rB\022Z\020common/compon"
-    "entb\006proto3"
+    "ts.proto\032,proto/common/component/support"
+    "_effects.proto\"\205\006\n\020EquipmentEffects\022\033\n\023p"
+    "hysical_attack_bps\030\001 \001(\r\022\030\n\020magic_attack"
+    "_bps\030\002 \001(\r\022\026\n\016max_health_bps\030\003 \001(\r\022\021\n\tsp"
+    "eed_bps\030\004 \001(\r\022\031\n\021outgoing_heal_bps\030\005 \001(\r"
+    "\022\033\n\023shield_capacity_bps\030\006 \001(\r\022\031\n\021physica"
+    "l_crit_bps\030\007 \001(\r\022\026\n\016magic_crit_bps\030\010 \001(\r"
+    "\022\033\n\023physical_resist_bps\030\t \001(\r\022\030\n\020magic_r"
+    "esist_bps\030\n \001(\r\022=\n\017ailment_hit_bps\030\013 \003(\013"
+    "2$.EquipmentEffects.AilmentHitBpsEntry\022C"
+    "\n\022ailment_resist_bps\030\014 \003(\0132\'.EquipmentEf"
+    "fects.AilmentResistBpsEntry\022C\n\022mana_redu"
+    "ction_bps\030\r \003(\0132\'.EquipmentEffects.ManaR"
+    "eductionBpsEntry\022+\n\tartifacts\030\016 \003(\0132\030.Eq"
+    "uipmentArtifactSource\022-\n\017support_sources"
+    "\030\017 \003(\0132\024.SupportEffectSource\022 \n\030support_"
+    "sources_complete\030\020 \001(\010\0324\n\022AilmentHitBpsE"
+    "ntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0327\n\025"
+    "AilmentResistBpsEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005va"
+    "lue\030\002 \001(\r:\0028\001\0327\n\025ManaReductionBpsEntry\022\013"
+    "\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\323\001\n\027Equip"
+    "mentArtifactSource\022\017\n\007item_id\030\001 \001(\004\022\021\n\te"
+    "ffect_id\030\002 \001(\r\022\021\n\tbonus_bps\030\003 \001(\r\022\017\n\007cap"
+    "_bps\030\004 \001(\r\022\027\n\017per_round_limit\030\005 \001(\r\022\024\n\014b"
+    "attle_limit\030\006 \001(\r\022\025\n\ractive_rounds\030\007 \001(\r"
+    "\022\034\n\024health_threshold_bps\030\010 \001(\r\022\014\n\004name\030\t"
+    " \001(\tB\022Z\020common/componentb\006proto3"
+};
+static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
+    descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_deps[1] = {
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fsupport_5feffects_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto = {
     false,
     false,
-    971,
+    1112,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto,
     "proto/common/component/equipment_effects.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_once,
-    nullptr,
-    0,
+    descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_deps,
+    1,
     5,
     schemas,
     file_message_globals,
@@ -1141,6 +1194,11 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EquipmentEffects_ManaReductionBpsEntry_D
 #endif  // !PROTOBUF_MESSAGE_GLOBALS
 // ===================================================================
 
+void EquipmentEffects::clear_support_sources() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.support_sources_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
 EquipmentEffects::EquipmentEffects(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, EquipmentEffects_get_class_data()) {
@@ -1161,6 +1219,13 @@ PROTOBUF_NDEBUG_INLINE EquipmentEffects::Impl_::Impl_(
               ::EquipmentEffects,
               PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.artifacts_)>()
           , from.artifacts_
+        }
+        ,
+        support_sources_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::EquipmentEffects,
+              PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_)>()
+          , from.support_sources_
         }
         ,
         ailment_hit_bps_ {
@@ -1203,9 +1268,9 @@ EquipmentEffects::EquipmentEffects(
                offsetof(Impl_, physical_attack_bps_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, physical_attack_bps_),
-           offsetof(Impl_, magic_resist_bps_) -
+           offsetof(Impl_, support_sources_complete_) -
                offsetof(Impl_, physical_attack_bps_) +
-               sizeof(Impl_::magic_resist_bps_));
+               sizeof(Impl_::support_sources_complete_));
 
   // @@protoc_insertion_point(copy_constructor:EquipmentEffects)
 }
@@ -1216,6 +1281,11 @@ PROTOBUF_NDEBUG_INLINE EquipmentEffects::Impl_::Impl_(
         artifacts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::EquipmentEffects,
             PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.artifacts_)>()
+         }
+        ,
+        support_sources_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::EquipmentEffects,
+            PROTOBUF_FIELD_OFFSET(::EquipmentEffects, _impl_.support_sources_)>()
          }
         ,
         ailment_hit_bps_ { visibility, ::_pbi::InternalMetadataOffset::Build<
@@ -1239,9 +1309,9 @@ inline void EquipmentEffects::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, physical_attack_bps_),
            0,
-           offsetof(Impl_, magic_resist_bps_) -
+           offsetof(Impl_, support_sources_complete_) -
                offsetof(Impl_, physical_attack_bps_) +
-               sizeof(Impl_::magic_resist_bps_));
+               sizeof(Impl_::support_sources_complete_));
 }
 EquipmentEffects::~EquipmentEffects() {
   // @@protoc_insertion_point(destructor:EquipmentEffects)
@@ -1291,25 +1361,30 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.artifacts_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.artifacts_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.support_sources_.Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.physical_attack_bps_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.physical_crit_bps_) -
-        reinterpret_cast<char*>(&_impl_.physical_attack_bps_)) + sizeof(_impl_.physical_crit_bps_));
+        reinterpret_cast<char*>(&_impl_.shield_capacity_bps_) -
+        reinterpret_cast<char*>(&_impl_.physical_attack_bps_)) + sizeof(_impl_.shield_capacity_bps_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    ::memset(&_impl_.magic_crit_bps_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.magic_resist_bps_) -
-        reinterpret_cast<char*>(&_impl_.magic_crit_bps_)) + sizeof(_impl_.magic_resist_bps_));
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.physical_crit_bps_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.support_sources_complete_) -
+        reinterpret_cast<char*>(&_impl_.physical_crit_bps_)) + sizeof(_impl_.support_sources_complete_));
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       _impl_.ailment_hit_bps_.Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       _impl_.ailment_resist_bps_.Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       _impl_.mana_reduction_bps_.Clear();
     }
   }
@@ -1337,7 +1412,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 physical_attack_bps = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_physical_attack_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1346,7 +1421,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 magic_attack_bps = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_magic_attack_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1355,7 +1430,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 max_health_bps = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_max_health_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1364,7 +1439,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 speed_bps = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_speed_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1373,7 +1448,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 outgoing_heal_bps = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_outgoing_heal_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1382,7 +1457,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 shield_capacity_bps = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_shield_capacity_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1391,7 +1466,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 physical_crit_bps = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_physical_crit_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1400,7 +1475,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 magic_crit_bps = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_magic_crit_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1409,7 +1484,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 physical_resist_bps = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_physical_resist_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1418,7 +1493,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // uint32 magic_resist_bps = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_magic_resist_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1427,7 +1502,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // map<uint32, uint32> ailment_hit_bps = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (!this_._internal_ailment_hit_bps().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1450,7 +1525,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // map<uint32, uint32> ailment_resist_bps = 12;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (!this_._internal_ailment_resist_bps().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1473,7 +1548,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
   }
 
   // map<uint32, uint32> mana_reduction_bps = 13;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (!this_._internal_mana_reduction_bps().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1505,6 +1580,28 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
           ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
               14, repfield, repfield.GetCachedSize(),
               target, stream);
+    }
+  }
+
+  // repeated .SupportEffectSource support_sources = 15;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_support_sources_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_support_sources().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              15, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // bool support_sources_complete = 16;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_support_sources_complete() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          16, this_._internal_support_sources_complete(), target);
     }
   }
 
@@ -1541,80 +1638,93 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint32 physical_attack_bps = 1;
+    // repeated .SupportEffectSource support_sources = 15;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_support_sources_size();
+      for (const auto& msg : this_._internal_support_sources()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // uint32 physical_attack_bps = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_physical_attack_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_attack_bps());
       }
     }
     // uint32 magic_attack_bps = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_magic_attack_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_magic_attack_bps());
       }
     }
     // uint32 max_health_bps = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_max_health_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_health_bps());
       }
     }
     // uint32 speed_bps = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_speed_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_speed_bps());
       }
     }
     // uint32 outgoing_heal_bps = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_outgoing_heal_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_outgoing_heal_bps());
       }
     }
     // uint32 shield_capacity_bps = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_shield_capacity_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_shield_capacity_bps());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 physical_crit_bps = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_physical_crit_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_crit_bps());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 magic_crit_bps = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_magic_crit_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_magic_crit_bps());
       }
     }
     // uint32 physical_resist_bps = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_physical_resist_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_resist_bps());
       }
     }
     // uint32 magic_resist_bps = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_magic_resist_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_magic_resist_bps());
       }
     }
+    // bool support_sources_complete = 16;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_support_sources_complete() != 0) {
+        total_size += 3;
+      }
+    }
     // map<uint32, uint32> ailment_hit_bps = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_ailment_hit_bps_size());
       for (const auto& entry : this_._internal_ailment_hit_bps()) {
@@ -1624,7 +1734,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
       }
     }
     // map<uint32, uint32> ailment_resist_bps = 12;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_ailment_resist_bps_size());
       for (const auto& entry : this_._internal_ailment_resist_bps()) {
@@ -1634,7 +1744,7 @@ PROTOBUF_NOINLINE void EquipmentEffects::Clear() {
       }
     }
     // map<uint32, uint32> mana_reduction_bps = 13;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_mana_reduction_bps_size());
       for (const auto& entry : this_._internal_mana_reduction_bps()) {
@@ -1669,64 +1779,74 @@ void EquipmentEffects::MergeImpl(::google::protobuf::MessageLite& to_msg,
           from._internal_artifacts());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_support_sources()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_support_sources());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_physical_attack_bps() != 0) {
         _this->_impl_.physical_attack_bps_ = from._impl_.physical_attack_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_magic_attack_bps() != 0) {
         _this->_impl_.magic_attack_bps_ = from._impl_.magic_attack_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_max_health_bps() != 0) {
         _this->_impl_.max_health_bps_ = from._impl_.max_health_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_speed_bps() != 0) {
         _this->_impl_.speed_bps_ = from._impl_.speed_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_outgoing_heal_bps() != 0) {
         _this->_impl_.outgoing_heal_bps_ = from._impl_.outgoing_heal_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_shield_capacity_bps() != 0) {
         _this->_impl_.shield_capacity_bps_ = from._impl_.shield_capacity_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_physical_crit_bps() != 0) {
         _this->_impl_.physical_crit_bps_ = from._impl_.physical_crit_bps_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_magic_crit_bps() != 0) {
         _this->_impl_.magic_crit_bps_ = from._impl_.magic_crit_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_physical_resist_bps() != 0) {
         _this->_impl_.physical_resist_bps_ = from._impl_.physical_resist_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_magic_resist_bps() != 0) {
         _this->_impl_.magic_resist_bps_ = from._impl_.magic_resist_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
-      _this->_impl_.ailment_hit_bps_.MergeFrom(from._impl_.ailment_hit_bps_);
-    }
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
-      _this->_impl_.ailment_resist_bps_.MergeFrom(from._impl_.ailment_resist_bps_);
+      if (from._internal_support_sources_complete() != 0) {
+        _this->_impl_.support_sources_complete_ = from._impl_.support_sources_complete_;
+      }
     }
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      _this->_impl_.ailment_hit_bps_.MergeFrom(from._impl_.ailment_hit_bps_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      _this->_impl_.ailment_resist_bps_.MergeFrom(from._impl_.ailment_resist_bps_);
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       _this->_impl_.mana_reduction_bps_.MergeFrom(from._impl_.mana_reduction_bps_);
     }
   }
@@ -1748,9 +1868,10 @@ void EquipmentEffects::InternalSwap(EquipmentEffects* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.artifacts_.InternalSwap(&other->_impl_.artifacts_);
+  _impl_.support_sources_.InternalSwap(&other->_impl_.support_sources_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.magic_resist_bps_)
-      + sizeof(EquipmentEffects::_impl_.magic_resist_bps_)
+      PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.support_sources_complete_)
+      + sizeof(EquipmentEffects::_impl_.support_sources_complete_)
       - PROTOBUF_FIELD_OFFSET(EquipmentEffects, _impl_.physical_attack_bps_)>(
           reinterpret_cast<char*>(&_impl_.physical_attack_bps_),
           reinterpret_cast<char*>(&other->_impl_.physical_attack_bps_));
@@ -1773,21 +1894,43 @@ EquipmentArtifactSource::EquipmentArtifactSource(::google::protobuf::Arena* PROT
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:EquipmentArtifactSource)
 }
+PROTOBUF_NDEBUG_INLINE EquipmentArtifactSource::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::EquipmentArtifactSource& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
 EquipmentArtifactSource::EquipmentArtifactSource(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipmentArtifactSource& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EquipmentArtifactSource& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, EquipmentArtifactSource_get_class_data()),
+    : ::google::protobuf::Message(arena, EquipmentArtifactSource_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  EquipmentArtifactSource* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, item_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, item_id_),
+           offsetof(Impl_, health_threshold_bps_) -
+               offsetof(Impl_, item_id_) +
+               sizeof(Impl_::health_threshold_bps_));
+
+  // @@protoc_insertion_point(copy_constructor:EquipmentArtifactSource)
 }
 PROTOBUF_NDEBUG_INLINE EquipmentArtifactSource::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        name_(arena) {}
 
 inline void EquipmentArtifactSource::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -1809,6 +1952,7 @@ inline void EquipmentArtifactSource::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -1846,11 +1990,15 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    ::memset(&_impl_.item_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.health_threshold_bps_) -
-        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.health_threshold_bps_));
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.item_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.active_rounds_) -
+        reinterpret_cast<char*>(&_impl_.item_id_)) + sizeof(_impl_.active_rounds_));
+  }
+  _impl_.health_threshold_bps_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1875,7 +2023,7 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 item_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_item_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1884,7 +2032,7 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   }
 
   // uint32 effect_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_effect_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1893,7 +2041,7 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   }
 
   // uint32 bonus_bps = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_bonus_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1902,7 +2050,7 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   }
 
   // uint32 cap_bps = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_cap_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1911,7 +2059,7 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   }
 
   // uint32 per_round_limit = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_per_round_limit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1920,7 +2068,7 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   }
 
   // uint32 battle_limit = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_battle_limit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1929,7 +2077,7 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   }
 
   // uint32 active_rounds = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_active_rounds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1938,11 +2086,21 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   }
 
   // uint32 health_threshold_bps = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_health_threshold_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           8, this_._internal_health_threshold_bps(), target);
+    }
+  }
+
+  // string name = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "EquipmentArtifactSource.name");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
     }
   }
 
@@ -1972,57 +2130,66 @@ PROTOBUF_NOINLINE void EquipmentArtifactSource::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // uint64 item_id = 1;
+    // string name = 9;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint64 item_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_item_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_item_id());
       }
     }
     // uint32 effect_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_effect_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_effect_id());
       }
     }
     // uint32 bonus_bps = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_bonus_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_bonus_bps());
       }
     }
     // uint32 cap_bps = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_cap_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_cap_bps());
       }
     }
     // uint32 per_round_limit = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_per_round_limit() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_per_round_limit());
       }
     }
     // uint32 battle_limit = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_battle_limit() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_limit());
       }
     }
     // uint32 active_rounds = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_active_rounds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_active_rounds());
       }
     }
+  }
+   {
     // uint32 health_threshold_bps = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_health_threshold_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_health_threshold_bps());
@@ -2048,44 +2215,53 @@ void EquipmentArtifactSource::MergeImpl(::google::protobuf::MessageLite& to_msg,
   cached_has_bits = from._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_item_id() != 0) {
         _this->_impl_.item_id_ = from._impl_.item_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_effect_id() != 0) {
         _this->_impl_.effect_id_ = from._impl_.effect_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_bonus_bps() != 0) {
         _this->_impl_.bonus_bps_ = from._impl_.bonus_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_cap_bps() != 0) {
         _this->_impl_.cap_bps_ = from._impl_.cap_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_per_round_limit() != 0) {
         _this->_impl_.per_round_limit_ = from._impl_.per_round_limit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_battle_limit() != 0) {
         _this->_impl_.battle_limit_ = from._impl_.battle_limit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_active_rounds() != 0) {
         _this->_impl_.active_rounds_ = from._impl_.active_rounds_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_health_threshold_bps() != 0) {
-        _this->_impl_.health_threshold_bps_ = from._impl_.health_threshold_bps_;
-      }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_health_threshold_bps() != 0) {
+      _this->_impl_.health_threshold_bps_ = from._impl_.health_threshold_bps_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -2103,8 +2279,11 @@ void EquipmentArtifactSource::CopyFrom(const EquipmentArtifactSource& from) {
 
 void EquipmentArtifactSource::InternalSwap(EquipmentArtifactSource* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(EquipmentArtifactSource, _impl_.health_threshold_bps_)
       + sizeof(EquipmentArtifactSource::_impl_.health_threshold_bps_)

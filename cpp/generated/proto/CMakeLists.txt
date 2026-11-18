@@ -177,6 +177,8 @@ set(SOURCE_FILES
     payment/payment.pb.cc
     payment/payment_table.pb.cc
     common/component/equipment_effects.pb.cc
+    common/component/pet_cultivation_effects.pb.cc
+    common/component/support_effects.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

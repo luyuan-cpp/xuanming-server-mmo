@@ -28,4 +28,7 @@ message PetRuleTable {
   uint32 summon_cooldown_seconds = 5;
   // 说明
   string desc = 6;
+  uint32 entry_config_version = 7; // 修改目录、预算、收益必须递增。
+  uint32 entry_total_points = 8; // 所有五阶统一，与四维点池独立。
+  uint32 entry_max_directions = 9; // 0不限。
 }

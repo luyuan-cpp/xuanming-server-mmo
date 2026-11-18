@@ -509,3 +509,115 @@ TEST_F(EquipmentV1BattleTest, LostOriginalPrimaryDoesNotTransferShieldBreakToFal
     EXPECT_EQ(Uses(result.state(), kSelf, 11), 0u); EXPECT_EQ(Uses(result.state(), kSelf, 12), 0u);
 }
 } // namespace
+
+TEST_F(EquipmentV1BattleTest, SupportProjectionMatchesActualHealAndSeparatesShieldAndConditionalArtifacts) {
+    Skill(901, BattleEffectOp::Heal, 2); Learn(kSelf, 901);
+    Skill(902, BattleEffectOp::Shield, 2); Learn(kSelf, 902);
+    auto& shield = data->AddBuff(9020); shield.set_duration_rounds(2); shield.set_refresh_policy(2);
+    auto* equipment = Player(kSelf).mutable_equipment_effects();
+    equipment->set_support_sources_complete(true); equipment->set_outgoing_heal_bps(3200);
+    for (uint32_t i = 0; i < 4; ++i) {
+        auto* source = equipment->add_support_sources(); source->set_kind(1); source->set_item_id(100 + i);
+        source->set_affix_id(5); source->set_effect_kind(1); source->set_raw_bonus_bps(800);
+        source->set_effective_bonus_bps(800); source->set_source_cap_bps(3200);
+    }
+    Modifier(kSelf, 9101, BattleModifier::OutgoingHeal, .15);
+    Modifier(kSelf, 9102, BattleModifier::OutgoingHeal, .20);
+    Modifier(kSelf, 9103, BattleModifier::OutgoingHeal, -.10);
+    Modifier(kSelf, 9104, BattleModifier::OutgoingShield, .25);
+    Artifact(kSelf, 4, 11); Artifact(kSelf, 5, 12);
+    Player(kAlly).mutable_base_attributes()->set_health(5000);
+    auto engine = Start(); const auto state = engine->BuildStateSnapshot();
+    const auto& summary = Unit(state, kSelf).support_effects();
+    ASSERT_TRUE(summary.healing().complete()); ASSERT_TRUE(summary.shield().complete());
+    EXPECT_DOUBLE_EQ(4200, summary.healing().total_bonus_bps());
+    EXPECT_DOUBLE_EQ(2500, summary.shield().total_bonus_bps());
+    double sum = 0; for (const auto& source : summary.healing().sources()) {
+        if (!source.conditional()) sum += source.effective_bonus_bps();
+        else EXPECT_EQ(0, source.effective_bonus_bps());
+    }
+    EXPECT_DOUBLE_EQ(4200, sum);
+    const SupportSkillPreview* healPreview = nullptr;
+    for (const auto& preview : summary.previews()) if (preview.skill_table_id() == 901) healPreview = &preview;
+    ASSERT_NE(nullptr, healPreview); EXPECT_DOUBLE_EQ(1000, healPreview->base_value());
+    EXPECT_EQ(1420, healPreview->reference_value());
+    const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kAlly, 901));
+    EXPECT_EQ(healPreview->reference_value(), EventSum(result, BATTLE_EVENT_HEAL, kSelf, kAlly));
+}
+
+TEST_F(EquipmentV1BattleTest, MissingOrInconsistentSupportProvenanceRemainsUnknownWithoutChangingBattleValues) {
+    Skill(901, BattleEffectOp::Heal, 2); Learn(kSelf, 901);
+    auto* effects = Player(kSelf).mutable_equipment_effects();
+    effects->set_outgoing_heal_bps(800); effects->set_support_sources_complete(true);
+    Player(kAlly).mutable_base_attributes()->set_health(5000);
+    auto engine = Start();
+    EXPECT_FALSE(Unit(engine->BuildStateSnapshot(), kSelf).support_effects().healing().complete());
+    const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kAlly, 901));
+    EXPECT_EQ(1080, EventSum(result, BATTLE_EVENT_HEAL, kSelf, kAlly));
+}
+
+TEST_F(EquipmentV1BattleTest, SupportShieldPreviewMatchesAppliedCapacityAndActualAbsorption) {
+    Skill(902, BattleEffectOp::Shield, 3); Learn(kSelf, 902);
+    auto& shield = data->AddBuff(9020); shield.set_duration_rounds(2); shield.set_tick_on_apply(1);
+    auto& attack = Skill(904, BattleEffectOp::Damage); attack.set_damage_type(combatdamage::kPhysicalDamage);
+    Learn(kEnemy, 904); data->SetSkillDamage(904, 2000);
+    auto* equipment = Player(kSelf).mutable_equipment_effects();
+    equipment->set_support_sources_complete(true); equipment->set_shield_capacity_bps(800);
+    auto* source = equipment->add_support_sources(); source->set_kind(1); source->set_item_id(77);
+    source->set_affix_id(6); source->set_effect_kind(2); source->set_raw_bonus_bps(800);
+    source->set_effective_bonus_bps(800); source->set_source_cap_bps(3200);
+    Modifier(kSelf, 9101, BattleModifier::OutgoingShield, .20);
+    Modifier(kSelf, 9102, BattleModifier::OutgoingHeal, .50);
+    auto engine = Start(); const auto initial = engine->BuildStateSnapshot();
+    const auto& support = Unit(initial, kSelf).support_effects();
+    ASSERT_TRUE(support.shield().complete()); ASSERT_EQ(support.previews_size(), 1);
+    EXPECT_EQ(support.previews(0).reference_value(), 1280u);
+    engine->SubmitAction(kSelf, Command(BATTLE_ACTION_SKILL, kSelf, 902));
+    engine->SubmitAction(kEnemy, Command(BATTLE_ACTION_SKILL, kSelf, 904));
+    engine->SubmitAction(kAlly, Command(BATTLE_ACTION_DEFEND));
+    engine->SubmitAction(kOtherEnemy, Command(BATTLE_ACTION_DEFEND));
+    const auto result = engine->ResolveCurrentRound();
+    uint64_t created = 0, absorbed = 0;
+    for (const auto& event : result.events()) {
+        if (event.event_type() == BATTLE_EVENT_BUFF_ADD && event.buff_table_id() == 9020) created = event.shield_after();
+        if (event.event_type() == BATTLE_EVENT_DAMAGE && event.source_id() == kEnemy) absorbed += event.absorbed();
+    }
+    // PvP基础伤害系数为0.3，目标本回合施盾而未防御。
+    EXPECT_EQ(created, support.previews(0).reference_value()); EXPECT_EQ(absorbed, 600u);
+    EXPECT_EQ(Unit(result.state(), kSelf).attributes().health(), 10000u);
+    EXPECT_EQ(Capacity(result.state(), kSelf, 9020), 680u);
+}
+
+TEST_F(EquipmentV1BattleTest, TemporarySupportSourceExpiresAfterItsLastActualHealingRound) {
+    Skill(901, BattleEffectOp::Heal, 2); Learn(kSelf, 901);
+    Skill(903, BattleEffectOp::Modifier, 3); Learn(kSelf, 903);
+    auto& modifier = data->AddBuff(9030); modifier.set_modifier_stat(static_cast<uint32_t>(BattleModifier::OutgoingHeal));
+    modifier.set_ratio(.20); modifier.set_duration_rounds(2); modifier.set_tick_on_apply(1);
+    Player(kSelf).mutable_equipment_effects()->set_support_sources_complete(true);
+    Player(kAlly).mutable_base_attributes()->set_health(5000);
+    auto engine = Start();
+    const auto first = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kSelf, 903));
+    const auto& during = Unit(first.state(), kSelf).support_effects().healing();
+    ASSERT_TRUE(during.complete()); EXPECT_DOUBLE_EQ(during.total_bonus_bps(), 2000);
+    ASSERT_EQ(during.sources_size(), 1); EXPECT_EQ(during.sources(0).kind(), 3u);
+    EXPECT_EQ(during.sources(0).skill_table_id(), 903u); EXPECT_EQ(during.sources(0).remain_rounds(), 1u);
+    const auto second = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kAlly, 901));
+    EXPECT_EQ(EventSum(second, BATTLE_EVENT_HEAL, kSelf, kAlly), 1200u);
+    const auto& after = Unit(second.state(), kSelf).support_effects().healing();
+    EXPECT_TRUE(after.complete()); EXPECT_DOUBLE_EQ(after.total_bonus_bps(), 0); EXPECT_EQ(after.sources_size(), 0);
+}
+
+TEST_F(EquipmentV1BattleTest, MixedSkillPreviewAndActualManaUseTheSameDamagePriorityCategory) {
+    auto& skill = Skill(901, BattleEffectOp::Heal, 3); Learn(kSelf, 901);
+    skill.set_damage_type(combatdamage::kPhysicalDamage); skill.add_effect(9011);
+    data->AddBuff(9011).set_battle_op(static_cast<uint32_t>(BattleEffectOp::Damage));
+    data->SetSkillDamage(901, 10);
+    auto* equipment = Player(kSelf).mutable_equipment_effects(); equipment->set_support_sources_complete(true);
+    (*equipment->mutable_mana_reduction_bps())[1] = 300;
+    (*equipment->mutable_mana_reduction_bps())[3] = 1200;
+    auto engine = Start(); const auto initial = engine->BuildStateSnapshot();
+    const auto& summary = Unit(initial, kSelf).support_effects();
+    ASSERT_EQ(summary.previews_size(), 1); EXPECT_EQ(summary.previews(0).mana_cost(), 970u);
+    const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kSelf, 901));
+    EXPECT_EQ(EventSum(result, BATTLE_EVENT_MANA, kSelf, kSelf), summary.previews(0).mana_cost());
+}

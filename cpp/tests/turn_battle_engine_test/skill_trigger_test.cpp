@@ -568,6 +568,8 @@ void AddPoison(MemoryBattleDataProvider& data, uint32_t id, const char* tag, uin
     auto& dot = Effect(data, id, BattleEffectOp::PeriodicDamage);
     dot.set_flat_value(10); dot.set_tick_count(3); dot.set_duration_rounds(3);
     dot.set_state_kind(state); dot.set_refresh_policy(1);
+    // 这些用例验证周期机制；显式启用施加判定，零概率配置按正式规则不挂毒。
+    dot.set_application_chance(1);
     (*dot.mutable_tag())[tag] = true;
 }
 

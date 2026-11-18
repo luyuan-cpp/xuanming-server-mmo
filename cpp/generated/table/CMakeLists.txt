@@ -45,6 +45,10 @@ include_directories(
 )
 
 set(SOURCE_FILES
+    proto/pettier_table.pb.cc
+    code/pettier_table.cpp
+    proto/petentry_table.pb.cc
+    code/petentry_table.cpp
     code/actoractioncombatstate_table.cpp
     code/actoractionstate_table.cpp
     code/all_table.cpp

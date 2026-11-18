@@ -12,12 +12,15 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+
+    <ClInclude Include="system\pet_cultivation_rules.h" />
     <ClInclude Include="constants\turn_battle_constants.h">
       <Filter>constants</Filter>
     </ClInclude>
     <ClInclude Include="constants\battle_effect_constants.h"><Filter>constants</Filter></ClInclude>
     <ClInclude Include="system\battle_actor_command_rules.h"><Filter>system</Filter></ClInclude>
     <ClInclude Include="system\equipment_battle_rules.h"><Filter>system</Filter></ClInclude>
+    <ClInclude Include="system\support_effect_rules.h"><Filter>system</Filter></ClInclude>
     <ClInclude Include="data\battle_data_provider.h">
       <Filter>data</Filter>
     </ClInclude>
