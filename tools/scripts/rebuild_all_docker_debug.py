@@ -17,6 +17,7 @@ import time
 import rebuild_docker_debug as rebuild
 import start_docker_debug as startup
 import docker_java_fixture as java_fixture
+import docker_java_redis_fixture as redis_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE = ROOT / 'build/docker-debug-current'
@@ -52,6 +53,7 @@ def local_requirements(languages, environment):
         import build_docker_java_debug as java
         tools.add('pwsh')
         problems.extend(java_fixture.local_requirements(environment))
+        problems.extend(redis_fixture.local_requirements(environment))
         for label, path in (('Java', java.DEFAULT_JDK / 'bin/java.exe'),
                             ('javap', java.DEFAULT_JDK / 'bin/javap.exe'), ('Maven', java.DEFAULT_MAVEN),
                             ('pinned protoc', java.DEFAULT_PROTOC)):
@@ -86,8 +88,10 @@ def refresh_sources():
               'deploy/debug/Dockerfile.cpp', 'deploy/debug/Dockerfile.go']
     names += ['tools/scripts/' + name + '.py' for name in
               ('prepare_docker_debug', 'start_docker_debug', 'rebuild_docker_debug', 'rebuild_all_docker_debug',
-               'build_docker_cpp_debug', 'build_docker_go_debug', 'build_docker_java_debug')]
+               'build_docker_cpp_debug', 'build_docker_go_debug', 'build_docker_java_debug',
+               'docker_rebuild_recovery', 'gm_scene_promotion')]
     names += list(java_fixture.source_inputs())
+    names += list(redis_fixture.source_inputs())
     return {name: rebuild.digest(ROOT / name) for name in sorted(set(names))}
 
 
@@ -142,11 +146,13 @@ def process_environment(environment):
         os.environ.update(original)
 
 
-def compose_command(overlay_path=None):
+def compose_command(overlay_path=None, recovery_path=None):
     command = startup.DOCKER + ['compose', '--project-name', startup.PROJECT, '--env-file', str(STATE / '.env'),
                                '-f', str(startup.COMPOSE_FILES[0]), '-f', str(startup.COMPOSE_FILES[1])]
     if overlay_path is not None:
         command += ['-f', str(overlay_path)]
+    if recovery_path is not None:
+        command += ['-f', str(recovery_path)]
     return command
 
 
@@ -166,6 +172,14 @@ def authored_contract(rows):
 def unchanged_authored(baseline, rows):
     require(authored_contract(rows) == baseline['authoredOverlay'],
             'Authored Compose overlay changed during this invocation')
+    recovery = baseline.get('recoveryOverlay')
+    if recovery:
+        require(startup.recovery_path().read_bytes() == recovery['raw'],
+                'Recovery Compose overlay changed during this invocation')
+
+
+def compose_input(baseline):
+    return baseline.get('composeInput', baseline['authoredOverlay']['input'])
 
 
 def validate_authored_mounts(services, allowed):
@@ -212,8 +226,15 @@ def current_containers(config):
             require(labels.get('com.docker.compose.container-number') == '1' and name not in services,
                     'Duplicate or unsupported service container: ' + name)
             services[name] = row
-    require(set(services) == set(config['services']) and len(historical) <= 1,
+    missing = set(config['services']) - set(services)
+    require(missing <= startup.HISTORY_ONLY and len(historical) <= 1,
             'Existing initialized service set is incomplete')
+    recovered = any(str(startup.recovery_path()) in row['Config']['Labels'].get(
+        'com.docker.compose.project.config_files', '').split(',') for row in rows)
+    if missing or recovered:
+        _, _, authored_input, _ = startup.authored_overlay(rows)
+        _, recovery = startup.recovery_contract(rows, authored_input)
+        require(recovery is not None, 'Missing initialization containers have no verified recovery provenance')
     return services, historical
 
 
@@ -224,7 +245,7 @@ def mounted_volumes(names):
     return by_name
 
 
-def infrastructure_plan(config, services, base_ids):
+def infrastructure_plan(config, services, base_ids, recovery=None):
     """Qualify only existing infrastructure against the resolved Compose configuration."""
     names = {mount['Name'] for name in startup.INFRA for mount in services[name]['Mounts'] if mount['Type'] == 'volume'}
     require(names, 'Infrastructure data volumes are missing')
@@ -263,7 +284,7 @@ def infrastructure_plan(config, services, base_ids):
                               for m in row['Mounts'] if m['Type'] == 'bind')
         require(actual_binds == expected_binds and all(m['Type'] in ('bind', 'volume') for m in row['Mounts']),
                 'Infrastructure bind mounts differ: ' + name)
-        startup.validate_mounts(name, row, service, config['volumes'], image.get('Volumes') or {}, volumes)
+        startup.validate_mounts(name, row, service, config['volumes'], image.get('Volumes') or {}, volumes, recovery)
         if state['Status'] == 'exited' and not state['Running']:
             require(state.get('StartedAt') and not state['StartedAt'].startswith('0001-'),
                     'Infrastructure container has never run: ' + name)
@@ -286,15 +307,17 @@ def confirm_infrastructure_rows(originals):
 def preflight(languages, environment):
     from prepare_docker_debug import refresh_existing_options
     # 此接口只读 canonical/run 路径与原环境，不产生配置或随机密钥。
-    refresh_existing_options()
+    refresh_options, _ = refresh_existing_options()
     env_digest = startup.sha((STATE / '.env').read_bytes())
     config = compose_config(environment)
     require(config.get('name') == startup.PROJECT, 'Only the existing local debug project is supported')
     services, historical = current_containers(config)
     all_rows = list(services.values()) + historical
     overlay = authored_contract(all_rows)
+    resolved_input, recovery = startup.recovery_contract(all_rows, overlay['input'])
+    if resolved_input is not None:
+        config = compose_config(environment, resolved_input)
     if overlay['input'] is not None:
-        config = compose_config(environment, overlay['input'])
         validate_authored_mounts(services, overlay['allowed'])
     selected_apps = {name for language in languages for name in SERVICES[language]} - set(rebuild.ONE_SHOT)
     for name in startup.APPS:
@@ -305,21 +328,30 @@ def preflight(languages, environment):
             require(startup.ready(name, row, {'gatewayPorts': startup.ports(config, 'gateway', 8081)}),
                     'Omitted application is not ready: ' + name + '; include its language or start it first')
     for name in startup.ONESHOTS:
+        if name not in services and recovery and name in startup.HISTORY_ONLY:
+            continue
         row = services[name]
         require(row['State']['Status'] == 'exited' and row['State']['ExitCode'] == 0,
                 'Initialization or writer registration did not complete: ' + name)
     canonical = startup.env_values((STATE / '.env').read_bytes())
+    if recovery:
+        retained_login_template(refresh_options)
     partial_refresh_guard(languages, canonical, config, services)
     expected = [name for language in languages for name in SERVICES[language]]
     bases = {name: config['services'][name]['image'] for name in expected}
     base_ids = {}
-    sql_boot_reference = config['services']['sql-boot']['image']
+    sql_boot_reference = config['services']['gateway-sql-boot' if recovery and 'go' not in languages
+                                            else 'sql-boot']['image']
     infra_references = {config['services'][name]['image'] for name in startup.INFRA}
     for reference in set(bases.values()) | {sql_boot_reference} | infra_references:
         identity = startup.run(startup.DOCKER + ['image', 'inspect', '--format', '{{.Id}}', reference]).strip()
         require(re.fullmatch(r'sha256:[0-9a-f]{64}', identity), 'A required local base image is unavailable')
         base_ids[reference] = identity
-    pending, volumes = infrastructure_plan(config, services, base_ids)
+    pending, volumes = infrastructure_plan(config, services, base_ids, recovery)
+    if recovery:
+        retained = mounted_volumes(recovery['requiredVolumes'])
+        require(all(startup.volume_signature(volume) == recovery['volumeSignatures'][name]
+                    for name, volume in retained.items()), 'Historical data volume identity changed')
     if 'cpp' in languages:
         from build_docker_cpp_debug import inputs, validate_sdk
         validate_sdk()
@@ -347,11 +379,32 @@ def preflight(languages, environment):
                 'signatures': mounts, 'envSha256': env_digest, 'states': {row['Id']: startup.state(row) for row in all_rows},
                 'refreshInputs': refresh_sources(), 'bindHashes': startup.binding_hashes(all_rows, overlay['allowed']),
                 'authoredOverlay': overlay,
+                'composeInput': resolved_input,
+                'recoveryOverlay': ({'raw': startup.recovery_path().read_bytes(), 'contract': recovery}
+                                    if recovery else None),
+                'recoveryVolumes': ({name: startup.volume_signature(volume) for name, volume in retained.items()}
+                                    if recovery else {}),
                 'projectVolumes': startup.project_volumes()}
     unchanged_authored(baseline, all_rows)
     require(env_digest == startup.sha((STATE / '.env').read_bytes()), 'Canonical environment changed during preflight')
     confirm_infrastructure_rows([services[name] for name in startup.INFRA])
     return config, baseline
+
+
+def retained_login_template(options):
+    # login 已改走 data_service，不重新签发旧 SQL writer；仅允许继续使用同一运行配置。
+    import ipaddress
+    import prepare_docker_debug as prepare
+    expected = prepare.render_go_runtime_template('login',
+        prepare.container_addresses(prepare.load_yaml('go/login/etc/login.yaml')),
+        ipaddress.ip_network(options.subnet, strict=True))
+    staged = Path(options.output) / 'config/login.yaml'
+    require(staged.is_file() and staged.resolve() == staged,
+            'Retained login configuration template is unavailable')
+    current = prepare.yaml.safe_load(staged.read_text('utf-8-sig'))
+    require(current == expected,
+            'Login runtime configuration would change. Update the retained login runtime through a reviewed '
+            'configuration promotion before rebuilding; historical login-sql-boot will not be replayed')
 
 
 def builder_command(language, output, bases):
@@ -607,7 +660,7 @@ def verify_sources(builds):
 
 
 def unchanged_runtime(baseline, environment):
-    services, historical = current_containers(compose_config(environment, baseline['authoredOverlay']['input']))
+    services, historical = current_containers(compose_config(environment, compose_input(baseline)))
     rows = list(services.values()) + historical
     require({r['Id']: startup.signature(r) for r in rows} == baseline['signatures']
             and {r['Id']: startup.state(r) for r in rows} == baseline['states']
@@ -617,6 +670,10 @@ def unchanged_runtime(baseline, environment):
     volumes = mounted_volumes(baseline['infraVolumes'])
     require({name: startup.hashed(value) for name, value in volumes.items()} == baseline['infraVolumes'],
             'Infrastructure volume identity changed')
+    if baseline.get('recoveryVolumes'):
+        retained = mounted_volumes(baseline['recoveryVolumes'])
+        require({name: startup.volume_signature(volume) for name, volume in retained.items()}
+                == baseline['recoveryVolumes'], 'Retained recovery volume identity changed')
     return rows
 
 
@@ -625,7 +682,7 @@ def unchanged_before_apply(config, baseline, environment):
     require(startup.binding_hashes(rows, baseline['authoredOverlay']['allowed']) == baseline['bindHashes']
             and startup.sha((STATE / '.env').read_bytes()) == baseline['envSha256'],
             'Runtime configuration changed during builds')
-    require(compose_config(environment, baseline['authoredOverlay']['input']) == config,
+    require(compose_config(environment, compose_input(baseline)) == config,
             'Resolved Compose configuration changed during builds')
     for reference, expected in baseline['baseIds'].items():
         require(startup.run(startup.DOCKER + ['image', 'inspect', '--format', '{{.Id}}', reference]).strip() == expected,
@@ -695,7 +752,7 @@ def refreshed_contract(original, config, baseline, environment):
     require(set(actual) - set(original) <= allowed_additions, 'Unexpected canonical setting after refresh')
     rows = list(baseline['services'].values()) + baseline['historical']
     unchanged_authored(baseline, rows)
-    current = compose_config(child_environment(actual, environment), baseline['authoredOverlay']['input'])
+    current = compose_config(child_environment(actual, environment), compose_input(baseline))
     require(current.get('volumes') == config.get('volumes') and current.get('networks') == config.get('networks'),
             'Refresh changed the existing volume or network contract')
     for name, service in config['services'].items():
@@ -733,6 +790,16 @@ def fixture_operation(result, phase, operation, *args):
         raise
 
 
+def redis_fixture_operation(result, phase, operation, *args):
+    result['phase'] = 'java-redis-fixture-' + phase
+    result['javaRedisFixture']['status'] = phase
+    try:
+        return operation(*args)
+    except BaseException:
+        result['javaRedisFixture']['status'] = phase + '-failed-preserved'
+        raise
+
+
 def pipeline(languages, root, inherited, result, check_only=False, resume_from=None):
     problems = local_requirements(languages, inherited)
     require(not problems, '\n'.join(problems) + '\nNo build, configuration refresh or container update was started; '
@@ -742,7 +809,11 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
     environment = child_environment(canonical, inherited)
     with process_environment(environment):
         fixture_state = None
+        redis_state = None
         if 'java' in languages:
+            result['javaRedisFixture'] = {'mode': redis_fixture.mode(environment), 'status': 'preflight'}
+            redis_fixture_operation(result, 'preflight', redis_fixture.preflight, environment)
+            result['javaRedisFixture']['status'] = 'preflight-complete'
             result['javaFixture'] = {'mode': java_fixture.mode(environment), 'status': 'pending'}
             fixture_operation(result, 'preflight', java_fixture.preflight, environment)
             result['javaFixture']['status'] = 'preflight-complete'
@@ -760,6 +831,9 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
                    'authoredOverlay': ({'path': str(overlay['path']), 'sha256': startup.sha(overlay['original'])}
                                        if overlay['path'] is not None else None),
                    'infraReady': not pending, 'pendingResume': pending,
+                   'recoveryProvenance': (baseline['recoveryOverlay']['contract']
+                                          if baseline.get('recoveryOverlay') else None),
+                   'absentHistoricalServices': sorted(startup.HISTORY_ONLY - set(baseline['services'])),
                    'configurationRefreshAfterBuilds': True, 'reused_from': result.get('reused_from', {}),
                    'buildRecipeHashes': {
                        lang: {name: baseline['refreshInputs'][name] for name in recipe_paths(lang)}
@@ -780,8 +854,11 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
                 continue
             stage_environment = environment
             if language == 'java':
+                stage_environment, redis_state = redis_fixture_operation(
+                    result, 'create', redis_fixture.create, root / 'java-redis-fixture', environment)
+                result['javaRedisFixture']['status'] = 'ready'
                 stage_environment, fixture_state = fixture_operation(
-                    result, 'create', java_fixture.create, root / 'java-fixture', environment)
+                    result, 'create', java_fixture.create, root / 'java-fixture', stage_environment)
                 stage_environment = java_test_environment(stage_environment)
                 result['javaFixture']['status'] = 'ready'
             result['phase'] = 'build-' + language
@@ -798,12 +875,17 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
             except BaseException:
                 if language == 'java':
                     result['javaFixture']['status'] = 'build-failed-preserved'
+                    result['javaRedisFixture']['status'] = 'build-failed-preserved'
                 raise
             if language == 'java':
                 result['javaFixture']['status'] = 'built-awaiting-verification'
         result['phase'] = 'verify-built-sources'
         verify_sources(builds)
         unchanged_before_apply(config, baseline, environment)
+        recovery_update = None
+        if baseline.get('recoveryOverlay'):
+            from docker_rebuild_recovery import prepare
+            recovery_update = prepare(startup, baseline, builds, root)
         if fixture_state is not None:
             if result['javaFixture']['mode'] == 'owned':
                 fixture_state['javaBuildSucceeded'] = True
@@ -811,6 +893,10 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
                 result['javaFixture']['status'] = 'closed'
             else:
                 result['javaFixture']['status'] = 'external-preserved'
+        if redis_state is not None:
+            redis_state['javaBuildSucceeded'] = True
+            redis_fixture_operation(result, 'close', redis_fixture.close, redis_state, environment)
+            result['javaRedisFixture']['status'] = ('closed' if redis_state['mode'] == 'owned' else 'external-preserved')
         result['phase'] = 'refresh-configuration'
         result['configurationWriteStarted'] = True
         code = run_stage([sys.executable, '-X', 'utf8', '-B', str(ROOT / 'tools/scripts/prepare_docker_debug.py'),
@@ -836,8 +922,27 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
             unchanged_refreshed(canonical, refreshed_binds, baseline)
             targets = [name for service in running for name in
                        ((service + '-sql-boot', service) if service in rebuild.SQL_WRITERS else (service,))]
+            if baseline.get('recoveryOverlay'):
+                # login-sql-boot 与迁移容器仅是初始化历史，恢复栈不得重新创建或执行。
+                targets = [name for name in targets if name not in startup.HISTORY_ONLY]
             # 重建必须保留原文件路径标签，供下次启动识别白名单；原件已逐字节复核。
-            command = compose_command(baseline['authoredOverlay']['path'])
+            if recovery_update is not None:
+                path = startup.recovery_path()
+                require(path.read_bytes() == baseline['recoveryOverlay']['raw'],
+                        'Recovery overlay changed before image publication')
+                (root / 'recovery-before.json').write_bytes(baseline['recoveryOverlay']['raw'])
+                (root / 'recovery-after.json').write_bytes(recovery_update)
+                temporary = path.with_name(path.name + '.rebuild.tmp')
+                with temporary.open('xb') as stream:
+                    stream.write(recovery_update)
+                os.replace(temporary, path)
+                baseline['recoveryOverlay']['raw'] = recovery_update
+                rows = list(baseline['services'].values()) + baseline['historical']
+                baseline['composeInput'], baseline['recoveryOverlay']['contract'] = startup.recovery_contract(
+                    rows, baseline['authoredOverlay']['input'])
+                result['recoveryOverlaySha256'] = startup.sha(recovery_update)
+            command = compose_command(baseline['authoredOverlay']['path'],
+                                      startup.recovery_path() if baseline.get('recoveryOverlay') else None)
             result['phase'] = 'recreate-services'
             result['containerUpdateStarted'] = True
             code = run_stage(command + ['up', '-d', '--no-build', '--pull', 'never', '--no-deps',
@@ -846,7 +951,7 @@ def pipeline(languages, root, inherited, result, check_only=False, resume_from=N
             require(code == 0, 'Container update failed; inspect recreate.log; completed changes remain applied')
             result['phase'] = 'verify-runtime'
             unchanged_refreshed(canonical, refreshed_binds, baseline)
-            final_config = compose_config(environment, baseline['authoredOverlay']['input'])
+            final_config = compose_config(environment, compose_input(baseline))
             final, historical = current_containers(final_config)
             unchanged_authored(baseline, list(final.values()) + historical)
             require(startup.project_volumes() == baseline['projectVolumes'], 'Project volume set changed')

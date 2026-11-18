@@ -34393,3 +34393,35 @@ Windows modules、scene及bag_test按/m:1构建和完整裸指针门禁通过；
 - 独立只读验收再次绑定三节点相同的成功批次 manifest、重算源码摘要，并核对镜像内三个二进制与三个调试符号摘要，全部匹配；原游戏运行合同及状态保持不变。正式结果在 build/verification/gm-admin-20261117/scene/cpp-build-retry/result.json，最终回执在同级上层 build-verification.json。GM 网页最终复查仍正常返回 HTTP 200。
 - 表差异审阅重新绑定成功批次，生成 table-compatibility-review-retry.json，旧调查报告保留；当前表与成功快照漂移0，仍为53张对现役51张、缺两张装备表。部署说明已指向成功构建凭据，并明确不能立即发布。按用户决定，未 stage/apply、未重建 Scene、未改表挂载、未执行运行期 GM 探针或修改玩家资产；邮件和玩家写通道仍等待装备/技能统一验收后的最后启用。本轮GM代码、网页/Java构建和游戏节点构建工作完成，不把编译通过当作装备/技能玩法或实际发放验收。
 - 本聊天未执行提交或推送。本条纯追加，并核验此前进度字节完整保留。
+
+
+## 2026-11-17 Codex：一键重编适配已恢复调试栈与可信历史初始化证明
+
+- 用户一键重编在 build/verification/docker-rebuild-all-20261118T023914.559071Z 预检报 Existing initialized service set is incomplete；本次失败未开始构建、刷新配置或更新容器。根因是原恢复栈缺少8个仅代表初始化历史的容器，日常启动已支持可信历史证明，而整套重编仍要求全部 Compose 服务容器实际存在。
+- 重编复用 start_docker_debug.py 的原有效来源校验，只允许历史初始化集合缺失；固定历史摘要、原初始化成功事实、GM Scene 前移证明、现存服务及基础设施身份继续核验。保留原数据卷、Kafka匿名卷、手绘挂载和第四份恢复 Compose 路径；缺失常驻服务、证据篡改或卷身份变化仍拒绝。旧证据原件保留，不生成替代成功声明，也不重放 INIT、migration 或 login-sql-boot。
+- 新增受限的重编恢复回执，将已核验构建结果、源码manifest与逐服务镜像更新绑定；发布阶段才按本次构建前移第四overlay的镜像pin，避免旧历史pin静默覆盖新镜像，并使下次启动及连续部分语言重编继续验证原恢复/GM证据。未选中的语言和注册器保持原pin，Java-only沿用既有gateway注册器镜像基线。
+- login业务进程现走data_service及只读口令查询，不重新签发历史SQL writer；其保留卷中的runtime配置也不能静默过期。复用prepare原有纯配置渲染，仅比较有效login模板与现存staged模板；需要改变login运行配置时，预检明确拒绝并要求先完成受审阅的配置前移，不泄露配置内容。
+- 项目自有离线Docker脚本合同测试145/145、GM合同测试27/27通过，覆盖GM后新镜像、连续重编、第四overlay发布、禁止历史初始化目标、部分语言注册器、证据/卷篡改拒绝及login漂移门禁；未运行第三方测试。命令、日志及源码SHA回执在 build/verification/rebuild-recovery-contract-tests-20261118T025528.967628Z/result.json，git diff --check通过。
+- 先前原17个常驻服务由正式start --execute安全启动并就绪，证据为 build/verification/docker-start-20261118T024358.786224Z；最终真实整套重编只读 --check 退出0、infraReady=true，证据为 build/verification/docker-rebuild-all-20261118T025516.335161Z/result.json。用户明确自行编译，本轮未触发实际全量重编或部署，故不把预检和离线合同通过视为完整构建/部署验收；运行数据与既有证据均保留。
+- 本次为本仓C++/Go/Java网关混合调试栈的本机工程脚本修复，不涉及客户端契约或玩法；独立Java全服务版未改动，不宣称该版已完成对应工程适配。本条仅追加，不覆盖此前进度记录。
+
+
+## 2026-11-17 Codex：回收、玩家变现与当面交易专项候选及 UI 交接
+
+- 按负责人要求，在本聊天完成只读核对与整体经济候选，新增 docs/design/equipment-recycling-trade-economy-candidate.md，登记总索引；不另开聊天、不向其他聊天或外部人员发消息。承接人民币变现、正常经营者参与和保留当面交易，不改装备、技能、宝宝、排位或赛季权威规则。
+- 区分已确认骨架与新增候选：既有每日20、首套300+300及聚宝斋48小时公示/7天寄售/5%手续费/3天冷静期保留；16绑定+4流通仅是额度内分配候选。旧件拆砂、加工调灵符与合法改配消费建议同片交付，不返核心材料或强化投入；列物品、游戏币、人民币三本闭环、完整差价算例、混绑继承、防重复返料及满养后需求衰减。30/38日均注明预算条件而非实测。
+- 核实当前RMB合同kind6、trade原件/游戏币市场、mall OMS/逐单收益/提现结构与客户端原意图恢复；不沿旧计划另造钱包或恢复Redis ACK存盘。静态发现trade托管引用trade:数字与mall纯数字校验不兼容、提现尚无逐单争议冻结、当面缺所见条款版本/完整实例详情等接线缺口，仅登记待补，不改业务代码，也未运行复现。
+- 交接包含双方各自报价、锁定、不可变清单、相同修订确认、统一交割决定和原号恢复；补旧版本资产退回与迟到回执隔离，区分赠送/接收视角、站外截图和系统付款、投诉与退款。列工作室行为规则、低基数监测、人工复核申诉、分片交付范围、数据契约和后续故障验收。
+- 第十节为可直接复制给另一台电脑的自包含中文UI提示词，含13类页面、字段/动作、空态/失败/处理中/撤单/未知恢复、动态文字分层与原图尺寸要求。未生成图片、修改客户端或美术目录，未启动Unity、服务、支付、结算或提现。
+- 三路只读评审发现的语义/切片/资产接缝问题已修订；索引生成检查、14个本地文档链接、空白/围栏及差异检查通过。证据位于忽略目录build/verification/recycling-economy-design-20261117；仅为文档检查，不代表编译、游戏运行、经济平衡、真实支付或提现验收。
+- 独立Java版只读PARITY：已有人民币相关源码记录及后续待补项，新回收/绑定继承/当面锁单两版均待实现；本轮未改Java仓、未登记功能完成版本。保留其他聊天已有修改，进度纯追加并核验此前全部字节保留；未提交或推送。
+
+## 2026-11-17 Codex：统一重编自动接线 Redis 测试夹具与失败批次续编
+
+- 用户自行运行统一重编，build/verification/docker-rebuild-all-20261118T034136.173887Z 的 C++、Go 均成功，Java 在进入 Maven 前因缺少 GATEWAY_RATE_LIMIT_REDIS_URL 与 GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES 被门禁拒绝；本批没有刷新配置或更新游戏容器。根因是统一入口预检只覆盖 TiDB 与工具链，未覆盖 Java 限流测试的 Redis 前提，非 Java 编译错误。
+- 统一入口现默认自动准备独占 Redis 单机与三主 Cluster，无需用户手动设置临时环境变量；只用已存在的固定摘要 Redis 8.10.2 镜像，随机命名资源及端口、宿主 loopback、共享网络命名空间、tmpfs 数据及资源上限。显式外部配置须完整且通过只读就绪验证，不接管其生命周期；缺本地镜像或外部接线不完整在耗时构建前拒绝，保留 Java 原有测试门禁，不跳测试或回退旧 JAR。
+- 首轮独占 Redis 验证在网络创建前后边界失败且未产生资源；只读检查发现 Docker 默认地址池已被现有网络占满。改为先读 Docker IPAM 与 Windows 宿主路由，选不重叠的随机 10.254.x/28 再单次创建，不修改系统、不删除其他网络；失败证据新增阶段及固定错误分类，不保存原始 stderr 或凭证。后续真实创建成功，单机 PING、三主可达及 16384 槽完整覆盖通过；验证用四个完整 CID 与独占网络逐项核验后精确清理，无持久卷，也未伪造 Java 构建成功。收据见 build/verification/java-redis-fixture-validation-20261118T045621.406487Z/verification.json 与 validation-cleanup.completed.json。
+- 原失败批次的 TiDB fixture 通过正式 abandonment 路径退休并精确移除自有基础设施，24000 端口释放；javaBuildSucceeded=false，旧失败证据全部保留，收据见原批次 java-fixture/abandon.completed.json。正常生产路径仍仅在 Java 构建与来源校验成功后清理 owned Redis，失败保留资源及证据、不自动重试未知写。
+- --resume-builds-from 可在验证旧批次未发布、源码及构建配方与镜像凭据仍匹配后复用成功 C++/Go 前缀，重新执行 Java 并按统一流程发布；不直接采用旧 success 字段或放宽源码守卫。真实续编只读 --check 已退出 0，success=true、infraReady=true、reused_from 同时含原批次 C++/Go，applied=false；证据见 build/verification/docker-rebuild-all-20261118T045657.426925Z/result.json。
+- 本分支项目自有 Redis fixture、统一编排与 Java 构建合同合计 106 项离线测试通过，真实 Redis 只读预检及 git diff --check 通过。用户仍自行执行完整构建；本次未执行 Maven、完整 Java 构建、第三方测试或游戏栈部署，不把 fixture 验证和续编预检当作 Java 构建或部署成功。
+- 本次为本仓 C++/Go/Java 网关混合调试栈的本机工程修复，不改客户端契约或玩法；独立 Java 全服务版未改动，不宣称其工程适配完成。本条纯追加并核验此前字节完整保留，未提交或推送。

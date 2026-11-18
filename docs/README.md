@@ -152,6 +152,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [equipment-eight-slot-implementation.md](design/equipment-eight-slot-implementation.md) — 八部位装备：代码接入与验证
 - [equipment-eight-slot-planning.md](design/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
 - [equipment-enhance-inlay.md](design/equipment-enhance-inlay.md) — 装备强化与镶嵌(装备属性系统二期)
+- [equipment-recycling-trade-economy-candidate.md](design/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
 - [equipment-v1-affixes-artifacts.md](design/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
 - [exploit_loss_prevention.md](design/exploit_loss_prevention.md) — Exploit & Loss Prevention Systems (漏洞止损与回收系统) · [EN](design/exploit_loss_prevention_en.md) · [中文](design/exploit_loss_prevention_zh.md)
 - [friend-client-spec-20260920.md](design/friend-client-spec-20260920.md) — friend 客户端任务规格(Unity,2026-09-20)

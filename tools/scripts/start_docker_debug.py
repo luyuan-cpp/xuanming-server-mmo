@@ -1,4 +1,4 @@
-"""恢复本机 Docker 调试栈；缺省只读预检，--execute 启动停止的原容器。"""
+"""恢复本机 Docker 调试栈与已准备的 GM 网页；缺省只读预检，--execute 执行启动。"""
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 import argparse
@@ -11,6 +11,7 @@ import re
 import socket
 import subprocess
 import time
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = "xuanming-debug-current"
@@ -357,7 +358,7 @@ def volume_signature(volume):
                    ('Name', 'Driver', 'Scope', 'CreatedAt', 'Labels', 'Options', 'Mountpoint')})
 
 
-def recovery_contract(rows, authored_input):
+def recovery_contract(rows, authored_input, *, original_raw=None, original_signature=None):
     path = recovery_path()
     recovered = [row for row in rows if path in [Path(value) for value in
                  row['Config']['Labels'].get('com.docker.compose.project.config_files', '').split(',')]]
@@ -373,6 +374,12 @@ def recovery_contract(rows, authored_input):
             require(files == [*COMPOSE_FILES,
                     ROOT / 'build/verification/authored-festival-pet-acquisition-20261116/compose.authored.json', path],
                     'Inconsistent recovery Compose provenance')
+    raw = original_raw if original_raw is not None else path.read_bytes()
+    if original_raw is None:
+        from docker_rebuild_recovery import EXTENSION, verify
+        document = json.loads(raw)
+        if EXTENSION in document:
+            return verify(sys.modules[__name__], rows, authored_input, document)
     evidence = []
     sources = {}
     for relative, expected in RECOVERY_SOURCES.items():
@@ -411,8 +418,9 @@ def recovery_contract(rows, authored_input):
     require(len(anonymous) == 2, 'Historical Kafka volume proof incomplete')
     # 新 GM Scene 仅能通过带源码/产物及原运行身份的显式前移回执；原历史原件仍逐字节核验。
     from gm_scene_promotion import expected_overlay
-    expected = expected_overlay(ROOT, env_values(ENV.read_bytes()), expected, rows, config, signature)
-    raw = path.read_bytes()
+    expected = expected_overlay(ROOT, env_values(ENV.read_bytes()), expected, rows, config,
+                                original_signature or signature, original_recovery_raw=original_raw)
+    raw = original_raw if original_raw is not None else path.read_bytes()
     require(json.loads(raw) == expected, 'Unauthorized recovery Compose overlay')
     combined = json.loads(authored_input) if authored_input else {'services': {}}
     for name, service in expected['services'].items():
@@ -727,7 +735,7 @@ def execute(saved, result):
 
 def main():
     global OUT
-    parser = argparse.ArgumentParser(description='Start existing local Docker debug servers without replaying migrations.')
+    parser = argparse.ArgumentParser(description='Start existing local Docker debug servers and the prepared GM website without replaying migrations.')
     parser.add_argument('--execute', action='store_true', help='Start stopped services; otherwise only perform read-only preflight.')
     args = parser.parse_args()
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
@@ -739,23 +747,35 @@ def main():
         with startup_lock() if args.execute else nullcontext():
             saved = preflight()
             save('preflight.json', saved)
+            import gm_admin_startup
+            gm_plan = gm_admin_startup.preflight(ROOT)
+            save('gm-preflight.json', gm_plan)
             for step in saved['plan']:
                 print(step['action'] + ': ' + step['service'], flush=True)
+            print('GM startup plan: MySQL, Redis, RPC bridge, Java backend, web frontend.', flush=True)
             if args.execute:
                 execute(saved, result)
+                result.update(passed=False, phase='gm-startup', activeService='gm')
+                game_ready = preflight()
+                result['gm'] = gm_admin_startup.ensure_started(ROOT, OUT, gm_plan)
+                game_after = preflight()
+                require(game_after['contract'] == game_ready['contract'] and game_after['states'] == game_ready['states'],
+                        'Game runtime changed during GM startup')
+                result.update(passed=True, phase='complete', activeService=None, gmGameRuntimeUnchanged=True)
             else:
                 result.update(passed=True, phase='preflight-complete', sourceCheckExecuted=False)
     except (Exception, KeyboardInterrupt) as error:
         if isinstance(error, InventoryError):
             result['inventoryDiagnostics'] = error.diagnostics
-        result.update(errorType=type(error).__name__,
+        result.update(passed=False, errorType=type(error).__name__,
                       error=str(error) if isinstance(error, RuntimeError) else 'Operation failed; raw details suppressed')
         event('stopped', phase=result['phase'], service=result.get('activeService'), errorType=type(error).__name__)
     finally:
         result['finishedUtc'] = now()
         save('result.json', result)
     if result['passed']:
-        print('Server startup completed.' if args.execute else 'Preflight completed. No containers started.', flush=True)
+        print('Server and GM startup completed. GM: http://127.0.0.1:3101/' if args.execute
+              else 'Preflight completed. No containers or GM processes started.', flush=True)
     else:
         print('Stopped: ' + result['error'] + '. Review the receipt; no automatic retry was performed.', flush=True)
     return 0 if result['passed'] else 1

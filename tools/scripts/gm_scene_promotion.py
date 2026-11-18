@@ -138,7 +138,7 @@ def ready_runtime(root, preflight, inspect, process_environment, read_bridge):
     return values
 
 
-def expected_overlay(root, values, expected, rows, config, signature):
+def expected_overlay(root, values, expected, rows, config, signature, *, original_recovery_raw=None):
     approval = values.get(KEY)
     if approval is None:
         return expected
@@ -202,7 +202,7 @@ def expected_overlay(root, values, expected, rows, config, signature):
                 ('MMORPG_GM_PLAYER_COMMAND_SECRET', 'MMORPG_ASSET_OP_SECRET_MAIL')), 'GM Scene secrets are missing')
     promoted = deepcopy(expected)
     promoted['services']['scene']['image'] = image
-    actual_recovery = Path(files[-1]).read_bytes()
+    actual_recovery = original_recovery_raw if original_recovery_raw is not None else Path(files[-1]).read_bytes()
     require(digest(actual_recovery) == receipt['newRecoverySha256'] and json.loads(actual_recovery) == promoted,
             'GM Scene recovery overlay changed outside the single approved image')
     return promoted

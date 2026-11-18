@@ -551,6 +551,25 @@ def main() -> None:
         prepare(args, stack, original)
 
 
+def render_go_runtime_template(service, config, subnet):
+    # 这两个入口把 ListenOn 原样注册为 NodeInfo，并不读取 POD_IP；显式绑定本容器可达地址。
+    listen_host = str(subnet.network_address + SERVICE_IP_OFFSETS[service]) if service in ("scene_manager", "player_locator") else "0.0.0.0"
+    config["ListenOn"] = listen_host + ":" + config["ListenOn"].rsplit(":", 1)[1]
+    config["Mode"] = "dev"
+    if service in ("login", "player_locator", "scene_manager", "rank"):
+        config["TableDir"] = "/generated/tables"
+    if "SnowflakeCacheDir" in config:
+        config["SnowflakeCacheDir"] = "/tmp/snowflake"
+    if "Prometheus" in config:
+        config["Prometheus"]["Host"] = "0.0.0.0"
+    if service == "login":
+        config["Secrets"] = {kind: {"Env": name} for kind, name in (
+            ("GateToken", "GATE_TOKEN_SECRET"), ("QueueToken", "QUEUE_TOKEN_SECRET"))}
+        config.pop("GateTokenSecret", None)
+        config["RequireClientEndpoint"] = True
+    return config
+
+
 def prepare(args: argparse.Namespace, stack: ExitStack, original: bytes | None = None) -> None:
     output = (REPO / args.output).resolve()
     if not output.is_relative_to((REPO / "build").resolve()):
@@ -597,21 +616,7 @@ def prepare(args: argparse.Namespace, stack: ExitStack, original: bytes | None =
     before = source_hashes(guarded_paths)
     configs = {service: container_addresses(load_yaml(f"go/{service}/etc/{filename}")) for service, filename in GO_CONFIGS.items()}
     for service, config in configs.items():
-        # 这两个入口把 ListenOn 原样注册为 NodeInfo，并不读取 POD_IP；显式绑定本容器可达地址。
-        listen_host = str(subnet.network_address + SERVICE_IP_OFFSETS[service]) if service in ("scene_manager", "player_locator") else "0.0.0.0"
-        config["ListenOn"] = listen_host + ":" + config["ListenOn"].rsplit(":", 1)[1]
-        config["Mode"] = "dev"
-        if service in ("login", "player_locator", "scene_manager", "rank"):
-            config["TableDir"] = "/generated/tables"
-        if "SnowflakeCacheDir" in config:
-            config["SnowflakeCacheDir"] = "/tmp/snowflake"
-        if "Prometheus" in config:
-            config["Prometheus"]["Host"] = "0.0.0.0"
-    login = configs["login"]
-    login["Secrets"] = {kind: {"Env": name} for kind, name in (
-        ("GateToken", "GATE_TOKEN_SECRET"), ("QueueToken", "QUEUE_TOKEN_SECRET"))}
-    login.pop("GateTokenSecret", None)
-    login["RequireClientEndpoint"] = True
+        render_go_runtime_template(service, config, subnet)
     # 常驻配置不留账号：写者每 boot 一个账号，由注册步骤写进私有卷里的运行配置（sql_boot_catalog_local.ps1 的 Get-LocalSqlBootConfigPatch）。
     db = configs["db"]
     db["ServerConfig"]["JsonPath"] = "/app/data/mysql_database_table_list.json"

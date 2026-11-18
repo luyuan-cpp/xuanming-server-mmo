@@ -19,6 +19,16 @@ pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 install --frozen-lockfile --fe
 
 ## 本机运行
 
+日常和游戏一起启动，在仓库根目录执行：
+
+```powershell
+python -X utf8 -B tools/scripts/start_docker_debug.py --execute
+```
+
+该入口先检查游戏与 GM 的既有安装，再恢复原 GM MySQL/Redis 和只读桥，依次启动 Java 后台与网页并等待 HTTP 就绪。已运行的健康服务不会重启；去掉 `--execute` 只预检。它不安装依赖、不构建、不新建管理库或重置口令，也不会部署 Scene 或启用未验收的写通道。运行材料或原容器缺失时保留现场并报错，不能用新空库代替。
+
+独立准备和分项维护仍可使用：
+
 ```powershell
 python java/gm_admin/run_local.py infra
 python java/gm_admin/run_local.py backend

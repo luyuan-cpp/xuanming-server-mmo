@@ -225,6 +225,9 @@ class RecoveryProvenanceTest(unittest.TestCase):
         self.addCleanup(self.stack.close)
         self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory())).resolve()
         self.stack.enter_context(patch.object(startup, 'ROOT', self.root))
+        env = self.root / 'fixture.env'
+        env.write_text('', encoding='utf-8')
+        self.stack.enter_context(patch.object(startup, 'ENV', env))
         selected = set(startup.INFRA + startup.APPS) | {n + '-sql-boot' for n in startup.WRITERS}
         self.rows = [InventoryDiagnosticsTest.row(name, startup.sha(name.encode())) for name in selected]
         authored = self.root / 'build/verification/authored-festival-pet-acquisition-20261116/compose.authored.json'

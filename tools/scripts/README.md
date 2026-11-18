@@ -111,7 +111,11 @@ python -X utf8 -B tools/scripts/start_docker_debug.py
 python -X utf8 -B tools/scripts/start_docker_debug.py --execute
 ```
 
-入口仅操作 `desktop-linux` 上的 `xuanming-debug-current` 原容器，要求基础初始化和写者注册任务已成功完成。17 个常驻服务及六个写者注册容器须与当前 `.env` 指定的镜像、挂载、端口及显式环境变量一致；不会重跑的历史初始化、迁移和 login 注册容器只核对成功状态与实际身份、配置及挂载基线，不要求追溯更新成最新业务镜像。正常运行的服务只检查，不重复启动或注册；停止的 `db`、`data-service`、`match`、`rank`、`player-inbox`、`gateway` 先重新执行各自原注册容器，取得新授权，再启动服务。login 不消费 SQL 授权，不重跑它的注册任务。所有服务已经正常运行时，重复执行只做检查。
+游戏部分仅操作 `desktop-linux` 上的 `xuanming-debug-current` 原容器，要求基础初始化和写者注册任务已成功完成。17 个常驻服务及六个写者注册容器须与当前 `.env` 指定的镜像、挂载、端口及显式环境变量一致；不会重跑的历史初始化、迁移和 login 注册容器只核对成功状态与实际身份、配置及挂载基线，不要求追溯更新成最新业务镜像。正常运行的服务只检查，不重复启动或注册；停止的 `db`、`data-service`、`match`、`rank`、`player-inbox`、`gateway` 先重新执行各自原注册容器，取得新授权，再启动服务。login 不消费 SQL 授权，不重跑它的注册任务。所有服务已经正常运行时，重复执行只做检查。
+
+同一条 `--execute` 命令也启动已准备好的 GM：依次恢复原 GM MySQL/Redis 容器和只读 RPC 桥，再以隐藏后台进程启动 Java 与 Vue 网页，等待身份匹配的进程及 HTTP 就绪。GM 地址为 `http://127.0.0.1:3101/`；已有健康进程不重启，缺少原管理库、凭据或构建产物时明确失败，不创建空库替代、不重置管理员口令、不自动安装或构建。缺省预检也检查 GM，但不启动进程、生成验证码或刷新回执。游戏就绪后若 GM 失败，整体仍非零退出，结果保留已就绪的游戏状态。
+
+只读桥日常恢复复用原镜像、容器、固定路由和源码封印；仅刷新已经重新核实的启动状态。Docker 将三项空 DNS 配置从 `null` 表示为 `[]` 时，只有内存还原后完整签名精确命中原件才接受该等价变化，其他配置或身份漂移仍拒绝；旧回执和摘要保存在本次启动证据目录。此流程不启动邮件写者注册、不重放邮件迁移，也不启用尚未验收的 Scene 写通道。
 
 本机独立网页 GM 的 Scene 单项升级使用 `deploy/gm-admin/scene-deploy.py` 准备、封存构建回执后审阅再执行；不是日常启动的自动动作。`gm_scene_promotion.py` 仅接受原私有环境明确绑定 SHA 的 GM Scene 前移回执，继续核对原恢复历史、四份 Compose、其他容器身份与卷，禁止通过第五份 overlay 或任意新镜像绕过。具体入口和未实测边界见 `deploy/gm-admin/mail-README.md`；仅运行 prepare 不启用写通道、不重启服务。
 
@@ -119,7 +123,7 @@ python -X utf8 -B tools/scripts/start_docker_debug.py --execute
 
 更新普通玩法表后，已有手绘地图覆盖目录不会自动读取镜像里的新表。先用 `tools/navmesh_baker/refresh_authored_runtime_tables.py` 生成新的开发批次：`--previous-manifest <旧批/runtime-data-manifest.json> --output build/verification/authored-festival-<新批次> --allow-table Pet --allow-table Monster --allow-table Dungeon --allow-table PlayMode --allow-table MessageLimiter`。脚本验证旧批来源和导航，复制当前正式源表与旧批的 `BaseScene.xlsx`、`World.xlsx`，调用正式沙盒导表器；两张地图的 JSON/PB 必须逐字节保持，其他表必须匹配当前正式导出，旧批变化必须局限于显式列出的表。成功后产出新的 `runtime-data-manifest.json`、`compose.authored.json` 和 `refresh-verification.json`，通过现有运行数据校验；旧批和正式源表不改，也不启动容器。部署时使用新覆盖文件并验证运行挂载；不能只更新镜像后继续挂旧表目录。
 
-每次调用独立保存 `build/verification/docker-start-<UTC>/`，包含启动计划、旧退出状态和结果。Compose 显式卷核对原卷名与读写属性；镜像声明的默认匿名卷核对原身份、目标、匿名标签、驱动及存在状态，所有实际挂载卷均纳入前后不变的基线，不要求匿名卷带 Compose 项目标签。脚本不构建、不拉取镜像、不重建容器、不清卷、不重放初始化或迁移；任一步失败立即停止并显示脱敏原因，保留已启动的服务及失败证据，不自动重试。成功输出 `Server startup completed.`，表示运行就绪检查完成；源码一致性仍由 VS Code 附加前检查执行，不能据此断言旧崩溃原因已修复。
+每次调用独立保存 `build/verification/docker-start-<UTC>/`，包含游戏与 GM 启动计划、旧退出状态和结果。Compose 显式卷核对原卷名与读写属性；镜像声明的默认匿名卷核对原身份、目标、匿名标签、驱动及存在状态，所有实际挂载卷均纳入前后不变的基线，不要求匿名卷带 Compose 项目标签。脚本不构建、不拉取镜像、不重建容器、不清卷、不重放初始化或迁移；任一步失败立即停止并显示脱敏原因，保留已启动的服务及失败证据，不自动重试。成功输出 `Server and GM startup completed.` 和 GM 地址，表示运行就绪检查完成；源码一致性仍由 VS Code 附加前检查执行，不能据此断言旧崩溃原因已修复。
 
 默认客户端入口为 `http://127.0.0.1:8081`，同一网关另保留 `http://127.0.0.1:18081`；gate 为 `127.0.0.1:28000`，battle 为 `127.0.0.1:28010`。可用 `--gateway-port` 调整附加 HTTP 端口、用 `--gate-port` / `--battle-port` 调整对应入口；`8081` 保留给客户端默认网关。VS Code 附加到固定名称的三个调试容器。此栈只启用登录、建角、主世界进场、战斗与全球匹配结算所需服务，未启动域的请求按现有路由契约失败。校验配置时使用 `docker compose ... config --quiet`，不要把展开后的配置与 `.env` 打印或上传。
 
@@ -661,7 +665,7 @@ python -X utf8 -B tools/scripts/rebuild_all_docker_debug.py --resume-builds-from
 
 Java 默认自动创建本次调用独占的三容器 TiDB 8.5.8 测试 fixture，经正式 producer 生成新的 `NORMAL` writer grant，再执行原有完整测试。无需手动配置十项 fixture 变量。统一入口会先检查本地工具、辅助程序、固定镜像及端口等前提；缺失时在 C++/Go 编译前停止。`--check` 只做只读检查，不创建 fixture。实际环境仅在轮到 Java 构建时创建，Java 构建和来源验证全部成功后才退休 writer 并清理本次 fixture，清理成功后才刷新配置和更新服务。创建、构建、验证或清理失败均停止并保留证据与尚存的 fixture，不自动重试，不跳过测试或复用旧 JAR。
 
-Java 网关的限流集成测试另需在调用进程设置 `GATEWAY_RATE_LIMIT_REDIS_URL`（单 Redis）和 `GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES`（逗号分隔的 Redis Cluster 种子），指向已准备的本机测试环境。两类 Redis 测试使用随机 `rl:it:` 键并逐键清理，不由 TiDB fixture 代替。缺少任一变量时，Java 构建器在封存及 Maven 编译前拒绝；统一入口的 TiDB `--check` 通过不代表 Redis 测试环境已经接好。不要通过扩大跳过白名单发布未执行这些测试的镜像。
+Java 网关的限流集成测试由统一入口自动准备独占 Redis 单机与三主 Cluster，无需手动设置临时环境变量；与 TiDB fixture 一样在构建前只读预检，Java 阶段创建，构建与来源核验成功后精确清理本次资源，失败保留证据及资源、不自动重试。Redis 使用仓内固定摘要的本地 8.10.2 镜像，不自动拉取；随机项目与端口、仅绑定 loopback、共享网络命名空间、tmpfs 数据及资源上限，不借用玩家 Redis，也不创建持久卷。`--check` 核本地镜像，实际创建后再核单机 PING、集群完整槽覆盖与各主节点可达。显式提供 `GATEWAY_RATE_LIMIT_REDIS_URL` 和 `GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES` 时使用外部 loopback 测试环境（认证集群另提供 `GATEWAY_RATE_LIMIT_REDIS_PASSWORD`），只读验证可用性，不管理其生命周期；任何部分或空配置均提前拒绝。凭证仅在子进程环境传递，不写公共证据。单独调用 Java 构建器仍要求两项显式变量；两类测试继续使用随机 `rl:it:` 键并逐键清理，不跳测试、不回退旧 JAR。
 
 如需自定义外部 fixture，八项核心变量中任一已设置就选择外部模式，必须完整提供 `MMORPG_AUTHORITY_IT_JDBC_URL`、`MMORPG_SQL_USERNAME`、`MMORPG_SQL_PASSWORD`、`MMORPG_SQL_WRITER_GRANT_FILE`、`MMORPG_SQL_WRITER_GRANT_SHA256`、`MMORPG_SQL_DEPLOYMENT_ID`、`MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256`、`MMORPG_SQL_WRITER_CONSUME_DIR`，以及 `MMORPG_SQL_PRIVATE_FILE_HELPER` 和 `MMORPG_SQL_PRIVATE_FILE_HELPER_SHA256`。JDBC URL 仅接受 `jdbc:mysql://127.0.0.1:<port>/<schema>` 或 `jdbc:mysql://localhost:<port>/<schema>`，必须显式指定端口和单个 schema，不接受 URL 参数、用户信息或多主机形式。仅配置 private-file helper 两项仍可使用自动模式。外部 fixture 不由统一入口退休或删除；两种模式传给 Java 的子环境均移除 `COMMERCE_IT_*` 和 SQL schema/registrar/maintenance 管理 DSN。公开 receipt 只记录 fixture 模式和阶段，不记录凭据或私有 context。离线单元测试用于验证编排契约，不代表已完成真实编译或部署。
 

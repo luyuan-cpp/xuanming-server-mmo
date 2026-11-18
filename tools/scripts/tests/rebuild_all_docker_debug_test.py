@@ -37,6 +37,10 @@ class RebuildAllTests(unittest.TestCase):
         self.fixture_create = self.mock(subject.java_fixture, 'create',
                                        side_effect=lambda directory, env: ({**env, 'FIXTURE_CHILD': 'yes'}, {}))
         self.fixture_close = self.mock(subject.java_fixture, 'close')
+        self.redis_preflight = self.mock(subject.redis_fixture, 'preflight')
+        self.redis_create = self.mock(subject.redis_fixture, 'create',
+                                     side_effect=lambda directory, env: (dict(env), {'mode': 'owned'}))
+        self.redis_close = self.mock(subject.redis_fixture, 'close')
 
     def mock(self, owner, name, **kwargs):
         return self.stack.enter_context(patch.object(owner, name, **kwargs))
@@ -90,6 +94,97 @@ class RebuildAllTests(unittest.TestCase):
         for value in ('', 'cpp,cpp', 'ruby', 'cpp,', 'CPP'):
             with self.subTest(value=value), self.assertRaises(RuntimeError):
                 subject.select_languages(value)
+
+    def test_redis_preflight_failure_prevents_any_build_or_fixture_creation(self):
+        self.pipeline_fixture()
+        self.redis_preflight.side_effect = RuntimeError('Pinned Redis image missing')
+        with self.assertRaisesRegex(RuntimeError, 'Pinned Redis'):
+            self.run_pipeline()
+        self.run_stage.assert_not_called()
+        self.fixture_create.assert_not_called()
+        self.redis_create.assert_not_called()
+        self.assertEqual(self.result['phase'], 'java-redis-fixture-preflight')
+
+    def test_redis_check_only_never_creates_fixtures(self):
+        self.pipeline_fixture()
+        self.run_pipeline(check=True)
+        self.redis_preflight.assert_called_once()
+        self.redis_create.assert_not_called()
+        self.redis_close.assert_not_called()
+
+    def test_redis_create_failure_is_not_mislabeled_as_tidb_failure(self):
+        self.pipeline_fixture()
+        self.redis_create.side_effect = RuntimeError('Redis failed')
+        with self.assertRaisesRegex(RuntimeError, 'Redis failed'):
+            self.run_pipeline()
+        self.assertEqual(self.result['phase'], 'java-redis-fixture-create')
+        self.assertEqual(self.result['javaFixture']['status'], 'preflight-complete')
+        self.fixture_create.assert_not_called()
+        self.redis_close.assert_not_called()
+
+    def test_redis_environment_reaches_java_and_cleanup_is_after_source_verification(self):
+        self.pipeline_fixture()
+        self.redis_create.side_effect = lambda directory, env: ({**env, 'GATEWAY_RATE_LIMIT_REDIS_URL': 'fixture-url'}, {'mode': 'owned'})
+        self.run_pipeline()
+        java_call = self.run_stage.call_args_list[2]
+        self.assertEqual(java_call.args[2]['GATEWAY_RATE_LIMIT_REDIS_URL'], 'fixture-url')
+        self.assertNotIn('GATEWAY_RATE_LIMIT_REDIS_URL', self.run_stage.call_args_list[0].args[2])
+        self.assertTrue(self.redis_close.call_args.args[0]['javaBuildSucceeded'])
+        self.assertEqual(self.result['javaRedisFixture']['status'], 'closed')
+
+    def test_source_verification_failure_preserves_redis(self):
+        self.pipeline_fixture()
+        self.verify.side_effect = RuntimeError('source drift')
+        with self.assertRaisesRegex(RuntimeError, 'source drift'):
+            self.run_pipeline()
+        self.redis_close.assert_not_called()
+
+    def test_recovery_publication_preserves_fourth_compose_file_and_never_replays_init(self):
+        import docker_rebuild_recovery
+        self.pipeline_fixture()
+        recovery = self.root / 'compose.recovery.json'
+        recovery.write_bytes(b'original')
+        self.baseline['authoredOverlay']['path'] = self.root / 'compose.authored.json'
+        self.baseline['authoredOverlay']['original'] = b'authored'
+        self.mock(subject, 'unchanged_authored')
+        self.baseline['recoveryOverlay'] = {'raw': b'original', 'contract': {'sourceSha256': {'original': 'verified'}}}
+        self.mock(subject.startup, 'recovery_path', return_value=recovery)
+        self.mock(subject.startup, 'recovery_contract', return_value=('resolved-new-images', {'verified': True}))
+        prepared = self.mock(docker_rebuild_recovery, 'prepare', return_value=b'new-image-pins')
+        self.run_pipeline()
+        prepared.assert_called_once()
+        command = next(call.args[0] for call in self.run_stage.call_args_list if 'up' in call.args[0])
+        files = [command[i + 1] for i, part in enumerate(command) if part == '-f']
+        self.assertEqual(files, [*map(str, subject.startup.COMPOSE_FILES),
+                                str(self.baseline['authoredOverlay']['path']), str(recovery)])
+        targets = command[command.index('300') + 1:]
+        self.assertFalse(set(targets) & subject.startup.HISTORY_ONLY)
+        self.assertIn('--no-deps', command)
+        self.assertEqual(recovery.read_bytes(), b'new-image-pins')
+        self.assertEqual((self.root / 'recovery-before.json').read_bytes(), b'original')
+        self.assertEqual(self.baseline['composeInput'], 'resolved-new-images')
+
+    def test_retained_login_template_checks_only_effective_login_inputs(self):
+        import ipaddress
+        source = {'ListenOn': '127.0.0.1:53000', 'Mode': 'test',
+                  'DataServiceRpc': {'Endpoints': ['data-service:9000']}}
+        options = SimpleNamespace(output=str(self.state), subnet='172.30.0.0/24')
+        directory = self.state / 'config'
+        directory.mkdir()
+        expected = prepare.render_go_runtime_template('login', copy.deepcopy(source),
+                                                       ipaddress.ip_network(options.subnet))
+        prepare.write_yaml(directory / 'login.yaml', expected)
+        reader = self.mock(prepare, 'load_yaml', side_effect=lambda _: copy.deepcopy(source))
+        self.mock(prepare, 'container_addresses', side_effect=lambda value: value)
+        subject.retained_login_template(options)
+        reader.assert_called_once_with('go/login/etc/login.yaml')
+        # 被渲染器覆盖的开发监听地址变化不构成实际运行配置漂移。
+        source['ListenOn'] = '0.0.0.0:53000'
+        subject.retained_login_template(options)
+        source['DataServiceRpc']['Endpoints'] = ['different:9000']
+        with self.assertRaisesRegex(RuntimeError, 'Login runtime configuration would change'):
+            subject.retained_login_template(options)
+        self.assertEqual(prepare.yaml.safe_load((directory / 'login.yaml').read_text()), expected)
 
     def test_missing_fixture_stops_before_preflight_or_build(self):
         self.pipeline_fixture()
@@ -582,7 +677,7 @@ class RebuildAllTests(unittest.TestCase):
     def authored_preflight_fixture(self):
         import build_docker_cpp_debug as cpp
         self.authored_fixture()
-        self.mock(prepare, 'refresh_existing_options')
+        self.mock(prepare, 'refresh_existing_options', return_value=(None, b''))
         self.mock(subject.startup, 'APPS', new=tuple(self.authored_rows))
         self.mock(subject.startup, 'INFRA', new=())
         self.mock(subject.startup, 'ONESHOTS', new=set())
@@ -1227,7 +1322,7 @@ class InfraRecoveryTests(unittest.TestCase):
         self.env_file.write_bytes(b'COMPOSE_PROJECT_NAME=xuanming-debug-current\n')
         with ExitStack() as stack:
             for owner, name, kwargs in (
-                    (prepare, 'refresh_existing_options', {}), (subject.startup, 'APPS', {'new': ()}),
+                    (prepare, 'refresh_existing_options', {'return_value': (None, b'')}), (subject.startup, 'APPS', {'new': ()}),
                     (subject.startup, 'ONESHOTS', {'new': set()}), (subject, 'SERVICES', {'new': {'cpp': ['gateway']}}),
                     (subject, 'partial_refresh_guard', {}),
                     (cpp, 'validate_sdk', {'side_effect': lambda: self.live['mysql']['State']['Health'].update(Status='unhealthy')})):
