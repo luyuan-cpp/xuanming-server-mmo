@@ -51,6 +51,7 @@ enum class ClientRequestKind : uint8_t
 	kBuyMysteryMerchantGoods = 2, // SceneMysteryMerchantClientPlayer.BuyMysteryMerchantGoods
 	kCreateAttributeScheme = 3,   // SceneAttributeClientPlayer.CreateAttributeScheme
 	kEquipmentCraft = 4,         // 打造与首次安装词条；另有forge_revision防止回执淘汰后重做。
+	kEquipmentMaterialReward = 5, // 材料自选领取，额度水位防止回执淘汰后再领。
 	kCount
 };
 
@@ -66,7 +67,7 @@ enum class ClientRequestVerdict : uint8_t
 
 // 名字表:日志用。下标即枚举值,static_assert 防脱节。
 inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhance_equip", "buy_mystery_merchant_goods",
-														  "create_attribute_scheme", "equipment_craft"};
+														  "create_attribute_scheme", "equipment_craft", "equipment_material_reward"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -96,6 +97,9 @@ struct ClientRequestResult
 	uint32_t createdSchemeId{0}; // kCreateAttributeScheme:那一次建出来的方案号
 	uint64_t equipmentItemId{0};
 	uint64_t forgeRevision{0};
+	uint64_t materialRewardRevision{0};
+	uint32_t craftingMaterialCount{0};
+	uint32_t enhancementStoneCount{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

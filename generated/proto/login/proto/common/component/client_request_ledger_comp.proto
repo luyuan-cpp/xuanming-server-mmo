@@ -32,6 +32,18 @@ message ClientRequestRecord {
   uint32 created_scheme_id = 7;  // 新建加点方案:那一次建出来的方案号
   uint64 equipment_item_id = 8; // 装备打造/装条：首次成功对应的实例。
   uint64 forge_revision = 9;    // 装备打造/装条：首次成功后的业务水位。
+  uint64 material_reward_revision = 10; // 材料自选：首次成功后的独立水位。
+  uint32 crafting_material_count = 11;  // 材料自选首次实际领取的打造材料数。
+  uint32 enhancement_stone_count = 12;  // 材料自选首次实际领取的强化石数。
+}
+
+// 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随游戏日重置。
+// 来源防重由战斗收件箱的永久消费水位负责；不能用近期结果列表充当去重账本。
+message EquipmentMaterialRewardLedger {
+  uint64 day_starts_at_ms = 1; // 首次应用结算所属游戏日：UTC+8每日05:00。
+  uint32 earned_today = 2;
+  uint64 available_units = 3;
+  uint64 revision = 4; // 仅成功领取+1；入账不改变领取水位，饱和时拒绝领取，永不回退。
 }
 
 message ClientRequestLedgerComp {
@@ -42,4 +54,5 @@ message ClientRequestLedgerComp {
   // 装备打造/首次装词条共用的持久防重水位，初始0，每次成功+1；饱和时拒绝。
   // 与records的淘汰序号独立；即使旧回执被淘汰，旧水位请求也不能再次扣料或造物。
   uint64 forge_revision = 3;
+  EquipmentMaterialRewardLedger material_reward = 4;
 }

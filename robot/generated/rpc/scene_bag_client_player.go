@@ -307,3 +307,49 @@ func (sceneBagClientPlayerRpc) decodeCommitEquipmentCraft(reply *base.MessageCon
 	}
 	return resp, nil
 }
+
+// GetEquipmentMaterialReward 异步调用 SceneBagClientPlayer.GetEquipmentMaterialReward(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) GetEquipmentMaterialReward(c *pkg.GameClient, req *scene.GetEquipmentMaterialRewardRequest, timeout time.Duration, done func(*scene.GetEquipmentMaterialRewardResponse, error)) {
+	c.Call(game.SceneBagClientPlayerGetEquipmentMaterialRewardMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetEquipmentMaterialReward(reply, err))
+	})
+}
+
+// GetEquipmentMaterialRewardSync 同步调用 SceneBagClientPlayer.GetEquipmentMaterialReward(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) GetEquipmentMaterialRewardSync(ctx context.Context, c *pkg.GameClient, req *scene.GetEquipmentMaterialRewardRequest, timeout time.Duration) (*scene.GetEquipmentMaterialRewardResponse, error) {
+	return r.decodeGetEquipmentMaterialReward(c.CallSync(ctx, game.SceneBagClientPlayerGetEquipmentMaterialRewardMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeGetEquipmentMaterialReward(reply *base.MessageContent, err error) (*scene.GetEquipmentMaterialRewardResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetEquipmentMaterialRewardResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.GetEquipmentMaterialReward reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ClaimEquipmentMaterialReward 异步调用 SceneBagClientPlayer.ClaimEquipmentMaterialReward(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) ClaimEquipmentMaterialReward(c *pkg.GameClient, req *scene.ClaimEquipmentMaterialRewardRequest, timeout time.Duration, done func(*scene.ClaimEquipmentMaterialRewardResponse, error)) {
+	c.Call(game.SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeClaimEquipmentMaterialReward(reply, err))
+	})
+}
+
+// ClaimEquipmentMaterialRewardSync 同步调用 SceneBagClientPlayer.ClaimEquipmentMaterialReward(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) ClaimEquipmentMaterialRewardSync(ctx context.Context, c *pkg.GameClient, req *scene.ClaimEquipmentMaterialRewardRequest, timeout time.Duration) (*scene.ClaimEquipmentMaterialRewardResponse, error) {
+	return r.decodeClaimEquipmentMaterialReward(c.CallSync(ctx, game.SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeClaimEquipmentMaterialReward(reply *base.MessageContent, err error) (*scene.ClaimEquipmentMaterialRewardResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ClaimEquipmentMaterialRewardResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.ClaimEquipmentMaterialReward reply: %w", err)
+	}
+	return resp, nil
+}

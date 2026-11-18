@@ -109,6 +109,16 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::CommitEquipmentCraftResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::EquipmentMaterialRewardSnapshot
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::GetEquipmentMaterialRewardRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::GetEquipmentMaterialRewardResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::ClaimEquipmentMaterialRewardRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::ClaimEquipmentMaterialRewardResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -990,6 +1000,130 @@ const ::_pbi::ClassData* GmGrantItemRequest_get_class_data() {
   return GmGrantItemRequest_globals_.GetClassData();
 #else
   return GmGrantItemRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetEquipmentMaterialRewardRequest::_Internal {
+ public:
+};
+
+constexpr GetEquipmentMaterialRewardRequest::ParseTableT_ GetEquipmentMaterialRewardRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardRequest,
+                            _impl_._cached_size_),  // no hasbits
+      0, // no _extensions_
+      0, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967295,  // skipmap
+      offsetof(ParseTableT_, field_names),  // no field_entries
+      0,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetEquipmentMaterialRewardRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, // no field_entries, or aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr GetEquipmentMaterialRewardRequest::GetEquipmentMaterialRewardRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::internal::ZeroFieldsBase(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL GetEquipmentMaterialRewardRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetEquipmentMaterialRewardRequest(arena);
+}
+constexpr auto GetEquipmentMaterialRewardRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetEquipmentMaterialRewardRequest), alignof(GetEquipmentMaterialRewardRequest));
+}
+constexpr auto GetEquipmentMaterialRewardRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetEquipmentMaterialRewardRequest::MergeImpl,
+          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<GetEquipmentMaterialRewardRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetEquipmentMaterialRewardRequest::SharedDtor,
+          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<GetEquipmentMaterialRewardRequest>(), &GetEquipmentMaterialRewardRequest::ByteSizeLong,
+              &GetEquipmentMaterialRewardRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[41],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetEquipmentMaterialRewardRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetEquipmentMaterialRewardRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetEquipmentMaterialRewardRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetEquipmentMaterialRewardRequest::InternalGenerateClassData_(
+            _default, &GetEquipmentMaterialRewardRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetEquipmentMaterialRewardRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetEquipmentMaterialRewardRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetEquipmentMaterialRewardRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetEquipmentMaterialRewardRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetEquipmentMaterialRewardRequestGlobalsTypeInternal GetEquipmentMaterialRewardRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetEquipmentMaterialRewardRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetEquipmentMaterialRewardRequest_globals_.GetClassData();
+#else
+  return GetEquipmentMaterialRewardRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2939,6 +3073,168 @@ const ::_pbi::ClassData* EnhanceEquipRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimEquipmentMaterialRewardRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimEquipmentMaterialRewardRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_._has_bits_);
+};
+
+constexpr ClaimEquipmentMaterialRewardRequest::ParseTableT_ ClaimEquipmentMaterialRewardRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ClaimEquipmentMaterialRewardRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 enhancement_stone_count = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimEquipmentMaterialRewardRequest, _impl_.enhancement_stone_count_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.enhancement_stone_count_)}},
+      // uint64 client_request_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimEquipmentMaterialRewardRequest, _impl_.client_request_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.client_request_id_)}},
+      // uint64 expected_revision = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimEquipmentMaterialRewardRequest, _impl_.expected_revision_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.expected_revision_)}},
+      // uint32 crafting_material_count = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimEquipmentMaterialRewardRequest, _impl_.crafting_material_count_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.crafting_material_count_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 client_request_id = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 expected_revision = 2;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.expected_revision_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 crafting_material_count = 3;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.crafting_material_count_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 enhancement_stone_count = 4;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.enhancement_stone_count_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimEquipmentMaterialRewardRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        client_request_id_{::uint64_t{0u}},
+        expected_revision_{::uint64_t{0u}},
+        crafting_material_count_{0u},
+        enhancement_stone_count_{0u} {}
+
+template <typename>
+constexpr ClaimEquipmentMaterialRewardRequest::ClaimEquipmentMaterialRewardRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimEquipmentMaterialRewardRequest(arena);
+}
+constexpr auto ClaimEquipmentMaterialRewardRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimEquipmentMaterialRewardRequest), alignof(ClaimEquipmentMaterialRewardRequest));
+}
+constexpr auto ClaimEquipmentMaterialRewardRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimEquipmentMaterialRewardRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimEquipmentMaterialRewardRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimEquipmentMaterialRewardRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimEquipmentMaterialRewardRequest>(), &ClaimEquipmentMaterialRewardRequest::ByteSizeLong,
+              &ClaimEquipmentMaterialRewardRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[43],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimEquipmentMaterialRewardRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimEquipmentMaterialRewardRequest::InternalGenerateClassData_(
+            _default, &ClaimEquipmentMaterialRewardRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimEquipmentMaterialRewardRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimEquipmentMaterialRewardRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimEquipmentMaterialRewardRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal ClaimEquipmentMaterialRewardRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimEquipmentMaterialRewardRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimEquipmentMaterialRewardRequest_globals_.GetClassData();
+#else
+  return ClaimEquipmentMaterialRewardRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class BagSlotInfo::_Internal {
  public:
   using HasBits = decltype(::std::declval<BagSlotInfo>()._impl_._has_bits_);
@@ -3392,6 +3688,244 @@ const ::_pbi::ClassData* PreviewEquipmentCraftRequest_get_class_data() {
   return PreviewEquipmentCraftRequest_globals_.GetClassData();
 #else
   return PreviewEquipmentCraftRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class EquipmentMaterialRewardSnapshot::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EquipmentMaterialRewardSnapshot>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_._has_bits_);
+};
+
+constexpr EquipmentMaterialRewardSnapshot::ParseTableT_ EquipmentMaterialRewardSnapshot::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_._has_bits_),
+      0, // no _extensions_
+      12, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294963200,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      12,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::EquipmentMaterialRewardSnapshot>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // bool available = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardSnapshot, _impl_.available_), 8>(),
+       {8, 8, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_)}},
+      // string unavailable_reason = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.unavailable_reason_)}},
+      // uint64 day_starts_at_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.day_starts_at_ms_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.day_starts_at_ms_)}},
+      // uint64 next_reset_at_ms = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.next_reset_at_ms_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.next_reset_at_ms_)}},
+      // uint32 earned_today = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.earned_today_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.earned_today_)}},
+      // uint32 daily_limit = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.daily_limit_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.daily_limit_)}},
+      // uint64 available_units = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.available_units_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_units_)}},
+      // uint32 batch_units = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.batch_units_), 10>(),
+       {64, 10, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.batch_units_)}},
+      // uint64 revision = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardSnapshot, _impl_.revision_), 11>(),
+       {72, 11, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.revision_)}},
+      // .EquipmentCraftMaterial crafting_material = 10;
+      {::_pbi::TcParser::FastMtS1,
+       {82, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.crafting_material_)}},
+      // .EquipmentCraftMaterial enhancement_stone = 11;
+      {::_pbi::TcParser::FastMtS1,
+       {90, 2, 1,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.enhancement_stone_)}},
+      // bool can_claim = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipmentMaterialRewardSnapshot, _impl_.can_claim_), 9>(),
+       {96, 9, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.can_claim_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool available = 1;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // string unavailable_reason = 2;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.unavailable_reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 day_starts_at_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.day_starts_at_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 next_reset_at_ms = 4;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.next_reset_at_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 earned_today = 5;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.earned_today_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 daily_limit = 6;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.daily_limit_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 available_units = 7;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.available_units_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 batch_units = 8;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.batch_units_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 revision = 9;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.revision_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .EquipmentCraftMaterial crafting_material = 10;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.crafting_material_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .EquipmentCraftMaterial enhancement_stone = 11;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.enhancement_stone_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool can_claim = 12;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.can_claim_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipmentCraftMaterial>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipmentCraftMaterial_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipmentCraftMaterial>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipmentCraftMaterial_globals_},
+        #endif
+    }},
+    {{
+      "\37\0\22\0\0\0\0\0\0\0\0\0\0\0\0\0"
+      "EquipmentMaterialRewardSnapshot"
+      "unavailable_reason"
+    }},
+  };
+}
+
+
+inline constexpr EquipmentMaterialRewardSnapshot::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        unavailable_reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        crafting_material_{nullptr},
+        enhancement_stone_{nullptr},
+        day_starts_at_ms_{::uint64_t{0u}},
+        next_reset_at_ms_{::uint64_t{0u}},
+        earned_today_{0u},
+        daily_limit_{0u},
+        available_units_{::uint64_t{0u}},
+        available_{false},
+        can_claim_{false},
+        batch_units_{0u},
+        revision_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr EquipmentMaterialRewardSnapshot::EquipmentMaterialRewardSnapshot(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EquipmentMaterialRewardSnapshot(arena);
+}
+constexpr auto EquipmentMaterialRewardSnapshot::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EquipmentMaterialRewardSnapshot), alignof(EquipmentMaterialRewardSnapshot));
+}
+constexpr auto EquipmentMaterialRewardSnapshot::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EquipmentMaterialRewardSnapshot::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EquipmentMaterialRewardSnapshot>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EquipmentMaterialRewardSnapshot::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EquipmentMaterialRewardSnapshot>(), &EquipmentMaterialRewardSnapshot::ByteSizeLong,
+              &EquipmentMaterialRewardSnapshot::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[40],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EquipmentMaterialRewardSnapshotGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EquipmentMaterialRewardSnapshotGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EquipmentMaterialRewardSnapshot_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EquipmentMaterialRewardSnapshot::InternalGenerateClassData_(
+            _default, &EquipmentMaterialRewardSnapshot_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EquipmentMaterialRewardSnapshot>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EquipmentMaterialRewardSnapshotGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EquipmentMaterialRewardSnapshot _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EquipmentMaterialRewardSnapshot>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshotGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EquipmentMaterialRewardSnapshotGlobalsTypeInternal EquipmentMaterialRewardSnapshot_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EquipmentMaterialRewardSnapshot_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EquipmentMaterialRewardSnapshot_globals_.GetClassData();
+#else
+  return EquipmentMaterialRewardSnapshot_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4116,6 +4650,165 @@ const ::_pbi::ClassData* BagLayoutInfo_get_class_data() {
   return BagLayoutInfo_globals_.GetClassData();
 #else
   return BagLayoutInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetEquipmentMaterialRewardResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetEquipmentMaterialRewardResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_._has_bits_);
+};
+
+constexpr GetEquipmentMaterialRewardResponse::ParseTableT_ GetEquipmentMaterialRewardResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetEquipmentMaterialRewardResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .EquipmentMaterialRewardSnapshot snapshot = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_.snapshot_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .EquipmentMaterialRewardSnapshot snapshot = 2;
+      {PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_.snapshot_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipmentMaterialRewardSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipmentMaterialRewardSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetEquipmentMaterialRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        snapshot_{nullptr} {}
+
+template <typename>
+constexpr GetEquipmentMaterialRewardResponse::GetEquipmentMaterialRewardResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetEquipmentMaterialRewardResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetEquipmentMaterialRewardResponse(arena);
+}
+constexpr auto GetEquipmentMaterialRewardResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetEquipmentMaterialRewardResponse), alignof(GetEquipmentMaterialRewardResponse));
+}
+constexpr auto GetEquipmentMaterialRewardResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetEquipmentMaterialRewardResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetEquipmentMaterialRewardResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetEquipmentMaterialRewardResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetEquipmentMaterialRewardResponse>(), &GetEquipmentMaterialRewardResponse::ByteSizeLong,
+              &GetEquipmentMaterialRewardResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[42],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetEquipmentMaterialRewardResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetEquipmentMaterialRewardResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetEquipmentMaterialRewardResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetEquipmentMaterialRewardResponse::InternalGenerateClassData_(
+            _default, &GetEquipmentMaterialRewardResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetEquipmentMaterialRewardResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetEquipmentMaterialRewardResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetEquipmentMaterialRewardResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetEquipmentMaterialRewardResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetEquipmentMaterialRewardResponseGlobalsTypeInternal GetEquipmentMaterialRewardResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetEquipmentMaterialRewardResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetEquipmentMaterialRewardResponse_globals_.GetClassData();
+#else
+  return GetEquipmentMaterialRewardResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -7167,8 +7860,228 @@ const ::_pbi::ClassData* CommitEquipmentCraftResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimEquipmentMaterialRewardResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimEquipmentMaterialRewardResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_._has_bits_);
+};
+
+constexpr ClaimEquipmentMaterialRewardResponse::ParseTableT_ ClaimEquipmentMaterialRewardResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      9, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966784,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      9,  // num_field_entries
+      3,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::ClaimEquipmentMaterialRewardResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.error_message_)}},
+      // uint64 client_request_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimEquipmentMaterialRewardResponse, _impl_.client_request_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.client_request_id_)}},
+      // .ClaimEquipmentMaterialRewardResponse.Outcome outcome = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimEquipmentMaterialRewardResponse, _impl_.outcome_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.outcome_)}},
+      // bool durable = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClaimEquipmentMaterialRewardResponse, _impl_.durable_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.durable_)}},
+      // bool replayed = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClaimEquipmentMaterialRewardResponse, _impl_.replayed_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.replayed_)}},
+      // uint64 result_revision = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimEquipmentMaterialRewardResponse, _impl_.result_revision_), 7>(),
+       {48, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.result_revision_)}},
+      // uint64 current_revision = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimEquipmentMaterialRewardResponse, _impl_.current_revision_), 8>(),
+       {56, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.current_revision_)}},
+      // .BagInfo bag = 8;
+      {::_pbi::TcParser::FastMtS1,
+       {66, 1, 1,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.bag_)}},
+      // .EquipmentMaterialRewardSnapshot snapshot = 9;
+      {::_pbi::TcParser::FastMtS1,
+       {74, 2, 2,
+        PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.snapshot_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 client_request_id = 2;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.client_request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .ClaimEquipmentMaterialRewardResponse.Outcome outcome = 3;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.outcome_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bool durable = 4;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.durable_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool replayed = 5;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 result_revision = 6;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.result_revision_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 current_revision = 7;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.current_revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .BagInfo bag = 8;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.bag_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .EquipmentMaterialRewardSnapshot snapshot = 9;
+      {PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.snapshot_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BagInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BagInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipmentMaterialRewardSnapshot>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipmentMaterialRewardSnapshot_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimEquipmentMaterialRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        bag_{nullptr},
+        snapshot_{nullptr},
+        client_request_id_{::uint64_t{0u}},
+        outcome_{static_cast< ::ClaimEquipmentMaterialRewardResponse_Outcome >(0)},
+        durable_{false},
+        replayed_{false},
+        result_revision_{::uint64_t{0u}},
+        current_revision_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr ClaimEquipmentMaterialRewardResponse::ClaimEquipmentMaterialRewardResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimEquipmentMaterialRewardResponse(arena);
+}
+constexpr auto ClaimEquipmentMaterialRewardResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimEquipmentMaterialRewardResponse), alignof(ClaimEquipmentMaterialRewardResponse));
+}
+constexpr auto ClaimEquipmentMaterialRewardResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimEquipmentMaterialRewardResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimEquipmentMaterialRewardResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimEquipmentMaterialRewardResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimEquipmentMaterialRewardResponse>(), &ClaimEquipmentMaterialRewardResponse::ByteSizeLong,
+              &ClaimEquipmentMaterialRewardResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[44],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimEquipmentMaterialRewardResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimEquipmentMaterialRewardResponse::InternalGenerateClassData_(
+            _default, &ClaimEquipmentMaterialRewardResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimEquipmentMaterialRewardResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimEquipmentMaterialRewardResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimEquipmentMaterialRewardResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal ClaimEquipmentMaterialRewardResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimEquipmentMaterialRewardResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimEquipmentMaterialRewardResponse_globals_.GetClassData();
+#else
+  return ClaimEquipmentMaterialRewardResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[2];
+    file_level_enum_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[3];
 static const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL
     file_level_service_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[1];
 const ::uint32_t
@@ -7646,6 +8559,73 @@ const ::uint32_t
         9,
         1,
         2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_._has_bits_),
+        15, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.available_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.unavailable_reason_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.day_starts_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.next_reset_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.earned_today_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.daily_limit_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.available_units_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.batch_units_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.revision_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.crafting_material_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.enhancement_stone_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardSnapshot, _impl_.can_claim_),
+        8,
+        0,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        11,
+        1,
+        2,
+        9,
+        0x000, // bitmap
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::GetEquipmentMaterialRewardResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::GetEquipmentMaterialRewardResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::GetEquipmentMaterialRewardResponse, _impl_.snapshot_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardRequest, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardRequest, _impl_.expected_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardRequest, _impl_.crafting_material_count_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardRequest, _impl_.enhancement_stone_count_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_._has_bits_),
+        12, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.outcome_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.durable_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.result_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.current_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.bag_),
+        PROTOBUF_FIELD_OFFSET(::ClaimEquipmentMaterialRewardResponse, _impl_.snapshot_),
+        0,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        1,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -7690,6 +8670,11 @@ static const ::_pbi::MigrationSchema
         {431, sizeof(::PreviewEquipmentCraftResponse)},
         {438, sizeof(::CommitEquipmentCraftRequest)},
         {449, sizeof(::CommitEquipmentCraftResponse)},
+        {472, sizeof(::EquipmentMaterialRewardSnapshot)},
+        {499, sizeof(::GetEquipmentMaterialRewardRequest)},
+        {500, sizeof(::GetEquipmentMaterialRewardResponse)},
+        {507, sizeof(::ClaimEquipmentMaterialRewardRequest)},
+        {518, sizeof(::ClaimEquipmentMaterialRewardResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7733,6 +8718,11 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::PreviewEquipmentCraftResponse_globals_,
         &::CommitEquipmentCraftRequest_globals_,
         &::CommitEquipmentCraftResponse_globals_,
+        &::EquipmentMaterialRewardSnapshot_globals_,
+        &::GetEquipmentMaterialRewardRequest_globals_,
+        &::GetEquipmentMaterialRewardResponse_globals_,
+        &::ClaimEquipmentMaterialRewardRequest_globals_,
+        &::ClaimEquipmentMaterialRewardResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -7875,28 +8865,60 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "(\004\022\036\n\026current_forge_revision\030\010 \001(\004\022\025\n\003ba"
     "g\030\t \001(\0132\010.BagInfo\022\033\n\tequipment\030\n \001(\0132\010.B"
     "agInfo\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010REJECT"
-    "ED\020\001\022\013\n\007APPLIED\020\0022\250\006\n\024SceneBagClientPlay"
-    "er\022)\n\006GetBag\022\016.GetBagRequest\032\017.GetBagRes"
-    "ponse\022,\n\007SortBag\022\017.SortBagRequest\032\020.Sort"
-    "BagResponse\0222\n\tEquipItem\022\021.EquipItemRequ"
-    "est\032\022.EquipItemResponse\0228\n\013UnequipItem\022\023"
-    ".UnequipItemRequest\032\024.UnequipItemRespons"
-    "e\0228\n\013GmGrantItem\022\023.GmGrantItemRequest\032\024."
-    "GmGrantItemResponse\022;\n\014EnhanceEquip\022\024.En"
-    "hanceEquipRequest\032\025.EnhanceEquipResponse"
-    "\022/\n\010InlayGem\022\020.InlayGemRequest\032\021.InlayGe"
-    "mResponse\0222\n\tRemoveGem\022\021.RemoveGemReques"
-    "t\032\022.RemoveGemResponse\022Y\n\026RetrieveTempora"
-    "ryItems\022\036.RetrieveTemporaryItemsRequest\032"
-    "\037.RetrieveTemporaryItemsResponse\022Y\n\026GetE"
-    "quipmentCraftRules\022\036.GetEquipmentCraftRu"
-    "lesRequest\032\037.GetEquipmentCraftRulesRespo"
-    "nse\022V\n\025PreviewEquipmentCraft\022\035.PreviewEq"
-    "uipmentCraftRequest\032\036.PreviewEquipmentCr"
-    "aftResponse\022S\n\024CommitEquipmentCraft\022\034.Co"
-    "mmitEquipmentCraftRequest\032\035.CommitEquipm"
-    "entCraftResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001"
-    "\230\324a\003b\006proto3"
+    "ED\020\001\022\013\n\007APPLIED\020\002\"\352\002\n\037EquipmentMaterialR"
+    "ewardSnapshot\022\021\n\tavailable\030\001 \001(\010\022\032\n\022unav"
+    "ailable_reason\030\002 \001(\t\022\030\n\020day_starts_at_ms"
+    "\030\003 \001(\004\022\030\n\020next_reset_at_ms\030\004 \001(\004\022\024\n\014earn"
+    "ed_today\030\005 \001(\r\022\023\n\013daily_limit\030\006 \001(\r\022\027\n\017a"
+    "vailable_units\030\007 \001(\004\022\023\n\013batch_units\030\010 \001("
+    "\r\022\020\n\010revision\030\t \001(\004\0222\n\021crafting_material"
+    "\030\n \001(\0132\027.EquipmentCraftMaterial\0222\n\021enhan"
+    "cement_stone\030\013 \001(\0132\027.EquipmentCraftMater"
+    "ial\022\021\n\tcan_claim\030\014 \001(\010\"#\n!GetEquipmentMa"
+    "terialRewardRequest\"\200\001\n\"GetEquipmentMate"
+    "rialRewardResponse\022&\n\rerror_message\030\001 \001("
+    "\0132\017.TipInfoMessage\0222\n\010snapshot\030\002 \001(\0132 .E"
+    "quipmentMaterialRewardSnapshot\"\235\001\n#Claim"
+    "EquipmentMaterialRewardRequest\022\031\n\021client"
+    "_request_id\030\001 \001(\004\022\031\n\021expected_revision\030\002"
+    " \001(\004\022\037\n\027crafting_material_count\030\003 \001(\r\022\037\n"
+    "\027enhancement_stone_count\030\004 \001(\r\"\375\002\n$Claim"
+    "EquipmentMaterialRewardResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022\031\n\021clien"
+    "t_request_id\030\002 \001(\004\022>\n\007outcome\030\003 \001(\0162-.Cl"
+    "aimEquipmentMaterialRewardResponse.Outco"
+    "me\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005 \001(\010\022\027\n"
+    "\017result_revision\030\006 \001(\004\022\030\n\020current_revisi"
+    "on\030\007 \001(\004\022\025\n\003bag\030\010 \001(\0132\010.BagInfo\0222\n\010snaps"
+    "hot\030\t \001(\0132 .EquipmentMaterialRewardSnaps"
+    "hot\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010REJECTED\020"
+    "\001\022\013\n\007APPLIED\020\0022\374\007\n\024SceneBagClientPlayer\022"
+    ")\n\006GetBag\022\016.GetBagRequest\032\017.GetBagRespon"
+    "se\022,\n\007SortBag\022\017.SortBagRequest\032\020.SortBag"
+    "Response\0222\n\tEquipItem\022\021.EquipItemRequest"
+    "\032\022.EquipItemResponse\0228\n\013UnequipItem\022\023.Un"
+    "equipItemRequest\032\024.UnequipItemResponse\0228"
+    "\n\013GmGrantItem\022\023.GmGrantItemRequest\032\024.GmG"
+    "rantItemResponse\022;\n\014EnhanceEquip\022\024.Enhan"
+    "ceEquipRequest\032\025.EnhanceEquipResponse\022/\n"
+    "\010InlayGem\022\020.InlayGemRequest\032\021.InlayGemRe"
+    "sponse\0222\n\tRemoveGem\022\021.RemoveGemRequest\032\022"
+    ".RemoveGemResponse\022Y\n\026RetrieveTemporaryI"
+    "tems\022\036.RetrieveTemporaryItemsRequest\032\037.R"
+    "etrieveTemporaryItemsResponse\022Y\n\026GetEqui"
+    "pmentCraftRules\022\036.GetEquipmentCraftRules"
+    "Request\032\037.GetEquipmentCraftRulesResponse"
+    "\022V\n\025PreviewEquipmentCraft\022\035.PreviewEquip"
+    "mentCraftRequest\032\036.PreviewEquipmentCraft"
+    "Response\022S\n\024CommitEquipmentCraft\022\034.Commi"
+    "tEquipmentCraftRequest\032\035.CommitEquipment"
+    "CraftResponse\022e\n\032GetEquipmentMaterialRew"
+    "ard\022\".GetEquipmentMaterialRewardRequest\032"
+    "#.GetEquipmentMaterialRewardResponse\022k\n\034"
+    "ClaimEquipmentMaterialReward\022$.ClaimEqui"
+    "pmentMaterialRewardRequest\032%.ClaimEquipm"
+    "entMaterialRewardResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z"
+    "\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps[3] = {
@@ -7908,13 +8930,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto = {
     false,
     false,
-    6412,
+    7701,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto,
     "proto/scene/player_bag.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps,
     3,
-    40,
+    45,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fbag_2eproto::offsets,
@@ -7934,6 +8956,13 @@ CommitEquipmentCraftResponse_Outcome_descriptor() {
   return file_level_enum_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t CommitEquipmentCraftResponse_Outcome_internal_data_[] = {
+    196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ClaimEquipmentMaterialRewardResponse_Outcome_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto);
+  return file_level_enum_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[2];
+}
+PROTOBUF_CONSTINIT const uint32_t ClaimEquipmentMaterialRewardResponse_Outcome_internal_data_[] = {
     196608u, 0u, };
 // ===================================================================
 
@@ -20238,6 +21267,1521 @@ void CommitEquipmentCraftResponse::InternalSwap(CommitEquipmentCraftResponse* PR
 }
 // ===================================================================
 
+EquipmentMaterialRewardSnapshot::EquipmentMaterialRewardSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipmentMaterialRewardSnapshot_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:EquipmentMaterialRewardSnapshot)
+}
+PROTOBUF_NDEBUG_INLINE EquipmentMaterialRewardSnapshot::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::EquipmentMaterialRewardSnapshot& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        unavailable_reason_(arena, from.unavailable_reason_) {}
+
+EquipmentMaterialRewardSnapshot::EquipmentMaterialRewardSnapshot(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EquipmentMaterialRewardSnapshot& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipmentMaterialRewardSnapshot_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EquipmentMaterialRewardSnapshot* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.crafting_material_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.crafting_material_)
+                : nullptr;
+  _impl_.enhancement_stone_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.enhancement_stone_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, day_starts_at_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, day_starts_at_ms_),
+           offsetof(Impl_, revision_) -
+               offsetof(Impl_, day_starts_at_ms_) +
+               sizeof(Impl_::revision_));
+
+  // @@protoc_insertion_point(copy_constructor:EquipmentMaterialRewardSnapshot)
+}
+PROTOBUF_NDEBUG_INLINE EquipmentMaterialRewardSnapshot::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        unavailable_reason_(arena) {}
+
+inline void EquipmentMaterialRewardSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, crafting_material_),
+           0,
+           offsetof(Impl_, revision_) -
+               offsetof(Impl_, crafting_material_) +
+               sizeof(Impl_::revision_));
+}
+EquipmentMaterialRewardSnapshot::~EquipmentMaterialRewardSnapshot() {
+  // @@protoc_insertion_point(destructor:EquipmentMaterialRewardSnapshot)
+  SharedDtor(*this);
+}
+inline void EquipmentMaterialRewardSnapshot::SharedDtor(MessageLite& self) {
+  EquipmentMaterialRewardSnapshot& this_ = static_cast<EquipmentMaterialRewardSnapshot&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.unavailable_reason_.Destroy();
+  delete this_._impl_.crafting_material_;
+  delete this_._impl_.enhancement_stone_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EquipmentMaterialRewardSnapshot_class_data_ =
+        EquipmentMaterialRewardSnapshot::InternalGenerateClassData_(EquipmentMaterialRewardSnapshot_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipmentMaterialRewardSnapshot::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipmentMaterialRewardSnapshot_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EquipmentMaterialRewardSnapshot_class_data_.tc_table);
+  return EquipmentMaterialRewardSnapshot_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipmentMaterialRewardSnapshot::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipmentMaterialRewardSnapshot_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EquipmentMaterialRewardSnapshot_globals_));
+  return EquipmentMaterialRewardSnapshot_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EquipmentMaterialRewardSnapshot::ParseTableT_
+    EquipmentMaterialRewardSnapshot::_table_ =
+        EquipmentMaterialRewardSnapshot::InternalGenerateParseTable_(EquipmentMaterialRewardSnapshot_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EquipmentMaterialRewardSnapshot::Clear() {
+// @@protoc_insertion_point(message_clear_start:EquipmentMaterialRewardSnapshot)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.unavailable_reason_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.crafting_material_ != nullptr);
+      _impl_.crafting_material_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.enhancement_stone_ != nullptr);
+      _impl_.enhancement_stone_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.day_starts_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.available_units_) -
+        reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.available_units_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.available_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.revision_) -
+        reinterpret_cast<char*>(&_impl_.available_)) + sizeof(_impl_.revision_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EquipmentMaterialRewardSnapshot& this_ = static_cast<const EquipmentMaterialRewardSnapshot&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EquipmentMaterialRewardSnapshot& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:EquipmentMaterialRewardSnapshot)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool available = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_available() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_available(), target);
+    }
+  }
+
+  // string unavailable_reason = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_unavailable_reason().empty()) {
+      const ::std::string& _s = this_._internal_unavailable_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "EquipmentMaterialRewardSnapshot.unavailable_reason");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint64 day_starts_at_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_day_starts_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_day_starts_at_ms(), target);
+    }
+  }
+
+  // uint64 next_reset_at_ms = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_next_reset_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_next_reset_at_ms(), target);
+    }
+  }
+
+  // uint32 earned_today = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_earned_today() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_earned_today(), target);
+    }
+  }
+
+  // uint32 daily_limit = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_daily_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_daily_limit(), target);
+    }
+  }
+
+  // uint64 available_units = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_available_units() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_available_units(), target);
+    }
+  }
+
+  // uint32 batch_units = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_batch_units() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_batch_units(), target);
+    }
+  }
+
+  // uint64 revision = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_revision(), target);
+    }
+  }
+
+  // .EquipmentCraftMaterial crafting_material = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        10, *this_._impl_.crafting_material_, this_._impl_.crafting_material_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .EquipmentCraftMaterial enhancement_stone = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        11, *this_._impl_.enhancement_stone_, this_._impl_.enhancement_stone_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool can_claim = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_can_claim() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          12, this_._internal_can_claim(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:EquipmentMaterialRewardSnapshot)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EquipmentMaterialRewardSnapshot::ByteSizeLong(const MessageLite& base) {
+  const EquipmentMaterialRewardSnapshot& this_ = static_cast<const EquipmentMaterialRewardSnapshot&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EquipmentMaterialRewardSnapshot::ByteSizeLong() const {
+  const EquipmentMaterialRewardSnapshot& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:EquipmentMaterialRewardSnapshot)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string unavailable_reason = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_unavailable_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_unavailable_reason());
+      }
+    }
+    // .EquipmentCraftMaterial crafting_material = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.crafting_material_);
+    }
+    // .EquipmentCraftMaterial enhancement_stone = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.enhancement_stone_);
+    }
+    // uint64 day_starts_at_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_day_starts_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_day_starts_at_ms());
+      }
+    }
+    // uint64 next_reset_at_ms = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_next_reset_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_reset_at_ms());
+      }
+    }
+    // uint32 earned_today = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_earned_today() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_earned_today());
+      }
+    }
+    // uint32 daily_limit = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_daily_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_daily_limit());
+      }
+    }
+    // uint64 available_units = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_available_units() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_available_units());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    // bool available = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_available() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool can_claim = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_can_claim() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 batch_units = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_batch_units() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_batch_units());
+      }
+    }
+    // uint64 revision = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_revision());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EquipmentMaterialRewardSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EquipmentMaterialRewardSnapshot*>(&to_msg);
+  auto& from = static_cast<const EquipmentMaterialRewardSnapshot&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:EquipmentMaterialRewardSnapshot)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_unavailable_reason().empty()) {
+        _this->_internal_set_unavailable_reason(from._internal_unavailable_reason());
+      } else {
+        if (_this->_impl_.unavailable_reason_.IsDefault()) {
+          _this->_internal_set_unavailable_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.crafting_material_ != nullptr);
+      if (_this->_impl_.crafting_material_ == nullptr) {
+        _this->_impl_.crafting_material_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.crafting_material_);
+      } else {
+        _this->_impl_.crafting_material_->MergeFrom(*from._impl_.crafting_material_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.enhancement_stone_ != nullptr);
+      if (_this->_impl_.enhancement_stone_ == nullptr) {
+        _this->_impl_.enhancement_stone_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.enhancement_stone_);
+      } else {
+        _this->_impl_.enhancement_stone_->MergeFrom(*from._impl_.enhancement_stone_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_day_starts_at_ms() != 0) {
+        _this->_impl_.day_starts_at_ms_ = from._impl_.day_starts_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_next_reset_at_ms() != 0) {
+        _this->_impl_.next_reset_at_ms_ = from._impl_.next_reset_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_earned_today() != 0) {
+        _this->_impl_.earned_today_ = from._impl_.earned_today_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_daily_limit() != 0) {
+        _this->_impl_.daily_limit_ = from._impl_.daily_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_available_units() != 0) {
+        _this->_impl_.available_units_ = from._impl_.available_units_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_available() != 0) {
+        _this->_impl_.available_ = from._impl_.available_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_can_claim() != 0) {
+        _this->_impl_.can_claim_ = from._impl_.can_claim_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_batch_units() != 0) {
+        _this->_impl_.batch_units_ = from._impl_.batch_units_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_revision() != 0) {
+        _this->_impl_.revision_ = from._impl_.revision_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EquipmentMaterialRewardSnapshot::CopyFrom(const EquipmentMaterialRewardSnapshot& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:EquipmentMaterialRewardSnapshot)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EquipmentMaterialRewardSnapshot::InternalSwap(EquipmentMaterialRewardSnapshot* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.unavailable_reason_, &other->_impl_.unavailable_reason_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.revision_)
+      + sizeof(EquipmentMaterialRewardSnapshot::_impl_.revision_)
+      - PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardSnapshot, _impl_.crafting_material_)>(
+          reinterpret_cast<char*>(&_impl_.crafting_material_),
+          reinterpret_cast<char*>(&other->_impl_.crafting_material_));
+}
+
+::google::protobuf::Metadata EquipmentMaterialRewardSnapshot::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetEquipmentMaterialRewardRequest::GetEquipmentMaterialRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetEquipmentMaterialRewardRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:GetEquipmentMaterialRewardRequest)
+}
+GetEquipmentMaterialRewardRequest::GetEquipmentMaterialRewardRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetEquipmentMaterialRewardRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetEquipmentMaterialRewardRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetEquipmentMaterialRewardRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:GetEquipmentMaterialRewardRequest)
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetEquipmentMaterialRewardRequest_class_data_ =
+        GetEquipmentMaterialRewardRequest::InternalGenerateClassData_(GetEquipmentMaterialRewardRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetEquipmentMaterialRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetEquipmentMaterialRewardRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetEquipmentMaterialRewardRequest_class_data_.tc_table);
+  return GetEquipmentMaterialRewardRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetEquipmentMaterialRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetEquipmentMaterialRewardRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetEquipmentMaterialRewardRequest_globals_));
+  return GetEquipmentMaterialRewardRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetEquipmentMaterialRewardRequest::ParseTableT_
+    GetEquipmentMaterialRewardRequest::_table_ =
+        GetEquipmentMaterialRewardRequest::InternalGenerateParseTable_(GetEquipmentMaterialRewardRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+
+
+
+
+
+
+
+::google::protobuf::Metadata GetEquipmentMaterialRewardRequest::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetEquipmentMaterialRewardResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+GetEquipmentMaterialRewardResponse::GetEquipmentMaterialRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetEquipmentMaterialRewardResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:GetEquipmentMaterialRewardResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetEquipmentMaterialRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::GetEquipmentMaterialRewardResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+GetEquipmentMaterialRewardResponse::GetEquipmentMaterialRewardResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetEquipmentMaterialRewardResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetEquipmentMaterialRewardResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetEquipmentMaterialRewardResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.snapshot_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:GetEquipmentMaterialRewardResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetEquipmentMaterialRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetEquipmentMaterialRewardResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, snapshot_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::snapshot_));
+}
+GetEquipmentMaterialRewardResponse::~GetEquipmentMaterialRewardResponse() {
+  // @@protoc_insertion_point(destructor:GetEquipmentMaterialRewardResponse)
+  SharedDtor(*this);
+}
+inline void GetEquipmentMaterialRewardResponse::SharedDtor(MessageLite& self) {
+  GetEquipmentMaterialRewardResponse& this_ = static_cast<GetEquipmentMaterialRewardResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.snapshot_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetEquipmentMaterialRewardResponse_class_data_ =
+        GetEquipmentMaterialRewardResponse::InternalGenerateClassData_(GetEquipmentMaterialRewardResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetEquipmentMaterialRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetEquipmentMaterialRewardResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetEquipmentMaterialRewardResponse_class_data_.tc_table);
+  return GetEquipmentMaterialRewardResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetEquipmentMaterialRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetEquipmentMaterialRewardResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetEquipmentMaterialRewardResponse_globals_));
+  return GetEquipmentMaterialRewardResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetEquipmentMaterialRewardResponse::ParseTableT_
+    GetEquipmentMaterialRewardResponse::_table_ =
+        GetEquipmentMaterialRewardResponse::InternalGenerateParseTable_(GetEquipmentMaterialRewardResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetEquipmentMaterialRewardResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:GetEquipmentMaterialRewardResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.snapshot_ != nullptr);
+      _impl_.snapshot_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetEquipmentMaterialRewardResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetEquipmentMaterialRewardResponse& this_ = static_cast<const GetEquipmentMaterialRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetEquipmentMaterialRewardResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetEquipmentMaterialRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:GetEquipmentMaterialRewardResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .EquipmentMaterialRewardSnapshot snapshot = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.snapshot_, this_._impl_.snapshot_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:GetEquipmentMaterialRewardResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetEquipmentMaterialRewardResponse::ByteSizeLong(const MessageLite& base) {
+  const GetEquipmentMaterialRewardResponse& this_ = static_cast<const GetEquipmentMaterialRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetEquipmentMaterialRewardResponse::ByteSizeLong() const {
+  const GetEquipmentMaterialRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:GetEquipmentMaterialRewardResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .EquipmentMaterialRewardSnapshot snapshot = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.snapshot_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetEquipmentMaterialRewardResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetEquipmentMaterialRewardResponse*>(&to_msg);
+  auto& from = static_cast<const GetEquipmentMaterialRewardResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:GetEquipmentMaterialRewardResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.snapshot_ != nullptr);
+      if (_this->_impl_.snapshot_ == nullptr) {
+        _this->_impl_.snapshot_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_);
+      } else {
+        _this->_impl_.snapshot_->MergeFrom(*from._impl_.snapshot_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetEquipmentMaterialRewardResponse::CopyFrom(const GetEquipmentMaterialRewardResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:GetEquipmentMaterialRewardResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetEquipmentMaterialRewardResponse::InternalSwap(GetEquipmentMaterialRewardResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_.snapshot_)
+      + sizeof(GetEquipmentMaterialRewardResponse::_impl_.snapshot_)
+      - PROTOBUF_FIELD_OFFSET(GetEquipmentMaterialRewardResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GetEquipmentMaterialRewardResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimEquipmentMaterialRewardRequest::ClaimEquipmentMaterialRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimEquipmentMaterialRewardRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ClaimEquipmentMaterialRewardRequest)
+}
+ClaimEquipmentMaterialRewardRequest::ClaimEquipmentMaterialRewardRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimEquipmentMaterialRewardRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimEquipmentMaterialRewardRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ClaimEquipmentMaterialRewardRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimEquipmentMaterialRewardRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           0,
+           offsetof(Impl_, enhancement_stone_count_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::enhancement_stone_count_));
+}
+ClaimEquipmentMaterialRewardRequest::~ClaimEquipmentMaterialRewardRequest() {
+  // @@protoc_insertion_point(destructor:ClaimEquipmentMaterialRewardRequest)
+  SharedDtor(*this);
+}
+inline void ClaimEquipmentMaterialRewardRequest::SharedDtor(MessageLite& self) {
+  ClaimEquipmentMaterialRewardRequest& this_ = static_cast<ClaimEquipmentMaterialRewardRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimEquipmentMaterialRewardRequest_class_data_ =
+        ClaimEquipmentMaterialRewardRequest::InternalGenerateClassData_(ClaimEquipmentMaterialRewardRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimEquipmentMaterialRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimEquipmentMaterialRewardRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimEquipmentMaterialRewardRequest_class_data_.tc_table);
+  return ClaimEquipmentMaterialRewardRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimEquipmentMaterialRewardRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimEquipmentMaterialRewardRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimEquipmentMaterialRewardRequest_globals_));
+  return ClaimEquipmentMaterialRewardRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimEquipmentMaterialRewardRequest::ParseTableT_
+    ClaimEquipmentMaterialRewardRequest::_table_ =
+        ClaimEquipmentMaterialRewardRequest::InternalGenerateParseTable_(ClaimEquipmentMaterialRewardRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimEquipmentMaterialRewardRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:ClaimEquipmentMaterialRewardRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.enhancement_stone_count_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.enhancement_stone_count_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimEquipmentMaterialRewardRequest& this_ = static_cast<const ClaimEquipmentMaterialRewardRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimEquipmentMaterialRewardRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ClaimEquipmentMaterialRewardRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 client_request_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // uint64 expected_revision = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_expected_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_expected_revision(), target);
+    }
+  }
+
+  // uint32 crafting_material_count = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_crafting_material_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_crafting_material_count(), target);
+    }
+  }
+
+  // uint32 enhancement_stone_count = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_enhancement_stone_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_enhancement_stone_count(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ClaimEquipmentMaterialRewardRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimEquipmentMaterialRewardRequest::ByteSizeLong(const MessageLite& base) {
+  const ClaimEquipmentMaterialRewardRequest& this_ = static_cast<const ClaimEquipmentMaterialRewardRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimEquipmentMaterialRewardRequest::ByteSizeLong() const {
+  const ClaimEquipmentMaterialRewardRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ClaimEquipmentMaterialRewardRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 client_request_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint64 expected_revision = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_expected_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_revision());
+      }
+    }
+    // uint32 crafting_material_count = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_crafting_material_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_crafting_material_count());
+      }
+    }
+    // uint32 enhancement_stone_count = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_enhancement_stone_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_enhancement_stone_count());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimEquipmentMaterialRewardRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimEquipmentMaterialRewardRequest*>(&to_msg);
+  auto& from = static_cast<const ClaimEquipmentMaterialRewardRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:ClaimEquipmentMaterialRewardRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_expected_revision() != 0) {
+        _this->_impl_.expected_revision_ = from._impl_.expected_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_crafting_material_count() != 0) {
+        _this->_impl_.crafting_material_count_ = from._impl_.crafting_material_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_enhancement_stone_count() != 0) {
+        _this->_impl_.enhancement_stone_count_ = from._impl_.enhancement_stone_count_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimEquipmentMaterialRewardRequest::CopyFrom(const ClaimEquipmentMaterialRewardRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ClaimEquipmentMaterialRewardRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimEquipmentMaterialRewardRequest::InternalSwap(ClaimEquipmentMaterialRewardRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.enhancement_stone_count_)
+      + sizeof(ClaimEquipmentMaterialRewardRequest::_impl_.enhancement_stone_count_)
+      - PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardRequest, _impl_.client_request_id_)>(
+          reinterpret_cast<char*>(&_impl_.client_request_id_),
+          reinterpret_cast<char*>(&other->_impl_.client_request_id_));
+}
+
+::google::protobuf::Metadata ClaimEquipmentMaterialRewardRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ClaimEquipmentMaterialRewardResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ClaimEquipmentMaterialRewardResponse::ClaimEquipmentMaterialRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimEquipmentMaterialRewardResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:ClaimEquipmentMaterialRewardResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimEquipmentMaterialRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::ClaimEquipmentMaterialRewardResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ClaimEquipmentMaterialRewardResponse::ClaimEquipmentMaterialRewardResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ClaimEquipmentMaterialRewardResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimEquipmentMaterialRewardResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ClaimEquipmentMaterialRewardResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.bag_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_)
+                : nullptr;
+  _impl_.snapshot_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, client_request_id_),
+           offsetof(Impl_, current_revision_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::current_revision_));
+
+  // @@protoc_insertion_point(copy_constructor:ClaimEquipmentMaterialRewardResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimEquipmentMaterialRewardResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimEquipmentMaterialRewardResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, current_revision_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::current_revision_));
+}
+ClaimEquipmentMaterialRewardResponse::~ClaimEquipmentMaterialRewardResponse() {
+  // @@protoc_insertion_point(destructor:ClaimEquipmentMaterialRewardResponse)
+  SharedDtor(*this);
+}
+inline void ClaimEquipmentMaterialRewardResponse::SharedDtor(MessageLite& self) {
+  ClaimEquipmentMaterialRewardResponse& this_ = static_cast<ClaimEquipmentMaterialRewardResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.bag_;
+  delete this_._impl_.snapshot_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimEquipmentMaterialRewardResponse_class_data_ =
+        ClaimEquipmentMaterialRewardResponse::InternalGenerateClassData_(ClaimEquipmentMaterialRewardResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimEquipmentMaterialRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimEquipmentMaterialRewardResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimEquipmentMaterialRewardResponse_class_data_.tc_table);
+  return ClaimEquipmentMaterialRewardResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimEquipmentMaterialRewardResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimEquipmentMaterialRewardResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimEquipmentMaterialRewardResponse_globals_));
+  return ClaimEquipmentMaterialRewardResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimEquipmentMaterialRewardResponse::ParseTableT_
+    ClaimEquipmentMaterialRewardResponse::_table_ =
+        ClaimEquipmentMaterialRewardResponse::InternalGenerateParseTable_(ClaimEquipmentMaterialRewardResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimEquipmentMaterialRewardResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:ClaimEquipmentMaterialRewardResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.bag_ != nullptr);
+      _impl_.bag_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.snapshot_ != nullptr);
+      _impl_.snapshot_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.result_revision_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.result_revision_));
+  }
+  _impl_.current_revision_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimEquipmentMaterialRewardResponse& this_ = static_cast<const ClaimEquipmentMaterialRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimEquipmentMaterialRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:ClaimEquipmentMaterialRewardResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 client_request_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // .ClaimEquipmentMaterialRewardResponse.Outcome outcome = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_outcome() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          3, this_._internal_outcome(), target);
+    }
+  }
+
+  // bool durable = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_durable() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_durable(), target);
+    }
+  }
+
+  // bool replayed = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          5, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint64 result_revision = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_result_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_result_revision(), target);
+    }
+  }
+
+  // uint64 current_revision = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_current_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_current_revision(), target);
+    }
+  }
+
+  // .BagInfo bag = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        8, *this_._impl_.bag_, this_._impl_.bag_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .EquipmentMaterialRewardSnapshot snapshot = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        9, *this_._impl_.snapshot_, this_._impl_.snapshot_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:ClaimEquipmentMaterialRewardResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimEquipmentMaterialRewardResponse::ByteSizeLong(const MessageLite& base) {
+  const ClaimEquipmentMaterialRewardResponse& this_ = static_cast<const ClaimEquipmentMaterialRewardResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimEquipmentMaterialRewardResponse::ByteSizeLong() const {
+  const ClaimEquipmentMaterialRewardResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:ClaimEquipmentMaterialRewardResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .BagInfo bag = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.bag_);
+    }
+    // .EquipmentMaterialRewardSnapshot snapshot = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.snapshot_);
+    }
+    // uint64 client_request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // .ClaimEquipmentMaterialRewardResponse.Outcome outcome = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_outcome() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_outcome());
+      }
+    }
+    // bool durable = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_durable() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool replayed = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 result_revision = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_result_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_result_revision());
+      }
+    }
+  }
+   {
+    // uint64 current_revision = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_current_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_current_revision());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimEquipmentMaterialRewardResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimEquipmentMaterialRewardResponse*>(&to_msg);
+  auto& from = static_cast<const ClaimEquipmentMaterialRewardResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:ClaimEquipmentMaterialRewardResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.bag_ != nullptr);
+      if (_this->_impl_.bag_ == nullptr) {
+        _this->_impl_.bag_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_);
+      } else {
+        _this->_impl_.bag_->MergeFrom(*from._impl_.bag_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.snapshot_ != nullptr);
+      if (_this->_impl_.snapshot_ == nullptr) {
+        _this->_impl_.snapshot_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_);
+      } else {
+        _this->_impl_.snapshot_->MergeFrom(*from._impl_.snapshot_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_outcome() != 0) {
+        _this->_impl_.outcome_ = from._impl_.outcome_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_durable() != 0) {
+        _this->_impl_.durable_ = from._impl_.durable_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_result_revision() != 0) {
+        _this->_impl_.result_revision_ = from._impl_.result_revision_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_current_revision() != 0) {
+      _this->_impl_.current_revision_ = from._impl_.current_revision_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimEquipmentMaterialRewardResponse::CopyFrom(const ClaimEquipmentMaterialRewardResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:ClaimEquipmentMaterialRewardResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimEquipmentMaterialRewardResponse::InternalSwap(ClaimEquipmentMaterialRewardResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.current_revision_)
+      + sizeof(ClaimEquipmentMaterialRewardResponse::_impl_.current_revision_)
+      - PROTOBUF_FIELD_OFFSET(ClaimEquipmentMaterialRewardResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata ClaimEquipmentMaterialRewardResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL SceneBagClientPlayer::descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto);
   return file_level_service_descriptors_proto_2fscene_2fplayer_5fbag_2eproto[0];
@@ -20331,6 +22875,20 @@ void SceneBagClientPlayer::CommitEquipmentCraft(::google::protobuf::RpcControlle
   controller->SetFailed("Method CommitEquipmentCraft() not implemented.");
   done->Run();
 }
+void SceneBagClientPlayer::GetEquipmentMaterialReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL,
+                         ::GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method GetEquipmentMaterialReward() not implemented.");
+  done->Run();
+}
+void SceneBagClientPlayer::ClaimEquipmentMaterialReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL,
+                         ::ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method ClaimEquipmentMaterialReward() not implemented.");
+  done->Run();
+}
 
 void SceneBagClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -20387,6 +22945,14 @@ void SceneBagClientPlayer::CallMethod(
       this->CommitEquipmentCraft(controller, ::google::protobuf::DownCastMessage<::CommitEquipmentCraftRequest>(request),
                    ::google::protobuf::DownCastMessage<::CommitEquipmentCraftResponse>(response), done);
       break;
+    case 12:
+      this->GetEquipmentMaterialReward(controller, ::google::protobuf::DownCastMessage<::GetEquipmentMaterialRewardRequest>(request),
+                   ::google::protobuf::DownCastMessage<::GetEquipmentMaterialRewardResponse>(response), done);
+      break;
+    case 13:
+      this->ClaimEquipmentMaterialReward(controller, ::google::protobuf::DownCastMessage<::ClaimEquipmentMaterialRewardRequest>(request),
+                   ::google::protobuf::DownCastMessage<::ClaimEquipmentMaterialRewardResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -20422,6 +22988,10 @@ const ::google::protobuf::Message& SceneBagClientPlayer::GetRequestPrototype(
       return ::PreviewEquipmentCraftRequest::default_instance();
     case 11:
       return ::CommitEquipmentCraftRequest::default_instance();
+    case 12:
+      return ::GetEquipmentMaterialRewardRequest::default_instance();
+    case 13:
+      return ::ClaimEquipmentMaterialRewardRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -20458,6 +23028,10 @@ const ::google::protobuf::Message& SceneBagClientPlayer::GetResponsePrototype(
       return ::PreviewEquipmentCraftResponse::default_instance();
     case 11:
       return ::CommitEquipmentCraftResponse::default_instance();
+    case 12:
+      return ::GetEquipmentMaterialRewardResponse::default_instance();
+    case 13:
+      return ::ClaimEquipmentMaterialRewardResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -20561,6 +23135,20 @@ void SceneBagClientPlayer_Stub::CommitEquipmentCraft(
     const ::CommitEquipmentCraftRequest* PROTOBUF_NONNULL request, ::CommitEquipmentCraftResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(11), controller,
+                       request, response, done);
+}
+void SceneBagClientPlayer_Stub::GetEquipmentMaterialReward(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL request, ::GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(12), controller,
+                       request, response, done);
+}
+void SceneBagClientPlayer_Stub::ClaimEquipmentMaterialReward(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL request, ::ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(13), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

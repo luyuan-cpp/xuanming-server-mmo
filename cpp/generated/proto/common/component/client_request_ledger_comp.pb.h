@@ -69,6 +69,14 @@ extern const ::google::protobuf::internal::ClassDataFull ClientRequestRecord_cla
 #else
 extern const ClientRequestRecordGlobalsTypeInternal ClientRequestRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class EquipmentMaterialRewardLedger;
+struct EquipmentMaterialRewardLedgerGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EquipmentMaterialRewardLedgerGlobalsTypeInternal EquipmentMaterialRewardLedger_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EquipmentMaterialRewardLedger_class_data_;
+#else
+extern const EquipmentMaterialRewardLedgerGlobalsTypeInternal EquipmentMaterialRewardLedger_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -78,6 +86,243 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:EquipmentMaterialRewardLedger) */ {
+ public:
+  inline EquipmentMaterialRewardLedger() : EquipmentMaterialRewardLedger(nullptr) {}
+  ~EquipmentMaterialRewardLedger() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EquipmentMaterialRewardLedger* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EquipmentMaterialRewardLedger));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EquipmentMaterialRewardLedger(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EquipmentMaterialRewardLedger(const EquipmentMaterialRewardLedger& from) : EquipmentMaterialRewardLedger(nullptr, from) {}
+  inline EquipmentMaterialRewardLedger(EquipmentMaterialRewardLedger&& from) noexcept : EquipmentMaterialRewardLedger(nullptr, ::std::move(from)) {}
+  inline EquipmentMaterialRewardLedger& operator=(const EquipmentMaterialRewardLedger& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EquipmentMaterialRewardLedger& operator=(EquipmentMaterialRewardLedger&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EquipmentMaterialRewardLedger& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentMaterialRewardLedger>(&EquipmentMaterialRewardLedger_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(EquipmentMaterialRewardLedger& a, EquipmentMaterialRewardLedger& b) { a.Swap(&b); }
+  inline void Swap(EquipmentMaterialRewardLedger* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EquipmentMaterialRewardLedger* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EquipmentMaterialRewardLedger* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EquipmentMaterialRewardLedger>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EquipmentMaterialRewardLedger& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EquipmentMaterialRewardLedger& from) { EquipmentMaterialRewardLedger::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EquipmentMaterialRewardLedger* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "EquipmentMaterialRewardLedger"; }
+
+  explicit EquipmentMaterialRewardLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EquipmentMaterialRewardLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipmentMaterialRewardLedger& from);
+  EquipmentMaterialRewardLedger(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EquipmentMaterialRewardLedger&& from) noexcept
+      : EquipmentMaterialRewardLedger(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDayStartsAtMsFieldNumber = 1,
+    kAvailableUnitsFieldNumber = 3,
+    kRevisionFieldNumber = 4,
+    kEarnedTodayFieldNumber = 2,
+  };
+  // uint64 day_starts_at_ms = 1;
+  void clear_day_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t day_starts_at_ms() const;
+  void set_day_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_day_starts_at_ms() const;
+  void _internal_set_day_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint64 available_units = 3;
+  void clear_available_units() ;
+  [[nodiscard]] ::uint64_t available_units() const;
+  void set_available_units(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_available_units() const;
+  void _internal_set_available_units(::uint64_t value);
+
+  public:
+  // uint64 revision = 4;
+  void clear_revision() ;
+  [[nodiscard]] ::uint64_t revision() const;
+  void set_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_revision() const;
+  void _internal_set_revision(::uint64_t value);
+
+  public:
+  // uint32 earned_today = 2;
+  void clear_earned_today() ;
+  [[nodiscard]] ::uint32_t earned_today() const;
+  void set_earned_today(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_earned_today() const;
+  void _internal_set_earned_today(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:EquipmentMaterialRewardLedger)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EquipmentMaterialRewardLedger& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t day_starts_at_ms_;
+    ::uint64_t available_units_;
+    ::uint64_t revision_;
+    ::uint32_t earned_today_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public ::google::protobuf::Message
@@ -237,6 +482,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kCreatedSchemeIdFieldNumber = 7,
     kEquipmentItemIdFieldNumber = 8,
     kForgeRevisionFieldNumber = 9,
+    kMaterialRewardRevisionFieldNumber = 10,
+    kCraftingMaterialCountFieldNumber = 11,
+    kEnhancementStoneCountFieldNumber = 12,
   };
   // bytes fingerprint = 3;
   void clear_fingerprint() ;
@@ -333,11 +581,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_forge_revision(::uint64_t value);
 
   public:
+  // uint64 material_reward_revision = 10;
+  void clear_material_reward_revision() ;
+  [[nodiscard]] ::uint64_t material_reward_revision() const;
+  void set_material_reward_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_material_reward_revision() const;
+  void _internal_set_material_reward_revision(::uint64_t value);
+
+  public:
+  // uint32 crafting_material_count = 11;
+  void clear_crafting_material_count() ;
+  [[nodiscard]] ::uint32_t crafting_material_count() const;
+  void set_crafting_material_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_crafting_material_count() const;
+  void _internal_set_crafting_material_count(::uint32_t value);
+
+  public:
+  // uint32 enhancement_stone_count = 12;
+  void clear_enhancement_stone_count() ;
+  [[nodiscard]] ::uint32_t enhancement_stone_count() const;
+  void set_enhancement_stone_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_enhancement_stone_count() const;
+  void _internal_set_enhancement_stone_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClientRequestRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -375,6 +653,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint32_t created_scheme_id_;
     ::uint64_t equipment_item_id_;
     ::uint64_t forge_revision_;
+    ::uint64_t material_reward_revision_;
+    ::uint32_t crafting_material_count_;
+    ::uint32_t enhancement_stone_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -438,7 +719,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   [[nodiscard]] static const ClientRequestLedgerComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClientRequestLedgerComp>(&ClientRequestLedgerComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(ClientRequestLedgerComp& a, ClientRequestLedgerComp& b) { a.Swap(&b); }
   inline void Swap(ClientRequestLedgerComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -531,6 +812,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   // accessors -------------------------------------------------------
   enum : int {
     kRecordsFieldNumber = 1,
+    kMaterialRewardFieldNumber = 4,
     kNextSeqFieldNumber = 2,
     kForgeRevisionFieldNumber = 3,
   };
@@ -553,6 +835,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   private:
   const ::google::protobuf::RepeatedPtrField<::ClientRequestRecord>& _internal_records() const;
   ::google::protobuf::RepeatedPtrField<::ClientRequestRecord>* PROTOBUF_NONNULL _internal_mutable_records();
+
+  public:
+  // .EquipmentMaterialRewardLedger material_reward = 4;
+  [[nodiscard]] bool has_material_reward()
+      const;
+  void clear_material_reward() ;
+  [[nodiscard]] const ::EquipmentMaterialRewardLedger& material_reward() const;
+  [[nodiscard]] ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE release_material_reward();
+  ::EquipmentMaterialRewardLedger* PROTOBUF_NONNULL mutable_material_reward();
+  void set_allocated_material_reward(::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_material_reward(::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE value);
+  ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE unsafe_arena_release_material_reward();
+
+  private:
+  const ::EquipmentMaterialRewardLedger& _internal_material_reward() const;
+  ::EquipmentMaterialRewardLedger* PROTOBUF_NONNULL _internal_mutable_material_reward();
 
   public:
   // uint64 next_seq = 2;
@@ -579,8 +877,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -609,6 +907,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::ClientRequestRecord > records_;
+    ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE material_reward_;
     ::uint64_t next_seq_;
     ::uint64_t forge_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -889,6 +1188,178 @@ inline void ClientRequestRecord::_internal_set_forge_revision(::uint64_t value) 
   _impl_.forge_revision_ = value;
 }
 
+// uint64 material_reward_revision = 10;
+inline void ClientRequestRecord::clear_material_reward_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_reward_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t ClientRequestRecord::material_reward_revision() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.material_reward_revision)
+  return _internal_material_reward_revision();
+}
+inline void ClientRequestRecord::set_material_reward_revision(::uint64_t value) {
+  _internal_set_material_reward_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.material_reward_revision)
+}
+inline ::uint64_t ClientRequestRecord::_internal_material_reward_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.material_reward_revision_;
+}
+inline void ClientRequestRecord::_internal_set_material_reward_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.material_reward_revision_ = value;
+}
+
+// uint32 crafting_material_count = 11;
+inline void ClientRequestRecord::clear_crafting_material_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafting_material_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t ClientRequestRecord::crafting_material_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.crafting_material_count)
+  return _internal_crafting_material_count();
+}
+inline void ClientRequestRecord::set_crafting_material_count(::uint32_t value) {
+  _internal_set_crafting_material_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.crafting_material_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_crafting_material_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafting_material_count_;
+}
+inline void ClientRequestRecord::_internal_set_crafting_material_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafting_material_count_ = value;
+}
+
+// uint32 enhancement_stone_count = 12;
+inline void ClientRequestRecord::clear_enhancement_stone_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhancement_stone_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t ClientRequestRecord::enhancement_stone_count() const {
+  // @@protoc_insertion_point(field_get:ClientRequestRecord.enhancement_stone_count)
+  return _internal_enhancement_stone_count();
+}
+inline void ClientRequestRecord::set_enhancement_stone_count(::uint32_t value) {
+  _internal_set_enhancement_stone_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:ClientRequestRecord.enhancement_stone_count)
+}
+inline ::uint32_t ClientRequestRecord::_internal_enhancement_stone_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enhancement_stone_count_;
+}
+inline void ClientRequestRecord::_internal_set_enhancement_stone_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhancement_stone_count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// EquipmentMaterialRewardLedger
+
+// uint64 day_starts_at_ms = 1;
+inline void EquipmentMaterialRewardLedger::clear_day_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::day_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.day_starts_at_ms)
+  return _internal_day_starts_at_ms();
+}
+inline void EquipmentMaterialRewardLedger::set_day_starts_at_ms(::uint64_t value) {
+  _internal_set_day_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.day_starts_at_ms)
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::_internal_day_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.day_starts_at_ms_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_day_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = value;
+}
+
+// uint32 earned_today = 2;
+inline void EquipmentMaterialRewardLedger::clear_earned_today() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_today_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::earned_today() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.earned_today)
+  return _internal_earned_today();
+}
+inline void EquipmentMaterialRewardLedger::set_earned_today(::uint32_t value) {
+  _internal_set_earned_today(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.earned_today)
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::_internal_earned_today() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.earned_today_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_earned_today(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_today_ = value;
+}
+
+// uint64 available_units = 3;
+inline void EquipmentMaterialRewardLedger::clear_available_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_units_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::available_units() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.available_units)
+  return _internal_available_units();
+}
+inline void EquipmentMaterialRewardLedger::set_available_units(::uint64_t value) {
+  _internal_set_available_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.available_units)
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::_internal_available_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.available_units_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_available_units(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_units_ = value;
+}
+
+// uint64 revision = 4;
+inline void EquipmentMaterialRewardLedger::clear_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::revision() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.revision)
+  return _internal_revision();
+}
+inline void EquipmentMaterialRewardLedger::set_revision(::uint64_t value) {
+  _internal_set_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.revision)
+}
+inline ::uint64_t EquipmentMaterialRewardLedger::_internal_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.revision_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // ClientRequestLedgerComp
@@ -952,7 +1423,7 @@ ClientRequestLedgerComp::_internal_mutable_records() {
 inline void ClientRequestLedgerComp::clear_next_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t ClientRequestLedgerComp::next_seq() const {
   // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.next_seq)
@@ -960,7 +1431,7 @@ inline ::uint64_t ClientRequestLedgerComp::next_seq() const {
 }
 inline void ClientRequestLedgerComp::set_next_seq(::uint64_t value) {
   _internal_set_next_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:ClientRequestLedgerComp.next_seq)
 }
 inline ::uint64_t ClientRequestLedgerComp::_internal_next_seq() const {
@@ -976,7 +1447,7 @@ inline void ClientRequestLedgerComp::_internal_set_next_seq(::uint64_t value) {
 inline void ClientRequestLedgerComp::clear_forge_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.forge_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t ClientRequestLedgerComp::forge_revision() const {
   // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.forge_revision)
@@ -984,7 +1455,7 @@ inline ::uint64_t ClientRequestLedgerComp::forge_revision() const {
 }
 inline void ClientRequestLedgerComp::set_forge_revision(::uint64_t value) {
   _internal_set_forge_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:ClientRequestLedgerComp.forge_revision)
 }
 inline ::uint64_t ClientRequestLedgerComp::_internal_forge_revision() const {
@@ -994,6 +1465,104 @@ inline ::uint64_t ClientRequestLedgerComp::_internal_forge_revision() const {
 inline void ClientRequestLedgerComp::_internal_set_forge_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.forge_revision_ = value;
+}
+
+// .EquipmentMaterialRewardLedger material_reward = 4;
+inline bool ClientRequestLedgerComp::has_material_reward() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.material_reward_ != nullptr);
+  return value;
+}
+inline void ClientRequestLedgerComp::clear_material_reward() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.material_reward_ != nullptr) _impl_.material_reward_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::EquipmentMaterialRewardLedger& ClientRequestLedgerComp::_internal_material_reward() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::EquipmentMaterialRewardLedger* p = _impl_.material_reward_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::EquipmentMaterialRewardLedger>(&::EquipmentMaterialRewardLedger_globals_);
+}
+inline const ::EquipmentMaterialRewardLedger& ClientRequestLedgerComp::material_reward() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.material_reward)
+  return _internal_material_reward();
+}
+inline void ClientRequestLedgerComp::unsafe_arena_set_allocated_material_reward(
+    ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.material_reward_);
+  }
+  _impl_.material_reward_ = reinterpret_cast<::EquipmentMaterialRewardLedger*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClientRequestLedgerComp.material_reward)
+}
+inline ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE ClientRequestLedgerComp::release_material_reward() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentMaterialRewardLedger* released = _impl_.material_reward_;
+  _impl_.material_reward_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE ClientRequestLedgerComp::unsafe_arena_release_material_reward() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClientRequestLedgerComp.material_reward)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentMaterialRewardLedger* temp = _impl_.material_reward_;
+  _impl_.material_reward_ = nullptr;
+  return temp;
+}
+inline ::EquipmentMaterialRewardLedger* PROTOBUF_NONNULL ClientRequestLedgerComp::_internal_mutable_material_reward() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.material_reward_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::EquipmentMaterialRewardLedger>(GetArena());
+    _impl_.material_reward_ = reinterpret_cast<::EquipmentMaterialRewardLedger*>(p);
+  }
+  return _impl_.material_reward_;
+}
+inline ::EquipmentMaterialRewardLedger* PROTOBUF_NONNULL ClientRequestLedgerComp::mutable_material_reward()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentMaterialRewardLedger* _msg = _internal_mutable_material_reward();
+  // @@protoc_insertion_point(field_mutable:ClientRequestLedgerComp.material_reward)
+  return _msg;
+}
+inline void ClientRequestLedgerComp::set_allocated_material_reward(::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.material_reward_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.material_reward_ = reinterpret_cast<::EquipmentMaterialRewardLedger*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ClientRequestLedgerComp.material_reward)
 }
 
 #ifdef __GNUC__

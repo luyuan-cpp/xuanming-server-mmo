@@ -36,13 +36,15 @@ SQL 沿用 `sql_boot_catalog_docker.ps1`、正式 `mail -migrate` 和 `writer_au
 
 邮件密钥单项草案已由 `scene-deploy.py` 的完整方案取代：最终一次只重建 Scene，同时接入新 GM 二进制、独立 `MMORPG_GM_PLAYER_COMMAND_SECRET`、现有邮件附件密钥及 `127.0.0.1:2355 → 50001`。`20001` 是 RPC0，不是 gRPC。当前 etcd 注册核实 nodeId=1。准备、构建、审阅和执行分开；prepare 已完成，正式 Linux 构建单独留回执，尚未进行 stage 或重启。
 
-**当前不能直接 stage/apply。** 用户已明确选择先完成 GM 代码和构建，Scene 等装备、技能统一验收后再重建。旧手绘表目录缺少新节点必读的 `equipartifact.json`、`equipv1affix.json`，直接挂载会在 `File2String` 中 `LOG_FATAL`；本轮不修改表快照、manifest 或 Compose。新增只读覆盖门禁会在 stage/apply 写配置之前拒绝缺表，并给出审阅清单 `build/verification/gm-admin-20261117/scene/table-compatibility-review.json`。下面是后续统一验收后的计划入口，不是本轮发布指令。表覆盖通过本身也不等于装备/技能已验收。
+**当前不能直接 stage/apply。** 用户已明确选择先完成 GM 代码和构建，Scene 等装备、技能统一验收后再重建。旧手绘表目录缺少新节点必读的 `equipartifact.json`、`equipv1affix.json`，直接挂载会在 `File2String` 中 `LOG_FATAL`；本轮不修改表快照、manifest 或 Compose。新增只读覆盖门禁会在 stage/apply 写配置之前拒绝缺表。成功构建批次的审阅清单是 `build/verification/gm-admin-20261117/scene/table-compatibility-review-retry.json`，原 `table-compatibility-review.json` 保留为首次调查证据；两批表内容相同，重试报告重新绑定成功批次的完整源码摘要和冻结表路径。下面是后续统一验收后的计划入口，不是本轮发布指令。表覆盖通过本身也不等于装备/技能已验收。
+
+正式 Linux 重试已通过，结果位于 `scene/cpp-build-retry/result.json`，gate、scene、battle 来自同一镜像；构建后的 SDK 和全量源码守卫均通过。`scene/build-verification.json` 进一步核对三节点和分离调试符号共六项产物摘要、同批表审阅及原运行栈身份/状态；没有 stage、重建 Scene 或玩家资产操作。首次 `scene/cpp-build/result.json` 因构建期间并行装备源码变化而失败，原失败证据完整保留，不能用于发布。
 
 ```powershell
 python -X utf8 -B deploy/gm-admin/scene-deploy.py prepare
-# 待 C++ 构建槽释放与源码冻结，执行 scene/plan.json 内 buildCommand。
+# 本轮构建已完成；后续源码变化须另建输出目录，重新执行正式构建器。
 # 正式构建器仍统一封存、验证 SDK 并构建 gate/scene/battle；只交付 Scene 容器。
-python -X utf8 -B deploy/gm-admin/scene-deploy.py stage --build-result build/verification/gm-admin-20261117/scene/cpp-build/result.json
+python -X utf8 -B deploy/gm-admin/scene-deploy.py stage --build-result build/verification/gm-admin-20261117/scene/cpp-build-retry/result.json
 # 审阅 scene/review.patch、promotion.json、plan.json 后，由主线释放执行。
 python -X utf8 -B deploy/gm-admin/scene-deploy.py apply --execute
 ```

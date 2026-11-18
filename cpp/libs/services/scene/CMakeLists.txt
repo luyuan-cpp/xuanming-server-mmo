@@ -124,6 +124,7 @@ set(SOURCE_FILES
     player/system/player_pet.cpp
     player/system/player_equip.cpp
     player/system/player_equipment_v1.cpp
+    player/system/player_equipment_material_reward.cpp
     player/system/player_mystery_merchant.cpp
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp

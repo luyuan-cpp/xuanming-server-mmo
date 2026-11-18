@@ -50,6 +50,12 @@ public:
     static void CommitEquipmentCraft(entt::entity player,
         const ::CommitEquipmentCraftRequest* request,
         ::CommitEquipmentCraftResponse* response);
+    static void GetEquipmentMaterialReward(entt::entity player,
+        const ::GetEquipmentMaterialRewardRequest* request,
+        ::GetEquipmentMaterialRewardResponse* response);
+    static void ClaimEquipmentMaterialReward(entt::entity player,
+        const ::ClaimEquipmentMaterialRewardRequest* request,
+        ::ClaimEquipmentMaterialRewardResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -164,6 +170,24 @@ public:
             CommitEquipmentCraft(player,
                 static_cast<const ::CommitEquipmentCraftRequest*>(request),
                 static_cast<::CommitEquipmentCraftResponse*>(response));
+			}
+            break;
+        case 12:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::GetEquipmentMaterialRewardResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            GetEquipmentMaterialReward(player,
+                static_cast<const ::GetEquipmentMaterialRewardRequest*>(request),
+                static_cast<::GetEquipmentMaterialRewardResponse*>(response));
+			}
+            break;
+        case 13:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ClaimEquipmentMaterialRewardResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ClaimEquipmentMaterialReward(player,
+                static_cast<const ::ClaimEquipmentMaterialRewardRequest*>(request),
+                static_cast<::ClaimEquipmentMaterialRewardResponse*>(response));
 			}
             break;
         default:

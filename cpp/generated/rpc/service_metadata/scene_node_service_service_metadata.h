@@ -42,3 +42,7 @@ constexpr uint32_t SceneNodeGrpcAssetCreditIndex = 8;
 constexpr uint32_t SceneNodeGrpcAssetAckReceiptMessageId = 270;
 constexpr uint32_t SceneNodeGrpcAssetAckReceiptIndex = 9;
 #define SceneNodeGrpcAssetAckReceiptMethod  ::SceneNodeGrpc_Stub::descriptor()->method(9)
+
+constexpr uint32_t SceneNodeGrpcGmExecutePlayerCommandMessageId = 409;
+constexpr uint32_t SceneNodeGrpcGmExecutePlayerCommandIndex = 10;
+#define SceneNodeGrpcGmExecutePlayerCommandMethod  ::SceneNodeGrpc_Stub::descriptor()->method(10)

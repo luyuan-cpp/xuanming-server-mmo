@@ -306,6 +306,14 @@ state=bootstrap
 1=EquipFixedAffix#1 optional uint32 slot
 1=EquipFixedAffix#2 optional uint32 affix_id
 1=EquipInstanceData#4 repeated EquipFixedAffix fixed_affixes
+1=ClientRequestLedgerComp#4 optional EquipmentMaterialRewardLedger material_reward
+1=ClientRequestRecord#10 optional uint64 material_reward_revision
+1=ClientRequestRecord#11 optional uint32 crafting_material_count
+1=ClientRequestRecord#12 optional uint32 enhancement_stone_count
+1=EquipmentMaterialRewardLedger#1 optional uint64 day_starts_at_ms
+1=EquipmentMaterialRewardLedger#2 optional uint32 earned_today
+1=EquipmentMaterialRewardLedger#3 optional uint64 available_units
+1=EquipmentMaterialRewardLedger#4 optional uint64 revision
 
 retired=player_database#10
 retired=player_database#17

@@ -111,6 +111,7 @@
     <ClInclude Include="player\system\mystery_merchant_rules.h" />
     <ClInclude Include="player\system\player_equip.h" />
     <ClInclude Include="player\system\player_equipment_v1.h" />
+    <ClInclude Include="player\system\player_equipment_material_reward.h" />
     <ClInclude Include="player\system\player_mystery_merchant.h" />
     <ClInclude Include="player\system\player_level_rules.h" />
     <ClInclude Include="player\system\stress_test_probe.h" />
@@ -196,6 +197,7 @@
     <ClCompile Include="player\system\player_pet.cpp" />
     <ClCompile Include="player\system\player_equip.cpp" />
     <ClCompile Include="player\system\player_equipment_v1.cpp" />
+    <ClCompile Include="player\system\player_equipment_material_reward.cpp" />
     <ClCompile Include="player\system\player_mystery_merchant.cpp" />
     <ClCompile Include="player\system\player_tip.cpp" />
     <ClCompile Include="player\system\stress_test_probe.cpp" />

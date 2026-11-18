@@ -33,11 +33,16 @@ type ClientRequestRecord struct {
 	// 账本内单调递增的序号(从 1 起),只用来挑最旧的那条淘汰。records 的下标不承载顺序(AGENTS §11.6)。
 	Seq uint64 `protobuf:"varint,4,opt,name=seq,proto3" json:"seq,omitempty"`
 	// ── 首次结果里,重放要回、却从当前状态推不出来的部分。只对注释里的种类有意义,其余保持默认值 ──
-	EnhanceSuccess  bool   `protobuf:"varint,5,opt,name=enhance_success,json=enhanceSuccess,proto3" json:"enhance_success,omitempty"`      // 强化:那一次掷骰成没成
-	EnhanceLevel    uint32 `protobuf:"varint,6,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`            // 强化:那一次之后的等级
-	CreatedSchemeId uint32 `protobuf:"varint,7,opt,name=created_scheme_id,json=createdSchemeId,proto3" json:"created_scheme_id,omitempty"` // 新建加点方案:那一次建出来的方案号
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	EnhanceSuccess         bool   `protobuf:"varint,5,opt,name=enhance_success,json=enhanceSuccess,proto3" json:"enhance_success,omitempty"`                            // 强化:那一次掷骰成没成
+	EnhanceLevel           uint32 `protobuf:"varint,6,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`                                  // 强化:那一次之后的等级
+	CreatedSchemeId        uint32 `protobuf:"varint,7,opt,name=created_scheme_id,json=createdSchemeId,proto3" json:"created_scheme_id,omitempty"`                       // 新建加点方案:那一次建出来的方案号
+	EquipmentItemId        uint64 `protobuf:"varint,8,opt,name=equipment_item_id,json=equipmentItemId,proto3" json:"equipment_item_id,omitempty"`                       // 装备打造/装条：首次成功对应的实例。
+	ForgeRevision          uint64 `protobuf:"varint,9,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`                               // 装备打造/装条：首次成功后的业务水位。
+	MaterialRewardRevision uint64 `protobuf:"varint,10,opt,name=material_reward_revision,json=materialRewardRevision,proto3" json:"material_reward_revision,omitempty"` // 材料自选：首次成功后的独立水位。
+	CraftingMaterialCount  uint32 `protobuf:"varint,11,opt,name=crafting_material_count,json=craftingMaterialCount,proto3" json:"crafting_material_count,omitempty"`    // 材料自选首次实际领取的打造材料数。
+	EnhancementStoneCount  uint32 `protobuf:"varint,12,opt,name=enhancement_stone_count,json=enhancementStoneCount,proto3" json:"enhancement_stone_count,omitempty"`    // 材料自选首次实际领取的强化石数。
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ClientRequestRecord) Reset() {
@@ -119,19 +124,128 @@ func (x *ClientRequestRecord) GetCreatedSchemeId() uint32 {
 	return 0
 }
 
+func (x *ClientRequestRecord) GetEquipmentItemId() uint64 {
+	if x != nil {
+		return x.EquipmentItemId
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetForgeRevision() uint64 {
+	if x != nil {
+		return x.ForgeRevision
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetMaterialRewardRevision() uint64 {
+	if x != nil {
+		return x.MaterialRewardRevision
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetCraftingMaterialCount() uint32 {
+	if x != nil {
+		return x.CraftingMaterialCount
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetEnhancementStoneCount() uint32 {
+	if x != nil {
+		return x.EnhancementStoneCount
+	}
+	return 0
+}
+
+// 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随游戏日重置。
+// 来源防重由战斗收件箱的永久消费水位负责；不能用近期结果列表充当去重账本。
+type EquipmentMaterialRewardLedger struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DayStartsAtMs  uint64                 `protobuf:"varint,1,opt,name=day_starts_at_ms,json=dayStartsAtMs,proto3" json:"day_starts_at_ms,omitempty"` // 首次应用结算所属游戏日：UTC+8每日05:00。
+	EarnedToday    uint32                 `protobuf:"varint,2,opt,name=earned_today,json=earnedToday,proto3" json:"earned_today,omitempty"`
+	AvailableUnits uint64                 `protobuf:"varint,3,opt,name=available_units,json=availableUnits,proto3" json:"available_units,omitempty"`
+	Revision       uint64                 `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"` // 仅成功领取+1；入账不改变领取水位，饱和时拒绝领取，永不回退。
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *EquipmentMaterialRewardLedger) Reset() {
+	*x = EquipmentMaterialRewardLedger{}
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipmentMaterialRewardLedger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipmentMaterialRewardLedger) ProtoMessage() {}
+
+func (x *EquipmentMaterialRewardLedger) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipmentMaterialRewardLedger.ProtoReflect.Descriptor instead.
+func (*EquipmentMaterialRewardLedger) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *EquipmentMaterialRewardLedger) GetDayStartsAtMs() uint64 {
+	if x != nil {
+		return x.DayStartsAtMs
+	}
+	return 0
+}
+
+func (x *EquipmentMaterialRewardLedger) GetEarnedToday() uint32 {
+	if x != nil {
+		return x.EarnedToday
+	}
+	return 0
+}
+
+func (x *EquipmentMaterialRewardLedger) GetAvailableUnits() uint64 {
+	if x != nil {
+		return x.AvailableUnits
+	}
+	return 0
+}
+
+func (x *EquipmentMaterialRewardLedger) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
 type ClientRequestLedgerComp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 条目之间无序,按 key 找;同一个 key 至多一条。
 	Records []*ClientRequestRecord `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
 	// 下一条的 seq。0 = 从没记过(旧存档没有这个字段),按 1 处理。
-	NextSeq       uint64 `protobuf:"varint,2,opt,name=next_seq,json=nextSeq,proto3" json:"next_seq,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	NextSeq uint64 `protobuf:"varint,2,opt,name=next_seq,json=nextSeq,proto3" json:"next_seq,omitempty"`
+	// 装备打造/首次装词条共用的持久防重水位，初始0，每次成功+1；饱和时拒绝。
+	// 与records的淘汰序号独立；即使旧回执被淘汰，旧水位请求也不能再次扣料或造物。
+	ForgeRevision  uint64                         `protobuf:"varint,3,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`
+	MaterialReward *EquipmentMaterialRewardLedger `protobuf:"bytes,4,opt,name=material_reward,json=materialReward,proto3" json:"material_reward,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ClientRequestLedgerComp) Reset() {
 	*x = ClientRequestLedgerComp{}
-	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -143,7 +257,7 @@ func (x *ClientRequestLedgerComp) String() string {
 func (*ClientRequestLedgerComp) ProtoMessage() {}
 
 func (x *ClientRequestLedgerComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -156,7 +270,7 @@ func (x *ClientRequestLedgerComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientRequestLedgerComp.ProtoReflect.Descriptor instead.
 func (*ClientRequestLedgerComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ClientRequestLedgerComp) GetRecords() []*ClientRequestRecord {
@@ -173,11 +287,25 @@ func (x *ClientRequestLedgerComp) GetNextSeq() uint64 {
 	return 0
 }
 
+func (x *ClientRequestLedgerComp) GetForgeRevision() uint64 {
+	if x != nil {
+		return x.ForgeRevision
+	}
+	return 0
+}
+
+func (x *ClientRequestLedgerComp) GetMaterialReward() *EquipmentMaterialRewardLedger {
+	if x != nil {
+		return x.MaterialReward
+	}
+	return nil
+}
+
 var File_proto_common_component_client_request_ledger_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" +
 	"\n" +
-	"7proto/common/component/client_request_ledger_comp.proto\"\xe9\x01\n" +
+	"7proto/common/component/client_request_ledger_comp.proto\"\xe6\x03\n" +
 	"\x13ClientRequestRecord\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12 \n" +
@@ -185,10 +313,23 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x03seq\x18\x04 \x01(\x04R\x03seq\x12'\n" +
 	"\x0fenhance_success\x18\x05 \x01(\bR\x0eenhanceSuccess\x12#\n" +
 	"\renhance_level\x18\x06 \x01(\rR\fenhanceLevel\x12*\n" +
-	"\x11created_scheme_id\x18\a \x01(\rR\x0fcreatedSchemeId\"d\n" +
+	"\x11created_scheme_id\x18\a \x01(\rR\x0fcreatedSchemeId\x12*\n" +
+	"\x11equipment_item_id\x18\b \x01(\x04R\x0fequipmentItemId\x12%\n" +
+	"\x0eforge_revision\x18\t \x01(\x04R\rforgeRevision\x128\n" +
+	"\x18material_reward_revision\x18\n" +
+	" \x01(\x04R\x16materialRewardRevision\x126\n" +
+	"\x17crafting_material_count\x18\v \x01(\rR\x15craftingMaterialCount\x126\n" +
+	"\x17enhancement_stone_count\x18\f \x01(\rR\x15enhancementStoneCount\"\xb0\x01\n" +
+	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
+	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
+	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +
+	"\x0favailable_units\x18\x03 \x01(\x04R\x0eavailableUnits\x12\x1a\n" +
+	"\brevision\x18\x04 \x01(\x04R\brevision\"\xd4\x01\n" +
 	"\x17ClientRequestLedgerComp\x12.\n" +
 	"\arecords\x18\x01 \x03(\v2\x14.ClientRequestRecordR\arecords\x12\x19\n" +
-	"\bnext_seq\x18\x02 \x01(\x04R\anextSeqB\x18Z\x16proto/common/componentb\x06proto3"
+	"\bnext_seq\x18\x02 \x01(\x04R\anextSeq\x12%\n" +
+	"\x0eforge_revision\x18\x03 \x01(\x04R\rforgeRevision\x12G\n" +
+	"\x0fmaterial_reward\x18\x04 \x01(\v2\x1e.EquipmentMaterialRewardLedgerR\x0ematerialRewardB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_client_request_ledger_comp_proto_rawDescOnce sync.Once
@@ -202,18 +343,20 @@ func file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP() 
 	return file_proto_common_component_client_request_ledger_comp_proto_rawDescData
 }
 
-var file_proto_common_component_client_request_ledger_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_common_component_client_request_ledger_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_common_component_client_request_ledger_comp_proto_goTypes = []any{
-	(*ClientRequestRecord)(nil),     // 0: ClientRequestRecord
-	(*ClientRequestLedgerComp)(nil), // 1: ClientRequestLedgerComp
+	(*ClientRequestRecord)(nil),           // 0: ClientRequestRecord
+	(*EquipmentMaterialRewardLedger)(nil), // 1: EquipmentMaterialRewardLedger
+	(*ClientRequestLedgerComp)(nil),       // 2: ClientRequestLedgerComp
 }
 var file_proto_common_component_client_request_ledger_comp_proto_depIdxs = []int32{
 	0, // 0: ClientRequestLedgerComp.records:type_name -> ClientRequestRecord
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	1, // 1: ClientRequestLedgerComp.material_reward:type_name -> EquipmentMaterialRewardLedger
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_client_request_ledger_comp_proto_init() }
@@ -227,7 +370,7 @@ func file_proto_common_component_client_request_ledger_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_client_request_ledger_comp_proto_rawDesc), len(file_proto_common_component_client_request_ledger_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

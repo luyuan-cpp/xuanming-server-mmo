@@ -34362,3 +34362,34 @@ Windows modules、scene及bag_test按/m:1构建和完整裸指针门禁通过；
 - 共享scene/battle法宝参数与词条来源上限校验，防止无效配置被打造后拒绝入战；补齐配置热更指纹、A26完整施放方快照、旧盾序列、主目标失效和状态重排边界。新增21项打造与36项战斗测试源码，客户端追加4项协议/回放测试源码。
 - 协议、配表及CMake/工程登记完成生成同步；静态差异与项目登记核对记录在build/verification/equipment-complete-20261117/final-static-review.json，表证据在equipment-complete-tables-20261117/final-validation.json，客户端最新静态证据在.codex-artifacts/equipment-crafting-20261117/final-static-review.json。
 - 用户最新要求先完成代码，装备和技能后续统一验收：本轮最终源码未继续编译或运行测试，不把之前302/126项通过当作最终版本验收。未改新UI、未部署/重启服务、未提交推送；独立Java玩法服务器不在本窗口范围。未定义的重铸/继承/升档、旧资产转换与支付不冒称已完成。详见docs/design/equipment-eight-slot-implementation.md。
+
+
+## 2026-11-17 Codex：独立 JeecgBoot 网页 GM、既有七项命令与身份权限验收
+
+- 用户确认使用 JeecgBoot 配套 Vue 3 与 Java 后台作为独立网页管理系统，现有游戏服务继续承载业务。固定上游 v3.9.6 与提交身份，自有扩展保存在 java/gm_admin；管理库、Redis、原生管理员账号与玩家身份分开，不跨库 SQL 改玩家。网页当前为 http://127.0.0.1:3101/，初始化口令只在忽略的私有运行材料中。游戏内旧 F10 调试面板默认隐藏。
+- 已接入区服及玩家查询、个人邮件附件，以及现有七项 GM：增加/扣除货币、封禁/解禁货币获取、设置等级、发宝宝和发物品。七项命令经新 typed Scene 内部 RPC 复用原域逻辑，保留 dev/test 限制；校验专用完整载荷签名、在线会话、代次、节点、归属和可变状态。未把收件箱处置、资产回收、排行榜、交易人工处置、区服公告等其他管理 API 冒称已接入网页。
+- 原生登录、角色和十二项 GM 权限落库，后端创建/发送均验权，操作者取真实认证主体。冻结草稿、先记发送意图、RPC 在事务外、持久审计、精确字符串 ID/金额均已实现。直接玩家命令进入 SENDING 后永不重发，UNKNOWN 不伪报成功；邮件同号重试依赖原正式邮件服务持久幂等，投递不等于附件领取。
+- 独立邮件节点已正式迁移、登记写者并通过健康检查。发现宿主 2347/2349 实为 Delve 后，新增独立固定两路 RPC 转发容器，回环 2356/2357 对应真实 DataService 9000 与 PlayerLocator 53200；验证源码、镜像、容器及注册身份后才加载读地址。启动器清理继承的读写目标，Scene 未有有效就绪凭据时保持邮件和玩家写通道关闭。
+- Java 自有六套测试 44/44、C++ GM 签名与原客户端门禁 12/12、网页玩家 GM 25 项及此前邮件 18 项检查通过；Vue 生产构建与原生 JeecgBoot 后台打包通过。GM 自有 TypeScript 无诊断；上游仍有 48 项既存诊断及旧 vue-tsc 与新版 TypeScript 的工具兼容问题，不宣称上游全量类型检查通过。Unity 隐藏入口四种条件编译通过。固定路由桥三项网络测试、gofmt、go vet 通过，CGO 关闭未跑 race。
+- 经用户授权完成真实验证码登录、退出重登、默认 GM 首页、原生角色管理十二项权限、七项下拉操作和实际 DataService 不存在角色查询。六个匿名/替代登录 HTTP 检查均拒绝；没有修改玩家资产。实际截图、浏览器记录、Java XML 汇总及其他证据在 build/verification/gm-admin-20261117/；网页构建证据另在 build/verification/gm-console-20261117/。
+- Scene 部署脚本已分 prepare/build/stage/apply，并校验同批源码、SDK、镜像、四份 Compose、原容器合同和私有配置；部署门禁 27/27、原启动回归 18/18 通过。当前只完成 prepare 并正在正式 Linux 三节点构建，整节点成功与否另追加最终记录；不把 Windows 静态库通过当作整节点最终链接通过。
+- 用户最新明确选择“先完成 GM 代码和构建，scene 等统一验收后重建”。现役手绘表缺新节点必读的 equipartifact.json、equipv1affix.json，另有装备/技能及地图表差异，已留 table-compatibility-review.json 并在任何 stage/apply 写入前增加区分大小写的缺表门禁。本轮不改表快照、manifest 或 Compose，不 stage/apply，不执行 Scene 运行期探针；原游戏 17 个常驻服务未重建，写通道保持禁用。
+- 本轮接入当前 C++/Go/Java 网关混合服务端；独立 Java 全服务版尚待内部管理适配，已登记 PARITY，不冒称两版玩法均完成。设计及运行入口见 docs/design/jeecg-gm-administration.md、java/gm_admin/README.md。本聊天未执行提交或推送；本条只追加并核验此前字节保留。
+
+## 2026-11-17 Codex：装备材料自选端到端与Unity协议导入修复
+
+- 用户要求补齐材料自选服务端与客户端，保留“不编译或启动服务、不操作Unity、后续统一联调”的边界。正式协议新增GetEquipmentMaterialReward/ClaimEquipmentMaterialReward（407/408），C++/Go/Unity与机器人调用桩及持久schema完成生成同步。
+- 正式战斗结算首次应用时为PVE胜利、匹配PVP正常完成发10份，游戏日UTC+8每日05:00共享上限20；切磋/逃跑/作废/零回合排除，未领取余额跨日保留。来源去重复用收件箱永久序号水位，不把有限战果列表当永久battle-id账本。
+- 材料领取使用严格背包候选事务同步发料、扣额度与记防重回执，只有当前归属代次的真实存档确认后durable。领取revision仅成功领取递增；额度新增不造成陈旧预览永久未知。原回执淘汰后的旧领取水位仍UNKNOWN，不重复发料。
+- 客户端材料页面接权威批次、数量加减、等额确认、余额/持有量与恢复；完整原请求发送前落盘，打造→材料→活跃奖励按优先级恢复，旧资产操作互斥。Unity缺EquipmentEffects并非类型未生成，而是33位无效meta GUID导致忽略脚本；修复meta并把生成同步/编译前元数据校验接入工具。
+- 客户端501份运行时源码离线编译无错误，34新增材料用例及相关回归合计224/224通过，元数据工具9/9、编译脚本6/6通过。服务端新增16个公开API和3个战斗结算用例源码，静态与工程登记检查完成，按用户要求未编译/运行服务端测试。客户端证据见.codex-artifacts/equipment-material-choice-20261117，服务端生成证据见build/verification/equipment-material-reward-20261117。
+- 未使用computer use、未启动Unity或后端、未联网验收或提交推送。独立Java玩法服务器延续本窗口排除范围；同仓Go与机器人生成同步不代表独立Java玩法完成。并行GM文档与生成改动保留，不覆盖其内容。
+
+
+## 2026-11-17 Codex：GM 正式 Linux 三节点构建及最终只读验收完成
+
+- 首轮 gate/scene/battle 均已编译、链接和镜像封装，但末尾源码守卫检测到共享工作区新增装备材料奖励逻辑、领取账本与协议生成物共43路径变化，正式 result.success=false。保留 cpp-build/failure.txt、result.json 与 source-drift.json，不把首轮镜像当成可交付成功，也未覆盖其他聊天文件或绕过守卫。
+- 当前输入稳定性复核无新增漂移后，以独立 cpp-build-retry 目录走同一正式构建器，复用按固定 SDK 与 Debug 隔离的缓存。最终22,157个输入、SDK校验及三个节点完整编译/链接全部通过，result.success=true；同批镜像为 local/xuanming-node:debug-20261117t132106.671713z，ID为 sha256:e69716aaf1478824baaa0ed7795ff5307951fad4f399f2c993f865797ca97c4f。
+- 独立只读验收再次绑定三节点相同的成功批次 manifest、重算源码摘要，并核对镜像内三个二进制与三个调试符号摘要，全部匹配；原游戏运行合同及状态保持不变。正式结果在 build/verification/gm-admin-20261117/scene/cpp-build-retry/result.json，最终回执在同级上层 build-verification.json。GM 网页最终复查仍正常返回 HTTP 200。
+- 表差异审阅重新绑定成功批次，生成 table-compatibility-review-retry.json，旧调查报告保留；当前表与成功快照漂移0，仍为53张对现役51张、缺两张装备表。部署说明已指向成功构建凭据，并明确不能立即发布。按用户决定，未 stage/apply、未重建 Scene、未改表挂载、未执行运行期 GM 探针或修改玩家资产；邮件和玩家写通道仍等待装备/技能统一验收后的最后启用。本轮GM代码、网页/Java构建和游戏节点构建工作完成，不把编译通过当作装备/技能玩法或实际发放验收。
+- 本聊天未执行提交或推送。本条纯追加，并核验此前进度字节完整保留。

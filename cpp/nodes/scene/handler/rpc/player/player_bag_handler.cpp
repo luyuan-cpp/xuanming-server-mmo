@@ -5,12 +5,14 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include "engine/core/time/system/time.h"
 
 #include "modules/bag/bag_system.h" // BagType:kInventory / kEquipment / kTemporary
 #include "player_gm_guard.h"        // GM 客户端指令的 scene 侧第二道锁
 #include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_equipment_v1.h"
+#include "services/scene/player/system/player_equipment_material_reward.h"
 #include "services/scene/player/system/player_feature_snapshot.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -312,6 +314,25 @@ void SceneBagClientPlayerHandler::CommitEquipmentCraft(entt::entity player,const
 {
 ///<<< BEGIN WRITING YOUR CODE
     PlayerEquipmentV1System::Commit(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneBagClientPlayerHandler::GetEquipmentMaterialReward(entt::entity player,const ::GetEquipmentMaterialRewardRequest* request,
+	::GetEquipmentMaterialRewardResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto error = PlayerEquipmentMaterialRewardSystem::Get(player, TimeSystem::NowMillisecondsUTC(), *response);
+    if (error != kSuccess) response->mutable_error_message()->set_id(error);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneBagClientPlayerHandler::ClaimEquipmentMaterialReward(entt::entity player,const ::ClaimEquipmentMaterialRewardRequest* request,
+	::ClaimEquipmentMaterialRewardResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PlayerEquipmentMaterialRewardSystem::Claim(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
 ///<<< END WRITING YOUR CODE
 
 }

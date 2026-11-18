@@ -345,6 +345,51 @@ message CommitEquipmentCraftResponse {
   BagInfo equipment = 10;
 }
 
+// 额度由权威战斗结算产生。PVE/PVP共享游戏日上限，未领取余额跨日保留。
+// 展示与数量以本快照为准；本次批次最多20份，不能把美术样例当作领取权。
+message EquipmentMaterialRewardSnapshot {
+  bool available = 1;
+  string unavailable_reason = 2;
+  uint64 day_starts_at_ms = 3;
+  uint64 next_reset_at_ms = 4;
+  uint32 earned_today = 5;
+  uint32 daily_limit = 6;
+  uint64 available_units = 7;
+  uint32 batch_units = 8;
+  uint64 revision = 9;
+  EquipmentCraftMaterial crafting_material = 10;
+  EquipmentCraftMaterial enhancement_stone = 11;
+  bool can_claim = 12;
+}
+message GetEquipmentMaterialRewardRequest {}
+message GetEquipmentMaterialRewardResponse {
+  TipInfoMessage error_message = 1;
+  EquipmentMaterialRewardSnapshot snapshot = 2;
+}
+// 发送前持久化整份请求；未知结果只重放原键、原水位和原分配。
+message ClaimEquipmentMaterialRewardRequest {
+  uint64 client_request_id = 1;
+  uint64 expected_revision = 2;
+  uint32 crafting_material_count = 3;
+  uint32 enhancement_stone_count = 4;
+}
+message ClaimEquipmentMaterialRewardResponse {
+  enum Outcome {
+    UNKNOWN = 0; // 含旧回执已淘汰；不得据此生成新请求重复领取。
+    REJECTED = 1; // 提交前明确拒绝，本请求没有资产变更。
+    APPLIED = 2;
+  }
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  Outcome outcome = 3;
+  bool durable = 4; // 真实确认的本归属代次完整存档已包含领取水位。
+  bool replayed = 5;
+  uint64 result_revision = 6;
+  uint64 current_revision = 7;
+  BagInfo bag = 8;
+  EquipmentMaterialRewardSnapshot snapshot = 9;
+}
+
 service SceneBagClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -368,4 +413,6 @@ service SceneBagClientPlayer {
   rpc GetEquipmentCraftRules (GetEquipmentCraftRulesRequest) returns (GetEquipmentCraftRulesResponse);
   rpc PreviewEquipmentCraft (PreviewEquipmentCraftRequest) returns (PreviewEquipmentCraftResponse);
   rpc CommitEquipmentCraft (CommitEquipmentCraftRequest) returns (CommitEquipmentCraftResponse);
+  rpc GetEquipmentMaterialReward (GetEquipmentMaterialRewardRequest) returns (GetEquipmentMaterialRewardResponse);
+  rpc ClaimEquipmentMaterialReward (ClaimEquipmentMaterialRewardRequest) returns (ClaimEquipmentMaterialRewardResponse);
 }

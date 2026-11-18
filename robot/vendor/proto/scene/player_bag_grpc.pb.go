@@ -19,15 +19,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneBagClientPlayer_GetBag_FullMethodName                 = "/SceneBagClientPlayer/GetBag"
-	SceneBagClientPlayer_SortBag_FullMethodName                = "/SceneBagClientPlayer/SortBag"
-	SceneBagClientPlayer_EquipItem_FullMethodName              = "/SceneBagClientPlayer/EquipItem"
-	SceneBagClientPlayer_UnequipItem_FullMethodName            = "/SceneBagClientPlayer/UnequipItem"
-	SceneBagClientPlayer_GmGrantItem_FullMethodName            = "/SceneBagClientPlayer/GmGrantItem"
-	SceneBagClientPlayer_EnhanceEquip_FullMethodName           = "/SceneBagClientPlayer/EnhanceEquip"
-	SceneBagClientPlayer_InlayGem_FullMethodName               = "/SceneBagClientPlayer/InlayGem"
-	SceneBagClientPlayer_RemoveGem_FullMethodName              = "/SceneBagClientPlayer/RemoveGem"
-	SceneBagClientPlayer_RetrieveTemporaryItems_FullMethodName = "/SceneBagClientPlayer/RetrieveTemporaryItems"
+	SceneBagClientPlayer_GetBag_FullMethodName                       = "/SceneBagClientPlayer/GetBag"
+	SceneBagClientPlayer_SortBag_FullMethodName                      = "/SceneBagClientPlayer/SortBag"
+	SceneBagClientPlayer_EquipItem_FullMethodName                    = "/SceneBagClientPlayer/EquipItem"
+	SceneBagClientPlayer_UnequipItem_FullMethodName                  = "/SceneBagClientPlayer/UnequipItem"
+	SceneBagClientPlayer_GmGrantItem_FullMethodName                  = "/SceneBagClientPlayer/GmGrantItem"
+	SceneBagClientPlayer_EnhanceEquip_FullMethodName                 = "/SceneBagClientPlayer/EnhanceEquip"
+	SceneBagClientPlayer_InlayGem_FullMethodName                     = "/SceneBagClientPlayer/InlayGem"
+	SceneBagClientPlayer_RemoveGem_FullMethodName                    = "/SceneBagClientPlayer/RemoveGem"
+	SceneBagClientPlayer_RetrieveTemporaryItems_FullMethodName       = "/SceneBagClientPlayer/RetrieveTemporaryItems"
+	SceneBagClientPlayer_GetEquipmentCraftRules_FullMethodName       = "/SceneBagClientPlayer/GetEquipmentCraftRules"
+	SceneBagClientPlayer_PreviewEquipmentCraft_FullMethodName        = "/SceneBagClientPlayer/PreviewEquipmentCraft"
+	SceneBagClientPlayer_CommitEquipmentCraft_FullMethodName         = "/SceneBagClientPlayer/CommitEquipmentCraft"
+	SceneBagClientPlayer_GetEquipmentMaterialReward_FullMethodName   = "/SceneBagClientPlayer/GetEquipmentMaterialReward"
+	SceneBagClientPlayer_ClaimEquipmentMaterialReward_FullMethodName = "/SceneBagClientPlayer/ClaimEquipmentMaterialReward"
 )
 
 // SceneBagClientPlayerClient is the client API for SceneBagClientPlayer service.
@@ -51,6 +56,11 @@ type SceneBagClientPlayerClient interface {
 	RemoveGem(ctx context.Context, in *RemoveGemRequest, opts ...grpc.CallOption) (*RemoveGemResponse, error)
 	// 临时格 → 人物背包(玩家显式操作,method index 8)。传送途中拒绝、战斗中放行;不改装备栏,不重算属性。
 	RetrieveTemporaryItems(ctx context.Context, in *RetrieveTemporaryItemsRequest, opts ...grpc.CallOption) (*RetrieveTemporaryItemsResponse, error)
+	GetEquipmentCraftRules(ctx context.Context, in *GetEquipmentCraftRulesRequest, opts ...grpc.CallOption) (*GetEquipmentCraftRulesResponse, error)
+	PreviewEquipmentCraft(ctx context.Context, in *PreviewEquipmentCraftRequest, opts ...grpc.CallOption) (*PreviewEquipmentCraftResponse, error)
+	CommitEquipmentCraft(ctx context.Context, in *CommitEquipmentCraftRequest, opts ...grpc.CallOption) (*CommitEquipmentCraftResponse, error)
+	GetEquipmentMaterialReward(ctx context.Context, in *GetEquipmentMaterialRewardRequest, opts ...grpc.CallOption) (*GetEquipmentMaterialRewardResponse, error)
+	ClaimEquipmentMaterialReward(ctx context.Context, in *ClaimEquipmentMaterialRewardRequest, opts ...grpc.CallOption) (*ClaimEquipmentMaterialRewardResponse, error)
 }
 
 type sceneBagClientPlayerClient struct {
@@ -151,6 +161,56 @@ func (c *sceneBagClientPlayerClient) RetrieveTemporaryItems(ctx context.Context,
 	return out, nil
 }
 
+func (c *sceneBagClientPlayerClient) GetEquipmentCraftRules(ctx context.Context, in *GetEquipmentCraftRulesRequest, opts ...grpc.CallOption) (*GetEquipmentCraftRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEquipmentCraftRulesResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_GetEquipmentCraftRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneBagClientPlayerClient) PreviewEquipmentCraft(ctx context.Context, in *PreviewEquipmentCraftRequest, opts ...grpc.CallOption) (*PreviewEquipmentCraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PreviewEquipmentCraftResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_PreviewEquipmentCraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneBagClientPlayerClient) CommitEquipmentCraft(ctx context.Context, in *CommitEquipmentCraftRequest, opts ...grpc.CallOption) (*CommitEquipmentCraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommitEquipmentCraftResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_CommitEquipmentCraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneBagClientPlayerClient) GetEquipmentMaterialReward(ctx context.Context, in *GetEquipmentMaterialRewardRequest, opts ...grpc.CallOption) (*GetEquipmentMaterialRewardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEquipmentMaterialRewardResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_GetEquipmentMaterialReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneBagClientPlayerClient) ClaimEquipmentMaterialReward(ctx context.Context, in *ClaimEquipmentMaterialRewardRequest, opts ...grpc.CallOption) (*ClaimEquipmentMaterialRewardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimEquipmentMaterialRewardResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_ClaimEquipmentMaterialReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneBagClientPlayerServer is the server API for SceneBagClientPlayer service.
 // All implementations must embed UnimplementedSceneBagClientPlayerServer
 // for forward compatibility.
@@ -172,6 +232,11 @@ type SceneBagClientPlayerServer interface {
 	RemoveGem(context.Context, *RemoveGemRequest) (*RemoveGemResponse, error)
 	// 临时格 → 人物背包(玩家显式操作,method index 8)。传送途中拒绝、战斗中放行;不改装备栏,不重算属性。
 	RetrieveTemporaryItems(context.Context, *RetrieveTemporaryItemsRequest) (*RetrieveTemporaryItemsResponse, error)
+	GetEquipmentCraftRules(context.Context, *GetEquipmentCraftRulesRequest) (*GetEquipmentCraftRulesResponse, error)
+	PreviewEquipmentCraft(context.Context, *PreviewEquipmentCraftRequest) (*PreviewEquipmentCraftResponse, error)
+	CommitEquipmentCraft(context.Context, *CommitEquipmentCraftRequest) (*CommitEquipmentCraftResponse, error)
+	GetEquipmentMaterialReward(context.Context, *GetEquipmentMaterialRewardRequest) (*GetEquipmentMaterialRewardResponse, error)
+	ClaimEquipmentMaterialReward(context.Context, *ClaimEquipmentMaterialRewardRequest) (*ClaimEquipmentMaterialRewardResponse, error)
 	mustEmbedUnimplementedSceneBagClientPlayerServer()
 }
 
@@ -208,6 +273,21 @@ func (UnimplementedSceneBagClientPlayerServer) RemoveGem(context.Context, *Remov
 }
 func (UnimplementedSceneBagClientPlayerServer) RetrieveTemporaryItems(context.Context, *RetrieveTemporaryItemsRequest) (*RetrieveTemporaryItemsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetrieveTemporaryItems not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) GetEquipmentCraftRules(context.Context, *GetEquipmentCraftRulesRequest) (*GetEquipmentCraftRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEquipmentCraftRules not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) PreviewEquipmentCraft(context.Context, *PreviewEquipmentCraftRequest) (*PreviewEquipmentCraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PreviewEquipmentCraft not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) CommitEquipmentCraft(context.Context, *CommitEquipmentCraftRequest) (*CommitEquipmentCraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CommitEquipmentCraft not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) GetEquipmentMaterialReward(context.Context, *GetEquipmentMaterialRewardRequest) (*GetEquipmentMaterialRewardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEquipmentMaterialReward not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) ClaimEquipmentMaterialReward(context.Context, *ClaimEquipmentMaterialRewardRequest) (*ClaimEquipmentMaterialRewardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimEquipmentMaterialReward not implemented")
 }
 func (UnimplementedSceneBagClientPlayerServer) mustEmbedUnimplementedSceneBagClientPlayerServer() {}
 func (UnimplementedSceneBagClientPlayerServer) testEmbeddedByValue()                              {}
@@ -392,6 +472,96 @@ func _SceneBagClientPlayer_RetrieveTemporaryItems_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneBagClientPlayer_GetEquipmentCraftRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEquipmentCraftRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).GetEquipmentCraftRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_GetEquipmentCraftRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).GetEquipmentCraftRules(ctx, req.(*GetEquipmentCraftRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneBagClientPlayer_PreviewEquipmentCraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreviewEquipmentCraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).PreviewEquipmentCraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_PreviewEquipmentCraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).PreviewEquipmentCraft(ctx, req.(*PreviewEquipmentCraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneBagClientPlayer_CommitEquipmentCraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitEquipmentCraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).CommitEquipmentCraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_CommitEquipmentCraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).CommitEquipmentCraft(ctx, req.(*CommitEquipmentCraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneBagClientPlayer_GetEquipmentMaterialReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEquipmentMaterialRewardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).GetEquipmentMaterialReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_GetEquipmentMaterialReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).GetEquipmentMaterialReward(ctx, req.(*GetEquipmentMaterialRewardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneBagClientPlayer_ClaimEquipmentMaterialReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimEquipmentMaterialRewardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).ClaimEquipmentMaterialReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_ClaimEquipmentMaterialReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).ClaimEquipmentMaterialReward(ctx, req.(*ClaimEquipmentMaterialRewardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneBagClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneBagClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -434,6 +604,26 @@ var SceneBagClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RetrieveTemporaryItems",
 			Handler:    _SceneBagClientPlayer_RetrieveTemporaryItems_Handler,
+		},
+		{
+			MethodName: "GetEquipmentCraftRules",
+			Handler:    _SceneBagClientPlayer_GetEquipmentCraftRules_Handler,
+		},
+		{
+			MethodName: "PreviewEquipmentCraft",
+			Handler:    _SceneBagClientPlayer_PreviewEquipmentCraft_Handler,
+		},
+		{
+			MethodName: "CommitEquipmentCraft",
+			Handler:    _SceneBagClientPlayer_CommitEquipmentCraft_Handler,
+		},
+		{
+			MethodName: "GetEquipmentMaterialReward",
+			Handler:    _SceneBagClientPlayer_GetEquipmentMaterialReward_Handler,
+		},
+		{
+			MethodName: "ClaimEquipmentMaterialReward",
+			Handler:    _SceneBagClientPlayer_ClaimEquipmentMaterialReward_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -31,11 +31,175 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::ClientRequestRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::EquipmentMaterialRewardLedger
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::ClientRequestLedgerComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class EquipmentMaterialRewardLedger::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EquipmentMaterialRewardLedger>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_._has_bits_);
+};
+
+constexpr EquipmentMaterialRewardLedger::ParseTableT_ EquipmentMaterialRewardLedger::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::EquipmentMaterialRewardLedger>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 revision = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.revision_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.revision_)}},
+      // uint64 day_starts_at_ms = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_)}},
+      // uint32 earned_today = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipmentMaterialRewardLedger, _impl_.earned_today_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_today_)}},
+      // uint64 available_units = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipmentMaterialRewardLedger, _impl_.available_units_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.available_units_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 day_starts_at_ms = 1;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 earned_today = 2;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_today_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 available_units = 3;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.available_units_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 revision = 4;
+      {PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr EquipmentMaterialRewardLedger::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        day_starts_at_ms_{::uint64_t{0u}},
+        available_units_{::uint64_t{0u}},
+        revision_{::uint64_t{0u}},
+        earned_today_{0u} {}
+
+template <typename>
+constexpr EquipmentMaterialRewardLedger::EquipmentMaterialRewardLedger(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EquipmentMaterialRewardLedger::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EquipmentMaterialRewardLedger(arena);
+}
+constexpr auto EquipmentMaterialRewardLedger::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(EquipmentMaterialRewardLedger), alignof(EquipmentMaterialRewardLedger));
+}
+constexpr auto EquipmentMaterialRewardLedger::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EquipmentMaterialRewardLedger::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EquipmentMaterialRewardLedger>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EquipmentMaterialRewardLedger::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EquipmentMaterialRewardLedger>(), &EquipmentMaterialRewardLedger::ByteSizeLong,
+              &EquipmentMaterialRewardLedger::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EquipmentMaterialRewardLedgerGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EquipmentMaterialRewardLedgerGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EquipmentMaterialRewardLedger_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EquipmentMaterialRewardLedger::InternalGenerateClassData_(
+            _default, &EquipmentMaterialRewardLedger_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EquipmentMaterialRewardLedger>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EquipmentMaterialRewardLedgerGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EquipmentMaterialRewardLedger _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EquipmentMaterialRewardLedger>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedgerGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EquipmentMaterialRewardLedgerGlobalsTypeInternal EquipmentMaterialRewardLedger_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EquipmentMaterialRewardLedger_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EquipmentMaterialRewardLedger_globals_.GetClassData();
+#else
+  return EquipmentMaterialRewardLedger_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ClientRequestRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<ClientRequestRecord>()._impl_._has_bits_);
@@ -48,11 +212,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      12,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -99,9 +263,18 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.forge_revision_), 8>(),
        {72, 8, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 material_reward_revision = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestRecord, _impl_.material_reward_revision_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.material_reward_revision_)}},
+      // uint32 crafting_material_count = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.crafting_material_count_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_material_count_)}},
+      // uint32 enhancement_stone_count = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClientRequestRecord, _impl_.enhancement_stone_count_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -126,6 +299,12 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_item_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 forge_revision = 9;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 material_reward_revision = 10;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.material_reward_revision_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 crafting_material_count = 11;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.crafting_material_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 enhancement_stone_count = 12;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -148,7 +327,10 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         enhance_level_{0u},
         created_scheme_id_{0u},
         equipment_item_id_{::uint64_t{0u}},
-        forge_revision_{::uint64_t{0u}} {}
+        forge_revision_{::uint64_t{0u}},
+        material_reward_revision_{::uint64_t{0u}},
+        crafting_material_count_{0u},
+        enhancement_stone_count_{0u} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -254,12 +436,12 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
-      1,  // num_aux_entries
+      4,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -268,18 +450,21 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
       ::_pbi::TcParser::GetTable<::ClientRequestLedgerComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // .EquipmentMaterialRewardLedger material_reward = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 1, 1,
+        PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.material_reward_)}},
       // repeated .ClientRequestRecord records = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.records_)}},
       // uint64 next_seq = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.next_seq_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.next_seq_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_)}},
       // uint64 forge_revision = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.forge_revision_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.forge_revision_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_)}},
     }}, {{
       65535, 65535
@@ -287,15 +472,22 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
       // repeated .ClientRequestRecord records = 1;
       {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.records_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 next_seq = 2;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 forge_revision = 3;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .EquipmentMaterialRewardLedger material_reward = 4;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.material_reward_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::ClientRequestRecord>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::ClientRequestRecord_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipmentMaterialRewardLedger>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipmentMaterialRewardLedger_globals_},
         #endif
     }},
     {{
@@ -313,6 +505,7 @@ inline constexpr ClientRequestLedgerComp::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.records_)>()
          }
         ,
+        material_reward_{nullptr},
         next_seq_{::uint64_t{0u}},
         forge_revision_{::uint64_t{0u}} {}
 
@@ -357,7 +550,7 @@ constexpr auto ClientRequestLedgerComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
@@ -417,7 +610,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        12, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -427,6 +620,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.created_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_item_id_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.forge_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.material_reward_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.crafting_material_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.enhancement_stone_count_),
         1,
         2,
         0,
@@ -436,52 +632,77 @@ const ::uint32_t
         6,
         7,
         8,
+        9,
+        10,
+        11,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.earned_today_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.available_units_),
+        PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_.revision_),
+        0,
+        3,
+        1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.records_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.next_seq_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.forge_revision_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.material_reward_),
         0,
-        1,
         2,
+        3,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {21, sizeof(::ClientRequestLedgerComp)},
+        {27, sizeof(::EquipmentMaterialRewardLedger)},
+        {38, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::ClientRequestRecord_globals_,
+        &::EquipmentMaterialRewardLedger_globals_,
         &::ClientRequestLedgerComp_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\320\001\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\264\002\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
     "d_scheme_id\030\007 \001(\r\022\031\n\021equipment_item_id\030\010"
-    " \001(\004\022\026\n\016forge_revision\030\t \001(\004\"j\n\027ClientRe"
-    "questLedgerComp\022%\n\007records\030\001 \003(\0132\024.Clien"
-    "tRequestRecord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forg"
-    "e_revision\030\003 \001(\004B\022Z\020common/componentb\006pr"
-    "oto3"
+    " \001(\004\022\026\n\016forge_revision\030\t \001(\004\022 \n\030material"
+    "_reward_revision\030\n \001(\004\022\037\n\027crafting_mater"
+    "ial_count\030\013 \001(\r\022\037\n\027enhancement_stone_cou"
+    "nt\030\014 \001(\r\"z\n\035EquipmentMaterialRewardLedge"
+    "r\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014earned_to"
+    "day\030\002 \001(\r\022\027\n\017available_units\030\003 \001(\004\022\020\n\010re"
+    "vision\030\004 \001(\004\"\243\001\n\027ClientRequestLedgerComp"
+    "\022%\n\007records\030\001 \003(\0132\024.ClientRequestRecord\022"
+    "\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001("
+    "\004\0227\n\017material_reward\030\004 \001(\0132\036.EquipmentMa"
+    "terialRewardLedgerB\022Z\020common/componentb\006"
+    "proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    404,
+    686,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
     nullptr,
     0,
-    2,
+    3,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto::offsets,
@@ -525,9 +746,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, forge_revision_) -
+           offsetof(Impl_, enhancement_stone_count_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::forge_revision_));
+               sizeof(Impl_::enhancement_stone_count_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -542,9 +763,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, forge_revision_) -
+           offsetof(Impl_, enhancement_stone_count_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::forge_revision_));
+               sizeof(Impl_::enhancement_stone_count_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -603,7 +824,11 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.equipment_item_id_) -
         reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.equipment_item_id_));
   }
-  _impl_.forge_revision_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.forge_revision_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.enhancement_stone_count_) -
+        reinterpret_cast<char*>(&_impl_.forge_revision_)) + sizeof(_impl_.enhancement_stone_count_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -707,6 +932,33 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
+  // uint64 material_reward_revision = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_material_reward_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_material_reward_revision(), target);
+    }
+  }
+
+  // uint32 crafting_material_count = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_crafting_material_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_crafting_material_count(), target);
+    }
+  }
+
+  // uint32 enhancement_stone_count = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_enhancement_stone_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_enhancement_stone_count(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -789,12 +1041,33 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint64 forge_revision = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_forge_revision());
+      }
+    }
+    // uint64 material_reward_revision = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_material_reward_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_material_reward_revision());
+      }
+    }
+    // uint32 crafting_material_count = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_crafting_material_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_crafting_material_count());
+      }
+    }
+    // uint32 enhancement_stone_count = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_enhancement_stone_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_enhancement_stone_count());
       }
     }
   }
@@ -861,9 +1134,26 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_forge_revision() != 0) {
-      _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_forge_revision() != 0) {
+        _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_material_reward_revision() != 0) {
+        _this->_impl_.material_reward_revision_ = from._impl_.material_reward_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_crafting_material_count() != 0) {
+        _this->_impl_.crafting_material_count_ = from._impl_.crafting_material_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_enhancement_stone_count() != 0) {
+        _this->_impl_.enhancement_stone_count_ = from._impl_.enhancement_stone_count_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -887,14 +1177,284 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.forge_revision_)
-      + sizeof(ClientRequestRecord::_impl_.forge_revision_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.enhancement_stone_count_)
+      + sizeof(ClientRequestRecord::_impl_.enhancement_stone_count_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));
 }
 
 ::google::protobuf::Metadata ClientRequestRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+EquipmentMaterialRewardLedger::EquipmentMaterialRewardLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipmentMaterialRewardLedger_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:EquipmentMaterialRewardLedger)
+}
+EquipmentMaterialRewardLedger::EquipmentMaterialRewardLedger(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipmentMaterialRewardLedger& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipmentMaterialRewardLedger_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE EquipmentMaterialRewardLedger::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void EquipmentMaterialRewardLedger::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, day_starts_at_ms_),
+           0,
+           offsetof(Impl_, earned_today_) -
+               offsetof(Impl_, day_starts_at_ms_) +
+               sizeof(Impl_::earned_today_));
+}
+EquipmentMaterialRewardLedger::~EquipmentMaterialRewardLedger() {
+  // @@protoc_insertion_point(destructor:EquipmentMaterialRewardLedger)
+  SharedDtor(*this);
+}
+inline void EquipmentMaterialRewardLedger::SharedDtor(MessageLite& self) {
+  EquipmentMaterialRewardLedger& this_ = static_cast<EquipmentMaterialRewardLedger&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EquipmentMaterialRewardLedger_class_data_ =
+        EquipmentMaterialRewardLedger::InternalGenerateClassData_(EquipmentMaterialRewardLedger_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipmentMaterialRewardLedger::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipmentMaterialRewardLedger_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EquipmentMaterialRewardLedger_class_data_.tc_table);
+  return EquipmentMaterialRewardLedger_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipmentMaterialRewardLedger::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipmentMaterialRewardLedger_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EquipmentMaterialRewardLedger_globals_));
+  return EquipmentMaterialRewardLedger_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EquipmentMaterialRewardLedger::ParseTableT_
+    EquipmentMaterialRewardLedger::_table_ =
+        EquipmentMaterialRewardLedger::InternalGenerateParseTable_(EquipmentMaterialRewardLedger_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EquipmentMaterialRewardLedger::Clear() {
+// @@protoc_insertion_point(message_clear_start:EquipmentMaterialRewardLedger)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.day_starts_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.earned_today_) -
+        reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.earned_today_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EquipmentMaterialRewardLedger::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EquipmentMaterialRewardLedger& this_ = static_cast<const EquipmentMaterialRewardLedger&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EquipmentMaterialRewardLedger::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EquipmentMaterialRewardLedger& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:EquipmentMaterialRewardLedger)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 day_starts_at_ms = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_day_starts_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_day_starts_at_ms(), target);
+    }
+  }
+
+  // uint32 earned_today = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_earned_today() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_earned_today(), target);
+    }
+  }
+
+  // uint64 available_units = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_available_units() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_available_units(), target);
+    }
+  }
+
+  // uint64 revision = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_revision() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_revision(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:EquipmentMaterialRewardLedger)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EquipmentMaterialRewardLedger::ByteSizeLong(const MessageLite& base) {
+  const EquipmentMaterialRewardLedger& this_ = static_cast<const EquipmentMaterialRewardLedger&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EquipmentMaterialRewardLedger::ByteSizeLong() const {
+  const EquipmentMaterialRewardLedger& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:EquipmentMaterialRewardLedger)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint64 day_starts_at_ms = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_day_starts_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_day_starts_at_ms());
+      }
+    }
+    // uint64 available_units = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_available_units() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_available_units());
+      }
+    }
+    // uint64 revision = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_revision() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_revision());
+      }
+    }
+    // uint32 earned_today = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_earned_today() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_earned_today());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EquipmentMaterialRewardLedger::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EquipmentMaterialRewardLedger*>(&to_msg);
+  auto& from = static_cast<const EquipmentMaterialRewardLedger&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:EquipmentMaterialRewardLedger)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_day_starts_at_ms() != 0) {
+        _this->_impl_.day_starts_at_ms_ = from._impl_.day_starts_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_available_units() != 0) {
+        _this->_impl_.available_units_ = from._impl_.available_units_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_revision() != 0) {
+        _this->_impl_.revision_ = from._impl_.revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_earned_today() != 0) {
+        _this->_impl_.earned_today_ = from._impl_.earned_today_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EquipmentMaterialRewardLedger::CopyFrom(const EquipmentMaterialRewardLedger& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:EquipmentMaterialRewardLedger)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EquipmentMaterialRewardLedger::InternalSwap(EquipmentMaterialRewardLedger* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.earned_today_)
+      + sizeof(EquipmentMaterialRewardLedger::_impl_.earned_today_)
+      - PROTOBUF_FIELD_OFFSET(EquipmentMaterialRewardLedger, _impl_.day_starts_at_ms_)>(
+          reinterpret_cast<char*>(&_impl_.day_starts_at_ms_),
+          reinterpret_cast<char*>(&other->_impl_.day_starts_at_ms_));
+}
+
+::google::protobuf::Metadata EquipmentMaterialRewardLedger::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -936,6 +1496,10 @@ ClientRequestLedgerComp::ClientRequestLedgerComp(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.material_reward_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.material_reward_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, next_seq_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -959,10 +1523,10 @@ PROTOBUF_NDEBUG_INLINE ClientRequestLedgerComp::Impl_::Impl_(
 inline void ClientRequestLedgerComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
-               offsetof(Impl_, next_seq_),
+               offsetof(Impl_, material_reward_),
            0,
            offsetof(Impl_, forge_revision_) -
-               offsetof(Impl_, next_seq_) +
+               offsetof(Impl_, material_reward_) +
                sizeof(Impl_::forge_revision_));
 }
 ClientRequestLedgerComp::~ClientRequestLedgerComp() {
@@ -976,6 +1540,7 @@ inline void ClientRequestLedgerComp::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.material_reward_;
   this_._impl_.~Impl_();
 }
 
@@ -1013,10 +1578,16 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.records_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.records_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.material_reward_ != nullptr);
+      _impl_.material_reward_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
     ::memset(&_impl_.next_seq_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.forge_revision_) -
         reinterpret_cast<char*>(&_impl_.next_seq_)) + sizeof(_impl_.forge_revision_));
@@ -1058,7 +1629,7 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   }
 
   // uint64 next_seq = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_next_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1067,12 +1638,19 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   }
 
   // uint64 forge_revision = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_forge_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           3, this_._internal_forge_revision(), target);
     }
+  }
+
+  // .EquipmentMaterialRewardLedger material_reward = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.material_reward_, this_._impl_.material_reward_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -1100,7 +1678,7 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // repeated .ClientRequestRecord records = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_records_size();
@@ -1108,15 +1686,20 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 next_seq = 2;
+    // .EquipmentMaterialRewardLedger material_reward = 4;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.material_reward_);
+    }
+    // uint64 next_seq = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_next_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_next_seq());
       }
     }
     // uint64 forge_revision = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_forge_revision());
@@ -1141,18 +1724,26 @@ void ClientRequestLedgerComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_records()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_records());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.material_reward_ != nullptr);
+      if (_this->_impl_.material_reward_ == nullptr) {
+        _this->_impl_.material_reward_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.material_reward_);
+      } else {
+        _this->_impl_.material_reward_->MergeFrom(*from._impl_.material_reward_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_next_seq() != 0) {
         _this->_impl_.next_seq_ = from._impl_.next_seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_forge_revision() != 0) {
         _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
       }
@@ -1179,9 +1770,9 @@ void ClientRequestLedgerComp::InternalSwap(ClientRequestLedgerComp* PROTOBUF_RES
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_)
       + sizeof(ClientRequestLedgerComp::_impl_.forge_revision_)
-      - PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_)>(
-          reinterpret_cast<char*>(&_impl_.next_seq_),
-          reinterpret_cast<char*>(&other->_impl_.next_seq_));
+      - PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.material_reward_)>(
+          reinterpret_cast<char*>(&_impl_.material_reward_),
+          reinterpret_cast<char*>(&other->_impl_.material_reward_));
 }
 
 ::google::protobuf::Metadata ClientRequestLedgerComp::GetMetadata() const {

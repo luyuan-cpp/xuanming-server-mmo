@@ -1,5 +1,7 @@
 #include "player_battle.h"
 #include "player/system/player_equipment_v1.h"
+#include "player/system/player_equipment_material_reward.h"
+#include "player/system/client_request_ledger.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "battle_lock_reply_shape.h"
 #include "battle_lock_rules.h"
@@ -2440,6 +2442,19 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         return false;
     }
 
+    // 额度只在正式收件箱首次应用时生成。先做纯候选，失败时连战斗资产也不动；
+    // 原来源去重继续由收件箱永久水位承担，不能依赖会淘汰的近期战果列表。
+    const bool creditsMaterialReward = PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(settlement);
+    ClientRequestLedgerComp materialRewardCandidate;
+    std::string materialRewardBefore;
+    if (creditsMaterialReward) {
+        const auto* ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+        if (ledger == nullptr || tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player)) return false;
+        materialRewardBefore = ledger->SerializeAsString();
+        if (PlayerEquipmentMaterialRewardSystem::PrepareBattleCredit(*ledger, settlement,
+            TimeSystem::NowMillisecondsUTC(), materialRewardCandidate) != kSuccess) return false;
+    }
+
     const auto inboxIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
     if (!inboxIdentity) return false;
     const auto originalIdentity = inboxIdentity->SerializeAsString();
@@ -2526,13 +2541,20 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     const auto credit = [&]() -> uint32_t {
         const auto currentIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
         const auto* currentPets = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
+        auto* currentLedger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+        if (creditsMaterialReward && (currentLedger == nullptr || currentLedger->SerializeAsString() != materialRewardBefore ||
+            tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) return kInvalidParameter;
         if (!currentIdentity || currentIdentity->SerializeAsString() != originalIdentity ||
             (changesPets && (!currentPets || currentPets->SerializeAsString() != originalPets)) ||
             HasUnsupportedInboxConsumption(player, settlement) ||
             !IsSettlementApplicable(player) || !HasCompleteBattleEffectInputs(player, settlement, currencyGains) ||
             !tlsEcs.actorRegistry.all_of<BaseAttributesComp, DerivedAttributesComp, PlayerBattleResultComp>(player))
             return kInvalidParameter;
-        return creditCurrencies();
+        const auto error = creditCurrencies();
+        if (error != kSuccess) return error;
+        // 此处之后只有无失败的候选发布；额度与货币、背包、收件箱水位同一次存盘。
+        if (creditsMaterialReward) currentLedger->Swap(&materialRewardCandidate);
+        return kSuccess;
     };
     // 两包都放不下时这一局的掉落整批改投邮件(docs/design/battle-overflow-mail.md):在任何副作用之前备好待寄条目
     // (分封、取请求号、核待寄队列余量),与扣消耗、入账在同一段写进存档;存档确认提交之后才寄出(PlayerMailOutboxSystem)。

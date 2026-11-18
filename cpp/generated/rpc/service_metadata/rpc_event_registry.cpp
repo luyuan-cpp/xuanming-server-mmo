@@ -314,6 +314,7 @@ namespace scene_node{void SendSceneNodeGrpcAssetDebitErased(entt::registry& , en
 namespace scene_node{void SendSceneNodeGrpcAssetAbortDebitErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace scene_node{void SendSceneNodeGrpcAssetCreditErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace scene_node{void SendSceneNodeGrpcAssetAckReceiptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace scene_node{void SendSceneNodeGrpcGmExecutePlayerCommandErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamCreateTeamErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamGetMyTeamErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamApplyJoinTeamErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -372,7 +373,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 407,
+static_assert(kMaxRpcMethodCount == 410,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1599,6 +1600,16 @@ void InitMessageInfo()
         std::make_unique<::CommitEquipmentCraftRequest>(),
         std::make_unique<::CommitEquipmentCraftResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerGetEquipmentMaterialRewardMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "GetEquipmentMaterialReward",
+        std::make_unique<::GetEquipmentMaterialRewardRequest>(),
+        std::make_unique<::GetEquipmentMaterialRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "ClaimEquipmentMaterialReward",
+        std::make_unique<::ClaimEquipmentMaterialRewardRequest>(),
+        std::make_unique<::ClaimEquipmentMaterialRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneBattleResultClientPlayer ---
     gRpcMethodRegistry[SceneBattleResultClientPlayerGetRecentBattleResultsMessageId] = RpcMethodMeta{
@@ -2059,6 +2070,11 @@ void InitMessageInfo()
         std::make_unique<::AssetOpRequest>(),
         std::make_unique<::AssetOpResponse>(),
         1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcAssetAckReceiptErased, "/scene_node.SceneNodeGrpc/AssetAckReceipt"};
+    gRpcMethodRegistry[SceneNodeGrpcGmExecutePlayerCommandMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "GmExecutePlayerCommand",
+        std::make_unique<::scene_node::GmExecutePlayerCommandRequest>(),
+        std::make_unique<::scene_node::GmExecutePlayerCommandResponse>(),
+        1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcGmExecutePlayerCommandErased, "/scene_node.SceneNodeGrpc/GmExecutePlayerCommand"};
 
     // --- ClientPlayerTeam ---
     gRpcMethodRegistry[ClientPlayerTeamCreateTeamMessageId] = RpcMethodMeta{
@@ -2440,6 +2456,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneBagClientPlayerGetEquipmentCraftRulesMessageId:
 	case SceneBagClientPlayerPreviewEquipmentCraftMessageId:
 	case SceneBagClientPlayerCommitEquipmentCraftMessageId:
+	case SceneBagClientPlayerGetEquipmentMaterialRewardMessageId:
+	case SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId:
 	case SceneBattleResultClientPlayerGetRecentBattleResultsMessageId:
 	case SceneBattleResultClientPlayerAckBattleResultsMessageId:
 	case SceneCurrencyClientPlayerGmAddCurrencyMessageId:

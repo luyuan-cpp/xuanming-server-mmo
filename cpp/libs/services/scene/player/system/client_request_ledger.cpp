@@ -1,4 +1,5 @@
 #include "client_request_ledger.h"
+#include "player_equipment_material_reward.h"
 
 #include <unordered_set>
 #include <utility>
@@ -97,6 +98,9 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.createdSchemeId = record->created_scheme_id();
 	result.equipmentItemId = record->equipment_item_id();
 	result.forgeRevision = record->forge_revision();
+	result.materialRewardRevision = record->material_reward_revision();
+	result.craftingMaterialCount = record->crafting_material_count();
+	result.enhancementStoneCount = record->enhancement_stone_count();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -123,12 +127,25 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_created_scheme_id(result.createdSchemeId);
 	record->set_equipment_item_id(result.equipmentItemId);
 	record->set_forge_revision(result.forgeRevision);
+	record->set_material_reward_revision(result.materialRewardRevision);
+	record->set_crafting_material_count(result.craftingMaterialCount);
+	record->set_enhancement_stone_count(result.enhancementStoneCount);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }
 
 std::string Validate(const ClientRequestLedgerComp &ledger)
 {
+	const auto& material = ledger.material_reward();
+	uint64_t dayStart = 0, nextDay = 0;
+	if (material.earned_today() > PlayerEquipmentMaterialRewardSystem::kDailyLimit ||
+		material.earned_today() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
+		material.available_units() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
+		(material.day_starts_at_ms() == 0 && (material.revision() != 0 || material.earned_today() != 0 || material.available_units() != 0)) ||
+		(material.day_starts_at_ms() != 0 && (material.earned_today() == 0 ||
+			!PlayerEquipmentMaterialRewardSystem::ResolveDay(material.day_starts_at_ms(), dayStart, nextDay) ||
+			dayStart != material.day_starts_at_ms())))
+		return "invalid equipment material reward ledger";
 	if (ledger.records_size() > kMaxRecordsOnLoad)
 	{
 		return "too many records: " + std::to_string(ledger.records_size());
@@ -137,8 +154,17 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 	std::unordered_set<uint64_t> keys;
 	std::unordered_set<uint64_t> seqs;
 	std::unordered_set<uint64_t> forgeRevisions;
+	std::unordered_set<uint64_t> materialRevisions;
 	for (const auto &record : ledger.records())
 	{
+		if (record.kind() == static_cast<uint32_t>(ClientRequestKind::kEquipmentMaterialReward))
+		{
+			const uint64_t total = uint64_t{record.crafting_material_count()} + record.enhancement_stone_count();
+			if (record.material_reward_revision() == 0 || record.material_reward_revision() > material.revision() ||
+				(total != PlayerEquipmentMaterialRewardSystem::kBattleUnits && total != PlayerEquipmentMaterialRewardSystem::kDailyLimit) ||
+				!materialRevisions.insert(record.material_reward_revision()).second)
+				return "invalid equipment material reward receipt";
+		}
 		if (record.kind() == static_cast<uint32_t>(ClientRequestKind::kEquipmentCraft) &&
 			(record.equipment_item_id() == 0 || (record.equipment_item_id() >> 63) != 0 || record.forge_revision() == 0 ||
 			 record.forge_revision() > ledger.forge_revision() || !forgeRevisions.insert(record.forge_revision()).second))

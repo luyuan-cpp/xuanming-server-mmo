@@ -57,6 +57,7 @@
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/comp/last_persisted_snapshot_comp.h"
 #include "services/scene/player/system/player_mission.h"
+#include "services/scene/player/system/player_equipment_material_reward.h"
 #include "services/scene/player/system/player_pet.h" // PetSystem::kPoolOwnerPet:宝宝属性池有配的前置断言
 #include "services/scene/player/system/role_admission_system.h"
 #include "services/scene/player/system/player_inbox_registry.h"
@@ -433,6 +434,7 @@ protected:
     }
     void CreatePlayerEntity() {
         player = tlsEcs.actorRegistry.create();
+        tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player);
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player, Guid{playerId});
         tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 7;
         tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, std::uint64_t{1}, std::uint64_t{1});
@@ -503,6 +505,39 @@ protected:
     std::unique_ptr<RoleAdmissionSystem::ScopedDependencies> admission;
     uint64_t saveSeq{0};
 };
+
+TEST_F(PlayerBattleSettlementTest, QualifyingBattleCreditsMaterialAllowanceWithAllSettlementEffects) {
+    settlement.set_match_mode(4); // 正式单人 PVE。
+    settlement.set_total_rounds(3);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    const auto& allowance = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).material_reward();
+    EXPECT_EQ(10u, allowance.available_units());
+    EXPECT_EQ(10u, allowance.earned_today());
+    EXPECT_EQ(12u, CurrencySystem::GetBalance(player, kCurrencyGold));
+    EXPECT_EQ(1, Results().entries_size());
+}
+
+TEST_F(PlayerBattleSettlementTest, MissingMaterialLedgerDefersQualifyingBattleBeforeGoldHealthAndMissions) {
+    settlement.set_match_mode(4);
+    settlement.set_total_rounds(3);
+    tlsEcs.actorRegistry.remove<ClientRequestLedgerComp>(player);
+    ExpectCurrencySettlementRejectedWithoutEffects();
+    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<ClientRequestLedgerComp>(player));
+    tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player);
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    EXPECT_EQ(10u, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).material_reward().available_units());
+}
+
+TEST_F(PlayerBattleSettlementTest, InvalidBattleCurrencyDoesNotPublishPreparedMaterialAllowance) {
+    settlement.set_match_mode(4);
+    settlement.set_total_rounds(3);
+    auto* invalid = settlement.add_currency_gains();
+    invalid->set_currency_type(std::numeric_limits<uint32_t>::max());
+    invalid->set_amount(1);
+    const auto before = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).SerializeAsString();
+    ExpectCurrencySettlementRejectedWithoutEffects();
+    EXPECT_EQ(before, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player).SerializeAsString());
+}
 
 TEST_F(PlayerBattleSettlementTest, ExperienceGainCreditsPersistedTotalAndResultWithoutChangingLevel) {
     auto& level = tlsEcs.actorRegistry.emplace<LevelComp>(player);

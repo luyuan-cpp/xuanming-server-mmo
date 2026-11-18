@@ -50,3 +50,11 @@ constexpr uint32_t SceneBagClientPlayerPreviewEquipmentCraftIndex = 10;
 constexpr uint32_t SceneBagClientPlayerCommitEquipmentCraftMessageId = 406;
 constexpr uint32_t SceneBagClientPlayerCommitEquipmentCraftIndex = 11;
 #define SceneBagClientPlayerCommitEquipmentCraftMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(11)
+
+constexpr uint32_t SceneBagClientPlayerGetEquipmentMaterialRewardMessageId = 407;
+constexpr uint32_t SceneBagClientPlayerGetEquipmentMaterialRewardIndex = 12;
+#define SceneBagClientPlayerGetEquipmentMaterialRewardMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(12)
+
+constexpr uint32_t SceneBagClientPlayerClaimEquipmentMaterialRewardMessageId = 408;
+constexpr uint32_t SceneBagClientPlayerClaimEquipmentMaterialRewardIndex = 13;
+#define SceneBagClientPlayerClaimEquipmentMaterialRewardMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(13)

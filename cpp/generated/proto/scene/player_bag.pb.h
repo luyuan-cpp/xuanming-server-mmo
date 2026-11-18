@@ -59,6 +59,8 @@ struct TableStruct_proto_2fscene_2fplayer_5fbag_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto;
 }  // extern "C"
+enum ClaimEquipmentMaterialRewardResponse_Outcome : int;
+extern const uint32_t ClaimEquipmentMaterialRewardResponse_Outcome_internal_data_[];
 enum CommitEquipmentCraftResponse_Outcome : int;
 extern const uint32_t CommitEquipmentCraftResponse_Outcome_internal_data_[];
 enum EquipmentCraftChoice_Operation : int;
@@ -102,6 +104,22 @@ extern BagSlotInfoGlobalsTypeInternal BagSlotInfo_globals_;
 extern const ::google::protobuf::internal::ClassDataFull BagSlotInfo_class_data_;
 #else
 extern const BagSlotInfoGlobalsTypeInternal BagSlotInfo_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimEquipmentMaterialRewardRequest;
+struct ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal ClaimEquipmentMaterialRewardRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimEquipmentMaterialRewardRequest_class_data_;
+#else
+extern const ClaimEquipmentMaterialRewardRequestGlobalsTypeInternal ClaimEquipmentMaterialRewardRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ClaimEquipmentMaterialRewardResponse;
+struct ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal ClaimEquipmentMaterialRewardResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ClaimEquipmentMaterialRewardResponse_class_data_;
+#else
+extern const ClaimEquipmentMaterialRewardResponseGlobalsTypeInternal ClaimEquipmentMaterialRewardResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class CommitEquipmentCraftRequest;
 struct CommitEquipmentCraftRequestGlobalsTypeInternal;
@@ -239,6 +257,14 @@ extern const ::google::protobuf::internal::ClassDataFull EquipmentCraftRecipe_cl
 #else
 extern const EquipmentCraftRecipeGlobalsTypeInternal EquipmentCraftRecipe_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class EquipmentMaterialRewardSnapshot;
+struct EquipmentMaterialRewardSnapshotGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EquipmentMaterialRewardSnapshotGlobalsTypeInternal EquipmentMaterialRewardSnapshot_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EquipmentMaterialRewardSnapshot_class_data_;
+#else
+extern const EquipmentMaterialRewardSnapshotGlobalsTypeInternal EquipmentMaterialRewardSnapshot_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetBagRequest;
 struct GetBagRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -270,6 +296,22 @@ extern GetEquipmentCraftRulesResponseGlobalsTypeInternal GetEquipmentCraftRulesR
 extern const ::google::protobuf::internal::ClassDataFull GetEquipmentCraftRulesResponse_class_data_;
 #else
 extern const GetEquipmentCraftRulesResponseGlobalsTypeInternal GetEquipmentCraftRulesResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetEquipmentMaterialRewardRequest;
+struct GetEquipmentMaterialRewardRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetEquipmentMaterialRewardRequestGlobalsTypeInternal GetEquipmentMaterialRewardRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetEquipmentMaterialRewardRequest_class_data_;
+#else
+extern const GetEquipmentMaterialRewardRequestGlobalsTypeInternal GetEquipmentMaterialRewardRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetEquipmentMaterialRewardResponse;
+struct GetEquipmentMaterialRewardResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetEquipmentMaterialRewardResponseGlobalsTypeInternal GetEquipmentMaterialRewardResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetEquipmentMaterialRewardResponse_class_data_;
+#else
+extern const GetEquipmentMaterialRewardResponseGlobalsTypeInternal GetEquipmentMaterialRewardResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GmGrantItemRequest;
 struct GmGrantItemRequestGlobalsTypeInternal;
@@ -386,6 +428,9 @@ extern const UnequipItemResponseGlobalsTypeInternal UnequipItemResponse_globals_
 namespace google {
 namespace protobuf {
 template <>
+internal::EnumTraitsT<::ClaimEquipmentMaterialRewardResponse_Outcome_internal_data_>
+    internal::EnumTraitsImpl::value<::ClaimEquipmentMaterialRewardResponse_Outcome>;
+template <>
 internal::EnumTraitsT<::CommitEquipmentCraftResponse_Outcome_internal_data_>
     internal::EnumTraitsImpl::value<::CommitEquipmentCraftResponse_Outcome>;
 template <>
@@ -474,6 +519,47 @@ template <>
 [[nodiscard]] inline bool CommitEquipmentCraftResponse_Outcome_Parse(
     ::absl::string_view name, CommitEquipmentCraftResponse_Outcome* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<CommitEquipmentCraftResponse_Outcome>(CommitEquipmentCraftResponse_Outcome_descriptor(), name,
+                                           value);
+}
+enum ClaimEquipmentMaterialRewardResponse_Outcome : int {
+  ClaimEquipmentMaterialRewardResponse_Outcome_UNKNOWN = 0,
+  ClaimEquipmentMaterialRewardResponse_Outcome_REJECTED = 1,
+  ClaimEquipmentMaterialRewardResponse_Outcome_APPLIED = 2,
+  ClaimEquipmentMaterialRewardResponse_Outcome_ClaimEquipmentMaterialRewardResponse_Outcome_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  ClaimEquipmentMaterialRewardResponse_Outcome_ClaimEquipmentMaterialRewardResponse_Outcome_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t ClaimEquipmentMaterialRewardResponse_Outcome_internal_data_[];
+inline constexpr ClaimEquipmentMaterialRewardResponse_Outcome ClaimEquipmentMaterialRewardResponse_Outcome_Outcome_MIN =
+    static_cast<ClaimEquipmentMaterialRewardResponse_Outcome>(0);
+inline constexpr ClaimEquipmentMaterialRewardResponse_Outcome ClaimEquipmentMaterialRewardResponse_Outcome_Outcome_MAX =
+    static_cast<ClaimEquipmentMaterialRewardResponse_Outcome>(2);
+[[nodiscard]] inline bool ClaimEquipmentMaterialRewardResponse_Outcome_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int ClaimEquipmentMaterialRewardResponse_Outcome_Outcome_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ClaimEquipmentMaterialRewardResponse_Outcome_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ClaimEquipmentMaterialRewardResponse_Outcome) {
+  return ClaimEquipmentMaterialRewardResponse_Outcome_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& ClaimEquipmentMaterialRewardResponse_Outcome_Name(T value) {
+  static_assert(::std::is_same<T, ClaimEquipmentMaterialRewardResponse_Outcome>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to Outcome_Name().");
+  return ClaimEquipmentMaterialRewardResponse_Outcome_Name(static_cast<ClaimEquipmentMaterialRewardResponse_Outcome>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& ClaimEquipmentMaterialRewardResponse_Outcome_Name(ClaimEquipmentMaterialRewardResponse_Outcome value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<ClaimEquipmentMaterialRewardResponse_Outcome_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool ClaimEquipmentMaterialRewardResponse_Outcome_Parse(
+    ::absl::string_view name, ClaimEquipmentMaterialRewardResponse_Outcome* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<ClaimEquipmentMaterialRewardResponse_Outcome>(ClaimEquipmentMaterialRewardResponse_Outcome_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -1746,6 +1832,144 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmGrantItemRequest final : public :
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipmentMaterialRewardRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:GetEquipmentMaterialRewardRequest) */ {
+ public:
+  inline GetEquipmentMaterialRewardRequest() : GetEquipmentMaterialRewardRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetEquipmentMaterialRewardRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetEquipmentMaterialRewardRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetEquipmentMaterialRewardRequest(const GetEquipmentMaterialRewardRequest& from) : GetEquipmentMaterialRewardRequest(nullptr, from) {}
+  inline GetEquipmentMaterialRewardRequest(GetEquipmentMaterialRewardRequest&& from) noexcept : GetEquipmentMaterialRewardRequest(nullptr, ::std::move(from)) {}
+  inline GetEquipmentMaterialRewardRequest& operator=(const GetEquipmentMaterialRewardRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetEquipmentMaterialRewardRequest& operator=(GetEquipmentMaterialRewardRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetEquipmentMaterialRewardRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipmentMaterialRewardRequest>(&GetEquipmentMaterialRewardRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 41;
+  friend void swap(GetEquipmentMaterialRewardRequest& a, GetEquipmentMaterialRewardRequest& b) { a.Swap(&b); }
+  inline void Swap(GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GetEquipmentMaterialRewardRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const GetEquipmentMaterialRewardRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const GetEquipmentMaterialRewardRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetEquipmentMaterialRewardRequest"; }
+
+  explicit GetEquipmentMaterialRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetEquipmentMaterialRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetEquipmentMaterialRewardRequest& from);
+  GetEquipmentMaterialRewardRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetEquipmentMaterialRewardRequest&& from) noexcept
+      : GetEquipmentMaterialRewardRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:GetEquipmentMaterialRewardRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
 };
 // -------------------------------------------------------------------
@@ -4547,6 +4771,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnhanceEquipRequest final : public 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimEquipmentMaterialRewardRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ClaimEquipmentMaterialRewardRequest) */ {
+ public:
+  inline ClaimEquipmentMaterialRewardRequest() : ClaimEquipmentMaterialRewardRequest(nullptr) {}
+  ~ClaimEquipmentMaterialRewardRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimEquipmentMaterialRewardRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimEquipmentMaterialRewardRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimEquipmentMaterialRewardRequest(const ClaimEquipmentMaterialRewardRequest& from) : ClaimEquipmentMaterialRewardRequest(nullptr, from) {}
+  inline ClaimEquipmentMaterialRewardRequest(ClaimEquipmentMaterialRewardRequest&& from) noexcept : ClaimEquipmentMaterialRewardRequest(nullptr, ::std::move(from)) {}
+  inline ClaimEquipmentMaterialRewardRequest& operator=(const ClaimEquipmentMaterialRewardRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimEquipmentMaterialRewardRequest& operator=(ClaimEquipmentMaterialRewardRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimEquipmentMaterialRewardRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimEquipmentMaterialRewardRequest>(&ClaimEquipmentMaterialRewardRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 43;
+  friend void swap(ClaimEquipmentMaterialRewardRequest& a, ClaimEquipmentMaterialRewardRequest& b) { a.Swap(&b); }
+  inline void Swap(ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimEquipmentMaterialRewardRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimEquipmentMaterialRewardRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimEquipmentMaterialRewardRequest& from) { ClaimEquipmentMaterialRewardRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ClaimEquipmentMaterialRewardRequest"; }
+
+  explicit ClaimEquipmentMaterialRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimEquipmentMaterialRewardRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimEquipmentMaterialRewardRequest& from);
+  ClaimEquipmentMaterialRewardRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimEquipmentMaterialRewardRequest&& from) noexcept
+      : ClaimEquipmentMaterialRewardRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 1,
+    kExpectedRevisionFieldNumber = 2,
+    kCraftingMaterialCountFieldNumber = 3,
+    kEnhancementStoneCountFieldNumber = 4,
+  };
+  // uint64 client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // uint64 expected_revision = 2;
+  void clear_expected_revision() ;
+  [[nodiscard]] ::uint64_t expected_revision() const;
+  void set_expected_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_revision() const;
+  void _internal_set_expected_revision(::uint64_t value);
+
+  public:
+  // uint32 crafting_material_count = 3;
+  void clear_crafting_material_count() ;
+  [[nodiscard]] ::uint32_t crafting_material_count() const;
+  void set_crafting_material_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_crafting_material_count() const;
+  void _internal_set_crafting_material_count(::uint32_t value);
+
+  public:
+  // uint32 enhancement_stone_count = 4;
+  void clear_enhancement_stone_count() ;
+  [[nodiscard]] ::uint32_t enhancement_stone_count() const;
+  void set_enhancement_stone_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_enhancement_stone_count() const;
+  void _internal_set_enhancement_stone_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ClaimEquipmentMaterialRewardRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimEquipmentMaterialRewardRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t client_request_id_;
+    ::uint64_t expected_revision_;
+    ::uint32_t crafting_material_count_;
+    ::uint32_t enhancement_stone_count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagSlotInfo final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:BagSlotInfo) */ {
  public:
@@ -5197,6 +5658,356 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PreviewEquipmentCraftRequest final 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::EquipmentCraftChoice* PROTOBUF_NULLABLE choice_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardSnapshot final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:EquipmentMaterialRewardSnapshot) */ {
+ public:
+  inline EquipmentMaterialRewardSnapshot() : EquipmentMaterialRewardSnapshot(nullptr) {}
+  ~EquipmentMaterialRewardSnapshot() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EquipmentMaterialRewardSnapshot));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EquipmentMaterialRewardSnapshot(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EquipmentMaterialRewardSnapshot(const EquipmentMaterialRewardSnapshot& from) : EquipmentMaterialRewardSnapshot(nullptr, from) {}
+  inline EquipmentMaterialRewardSnapshot(EquipmentMaterialRewardSnapshot&& from) noexcept : EquipmentMaterialRewardSnapshot(nullptr, ::std::move(from)) {}
+  inline EquipmentMaterialRewardSnapshot& operator=(const EquipmentMaterialRewardSnapshot& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EquipmentMaterialRewardSnapshot& operator=(EquipmentMaterialRewardSnapshot&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EquipmentMaterialRewardSnapshot& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipmentMaterialRewardSnapshot>(&EquipmentMaterialRewardSnapshot_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 40;
+  friend void swap(EquipmentMaterialRewardSnapshot& a, EquipmentMaterialRewardSnapshot& b) { a.Swap(&b); }
+  inline void Swap(EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EquipmentMaterialRewardSnapshot>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EquipmentMaterialRewardSnapshot& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EquipmentMaterialRewardSnapshot& from) { EquipmentMaterialRewardSnapshot::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "EquipmentMaterialRewardSnapshot"; }
+
+  explicit EquipmentMaterialRewardSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EquipmentMaterialRewardSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipmentMaterialRewardSnapshot& from);
+  EquipmentMaterialRewardSnapshot(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EquipmentMaterialRewardSnapshot&& from) noexcept
+      : EquipmentMaterialRewardSnapshot(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kUnavailableReasonFieldNumber = 2,
+    kCraftingMaterialFieldNumber = 10,
+    kEnhancementStoneFieldNumber = 11,
+    kDayStartsAtMsFieldNumber = 3,
+    kNextResetAtMsFieldNumber = 4,
+    kEarnedTodayFieldNumber = 5,
+    kDailyLimitFieldNumber = 6,
+    kAvailableUnitsFieldNumber = 7,
+    kAvailableFieldNumber = 1,
+    kCanClaimFieldNumber = 12,
+    kBatchUnitsFieldNumber = 8,
+    kRevisionFieldNumber = 9,
+  };
+  // string unavailable_reason = 2;
+  void clear_unavailable_reason() ;
+  [[nodiscard]] const ::std::string& unavailable_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_unavailable_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_unavailable_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_unavailable_reason();
+  void set_allocated_unavailable_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_unavailable_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_unavailable_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_unavailable_reason();
+
+  public:
+  // .EquipmentCraftMaterial crafting_material = 10;
+  [[nodiscard]] bool has_crafting_material()
+      const;
+  void clear_crafting_material() ;
+  [[nodiscard]] const ::EquipmentCraftMaterial& crafting_material() const;
+  [[nodiscard]] ::EquipmentCraftMaterial* PROTOBUF_NULLABLE release_crafting_material();
+  ::EquipmentCraftMaterial* PROTOBUF_NONNULL mutable_crafting_material();
+  void set_allocated_crafting_material(::EquipmentCraftMaterial* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_crafting_material(::EquipmentCraftMaterial* PROTOBUF_NULLABLE value);
+  ::EquipmentCraftMaterial* PROTOBUF_NULLABLE unsafe_arena_release_crafting_material();
+
+  private:
+  const ::EquipmentCraftMaterial& _internal_crafting_material() const;
+  ::EquipmentCraftMaterial* PROTOBUF_NONNULL _internal_mutable_crafting_material();
+
+  public:
+  // .EquipmentCraftMaterial enhancement_stone = 11;
+  [[nodiscard]] bool has_enhancement_stone()
+      const;
+  void clear_enhancement_stone() ;
+  [[nodiscard]] const ::EquipmentCraftMaterial& enhancement_stone() const;
+  [[nodiscard]] ::EquipmentCraftMaterial* PROTOBUF_NULLABLE release_enhancement_stone();
+  ::EquipmentCraftMaterial* PROTOBUF_NONNULL mutable_enhancement_stone();
+  void set_allocated_enhancement_stone(::EquipmentCraftMaterial* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_enhancement_stone(::EquipmentCraftMaterial* PROTOBUF_NULLABLE value);
+  ::EquipmentCraftMaterial* PROTOBUF_NULLABLE unsafe_arena_release_enhancement_stone();
+
+  private:
+  const ::EquipmentCraftMaterial& _internal_enhancement_stone() const;
+  ::EquipmentCraftMaterial* PROTOBUF_NONNULL _internal_mutable_enhancement_stone();
+
+  public:
+  // uint64 day_starts_at_ms = 3;
+  void clear_day_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t day_starts_at_ms() const;
+  void set_day_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_day_starts_at_ms() const;
+  void _internal_set_day_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint64 next_reset_at_ms = 4;
+  void clear_next_reset_at_ms() ;
+  [[nodiscard]] ::uint64_t next_reset_at_ms() const;
+  void set_next_reset_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_reset_at_ms() const;
+  void _internal_set_next_reset_at_ms(::uint64_t value);
+
+  public:
+  // uint32 earned_today = 5;
+  void clear_earned_today() ;
+  [[nodiscard]] ::uint32_t earned_today() const;
+  void set_earned_today(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_earned_today() const;
+  void _internal_set_earned_today(::uint32_t value);
+
+  public:
+  // uint32 daily_limit = 6;
+  void clear_daily_limit() ;
+  [[nodiscard]] ::uint32_t daily_limit() const;
+  void set_daily_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_daily_limit() const;
+  void _internal_set_daily_limit(::uint32_t value);
+
+  public:
+  // uint64 available_units = 7;
+  void clear_available_units() ;
+  [[nodiscard]] ::uint64_t available_units() const;
+  void set_available_units(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_available_units() const;
+  void _internal_set_available_units(::uint64_t value);
+
+  public:
+  // bool available = 1;
+  void clear_available() ;
+  [[nodiscard]] bool available() const;
+  void set_available(bool value);
+
+  private:
+  bool _internal_available() const;
+  void _internal_set_available(bool value);
+
+  public:
+  // bool can_claim = 12;
+  void clear_can_claim() ;
+  [[nodiscard]] bool can_claim() const;
+  void set_can_claim(bool value);
+
+  private:
+  bool _internal_can_claim() const;
+  void _internal_set_can_claim(bool value);
+
+  public:
+  // uint32 batch_units = 8;
+  void clear_batch_units() ;
+  [[nodiscard]] ::uint32_t batch_units() const;
+  void set_batch_units(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_batch_units() const;
+  void _internal_set_batch_units(::uint32_t value);
+
+  public:
+  // uint64 revision = 9;
+  void clear_revision() ;
+  [[nodiscard]] ::uint64_t revision() const;
+  void set_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_revision() const;
+  void _internal_set_revision(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:EquipmentMaterialRewardSnapshot)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          2, 66,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EquipmentMaterialRewardSnapshot& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr unavailable_reason_;
+    ::EquipmentCraftMaterial* PROTOBUF_NULLABLE crafting_material_;
+    ::EquipmentCraftMaterial* PROTOBUF_NULLABLE enhancement_stone_;
+    ::uint64_t day_starts_at_ms_;
+    ::uint64_t next_reset_at_ms_;
+    ::uint32_t earned_today_;
+    ::uint32_t daily_limit_;
+    ::uint64_t available_units_;
+    bool available_;
+    bool can_claim_;
+    ::uint32_t batch_units_;
+    ::uint64_t revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6241,6 +7052,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagLayoutInfo final : public ::goog
     ::uint32_t bag_type_;
     ::uint32_t capacity_;
     bool can_sort_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetEquipmentMaterialRewardResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GetEquipmentMaterialRewardResponse) */ {
+ public:
+  inline GetEquipmentMaterialRewardResponse() : GetEquipmentMaterialRewardResponse(nullptr) {}
+  ~GetEquipmentMaterialRewardResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetEquipmentMaterialRewardResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetEquipmentMaterialRewardResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetEquipmentMaterialRewardResponse(const GetEquipmentMaterialRewardResponse& from) : GetEquipmentMaterialRewardResponse(nullptr, from) {}
+  inline GetEquipmentMaterialRewardResponse(GetEquipmentMaterialRewardResponse&& from) noexcept : GetEquipmentMaterialRewardResponse(nullptr, ::std::move(from)) {}
+  inline GetEquipmentMaterialRewardResponse& operator=(const GetEquipmentMaterialRewardResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetEquipmentMaterialRewardResponse& operator=(GetEquipmentMaterialRewardResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetEquipmentMaterialRewardResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetEquipmentMaterialRewardResponse>(&GetEquipmentMaterialRewardResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 42;
+  friend void swap(GetEquipmentMaterialRewardResponse& a, GetEquipmentMaterialRewardResponse& b) { a.Swap(&b); }
+  inline void Swap(GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetEquipmentMaterialRewardResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetEquipmentMaterialRewardResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetEquipmentMaterialRewardResponse& from) { GetEquipmentMaterialRewardResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetEquipmentMaterialRewardResponse"; }
+
+  explicit GetEquipmentMaterialRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetEquipmentMaterialRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetEquipmentMaterialRewardResponse& from);
+  GetEquipmentMaterialRewardResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetEquipmentMaterialRewardResponse&& from) noexcept
+      : GetEquipmentMaterialRewardResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSnapshotFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .EquipmentMaterialRewardSnapshot snapshot = 2;
+  [[nodiscard]] bool has_snapshot()
+      const;
+  void clear_snapshot() ;
+  [[nodiscard]] const ::EquipmentMaterialRewardSnapshot& snapshot() const;
+  [[nodiscard]] ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE release_snapshot();
+  ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL mutable_snapshot();
+  void set_allocated_snapshot(::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_snapshot(::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value);
+  ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_snapshot();
+
+  private:
+  const ::EquipmentMaterialRewardSnapshot& _internal_snapshot() const;
+  ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL _internal_mutable_snapshot();
+
+  public:
+  // @@protoc_insertion_point(class_scope:GetEquipmentMaterialRewardResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetEquipmentMaterialRewardResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE snapshot_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10627,6 +11663,342 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CommitEquipmentCraftResponse final 
   union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
 };
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimEquipmentMaterialRewardResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ClaimEquipmentMaterialRewardResponse) */ {
+ public:
+  inline ClaimEquipmentMaterialRewardResponse() : ClaimEquipmentMaterialRewardResponse(nullptr) {}
+  ~ClaimEquipmentMaterialRewardResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimEquipmentMaterialRewardResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimEquipmentMaterialRewardResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimEquipmentMaterialRewardResponse(const ClaimEquipmentMaterialRewardResponse& from) : ClaimEquipmentMaterialRewardResponse(nullptr, from) {}
+  inline ClaimEquipmentMaterialRewardResponse(ClaimEquipmentMaterialRewardResponse&& from) noexcept : ClaimEquipmentMaterialRewardResponse(nullptr, ::std::move(from)) {}
+  inline ClaimEquipmentMaterialRewardResponse& operator=(const ClaimEquipmentMaterialRewardResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimEquipmentMaterialRewardResponse& operator=(ClaimEquipmentMaterialRewardResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimEquipmentMaterialRewardResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimEquipmentMaterialRewardResponse>(&ClaimEquipmentMaterialRewardResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 44;
+  friend void swap(ClaimEquipmentMaterialRewardResponse& a, ClaimEquipmentMaterialRewardResponse& b) { a.Swap(&b); }
+  inline void Swap(ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimEquipmentMaterialRewardResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimEquipmentMaterialRewardResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimEquipmentMaterialRewardResponse& from) { ClaimEquipmentMaterialRewardResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ClaimEquipmentMaterialRewardResponse"; }
+
+  explicit ClaimEquipmentMaterialRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimEquipmentMaterialRewardResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimEquipmentMaterialRewardResponse& from);
+  ClaimEquipmentMaterialRewardResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimEquipmentMaterialRewardResponse&& from) noexcept
+      : ClaimEquipmentMaterialRewardResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+  using Outcome = ClaimEquipmentMaterialRewardResponse_Outcome;
+  static constexpr Outcome UNKNOWN = ClaimEquipmentMaterialRewardResponse_Outcome_UNKNOWN;
+  static constexpr Outcome REJECTED = ClaimEquipmentMaterialRewardResponse_Outcome_REJECTED;
+  static constexpr Outcome APPLIED = ClaimEquipmentMaterialRewardResponse_Outcome_APPLIED;
+  [[nodiscard]] static inline bool Outcome_IsValid(int value) {
+    return ClaimEquipmentMaterialRewardResponse_Outcome_IsValid(value);
+  }
+  static constexpr Outcome Outcome_MIN = ClaimEquipmentMaterialRewardResponse_Outcome_Outcome_MIN;
+  static constexpr Outcome Outcome_MAX = ClaimEquipmentMaterialRewardResponse_Outcome_Outcome_MAX;
+  static constexpr int Outcome_ARRAYSIZE = ClaimEquipmentMaterialRewardResponse_Outcome_Outcome_ARRAYSIZE;
+  static inline const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL Outcome_descriptor() {
+    return ClaimEquipmentMaterialRewardResponse_Outcome_descriptor();
+  }
+  template <typename T>
+  [[nodiscard]] static inline const ::std::string& Outcome_Name(T value) {
+    return ClaimEquipmentMaterialRewardResponse_Outcome_Name(value);
+  }
+  [[nodiscard]] static inline bool Outcome_Parse(
+      ::absl::string_view name, Outcome* PROTOBUF_NONNULL value) {
+    return ClaimEquipmentMaterialRewardResponse_Outcome_Parse(name, value);
+  }
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kBagFieldNumber = 8,
+    kSnapshotFieldNumber = 9,
+    kClientRequestIdFieldNumber = 2,
+    kOutcomeFieldNumber = 3,
+    kDurableFieldNumber = 4,
+    kReplayedFieldNumber = 5,
+    kResultRevisionFieldNumber = 6,
+    kCurrentRevisionFieldNumber = 7,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .BagInfo bag = 8;
+  [[nodiscard]] bool has_bag()
+      const;
+  void clear_bag() ;
+  [[nodiscard]] const ::BagInfo& bag() const;
+  [[nodiscard]] ::BagInfo* PROTOBUF_NULLABLE release_bag();
+  ::BagInfo* PROTOBUF_NONNULL mutable_bag();
+  void set_allocated_bag(::BagInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_bag(::BagInfo* PROTOBUF_NULLABLE value);
+  ::BagInfo* PROTOBUF_NULLABLE unsafe_arena_release_bag();
+
+  private:
+  const ::BagInfo& _internal_bag() const;
+  ::BagInfo* PROTOBUF_NONNULL _internal_mutable_bag();
+
+  public:
+  // .EquipmentMaterialRewardSnapshot snapshot = 9;
+  [[nodiscard]] bool has_snapshot()
+      const;
+  void clear_snapshot() ;
+  [[nodiscard]] const ::EquipmentMaterialRewardSnapshot& snapshot() const;
+  [[nodiscard]] ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE release_snapshot();
+  ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL mutable_snapshot();
+  void set_allocated_snapshot(::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_snapshot(::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value);
+  ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_snapshot();
+
+  private:
+  const ::EquipmentMaterialRewardSnapshot& _internal_snapshot() const;
+  ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL _internal_mutable_snapshot();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // .ClaimEquipmentMaterialRewardResponse.Outcome outcome = 3;
+  void clear_outcome() ;
+  [[nodiscard]] ::ClaimEquipmentMaterialRewardResponse_Outcome outcome() const;
+  void set_outcome(::ClaimEquipmentMaterialRewardResponse_Outcome value);
+
+  private:
+  ::ClaimEquipmentMaterialRewardResponse_Outcome _internal_outcome() const;
+  void _internal_set_outcome(::ClaimEquipmentMaterialRewardResponse_Outcome value);
+
+  public:
+  // bool durable = 4;
+  void clear_durable() ;
+  [[nodiscard]] bool durable() const;
+  void set_durable(bool value);
+
+  private:
+  bool _internal_durable() const;
+  void _internal_set_durable(bool value);
+
+  public:
+  // bool replayed = 5;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint64 result_revision = 6;
+  void clear_result_revision() ;
+  [[nodiscard]] ::uint64_t result_revision() const;
+  void set_result_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_result_revision() const;
+  void _internal_set_result_revision(::uint64_t value);
+
+  public:
+  // uint64 current_revision = 7;
+  void clear_current_revision() ;
+  [[nodiscard]] ::uint64_t current_revision() const;
+  void set_current_revision(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_current_revision() const;
+  void _internal_set_current_revision(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ClaimEquipmentMaterialRewardResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          3, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimEquipmentMaterialRewardResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::BagInfo* PROTOBUF_NULLABLE bag_;
+    ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE snapshot_;
+    ::uint64_t client_request_id_;
+    int outcome_;
+    bool durable_;
+    bool replayed_;
+    ::uint64_t result_revision_;
+    ::uint64_t current_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fbag_2eproto;
+};
 
 // ===================================================================
 
@@ -10694,6 +12066,14 @@ class SceneBagClientPlayer : public ::google::protobuf::Service {
   virtual void CommitEquipmentCraft(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::CommitEquipmentCraftRequest* PROTOBUF_NONNULL request,
                         ::CommitEquipmentCraftResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void GetEquipmentMaterialReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL request,
+                        ::GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void ClaimEquipmentMaterialReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL request,
+                        ::ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
@@ -10774,6 +12154,14 @@ class SceneBagClientPlayer_Stub final : public SceneBagClientPlayer {
   void CommitEquipmentCraft(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::CommitEquipmentCraftRequest* PROTOBUF_NONNULL request,
                         ::CommitEquipmentCraftResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void GetEquipmentMaterialReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::GetEquipmentMaterialRewardRequest* PROTOBUF_NONNULL request,
+                        ::GetEquipmentMaterialRewardResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void ClaimEquipmentMaterialReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ClaimEquipmentMaterialRewardRequest* PROTOBUF_NONNULL request,
+                        ::ClaimEquipmentMaterialRewardResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -19430,6 +20818,1222 @@ inline void CommitEquipmentCraftResponse::set_allocated_equipment(::BagInfo* PRO
   // @@protoc_insertion_point(field_set_allocated:CommitEquipmentCraftResponse.equipment)
 }
 
+// -------------------------------------------------------------------
+
+// EquipmentMaterialRewardSnapshot
+
+// bool available = 1;
+inline void EquipmentMaterialRewardSnapshot::clear_available() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool EquipmentMaterialRewardSnapshot::available() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.available)
+  return _internal_available();
+}
+inline void EquipmentMaterialRewardSnapshot::set_available(bool value) {
+  _internal_set_available(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.available)
+}
+inline bool EquipmentMaterialRewardSnapshot::_internal_available() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.available_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_available(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_ = value;
+}
+
+// string unavailable_reason = 2;
+inline void EquipmentMaterialRewardSnapshot::clear_unavailable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unavailable_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& EquipmentMaterialRewardSnapshot::unavailable_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.unavailable_reason)
+  return _internal_unavailable_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EquipmentMaterialRewardSnapshot::set_unavailable_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.unavailable_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.unavailable_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::mutable_unavailable_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_unavailable_reason();
+  // @@protoc_insertion_point(field_mutable:EquipmentMaterialRewardSnapshot.unavailable_reason)
+  return _s;
+}
+inline const ::std::string& EquipmentMaterialRewardSnapshot::_internal_unavailable_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unavailable_reason_.Get();
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_unavailable_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unavailable_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::_internal_mutable_unavailable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.unavailable_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EquipmentMaterialRewardSnapshot::release_unavailable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipmentMaterialRewardSnapshot.unavailable_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.unavailable_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.unavailable_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EquipmentMaterialRewardSnapshot::set_allocated_unavailable_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.unavailable_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.unavailable_reason_.IsDefault()) {
+    _impl_.unavailable_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:EquipmentMaterialRewardSnapshot.unavailable_reason)
+}
+
+// uint64 day_starts_at_ms = 3;
+inline void EquipmentMaterialRewardSnapshot::clear_day_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::day_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.day_starts_at_ms)
+  return _internal_day_starts_at_ms();
+}
+inline void EquipmentMaterialRewardSnapshot::set_day_starts_at_ms(::uint64_t value) {
+  _internal_set_day_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.day_starts_at_ms)
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::_internal_day_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.day_starts_at_ms_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_day_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.day_starts_at_ms_ = value;
+}
+
+// uint64 next_reset_at_ms = 4;
+inline void EquipmentMaterialRewardSnapshot::clear_next_reset_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_reset_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::next_reset_at_ms() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.next_reset_at_ms)
+  return _internal_next_reset_at_ms();
+}
+inline void EquipmentMaterialRewardSnapshot::set_next_reset_at_ms(::uint64_t value) {
+  _internal_set_next_reset_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.next_reset_at_ms)
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::_internal_next_reset_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_reset_at_ms_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_next_reset_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_reset_at_ms_ = value;
+}
+
+// uint32 earned_today = 5;
+inline void EquipmentMaterialRewardSnapshot::clear_earned_today() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_today_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t EquipmentMaterialRewardSnapshot::earned_today() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.earned_today)
+  return _internal_earned_today();
+}
+inline void EquipmentMaterialRewardSnapshot::set_earned_today(::uint32_t value) {
+  _internal_set_earned_today(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.earned_today)
+}
+inline ::uint32_t EquipmentMaterialRewardSnapshot::_internal_earned_today() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.earned_today_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_earned_today(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.earned_today_ = value;
+}
+
+// uint32 daily_limit = 6;
+inline void EquipmentMaterialRewardSnapshot::clear_daily_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t EquipmentMaterialRewardSnapshot::daily_limit() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.daily_limit)
+  return _internal_daily_limit();
+}
+inline void EquipmentMaterialRewardSnapshot::set_daily_limit(::uint32_t value) {
+  _internal_set_daily_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.daily_limit)
+}
+inline ::uint32_t EquipmentMaterialRewardSnapshot::_internal_daily_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.daily_limit_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_daily_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_limit_ = value;
+}
+
+// uint64 available_units = 7;
+inline void EquipmentMaterialRewardSnapshot::clear_available_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_units_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::available_units() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.available_units)
+  return _internal_available_units();
+}
+inline void EquipmentMaterialRewardSnapshot::set_available_units(::uint64_t value) {
+  _internal_set_available_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.available_units)
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::_internal_available_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.available_units_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_available_units(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.available_units_ = value;
+}
+
+// uint32 batch_units = 8;
+inline void EquipmentMaterialRewardSnapshot::clear_batch_units() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.batch_units_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t EquipmentMaterialRewardSnapshot::batch_units() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.batch_units)
+  return _internal_batch_units();
+}
+inline void EquipmentMaterialRewardSnapshot::set_batch_units(::uint32_t value) {
+  _internal_set_batch_units(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.batch_units)
+}
+inline ::uint32_t EquipmentMaterialRewardSnapshot::_internal_batch_units() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.batch_units_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_batch_units(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.batch_units_ = value;
+}
+
+// uint64 revision = 9;
+inline void EquipmentMaterialRewardSnapshot::clear_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::revision() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.revision)
+  return _internal_revision();
+}
+inline void EquipmentMaterialRewardSnapshot::set_revision(::uint64_t value) {
+  _internal_set_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.revision)
+}
+inline ::uint64_t EquipmentMaterialRewardSnapshot::_internal_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.revision_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.revision_ = value;
+}
+
+// .EquipmentCraftMaterial crafting_material = 10;
+inline bool EquipmentMaterialRewardSnapshot::has_crafting_material() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.crafting_material_ != nullptr);
+  return value;
+}
+inline void EquipmentMaterialRewardSnapshot::clear_crafting_material() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.crafting_material_ != nullptr) _impl_.crafting_material_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::EquipmentCraftMaterial& EquipmentMaterialRewardSnapshot::_internal_crafting_material() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::EquipmentCraftMaterial* p = _impl_.crafting_material_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::EquipmentCraftMaterial>(&::EquipmentCraftMaterial_globals_);
+}
+inline const ::EquipmentCraftMaterial& EquipmentMaterialRewardSnapshot::crafting_material() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.crafting_material)
+  return _internal_crafting_material();
+}
+inline void EquipmentMaterialRewardSnapshot::unsafe_arena_set_allocated_crafting_material(
+    ::EquipmentCraftMaterial* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.crafting_material_);
+  }
+  _impl_.crafting_material_ = reinterpret_cast<::EquipmentCraftMaterial*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:EquipmentMaterialRewardSnapshot.crafting_material)
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NULLABLE EquipmentMaterialRewardSnapshot::release_crafting_material() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentCraftMaterial* released = _impl_.crafting_material_;
+  _impl_.crafting_material_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NULLABLE EquipmentMaterialRewardSnapshot::unsafe_arena_release_crafting_material() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipmentMaterialRewardSnapshot.crafting_material)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentCraftMaterial* temp = _impl_.crafting_material_;
+  _impl_.crafting_material_ = nullptr;
+  return temp;
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::_internal_mutable_crafting_material() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.crafting_material_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::EquipmentCraftMaterial>(GetArena());
+    _impl_.crafting_material_ = reinterpret_cast<::EquipmentCraftMaterial*>(p);
+  }
+  return _impl_.crafting_material_;
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::mutable_crafting_material()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentCraftMaterial* _msg = _internal_mutable_crafting_material();
+  // @@protoc_insertion_point(field_mutable:EquipmentMaterialRewardSnapshot.crafting_material)
+  return _msg;
+}
+inline void EquipmentMaterialRewardSnapshot::set_allocated_crafting_material(::EquipmentCraftMaterial* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.crafting_material_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.crafting_material_ = reinterpret_cast<::EquipmentCraftMaterial*>(value);
+  // @@protoc_insertion_point(field_set_allocated:EquipmentMaterialRewardSnapshot.crafting_material)
+}
+
+// .EquipmentCraftMaterial enhancement_stone = 11;
+inline bool EquipmentMaterialRewardSnapshot::has_enhancement_stone() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.enhancement_stone_ != nullptr);
+  return value;
+}
+inline void EquipmentMaterialRewardSnapshot::clear_enhancement_stone() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.enhancement_stone_ != nullptr) _impl_.enhancement_stone_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::EquipmentCraftMaterial& EquipmentMaterialRewardSnapshot::_internal_enhancement_stone() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::EquipmentCraftMaterial* p = _impl_.enhancement_stone_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::EquipmentCraftMaterial>(&::EquipmentCraftMaterial_globals_);
+}
+inline const ::EquipmentCraftMaterial& EquipmentMaterialRewardSnapshot::enhancement_stone() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.enhancement_stone)
+  return _internal_enhancement_stone();
+}
+inline void EquipmentMaterialRewardSnapshot::unsafe_arena_set_allocated_enhancement_stone(
+    ::EquipmentCraftMaterial* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.enhancement_stone_);
+  }
+  _impl_.enhancement_stone_ = reinterpret_cast<::EquipmentCraftMaterial*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:EquipmentMaterialRewardSnapshot.enhancement_stone)
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NULLABLE EquipmentMaterialRewardSnapshot::release_enhancement_stone() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::EquipmentCraftMaterial* released = _impl_.enhancement_stone_;
+  _impl_.enhancement_stone_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NULLABLE EquipmentMaterialRewardSnapshot::unsafe_arena_release_enhancement_stone() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:EquipmentMaterialRewardSnapshot.enhancement_stone)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::EquipmentCraftMaterial* temp = _impl_.enhancement_stone_;
+  _impl_.enhancement_stone_ = nullptr;
+  return temp;
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::_internal_mutable_enhancement_stone() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.enhancement_stone_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::EquipmentCraftMaterial>(GetArena());
+    _impl_.enhancement_stone_ = reinterpret_cast<::EquipmentCraftMaterial*>(p);
+  }
+  return _impl_.enhancement_stone_;
+}
+inline ::EquipmentCraftMaterial* PROTOBUF_NONNULL EquipmentMaterialRewardSnapshot::mutable_enhancement_stone()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::EquipmentCraftMaterial* _msg = _internal_mutable_enhancement_stone();
+  // @@protoc_insertion_point(field_mutable:EquipmentMaterialRewardSnapshot.enhancement_stone)
+  return _msg;
+}
+inline void EquipmentMaterialRewardSnapshot::set_allocated_enhancement_stone(::EquipmentCraftMaterial* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.enhancement_stone_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.enhancement_stone_ = reinterpret_cast<::EquipmentCraftMaterial*>(value);
+  // @@protoc_insertion_point(field_set_allocated:EquipmentMaterialRewardSnapshot.enhancement_stone)
+}
+
+// bool can_claim = 12;
+inline void EquipmentMaterialRewardSnapshot::clear_can_claim() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.can_claim_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool EquipmentMaterialRewardSnapshot::can_claim() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardSnapshot.can_claim)
+  return _internal_can_claim();
+}
+inline void EquipmentMaterialRewardSnapshot::set_can_claim(bool value) {
+  _internal_set_can_claim(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardSnapshot.can_claim)
+}
+inline bool EquipmentMaterialRewardSnapshot::_internal_can_claim() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.can_claim_;
+}
+inline void EquipmentMaterialRewardSnapshot::_internal_set_can_claim(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.can_claim_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetEquipmentMaterialRewardRequest
+
+// -------------------------------------------------------------------
+
+// GetEquipmentMaterialRewardResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetEquipmentMaterialRewardResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetEquipmentMaterialRewardResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetEquipmentMaterialRewardResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetEquipmentMaterialRewardResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetEquipmentMaterialRewardResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetEquipmentMaterialRewardResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetEquipmentMaterialRewardResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetEquipmentMaterialRewardResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetEquipmentMaterialRewardResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetEquipmentMaterialRewardResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetEquipmentMaterialRewardResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:GetEquipmentMaterialRewardResponse.error_message)
+  return _msg;
+}
+inline void GetEquipmentMaterialRewardResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetEquipmentMaterialRewardResponse.error_message)
+}
+
+// .EquipmentMaterialRewardSnapshot snapshot = 2;
+inline bool GetEquipmentMaterialRewardResponse::has_snapshot() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.snapshot_ != nullptr);
+  return value;
+}
+inline void GetEquipmentMaterialRewardResponse::clear_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.snapshot_ != nullptr) _impl_.snapshot_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::EquipmentMaterialRewardSnapshot& GetEquipmentMaterialRewardResponse::_internal_snapshot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::EquipmentMaterialRewardSnapshot* p = _impl_.snapshot_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::EquipmentMaterialRewardSnapshot>(&::EquipmentMaterialRewardSnapshot_globals_);
+}
+inline const ::EquipmentMaterialRewardSnapshot& GetEquipmentMaterialRewardResponse::snapshot() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GetEquipmentMaterialRewardResponse.snapshot)
+  return _internal_snapshot();
+}
+inline void GetEquipmentMaterialRewardResponse::unsafe_arena_set_allocated_snapshot(
+    ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.snapshot_);
+  }
+  _impl_.snapshot_ = reinterpret_cast<::EquipmentMaterialRewardSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:GetEquipmentMaterialRewardResponse.snapshot)
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE GetEquipmentMaterialRewardResponse::release_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentMaterialRewardSnapshot* released = _impl_.snapshot_;
+  _impl_.snapshot_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE GetEquipmentMaterialRewardResponse::unsafe_arena_release_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GetEquipmentMaterialRewardResponse.snapshot)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentMaterialRewardSnapshot* temp = _impl_.snapshot_;
+  _impl_.snapshot_ = nullptr;
+  return temp;
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL GetEquipmentMaterialRewardResponse::_internal_mutable_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.snapshot_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::EquipmentMaterialRewardSnapshot>(GetArena());
+    _impl_.snapshot_ = reinterpret_cast<::EquipmentMaterialRewardSnapshot*>(p);
+  }
+  return _impl_.snapshot_;
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL GetEquipmentMaterialRewardResponse::mutable_snapshot()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::EquipmentMaterialRewardSnapshot* _msg = _internal_mutable_snapshot();
+  // @@protoc_insertion_point(field_mutable:GetEquipmentMaterialRewardResponse.snapshot)
+  return _msg;
+}
+inline void GetEquipmentMaterialRewardResponse::set_allocated_snapshot(::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.snapshot_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.snapshot_ = reinterpret_cast<::EquipmentMaterialRewardSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:GetEquipmentMaterialRewardResponse.snapshot)
+}
+
+// -------------------------------------------------------------------
+
+// ClaimEquipmentMaterialRewardRequest
+
+// uint64 client_request_id = 1;
+inline void ClaimEquipmentMaterialRewardRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardRequest::client_request_id() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardRequest.client_request_id)
+  return _internal_client_request_id();
+}
+inline void ClaimEquipmentMaterialRewardRequest::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardRequest.client_request_id)
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void ClaimEquipmentMaterialRewardRequest::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
+}
+
+// uint64 expected_revision = 2;
+inline void ClaimEquipmentMaterialRewardRequest::clear_expected_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardRequest::expected_revision() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardRequest.expected_revision)
+  return _internal_expected_revision();
+}
+inline void ClaimEquipmentMaterialRewardRequest::set_expected_revision(::uint64_t value) {
+  _internal_set_expected_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardRequest.expected_revision)
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardRequest::_internal_expected_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_revision_;
+}
+inline void ClaimEquipmentMaterialRewardRequest::_internal_set_expected_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_revision_ = value;
+}
+
+// uint32 crafting_material_count = 3;
+inline void ClaimEquipmentMaterialRewardRequest::clear_crafting_material_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafting_material_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ClaimEquipmentMaterialRewardRequest::crafting_material_count() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardRequest.crafting_material_count)
+  return _internal_crafting_material_count();
+}
+inline void ClaimEquipmentMaterialRewardRequest::set_crafting_material_count(::uint32_t value) {
+  _internal_set_crafting_material_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardRequest.crafting_material_count)
+}
+inline ::uint32_t ClaimEquipmentMaterialRewardRequest::_internal_crafting_material_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.crafting_material_count_;
+}
+inline void ClaimEquipmentMaterialRewardRequest::_internal_set_crafting_material_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.crafting_material_count_ = value;
+}
+
+// uint32 enhancement_stone_count = 4;
+inline void ClaimEquipmentMaterialRewardRequest::clear_enhancement_stone_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhancement_stone_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ClaimEquipmentMaterialRewardRequest::enhancement_stone_count() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardRequest.enhancement_stone_count)
+  return _internal_enhancement_stone_count();
+}
+inline void ClaimEquipmentMaterialRewardRequest::set_enhancement_stone_count(::uint32_t value) {
+  _internal_set_enhancement_stone_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardRequest.enhancement_stone_count)
+}
+inline ::uint32_t ClaimEquipmentMaterialRewardRequest::_internal_enhancement_stone_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enhancement_stone_count_;
+}
+inline void ClaimEquipmentMaterialRewardRequest::_internal_set_enhancement_stone_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enhancement_stone_count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ClaimEquipmentMaterialRewardResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ClaimEquipmentMaterialRewardResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ClaimEquipmentMaterialRewardResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ClaimEquipmentMaterialRewardResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.error_message)
+  return _internal_error_message();
+}
+inline void ClaimEquipmentMaterialRewardResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClaimEquipmentMaterialRewardResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimEquipmentMaterialRewardResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimEquipmentMaterialRewardResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimEquipmentMaterialRewardResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:ClaimEquipmentMaterialRewardResponse.error_message)
+  return _msg;
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ClaimEquipmentMaterialRewardResponse.error_message)
+}
+
+// uint64 client_request_id = 2;
+inline void ClaimEquipmentMaterialRewardResponse::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardResponse::client_request_id() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.client_request_id)
+  return _internal_client_request_id();
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardResponse.client_request_id)
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardResponse::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void ClaimEquipmentMaterialRewardResponse::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
+}
+
+// .ClaimEquipmentMaterialRewardResponse.Outcome outcome = 3;
+inline void ClaimEquipmentMaterialRewardResponse::clear_outcome() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::ClaimEquipmentMaterialRewardResponse_Outcome ClaimEquipmentMaterialRewardResponse::outcome() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.outcome)
+  return _internal_outcome();
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_outcome(::ClaimEquipmentMaterialRewardResponse_Outcome value) {
+  _internal_set_outcome(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardResponse.outcome)
+}
+inline ::ClaimEquipmentMaterialRewardResponse_Outcome ClaimEquipmentMaterialRewardResponse::_internal_outcome() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::ClaimEquipmentMaterialRewardResponse_Outcome>(_impl_.outcome_);
+}
+inline void ClaimEquipmentMaterialRewardResponse::_internal_set_outcome(::ClaimEquipmentMaterialRewardResponse_Outcome value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.outcome_ = value;
+}
+
+// bool durable = 4;
+inline void ClaimEquipmentMaterialRewardResponse::clear_durable() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.durable_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool ClaimEquipmentMaterialRewardResponse::durable() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.durable)
+  return _internal_durable();
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_durable(bool value) {
+  _internal_set_durable(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardResponse.durable)
+}
+inline bool ClaimEquipmentMaterialRewardResponse::_internal_durable() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.durable_;
+}
+inline void ClaimEquipmentMaterialRewardResponse::_internal_set_durable(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.durable_ = value;
+}
+
+// bool replayed = 5;
+inline void ClaimEquipmentMaterialRewardResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool ClaimEquipmentMaterialRewardResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.replayed)
+  return _internal_replayed();
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardResponse.replayed)
+}
+inline bool ClaimEquipmentMaterialRewardResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void ClaimEquipmentMaterialRewardResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
+}
+
+// uint64 result_revision = 6;
+inline void ClaimEquipmentMaterialRewardResponse::clear_result_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardResponse::result_revision() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.result_revision)
+  return _internal_result_revision();
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_result_revision(::uint64_t value) {
+  _internal_set_result_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardResponse.result_revision)
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardResponse::_internal_result_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.result_revision_;
+}
+inline void ClaimEquipmentMaterialRewardResponse::_internal_set_result_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_revision_ = value;
+}
+
+// uint64 current_revision = 7;
+inline void ClaimEquipmentMaterialRewardResponse::clear_current_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_revision_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardResponse::current_revision() const {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.current_revision)
+  return _internal_current_revision();
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_current_revision(::uint64_t value) {
+  _internal_set_current_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:ClaimEquipmentMaterialRewardResponse.current_revision)
+}
+inline ::uint64_t ClaimEquipmentMaterialRewardResponse::_internal_current_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_revision_;
+}
+inline void ClaimEquipmentMaterialRewardResponse::_internal_set_current_revision(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_revision_ = value;
+}
+
+// .BagInfo bag = 8;
+inline bool ClaimEquipmentMaterialRewardResponse::has_bag() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.bag_ != nullptr);
+  return value;
+}
+inline void ClaimEquipmentMaterialRewardResponse::clear_bag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.bag_ != nullptr) _impl_.bag_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::BagInfo& ClaimEquipmentMaterialRewardResponse::_internal_bag() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BagInfo* p = _impl_.bag_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BagInfo>(&::BagInfo_globals_);
+}
+inline const ::BagInfo& ClaimEquipmentMaterialRewardResponse::bag() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.bag)
+  return _internal_bag();
+}
+inline void ClaimEquipmentMaterialRewardResponse::unsafe_arena_set_allocated_bag(
+    ::BagInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bag_);
+  }
+  _impl_.bag_ = reinterpret_cast<::BagInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClaimEquipmentMaterialRewardResponse.bag)
+}
+inline ::BagInfo* PROTOBUF_NULLABLE ClaimEquipmentMaterialRewardResponse::release_bag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BagInfo* released = _impl_.bag_;
+  _impl_.bag_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BagInfo* PROTOBUF_NULLABLE ClaimEquipmentMaterialRewardResponse::unsafe_arena_release_bag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimEquipmentMaterialRewardResponse.bag)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BagInfo* temp = _impl_.bag_;
+  _impl_.bag_ = nullptr;
+  return temp;
+}
+inline ::BagInfo* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::_internal_mutable_bag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.bag_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BagInfo>(GetArena());
+    _impl_.bag_ = reinterpret_cast<::BagInfo*>(p);
+  }
+  return _impl_.bag_;
+}
+inline ::BagInfo* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::mutable_bag()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BagInfo* _msg = _internal_mutable_bag();
+  // @@protoc_insertion_point(field_mutable:ClaimEquipmentMaterialRewardResponse.bag)
+  return _msg;
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_allocated_bag(::BagInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bag_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.bag_ = reinterpret_cast<::BagInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ClaimEquipmentMaterialRewardResponse.bag)
+}
+
+// .EquipmentMaterialRewardSnapshot snapshot = 9;
+inline bool ClaimEquipmentMaterialRewardResponse::has_snapshot() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.snapshot_ != nullptr);
+  return value;
+}
+inline void ClaimEquipmentMaterialRewardResponse::clear_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.snapshot_ != nullptr) _impl_.snapshot_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::EquipmentMaterialRewardSnapshot& ClaimEquipmentMaterialRewardResponse::_internal_snapshot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::EquipmentMaterialRewardSnapshot* p = _impl_.snapshot_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::EquipmentMaterialRewardSnapshot>(&::EquipmentMaterialRewardSnapshot_globals_);
+}
+inline const ::EquipmentMaterialRewardSnapshot& ClaimEquipmentMaterialRewardResponse::snapshot() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimEquipmentMaterialRewardResponse.snapshot)
+  return _internal_snapshot();
+}
+inline void ClaimEquipmentMaterialRewardResponse::unsafe_arena_set_allocated_snapshot(
+    ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.snapshot_);
+  }
+  _impl_.snapshot_ = reinterpret_cast<::EquipmentMaterialRewardSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClaimEquipmentMaterialRewardResponse.snapshot)
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE ClaimEquipmentMaterialRewardResponse::release_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::EquipmentMaterialRewardSnapshot* released = _impl_.snapshot_;
+  _impl_.snapshot_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE ClaimEquipmentMaterialRewardResponse::unsafe_arena_release_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimEquipmentMaterialRewardResponse.snapshot)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::EquipmentMaterialRewardSnapshot* temp = _impl_.snapshot_;
+  _impl_.snapshot_ = nullptr;
+  return temp;
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::_internal_mutable_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.snapshot_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::EquipmentMaterialRewardSnapshot>(GetArena());
+    _impl_.snapshot_ = reinterpret_cast<::EquipmentMaterialRewardSnapshot*>(p);
+  }
+  return _impl_.snapshot_;
+}
+inline ::EquipmentMaterialRewardSnapshot* PROTOBUF_NONNULL ClaimEquipmentMaterialRewardResponse::mutable_snapshot()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::EquipmentMaterialRewardSnapshot* _msg = _internal_mutable_snapshot();
+  // @@protoc_insertion_point(field_mutable:ClaimEquipmentMaterialRewardResponse.snapshot)
+  return _msg;
+}
+inline void ClaimEquipmentMaterialRewardResponse::set_allocated_snapshot(::EquipmentMaterialRewardSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.snapshot_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.snapshot_ = reinterpret_cast<::EquipmentMaterialRewardSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ClaimEquipmentMaterialRewardResponse.snapshot)
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -19451,6 +22055,12 @@ struct is_proto_enum<::CommitEquipmentCraftResponse_Outcome> : std::true_type {}
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::CommitEquipmentCraftResponse_Outcome>() {
   return ::CommitEquipmentCraftResponse_Outcome_descriptor();
+}
+template <>
+struct is_proto_enum<::ClaimEquipmentMaterialRewardResponse_Outcome> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::ClaimEquipmentMaterialRewardResponse_Outcome>() {
+  return ::ClaimEquipmentMaterialRewardResponse_Outcome_descriptor();
 }
 
 }  // namespace protobuf

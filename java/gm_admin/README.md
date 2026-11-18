@@ -46,4 +46,8 @@ python java/gm_admin/run_local.py status
 
 ## Scene 最后部署
 
+当前网页已完成原生登录、退出重登、十二项权限展示和七项操作目录验收；读服务转发已就绪。用户已明确选择先完成 GM 代码和构建，Scene 等装备、技能统一验收后再重建，因此玩家命令和邮件写通道保持禁用。这不影响通过浏览器访问管理网页。
+
+现役手绘表挂载缺少新节点必读的 `equipartifact.json` 和 `equipv1affix.json`，且其余装备、技能表也有变化。本轮不执行下面的 stage/apply，不更新表快照、manifest 或 Compose；后续须先统一验收并准备兼容表快照。部署工具会在写配置前拒绝缺表。差异记录在 `build/verification/gm-admin-20261117/scene/table-compatibility-review.json`。
+
 `python deploy/gm-admin/scene-deploy.py prepare` 只生成私有配置、现役身份快照和 `scene/plan.json`，不构建或重启。按计划完成正式 C++ 镜像构建，再运行 `stage --build-result <构建凭据>`，生成精确配置差异。只有最后显式执行 `apply --execute` 才会替换一个 scene 容器并断开其现有连接；其他 16 个服务必须保持原身份和状态。执行前后均检查四份 Compose 来源、SDK、源码、镜像与配置，检查失败不自动重试。完整就绪凭据通过后重启 GM Java 后台，才会启用写通道。

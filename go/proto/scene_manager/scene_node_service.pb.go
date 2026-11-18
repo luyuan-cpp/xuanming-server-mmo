@@ -512,7 +512,7 @@ const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"\x0fAssetAbortDebit\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x122\n" +
 	"\vAssetCredit\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x126\n" +
 	"\x0fAssetAckReceipt\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x12q\n" +
-	"\x16GmExecutePlayerCommand\x12).scene_node.GmExecutePlayerCommandRequest\x1a*.scene_node.GmExecutePlayerCommandResponse\"\x00B\x1dZ\x1bscene_manager/scene_managerb\x06proto3"
+	"\x16GmExecutePlayerCommand\x12).scene_node.GmExecutePlayerCommandRequest\x1a*.scene_node.GmExecutePlayerCommandResponse\"\x00B\x15Z\x13proto/scene_managerb\x06proto3"
 
 var (
 	file_proto_scene_manager_scene_node_service_proto_rawDescOnce sync.Once
