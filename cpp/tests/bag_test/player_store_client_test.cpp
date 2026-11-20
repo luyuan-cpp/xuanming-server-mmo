@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "core/system/scene_task_scope.h"
+#include "modules/audit/audit_outbox.h"
 #include "modules/audit/audit_outbox_stats.h"
 #include "muduo/net/EventLoop.h"
 #include "player/system/player_store_client.h"
@@ -1719,14 +1720,12 @@ TEST(PlayerStoreClientTest, ZeroFallbackNeverDefers)
 // ── 审计发件箱(docs/design/player-audit-outbox.md §5.2)──────────────────────────────────
 namespace
 {
-    // 假的审计队列,语义与 AuditOutbox 相同:按水位排队,按快照水位交出(一笔有预算),放行时删掉水位不大于它的。
+    // 假的审计队列,语义与 AuditOutbox 相同:按水位排队,按快照水位全部交出,放行时删掉水位不大于它的。
     struct AuditProbe
     {
         uint64_t mark{0};
         std::vector<std::pair<uint64_t, uint64_t>> queued; // (水位, tx_id)
         std::vector<uint64_t> acked;
-        // 一笔最多带几条。AuditOutbox 的预算按字节算(kMaxBytesPerSave),这里按条数模拟;缺省不限。
-        std::size_t perSave{static_cast<std::size_t>(-1)};
 
         void Record(uint64_t txId) { queued.emplace_back(++mark, txId); }
 
@@ -1736,24 +1735,14 @@ namespace
             options.auditDue = [this](Guid, uint64_t commitMark) { return !queued.empty() && queued.front().first <= commitMark; };
             options.attachAudit = [this](Guid, uint64_t commitMark, playerstore::SavePlayerRequest &request)
             {
-                PlayerStoreClient::AuditAttachment attached;
-                std::size_t count = 0;
                 for (const auto &[recordMark, txId] : queued)
                 {
                     if (recordMark > commitMark)
                     {
                         break;
                     }
-                    if (count == perSave)
-                    {
-                        attached.more = true;
-                        break;
-                    }
                     request.add_transaction_logs()->set_tx_id(txId);
-                    attached.through = recordMark;
-                    ++count;
                 }
-                return attached;
             };
             options.onCommittedThrough = [this](Guid, uint64_t commitMark)
             {
@@ -1933,13 +1922,13 @@ TEST(PlayerStoreClientTest, PeriodicSaveIsNotDeferredWhileAuditIsDue)
     EXPECT_FALSE(client.DeferPeriodicSave(kPlayer, WithLocation(Rows("h0"), "l2")));
 }
 
-// 到期的审计记录超过一笔的预算:分笔,不丢。行随第一笔提交;调用方要的 release 与回调留给最后一笔 ——
-// release 之后别的节点可以认领,剩下的记录就没有机会由本节点提交了。
-TEST(PlayerStoreClientTest, AuditOverTheSaveBudgetIsCarriedByFollowUpSaves)
+
+// 到期的审计记录一笔全部带上,和行、调用方要的 release 在同一笔里提交,回调只有一次(设计 §5.2)。
+// 不分笔:分笔时前一笔的改动已经提交、剩下的记录还在内存里,这一两拍里 scene 崩溃,已提交改动的流水就丢了。
+TEST(PlayerStoreClientTest, AllDueAuditGoesWithTheRowsAndReleaseInOneSave)
 {
     Fixture f;
     AuditProbe audit;
-    audit.perSave = 2;
     audit.Install(f.options);
     PlayerStoreClient client(f.options);
     ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
@@ -1951,147 +1940,28 @@ TEST(PlayerStoreClientTest, AuditOverTheSaveBudgetIsCarriedByFollowUpSaves)
     ASSERT_EQ(PlayerStoreClient::SubmitResult::kAccepted,
               client.Submit(kPlayer, Rows("h1"), Released(), [&results](const PlayerStoreClient::SaveResult &result) { results.push_back(result); }));
 
-    // 第一笔:行和前两条记录,不带 release。
     ASSERT_EQ(1u, f.sent.size());
     EXPECT_EQ("h1", PayloadOf(f.sent.front().request, kCharacter));
-    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1, 2}));
-    EXPECT_FALSE(f.sent.front().request.release());
-    const uint64_t firstSeq = f.sent.front().request.save_seq();
-    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
-    EXPECT_TRUE(results.empty()) << "记录还没交完,这次存盘对调用方来说还没完成";
-    EXPECT_TRUE(client.HasUnsettled(kPlayer));
-    EXPECT_TRUE(f.settled.empty());
-    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{2})) << "只放行到带上的最后一条";
-
-    // 第二笔:没有脏行,接着带两条,仍不带 release。
-    ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ(0, f.sent.front().request.rows_size());
-    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{3, 4}));
-    EXPECT_FALSE(f.sent.front().request.release());
-    EXPECT_GT(f.sent.front().request.save_seq(), firstSeq) << "每一笔是一次独立的提交,各取各的序号";
-    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
-    EXPECT_TRUE(results.empty());
-
-    // 最后一笔:带走剩下的一条,带上调用方要的 release;它提交了才回调。
-    ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ(0, f.sent.front().request.rows_size());
-    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{5}));
+    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1, 2, 3, 4, 5}));
     EXPECT_TRUE(f.sent.front().request.release());
-    const uint64_t lastSeq = f.sent.front().request.save_seq();
+    const uint64_t seq = f.sent.front().request.save_seq();
     ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
 
     ASSERT_EQ(1u, results.size());
     EXPECT_EQ(PlayerStoreClient::SaveStatus::kCommitted, results[0].status);
-    EXPECT_FALSE(results[0].superseded);
-    EXPECT_EQ(lastSeq, results[0].saveSeq) << "调用方拿到的是最后一笔的序号:库里的写权行停在它上面";
-    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{2, 4, 5}));
+    EXPECT_EQ(seq, results[0].saveSeq);
+    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{5})) << "按这份快照的水位放行";
     EXPECT_TRUE(audit.queued.empty());
+    EXPECT_TRUE(f.sent.empty()) << "没有续笔";
     EXPECT_FALSE(client.HasUnsettled(kPlayer));
     ASSERT_EQ(1u, f.settled.size());
-    EXPECT_TRUE(f.sent.empty());
 }
 
-// 第一笔在途时又来了更新的快照:不另补续笔,更新的那份水位更大,带走剩下的记录,release 也以它为准;第一笔照常回调。
-TEST(PlayerStoreClientTest, NewerSnapshotTakesOverTheRestOfTheAudit)
+// 缺省的请求上限装得下一名玩家排满的审计记录:不然排满之后每一笔都按 TOO_LARGE 被本地拒掉,存档也跟着存不进去。
+// 行预算由 go/db 启动时连同它一起核(playerstore.checkAuditBudget)。
+TEST(PlayerStoreClientTest, DefaultRequestLimitHoldsAFullAuditQueue)
 {
-    Fixture f;
-    AuditProbe audit;
-    audit.perSave = 2;
-    audit.Install(f.options);
-    PlayerStoreClient client(f.options);
-    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
-    for (uint64_t txId = 1; txId <= 3; ++txId)
-    {
-        audit.Record(txId);
-    }
-    std::vector<std::string> calls;
-    auto record = [&calls](const char *name)
-    {
-        return [&calls, name](const PlayerStoreClient::SaveResult &result)
-        {
-            calls.push_back(std::string(name) + (result.status == PlayerStoreClient::SaveStatus::kCommitted ? ":ok" : ":other") +
-                            (result.superseded ? ":superseded" : ""));
-        };
-    };
-    client.Submit(kPlayer, Rows("h1"), Released(), record("first"));
-    ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1, 2}));
-    EXPECT_FALSE(f.sent.front().request.release());
-
-    audit.Record(4);
-    client.Submit(kPlayer, Rows("h2"), {}, record("second")); // 同节点重连取消了退出:这一份不带 release
-    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
-
-    EXPECT_EQ(calls, (std::vector<std::string>{"first:ok"}));
-    ASSERT_EQ(1u, f.sent.size());
-    EXPECT_EQ("h2", PayloadOf(f.sent.front().request, kCharacter));
-    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{3, 4}));
-    EXPECT_FALSE(f.sent.front().request.release()) << "release 以最后一份快照为准";
-    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, true);
-
-    EXPECT_EQ(calls, (std::vector<std::string>{"first:ok", "second:ok"}));
-    EXPECT_EQ(audit.acked, (std::vector<uint64_t>{2, 4}));
-    EXPECT_TRUE(audit.queued.empty());
-    EXPECT_FALSE(client.HasUnsettled(kPlayer));
-}
-
-// 分笔的第一笔被拒:结局原样交给调用方,不自己接着发 —— 续笔只在提交之后才有。
-TEST(PlayerStoreClientTest, RejectedFirstChunkReportsToTheCallerWithoutAFollowUp)
-{
-    Fixture f;
-    AuditProbe audit;
-    audit.perSave = 2;
-    audit.Install(f.options);
-    PlayerStoreClient client(f.options);
-    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
-    for (uint64_t txId = 1; txId <= 3; ++txId)
-    {
-        audit.Record(txId);
-    }
-    std::vector<PlayerStoreClient::SaveResult> results;
-    client.Submit(kPlayer, Rows("h1"), Released(), [&results](const PlayerStoreClient::SaveResult &result) { results.push_back(result); });
-    ASSERT_EQ(1u, f.sent.size());
-
-    f.Reply(playerstore::SAVE_PLAYER_STALE_OWNER, kEpoch + 1, 9);
-
-    ASSERT_EQ(1u, results.size());
-    EXPECT_EQ(PlayerStoreClient::SaveStatus::kRejected, results[0].status);
-    EXPECT_TRUE(f.sent.empty());
-    EXPECT_TRUE(audit.acked.empty());
-    EXPECT_EQ(3u, audit.queued.size()) << "记录留在队列,由调用方的处置决定去留";
-    EXPECT_FALSE(client.HasUnsettled(kPlayer));
-}
-
-// go/db 不认识审计字段(比 scene 旧)又赶上记录超过一笔的预算:记录交不出去,分笔只会一笔接一笔空转。
-// 第一次发现之后不再分笔:补一笔把调用方要的 release 带上就收住,记录留在队列。
-TEST(PlayerStoreClientTest, StoreWithoutTheOutboxDoesNotLoopOnAuditOverTheBudget)
-{
-    Fixture f;
-    AuditProbe audit;
-    audit.perSave = 2;
-    audit.Install(f.options);
-    PlayerStoreClient client(f.options);
-    ASSERT_TRUE(client.Seed(kPlayer, 1, kEpoch, 0, Rows("h0")));
-    for (uint64_t txId = 1; txId <= 3; ++txId)
-    {
-        audit.Record(txId);
-    }
-    std::vector<PlayerStoreClient::SaveResult> results;
-    client.Submit(kPlayer, Rows("h1"), Released(), [&results](const PlayerStoreClient::SaveResult &result) { results.push_back(result); });
-    ASSERT_EQ(1u, f.sent.size());
-    EXPECT_FALSE(f.sent.front().request.release()) << "还不知道 go/db 太旧:照常分笔";
-
-    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, false);
-    EXPECT_TRUE(results.empty());
-    ASSERT_EQ(1u, f.sent.size());
-    EXPECT_TRUE(f.sent.front().request.release()) << "交不出去就不再分笔:这一笔带上调用方要的 release";
-    EXPECT_EQ(TxIdsOf(f.sent.front().request), (std::vector<uint64_t>{1, 2}));
-
-    ReplyWithAudit(f, playerstore::SAVE_PLAYER_COMMITTED, false);
-    ASSERT_EQ(1u, results.size());
-    EXPECT_EQ(PlayerStoreClient::SaveStatus::kCommitted, results[0].status);
-    EXPECT_TRUE(f.sent.empty()) << "不会一笔接一笔空转";
-    EXPECT_TRUE(audit.acked.empty());
-    EXPECT_EQ(3u, audit.queued.size());
-    EXPECT_FALSE(client.HasUnsettled(kPlayer));
+    const PlayerStoreClient::Options defaults{};
+    EXPECT_GT(defaults.maxRequestBytes, AuditOutbox::kMaxBytesPerPlayer);
+    EXPECT_LT(defaults.maxRequestBytes, player_store_path::kMaxSaveRequestBytes) << "要给签名留余量";
 }

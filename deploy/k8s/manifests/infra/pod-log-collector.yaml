@@ -31,6 +31,13 @@
 # 改配置 = 滚动重启本 DaemonSet:Pod 模板上的 mmorpg.io/pod-log-collector-config-hash 是整份渲染结果的指纹,
 #   只改 ConfigMap 不会让跑着的 Alloy 重读配置。滚动期间每个节点停采几秒,重启后从 positions 接着读;
 #   只有停采的那几秒里正好赶上 kubelet 轮转日志文件(默认每 10MiB 一次),轮转走的那一小段才会漏读。业务 Pod 不受影响。
+#
+# span(阶段三,docs/design/distributed-tracing.md §10.3)也走这里:
+#   - 节点级:本 DaemonSet 收 OTLP(gRPC 4317、HTTP 4318),经 Service pod-log-collector-otlp(internalTrafficPolicy: Local,
+#     每个 Pod 只连本节点的采集器)接入;用 otelcol.exporter.loadbalancing 按 trace_id 分给网关级,同一条 trace 的 span 总落到同一个实例。
+#   - 网关级:Deployment trace-gateway(本文件末尾),无头 Service trace-gateway-headless 给负载均衡的 DNS 解析出各 Pod 地址。
+#     在那里收齐一条 trace 再尾部采样(错误全留、总耗时 ≥ 1 秒全留、其余按 trace_id 留 10%,与本机 config.alloy 逐字相同),写 Tempo(tempo.yaml)。
+#   - 指纹注解两边都带:改了这份清单里任何一处,节点级与网关级一起滚动。网关级换 Pod 时,正在等决策的 trace(最多 30 秒)会丢。
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -565,6 +572,68 @@ data:
         values = ["filename"]
       }
     }
+
+    // -------------------------------------------------------------------------
+    // span(docs/design/distributed-tracing.md §10.3):本节点三种语言的 OTLP 都进这里,按 trace_id 分给网关级 Alloy。
+    // 节点级不做采样:尾部采样要看到整条 trace,而一条 trace 的 span 散在各个节点上。
+    // -------------------------------------------------------------------------
+    otelcol.receiver.otlp "default" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+      output {
+        traces = [otelcol.processor.batch.default.input]
+      }
+    }
+
+    otelcol.processor.batch "default" {
+      output {
+        traces = [otelcol.exporter.loadbalancing.trace_gateway.input]
+      }
+    }
+
+    otelcol.exporter.loadbalancing "trace_gateway" {
+      routing_key = "traceID"
+      resolver {
+        dns {
+          hostname = "trace-gateway-headless.__INFRA_NAMESPACE__.svc.cluster.local"
+          port     = "4317"
+        }
+      }
+      protocol {
+        otlp {
+          client {
+            tls {
+              insecure = true
+            }
+          }
+        }
+      }
+    }
+---
+# 业务 Pod 发 span 的入口(Go 的 Telemetry.Endpoint、C++ 的 Tracing.OtlpTracesEndpoint、Java 的 management.otlp.tracing.endpoint,
+# 都由 k8s_deploy.ps1 的 Get-TraceAgentEndpoints 写成这个 Service)。internalTrafficPolicy: Local:只落到同节点的采集器,
+# 本节点的采集器不在时连接失败,导出方丢这一批并计数,不绕到别的节点。
+apiVersion: v1
+kind: Service
+metadata:
+  name: pod-log-collector-otlp
+  labels:
+    app: pod-log-collector
+spec:
+  selector:
+    app: pod-log-collector
+  internalTrafficPolicy: Local
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -602,6 +671,10 @@ spec:
           ports:
             - containerPort: 12345
               name: alloy-http
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
           env:
             - name: NODE_NAME
               valueFrom:
@@ -644,3 +717,171 @@ spec:
           hostPath:
             path: /var/lib/mmorpg-pod-log-collector/__INFRA_NAMESPACE__
             type: DirectoryOrCreate
+---
+# 网关级 Alloy(docs/design/distributed-tracing.md §10.3):节点级按 trace_id 把 span 转到这里,一条 trace 的 span 都落在同一个实例上,
+# 收齐之后尾部采样再写 Tempo。尾部采样那段与本机 deploy/observability/alloy/config.alloy 逐字相同,
+# 契约测试 tools/scripts/tests/k8s_log_collection_contract.tests.ps1 核对。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trace-gateway
+  labels:
+    app: trace-gateway
+data:
+  config.alloy: |
+    // 事实源是 deploy/k8s/manifests/infra/pod-log-collector.yaml,由 tools/scripts/k8s_deploy.ps1 渲染,不要直接改集群里的副本。
+    logging {
+      level  = "warn"
+      format = "logfmt"
+    }
+
+    otelcol.receiver.otlp "default" {
+      grpc {
+        endpoint = "0.0.0.0:4317"
+      }
+      output {
+        traces = [otelcol.processor.tail_sampling.default.input]
+      }
+    }
+
+    // 尾部采样:命中任一条就留下整条 trace。decision_wait 与 num_traces 取组件默认值:
+    // EnterGame 这类异步链,span 可能在根 span 结束十几秒后才到。
+    otelcol.processor.tail_sampling "default" {
+      decision_wait = "30s"
+      num_traces    = 50000
+
+      policy {
+        name = "errors"
+        type = "status_code"
+
+        status_code {
+          status_codes = ["ERROR"]
+        }
+      }
+
+      policy {
+        name = "slow"
+        type = "latency"
+
+        latency {
+          threshold_ms = 1000
+        }
+      }
+
+      policy {
+        name = "sampled"
+        type = "probabilistic"
+
+        probabilistic {
+          sampling_percentage = 10
+        }
+      }
+
+      output {
+        traces = [otelcol.processor.batch.default.input]
+      }
+    }
+
+    otelcol.processor.batch "default" {
+      output {
+        traces = [otelcol.exporter.otlp.tempo.input]
+      }
+    }
+
+    otelcol.exporter.otlp "tempo" {
+      client {
+        endpoint = "tempo.__INFRA_NAMESPACE__:4317"
+        tls {
+          insecure = true
+        }
+      }
+    }
+---
+# 给节点级的 otelcol.exporter.loadbalancing 做 DNS 解析用:无头 Service 解析出每个网关 Pod 的地址,按 trace_id 一致性哈希。
+apiVersion: v1
+kind: Service
+metadata:
+  name: trace-gateway-headless
+  labels:
+    app: trace-gateway
+spec:
+  clusterIP: None
+  selector:
+    app: trace-gateway
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trace-gateway
+  labels:
+    app: trace-gateway
+spec:
+  # 两个副本:一个滚动或挂掉时另一个接着收(负载均衡按 DNS 结果重新分 trace_id,换过来的那部分 trace 在等决策时会丢)。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: trace-gateway
+  template:
+    metadata:
+      labels:
+        app: trace-gateway
+      annotations:
+        mmorpg.io/pod-log-collector-config-hash: "__POD_LOG_COLLECTOR_CONFIG_HASH__"
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        fsGroup: 10001
+      containers:
+        - name: alloy
+          # 与节点级同一个镜像(-CppLogSidecarImage)。
+          image: __POD_LOG_COLLECTOR_IMAGE__
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            - --server.http.listen-addr=0.0.0.0:12345
+            - --storage.path=/var/lib/alloy
+            - /etc/alloy/config.alloy
+          ports:
+            - containerPort: 12345
+              name: alloy-http
+            - containerPort: 4317
+              name: otlp-grpc
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 12345
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/alloy
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: trace-gateway
+        - name: state
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

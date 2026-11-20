@@ -22,11 +22,11 @@ package main
 //
 // `team_follow_smoke.client_follower: true` 时改跑「真实客户端跟随」验收(走路跟随在客户端,只有真客户端能验):
 //
-//	C1 A 建队、机器人 B 入队;C2 机器人 B 下线(离线队员留在队里),A 走开 16,然后打印一行
+//	C1 A 建队、机器人 B 入队;C2 机器人 B 下线(离线队员留在队里),A 走开 60(视野半径 50 之外),然后打印一行
 //	   `TEAM_FOLLOW_CLIENT_READY account=robot_9306 …` —— 外层脚本看到后用 DevAutoPilot 让真实客户端登录该账号;
 //	C3 A 等客户端出现在视野里,且出现的位置就在 A 身边(登录进场 → 被带到 A 的线 → 归队瞬移);
 //	C4 A 按脚本走 6 段,从客户端的移动广播里断言:第一条上报来自 A 身边(客户端处理了 TeleportS2C),
-//	   每段都跟着走、A 停下后它也停下并停在身后约 1.4 处;
+//	   每段都跟着走、A 停下后它也停下并停在身后约 3 处(一号槽位,服务端 kTeamFollowSpacing);
 //	C5 A 解散。全过 → `TEAM_FOLLOW_CLIENT_OK … leg0=ok(…) …`;失败同样是 `TEAM_FOLLOW_SMOKE_FAIL step=C… reason=…`。
 //
 // 组队请求 / 回包复用 team-smoke 的 teamSmokeBot(同一套经 smokeCaller 按请求号认领回包、信封拒绝与业务 tip 分开的口径);
@@ -66,10 +66,16 @@ const (
 const (
 	// 与服务端 kTeleportReasonTeamRegroup 一致(cpp/libs/services/scene/spatial/system/movement.h)。
 	teamFollowSmokeRegroupReason = 5
-	// F1 要拉开的最小水平距离。服务端归队阈值 kTeamRegroupDistance = 8,留出余量。
-	teamFollowSmokeSeparation = 12.0
-	// F1 每次尝试朝目标方向走出的距离。
+	// F1 / C2 要拉开的最小水平距离(2026-11-19 随视野与跟随间距放大):超过视野半径 kMaxViewRadius = 50,
+	// C3 才能断言客户端只有被瞬移之后才进入队长视野;也远超归队阈值 kTeamRegroupDistance = 24。
+	teamFollowSmokeSeparation = 60.0
+	// F1 / C2 每一步上报的直线距离(与视野放大前一样是 16):拉开 60 要沿同一方向走几步,
+	// 每步只要这 16 米直线可走,不要求地图上有一整条 60 米以上的直路。
 	teamFollowSmokeStride = 16.0
+	// 一步推进不到这么远(撞墙被服务器夹住)就换下一个方向。
+	teamFollowSmokeMinStepProgress = 1.0
+	// 每个方向最多走几步:拉开 60 只需要 4 步,多留余量但不让绕圈的地形无限走下去。
+	teamFollowSmokeMaxStepsPerDirection = 8
 	// 落点 / 复位位置与期望点的允许误差。
 	teamFollowSmokeArriveTolerance = 1.0
 	// 上报位置后等服务器裁决(MoveAck)的窗口:有 MoveAck 以最后一条为准,没有则上报点被原样接受。
@@ -92,7 +98,7 @@ const (
 	teamFollowSmokeClientWait = 240 * time.Second
 	// C1 组队后等机器人 B 自己的归队瞬移(只在两人起步相距较远 / 不同线时才会有)。
 	teamFollowSmokeFormSettle = 3 * time.Second
-	// C4 队员第一条移动上报离队长出发点的上限:落在瞬移位置上的客户端从 1.4 以内起步,留在旧位置的会从 16 之外来。
+	// C4 队员第一条移动上报离队长出发点的上限:落在瞬移位置上的客户端从一个间距(3)以内起步,留在旧位置的会从 60 之外来。
 	teamFollowSmokeRegroupReach = 5.0
 	// C3 等待期间的保活间隔。
 	teamFollowSmokeKeepAlive = 10 * time.Second
@@ -107,9 +113,9 @@ const (
 	teamFollowSmokeLegSettle = 2500 * time.Millisecond
 	// 实际走出不到这么远的段(撞墙)不计入断言。
 	teamFollowSmokeMinLeg = 4.0
-	// 队员停下后离队长的允许范围:客户端一号槽位 1.4,起停滞回 0.15 / 0.6,再留出网络与裁决误差。
-	teamFollowSmokeGapMin = 0.5
-	teamFollowSmokeGapMax = 3.0
+	// 队员停下后离队长的允许范围:服务器驱动,一号槽位沿路在队长身后 3(kTeamFollowSpacing),再留出网络与裁决误差。
+	teamFollowSmokeGapMin = 2.0
+	teamFollowSmokeGapMax = 4.6
 	// 走满这么远的段才判「在身后」;沿行进方向至少落后这么多。
 	teamFollowSmokeFullLeg   = 13.0
 	teamFollowSmokeBehindMin = 0.5
@@ -225,7 +231,7 @@ func RunTeamFollowSmoke(cfg *config.Config) {
 			posB = teamFollowSmokeFromVector(regroup.GetTransform().GetLocation())
 		}
 		// C2:机器人 B 下线(不离队:离线队员留在队里),把账号让给真实客户端;
-		// 然后队长走开 16:客户端登录时落在 B 的存档位置,必须经过「归队瞬移」才能到队长身边(客户端要处理 TeleportS2C)。
+		// 然后队长走开 60(视野半径 50 之外):客户端登录时落在 B 的存档位置,必须经过「归队瞬移」才能到队长身边(客户端要处理 TeleportS2C)。
 		followerId := b.gc.PlayerId
 		leaderMark := a.recordMark()
 		_ = leaveGame(b.gc, stats)
@@ -323,7 +329,7 @@ func RunTeamFollowSmoke(cfg *config.Config) {
 	zap.L().Info("[team-follow-smoke] F4: movement is broadcast both ways")
 
 	// ---- F6:请求归队(GetMyTeam{regroup},组队跟随 v1.1 V.9) ----
-	// 近处:两人互相可见、相距不到 8,请求归队不应瞬移。
+	// 近处:两人互相可见、相距不到归队阈值 24,请求归队不应瞬移。
 	nearMark := b.recordMark()
 	if err := b.expect(game.ClientPlayerTeamGetMyTeamMessageId, &teampb.GetMyTeamRequest{Regroup: true}, &teampb.TeamResponse{}, 0); err != nil {
 		fail("F6-regroup-near", "%v", err)
@@ -381,18 +387,28 @@ func RunTeamFollowSmoke(cfg *config.Config) {
 	cleanup()
 }
 
-// teamFollowSmokeWalkAway 让 walker 离开 anchor 至少 teamFollowSmokeSeparation:目标点按 anchor 的位置算
-// (anchor 那个人全程不动),八个方向各试一次,以服务器裁决后的位置为准。返回 walker 的新位置。
+// teamFollowSmokeWalkAway 让 walker 离开 anchor 至少 teamFollowSmokeSeparation(anchor 那个人全程不动):
+// 八个方向依次试,沿一个方向从当前位置每步上报 teamFollowSmokeStride 远的点,以服务器裁决后的位置为准;
+// 走够了就返回,一步推进不到 teamFollowSmokeMinStepProgress(撞墙)或走满步数就换下一个方向。返回 walker 的新位置。
 func teamFollowSmokeWalkAway(walker *teamFollowSmokeBot, from, anchor *component.Location) (*component.Location, error) {
 	directions := [][2]float64{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {0.7071, 0.7071}, {-0.7071, 0.7071}, {0.7071, -0.7071}, {-0.7071, -0.7071}}
 	pos := from
 	for _, dir := range directions {
-		target := &component.Location{X: anchor.GetX() + dir[0]*teamFollowSmokeStride, Y: anchor.GetY() + dir[1]*teamFollowSmokeStride, Z: pos.GetZ()}
-		accepted, err := walker.reportPosition(target)
-		if err != nil {
-			return nil, err
+		for step := 0; step < teamFollowSmokeMaxStepsPerDirection; step++ {
+			if teamFollowSmokeDistance(pos, anchor) >= teamFollowSmokeSeparation {
+				return pos, nil
+			}
+			target := &component.Location{X: pos.GetX() + dir[0]*teamFollowSmokeStride, Y: pos.GetY() + dir[1]*teamFollowSmokeStride, Z: pos.GetZ()}
+			accepted, err := walker.reportPosition(target)
+			if err != nil {
+				return nil, err
+			}
+			progress := teamFollowSmokeDistance(accepted, pos)
+			pos = accepted
+			if progress < teamFollowSmokeMinStepProgress {
+				break
+			}
 		}
-		pos = accepted
 		if teamFollowSmokeDistance(pos, anchor) >= teamFollowSmokeSeparation {
 			return pos, nil
 		}
@@ -427,7 +443,7 @@ func teamFollowSmokeFormTeam(leader, member *teamFollowSmokeBot) (uint64, error)
 //	C3 等真实客户端(DevAutoPilot 登录 followerId 的账号)出现在队长视野里,出现的位置必须在队长(start)1 以内;
 //	C4 队长按脚本走 6 段(东西南北来回,每段约 13.5,客户端基础移速 9,每 250ms 一条 MoveSync,段末停 2.5s)。
 //	   走得开的每一段都要求:期间收到队员的起步广播(客户端真的在走);队长停下后队员也停下(最后一条 move_state=0),
-//	   且停在离队长 0.5~3.0 处(客户端一号槽位在队长身后 1.4),走满全程的段还要求它在队长身后(沿行进方向落后 >= 0.5)。
+//	   且停在离队长 2.0~4.6 处(一号槽位在队长身后 3),走满全程的段还要求它在队长身后(沿行进方向落后 >= 0.5)。
 //	   第一段走得开的另外要求队员的第一条上报来自队长出发点 5 以内。
 //	   撞墙走不开的段只记录不断言,至少要有 2 段走得开。
 //
@@ -457,7 +473,7 @@ func teamFollowSmokeClientCheck(cfg *config.Config, leader *teamFollowSmokeBot, 
 		}
 	}
 	follower := seen.GetEntity()
-	// 队长在 16 之外,客户端只有被归队瞬移之后才会进入队长视野,所以它出现时的位置就是瞬移落点。
+	// 队长在 60 之外(视野半径 50),客户端只有被归队瞬移之后才会进入队长视野,所以它出现时的位置就是瞬移落点。
 	arrive := teamFollowSmokeFromVector(seen.GetTransform().GetLocation())
 	if d := teamFollowSmokeDistance(arrive, start); d > teamFollowSmokeArriveTolerance {
 		return "", "C3-regroup", fmt.Errorf("客户端出现在 %s,离队长 %s 有 %.2f(期望 <= %.1f):登录进场后没有被归队瞬移到队长身边",
@@ -493,7 +509,7 @@ func teamFollowSmokeClientCheck(cfg *config.Config, leader *teamFollowSmokeBot, 
 		}
 		if valid == 0 {
 			// 第一段走得开的:队员的第一条上报必须来自队长出发点附近 —— 客户端确实落在了归队瞬移的位置,
-			// 而不是还站在 16 之外的旧位置上(那样它的上报会从远处来)。
+			// 而不是还站在 60 之外的旧位置上(那样它的上报会从远处来)。
 			firstPos := teamFollowSmokeFromVector(first.GetTransform().GetLocation())
 			if d := teamFollowSmokeDistance(firstPos, legStart); d > teamFollowSmokeRegroupReach {
 				return "", "C4-client-snap", fmt.Errorf("队员的第一条移动上报来自 %s,离队长出发点 %s 有 %.2f(期望 <= %.1f):客户端没有落到归队瞬移的位置",
@@ -511,7 +527,7 @@ func teamFollowSmokeClientCheck(cfg *config.Config, leader *teamFollowSmokeBot, 
 				teamFollowSmokeFormat(lastPos), gap, teamFollowSmokeLegSettle, leader.followerTrace(legMark, follower))
 		}
 		if gap < teamFollowSmokeGapMin || gap > teamFollowSmokeGapMax {
-			return "", "C4-follow", fmt.Errorf("第 %d 段结束后队员停在 %s,离队长 %s 有 %.2f,期望 %.1f~%.1f(客户端一号槽位在队长身后 1.4)。本段队员的全部上报:%s",
+			return "", "C4-follow", fmt.Errorf("第 %d 段结束后队员停在 %s,离队长 %s 有 %.2f,期望 %.1f~%.1f(一号槽位在队长身后 3)。本段队员的全部上报:%s",
 				i, teamFollowSmokeFormat(lastPos), teamFollowSmokeFormat(pos), gap, teamFollowSmokeGapMin, teamFollowSmokeGapMax,
 				leader.followerTrace(legMark, follower))
 		}

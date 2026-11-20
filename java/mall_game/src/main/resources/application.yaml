@@ -11,6 +11,11 @@ management:
   tracing:
     sampling:
       probability: 1.0
+  # span 导出(阶段三,设计 §10.3):OTLP/HTTP 发本机 Alloy;Alloy 没起时丢批并打 WARN,不影响业务。
+  # 不想导出就设 management.otlp.tracing.export.enabled=false。
+  otlp:
+    tracing:
+      endpoint: http://127.0.0.1:4318/v1/traces
   endpoints:
     web:
       exposure:

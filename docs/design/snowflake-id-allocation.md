@@ -36,7 +36,7 @@ C++ `cpp/libs/engine/core/utils/id/snow_flake.h` 与 Go `go/shared/snowflake/sno
 规则(`go/shared/snowflakealloc/testdata/selection_vectors.json` 钉住选号;C++ 侧不再申领,不再对拍):
 
 1. **选号**:候选 = 未被占 且 `now − watermark ≥ Q`(Q = 4h);取 watermark 最小者(从没用过的优先),并列取最小 slot。不再"最小空闲位"。
-2. **水位**:持有者每秒写 `max(墙钟, 逻辑高水位) + 2s`,单调不回退;申领时第一笔与 slots key 同一 txn 落地;启动地板 `SetGuardTime(max(now, watermark))` 并等真实时钟越过。
+2. **水位**:持有者每秒写 `max(墙钟, 逻辑高水位) + 2s`,单调不回退;申领 Txn 只写 slots / affinity,第一笔水位在申领之后单独写(Txn 以 slots key 仍是自己的 uuid 为条件,成功才 Ack 闸,`advanceGuard`;已删的 C++ 客户端当年是同一 txn 落地);启动地板 `SetGuardTime(max(now, watermark))` 并等真实时钟越过。
 3. **自 fence**:距上次水位写成功超过 F = 2h(单调钟或墙钟任一;墙钟按去掉单调读数的时刻相减,否则 VM 挂起后不触发)→ `Generate()` 拒发;水位再写成功即恢复(Go)/ 永久 fence 仅在 `slots/<slot>` 被别的 uuid 持有,或槽 key 过期期间水位被别人写过时(见第 4 条)。
 4. **lease 只做活性**:lease 过期但槽没被别人挂走 → 重挂,不 fence、不退出。槽 key 已过期时,只有水位 key `watermark/<slot>` 的 ModRevision 仍是自己最后一次观测的值才重新 Create(与 `CreateRev==0` 同一笔 Txn);对不上说明失联期间有人用过这个槽,永久 fence,重启后走受隔离期保护的申领。细节见设计稿 §3.4。
 5. **弱依赖**:scene_manager 在 etcd 不可达且本地缓存(`SnowflakeCacheDir`)未过 F 时可用缓存槽起。

@@ -140,3 +140,13 @@ PlayerInbox:
   # 窗口必须覆盖至少两轮间隔(窗口小时 × 60 ≥ 2 × 间隔分钟,config.Validate 拒启);当选后第一轮 1–5 分钟内起跑。
   ReconcileIntervalMinutes: 60
   ReconcileWindowHours: 24
+
+# 链路追踪阶段三(docs/design/distributed-tracing.md §10.3):go-zero 把 span 经 OTLP/gRPC 送本机 Alloy
+# (deploy/docker-compose.observability.yml,dev.bat obs 起),Alloy 尾部采样后存进 Tempo。Name 与 Loki 的 service 标签同值。
+# 头部全采(Sampler 1.0),取舍在采集器。Alloy 没起时导出器在后台重连、丢 span,不影响业务;不想导出就加 Disabled: true。
+# K8s 上由 k8s_deploy.ps1 按是否部署了节点采集器重写整段(New-GoSvcConfigMapYaml),不搬本机这个地址。
+Telemetry:
+  Name: player_inbox
+  Endpoint: 127.0.0.1:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc

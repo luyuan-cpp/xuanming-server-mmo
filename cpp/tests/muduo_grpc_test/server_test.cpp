@@ -1753,9 +1753,12 @@ TEST_F(ServerLoopbackTest, UnaryInterceptorAppendsMetadataAndWrapsTheCompletion)
 {
     ASSERT_NE(StartServer(), nullptr);
     const auto order = std::make_shared<std::vector<std::string>>();
+    const auto seenMethod = std::make_shared<std::string>();
     muduo_grpc::ChannelOptions channelOptions;
-    channelOptions.unaryInterceptor = [order](Metadata &metadata, muduo_grpc::UnaryCallback done) -> muduo_grpc::UnaryCallback
+    channelOptions.unaryInterceptor = [order, seenMethod](const std::string &method, Metadata &metadata,
+                                                          muduo_grpc::UnaryCallback done) -> muduo_grpc::UnaryCallback
     {
+        *seenMethod = method;   // 钩子拿到本次调用的 :path(链路追踪用它给 client span 命名)
         metadata.emplace_back("x-hook", "on");
         return [order, done = std::move(done)](UnaryCallResult &&result) mutable
         {
@@ -1782,6 +1785,7 @@ TEST_F(ServerLoopbackTest, UnaryInterceptorAppendsMetadataAndWrapsTheCompletion)
     EXPECT_EQ(outcome->count, 1);
     ASSERT_TRUE(outcome->result.status.ok()) << outcome->result.status.ToString();
     EXPECT_EQ(*order, (std::vector<std::string>{"wrapper", "done"}));
+    EXPECT_EQ(*seenMethod, kEchoPath);
     const std::string *hook = muduo_grpc::FindMetadata(state_->lastMetadata, "x-hook");
     ASSERT_NE(hook, nullptr);
     EXPECT_EQ(*hook, "on");
@@ -1792,7 +1796,8 @@ TEST_F(ServerLoopbackTest, UnaryInterceptorAlsoWrapsLocalRejections)
 {
     const auto wrapped = std::make_shared<int>(0);
     muduo_grpc::ChannelOptions channelOptions;
-    channelOptions.unaryInterceptor = [wrapped](Metadata &, muduo_grpc::UnaryCallback done) -> muduo_grpc::UnaryCallback
+    channelOptions.unaryInterceptor = [wrapped](const std::string &, Metadata &,
+                                                muduo_grpc::UnaryCallback done) -> muduo_grpc::UnaryCallback
     {
         return [wrapped, done = std::move(done)](UnaryCallResult &&result) mutable
         {
@@ -1815,10 +1820,13 @@ TEST_F(ServerLoopbackTest, DispatchInterceptorRunsOncePerCallAndExtraInvokesAreI
 {
     const auto hookCalls = std::make_shared<int>(0);
     const auto sawMetadata = std::make_shared<bool>(false);
+    const auto seenPath = std::make_shared<std::string>();
     ServerOptions options = QuietOptions();
-    options.dispatchInterceptor = [hookCalls, sawMetadata](const Metadata &metadata, const std::function<void()> &invoke)
+    options.dispatchInterceptor = [hookCalls, sawMetadata, seenPath](const std::string &methodPath, const Metadata &metadata,
+                                                                     const std::function<void()> &invoke)
     {
         ++*hookCalls;
+        *seenPath = methodPath;   // 链路追踪用它给 server span 命名
         *sawMetadata = muduo_grpc::FindMetadata(metadata, "x-hook") != nullptr;
         invoke();
         invoke(); // 误调第二次:必须被忽略
@@ -1834,6 +1842,7 @@ TEST_F(ServerLoopbackTest, DispatchInterceptorRunsOncePerCallAndExtraInvokesAreI
     EXPECT_EQ(outcome->count, 1);
     EXPECT_EQ(*hookCalls, 1);
     EXPECT_TRUE(*sawMetadata);
+    EXPECT_EQ(*seenPath, kEchoPath);
     EXPECT_EQ(state_->invocations, 1u);
 }
 
@@ -1841,7 +1850,7 @@ TEST_F(ServerLoopbackTest, DispatchInterceptorRunsOncePerCallAndExtraInvokesAreI
 TEST_F(ServerLoopbackTest, DispatchInterceptorThatNeverInvokesStillDispatchesOnce)
 {
     ServerOptions options = QuietOptions();
-    options.dispatchInterceptor = [](const Metadata &, const std::function<void()> &) {};
+    options.dispatchInterceptor = [](const std::string &, const Metadata &, const std::function<void()> &) {};
     ASSERT_NE(StartServer(std::move(options)), nullptr);
     const auto channel = MakeChannel();
     ASSERT_NE(channel, nullptr);

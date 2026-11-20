@@ -97,7 +97,7 @@ func (p *AccessTokenProvider) Validate(ctx context.Context, accessToken string) 
 		return nil, providerFault(fmt.Errorf("access token lookup failed: %w", err))
 	}
 	logx.Infof("Access token validated: account=%s auth_type=%s", data.Account, data.AuthType)
-	return &AuthResult{Account: data.Account}, nil
+	return &AuthResult{Account: data.Account, Channel: data.AuthType}, nil
 }
 
 // SaTokenProvider validates SA-Token via Redis lookup.

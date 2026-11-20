@@ -1285,34 +1285,55 @@ void Node::StartSpanExporter()
 		return;
 	}
 
+	// 主机名只在这里解析一次(loop 还没开转,阻塞只推迟启动):导出器跑在本 loop 上,运行期不能做阻塞解析。
+	// 本机是 IPv4 字面量;K8s 上是 Service 名,它的 ClusterIP 在 Service 存在期间不变。解析不了就不导出,不拒启:
+	// 链路追踪不在业务链路上,地址写法本身已经在上面校验过。
+	const std::optional<muduo::net::InetAddress> address = tracing::ResolveOtlpEndpoint(settings.endpoint);
+	if (!address)
+	{
+		LOG_ERROR << "[Tracing] cannot resolve the OTLP endpoint host " << settings.endpoint.host
+				  << "; span export disabled for this process";
+		return;
+	}
+
 	const NodeInfo &info = GetNodeInfo();
 	tracing::OtlpSpanExporterOptions options;
 	options.endpoint = settings.endpoint;
+	options.address = *address;
 	options.resource.serviceName = SpanServiceNameOf(info.node_type());
 	options.resource.serviceNamespace = "mmorpg";
 	options.resource.serviceInstanceId = info.node_uuid();
 	options.resource.serviceVersion = info.build();
 	options.resource.extraAttributes.emplace_back("mmorpg.zone_id", std::to_string(info.zone_id()));
-	spanExporter_ = std::make_unique<tracing::OtlpSpanExporter>(tracing::ProcessSpanExportQueue(),
+	// 导出器挂在本节点的主 loop 上,不另起线程(负责人 2026-11-19:C++ 节点除主线程不再开线程)。
+	spanExporter_ = std::make_unique<tracing::OtlpSpanExporter>(eventLoop, tracing::ProcessSpanExportQueue(),
 																 tracing::ProcessSpanExportStats(), std::move(options));
 	spanExporter_->Start();
 	tracing::RegisterSpanExportMetrics();
-	// 导出线程起来之后才装去处:之前结束的 span 不记录(没装去处时接缝只多一次原子读)。
+	// 导出器起来之后才装去处:之前结束的 span 不记录(没装去处时接缝只多一次原子读)。
 	tracing::InstallSpanSink(&tracing::ProcessSpanExportQueue());
-	LOG_INFO << "[Tracing] exporting spans over OTLP/HTTP to " << settings.endpoint.ToUrl() << " (from " << settings.source
-			 << ", queue " << tracing::kDefaultSpanQueueCapacity << ", batch " << tracing::kDefaultSpanExportBatchSize << ")";
+	LOG_INFO << "[Tracing] exporting spans over OTLP/HTTP to " << settings.endpoint.ToUrl() << " (" << address->toIpPort()
+			 << ", from " << settings.source << ", queue " << tracing::kDefaultSpanQueueCapacity << ", batch "
+			 << tracing::kDefaultSpanExportBatchSize << ")";
 }
 
-void Node::StopSpanExporter()
+bool Node::FinishSpanExportInLoop()
 {
+	eventLoop.assertInLoopThread();
 	if (!spanExporter_)
 	{
-		return;
+		return true;
 	}
-	// 先摘去处,之后结束的 span 不再入队;再在导出线程上有界冲刷(OtlpSpanExporterOptions::shutdownTimeout)并停线程。
+	// 第一次进来:先摘去处,之后结束的 span 不再入队;再开始有界冲刷(OtlpSpanExporterOptions::shutdownTimeout)。
+	// 冲刷靠本 loop 推进,所以这里不等,由调用方让一轮后再来问。重复调用是空操作。
 	tracing::InstallSpanSink(nullptr);
-	spanExporter_->Shutdown();
+	spanExporter_->BeginShutdown();
+	if (!spanExporter_->Finished())
+	{
+		return false;
+	}
 	spanExporter_.reset();
+	return true;
 }
 
 void Node::InitRpcServer()
@@ -1435,11 +1456,25 @@ void Node::InitClientEndpoint()
 	}
 	clientEndpointRequired_ = settings.required;
 
+	// 小游戏的 WebSocket 地址(docs/design/minigame-websocket-gate.md W7)要用终值端口拼,由 AcquireNodePort 在端口定下来之后写进
+	// NodeInfo。这里先把配置校验掉,理由同上:带着一个客户端永远连不通的地址发布,比起不来更难查。
+	std::string wsBaseUrl;
+	if (!client_endpoint::ParseWsBaseUrl(env, wsBaseUrl, error))
+	{
+		FatalClientEndpoint("invalid settings: " + error);
+	}
+	if (!wsBaseUrl.empty() && !client_endpoint::IsIpv4Literal(localNodeInfo.endpoint().ip()))
+	{
+		FatalClientEndpoint(std::string(client_endpoint::kEnvWsBaseUrl) + " is set but endpoint ip '" + localNodeInfo.endpoint().ip() +
+							"' is not an IPv4 literal; the WebSocket edge only routes to IPv4 addresses");
+	}
+
 	// endpoint 的端口可能还是 0(扫描区间的节点要到 etcd 分配后才定),照实打印。
 	LOG_INFO << "Client endpoint resolved. source=" << std::string(client_endpoint::SourceKindName(settings.source))
 			 << " endpoint=" << FormatEndpoint(localNodeInfo.endpoint())
 			 << " client_endpoint=" << (clientEndpoint ? FormatEndpoint(*clientEndpoint) : std::string("(unset, clients use endpoint)"))
-			 << " required=" << (settings.required ? 1 : 0);
+			 << " required=" << (settings.required ? 1 : 0)
+			 << " ws_base_url=" << (wsBaseUrl.empty() ? std::string("(unset, no WebSocket clients)") : wsBaseUrl);
 }
 
 void Node::InitKafka()
@@ -2394,9 +2429,14 @@ void Node::FinalizeTeardownInLoop()
 	// /metrics 出口同理趁 EventLoop 还活着释放(~TcpServer 要在 loop 线程上关掉已有连接);它的采集回调读 tlsEcs,
 	// 必须排在 tlsEcs.Clear() 之前。关闭排进队列的连接收尾由下面的两跳 queueInLoop 排空。
 	metricsExporter_.reset();
-	// span 导出线程:RPC 通道、Kafka、Redis 都已收尾,最后一批 client / consumer span 已经入队;在 logSystem.stop() 之前停,
-	// 收尾日志还写得出去。它有自己的线程与 loop,连接在那边释放,不占本 loop 的两跳;最多阻塞 shutdownTimeout + 2 秒。
-	StopSpanExporter();
+	// span 导出:RPC 通道、Kafka、Redis 都已收尾,最后一批 client / consumer span 已经入队。导出器在本 loop 上有界冲刷
+	// (≤ shutdownTimeout,默认 2 秒),没冲完就同上面一样让一轮再进来:重入时上面各步都是空操作。在 logSystem.stop() 之前,
+	// 收尾日志还写得出去;它排进队列的连接收尾由下面的两跳 queueInLoop 排空。
+	if (!FinishSpanExportInLoop())
+	{
+		shutdownDrainTimer.RunAfter(0.05, [this] { FinalizeTeardownInLoop(); });
+		return;
+	}
 	// Cleared by tlsEcs.Clear() below.
 	tlsEcs.Clear();
 #ifdef WIN32

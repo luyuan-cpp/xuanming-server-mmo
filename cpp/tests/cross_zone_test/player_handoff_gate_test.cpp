@@ -10,6 +10,8 @@
 // 接线在 SceneHandler::ProcessClientPlayerMessage,节点层入口没有单测宿主,所以判定抽成头文件在这里直接测
 // (与 player_gm_guard.h 同一做法)。
 
+#include <string_view>
+
 #include <gtest/gtest.h>
 
 #include <google/protobuf/descriptor.h>
@@ -31,16 +33,22 @@ namespace
 	using scene_handoff_gate::IsStaleForThisScene;
 	using scene_handoff_gate::MayBeRetriedLater;
 
+	// 成员是借用引用与 string_view:裸指针成员过不了工程的 no-raw-pointer-member 检查;descriptor() 返回进程级静态对象,不为空。
 	struct NamedMethod
 	{
-		const google::protobuf::ServiceDescriptor *service;
-		const char *method;
+		NamedMethod(const google::protobuf::ServiceDescriptor *serviceDescriptor, std::string_view methodName)
+			: service(*serviceDescriptor), method(methodName)
+		{
+		}
+
+		const google::protobuf::ServiceDescriptor &service;
+		std::string_view method;
 	};
 
 	// 找不到就返回空:方法改名时用例在 ASSERT 上失败,不解引用空指针。
 	const google::protobuf::MethodDescriptor *Find(const NamedMethod &named)
 	{
-		return named.service->FindMethodByName(named.method);
+		return named.service.FindMethodByName(named.method);
 	}
 
 	// 用完即销毁的玩家实体:本工程的用例共用 tlsEcs,不能把实体留给后面的用例。

@@ -1,0 +1,25 @@
+# Grafana 启动时自动注册 Tempo 数据源(docs/design/distributed-tracing.md §10.3)。
+# trace → 日志:按 trace_id 跳回 Loki,查的是结构化元数据 trace_id(§9.3 的写法),前后各放宽 5 分钟,
+# 覆盖 EnterGame 这类异步链里晚到的日志。「$$」是 provisioning 文件里 $ 的转义。
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: true
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        query: '{job=~".+"} | trace_id="$${__trace.traceId}"'
+      lokiSearch:
+        datasourceUid: loki
+      nodeGraph:
+        enabled: true

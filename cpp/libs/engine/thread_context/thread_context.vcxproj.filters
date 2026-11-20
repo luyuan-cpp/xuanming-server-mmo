@@ -1,29 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="dispatcher_manager.cpp" />
     <ClCompile Include="ecs_context.cpp" />
     <ClCompile Include="lua_state.cpp" />
-    <ClCompile Include="message_context.cpp" />
     <ClCompile Include="node_context_manager.cpp" />
-    <ClCompile Include="player_manager.cpp" />
     <ClCompile Include="redis_manager.cpp" />
-    <ClCompile Include="registry_manager.cpp" />
-    <ClCompile Include="thread_local_entity_container.cpp" />
-    <ClCompile Include="entity_manager.cpp" />
-    <ClCompile Include="rpc_manager.cpp" />
+    <ClCompile Include="trace_context_tls.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="dispatcher_manager.h" />
     <ClInclude Include="ecs_context.h" />
     <ClInclude Include="lua_state.h" />
-    <ClInclude Include="message_context.h" />
     <ClInclude Include="node_context_manager.h" />
-    <ClInclude Include="player_manager.h" />
     <ClInclude Include="redis_manager.h" />
-    <ClInclude Include="registry_manager.h" />
-    <ClInclude Include="thread_local_entity_container.h" />
-    <ClInclude Include="entity_manager.h" />
-    <ClInclude Include="rpc_manager.h" />
   </ItemGroup>
 </Project>

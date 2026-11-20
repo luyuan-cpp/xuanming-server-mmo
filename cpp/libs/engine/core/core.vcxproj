@@ -169,6 +169,7 @@
     <ClCompile Include="log\system\console_log.cpp" />
     <ClCompile Include="message_limiter\message_limiter.cpp" />
     <ClCompile Include="network\codec\codec.cpp" />
+    <ClCompile Include="network\codec\websocket.cpp" />
     <ClCompile Include="async\loop_task_scope.cpp" />
     <ClCompile Include="network\rpc_channel.cpp" />
     <ClCompile Include="network\rpc_channel_stats.cpp" />
@@ -387,6 +388,7 @@
     <ClInclude Include="network\broadcast_target_codec.h" />
     <ClInclude Include="network\codec\codec.h" />
     <ClInclude Include="network\codec\dispatcher.h" />
+    <ClInclude Include="network\codec\websocket.h" />
     <ClInclude Include="network\rpc_channel.h" />
     <ClInclude Include="network\rpc_channel_stats.h" />
     <ClInclude Include="network\rpc_trace_envelope.h" />
@@ -407,6 +409,7 @@
     <ClInclude Include="network\rpc_done_callback.h" />
     <ClInclude Include="network\rpc_link_liveness.h" />
     <ClInclude Include="network\client_liveness.h" />
+    <ClInclude Include="network\accept_admission.h" />
     <ClInclude Include="network\rpc_status.h" />
     <ClInclude Include="network\message_statistics.h" />
     <ClInclude Include="network\network_constants.h" />

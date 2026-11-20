@@ -138,9 +138,10 @@ func (s *Store) teamLaunchOnce(ctx context.Context, actor uint64, request string
 	if err != nil {
 		return nil, err
 	}
+	// lockActor 已核对会话是角色现主人,原件主人不同就只能是过户前留下的。
 	original := originalPlayer(ctx, actor)
 	if launch.OwnerAccount != original.OwnerAccount || launch.OwnerRevision != original.OwnerRevision {
-		return nil, ErrOriginalPlayer
+		return nil, ErrForeignOriginal
 	}
 	if _, err = DecodeTeamLaunch(launch); err != nil {
 		return nil, err

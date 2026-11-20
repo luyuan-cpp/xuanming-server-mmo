@@ -20,6 +20,7 @@ import (
 
 	"login/internal/config"
 	"login/internal/kafka"
+	"login/internal/logic/pkg/accountdeletion"
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/loginqueue"
 	"login/internal/logic/pkg/node"
@@ -56,6 +57,10 @@ type ServiceContext struct {
 	idSegmentNeverUsed bool
 	idSegmentFrontier  []byte
 	AccountDirectory   accountdirectory.Directory
+	// AccountDeletions 与 AccountDirectory 是同一个目录客户端,多出账号注销那几个调用(docs/design/account-deletion.md);
+	// AccountDeletion 编排申请、撤销与执行者。见 account_deletion.go 的 initAccountDeletion。单测替身不设时都为 nil。
+	AccountDeletions accountdirectory.Deletions
+	AccountDeletion  *accountdeletion.Service
 	// ControlRedis 是控制集群句柄(shared/clusterredis,ControlClusterKeys 键策略;2026-11-12 取代不带守卫的 RedisClient):
 	// gate 排空 / 已排空 / 停写标记(gm 族)。没写 ControlRedis.Addrs 时连的是 Node.RedisClient 那一个实例。
 	ControlRedis redis.UniversalClient
@@ -131,6 +136,12 @@ type ServiceContext struct {
 	ZonePolicy *zonepolicy.Reader
 	// zonePolicyStop 取消 startZonePolicyReader 起的读循环;nil = 没起。
 	zonePolicyStop context.CancelFunc
+	// AntiAddiction 是实名与防沉迷的依赖(anti_addiction.go);部署没开防沉迷时为 nil。
+	AntiAddiction *AntiAddiction
+	// antiAddictionStop 取消 startAntiAddictionReporter 起的上下线上报循环;nil = 没起。
+	antiAddictionStop context.CancelFunc
+	// accountDeletionStop 取消 startAccountDeletionExecutor 起的注销执行者循环(account_deletion.go);nil = 没起。
+	accountDeletionStop context.CancelFunc
 	// authCleanup 只拥有生产口令的专用 Redis 池与只读 SQL 连接。
 	authCleanup func()
 }
@@ -166,6 +177,7 @@ func NewServiceContext() *ServiceContext {
 	}
 	playerRedis := mustNewDomainRedis(ctx, "PlayerRedis", config.AppConfig.EffectivePlayerRedis())
 	loginRedis := mustNewDomainRedis(ctx, "LoginRedis", config.AppConfig.EffectiveLoginRedis())
+	RegisterIdTokenProviders(loginRedis)
 
 	kafkaClient, err := kafka.NewCommandProducer(config.AppConfig.Kafka)
 	if err != nil {
@@ -249,7 +261,10 @@ func NewServiceContext() *ServiceContext {
 	sc.initPlayerIDMinter()
 	sc.initHomeZoneResolver() // 依赖 initPlayerIDMinter 可能已拨好的 DataServiceClient
 	sc.initPlayerNames()      // 依赖 initHomeZoneResolver 兜底拨好的 DataServiceClient
-	sc.AccountDirectory = accountdirectory.NewClient(sc.DataServiceClient, os.Getenv(accountdirectory.SecretEnv))
+	directoryClient := accountdirectory.NewClient(sc.DataServiceClient, os.Getenv(accountdirectory.SecretEnv))
+	sc.AccountDirectory = directoryClient
+	sc.initAccountDeletion(directoryClient)
+	sc.initAntiAddiction()
 	initialized = true
 	return sc
 }
@@ -503,6 +518,7 @@ func buildGateCandidates(nodes []node.WatchedNode, zoneID uint32, require bool) 
 				NodeID:         n.NodeId,
 				IP:             host,
 				Port:           port,
+				WsURL:          n.GetClientWsUrl(),
 				PlayerCount:    n.PlayerCount,
 				ZoneID:         n.ZoneId,
 				MaxConnections: n.MaxConnections,
@@ -655,6 +671,8 @@ func (s *ServiceContext) Start() {
 	s.startGateDrainMonitor()
 	s.startGateStalePublisher()
 	s.startZonePolicyReader()
+	s.startAntiAddictionReporter()
+	s.startAccountDeletionExecutor()
 }
 
 // startGateWatcher 起 gate 目录的 list-watch,让 AssignGate 与排队 dispatcher 读进程内镜像,
@@ -808,6 +826,19 @@ func (s *ServiceContext) KickSessionOnGate(ctx context.Context, gateID string, g
 	return nil
 }
 
+// KickSessionWithReason 踢掉一条 gate 连接,并告诉客户端原因(防沉迷到点下线等,docs/design/real-name-anti-addiction.md §5.4)。
+// 不比较登录代次;playerID 为 0 时 gate 按 session_id 踢。
+func (s *ServiceContext) KickSessionWithReason(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, reasonTip uint32) error {
+	msg, err := buildKickPlayerCommandWithReason(gateID, gateInstanceID, sessionID, playerID, 0, reasonTip)
+	if err != nil {
+		return err
+	}
+	if err := s.KafkaClient.SendToTopicPartitionContext(ctx, msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+		return fmt.Errorf("send gate kick command to %s/%d: %w", msg.Topic, msg.Partition, err)
+	}
+	return nil
+}
+
 // PushTipToSession 经 gate 给指定会话的客户端推一条 tip(SendTipToClient)。
 //
 // 这是 login 唯一的"面向客户端的异步通知"原语:EnterGame 的 gRPC 应答在提交预加载后就已
@@ -884,6 +915,12 @@ func (s *ServiceContext) CloseSource(ctx context.Context) error {
 		}
 		if s.zonePolicyStop != nil {
 			s.zonePolicyStop()
+		}
+		if s.accountDeletionStop != nil {
+			s.accountDeletionStop()
+		}
+		if s.antiAddictionStop != nil {
+			s.antiAddictionStop()
 		}
 		if s.preloadStatsStop != nil {
 			close(s.preloadStatsStop)

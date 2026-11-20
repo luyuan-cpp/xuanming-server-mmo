@@ -1,7 +1,7 @@
 # Prometheus alert rules for the player-domain Redis Cluster(玩家域 Redis Cluster,deploy/k8s/manifests/infra/redis-cluster.yaml,name=redis-player)。
 #
 # 来源:docs/design/redis-player-store-cluster.md §7(持久性与故障转移)、§8(扩缩容);处置见 docs/ops/redis-player-cluster-runbook.md。
-# 单实例控制域(redis、redis-ha、redis-queue-g<N>、redis-ctl-g<N>、redis-match-cluster)的规则在 deploy/k8s/redis-alerts.yaml,不在这里。
+# 核心单实例 redis(只有 dev 部署)与 match 私有集群 redis-match-cluster 的规则在 deploy/k8s/redis-alerts.yaml,不在这里。
 # 控制 Redis Cluster(redis-control,同一份模板)的规则在 deploy/k8s/redis-control-alerts.yaml,与本文件一条对一条,改阈值时两边一起改。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 redis-alerts.yaml 同法:

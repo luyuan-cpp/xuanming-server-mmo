@@ -90,6 +90,43 @@ func newTestRetention(now time.Time, batch, maxBatches int, tables ...auditReten
 	}
 }
 
+// 每轮清理之后报每张表现存最老一行的年龄与保留期:空表报 0,时钟偏差导致的「未来」行也报 0;
+// 读失败、没装 oldest 的表不报;排空期间整轮不读。
+func TestAuditRetention_ReportsOldestRowAgeAfterEachRound(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	type report struct {
+		table          string
+		maxAge, oldest time.Duration
+	}
+	var got []report
+	withOldest := func(name string, oldest func(context.Context) (uint64, bool, error)) auditRetentionTable {
+		table := (&fakeRetentionTable{}).asTable(name)
+		table.oldest = oldest
+		return table
+	}
+	r := newTestRetention(now, 10, 1,
+		withOldest("old", func(context.Context) (uint64, bool, error) { return uint64(now.Add(-90 * time.Minute).Unix()), true, nil }),
+		withOldest("empty", func(context.Context) (uint64, bool, error) { return 0, false, nil }),
+		withOldest("broken", func(context.Context) (uint64, bool, error) { return 0, false, errors.New("injected oldest error") }),
+		withOldest("future", func(context.Context) (uint64, bool, error) { return uint64(now.Add(time.Minute).Unix()), true, nil }),
+		(&fakeRetentionTable{}).asTable("no_oldest"),
+	)
+	r.observeOldest = func(table string, maxAge, oldest time.Duration) { got = append(got, report{table, maxAge, oldest}) }
+
+	r.runRound(context.Background())
+	want := []report{{"old", time.Hour, 90 * time.Minute}, {"empty", time.Hour, 0}, {"future", time.Hour, 0}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("最老一行的报数不对: got=%+v want=%+v", got, want)
+	}
+
+	got = nil
+	r.paused = func() bool { return true }
+	r.runRound(context.Background())
+	if len(got) != 0 {
+		t.Fatalf("排空期间不读最老一行: %+v", got)
+	}
+}
+
 // 每个桶都取锁、都删到不满一批为止,所有批的截止时刻与批大小都相同(截止时刻在一轮开始时定好);拿到的锁全部放掉。
 func TestAuditRetention_SweepsEveryShardUntilShortBatchWithFixedCutoff(t *testing.T) {
 	now := time.Unix(1_000_000, 0)

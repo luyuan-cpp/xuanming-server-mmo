@@ -18,6 +18,9 @@ namespace
 	constexpr double kDt = 0.05;
 	constexpr double kWalkStep = 0.45; // 9 米/秒 × 0.05 秒
 	constexpr uint64_t kFirstMemberId = 100;
+	// 拐角、发夹、补位这些用例的期望坐标按间距 1.4 手算,所以队形按 1.4 构造(队形只认构造时给的间距);
+	// 生产间距 kTeamFollowSpacing 由直走那条用例覆盖。
+	constexpr double kSpacing = 1.4;
 
 	FollowPoint P(double x, double y)
 	{
@@ -25,10 +28,10 @@ namespace
 	}
 
 	// 一个已经排好队的队形:队长从 (0,0) 沿 +x 走到 (20,0),members 名队员按名次锁在各自槽位上
-	// (第 k 名在队长身后 (k+1)×1.4)。
-	TeamFollowFormation MakeColumnAt20(std::size_t members)
+	// (第 k 名在队长身后 (k+1)×spacing)。
+	TeamFollowFormation MakeColumnAt20(std::size_t members, double spacing = kSpacing)
 	{
-		TeamFollowFormation formation(P(0.0, 0.0));
+		TeamFollowFormation formation(P(0.0, 0.0), spacing);
 		std::vector<TeamFollowStep> steps;
 		for (int i = 1; i <= 40; ++i)
 		{
@@ -79,7 +82,7 @@ namespace
 
 TEST(TeamFollowFormationTest, StraightWalkMovesEveryMemberExactlyAsFarAsTheLeader)
 {
-	auto formation = MakeColumnAt20(4);
+	auto formation = MakeColumnAt20(4, kTeamFollowSpacing); // 生产间距
 	const auto ticks = WalkLeader(formation, P(20.0, 0.0), P(29.0, 0.0));
 	ASSERT_EQ(ticks.size(), 20u);
 	for (const auto& steps : ticks)
@@ -94,7 +97,8 @@ TEST(TeamFollowFormationTest, StraightWalkMovesEveryMemberExactlyAsFarAsTheLeade
 	}
 	for (std::size_t rank = 0; rank < 4; ++rank)
 	{
-		ExpectAt(MemberPosition(formation, kFirstMemberId + rank), 29.0 - 1.4 * static_cast<double>(rank + 1), 0.0);
+		ExpectAt(MemberPosition(formation, kFirstMemberId + rank),
+			29.0 - kTeamFollowSpacing * static_cast<double>(rank + 1), 0.0);
 	}
 }
 
@@ -245,7 +249,7 @@ TEST(TeamFollowFormationTest, NewcomerWalksToTheEndOfTheLineAndStopsOneSpacingBe
 	ASSERT_EQ(rank, 2u);
 	// ECS 层的加入顺序:剪尾 → 寻路到队尾(这里直接给直线)→ 接在尾部 → 站在新尾部。
 	formation.TrimTailForNewcomer(rank);
-	ExpectAt(formation.Trail().Tail(), 20.0 - 4.2, 0.0);
+	ExpectAt(formation.Trail().Tail(), 20.0 - 3 * kSpacing, 0.0);
 	const std::vector<FollowPoint> path{P(16.0, 2.0), formation.Trail().Tail()};
 	formation.Trail().PrependPath(path);
 	TeamFollowMember member;
@@ -267,7 +271,7 @@ TEST(TeamFollowFormationTest, NewcomerWalksToTheEndOfTheLineAndStopsOneSpacingBe
 
 TEST(TeamFollowFormationTest, NewcomerCloserThanItsSlotWaitsUntilTheLeaderWalksAway)
 {
-	TeamFollowFormation formation(P(0.0, 0.0));
+	TeamFollowFormation formation(P(0.0, 0.0), kSpacing);
 	const uint64_t newcomer = kFirstMemberId;
 	formation.TrimTailForNewcomer(0);
 	const std::vector<FollowPoint> path{P(0.8, 0.3), P(0.0, 0.0)};
@@ -318,7 +322,7 @@ TEST(TeamFollowFormationTest, SuspendedMemberKeepsItsSlotAndIsPlacedAfterFalling
 	WalkLeader(formation, P(25.4, 0.0), P(50.0, 0.0));
 	ASSERT_NE(formation.Find(first), nullptr);
 	EXPECT_TRUE(formation.Find(first)->needsPlacement) << "落后超过上限就不再为他保留轨迹";
-	EXPECT_GE(formation.Trail().TailOdo(), formation.Trail().HeadOdo() - kTeamFollowMaxLag - 2 * kTeamFollowSpacing);
+	EXPECT_GE(formation.Trail().TailOdo(), formation.Trail().HeadOdo() - kTeamFollowMaxLag - 2 * kSpacing);
 
 	formation.SetSuspended(first, false);
 	std::vector<TeamFollowStep> steps;
@@ -366,7 +370,7 @@ TEST(TeamFollowFormationTest, TrailStaysBoundedOnALongWalk)
 	}
 	// 只需要覆盖到最后一名队员(5.6)与保留历史(7.0):按每 tick 一个点,远小于这个上限。
 	EXPECT_LE(formation.Trail().PointCount(), 40u);
-	EXPECT_GE(formation.Trail().Length(), 4 * kTeamFollowSpacing);
+	EXPECT_GE(formation.Trail().Length(), 4 * kSpacing);
 }
 
 // ---- 轨迹本身 ----

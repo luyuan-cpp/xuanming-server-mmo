@@ -26,7 +26,7 @@ module**,各自有 `go.mod`,通过 `replace` 引用同目录下的公共库。
 
 | 目录 | 内容 |
 |------|------|
-| `shared/` | 各服务共用的包:雪花 ID、号段、节点注册、Kafka 寻址、gRPC 拦截器、选主、热关停等 |
+| `shared/` | 各服务共用的包:号段(永久 ID 的发号客户端)、雪花 ID(只剩 scene_manager 的 scene_id)、节点注册、Kafka 寻址、gRPC 拦截器、选主、热关停等 |
 | `schemamigrate/` | 以 proto 为源的建表与迁移库,guild、friend、trade、player_inbox 使用 |
 | `proto/` | 全部 `.pb.go`,由协议生成器产出,勿手改 |
 

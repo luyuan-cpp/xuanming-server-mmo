@@ -6,6 +6,8 @@
 > 已落码,并在 kind 的临时 namespace 上做完端到端复测,真实 zone / infra namespace 仍未 apply,见 §7)。
 > 2026-11-12 k8s 侧补上容器 stdout / stderr 的采集(读 `/var/log/pods` 的 DaemonSet,Go / Java 全部日志与 C++ 容器的 stderr,§6.11),
 > C++ sidecar 也取出 `trace_id` / `span_id` / `player_id`(§6.4);已落码,配置校验、契约测试与 kind 端到端核对都还没跑,见 §7 末条。
+> 2026-11-19 加上 Tempo:三种语言的 span 经 Alloy 尾部采样后存进 Tempo,Grafana 里日志与 trace 互相跳
+> (`docs/design/distributed-tracing.md` §10.3);已写完,没有运行。
 > 适用于 Windows 本机开发环境;k8s 侧见 §6。
 
 ---
@@ -20,6 +22,11 @@ dev.bat obs
 也可以在左侧「仪表板 → 玄冥本地」里找到它。
 顶部可以按 **来源(语言)/ 服务 / zone / 级别 / 关键字** 过滤,下方是三种语言合在一起的日志流。
 想自由查询,用左侧「探索(Explore)」或「Drilldown → Logs」。
+
+**看一条请求的调用链(trace):** 日志详情里 `trace_id` 旁边有「在 Tempo 里看这条 trace」,点开是各服务的 span 时间线;
+在 Tempo 的 span 上点「Logs for this span」就跳回 Loki 查这条 trace 的全部日志。也可以在「探索」里切到 Tempo 数据源直接按 trace_id 查。
+Tempo 只留尾部采样选中的 trace(有错误的、总耗时 ≥ 1 秒的全留,其余留 10%),查不到不代表没有日志,日志一行不少。
+服务把 span 发给本机 Alloy 的 `127.0.0.1:4317`(Go)/ `4318`(C++、Java);观测台没起时导出失败只计数,不影响服务。
 
 ```bat
 dev.bat obs-down
@@ -59,7 +66,8 @@ run/logs/java/*.log、run/logs/sa_token.log              Java 手工重定向的
 | 组件 | 镜像(钉死版本) | 容器名 | 端口 | 配置文件 |
 |---|---|---|---|---|
 | Loki | `grafana/loki:3.5.8` | `xm-loki` | 3100 | `deploy/observability/loki/loki.yaml` |
-| Alloy | `grafana/alloy:v1.10.0` | `xm-alloy` | 12345(调试页) | `deploy/observability/alloy/config.alloy` |
+| Tempo | `grafana/tempo:2.6.1` | `xm-tempo` | 不映射到本机(Grafana 在 compose 网络里连 3200) | `deploy/observability/tempo/tempo.yaml` |
+| Alloy | `grafana/alloy:v1.10.0` | `xm-alloy` | 12345(调试页);`127.0.0.1:4317` / `4318`(收 OTLP span) | `deploy/observability/alloy/config.alloy` |
 | Grafana | `grafana/grafana:13.2.1` | `xm-grafana` | 3000 | `deploy/observability/grafana/provisioning/*`(数据源和看板自动导入) |
 
 compose 文件是 `deploy/docker-compose.observability.yml`。它和 `deploy/docker-compose.yml`(Kafka/Redis/MySQL/etcd)互不依赖。
@@ -450,6 +458,15 @@ http://host.docker.internal:3101
 **不能填 `localhost:3101`**:Grafana 跑在 docker compose 里,容器里的 `localhost` 是它自己。
 名字取个能区分的(例如 `Loki-k8s`),保存后在「探索」里切到它查 `{env="k8s"}`。
 §0 的看板绑的是本机那个数据源,不会自动把集群数据并进去。
+
+**集群里的 trace**(随日志采集器一起部署,`-NoCppLogSidecar` 时没有)同样先 forward,本机侧用 3201:
+
+```powershell
+kubectl -n mmorpg-infra port-forward svc/tempo 3201:3200
+```
+
+再添加一个 Tempo 数据源,URL 填 `http://host.docker.internal:3201`,名字如 `Tempo-k8s`。要从集群日志跳到集群 trace,
+把 `Loki-k8s` 的派生字段照本机 `provisioning/datasources/loki.yaml` 配一条,指向 `Tempo-k8s`。
 
 ### 6.4 标签口径(与 §3 的差异)
 

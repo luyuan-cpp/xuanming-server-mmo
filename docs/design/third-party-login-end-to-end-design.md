@@ -148,7 +148,7 @@ POST /api/bind   { bind_type: "wechat", auth_token: <code> }
 
 ### Apple（iOS）
 - `ASAuthorizationAppleIDProvider` 发起授权，取 `ASAuthorizationAppleIDCredential.identityToken`（UTF-8 的 JWT，10 分钟有效）→ POST `/api/login {auth_type:"apple", auth_token:令牌}`
-- 不需要把 `authorizationCode` 发给服务端（只有以后做 Apple 令牌撤销时才用，见 §12.4）
+- 登录不需要把 `authorizationCode` 发给服务端；注销账号时要不要送、怎么撤销 Apple 令牌见 [账号注销](./account-deletion.md) §8（2026-11-19 待拍板）
 
 ### Google（安卓）
 - Google 登录 SDK 请求 ID token 时填**服务端**的 OAuth 客户端 ID（Web 应用类型，与 `AuthProviders.Google.ClientId` 相同），取 `idToken`（1 小时有效）→ POST `/api/login {auth_type:"google", auth_token:令牌}`
@@ -402,10 +402,10 @@ message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/Ente
 
 | 项 | 状态 |
 |---|---|
-| nonce | 不校验。渠道的 nonce 机制要服务端先发挑战、客户端带进 SDK 请求，当前登录流程没有这一步。现有防线：令牌有效期短、只走 HTTPS、网关与服务端不记录原文、`aud` 限定本应用（别家应用拿到的令牌用不了）。要防截获后的重放，就加「服务端发 nonce → 客户端带进 SDK 请求 → login 核对并一次性消费」一整套，服务端两版与客户端同批改 |
+| nonce | 不校验。渠道的 nonce 机制要服务端先发挑战、客户端带进 SDK 请求，当前登录流程没有这一步。现有防线：令牌有效期短、只走 HTTPS、网关与服务端不记录原文、`aud` 限定本应用（别家应用拿到的令牌用不了）。要防截获后的重放，就加「服务端发 nonce → 客户端带进 SDK 请求 → login 核对并一次性消费」一整套，服务端两版与客户端同批改。2026-11-19 另提了更省的「身份令牌一次性消费」，取舍见 [账号注销](./account-deletion.md) §3.4、§9，待拍板 |
 | 多个 ClientId | 只认一个。Apple 在安卓 / 网页上登录时 `aud` 是 Services ID，不是 Bundle ID；要同时支持就把 `ClientId` 改成列表，部署参数与防误关同批改 |
-| 账号注销与 Apple 令牌撤销 | 未做。App Store 要求 App 内能删除账号，删除时要调 Apple 的撤销接口，需要 Sign in with Apple 的私钥与授权码流程，归账号注销任务 |
-| 客户端 | 未做。iOS 接 AuthenticationServices，安卓接 Google 登录 SDK，拿到令牌后调 `LoginCredential.ForThirdParty("apple" / "google", 令牌)`；常量已在客户端 `LoginAuthTypes` 里 |
+| 账号注销与 Apple 令牌撤销 | 未做。设计见 [账号注销](./account-deletion.md)（2026-11-19 设计稿，待拍板与同意动码） |
+| 客户端 | 未做。iOS 接 AuthenticationServices，安卓接 Credential Manager 的 Sign in with Google，拿到令牌后调 `LoginCredential.ForThirdParty("apple" / "google", 令牌)`；常量已在客户端 `LoginAuthTypes` 里。接入设计见 [账号注销](./account-deletion.md) §3 |
 | 真渠道联调 | 未做，没有 Apple / Google 开发者账号。现有证据只能来自 mock |
 | Java 版 | 待做，已在 Java 仓 `PARITY.md` 登记 |
 

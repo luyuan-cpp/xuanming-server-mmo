@@ -11,6 +11,7 @@ import (
 	"data_service/internal/rolefencecoord"
 	"data_service/internal/store"
 	base "proto/common/base"
+	dspb "proto/data_service"
 	rfpb "proto/role_fence"
 	"shared/authoritysql"
 	"shared/rolefence"
@@ -60,6 +61,23 @@ type RoleRefSweeper interface {
 // RolePreparingAborter 撤销没人重放的超时 PREPARING。*store.AccountDirectoryStore 满足它。
 type RolePreparingAborter interface {
 	AbortStalePreparing(ctx context.Context, limit int) (store.PrepareAbortResult, error)
+}
+
+// AccountRealNameStore 是账号行上的实名列(docs/design/real-name-anti-addiction.md §5.1)。*store.AccountDirectoryStore 满足它。
+type AccountRealNameStore interface {
+	SetRealName(ctx context.Context, account, pi string) (string, error)
+	RealNameOfPlayer(ctx context.Context, player uint64) (string, bool, error)
+}
+
+// AccountDeletionStore 是账号注销在目录上的动作与读(docs/design/account-deletion.md §4、§5.1)。*store.AccountDirectoryStore 满足它。
+type AccountDeletionStore interface {
+	ReadWithLifecycle(ctx context.Context, account string, create bool) (*dspb.AccountDirectoryResponse, error)
+	AccountDeletionState(ctx context.Context, account string) (dspb.AccountDeletionState, error)
+	RequestDeletion(ctx context.Context, account string, source uint32, coolingOff time.Duration) (*dspb.AccountDeletionResponse, error)
+	CancelDeletion(ctx context.Context, account string) (*dspb.AccountDeletionResponse, error)
+	ClaimDeletions(ctx context.Context, limit int) ([]string, error)
+	FinishDeletion(ctx context.Context, account string) (*dspb.FinishAccountDeletionResponse, error)
+	AccountDeletionsOverdue(ctx context.Context, olderThan time.Duration) (int, error)
 }
 
 // configureRoleFence 装配协调者和 GetRoleFenceState 的鉴权。失败只记日志、保持缺席:
@@ -137,6 +155,7 @@ func (s *ServiceContext) StartRoleRemovalResumer() {
 				s.resumeRoleRemovals(ctx)
 				s.abortStaleRolePreparing(ctx)
 				s.sweepStaleRoleRefs(ctx)
+				s.countOverdueDeletions(ctx)
 			}
 		}
 	})
@@ -182,6 +201,24 @@ func (s *ServiceContext) resumeRoleRemovals(ctx context.Context) {
 	})
 	if !finished {
 		s.RelayAdmission.Hold()
+	}
+}
+
+// countOverdueDeletions 报冷静期满超过 24 小时还没删完的账号数(只读,不走 RELAY 门禁)。没数成就不写,保留上一轮的值。
+func (s *ServiceContext) countOverdueDeletions(ctx context.Context) {
+	if s.AccountDeletions == nil {
+		return
+	}
+	n, err := s.AccountDeletions.AccountDeletionsOverdue(ctx, store.DeletionOverdueAfter)
+	if err != nil {
+		if ctx.Err() == nil {
+			logx.Errorf("[account-deletion] count overdue deletions: %v", err)
+		}
+		return
+	}
+	metrics.SetAccountDeletionOverdue(n)
+	if n > 0 {
+		logx.Errorf("[account-deletion] %d account deletions are overdue by more than %s; check the login deletion executor logs for the blocking role", n, store.DeletionOverdueAfter)
 	}
 }
 

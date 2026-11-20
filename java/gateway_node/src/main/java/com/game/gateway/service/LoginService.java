@@ -53,13 +53,18 @@ public class LoginService {
                 }
                 return LoginResponse.error(code, msg);
             }
-            return LoginResponse.ok(
+            LoginResponse out = LoginResponse.ok(
                     rsp.players,
                     rsp.accessToken,
                     rsp.refreshToken,
                     rsp.accessTokenExpire,
                     rsp.refreshTokenExpire
             );
+            // 账号注销状态原样带给客户端(docs/design/account-deletion.md §4.3、§4.5)。
+            out.setAccountDeletionState(rsp.accountDeletionState);
+            out.setAccountDeletionExecuteAfter(rsp.accountDeletionExecuteAfter);
+            out.setPreviousAccountDeletedAt(rsp.previousAccountDeletedAt);
+            return out;
         } catch (StatusRuntimeException e) {
             Status.Code c = e.getStatus().getCode();
             log.warn("login.rpc failed: {} — {}", c, e.getStatus().getDescription());

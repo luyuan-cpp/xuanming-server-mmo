@@ -18,6 +18,7 @@
 // 线程模型:全部在 scene 节点 loop 线程调用;不跨 loop、不持有跨 tick 的实体引用以外的状态。
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "core/constants/fps.h"
@@ -60,8 +61,12 @@ public:
 	// 客户端刚收到入场通知(新登录接回断线保留 / 托管中的角色,或同一会话重新入场):它把跟随状态清成了
 	// "没被驱动",仍接在队长身后的就当场补推一次 driven=true。不等组队读回来 —— 那条读可能失败或被别的
 	// 守卫挡住,客户端就会以为自己能走,而服务器其实还在带着他走。换了场景实例的(队形还记着旧场景)不推:
-	// 下一 tick 会按换场景停止驱动,接下来的跟随检查再重新接上。
+	// 下一 tick 会按换场景停止驱动,接下来的跟随检查再重新接上。补推的名次与条件就是 DrivenSlot。
 	static void ResendStateAfterEntry(entt::entity player);
+
+	// 仍接在队长身后时的名次(1 起,与 TeamFollowStateS2C.slot 同口径);没被驱动,或队形记的场景已不是他
+	// 现在所在的场景,返回空。只读。
+	static std::optional<uint32_t> DrivenSlot(entt::entity player);
 
 	// 队形因"队长离开本节点"解散后在等队长去留的随从(TeamFollowAwaitLeaderComp),这一 tick 有了结论的取走:
 	// 队长实体已不在本节点,或队长不再处于离开中(交接作废);等满超时的直接摘掉、不返回。返回的随从仍声明跟随,

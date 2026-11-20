@@ -124,5 +124,5 @@ spec:
             summary: "{{ $labels.namespace }} 的 scene {{ $labels.instance }} 的归属对账十分钟里过半轮次读不到控制域"
             description: >-
               每 10 秒一轮,十分钟 60 轮里有 30 轮以上没有读成(redis_unavailable / previous_in_flight / send_failed)。
-              查这个 Pod 到本 zone 控制域 Redis(scene_control_redis)的连接:日志里的 metric=zone_redis_liveness_timeout、AUTH 失败、DNS。
+              查这个 Pod 到控制集群(node-config 的 control_redis)的连接:日志里的 [ControlRedis] 计数行、metric=zone_redis_liveness_timeout、AUTH 失败、DNS。
             runbook_url: docs/ops/scene-node-role-split.md

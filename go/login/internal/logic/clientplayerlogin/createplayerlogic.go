@@ -14,6 +14,7 @@ import (
 	"login/internal/svc"
 	login_proto_common "proto/common/base"
 	login_data_base "proto/common/database"
+	dspb "proto/data_service"
 	login_proto "proto/login"
 	"shared/accountdirectory"
 	"shared/generated/pb/table"
@@ -127,9 +128,15 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 	}()
 
 	// 账号目录只强读全局 SQL；Redis 锁仍用于限制单账号本地在途，不裁决角色上限。
-	userAccount, err := readAccountDirectory(l.ctx, l.svcCtx, account, false)
+	userAccount, lifecycle, err := readAccountLifecycle(l.ctx, l.svcCtx, account, false)
 	if err != nil {
 		resp.ErrorMessage = loginTip(table.LoginError_kLoginDataSerializeFailed)
+		return resp, nil
+	}
+	// 冷静期 / 执行中不能建角(docs/design/account-deletion.md §4.3)。互斥在目录的 reserveRef(注销中名额按 0 算),
+	// 这里只为给出正确的提示,并且不白占名字。
+	if lifecycle.GetDeletionState() != dspb.AccountDeletionState_ACCOUNT_DELETION_STATE_NONE {
+		resp.ErrorMessage = loginTip(table.LoginError_kLoginAccountDeletionPending)
 		return resp, nil
 	}
 

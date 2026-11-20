@@ -349,7 +349,7 @@ type AssetOpConf struct {
 	// AuditIntervalMs 日对账(只读,刷新 assetop_pending_rows / assetop_pending_class_oldest_age_seconds)的间隔。
 	// 0 = 不跑对账;非 0 时取 [60000, 604800000]。对账与放弃只在选主当选的一个副本上跑(svc.AssetPipeline)。
 	AuditIntervalMs int `json:",default=86400000"`
-	// Wake 是落地唤醒订阅(ControlRedis 句柄上 SSUBSCRIBE 64 个分片频道 assetop:wake:{aw:N}),见 AssetOpWakeConf。
+	// Wake 是落地唤醒订阅(ControlRedis 句柄上只 SSUBSCRIBE 本副本负责的分片频道 assetop:wake:{aw:N}),见 AssetOpWakeConf。
 	Wake AssetOpWakeConf `json:",optional"`
 }
 

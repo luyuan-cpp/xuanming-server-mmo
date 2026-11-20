@@ -158,7 +158,7 @@ function Invoke-NormalFiniteTool {
     $null=Write-MaintenanceImmutableJson -Path $attempt -Value ([ordered]@{kind=$tool.kind;executableSha256=$tool.executableSha256;writerKey=$grant.writerKey;instanceId=$grant.instanceId;retirementRequestSha256=$tool.retirementRequestSha256})
     $start=[Diagnostics.ProcessStartInfo]::new();$start.FileName=$tool.executable;$start.WorkingDirectory=$tool.workingDirectory;$start.UseShellExecute=$false;$start.CreateNoWindow=$true
     foreach($arg in $arguments){$start.ArgumentList.Add($arg)}
-    foreach($name in @('MMORPG_SQL_REGISTRAR_DSN','MMORPG_SQL_MAINTENANCE_DSN','MMORPG_SQL_SCHEMA_DSN','MMORPG_SQL_OPERATOR_PRINCIPAL','MMORPG_SQL_SCHEMA_PRINCIPAL','CHAT_AUTHORITY_DSN','MMORPG_GUILD_SQL_DSN','MMORPG_MAIL_SQL_DSN','MMORPG_RANK_SQL_DSN','MATCH_MYSQL_PASSWORD','MMORPG_MAINTENANCE_CONTROL_DIR','MMORPG_MAINTENANCE_PREPARE_ONLY')){$null=$start.Environment.Remove($name)}
+    foreach($name in @('MMORPG_SQL_REGISTRAR_DSN','MMORPG_SQL_MAINTENANCE_DSN','MMORPG_SQL_SCHEMA_DSN','MMORPG_SQL_OPERATOR_PRINCIPAL','MMORPG_SQL_SCHEMA_PRINCIPAL','CHAT_AUTHORITY_DSN','MMORPG_GUILD_SQL_DSN','MMORPG_MAIL_SQL_DSN','MMORPG_RANK_SQL_DSN','MMORPG_PAYMENT_SQL_DSN','MATCH_MYSQL_PASSWORD','MMORPG_MAINTENANCE_CONTROL_DIR','MMORPG_MAINTENANCE_PREPARE_ONLY')){$null=$start.Environment.Remove($name)}
     foreach($name in $environment.Keys){$start.Environment[$name]=[string]$environment[$name]}
     if((Get-MaintenanceSha256 $tool.executable) -cne $tool.executableSha256){throw 'finite执行前工件变化'}
     $process=[Diagnostics.Process]::new();$process.StartInfo=$start
@@ -341,7 +341,7 @@ function Get-SqlWriterBootEnvironment {
         if(-not [IO.Path]::IsPathRooted($entry.maintenanceControlDir) -or -not [IO.Directory]::Exists($entry.maintenanceControlDir) -or (Get-Item -LiteralPath $entry.maintenanceControlDir).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'boot在线维护control目录必须预固定私有非重解析路径'}
         $environment.MMORPG_MAINTENANCE_CONTROL_DIR=$entry.maintenanceControlDir
     }
-    $allowed=@(switch($ServiceName){'chat'{@('CHAT_AUTHORITY_DSN')};'guild'{@('MMORPG_GUILD_SQL_DSN')};'mail'{@('MMORPG_MAIL_SQL_DSN')};'rank'{@('MMORPG_RANK_SQL_DSN')};'match'{@('MATCH_MYSQL_PASSWORD')};default{@()}})
+    $allowed=@(switch($ServiceName){'chat'{@('CHAT_AUTHORITY_DSN')};'guild'{@('MMORPG_GUILD_SQL_DSN')};'mail'{@('MMORPG_MAIL_SQL_DSN')};'rank'{@('MMORPG_RANK_SQL_DSN')};'payment'{@('MMORPG_PAYMENT_SQL_DSN')};'match'{@('MATCH_MYSQL_PASSWORD')};default{@()}})
     $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach($variable in $entry.runtimeEnvironment){
         Assert-MaintenanceProperties -Value $variable -Required @('name','valueFile','valueSha256')
@@ -361,7 +361,7 @@ function Get-SqlWriterBootEnvironment {
 function Enter-SqlWriterBootEnvironment {
     param([Collections.IDictionary]$Environment)
     $saved = @{}
-    foreach($key in @('CHAT_AUTHORITY_DSN','MMORPG_GUILD_SQL_DSN','MMORPG_MAIL_SQL_DSN','MMORPG_RANK_SQL_DSN','MATCH_MYSQL_PASSWORD','MMORPG_MAINTENANCE_CONTROL_DIR')){$saved[$key]=[Environment]::GetEnvironmentVariable($key,'Process');[Environment]::SetEnvironmentVariable($key,$null,'Process')}
+    foreach($key in @('CHAT_AUTHORITY_DSN','MMORPG_GUILD_SQL_DSN','MMORPG_MAIL_SQL_DSN','MMORPG_RANK_SQL_DSN','MMORPG_PAYMENT_SQL_DSN','MATCH_MYSQL_PASSWORD','MMORPG_MAINTENANCE_CONTROL_DIR')){$saved[$key]=[Environment]::GetEnvironmentVariable($key,'Process');[Environment]::SetEnvironmentVariable($key,$null,'Process')}
     foreach ($key in $Environment.Keys) { if(-not $saved.ContainsKey($key)){$saved[$key]=[Environment]::GetEnvironmentVariable($key,'Process')}; [Environment]::SetEnvironmentVariable($key,[string]$Environment[$key],'Process') }
     # 常驻服务永不继承控制身份，finally由调用方恢复父环境。
     foreach ($key in @('MMORPG_SQL_REGISTRAR_DSN','MMORPG_SQL_MAINTENANCE_DSN','MMORPG_SQL_SCHEMA_DSN','MMORPG_SQL_OPERATOR_PRINCIPAL','MMORPG_SQL_SCHEMA_PRINCIPAL')) { $saved[$key]=[Environment]::GetEnvironmentVariable($key,'Process'); [Environment]::SetEnvironmentVariable($key,$null,'Process') }

@@ -43,6 +43,10 @@ public class LoginResponse {
     private String refreshToken;
     private Long accessTokenExpire;
     private Long refreshTokenExpire;
+    // 账号注销(docs/design/account-deletion.md §4.3、§4.5),只在成功时出现。客户端看到 1 只给「撤销注销」与「退出」,不往下走。
+    private Integer accountDeletionState;         // 0 正常、1 冷静期、2 执行中
+    private Long accountDeletionExecuteAfter;     // 冷静期满的时刻,Unix 秒;状态 0 时为 0
+    private Long previousAccountDeletedAt;        // 这次建了新账号、而同一身份以前注销完成过:完成时刻,Unix 秒;其余 0
 
     public static LoginResponse ok(List<PlayerInfo> players,
                                    String accessToken, String refreshToken,
@@ -112,4 +116,10 @@ public class LoginResponse {
     public void setAccessTokenExpire(Long accessTokenExpire) { this.accessTokenExpire = accessTokenExpire; }
     public Long getRefreshTokenExpire() { return refreshTokenExpire; }
     public void setRefreshTokenExpire(Long refreshTokenExpire) { this.refreshTokenExpire = refreshTokenExpire; }
+    public Integer getAccountDeletionState() { return accountDeletionState; }
+    public void setAccountDeletionState(Integer accountDeletionState) { this.accountDeletionState = accountDeletionState; }
+    public Long getAccountDeletionExecuteAfter() { return accountDeletionExecuteAfter; }
+    public void setAccountDeletionExecuteAfter(Long accountDeletionExecuteAfter) { this.accountDeletionExecuteAfter = accountDeletionExecuteAfter; }
+    public Long getPreviousAccountDeletedAt() { return previousAccountDeletedAt; }
+    public void setPreviousAccountDeletedAt(Long previousAccountDeletedAt) { this.previousAccountDeletedAt = previousAccountDeletedAt; }
 }

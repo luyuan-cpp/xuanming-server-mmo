@@ -4,23 +4,21 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 
 #include "core/tracing/otlp_http.h"
 #include "core/tracing/otlp_trace_encoder.h"
 #include "core/tracing/span_export_queue.h"
+#include "muduo/net/InetAddress.h"
 
 namespace muduo::net
 {
 class EventLoop;
-class EventLoopThread;
 }
 
-// span 导出线程(docs/design/distributed-tracing.md §10.3):从 SpanExportQueue 取 span,攒批编成 OTLP 的
-// ExportTraceServiceRequest,经 OTLP/HTTP(protobuf)发给本机 / 本节点的 Alloy。照 OTel SDK 规范的 BatchSpanProcessor:
-//   * 每进程一个专用线程(muduo EventLoopThread),线程数固定;业务线程只往队列里放,永不等导出;
+// span 导出器(docs/design/distributed-tracing.md §10.3):从 SpanExportQueue 取 span,攒批编成 OTLP 的
+// ExportTraceServiceRequest,经 OTLP/HTTP(protobuf)发给本机 / 本节点的 Alloy。攒批语义照 OTel SDK 规范的 BatchSpanProcessor:
 //   * 每 scheduleDelay(5 秒)发一批,队列攒够一批(512)时提前发;同一时刻最多一个在途请求;
 //   * 一次导出(连接 + 发送 + 等响应)超过 exportTimeout(30 秒)就算失败;
 //   * 失败(连不上、超时、非 2xx)就丢掉这一批并计数,不重试、不回填队列。连不上时按 1 秒起、翻倍、封顶 60 秒退避:
@@ -28,17 +26,19 @@ class EventLoopThread;
 //   * 停机时在 shutdownTimeout(2 秒)内把剩下的发出去,发不完的丢掉并计数。
 // 不引入 OpenTelemetry C++ SDK(它的 OTLP/gRPC 导出器会拉起 gRPC 运行时线程,与「运行期不起 gRPC 线程」冲突)。
 //
-// 连接是 HTTP/1.1 长连接,对端关了就在下一批重连。地址是主机名时每次建连在导出线程上解析一次(阻塞,只卡导出线程);
-// 停机冲刷不做解析,没连着就直接丢。
+// 跑在节点的主 EventLoop 上,不另起线程(负责人 2026-11-19:C++ 节点除主线程不再开线程)。所有网络都是 muduo 的非阻塞 I/O;
+// 唯一会阻塞的主机名解析放在启动时做一次(ResolveOtlpEndpoint),运行期只用解析好的地址:本机是 127.0.0.1,
+// K8s 上是 Service 的 ClusterIP,Service 存在期间不变。在主线程上多出来的只有每批的 protobuf 编码,量随 span 数线性增长。
 //
-// 生命周期:Start / Shutdown / 析构都在同一个非导出线程上调用(Node 的 loop 线程)。Shutdown 在导出线程上收尾:
-// 连接与定时器都在那里释放,两跳 queueInLoop 之后才放行(AGENTS.md §11.7);等不到收尾(导出线程卡住)时
-// 有意泄漏线程与内部对象,不在别的线程上拆它们。
+// 生命周期:构造、Start、BeginShutdown、Finished、析构都只在这个 loop 的线程上调用。连接是 HTTP/1.1 长连接,对端关了就在
+// 下一批重连;连接对象只在排队任务里析构,muduo 回调只绑 weak_ptr(AGENTS.md §11.7)。停机不阻塞:BeginShutdown 开始有界冲刷,
+// 调用方按 Finished() 轮询(Node 在 FinalizeTeardownInLoop 的让轮里等它),之后再析构。
 
 namespace tracing {
 
 struct OtlpSpanExporterOptions {
-    OtlpHttpEndpoint endpoint;
+    OtlpHttpEndpoint endpoint;           // 请求的 Host 头与路径
+    muduo::net::InetAddress address;     // 连哪(ResolveOtlpEndpoint 的结果)
     OtlpResource resource;
     size_t maxExportBatchSize{kDefaultSpanExportBatchSize};
     std::chrono::milliseconds scheduleDelay{5000};
@@ -47,6 +47,10 @@ struct OtlpSpanExporterOptions {
     std::chrono::milliseconds initialBackoff{1000};
     std::chrono::milliseconds maxBackoff{60000};
 };
+
+// 把 endpoint.host 解析成地址:规范的点分十进制 IPv4 直接用;主机名走 InetAddress::resolve(阻塞)。
+// 只在 loop 开转之前调用(Node::StartSpanExporter);解析不了返回 nullopt。
+std::optional<muduo::net::InetAddress> ResolveOtlpEndpoint(const OtlpHttpEndpoint& endpoint);
 
 // 导出结果的计数。生产用进程唯一的一份(ProcessSpanExportStats),/metrics 读它;单测各用各的。
 struct SpanExportStats {
@@ -65,33 +69,29 @@ void RegisterSpanExportMetrics();
 
 class OtlpSpanExporter {
 public:
-    OtlpSpanExporter(SpanExportQueue& queue, SpanExportStats& stats, OtlpSpanExporterOptions options);
+    OtlpSpanExporter(muduo::net::EventLoop& loop, SpanExportQueue& queue, SpanExportStats& stats,
+                     OtlpSpanExporterOptions options);
+    // 还没收尾就析构:剩下的按停机丢弃计数,连接排进队列关掉,不再冲刷。
     ~OtlpSpanExporter();
 
     OtlpSpanExporter(const OtlpSpanExporter&) = delete;
     OtlpSpanExporter& operator=(const OtlpSpanExporter&) = delete;
 
-    // 起导出线程并开始按周期导出。只调一次。不装进程的 span 去处:那由调用方决定(Node 在 Start 之后
+    // 开始按周期导出。只调一次。不装进程的 span 去处:那由调用方决定(Node 在 Start 之后
     // InstallSpanSink(&ProcessSpanExportQueue()))。
     void Start();
 
-    // 在 shutdownTimeout 内把队列里剩下的发出去,然后停线程。幂等。调用前应先摘掉进程的 span 去处,
+    // 开始停机冲刷:不再按周期发,在 shutdownTimeout 内把队列里剩下的发出去。幂等、不阻塞。调用前应先摘掉进程的 span 去处,
     // 否则停下之后还在入队的 span 只会留在队列里(不再导出,也不计数)。
-    void Shutdown();
+    void BeginShutdown();
+
+    // 停机冲刷已结束(发完、超时或没有可发的)。之后析构不会再丢 span。
+    bool Finished() const;
 
     class Impl;
-    struct Latch;
 
 private:
-    SpanExportQueue& queue_;
-    SpanExportStats& stats_;
-    OtlpSpanExporterOptions options_;
-    std::unique_ptr<muduo::net::EventLoopThread> thread_;
-    std::optional<std::reference_wrapper<muduo::net::EventLoop>> loop_; // 借用 thread_ 的 loop,启动前与关闭后为空
     std::shared_ptr<Impl> impl_;
-    std::shared_ptr<Latch> latch_;           // 收尾完成信号:导出线程在最后一跳置位,Shutdown 等它
-    bool started_{false};
-    bool stopped_{false};
 };
 
 } // namespace tracing

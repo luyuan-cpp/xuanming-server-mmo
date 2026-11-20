@@ -5552,9 +5552,8 @@ namespace
 		options.auditDue = [](Guid playerId, uint64_t commitMark) { return AuditOutbox::HasDue(playerId, commitMark); };
 		options.attachAudit = [](Guid playerId, uint64_t commitMark, playerstore::SavePlayerRequest &request)
 		{
-			// 一笔最多带 AuditOutbox::kMaxBytesPerSave;带不完时 more 为真,状态机分笔交完(PlayerStoreClient::Options::attachAudit)。
-			const auto attached = AuditOutbox::AttachDue(playerId, commitMark, *request.mutable_transaction_logs(), *request.mutable_audit_snapshots());
-			return PlayerStoreClient::AuditAttachment{attached.through, attached.more};
+			// 到期的一笔全部带上:队列上限 AuditOutbox::kMaxBytesPerPlayer 装得进一笔存盘(PlayerStoreClient::Options::attachAudit)。
+			AuditOutbox::AttachDue(playerId, commitMark, *request.mutable_transaction_logs(), *request.mutable_audit_snapshots());
 		};
 		options.onCommittedThrough = [](Guid playerId, uint64_t commitMark) { AuditOutbox::AckThrough(playerId, commitMark); };
 		options.onSettled = [](Guid playerId)

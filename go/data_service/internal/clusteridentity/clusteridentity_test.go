@@ -110,6 +110,30 @@ func TestRead_RejectsAnUnexpectedObject(t *testing.T) {
 	}
 }
 
+// Now 取 API server 回应里的 Date 头;读不懂就报错,不拿本机时钟顶替。
+func TestNow_ReturnsTheAPIServerDate(t *testing.T) {
+	at := time.Date(2026, time.November, 19, 8, 30, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		date string
+		ok   bool
+	}{
+		{at.Format(http.TimeFormat), true},
+		{"not a date", false},
+	} {
+		r := fakeAPIServer(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Date", tc.date)
+			_, _ = w.Write([]byte(namespaceBody("kube-system", testUID)))
+		})
+		got, err := r.Now(context.Background())
+		if tc.ok && (err != nil || !got.Equal(at)) {
+			t.Fatalf("Date %q: now=%v err=%v, want %v", tc.date, got, err, at)
+		}
+		if !tc.ok && err == nil {
+			t.Fatalf("Date %q: got %v, want an error", tc.date, got)
+		}
+	}
+}
+
 // 证书不是集群 CA 签的:TLS 校验失败,不读身份。拦的是把请求导到别处的假 API server。
 func TestRead_RefusesAServerTheClusterCADoesNotVouchFor(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

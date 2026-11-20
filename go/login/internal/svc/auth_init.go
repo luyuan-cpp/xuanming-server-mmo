@@ -151,19 +151,27 @@ func InitAuthProviders() (cleanup func()) {
 			auth.DouyinMiniGameAuthType, cfg.DouyinMiniGame.RequireUnionId, cfg.DouyinMiniGame.Endpoint)
 	}
 
-	// 海外渠道:身份令牌按渠道公钥验签,没有密钥(ClientId 与 Endpoint 已由 ResolveSecrets 校验)。
+	// 海外渠道 Apple / Google 不在这里注册:它们的一次性消费登记要用登录域句柄,见 RegisterIdTokenProviders。
+	initialized = true
+	return cleanup
+}
+
+// RegisterIdTokenProviders 注册 Apple / Google(身份令牌按渠道公钥验签,没有密钥;ClientId 与 Endpoint 已由 ResolveSecrets 校验)。
+// 一次性消费登记(docs/design/account-deletion.md §3.4)用登录域句柄,所以在它建好之后、开始服务之前调,同 RegisterAccessTokenProvider;
+// 复用这个句柄而不另开连接池,K8s 的 Redis 连接总账不变。
+func RegisterIdTokenProviders(loginRedis redis.UniversalClient) {
+	cfg := config.AppConfig.AuthProviders
+	guard := auth.NewRedisIdTokenReplayGuard(loginRedis)
 	if cfg.Apple != nil {
-		auth.Register(auth.AppleAuthType, appleProviderFromConfig(cfg.Apple))
+		auth.Register(auth.AppleAuthType, appleProviderFromConfig(cfg.Apple).WithReplayGuard(guard))
 		logx.Infof("Auth provider registered: %s (client_id=%q endpoint_override=%q)",
 			auth.AppleAuthType, cfg.Apple.ClientId, cfg.Apple.Endpoint)
 	}
 	if cfg.Google != nil {
-		auth.Register(auth.GoogleAuthType, googleProviderFromConfig(cfg.Google))
+		auth.Register(auth.GoogleAuthType, googleProviderFromConfig(cfg.Google).WithReplayGuard(guard))
 		logx.Infof("Auth provider registered: %s (client_id=%q endpoint_override=%q)",
 			auth.GoogleAuthType, cfg.Google.ClientId, cfg.Google.Endpoint)
 	}
-	initialized = true
-	return cleanup
 }
 
 // appleProviderFromConfig / googleProviderFromConfig 只组装不注册(同 weChatProviderFromConfig);用默认的 5s HTTP 客户端取公钥。

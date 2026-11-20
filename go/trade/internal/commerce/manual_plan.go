@@ -215,11 +215,16 @@ func refundBlockers(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWork
 	return refundCommon(w)
 }
 
-// refundCommon 是整单退回与作废拍卖共用的前置:没有发放到账、没有整单退回过。
+// refundCommon 是整单退回与作废拍卖共用的前置:没有发放到账、没有部分到账过、没有整单退回过。
 // 已经整单退回过的合同再退一次,旧写法会把没到账的退回腿标「被退回取代」,再按同名加退回腿时因名字已存在什么也没加上,
 // 合同按「没有发放腿」直接结案,托管再也不退(2026-11-11 修)。退回没到账用 reissue。
+// 部分到账过的发放腿(已被缺口补发取代)说明有一部分已经交出,整单退回会按托管原样把它再退一遍;缺口没到账用 reissue。
+// 先买家、后卖家之后「买家那份部分到账、补发又被拒」时卖家所得还压着、没到账,不拦这一条就能整单退回(数据覆写审计 r2-trade#1 评审)。
 func refundCommon(w *tradepb.TradeCommerceWorkflow) error {
 	for _, l := range w.Legs {
+		if l.Stream == 4 && l.Outcome == partialOutcome {
+			return notAllowed("发放腿 %s 部分到账过,不能整单退回;缺口没到账的用 reissue", l.Role)
+		}
 		if l.Stream != 4 || l.SupersededBy != "" {
 			continue
 		}
@@ -268,11 +273,18 @@ func refundReturns(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkf
 	return out, nil
 }
 
-// applyRefund 把算好的退回加进合同。
+// applyRefund 把算好的退回加进合同。没到账的发放腿,和先买家、后卖家压着、从没发出的卖家所得,都标被退回取代:
+// 卖家所得的钱随整单退回还给买家,它不能再发;不标的话 finalCredits 一直等它,合同停在 return 每轮空转(delivery_order.go)。
 func applyRefund(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, returns []plannedLeg, result *ManualResult) {
 	for _, l := range failedCredits(w) {
 		l.SupersededBy = string(ManualRefund)
 		result.SupersededLegs = append(result.SupersededLegs, l.Role)
+	}
+	for _, l := range w.Legs {
+		if l.Stream == 4 && l.SupersededBy == "" && l.OpId == 0 && isSellerProceeds(l) {
+			l.SupersededBy = string(ManualRefund)
+			result.SupersededLegs = append(result.SupersededLegs, l.Role)
+		}
 	}
 	for _, p := range returns {
 		addLeg(w, p.role, p.player, 4, p.bundle)

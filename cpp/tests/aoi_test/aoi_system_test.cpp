@@ -10,6 +10,8 @@
 //   7. Per-scene priority policies (open-world, dungeon, PvP)
 
 #include "spatial/system/aoi.h"
+#include <cmath>
+#include "spatial/constants/view.h"
 #include "actor/actor_net_id.h"
 #include "core/system/id_generator.h"
 #include <gtest/gtest.h>
@@ -323,11 +325,11 @@ protected:
     }
 };
 
-// When two entities are within kMaxViewRadius (10 units) after Update,
+// When two entities are within kMaxViewRadius after Update,
 // each should appear in the other's AoiListComp.
 TEST_F(AoiVisibilityTest, EntitiesWithinRangeEnterEachOthersAoiList)
 {
-    // Move entity2 close to entity1 (distance 5 < kMaxViewRadius 10)
+    // Move entity2 close to entity1 (distance 5 < kMaxViewRadius)
     auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
     location2.set_x(5);
     location2.set_y(0);
@@ -380,22 +382,27 @@ TEST_F(AoiVisibilityTest, EntitiesOutOfRangeAreNotVisible)
 // AoiSystem::ResetEntityVisibility:同场景瞬移之后的可见性重建(team-system.md 文末「组队跟随 v1.1」V.2)
 // ---------------------------------------------------------------------------
 
-// 同一个六边形内的瞬移:两者同格但相距 14(> kMaxViewRadius 10)时互相不可见;
+// 同一个六边形内的瞬移:两者同格但相距超过视野半径时互相不可见;
 // 把 entity2 瞬移到 entity1 脚下并重置之后,下一次 Update 必须建立双向可见。
 TEST_F(AoiVisibilityTest, ResetEntityVisibilityRebuildsViewAfterSameHexTeleport)
 {
+    // 视野半径等于格子尺寸,从格心出发同格内够不到视野外:两人分站原点那一格内切圆(格子尺寸 × √3/2)的两侧,
+    // 任何朝向的格子都包含它们。
+    const double offset = 0.8 * kAoiHexSize * std::sqrt(3.0) / 2;
+    ASSERT_GT(2 * offset, kMaxViewRadius) << "前置条件:相距超过视野半径";
+    auto& location1 = *tlsEcs.actorRegistry.get<Transform>(entity1).mutable_location();
+    location1.set_x(-offset);
     auto& location2 = *tlsEcs.actorRegistry.get<Transform>(entity2).mutable_location();
-    location2.set_x(14);
+    location2.set_x(offset);
     location2.set_y(0);
     AoiSystem::Update(0.0);
 
     // 前置条件:同格、互相不可见
-    ASSERT_EQ(GridSystem::GetGridId(tlsEcs.actorRegistry.get<Transform>(entity1).location()),
-              GridSystem::GetGridId(location2));
+    ASSERT_EQ(GridSystem::GetGridId(location1), GridSystem::GetGridId(location2));
     ASSERT_FALSE(IsInAoiList(entity1, entity2));
     ASSERT_FALSE(IsInAoiList(entity2, entity1));
 
-    location2.set_x(0);
+    location2.set_x(-offset);
     AoiSystem::ResetEntityVisibility(entity2);
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<Hex>(entity2))
         << "重置后必须摘掉 Hex,下一次 Update 才会走首次进场分支";

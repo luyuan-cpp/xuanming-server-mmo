@@ -76,3 +76,10 @@ func TestExpectedClaimRejectionCoversStaleClaims(t *testing.T) {
 	require.True(t, expectedClaimRejection(fmt.Errorf("claim: %w", authority.ErrClaimStale)))
 	require.False(t, expectedClaimRejection(errors.New("database unavailable")))
 }
+
+// 组队池里两个副本(失联实例与接管实例)或两个撮合段抢同一支整队:后到的一方在入场守卫上被拒、整笔回滚
+// (team 包 TestTeamTiDBSecondClaimOfClaimedUnitsIsRejectedWholly 钉住它回的就是这个错误),结局已知,不记排空 HOLD。
+func TestExpectedClaimRejectionCoversClaimedTeamUnits(t *testing.T) {
+	require.True(t, expectedClaimRejection(authority.ErrMatchEntryOccupied))
+	require.True(t, expectedClaimRejection(fmt.Errorf("claim: %w", authority.ErrMatchEntryOccupied)))
+}

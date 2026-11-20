@@ -16,7 +16,8 @@ import (
 	"shared/redisslot"
 )
 
-// 金样:键名逐字钉住。改形要同批改运维文档与 tools/data_consistency_check 的手写键名(它是独立 go 模块,不 import redisslot)。
+// 金样:键名逐字钉住。改形要同批改运维文档与 tools/data_consistency_check(独立 go 模块:tag 经 redisslot.ZoneControlTag 构造,
+// 前缀是它自己的常量,金样 TestZoneRankKeyShape 同批改)。
 func TestGuildControlKeysGolden(t *testing.T) {
 	cases := map[string]string{
 		guildKey(42):                     "guild:v2:{g:42}",

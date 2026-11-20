@@ -531,6 +531,10 @@ func TestTiDBMallBridgeWaitsForCommittedLegAndRecoversLostReceipt(t *testing.T) 
 			}
 			return
 		}
+		if r.URL.Path == "/internal/reversals/poll" {
+			_, _ = w.Write([]byte(`{"entries":[]}`))
+			return
+		}
 		w.WriteHeader(404)
 	}))
 	defer server.Close()
@@ -626,6 +630,8 @@ func newMallPageServer(t *testing.T, intents []mallIntent) (*httptest.Server, *m
 			probe.receiptOrderIDs = append(probe.receiptOrderIDs, receipt.OrderID)
 			probe.receipts.Add(1)
 			probe.mu.Unlock()
+		case "/internal/reversals/poll":
+			_, _ = w.Write([]byte(`{"entries":[]}`))
 		default:
 			w.WriteHeader(404)
 		}

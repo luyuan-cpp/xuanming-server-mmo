@@ -72,7 +72,7 @@ constexpr uint32_t kZoneId = 3;
 constexpr uint32_t kSceneNodeId = 12;
 constexpr uint32_t kOriginalGateId = 5;
 constexpr uint32_t kCurrentGateId = 6;
-constexpr double kLeaderX = 20.0;
+constexpr double kLeaderX = 30.0; // 超过归队阈值 kTeamRegroupDistance(24):旧规则会瞬移,新规则直接放进槽位
 constexpr uint64_t kTeamId = 950200100;
 
 SessionId SessionOnGate(uint32_t gateId)
@@ -586,7 +586,7 @@ TEST_F(PlayerTeamFollowTest, OfflineMemberWhoDeclaredFollowIsAttachedInTheSameSc
     SessionMap().erase(SessionOnGate(kOriginalGateId)); // 断线:同场景里的服务器驱动跟随不看会话
     redis_.Reply(REDIS_REPLY_STRING, LeaderLocation());
     EXPECT_TRUE(TeamFollowSystem::IsDriven(player_)) << "离线也要接到队长身后";
-    // 离队长 20,超过归队阈值,直接放进槽位;轨迹刚建、只有队长一个点,槽位就在队长脚下。
+    // 离队长 30,超过归队阈值,直接放进槽位;轨迹刚建、只有队长一个点,槽位就在队长脚下。
     EXPECT_DOUBLE_EQ(tlsEcs.actorRegistry.get<Transform>(player_).location().x(), kLeaderX);
 }
 
@@ -798,7 +798,8 @@ TEST_F(TeamFollowDriveTest, FollowerInBattleWaitsAndCatchesUpAfterwards)
 
 TEST_F(TeamFollowDriveTest, LeavingFollowStopsDrivingAtOnce)
 {
-    WalkLeader(3.0);
+    // 多走一个间距:队员在 -1,槽位要越过他才开始被带着走,暂离时他得正在走。
+    WalkLeader(kTeamFollowSpacing + 3.0);
     TeamFollowSystem::SetFollowIntent(follower_, false);
     EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_));
     const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower_);
@@ -806,7 +807,7 @@ TEST_F(TeamFollowDriveTest, LeavingFollowStopsDrivingAtOnce)
     EXPECT_DOUBLE_EQ(velocity->x(), 0.0) << "停止驱动时清零速度,MovementSystem 不会按队形最后写的速度继续积分";
 
     const double stoppedAt = X(follower_);
-    WalkLeader(6.0);
+    WalkLeader(kTeamFollowSpacing + 6.0);
     EXPECT_DOUBLE_EQ(X(follower_), stoppedAt) << "暂离之后不再被带着走";
 }
 
@@ -832,6 +833,23 @@ TEST_F(TeamFollowDriveTest, ResendAfterEntryLeavesTheFormationUntouched)
 
     WalkLeader(6.0);
     EXPECT_NEAR(X(follower_), 6.0 - kTeamFollowSpacing, 1e-6) << "补推之后照常被带着走";
+}
+
+// 入场后补推的判据(ResendStateAfterEntry 只在 DrivenSlot 有值时发 driven=true,名次就是它)。
+TEST_F(TeamFollowDriveTest, DrivenSlotIsWhatTheResendAfterEntryReports)
+{
+    EXPECT_EQ(TeamFollowSystem::DrivenSlot(follower_).value_or(0u), 1u) << "唯一的队员排第一";
+    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(leader_).has_value()) << "队长不被驱动";
+
+    // 队员已进了别的场景实例、还没轮到下一 tick 按换场景停止驱动:队形记的是旧场景,补推不能说他还在跟。
+    const auto otherScene = tlsEcs.sceneRegistry.create();
+    tlsEcs.actorRegistry.get<SceneEntityComp>(follower_).sceneEntity = otherScene;
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_)) << "前置条件:驱动还没摘";
+    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(follower_).has_value());
+
+    TeamFollowSystem::Update(0.05);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower_)) << "下一 tick 按换场景停止驱动";
+    EXPECT_FALSE(TeamFollowSystem::DrivenSlot(follower_).has_value());
 }
 
 // ---- 队长离开本节点:原随从等队长的去留,有了结论再跟一次(team-follow-server-trail.md §3.7) ----

@@ -44,9 +44,12 @@ const hmacSessionKeyLen = 32
 // minimal so capacity.go can build it from any source (etcd watcher today,
 // possibly a metrics-driven view later) without lugging the full proto.
 type GateCandidate struct {
-	NodeID      uint32
-	IP          string
-	Port        uint32
+	NodeID uint32
+	IP     string
+	Port   uint32
+	// WsURL 是这台 gate 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url);空串 = 这台 gate 不接小游戏。
+	// 与 IP / Port 一样只下发给客户端,不参与挑选、去重与签票(docs/design/minigame-websocket-gate.md W7)。
+	WsURL       string
 	PlayerCount uint32
 	ZoneID      uint32
 	// MaxConnections 是这台 gate 自报的客户端连接上限(NodeInfo.max_connections,即它的 GateMaxConnections),
@@ -252,6 +255,7 @@ func signGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, player
 	return &AdmitToken{
 		IP:             gate.IP,
 		Port:           gate.Port,
+		WsURL:          gate.WsURL,
 		TokenPayload:   payloadBytes,
 		TokenSignature: signature,
 		TokenDeadline:  expireTS,

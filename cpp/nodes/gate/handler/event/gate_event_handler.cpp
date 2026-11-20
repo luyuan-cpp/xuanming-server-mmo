@@ -169,9 +169,9 @@ void GateEventHandler::KickPlayerEventHandler(const contracts::kafka::KickPlayer
         return;
     }
 
-    // Send kick notification to client before closing.
+    // Send kick notification to client before closing. 原因由发送方给(防沉迷到点下线等),0 = 账号在别处登录。
     GameKickPlayerRequest kickMsg;
-    kickMsg.mutable_reason()->set_id(kLoginBeKickByAnOtherAccount);
+    kickMsg.mutable_reason()->set_id(event.reason_tip() != 0 ? event.reason_tip() : kLoginBeKickByAnOtherAccount);
     MessageContent mc;
     mc.set_message_id(SceneClientPlayerCommonKickPlayerMessageId);
     mc.set_serialized_message(kickMsg.SerializeAsString());
@@ -316,6 +316,7 @@ void GateEventHandler::RedirectToGateEventHandler(const contracts::kafka::Redire
     RedirectToGateNotify notify;
     notify.set_target_ip(event.target_gate_ip());
     notify.set_target_port(event.target_gate_port());
+    notify.set_target_ws_url(event.target_gate_ws_url()); // 小游戏客户端用;原生客户端不读
     notify.set_token_payload(event.token_payload().data(), event.token_payload().size());
     notify.set_token_signature(event.token_signature().data(), event.token_signature().size());
     notify.set_token_deadline(event.token_deadline());

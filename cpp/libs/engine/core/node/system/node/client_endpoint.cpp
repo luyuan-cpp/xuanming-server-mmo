@@ -326,4 +326,89 @@ std::string_view SourceKindName(SourceKind kind)
     return kSourceKindNames[index];
 }
 
+bool ParseWsBaseUrl(const EnvLookup &env, std::string &out, std::string &error)
+{
+    if (!env)
+    {
+        error = "client endpoint env lookup is empty";
+        return false;
+    }
+    std::string_view url = ReadEnv(env, kEnvWsBaseUrl);
+    if (url.empty())
+    {
+        out.clear();
+        return true;
+    }
+
+    constexpr std::string_view kSecureScheme = "wss://";
+    constexpr std::string_view kPlainScheme = "ws://";
+    std::size_t schemeLen = 0;
+    if (url.substr(0, kSecureScheme.size()) == kSecureScheme)
+    {
+        schemeLen = kSecureScheme.size();
+    }
+    else if (url.substr(0, kPlainScheme.size()) == kPlainScheme)
+    {
+        schemeLen = kPlainScheme.size();
+    }
+    else
+    {
+        error = std::string(kEnvWsBaseUrl) + " must start with wss:// or ws://, got '" + std::string(url) + "'";
+        return false;
+    }
+    while (url.size() > schemeLen && url.back() == '/')
+    {
+        url.remove_suffix(1);
+    }
+
+    // scheme 之后只接受主机、端口与路径用到的字符。用白名单而非黑名单,理由同 IsBareHost:
+    // 查询串、片段、空白、kubelet 没展开的 `$(VAR)`、残留的模板占位符 `{…}` 都会原样下发给客户端。
+    const std::string_view rest = url.substr(schemeLen);
+    bool valid = !rest.empty() && IsAsciiAlnum(rest.front());
+    for (const char c : rest)
+    {
+        valid = valid && (IsAsciiAlnum(c) || c == '.' || c == '-' || c == '_' || c == ':' || c == '/');
+    }
+    if (!valid)
+    {
+        error = std::string(kEnvWsBaseUrl) + " must be wss://host[:port][/path] without query, fragment or whitespace, got '" +
+                std::string(url) + "'";
+        return false;
+    }
+    out.assign(url);
+    return true;
+}
+
+bool IsIpv4Literal(std::string_view text)
+{
+    int parts = 0;
+    while (true)
+    {
+        const std::size_t dot = text.find('.');
+        const std::string_view part = text.substr(0, dot);
+        uint32_t value = 0;
+        const auto [ptr, ec] = std::from_chars(part.data(), part.data() + part.size(), value, 10);
+        // 每段 1..3 位纯十进制、不超过 255(from_chars 不接受符号与空白;空段解析失败)。
+        if (ec != std::errc{} || ptr != part.data() + part.size() || part.size() > 3 || value > 255)
+        {
+            return false;
+        }
+        ++parts;
+        if (dot == std::string_view::npos)
+        {
+            return parts == 4;
+        }
+        text.remove_prefix(dot + 1);
+    }
+}
+
+std::string BuildWsUrl(std::string_view base, const EndpointComp &endpoint)
+{
+    if (base.empty() || !IsIpv4Literal(endpoint.ip()) || !IsUsable(endpoint))
+    {
+        return {};
+    }
+    return std::string(base) + "/" + endpoint.ip() + "/" + std::to_string(endpoint.port());
+}
+
 } // namespace client_endpoint

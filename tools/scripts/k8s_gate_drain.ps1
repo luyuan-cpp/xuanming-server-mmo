@@ -51,8 +51,8 @@
 
     依赖:etcdctl 在 kubectl exec 进 login 所连 etcd Service 背后的 Pod 后,按 login 配置里的 Service 地址连回同一个
     Service(hairpin);redis-cli 在 kubectl exec 进 login 控制域地址背后的 Redis 节点(核心单实例是 statefulset/redis,控制集群
-    redis-control 是种子 Service 同名的 Pod)的 redis 容器后,同样按 Service 地址连 —— 单实例与集群的种子背后就是这个 Pod(hairpin),
-    高可用形态(redis-ha.yaml)下 Service 指向 redis-proxy、经代理落到主,不涉及 hairpin。redis-cli 带 -c:集群上按键跟随 MOVED / ASK,
+    redis-control 是种子 Service 同名的 Pod)的 redis 容器后,同样按 Service 地址连 —— 单实例与集群的种子背后就是这个 Pod(hairpin)。
+    redis-cli 带 -c:集群上按键跟随 MOVED / ASK,
     单实例下无影响。
     读写失败的方向都是 fail-closed(读不到就不写、不删)。
 
@@ -798,11 +798,10 @@ function Select-GateDrainPeers {
 # ─── Redis(login 所用的那个)───
 
 # 用哪个 Pod 里的 redis-cli:
-#   - 核心单实例(login 的控制域地址是 Service redis):与 Service 同名的 StatefulSet 里任一 Pod 的 redis 容器。不 exec svc/<Service>:
-#     高可用形态(redis-ha.yaml)下 Service redis 指向 haproxy 入口代理,代理镜像里没有 redis-cli;
+#   - 核心单实例(只有 dev;login 的控制域地址是 Service redis):与 Service 同名的 StatefulSet 里的 Pod 的 redis 容器;
 #   - 控制集群(ControlRedis.Cluster: true,地址是种子 Service redis-control-<序号>):与种子 Service 同名的 Pod(redis-cluster.yaml
 #     每 Pod 一个 Service、名字相同),StatefulSet 叫 redis-control,不是种子的名字。
-# 连哪台仍由 -h 决定(login 配置里的 Service 地址):高可用形态下经代理落到当前的主,集群上 redis-cli -c 按键跟到持有该槽的主 ——
+# 连哪台仍由 -h 决定(login 配置里的 Service 地址):集群上 redis-cli -c 按键跟到持有该槽的主 ——
 # 与 login 写的是同一处,不随 exec 落到哪个 Pod(可能是从)而变。
 function Get-GateDrainRedisExecTarget {
     param([Parameter(Mandatory = $true)]$Login)
@@ -815,7 +814,7 @@ function Get-GateDrainRedisExecTarget {
 # 不经本机命令行、不进日志;为空时不设(设成空串 redis-cli 会发 AUTH "" 并报错)。
 # 参数经 sh 的位置参数传入,不拼进脚本文本。--no-raw 让 nil 与空串可区分。redis-cli 的 -c:集群模式,跟随 MOVED / ASK
 # (本脚本的多键命令与两段脚本只碰同一个 zone 的标记,同槽);单实例下无影响。-n 照传:集群只有 DB 0,传 0 合法,
-# 传别的会被集群拒绝(fail-closed),单实例开发库号仍与 login 对得上。kubectl 的 -c redis:高可用形态的节点 Pod 另有哨兵容器。
+# 传别的会被集群拒绝(fail-closed),单实例开发库号仍与 login 对得上。kubectl 的 -c redis:节点 Pod 里另有 redis-exporter 容器。
 function Invoke-GateDrainRedis {
     param(
         [Parameter(Mandatory = $true)]$Login,

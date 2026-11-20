@@ -109,11 +109,6 @@ param(
     # switch 只在被指定时透传,只在维护窗口里显式加。只有 release-all(不带 -SkipInfra)会 infra-up,release-zone 用不到它。
     # 追加在末尾,理由同上方"新参数一律追加在末尾"。
     [switch]$ConfirmRedisCoreRestart,
-    # 共享 Redis 的形态(1 = 单实例 redis.yaml,3 = 高可用 redis-ha.yaml;0 = 不透传,由 k8s_deploy.ps1 按档位取),透传给 k8s_deploy.ps1
-    # 同名参数,语义见那边参数注释。非 0 才透传。只有 release-all(不带 -SkipInfra)会 apply 共享 Redis;本脚本不部署 Go 服务,
-    # 不渲染 WAITAOF,release-zone 给了也只影响入口打印的那一行。追加在末尾,理由同上方"新参数一律追加在末尾"。
-    [ValidateRange(0, 3)]
-    [int]$RedisReplicas = 0,
     # B0-4 运维豁免开关(NODE_OPEN_FILE_LIMIT_MODE),透传给 k8s_deploy.ps1 -NodeOpenFileLimitMode,取值语义与 warn 的代价见那边参数注释。
     # 生效范围:release-zone 改 gate / scene,release-all(不带 -SkipInfra)还有 battle。
     # 写法同 -GateRouterMode:默认留空 = 不透传,由 k8s_deploy.ps1 接管(留空 = 不写 env、进程按 enforce),非空才透传。
@@ -150,7 +145,10 @@ param(
     [ValidateRange(0, 2)]
     [int]$ControlRedisReplicasPerMaster = 0,
     [string]$ControlRedisMaxMemory = "",
-    [string]$ControlRedisStorage = ""
+    [string]$ControlRedisStorage = "",
+    # 共享基础设施所在 namespace,透传给 k8s_deploy.ps1 同名参数;留空 = 用那边的缺省(mmorpg-infra)。以前不透传,
+    # release-all 在别的 infra namespace 上也会去 mmorpg-infra 部署、过重启闸。追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [string]$InfraNamespace = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -434,6 +432,9 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($KubeContext)) {
         $args.KubeContext = $KubeContext
     }
+    if (-not [string]::IsNullOrWhiteSpace($InfraNamespace)) {
+        $args.InfraNamespace = $InfraNamespace
+    }
     if (-not [string]::IsNullOrWhiteSpace($KubeConfig)) {
         $args.KubeConfig = $KubeConfig
     }
@@ -470,7 +471,6 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($BattleOrchestrator)) { $args.BattleOrchestrator = $BattleOrchestrator }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
-    if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
     # 玩家域与控制两套 Redis Cluster:非 0 / 非空才传。
     if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }

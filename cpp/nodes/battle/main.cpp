@@ -231,6 +231,29 @@ namespace
         }
     }
 
+    // 启动:客户端直连的准入参数(client/battle_connection_admission.h,与 gate 的 ConfigureConnectionAdmissionOrDie 同一做法)。
+    // 总量上限就是 battle_max_connections(0 只在 dev/test,取硬上限);新建连接速率闸缺省由它推导,
+    // BATTLE_ACCEPT_RATE_PER_SECOND / BATTLE_ACCEPT_BURST 可覆盖。两个变量写错就拒绝启动:带着一个没人知道的速率上限
+    // 跑起来,比起不来更难查。在上面的门禁之后、Install 之前调。
+    void ConfigureClientAdmissionOrDie(BattleClientEdge &edge)
+    {
+        const auto effectiveMaxConnections = static_cast<uint32_t>(edge.EffectiveMaxConnections());
+        std::string error;
+        const auto rateLimit = battle_connection_admission::ResolveRateLimit(
+            std::getenv(battle_connection_admission::kAcceptRateEnv),
+            std::getenv(battle_connection_admission::kAcceptBurstEnv), effectiveMaxConnections, error);
+        if (!rateLimit)
+        {
+            LOG_FATAL << "Refusing to start: " << error;
+            return;
+        }
+        edge.ConfigureAdmission(*rateLimit);
+        LOG_INFO << "Battle client connection admission ENFORCED at accept, max_connections=" << effectiveMaxConnections
+                 << " accept_rate_per_second=" << rateLimit->perSecond << " accept_burst=" << rateLimit->burst
+                 << " (override the rate gate with " << battle_connection_admission::kAcceptRateEnv << " / "
+                 << battle_connection_admission::kAcceptBurstEnv << ")";
+    }
+
     struct BattleNodeHooks
     {
         // 表加载完成钩子:battle 依赖 Skill/Buff/Cooldown/SkillPermission/Monster/Dungeon/Item
@@ -348,6 +371,7 @@ int main(int argc, char *argv[])
             // 客户端直连面(设计文档 §18):先过安全门禁,再装配。
             ValidateBattleClientEdgeConfigOrDie();
             context.clientEdge = std::make_shared<BattleClientEdge>();
+            ConfigureClientAdmissionOrDie(*context.clientEdge);
             BattleRoomManager::Instance().SetClientEdge(context.clientEdge.get());
 
             // 房间 = Agones 单元(D82 / D85):房间表(battle_room_table.h,只能经 Emplace / Erase 增删)
@@ -448,6 +472,12 @@ int main(int argc, char *argv[])
             // 下面的排空谓词等它们落定,拆除前钩子才装停止闸。
             auto closeSource = [&context](Node &n)
                                    {
+                // accept 处的准入闸同一刻关源:之后的新直连在建 TcpConnection 之前就以 RST 拒掉(reason = shutting_down)。
+                // 下面替换连接回调留作第二道:准入回调要等 Install 之后才装上。
+                if (context.clientEdge)
+                {
+                    context.clientEdge->CloseSource();
+                }
                 // 只替换后续新连接的回调；既有连接保留原 DOWN 回调，ConnectionCount 归零前不能签 P1。
                 if (n.IsServiceStarted()) {
                     n.GetTcpServer().setConnectionCallback([](const TcpConnectionPtr& conn) { if (conn->connected()) conn->forceClose(); });

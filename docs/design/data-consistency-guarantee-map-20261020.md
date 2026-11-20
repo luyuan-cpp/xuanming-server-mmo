@@ -209,7 +209,7 @@
    - go/db:COMMITTED 时在提交存档的同一个 TiDB 事务里写本存档库的 `player_audit_outbox`(`go/db/internal/playerstore/audit_outbox.go`);被拒的存盘一条都不写;EQUAL 不重写(同一份请求之前提交时已经写过);发件箱写失败整笔回滚,按结果未知同序号重试。快照由 go/db 按这一笔写完之后的行拼,内容就是库里一笔提交的原样。坏的单条记录跳过并计数,不挡存盘。
    - 转发(`go/db/internal/auditoutbox`):按 (存档库, 片) 用最高随机权重哈希分给本地域的 stable go/db;处理一片时在钉住的连接上持这一片的会话级命名锁(`GET_LOCK`),同一时刻只有一个实例在投这一片;读一批 → Kafka 全副本确认(acks=all)→ 只按主键删投成功的行。至少一次:删之前崩溃、锁所在连接断开后被接手都会重投,data_service 按 `tx_id` / `snapshot_guid` 去重。删除走存档库的写者闸门,搬库冻结时暂停;维护排空时随 RELAY 会话停下。key = 玩家号(AGENTS §7 第 3 条)。
    - 效果:「流水里有这条」⇔「这笔改动已提交」,两个方向都成立;Kafka 停多久都不丢,行留在发件箱,积压年龄告警会响。人工终结工具和 GM 回收照旧以已提交账本为证据(第 4 条),流水只是审计。
-   - 剩下的窗口(设计 §12):scene 崩溃时队列里还没随存盘交出去的记录随进程丢失,它们描述的改动也没提交,两边一致;积压超过一笔的审计预算、要连续几笔才带完时,中途崩溃会丢后几笔该带的流水,只在 go/db 长时间存不进之后出现。没有单一玩家的流水 scene 拒收并打 ERROR(目前没有这种调用方)。
+   - 剩下的窗口(设计 §12):scene 崩溃时队列里还没随存盘交出去的记录随进程丢失,它们描述的改动也没提交,两边一致。到期的记录一笔带完(11-19 起,存盘通道单消息上限放到 16 MiB,装得下一名玩家排满的 8 MiB),没有「改动已提交、记录还在等下一笔」的窗口;11-12 的分笔做法在积压超过 512 KiB 时要连续几笔才带完,中途崩溃会丢后几笔该带的流水,已删掉。没有单一玩家的流水 scene 拒收并打 ERROR、计数告警(目前没有这种调用方)。
    - 只顺带的行(位置)被推迟时不进状态机,不会触发放行;投影启动校验只许这类行放 `transform`。
 2. **身份不确认期间补存。** `player_lifecycle.cpp` 的 `RunIdentityAtRiskSaves`:节点入口注入身份探针时挂一个 1 秒的定时器;身份不确认(keepalive 应答超过半个租约没来、重注册中、紧急疏散中)时,每 5 秒给所有可改的玩家 `SavePlayer` 一次(按玩家号分摊到每秒,和定时存盘同一个做法,不在一个回调里存全员),位置也一起写;身份恢复后回到定时存盘的节奏。这是缩短窗口,不是围栏:最后一次补存到接管之间的改动照样会丢。不让活着的持有者被接管靠的是第 6 条的存活租约,补存留作租约失效时的兜底上限。
 3. **本地换图旁路关掉**:`go/scene_manager/etc/scene_manager_service.yaml` 的 `AllowUnsafeCrossNodeHandoff` 改成 false;`reentry_barrier.go` 的时间线注释按实际行为改写;`robot/etc/travel_smoke.yaml` 的说明同步。
@@ -229,7 +229,7 @@
 
 | 条 | 已有的运行证据 | 出处 |
 |---|---|---|
-| 1 流水随存盘提交(发件箱) | 11-08 的证据(`currency_test` 的 `TransactionLogCommitGateTest.*` 7 条、`bag_test` 4 条提交水位用例全 PASS)对的是 11-05 的提交闸门,发件箱已取代它,只剩提交水位那部分仍适用。11-11~12 的发件箱**全部未编译,待 Codex**:协议生成;C++ `AuditOutboxTest.*`、`bag_test` 的存盘客户端审计用例;Go `go/db/internal/auditoutbox`(确认后才删、部分失败只删成功的、持锁互斥、两副本并发每行只投一次、按哈希分工不重叠、排空、闸门冻结、全扫)、`playerstore` 同事务写入与回滚、`config` 与 data_service 的 topic 一致;真库(MySQL 与 TiDB)的命名锁互斥与发件箱同事务 | PROGRESS 11-11、11-12 两条「审计发件箱」;11-08 原件 `build/verification/naming-audit-20261108/cpp-tests/` |
+| 1 流水随存盘提交(发件箱) | 11-08 的证据(`currency_test` 的 `TransactionLogCommitGateTest.*` 7 条、`bag_test` 4 条提交水位用例全 PASS)对的是 11-05 的提交闸门,发件箱已取代它,只剩提交水位那部分仍适用。11-11~12 的发件箱:11-13 Codex 编过 go/db 生产代码、跑通告警契约,11-14 与 11-18 编过 scene;**单测与冒烟一条没跑**;11-19 改成一笔带完(删分笔、存盘通道 16 MiB)**未编译**。待 Codex:协议生成;C++ `AuditOutboxTest.*`、`bag_test` 的存盘客户端审计用例;Go `go/db/internal/auditoutbox`(确认后才删、部分失败只删成功的、持锁互斥、两副本并发每行只投一次、按哈希分工不重叠、排空、闸门冻结、全扫)、`playerstore` 同事务写入与回滚、`config` 与 data_service 的 topic 一致;真库(MySQL 与 TiDB)的命名锁互斥与发件箱同事务 | PROGRESS 11-11、11-12 两条「审计发件箱」;11-08 原件 `build/verification/naming-audit-20261108/cpp-tests/` |
 | 2 身份不确认期间补存 | 11-08 整解编译通过。11-10 补了 3 条单测(`cross_zone_test` 的 `PlayerStoreDirectEcs.UnconfirmedIdentitySavesEachPlayerOnceEveryFiveSeconds` 等),补存入口改为 `PlayerLifecycleSystem::RunIdentityAtRiskSaves`,**未编译,待 Codex** | PROGRESS 11-10 Claude「身份不确认期间补存补单测」 |
 | 3 本地换图旁路关掉 | 只改配置与注释,没有运行证据 | — |
 | 4 人工终结统一判据 | `go/shared` assetop 144 PASS(9 条真 MySQL 门控 SKIP);trade 的 assetopfix、data、reconcile、svc 共 111 PASS | PROGRESS 11-06 Codex「数据一致性验证续跑」「修正 scene_manager 五项旧夹具」 |

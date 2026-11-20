@@ -367,6 +367,37 @@ func TestSceneMemberReconcileIgnoresNodesOutOfLoadSet(t *testing.T) {
 	assert.Equal(t, []string{"1801"}, membersOf(t, mr, deadKey))
 }
 
+// 只核本进程的 zone(orchestrated_zones.go,control-plane-zone-scoping-20261105.md §4.3):同组别的 zone 的集合在同一个实例上
+// 读得到也不碰,由那个 zone 的领导者核。本 zone 同样形状的残留照常摘,证明这一轮确实跑过。
+// 坏成员是直接 SREM 的(不经 removeSceneMember 的跨 zone 守卫),所以它守的是「根本不列出别的 zone 的集合」这一层。
+func TestSceneMemberReconcileLeavesOtherZonesAlone(t *testing.T) {
+	sc, mr := newMemberReconcileCase(t)
+	const (
+		foreignZone  = uint32(77)
+		foreignScene = reconcileMemberScene + 100
+		stale        = uint64(1901) // 没有 location:在哪个 zone 都是残留
+		malformed    = "not-a-player"
+	)
+	_, err := mr.ZAdd(nodeLoadKey(foreignZone), 0, reconcileMemberNode)
+	require.NoError(t, err)
+	_, err = mr.SetAdd(nodeScenesKey(foreignZone, reconcileMemberNode), strconv.FormatUint(foreignScene, 10))
+	require.NoError(t, err)
+	localKey := instanceMembersKey(testZoneId, reconcileMemberScene)
+	foreignSceneKey, foreignNodeKey := instanceMembersKey(foreignZone, foreignScene), nodeMembersKey(foreignZone, reconcileMemberNode)
+	for _, key := range []string{localKey, foreignSceneKey, foreignNodeKey} {
+		addReconcileMembers(t, mr, key, stale)
+		_, err = mr.SetAdd(key, malformed)
+		require.NoError(t, err)
+	}
+
+	(&sceneMemberReconciler{}).runRound(context.Background(), sc, 100, 100)
+
+	assert.Empty(t, membersOf(t, mr, localKey), "本 zone 的残留与坏成员照常摘")
+	want := []string{"1901", malformed}
+	assert.Equal(t, want, membersOf(t, mr, foreignSceneKey), "别的 zone 的场景集合不归本进程")
+	assert.Equal(t, want, membersOf(t, mr, foreignNodeKey), "别的 zone 的节点集合不归本进程")
+}
+
 // 空集合没有可核对的成员:一轮走完不报错,也不空转到预算耗尽。
 func TestSceneMemberReconcileNoSetsIsNoop(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)

@@ -14,6 +14,7 @@ import (
 	"login/internal/svc"
 	login_proto_common "proto/common/base"
 	kafkapb "proto/contracts/kafka"
+	dspb "proto/data_service"
 	login_proto "proto/login"
 	smpb "proto/scene_manager"
 	"shared/accountdirectory"
@@ -186,7 +187,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginDataSerializeFailed)
 		return resp, nil
 	}
-	ownership, err := l.svcCtx.AccountDirectory.Lookup(ctx, in.PlayerId)
+	ownership, err := l.lookupEnteringRole(ctx, in.PlayerId)
 	if err != nil {
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginDataSerializeFailed)
 		if errors.Is(err, accountdirectory.ErrMissing) {
@@ -196,6 +197,12 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	}
 	if ownership.Account != account {
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginEnterGameGuid)
+		return resp, nil
+	}
+	// 冷静期 / 执行中的账号不能进游戏(docs/design/account-deletion.md §4.3):玩家先撤销注销。
+	// 这一读与注销提交不在一个事务里,只是入口闸门;执行时在线的角色只会让删角放弃、执行者先踢线再重试。
+	if ownership.AccountDeletionState != dspb.AccountDeletionState_ACCOUNT_DELETION_STATE_NONE {
+		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginAccountDeletionPending)
 		return resp, nil
 	}
 	if removedCharacterAppearance(ownership.GetRole().GetAppearanceId()) {

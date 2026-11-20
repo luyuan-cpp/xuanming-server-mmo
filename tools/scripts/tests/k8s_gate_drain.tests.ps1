@@ -413,7 +413,7 @@ Test-Case '同 zone 候选口径与 login 源头一致(Select-GateDrainPeers 镜
     $configGo = Read-RepoText 'go/login/internal/config/config.go'
     Assert-Match -Text $configGo -Pattern 'RequireClientEndpoint\s+bool\s+`json:"RequireClientEndpoint,default=false"`' -Because '顶层键,缺省 false'
     $monitorGo = Read-RepoText 'go/login/internal/logic/pkg/loginqueue/gatedrain_monitor.go'
-    Assert-Match -Text $monitorGo -Pattern 'for _, g := range gates \{\s*markedAtRaw, err := rdb\.Get\(ctx, gateDrainingKey\(g\.NodeID\)\)' -Because 'login 只评估快照里的 node_id:进程没了,drained 永远不会来(脚本据此中途复核进程身份)'
+    Assert-Match -Text $monitorGo -Pattern 'for _, g := range gates \{\s*drainingKey, drainedKey := gatepick\.DrainingKey\(zoneID, g\.NodeID\), gatepick\.DrainedKey\(zoneID, g\.NodeID\)\s*markedAtRaw, err := rdb\.Get\(ctx, drainingKey\)' -Because 'login 只评估快照里的 node_id:进程没了,drained 永远不会来(脚本据此中途复核进程身份)'
 }
 
 Test-Case '标记 / 撤回脚本文本:检查与写入同在一个 EVAL,撤回按值比对' {
@@ -427,27 +427,40 @@ Test-Case '标记 / 撤回脚本文本:检查与写入同在一个 EVAL,撤回�
     Assert-Match -Text $c.ReleaseScript -Pattern "^if redis\.call\('GET',KEYS\[1\]\)==ARGV\[1\] then return redis\.call\('DEL',KEYS\[1\],KEYS\[2\]\) end return -1$" -Because '只删本次写入的值'
 }
 
-Test-Case '部署生成器的真实 login 模板能被解析出同一组定位参数' {
+Test-Case '部署生成器的真实 login 模板能被解析出同一组定位参数(控制端点是核心单实例 / 控制集群两种形态)' {
     Reset-DrainFixture
     $deployText = Read-RepoText 'tools/scripts/k8s_deploy.ps1'
     $template = [regex]::Match($deployText, '(?s)"login"\s*\{\s*@"\r?\n(?<body>.*?)\r?\n"@')
     Assert-True -Condition $template.Success -Because '找不到 New-GoSvcConfigMapYaml 的 login 模板'
-    $body = $template.Groups['body'].Value -replace '\$\{InfraNamespace\}', 'audit-infra'
-    # Node.RedisClient.Host 由 -RedisSplit 的唯一来源 Get-RedisPurposeTopologyFor 算出(核心恒为 redis.<infra>:6379),模板里只是变量;
-    # 先核对这条来源,再代入同样的值,否则通用的 "变量 → 1" 替换会把它变成非法地址。
-    Assert-Match -Text $template.Groups['body'].Value -Pattern '(?m)^\s+Host: \$\{loginCoreRedisHost\}\s*$' -Because 'login 的 RedisClient 仍取核心地址变量'
-    Assert-Match -Text $deployText -Pattern '\$loginCoreRedisHost = \$loginRedisPurpose\.Core\.HostPort' -Because '变量来自 Redis 用途拓扑的核心实例'
-    Assert-Match -Text $deployText -Pattern "HostPort = \('redis\.\{0\}:\{1\}' -f \`$InfraNamespace, \`$port\)" -Because '核心实例就是 infra 里的 redis Service'
-    $body = $body -replace '\$\{loginCoreRedisHost\}', 'redis.audit-infra:6379'
-    # RequireClientEndpoint 由生成器按 -ClientEntryMode 填 true / false;通用的 "变量 → 1" 替换会把它变成非法值。
-    $body = $body -replace '(?m)^(\s*RequireClientEndpoint:\s*)\S.*$', '${1}true'
-    $body = $body -replace '\$\{[A-Za-z_][A-Za-z0-9_]*\}', '1' -replace '\$\([^()]*\)', '' -replace '\$[A-Za-z_][A-Za-z0-9_]*', ''
-    $login = ConvertFrom-LoginDrainConfig -Text $body -Source 'k8s_deploy login 模板'
-    Assert-Equal -Expected 'redis' -Actual $login.Redis.Service -Because 'Redis 来自 Node.RedisClient.Host'
-    Assert-Equal -Expected 'audit-infra' -Actual $login.Redis.Namespace -Because 'Redis 在 infra namespace'
-    Assert-Equal -Expected 'etcd' -Actual $login.Etcd.Service -Because 'etcd 来自 Registry.Etcd.Hosts'
-    Assert-Equal -Expected 'audit-infra' -Actual $login.Etcd.Namespace -Because 'etcd 在 infra namespace'
-    Assert-True -Condition ($login.DeadlineSeconds -lt 1800) -Because '生成器产出的 Deadline 必须小于脚本默认 TTL 1800s'
+    # 排空标记在控制域:地址在顶层 ControlRedis 段(New-ControlRedisConfigYaml 渲染,模板里是 ${loginControlRedisBlock});Node.RedisClient 是
+    # 本机回落段,K8s 上写核心地址。先核对这两条来源,再代入同形的段,否则通用的 "变量 → 1" 替换会把它们变成非法值。
+    Assert-Match -Text $template.Groups['body'].Value -Pattern '(?m)^\$\{loginControlRedisBlock\}\s*$' -Because 'login 的控制域段由 New-ControlRedisConfigYaml 渲染(缺口第 34 条第 6b 批)'
+    Assert-Match -Text $template.Groups['body'].Value -Pattern '(?m)^\s+Host: redis\.\$\{InfraNamespace\}:6379\s*$' -Because 'login 的 Node.RedisClient 写核心地址'
+    foreach ($case in @(
+            @{ Label = '核心单实例(dev)'; Service = 'redis'; Cluster = $false; Target = 'statefulset/redis'
+                Block = "ControlRedis:`n  Addrs:`n    - `"redis.audit-infra:6379`"`n  Password: `"`"`n  PoolSizePerNode: 20" }
+            @{ Label = '控制集群(staging / prod)'; Service = 'redis-control-0'; Cluster = $true; Target = 'pod/redis-control-0'
+                Block = "ControlRedis:`n  Addrs:`n    - `"redis-control-0.audit-infra:6379`"`n    - `"redis-control-1.audit-infra:6379`"`n    - `"redis-control-2.audit-infra:6379`"`n  Cluster: true`n  Password: `"`"`n  PoolSizePerNode: 20" }
+        )) {
+        $body = $template.Groups['body'].Value -replace '\$\{InfraNamespace\}', 'audit-infra'
+        $body = $body.Replace('${loginControlRedisBlock}', $case.Block)
+        # RequireClientEndpoint 由生成器按 -ClientEntryMode 填 true / false;通用的 "变量 → 1" 替换会把它变成非法值。
+        $body = $body -replace '(?m)^(\s*RequireClientEndpoint:\s*)\S.*$', '${1}true'
+        $body = $body -replace '\$\{[A-Za-z_][A-Za-z0-9_]*\}', '1' -replace '\$\([^()]*\)', '' -replace '\$[A-Za-z_][A-Za-z0-9_]*', ''
+        $login = ConvertFrom-LoginDrainConfig -Text $body -Source "k8s_deploy login 模板($($case.Label))"
+        Assert-Equal -Expected $case.Service -Actual $login.Redis.Service -Because "$($case.Label):Redis 来自 ControlRedis.Addrs[0],不是本机回落的 Node.RedisClient"
+        Assert-Equal -Expected 'audit-infra' -Actual $login.Redis.Namespace -Because "$($case.Label):Redis 在 infra namespace"
+        Assert-Equal -Expected $case.Cluster -Actual ([bool]$login.RedisCluster) -Because "$($case.Label):ControlRedis.Cluster"
+        Assert-Equal -Expected $case.Target -Actual (Get-GateDrainRedisExecTarget -Login $login) -Because "$($case.Label):exec 进哪个对象(集群的 StatefulSet 叫 redis-control,种子 Service 与 Pod 同名)"
+        Assert-Equal -Expected 'etcd' -Actual $login.Etcd.Service -Because 'etcd 来自 Registry.Etcd.Hosts'
+        Assert-Equal -Expected 'audit-infra' -Actual $login.Etcd.Namespace -Because 'etcd 在 infra namespace'
+        Assert-True -Condition ($login.DeadlineSeconds -lt 1800) -Because '生成器产出的 Deadline 必须小于脚本默认 TTL 1800s'
+    }
+    # ControlRedis.Cluster 只认 true / false,写错拒绝(不能把集群当单实例去 exec StatefulSet)。
+    $bad = ($template.Groups['body'].Value -replace '\$\{InfraNamespace\}', 'audit-infra').Replace('${loginControlRedisBlock}', "ControlRedis:`n  Addrs:`n    - `"redis-control-0.audit-infra:6379`"`n  Cluster: yes")
+    $bad = $bad -replace '(?m)^(\s*RequireClientEndpoint:\s*)\S.*$', '${1}true'
+    $bad = $bad -replace '\$\{[A-Za-z_][A-Za-z0-9_]*\}', '1' -replace '\$\([^()]*\)', '' -replace '\$[A-Za-z_][A-Za-z0-9_]*', ''
+    Assert-Match -Text (Get-ThrownMessage { ConvertFrom-LoginDrainConfig -Text $bad -Source 'login 模板(Cluster 写错)' }) -Pattern "ControlRedis\.Cluster='yes' 不是 true / false" -Because 'Cluster 的值写错必须 throw'
 }
 
 Test-Case '全局 kubectl 参数排在子命令之前,exec 的 -- 之后原样保留' {

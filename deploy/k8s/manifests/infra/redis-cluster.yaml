@@ -150,14 +150,11 @@ spec:
       terminationGracePeriodSeconds: 60
       affinity:
         podAntiAffinity:
-          # 尽量分散到不同节点。容量验收要求每个主独占主机或 CPU 核(§14.3),那时改用专用节点池,这里只是缺省保底。
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app: __REDIS_CLUSTER_NAME__
-                topologyKey: kubernetes.io/hostname
+          # 成员之间的反亲和按档位渲染(k8s_deploy.ps1 的 Get-QuorumMemberAntiAffinityYaml,与 etcd、Kafka 同一个函数):
+          # staging / prod 必须分散到不同节点(required)。主从角色会随故障转移互换,只能要求全部成员两两不同节点,否则主和它的从
+          # 可能落在同一台,一个节点故障就丢掉那几个槽的全部副本。所以 staging / prod 要有不少于本集群节点总数的可调度节点。
+          # dev 只是尽量分散(preferred),单节点 kind 照样起得来。容量验收要求每个主独占主机或 CPU 核(§14.3),那时改用专用节点池。
+          __REDIS_CLUSTER_MEMBER_ANTI_AFFINITY__
       containers:
         # 容器名必须叫 redis:k8s_deploy.ps1 的 redis-wipe 与 maxclients 核对、stress_snap.ps1 都按「pod/<集群名>-<序号> -c redis」exec 进来。
         - name: redis

@@ -10,7 +10,7 @@
 // 这种情形由登记处水位兜底,见设计 §6.3。
 //
 // 只用标准库发一次 GET,不引 client-go:data_service 只需要这一个字段,把 client-go 提成直接依赖要连带一串传递包的
-// 校验和,而服务按 -mod=readonly 构建。
+// 校验和,而服务按 -mod=readonly 构建。同一个回应的 Date 头还给发号器当第二个时钟(Now)。
 package clusteridentity
 
 import (
@@ -26,6 +26,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 const (
@@ -72,38 +73,9 @@ func InCluster() Reader {
 // 缓存由调用方决定。ServiceAccount 要能 get namespaces/kube-system
 // (deploy/k8s/manifests/go-svc/data-service-identity-rbac.yaml)。
 func (r Reader) Read(ctx context.Context) (string, error) {
-	if r.Host == "" || r.Port == "" {
-		return "", ErrNotInCluster
-	}
-	token, err := os.ReadFile(r.TokenPath)
+	body, _, err := r.get(ctx)
 	if err != nil {
-		return "", fmt.Errorf("cluster identity: read the service account token: %w", err)
-	}
-	client := r.Client
-	if client == nil {
-		if client, err = r.newClient(); err != nil {
-			return "", err
-		}
-	}
-	url := "https://" + net.JoinHostPort(r.Host, r.Port) + "/api/v1/namespaces/kube-system"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", fmt.Errorf("cluster identity: build the request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("cluster identity: GET namespace kube-system: %w", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return "", fmt.Errorf("cluster identity: read the response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("cluster identity: GET namespace kube-system returned HTTP %d "+
-			"(the service account needs get on namespaces/kube-system): %s", resp.StatusCode, snippet(body))
+		return "", err
 	}
 	var ns struct {
 		Metadata struct {
@@ -118,6 +90,59 @@ func (r Reader) Read(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("cluster identity: unexpected namespace object name=%q uid=%q", ns.Metadata.Name, ns.Metadata.UID)
 	}
 	return Prefix + ns.Metadata.UID, nil
+}
+
+// Now 返回 API server 回应里 Date 头的时间(秒级),给发号器当本机时钟之外的第二个时钟(登记处丢码时算重新登记的上界)。
+// 和 Read 是同一个请求、同一条权限,每次调用都发一次。Date 缺失或读不懂时报错,不拿本机时钟顶替。
+func (r Reader) Now(ctx context.Context) (time.Time, error) {
+	_, header, err := r.get(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	date := header.Get("Date")
+	at, err := http.ParseTime(date)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("cluster identity: the API server response has no usable Date header %q: %w", date, err)
+	}
+	return at, nil
+}
+
+// get 带上 ServiceAccount 令牌 GET kube-system 命名空间,返回 HTTP 200 的响应体和响应头。
+func (r Reader) get(ctx context.Context) ([]byte, http.Header, error) {
+	if r.Host == "" || r.Port == "" {
+		return nil, nil, ErrNotInCluster
+	}
+	token, err := os.ReadFile(r.TokenPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cluster identity: read the service account token: %w", err)
+	}
+	client := r.Client
+	if client == nil {
+		if client, err = r.newClient(); err != nil {
+			return nil, nil, err
+		}
+	}
+	url := "https://" + net.JoinHostPort(r.Host, r.Port) + "/api/v1/namespaces/kube-system"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cluster identity: build the request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cluster identity: GET namespace kube-system: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return nil, nil, fmt.Errorf("cluster identity: read the response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil, fmt.Errorf("cluster identity: GET namespace kube-system returned HTTP %d "+
+			"(the service account needs get on namespaces/kube-system): %s", resp.StatusCode, snippet(body))
+	}
+	return body, resp.Header, nil
 }
 
 // newClient 建一个只信任集群 CA 的一次性客户端:一个进程只读一次身份,不保留连接。

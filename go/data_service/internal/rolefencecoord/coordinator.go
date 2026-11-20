@@ -12,6 +12,7 @@ import (
 	"data_service/internal/config"
 	"data_service/internal/metrics"
 	rfpb "proto/role_fence"
+	"shared/grpckeepalive"
 	"shared/rolefence"
 	"shared/safego"
 	"shared/serviceauth"
@@ -32,6 +33,8 @@ const (
 	dryRunTimeout = 800 * time.Millisecond
 	// pushTimeout 是一次推送的上限。丢了由副本下一次访问自愈。
 	pushTimeout = 2 * time.Second
+	// purgeTimeout 是一轮清数据的上限。清理跑在删角收尾里(前台删角或后台 ResumeRemovals),超时算没清完,下一轮整组再调。
+	purgeTimeout = 2 * time.Second
 )
 
 // errPushRetry 表示参与者这一次没写成,带内回的 retry。
@@ -90,6 +93,10 @@ func (l localClient) ApplyRoleFence(ctx context.Context, in *rfpb.ApplyRoleFence
 	return l.server.ApplyRoleFence(ctx, in)
 }
 
+func (l localClient) PurgeRemovedRole(ctx context.Context, in *rfpb.PurgeRemovedRoleRequest, _ ...grpc.CallOption) (*rfpb.PurgeRemovedRoleResponse, error) {
+	return l.server.PurgeRemovedRole(ctx, in)
+}
+
 // AddLocalParticipant 接上同进程的参与者。只在交给目录之前调,之后字段不再改。
 func (c *Coordinator) AddLocalParticipant(server rfpb.RoleFenceParticipantServer) {
 	c.participants = append(c.participants, participant{name: LocalParticipant, client: localClient{server: server}})
@@ -108,7 +115,9 @@ func dial(p config.RoleFenceParticipantConfig) (zrpc.Client, error) {
 	}
 	c.Endpoints, c.Etcd = p.Endpoints, p.Etcd
 	c.NonBlock = true
-	return zrpc.NewClient(c)
+	// K8s 上参与者都是 Service 地址,整条连接落在一个 Pod 上:keepalive 让对端整机消失后的半开连接
+	// 在一次调用后 20 秒内断开重连,否则冻结一直不可达、过户删角被挡约 15 分钟(shared/grpckeepalive)。
+	return zrpc.NewClient(c, zrpc.WithDialOption(grpckeepalive.DialOption()))
 }
 
 func (c *Coordinator) sign(method string, in proto.Message) error {
@@ -117,28 +126,83 @@ func (c *Coordinator) sign(method string, in proto.Message) error {
 
 // Prepare 并行调全部参与者 PrepareRoleFreeze。有不通过就是 Blocked,其次有不可达或过时就是 Retry,全部通过才是 Clean。
 func (c *Coordinator) Prepare(ctx context.Context, state *rfpb.RoleFenceState) rolefence.PrepareOutcome {
-	return c.askAll(ctx, prepareTimeout, state, false)
+	outcome, _ := c.askAll(ctx, prepareTimeout, state, false)
+	return outcome
 }
 
 // DryRun 并行试探全部参与者有没有挂起,参与者不写副本。结论的合并规则和 Prepare 相同,问不齐就是 Retry。
 func (c *Coordinator) DryRun(ctx context.Context, state *rfpb.RoleFenceState) rolefence.PrepareOutcome {
+	outcome, _ := c.askAll(ctx, dryRunTimeout, state, true)
+	return outcome
+}
+
+// DryRunBlockers 同 DryRun,另回各参与者说的挂起原因(低基数枚举串,按参与者顺序,一个参与者至多一个)。
+func (c *Coordinator) DryRunBlockers(ctx context.Context, state *rfpb.RoleFenceState) (rolefence.PrepareOutcome, []string) {
 	return c.askAll(ctx, dryRunTimeout, state, true)
 }
 
-func (c *Coordinator) askAll(ctx context.Context, timeout time.Duration, state *rfpb.RoleFenceState, dryRun bool) rolefence.PrepareOutcome {
+func (c *Coordinator) askAll(ctx context.Context, timeout time.Duration, state *rfpb.RoleFenceState, dryRun bool) (rolefence.PrepareOutcome, []string) {
 	call, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	outcomes := make([]rolefence.PrepareOutcome, len(c.participants))
+	blockers := make([]string, len(c.participants))
 	var wg sync.WaitGroup
 	for i, p := range c.participants {
 		wg.Add(1)
 		safego.Go("data_service.role_fence.prepare", func() {
 			defer wg.Done()
-			outcomes[i] = c.prepareOne(call, p, state, dryRun)
+			outcomes[i], blockers[i] = c.prepareOne(call, p, state, dryRun)
 		})
 	}
 	wg.Wait()
-	return mergeOutcomes(outcomes)
+	var reasons []string
+	for _, b := range blockers {
+		if b != "" {
+			reasons = append(reasons, b)
+		}
+	}
+	return mergeOutcomes(outcomes), reasons
+}
+
+// Purge 并行调全部参与者 PurgeRemovedRole(docs/design/account-deletion.md §6.1),state 必须是墓碑。全部回成功才是 true;
+// 有一个没清完就回 false,删角收尾的小表留着,下一轮(ResumeRemovals)整组再调一遍:每个参与者的清理都可重复。
+func (c *Coordinator) Purge(ctx context.Context, state *rfpb.RoleFenceState) bool {
+	call, cancel := context.WithTimeout(ctx, purgeTimeout)
+	defer cancel()
+	done := make([]bool, len(c.participants))
+	var wg sync.WaitGroup
+	for i, p := range c.participants {
+		wg.Add(1)
+		safego.Go("data_service.role_fence.purge", func() {
+			defer wg.Done()
+			done[i] = c.purgeOne(call, p, state)
+		})
+	}
+	wg.Wait()
+	for _, ok := range done {
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Coordinator) purgeOne(ctx context.Context, p participant, state *rfpb.RoleFenceState) bool {
+	in := &rfpb.PurgeRemovedRoleRequest{State: state}
+	if err := c.sign(rfpb.RoleFenceParticipant_PurgeRemovedRole_FullMethodName, in); err != nil {
+		logx.Errorf("[role-fence] sign purge failed: participant=%s err=%v", p.name, err)
+		return false
+	}
+	out, err := p.client.PurgeRemovedRole(ctx, in)
+	switch {
+	case err != nil:
+		logx.Errorf("[role-fence] purge unreachable: participant=%s player=%d version=%d err=%v", p.name, state.PlayerId, state.Version, err)
+		return false
+	case out.GetRetry():
+		logx.Errorf("[role-fence] purge answered retry: participant=%s player=%d version=%d", p.name, state.PlayerId, state.Version)
+		return false
+	}
+	return true
 }
 
 func mergeOutcomes(outcomes []rolefence.PrepareOutcome) rolefence.PrepareOutcome {
@@ -155,40 +219,41 @@ func mergeOutcomes(outcomes []rolefence.PrepareOutcome) rolefence.PrepareOutcome
 	return merged
 }
 
-func (c *Coordinator) prepareOne(ctx context.Context, p participant, state *rfpb.RoleFenceState, dryRun bool) rolefence.PrepareOutcome {
+// prepareOne 问一个参与者,回结论与它说的挂起原因(只有 Blocked 时非空)。
+func (c *Coordinator) prepareOne(ctx context.Context, p participant, state *rfpb.RoleFenceState, dryRun bool) (rolefence.PrepareOutcome, string) {
 	in := &rfpb.PrepareRoleFreezeRequest{State: state, DryRun: dryRun}
 	if err := c.sign(rfpb.RoleFenceParticipant_PrepareRoleFreeze_FullMethodName, in); err != nil {
 		logx.Errorf("[role-fence] sign prepare failed: participant=%s err=%v", p.name, err)
 		metrics.ObserveRoleFencePrepare(p.name, metrics.RoleFenceResultUnreachable)
-		return rolefence.PrepareRetry
+		return rolefence.PrepareRetry, ""
 	}
 	out, err := p.client.PrepareRoleFreeze(ctx, in)
 	switch {
 	case err != nil:
 		logx.Errorf("[role-fence] prepare unreachable: participant=%s player=%d version=%d err=%v", p.name, state.PlayerId, state.Version, err)
 		metrics.ObserveRoleFencePrepare(p.name, metrics.RoleFenceResultUnreachable)
-		return rolefence.PrepareRetry
+		return rolefence.PrepareRetry, ""
 	case out.GetRetry():
 		logx.Errorf("[role-fence] prepare answered retry: participant=%s player=%d version=%d", p.name, state.PlayerId, state.Version)
 		metrics.ObserveRoleFencePrepare(p.name, metrics.RoleFenceResultUnreachable)
-		return rolefence.PrepareRetry
+		return rolefence.PrepareRetry, ""
 	case out.GetStale():
 		logx.Infof("[role-fence] prepare stale: participant=%s player=%d version=%d", p.name, state.PlayerId, state.Version)
 		metrics.ObserveRoleFencePrepare(p.name, metrics.RoleFenceResultStale)
-		return rolefence.PrepareRetry
+		return rolefence.PrepareRetry, ""
 	case out.GetClean():
 		metrics.ObserveRoleFencePrepare(p.name, metrics.RoleFenceResultClean)
-		return rolefence.PrepareClean
+		return rolefence.PrepareClean, ""
 	case out.GetBlocker() != "":
 		logx.Infof("[role-fence] prepare blocked: participant=%s player=%d version=%d blocker=%s", p.name, state.PlayerId, state.Version, out.GetBlocker())
 		metrics.ObserveRoleFencePrepare(p.name, metrics.RoleFenceResultBlocked)
 		metrics.ObserveRoleFenceBlocker(p.name, out.GetBlocker())
-		return rolefence.PrepareBlocked
+		return rolefence.PrepareBlocked, out.GetBlocker()
 	default:
 		// 既没通过也没说原因,不算通过,也不清令牌。
 		logx.Errorf("[role-fence] prepare answered nothing: participant=%s player=%d version=%d", p.name, state.PlayerId, state.Version)
 		metrics.ObserveRoleFencePrepare(p.name, metrics.RoleFenceResultUnreachable)
-		return rolefence.PrepareRetry
+		return rolefence.PrepareRetry, ""
 	}
 }
 

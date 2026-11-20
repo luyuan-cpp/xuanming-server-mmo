@@ -675,6 +675,11 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
 ## 回执与范围
 
+- **2026-11-19 核对（Claude，只读）**：第 9～11 节的代码都已随 11-13～11-18 的快照提交进 main。
+  - 第 10 节第 1 步的生成已经有人做过：`go/proto/login` 有 `RenewSession`，`cpp/generated` 有 `ClientPlayerLoginRenewSessionMessageId`，login 的 goctl 包装 `clientplayerloginserver.go` 已把 `RenewSession` 接到 `NewRenewSessionLogic`，`RequestGateMigration` 也接上了。
+  - 11-18 的 Docker 全量重建 `build/verification/docker-rebuild-all-20261118T082435.788540Z/` 里 C++、Go、Java 三段都退出 0，gate 的链接行含 `login_session_renewal.cpp.o`。这一轮失败在之后的运行时核对（gateway 的挂载变了），与本清单无关。
+  - 所以编译这一项在 Linux 上有证据；**测试一个都没跑**（Go 单测、`routing_identity_test`、两份 ps1 契约测试、kind 实测）。Windows 的 `msbuild /m:1` 整解也没有证据。Codex 从第 10 节第 2 步与第 11 节第 2 步往下做即可，第 1 步只需重跑一次生成确认没有差异。
+
 - 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1～4 批中的哪一批、第 9 节的 §7 批 1（Ed25519 签名），第 10 节的 §7 批 2～4 与读路径归属预检，还是第 11 节的残余收尾。第 11 节不改协议、不改 C++，跟着第 10 节的 Go 与部署脚本步骤一起跑，另有一步 kind 实测。第 9 节不改协议，不需要重新生成；它改了 C++ gate，要整解重编。第 10 节改了 `login.proto`，要先生成并跑 `go/build.ps1`，再整解重编 C++；第 9、10 两节可以合在一次生成与一次整解里验证。
 - 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。（2026-11-11 补注：`proto/guild/guild_db.proto` 加了 `GuildRecord.score_version = 12`，所以 `cpp/generated/proto/guild/guild_db.pb.{h,cc}` 与 `go/proto/guild/guild_db.pb.go` 的差异也是预期的，见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。）
 - 第 4 批：C++ 手写代码不改，但 guild 的 C++ 生成物会变，要重编 C++；客户端要按新协议重新生成并重编（第 8 节）。Java 版本轮不写代码，只在 Java 仓 `PARITY.md` 记 TODO（设计 §8）。

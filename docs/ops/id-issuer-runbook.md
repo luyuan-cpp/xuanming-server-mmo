@@ -7,6 +7,7 @@
 > 2026-11-11 第二批([交接 §9](../handoff/global-id-issuer-registry-20261105.md)):登记处只走双向 TLS;地域码只能按顺序认领;dev、test 不能连共用登记处;换码只换发号码(`-IdIssuerRegion`),存档库的地域编号不变。同样**未编译、未测试**。
 > 2026-11-12 第三批([交接 §10](../handoff/global-id-issuer-registry-20261105.md)):本地记录也写上部署身份,登记处丢码之后拷来的记录不能用来重新登记;没认领过的码只能按顺序跳过,不能隔空补墓碑;退役别的码用 `-id-issuer-retire-code`。同样**未编译、未测试**。
 > 2026-11-12 第四批([交接 §11](../handoff/global-id-issuer-registry-20261105.md)):登记处整个丢了时先声明重建(`-id-registry-rebuild`)再补墓碑,没有 `next_region` 时补墓碑一律拒绝,不再有手工删登记处记录的例外;登记处丢码时重新登记的水位加上时钟推得出的上界,本地两份随即抬齐;活着的发号进程每 10 秒给三份记录作证,被回档或删掉的抬回去(`records_behind_issuer`)。同样**未编译、未测试**。
+> 2026-11-19 第五批([交接 §12](../handoff/global-id-issuer-registry-20261105.md)):计数器比时钟超前一天以上时改预留小块(16 秒的号),崩溃循环推不到 `ahead_of_clock`;重新登记的时间上界取本机和 K8s API server 两个时钟里较晚的那个。同样**未编译、未测试**。
 
 ## 1. 要知道的事实
 
@@ -132,7 +133,7 @@ kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /ap
 | `result="refused"`、`outcome="records_missing"` | 登记处没有这个码,或者本地两份都不存在 | 新地域走 §2.2;否则是 ID 安全事件,按日志走 §4.2 或 §4.3 |
 | `result="refused"`、`outcome="refused"` | 本部署环境(K8s 集群)或这两套 etcd 不是登记处给这个码绑的那一份,或者码已退役 | 日志 `not the ones bound`,带两边的部署身份和集群号:重复部署、克隆、灾备到新的 K8s 集群或换了 etcd 没有 rebind,§4.2;日志 `retired`:这个地域不该再发号 |
 | `result="identity_error"` | 读不到本进程所在 K8s 集群的身份:API server 不可达,或 data-service 的 ServiceAccount 没有 get `namespaces/kube-system` | 什么都没写,手里的块照发,下次预留再读。日志里 HTTP 403 就补 RBAC(§1),其他先查到 API server 的网络 |
-| `result="ahead_of_clock"` | 计数器比时钟超前 7 天以上:时钟曾跳到未来,或者预留快过了时钟(崩溃循环)。登记处丢码、重新登记之后的几分钟里也会出现:重新登记把计数器放到了时钟前面 7 天 | 不影响唯一性。修时钟或崩溃循环,记下来。**这个地域出现过它,登记处丢码时就不能重新登记**,时间上界不一定盖得住(§4.3) |
+| `result="ahead_of_clock"` | 计数器比时钟超前 7 天以上:时钟曾跳到未来。崩溃循环推不到这里:超前一天以上发号器就改预留 16 秒的小块。登记处丢码、重新登记之后的几分钟里也会出现:重新登记把计数器放到了时钟前面 7 天 | 不影响唯一性。修时钟或崩溃循环,记下来。**这个地域出现过它,登记处丢码时就不能重新登记**,时间上界不一定盖得住(§4.3) |
 | `result="records_behind_issuer"`,日志 `which this process already confirmed` | 有记录低于活着的发号进程确认过的水位:那套 etcd 被旧数据覆盖过,或者记录被删了。日志带三份记录的值 | 发号不受影响,作证检查已经把低的抬回去(登记处丢了这个码时只抬本地两份)。按 ID 安全事件复盘,查是谁恢复或删除了 etcd 数据。三份都低于它,说明三套一起出了事,对照 §4.1、§4.3 |
 | 日志 `belongs to another region`(`outcome="refused"`) | 记录的地域和配置不一致 | 配错了 `IdSegment.Issuer.Region`。改回去,不要改记录 |
 | 日志 `same etcd cluster`(`outcome="refused"`) | 三套 etcd 里有两套是同一套 | 配错了地址。生产必须三套独立 etcd |
@@ -198,11 +199,12 @@ kubectl -n <zone-namespace> exec statefulset/data-service -- /app/service -f /ap
 
 - **登记处被回档、本地完好**:不用手工修改水位,发号器按本地记录继续并把登记处抬上去,指标 `registry_behind`。差距超过一块时日志含 `more than one block behind`,但多次未完成的预留也会产生这条日志,须结合写失败和恢复记录判断,不能只凭日志断言回档。确认回档后查清楚是谁恢复了登记处。
 - **登记处丢了一个码**:这个地域预留和初始化都拒绝,日志 `not registered`。在这个地域跑 `-id-issuer-recover`(不带 rebind)重新登记,输出 `re-registered region <码> ... at high_water=<水位> and raised the local records to it`。
-  - 水位取本地两份记录的最大值和「现在的时间下限 + 7 天 + 一块」里大的那个,本地两份随即抬到这个水位。为什么要加时间上界:本地记录自己证明不了没被回档。同一个 K8s 集群里本地两套 etcd 被恢复到旧快照、登记处又同时丢了这个码,本地记录就比发过的号旧。每块的起点比当时的时间下限超前 7 天以上就会告警(`ahead_of_clock`);没告警过,发过的号就都在这个上界之下。代价是计数器一次跳到时钟前面 7 天,之后几分钟会有 `ahead_of_clock`,值域浪费可以忽略。
+  - 水位取本地两份记录的最大值和「现在的时间下限 + 7 天 + 一块」里大的那个,本地两份随即抬到这个水位。「现在」取 data-service 本机时钟和 K8s API server 时钟里较晚的那个,本机时钟慢了也盖得住。为什么要加时间上界:本地记录自己证明不了没被回档。同一个 K8s 集群里本地两套 etcd 被恢复到旧快照、登记处又同时丢了这个码,本地记录就比发过的号旧。每块的起点比当时的时间下限超前 7 天以上就会告警(`ahead_of_clock`);没告警过,发过的号就都在这个上界之下。代价是计数器一次跳到时钟前面 7 天,之后几分钟会有 `ahead_of_clock`,值域浪费可以忽略。
   - **重新登记之前,先查指标历史,确认这个地域从没出现过 `ahead_of_clock`。** 出现过的话,时间上界不一定盖得住,按 §4.4 换码,不要重新登记。
   - 出事时还在跑的发号进程会先把本地两份抬到它们确认过的水位(§1),所以这种情况下本地记录本身就够高。
   - 报 `more than 7 days ahead of the clock`:本地记录本身就超前时钟 7 天以上,推不出上界。拒绝,什么都不写,按 §4.4 换码。
   - 报 `outside the representable range`:时钟坏了,修好再跑。什么都没写。
+  - 报 `read the reference clock`:读不到 K8s API server 的时钟(和读部署身份是同一个请求,§1)。什么都没写,API server 恢复后重跑。
   - 报 `raising the local records to it failed`:登记处已经重新登记了,抬本地记录时某一套 etcd 写失败。修好那套 etcd 后重跑 `-id-issuer-recover`,输出 `raised the local records`。不重跑也不会重号,只是下一次预留会误报 `records_behind_registry`。
   - 只有写下本地记录的那个环境能重新登记:发号器比对本地记录里的部署身份和本进程所在的 K8s 集群。
   - 报 `local reservation records were not written by this deployment`,并列出记录里的身份和本环境的身份:这套环境的 etcd 数据是从别的环境拷来的(集群级备份恢复),或者是 2026-11-12 之前写的、没有身份的记录。拷来的记录可能比原地域发过的号旧,不是可信的上界,所以这里不能重新登记,加 `-id-issuer-rebind` 也不放行。登记处在的时候 rebind 是安全的,因为水位由登记处盖住;现在登记处没有这个码,过期的水位没有任何东西纠正。

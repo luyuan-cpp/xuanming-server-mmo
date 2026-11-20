@@ -89,13 +89,13 @@ spec:
       # 尽量散到不同节点,也尽量别和主 etcd 的成员挤在一起:两套同时倒下正是这份记录要防的事。
       affinity:
         podAntiAffinity:
+          # 自己的成员两两不在同一节点(硬约束):本套只在 staging / prod 部署,一个节点挂了 quorum 还在。
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: etcd-id-secondary
           preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    app: etcd-id-secondary
             - weight: 50
               podAffinityTerm:
                 topologyKey: kubernetes.io/hostname

@@ -1,6 +1,7 @@
-# 共享 Redis:player:session:{id} / player:{id}:location / 登录锁 / 玩家锁 / scene_manager 选主锁 /
-# 场景路由(scene:{ctl:<z>}:<id>:node)/ battle:lock / 战斗结算待销账记录都在这一个实例里,而且它在
-# **同步登录路径**上(login 拿不到锁即拒绝 EnterGame)。
+# 核心单实例:只在 dev 没开控制集群时部署(k8s_deploy.ps1 的 Test-CoreRedisDeployed;缺口第 34 条第 6b-2 批)。那时控制域
+# (场景路由 scene:{ctl:<z>}:<id>:node、选主锁、gate 标记、排队……)与没开玩家域集群时的玩家域(player:session:{id} /
+# player:{id}:location / 玩家锁 / battle:lock)都在这一个实例里,而且它在**同步登录路径**上(login 拿不到锁即拒绝 EnterGame)。
+# staging / prod 两个域都在 Redis Cluster 上(redis-cluster.yaml 渲染的 redis-control、redis-player),不部署本清单。
 #
 # 为什么是 StatefulSet + PVC,而不是原来的 Deployment + emptyDir:
 #   1. emptyDir 随 Pod 生灭。原清单开着 --appendonly yes,但 AOF 落在 emptyDir 上,Pod 一重建
@@ -11,8 +12,7 @@
 #      StatefulSet 同一序号的 Pod 不会并存,这个窗口从结构上消失。
 #
 # 仍然是**单实例**:这一步解决的是"重启即丢数据"与"滚动时双实例",不是高可用。Redis 挂掉期间登录
-# 链路仍然整体不可用,恢复靠 K8s 重建 Pod + 重放 AOF。真正的 HA(Sentinel / Cluster)要同时改所有
-# 客户端的连接方式(现在全部是 Type: node 单机模式),是另一件事。
+# 链路仍然整体不可用,恢复靠 K8s 重建 Pod + 重放 AOF。高可用与水平扩展由两套 Redis Cluster 承担,这份清单只给 dev。
 #
 # 切换注意(k8s_deploy.ps1 的 Apply-Infra 里有配套分支):kind 从 Deployment 变成 StatefulSet、名字
 # 相同,kubectl apply 只会新建 StatefulSet 而不回收旧 Deployment,所以脚本会先删旧 Deployment。
@@ -120,7 +120,6 @@ spec:
           # **改这个数或改本段任何一行都会改 Pod 模板,apply 即重启 redis-0**(全服登录中断并重放 AOF):k8s_deploy.ps1 的重启闸
           # 要求显式 -ConfirmRedisCoreRestart,只在维护窗口做。要先调大已在运行的实例,在到线之前 redis-cli CONFIG SET maxclients <N>
           # (不持久,重启后回到清单值),步骤见 deploy/k8s/README.md「Redis 连接上限与总账」。
-          # redis-ha.yaml 接入时要同样显式 --maxclients,节点上限 ≥(代理副本数 + maxSurge)× haproxy maxconn + 余量,并重算总账。
           #
           # --enable-debug-command no:DEBUG RELOAD NOSAVE / DEBUG LOADAOF 会在同一进程里整库替换数据而 run_id / master_replid 不变,
           # 谁都认不出换过数据。Redis 7 缺省就是 no,这里显式写出来防止被改。

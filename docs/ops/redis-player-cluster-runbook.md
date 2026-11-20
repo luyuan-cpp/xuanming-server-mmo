@@ -45,7 +45,7 @@ svcip() { kubectl -n "$NS" get svc "$CLUSTER-$1" -o jsonpath='{.spec.clusterIP}'
 
 | 参数 | 含义 |
 |---|---|
-| `-PlayerRedisMasters` | 主节点数。dev 缺省 0,不建集群:玩家域与登录域用各服务现有的单实例;控制集群不建。staging、prod 必须显式给,至少 3 |
+| `-PlayerRedisMasters` | 主节点数。dev 缺省 0,不建集群:玩家域与登录域用各服务的控制域实例(dev 是核心单实例);控制集群不建,控制域也在核心单实例。staging、prod 必须显式给,至少 3。开控制集群必须同时开玩家域集群(`Assert-RedisClusterPairing`) |
 | `-PlayerRedisReplicasPerMaster` | 每主副本数,缺省 1(`min-replicas-to-write 0`)。2 时取 1,节点数 ×1.5(设计 §7) |
 | `-PlayerRedisMaxMemory` | 每节点 `maxmemory`。容器内存按 2 倍渲染。release 档 apply 集群时必须给 |
 | `-PlayerRedisStorage` | 每节点 PVC,至少放得下 2 × maxmemory 的 AOF。release 档 apply 集群时必须给,创建后不能改(§8) |
@@ -66,10 +66,12 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up -ReleaseProfile prod
 
 顺序只有一条:集群先于连它的服务。`infra-up` 内部已经这样排了(两套集群的清单在全局 Go 服务之前,玩家域先);`zone-up` 跑在集群之前会被 `Assert-RedisClusterPreflight` 拒绝。
 
+**节点数**:staging / prod 的成员反亲和是 required(全部成员两两不同节点;主从角色随故障转移互换,只能这样保证主和它的从不在同一台),所以每套集群要有不少于节点总数(上例玩家域 12、控制 6)的可调度节点,两套之间不互斥。节点不够时多出的成员停在 Pending,建群 Job 等不齐、`-WaitReady` 超时;dev 是 preferred,单节点 kind 照样起得来。
+
 部署时每套集群打印两行要看(控制集群把 `player` 换成 `control`):
 
 - `Redis player cluster: masters=6 replicas_per_master=1 nodes=12 ... (manifests/infra/redis-cluster.yaml, name=redis-player)`
-- `Redis player connection ledger: per_master zones=... steady=... peak=... maxclients=40000 warn_at=32000 ...`。每主节点连接 = Σ(每服务 `PoolSizePerNode` × 副本数) + scene 进程数,和主节点数无关。超过 80% 水位只告警、不阻断,处理见 §7 末尾。控制集群接上服务之前这一行是 `per_master no clients wired yet`。
+- `Redis player connection ledger: per_master zones=... steady=... peak=... maxclients=40000 warn_at=32000 ...`。每主节点连接 = Σ(每服务 `PoolSizePerNode` × 副本数) + scene 进程数,和主节点数无关。超过 80% 水位只告警、不阻断,处理见 §7 末尾。控制集群的客户端是全部控制域服务(Go 服务的 `ControlRedis`、gateway、scene 的 `control_redis`),唤醒订阅每副本按 64 条记。两套都开时核心那一行只打 `no clients`。
 
 告警规则手工安装:
 

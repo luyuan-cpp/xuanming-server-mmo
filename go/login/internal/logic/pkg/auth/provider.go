@@ -10,6 +10,9 @@ import (
 // AuthResult holds the resolved account from authentication.
 type AuthResult struct {
 	Account string // Resolved account identifier
+	// Channel 是这份凭证最初来自哪个渠道(auth_type)。只有 access_token 这种转手的凭证填(签发令牌时的 auth_type);
+	// 为空时就是请求里的 auth_type。防沉迷按它判定由谁实名(docs/design/real-name-anti-addiction.md §4)。
+	Channel string
 }
 
 // Provider validates an auth token and returns the resolved account.

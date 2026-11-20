@@ -25,7 +25,7 @@
 5. **C++ 自研集群路由层，同一 slot「停等」：每个 slot 至多一条在途命令。** 同 slot 的执行顺序因此严格等于 `command()` 调用顺序，与重定向类型和迁移方式无关；不同 slot 之间照常并发。重定向与「未执行」类服务端错误在路由层内按时间预算重试，耗尽按「连接断开」（空应答）上报，并让同 slot 已排队的后续命令一起空应答收尾，与单连接断开的语义一致。
 6. **扩容就是加主节点、迁 slot。** 数据与读写真实搬到新节点；slot 交接后旧节点对它回 MOVED，不存在新旧两处都能写的窗口。增加副本或接入代理不算扩容证据（§14 的验收以主节点数、slot 分布与主线程饱和度变化为准）。
 7. **扩展边界**：Redis Cluster 设计目标约 1000 个节点（主 + 副本都算）。每主 1 副本时玩家域按 2000 万 PCU 推算约需 50–250 个主、100–500 个节点 [I]，余量约 2–10 倍；节点数达到约 600 时启动多集群联邦（§10.3），键形不变。
-8. **系统级上限目前不由玩家域决定。** 控制域（原共享实例）里登录令牌 / 会话随在线人数增长，仍是单主；排队已由 G4a 会话按 zone 组拆实例（2026-10-23 第 1a 批）。登录令牌 / 会话的横向扩展列为本稿第 11 批（§10.2），在它落地前，系统的 Redis 扩展上限由控制域单主决定，本稿不把第 7 条写成系统级边界。
+8. **第 7 条只是玩家域的边界。** 登录令牌 / 会话由本稿第 11 批拆进登录域（§10.2），K8s 缺省与玩家域共用这个集群；排队与控制域其余用途 2026-11-10 起进控制集群 `redis-control`，按 hash tag 分片（每个 zone 的控制域键共用 `{ctl:<z>}`，排队 `{q:<z>}`），同样加主节点就扩（[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)）。系统级 Redis 上限不再由哪一个单主决定；剩下的边界是单个 zone 的控制域与排队各落一个槽，上限一台主节点（该稿 §6.2、§6.3）。
 9. **映射态移出 Redis**（负责人 2026-10-23 拍板直读 TiDB，§5.13），不在本稿范围。
 10. **不做**：单元化与跨单元转区（违反自由跨区需求）、默认部署接入代理（条件触发的下一阶段，§6.4）、读副本。
 
@@ -91,10 +91,10 @@
 |---|---|---|---|
 | **玩家域 player** | 一切以 player_id 为身份的键，以及由玩家派生、必须与玩家同槽的按 slot 索引（§5.2 表） | 新建 Redis Cluster，Redis ≥ 8.4（取 8.10.x），每主 1 副本（可选 2 副本，§7），AOF everysec，PVC 持久化；每个 Pod 一个 ClusterIP Service，以 `cluster-announce-ip/port/bus-port` 宣告 Service IP（§5.6「连接」） | `slot = CRC16(<pid 十进制>) mod 16384`；slot → 主节点由集群管理 |
 | **登录域 login** | 连接栅栏、登录态、设备集、账号索引、令牌、令牌家族、口令配额（第 11 批从控制域拆出，§10.2） | K8s 缺省与玩家域共用一个 Redis Cluster，配置上能拆开（`LoginRedis`） | 连接键按 `{<gate>:<inc>}`，账号键按 `{AccountTag(account)}` |
-| **控制域 control** | 场景路由、账号锁、选主锁、重试队列、task:result、协议世代、战斗活动结果、队伍、各服务私有键、工具互斥键 | 现有共享实例（含 redis-ha），名字与地址不变；排队族已由 G4a 第 1a 批拆到按 zone 组的 queue 实例 | 不分片（上限与路线见 §10.2）。2026-11-10 负责人定控制域也上 Cluster，改为新建的控制集群，见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) |
+| **控制域 control** | 除玩家域、登录域与 match 私有键之外的全部用途：场景路由、排队、选主锁、gate 标记、限流、落点唤醒、各服务私有键、工具互斥键等（族表见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §3.2） | 控制集群 `redis-control`（2026-11-10 负责人定；K8s staging / prod 必须开，dev 档与本机缺省是单实例 `redis`，客户端走同一条路径和守卫），与玩家域同一份模板、同一个 8.10.2 镜像 | 按 hash tag：多键操作的键共用一个 tag（每个 zone 的控制域 `{ctl:<z>}`、排队 `{q:<z>}`、gate 标记 `{gm:<z>}`，帮会按帮或按玩家），单键可以不带；族前缀登记在 `shared/redisslot/control_keys.go`。单 zone 的上限见 §10.2 |
 | **映射域 mapping** | `player:zone/placement/maprev`、合服围栏镜像、就绪标记 | 2026-10-23 起改为直读 TiDB，移出 Redis（§5.13） | 不适用 |
 
-**接缝规则（可机械检查）**：玩家域客户端只接受带 hash tag 的键，非玩家域的键一律不带 `{<数字>}`。C++ 路由层与 Go 玩家域客户端的守卫在发送前检查（§5.6、§5.7），本机单实例开发时同样生效。
+**接缝规则（可机械检查）**：玩家域客户端只接受带 hash tag 的键，非玩家域的键一律不带 `{<数字>}`。C++ 路由层与 Go 玩家域客户端的守卫在发送前检查（§5.6、§5.7），本机单实例开发时同样生效。控制集群的 tag 形状是 `{<族前缀>:<身份>}`，两侧守卫按 tag 形状分域：玩家域句柄拒绝控制集群的族 tag，控制集群句柄拒绝玩家域的 tag（[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §3.1、§5）。
 
 ### 5.2 键形契约
 
@@ -202,7 +202,7 @@
 
 **重连回调**：客户端仍提供（任一节点完成握手都触发一次，带节点身份），玩家域没有使用方。`RedisSystem` 不挂（负责人 2026-11-05 定「重连成功不做业务逻辑」，2026-11-11 删去，见[断线重连总纲](infra-reconnect-overview.md) R14）；`MessageAsyncClient` 已随存档移出 Redis 删除（见下文第 5b、5c 批补充）。撤回、A2′、改派核实只由 `RedisSystem` 的 1s 定时器按各条目自己的重试时刻重发。正确性一直靠闸门与条件写，不靠补发时机。
 
-**两个句柄**：`tlsRedis` 保留为控制域连接（世界分线目录、神秘商人、`PUBLISH assetop:wake`）；新增 `tlsPlayerRedis` 承担玩家域。gate、battle 节点不访问玩家域，不建玩家域连接（battle 不写 Redis，结算只走 match SQL 与收件箱）。
+**两个句柄**：`tlsPlayerRedis` 承担玩家域；控制域原来是单实例的 `tlsRedis`，2026-11-12 起换成同一个路由层上的 `tlsControlRedis`（控制集群键策略；世界分线目录、神秘商人、归属对账与 `SPUBLISH` 分片唤醒，[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §4.2）。只有 scene 连 Redis：gate、battle 两个句柄都不建（battle 不写 Redis，结算只走 match SQL 与收件箱）。
 
 **依赖说明（§11.2）**：不引入 hiredis-cluster / redis-plus-plus。它们没有 muduo 事件循环适配，接入要么另起线程，要么自写适配层，且无法保证上面的「同 slot 停等」与「未执行类错误不外泄」两条契约；路由层需要的能力（CRC16、`CLUSTER SLOTS` 解析、按 slot 分发与重发）用现有 hiredis 1.2.0 的格式化接口即可实现，代码量与风险更可控。
 
@@ -248,7 +248,7 @@
 - 构造器挂发送前守卫：EVAL / EVALSHA / MGET / DEL 等多键命令的键必须同 slot、玩家域的键必须带 tag，否则直接返回错误，单实例开发时同样生效。
 - 跨玩家 MGET 统一走 `playerredis.MGetBySlot`：按 slot 分组后 pipeline（ClusterClient 自动按节点拆批），结果按输入顺序还原。
 - 全库扫描分两种：离线全量任务用 `playerredis.ScanEachMaster`——逐主节点扫完，任何一个节点失败就整体失败；扫描前后各取一次拓扑指纹（每个主节点的节点 ID、run_id 与所持 slot 段，以及有无进行中的迁移），扫描所用的主节点集合取自指纹，前后不一致、或看到进行中的迁移，就返回 `ErrTopologyChanged`（fail-closed，调用方不得据此断言「键不存在」）；按请求分页的在线目录用 `playerredis.ScanPage`（第 6 批加）：游标 = 指纹摘要 + 主节点序号 + 节点内游标，指纹变化即游标失效、从头开始。
-- go-zero 句柄（scene_manager、friend、match）在玩家域改用 go-redis `UniversalClient`；控制域照旧。
+- go-zero 句柄（scene_manager、friend、match）在玩家域改用 go-redis `UniversalClient`；控制域客户端 2026-11-10 起也换成 `UniversalClient`（`shared/clusterredis` 的控制集群键策略，结果未知同样不重放），见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §5.1。
 
 **第 6 批实现补充（2026-10-31，未编译）。**
 
@@ -365,7 +365,7 @@ friend（会话、父快照、同步摘要）、guild（会话、位置、战斗
 
 ### 5.12 Pub/Sub
 
-`assetop:wake` 留在控制域（C++ 经 `tlsRedis` 发布，guild / trade 在控制域订阅）。`task:result` 通知同在控制域。玩家域不使用 PUBLISH（Cluster 下普通 PUBLISH 会全集群广播）。
+`assetop:wake` 在控制集群，2026-11-12 起按 `player_id % 64` 拆成 64 个分片频道 `assetop:wake:{aw:<k>}`：C++ 经 `tlsControlRedis` 用 `SPUBLISH` 发布，guild / trade / data_service 按分工只订本副本负责的片（[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §4.6）。`task:result` 通知已随存档移出 Redis 删除。玩家域不使用 Pub/Sub（Cluster 下普通 PUBLISH 会全集群广播）。
 
 ### 5.13 映射域：移出 Redis（2026-10-23 方向变更）
 
@@ -466,13 +466,14 @@ C_master = N_cpp + Σ_svc ( R_svc × p_svc )
 
 ### 10.2 控制域的上限
 
-- 排队轮询（约 300 万往返/s）已由 G4a 会话按 zone 组拆到独立的 queue 实例（2026-10-23 第 1a 批），横向随 zone 组增加。
-- **登录令牌 / 会话随在线人数增长，仍压在控制域单主上**，是控制域到达 2000 万口径前的主要瓶颈 [I]（G4a §24）。路线：第 11 批把登录域拆成自己的 Redis Cluster——令牌族按 `{acc}` tag，会话栅栏与设备集的同脚本问题（连接键与账号键同在 `commitLoginScript`）需要先改形，设计在第 11 批开工前补齐。在它落地前，系统级 Redis 上限由控制域单主决定。
+- 控制域本身 2026-11-10 起进控制集群 `redis-control`，按 hash tag 分片，加主节点 + 原子迁 slot 就扩写入（[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)）。G4a 第 1a 批按 zone 组拆的 queue 实例已在该稿第 6b-1 批退役；staging / prod 剩下的核心单实例只给 match、mail 的回落段用，退役归第 6b-2 批。
+- 排队轮询（约 300 万往返/s）：排队键按 zone 打 `{q:<z>}`，各 zone 随 slot 散到各主节点；一个 zone 的排队落一个槽，靠服务端按名次拉长 `RetryAfterMs` 压住轮询量，不拆分片（该稿 §6.2，2026-11-19 定案）。
+- **登录令牌 / 会话随在线人数增长**，原来压在当时单主的控制域上，是到达 2000 万口径前的主要瓶颈 [I]（G4a §24）。第 11 批把它们拆进登录域（下面的设计与实现）——令牌族按 `{acc}` tag，会话栅栏与设备集的同脚本问题（连接键与账号键同在 `commitLoginScript`）先改形；K8s 缺省与玩家域共用一个 Redis Cluster。系统级 Redis 上限因此不再由单主决定，剩下的是单个 zone 的控制域与排队各落一个槽，上限一台主节点（该稿 §6.2、§6.3）。
 - 映射域原有的「每条写任务两次就绪读、每次两次 INFO」热点随直读 TiDB 一并消失（§5.13）。
 
 **第 11 批设计(2026-10-31,开工前补齐)**
 
-目标:令牌、登录态、连接栅栏不再压在控制域单主上,加主节点就能扩。
+目标:令牌、登录态、连接栅栏不再压在当时单主的控制域上,加主节点就能扩。
 
 - **部署**:登录域和玩家域同样用 `shared/playerredis` 的 `UniversalClient`,配置独立成 `LoginRedis`。K8s 缺省和玩家域共用一个 Redis Cluster(只有一种东西要运维,加主节点就扩);配置上能拆开,登录量大到要隔离时改地址即可。
 - **账号 tag**:账号是用户输入,可能带花括号,不能直接当 hash tag。`AccountTag(account) = SlotTag(CRC16(account) mod 16384)`,放进 `shared/redisslot`。SlotTag 是纯字母,没有解析歧义,同一账号的键必然同槽。
@@ -496,14 +497,14 @@ C_master = N_cpp + Σ_svc ( R_svc × p_svc )
 - **`PruneStaleFromDeviceSet`** 跨连接读登录态,改 `MGetBySlot`。
 - **删旧 gate 兼容**:`RefOf` 的 legacy 分支、`Ref.WriteKeys` 双写、`loginsession.Save` 两步写、`loginsession_legacy_key_total` 全部删除。没有会话代次的连接直接拒绝。
 - **读者**:chat、friend、guild、match 经 `shared/loginsession` 读登录态,改成同一个键构造函数,客户端类型换 `UniversalClient`。
-- **排队**:`queue:{q:*}`、`admitted:zset:{q:*}` 已按 zone 组拆实例,不动。
+- **排队**:`queue:{q:<z>}`、`admitted:zset:{q:<z>}` 不进登录域,在控制集群(全部 Redis 上 Cluster 第 4 批)。
 - **玩家键**:`player_locker`、`login_idempotent`、`login_generation` 已在第 3 批带 `{pid}`,属于玩家域,不属于登录域。
 
 **第 11 批实现补充(2026-10-31,未编译)。**
 
 - **句柄**:login 的 `ServiceContext` 三个句柄。`PlayerRedis` 管上面三族玩家键,`LoginRedis` 管设计表里的七族键,`RedisClient` 只剩控制域。两段配置都是 `playerredis.Config`,没写 `Addrs` 时指向 `Node.RedisClient` 那一个实例。口令配额的专用小池地址、口令、集群形态随 `LoginRedis`,连接数(每节点 4)和超时(250ms)是它自己的。
 - **`playerredis.Config` 加了 `DB`**:只对单实例有意义,回落到现有实例时要落在它原来的库号上,否则 `Node.RedisClient.DB` 非 0 的部署,登录键会悄悄换库。`Cluster: true` 时写非 0 拒启。
-- **`account_lock:*` 也进登录域**:设计表没列,实现时补上。它的压力随登录速率增长,留在控制域单主上仍是瓶颈。键形 `account_lock:login:{<AccountTag>}:<account>`、`account_lock:create:{<AccountTag>}:<account>`。
+- **`account_lock:*` 也进登录域**:设计表没列,实现时补上。它的压力随登录速率增长,留在当时单主的控制域上仍是瓶颈。键形 `account_lock:login:{<AccountTag>}:<account>`、`account_lock:create:{<AccountTag>}:<account>`。
 - **令牌里的 secret 与 head**:账号索引的成员和家族的 `head` 存 secret,不存完整令牌。脚本校验 `#head == 43`,并按「前缀 + secret」现拼 refresh 键,前缀带账号 tag。四段脚本一个字没改,现拼的键与声明的键同槽;`KEYS` 之外的键在 Cluster 上能访问的前提是同槽且在本节点,这里成立。
 - **校验顺序**:先拆令牌字符串。tag 必须是规范的 SlotTag,secret 必须是 32 字节随机数的规范 base64url,否则按无效令牌,不访问 Redis。读到载荷后再核对 `AccountTag(账号) == tag`:账号索引键按账号算槽,家族键按 tag 算槽,两者不一致的载荷进不了同一段脚本。
 - **`KeyOf` 拒绝之后**:Login、CreatePlayer、EnterGame 回 `kLoginSessionIdNotFound`,Login 的拒绝在认证之前,第三方 code 不被消费。Disconnect、LeaveGame 没有 tip 可回,记 ERROR 后直接返回:这种连接过不了 Login,没有状态要收尾。gate 每条连接都带实例号与代次(`client_session_handler.cpp`、`client_request_lane.cpp`),走到这里是接线缺陷。
@@ -551,7 +552,7 @@ Redis Cluster 的设计目标约 1000 个节点（集群总线 gossip，主与�
 | 存盘围栏「父快照屏障部署前提是同一 Redis 实例」 | 改为「同一 `{pid}` slot」；§18.7 的二选一按 B（同 slot）落地 |
 | saveoutbox 同实例门禁、`BucketCount=64` | 改为按 slot 索引与成员登记 + 段租约；门禁改为核对玩家域句柄 |
 | B0-1 §11 | 按原设计落地（§5.9） |
-| 各处「共享库不许集群化」的注释 | 随对应批次改为「玩家域在 PlayerRedis（Cluster），控制域仍单实例」 |
+| 各处「共享库不许集群化」的注释 | 随对应批次改为「玩家域在 PlayerRedis（Cluster），控制域在 ControlRedis（控制集群）」（控制域部分 2026-11-10 起，[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)） |
 | cross_server 原则「同一连接 FIFO」 | 收窄为「同一 slot 内 FIFO」，由路由层停等保证 |
 | 「真 Redis 验证 7.2 与 8.x 两版都跑」 | 玩家域只跑 ≥ 8.4（取 8.10.x），原子迁移需要；控制域仍两版 |
 
@@ -644,7 +645,7 @@ Java 版玩家存盘是单个 SQL 事务（`player` / `player_state` 两表）�
 2. **离场人数改成员集合**（§5.10）：第 3 批已定稿，崩溃留下的成员由第 6 批的后台对账摘除。剩余：对账的预算是推算值，规模上来后要看走完一遍的时长。
 3. **Go 服务按 zone 部署的进程数**：物理 zone 增长时它主导连接数（§6.2），建议 Go 服务改为一进程多 zone，单独立项。
 4. **DBTask 按 home_zone 分 topic**：逻辑 zone 达到 10 万时 Kafka topic 数不可行，与 Redis 无关，单独立项。
-5. **登录令牌 / 会话仍在控制域单主**（§10.2）：第 11 批之前它决定系统级上限。第 11 批代码已切到 `LoginRedis`（2026-10-31，未编译），第 10 批部署脚本把它指向 Cluster（2026-10-31，未运行），真集群验证之后这条才解除。
+5. **登录令牌 / 会话已移出控制域**（§10.2）：第 11 批代码切到 `LoginRedis`（2026-10-31，未编译），第 10 批部署脚本把它指向玩家域集群（2026-10-31，未运行）；控制域其余用途 2026-11-10 起进控制集群（[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md)，同样没有运行证据）。真集群验证之后这条才解除。
 6. **迁移后的 SQL 核验读放大**（§7、§8.4）：扩容须分批、低峰执行。
 7. **data_service 字段脚本**在迁移交接瞬间可能被短暂阻塞（无生产写者，§5.3）。
 
@@ -666,6 +667,4 @@ Java 版玩家存盘是单个 SQL 事务（`player` / `player_state` 两表）�
 - **第 3 批（2026-10-31）**：§5.2 表按实际情况标注已删除的键族，§5.10 定稿。
 - **第 11 批（2026-10-31）**：§10.2 补实现细节与部署要改的键；§13 第 11 行更新状态。
 - **第 7 批（2026-10-31）**：§5.2、§5.3 去掉「未改」标注，加分片键；§5.9 补实现细节。
-- **第 6 批（2026-10-31）**：包改名 `shared/playerredis`；§5.7 补实现细节（配置、`ScanPage` 指纹取舍、铸造通道）；§5.8 补各服务分工；§5.10 补分句柄与成员集合对账。
-- **第 5b、5c 批（2026-10-31）**：§5.6 补实现细节与 FIFO 依赖逐处结论；§6.1 的 `N_cpp` 改为只算 scene。
-- **第 9、10 批（2026-10-31）**：§13 第 9、10 行更新状态并补实现细节；§10.2 与 §16 第 5 条更新部署状态。
+- **第 6 批（2026-10-31）**：包改名 `shared/playerredis`；§5.7 补实现细节（配置、`ScanPage` 指纹取舍、铸造通道）；§5.8 补各服务分�

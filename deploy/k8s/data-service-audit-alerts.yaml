@@ -252,3 +252,21 @@ spec:
           annotations:
             summary: "审计表 {{ $labels.table }} 的清理持续失败"
             description: "看日志 [AuditRetention]。过期行下一轮还在,数据不会错,只是表和磁盘在涨。"
+
+        # 审计表清理跟不上(2026-11-19;缺口清单第 15 条「按天分区不做」的配套,设计稿 audit-pipeline-horizontal-scale-20261106.md §2.D):
+        # 每轮清理之后各副本报这张表现存最老一行的年龄与配置的保留期。最老一行比保留期还老一天以上、持续 1 小时 = 删除赶不上写入,
+        # 或清理循环停了(一直在维护排空、进程没起)。语句失败另由上一条 DataServiceAuditRetentionFailing 报。
+        - alert: DataServiceAuditRetentionBehind
+          expr: |
+            max by (table) (data_service_audit_retention_oldest_age_seconds)
+              > on (table) max by (table) (data_service_audit_retention_max_age_seconds) + 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "审计表 {{ $labels.table }} 的过期清理跟不上:最老一行比保留期还老一天以上"
+            description: >-
+              最老一行的年龄 {{ $value | printf "%.0f" }} 秒。数据不会错,只是表和磁盘在涨。先看 [AuditRetention] 日志里每轮的
+              swept / skipped / deleted:skipped 多 = 桶锁被别的实例占着(正常),deleted 每轮都打满预算 = 删除量不够。
+              处置:先加 data_service 副本(删除按 16 个桶分工,吞吐随副本线性涨),再调 AuditRetention 的 BatchSize / IntervalSeconds;
+              都不够才按设计稿 §2.D 换成按天分区的建表方式。

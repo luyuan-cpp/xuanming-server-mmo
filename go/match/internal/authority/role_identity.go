@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	pb "proto/match"
 	"shared/accountdirectory"
@@ -12,6 +13,10 @@ import (
 )
 
 var ErrOriginalPlayer = errors.New("匹配原会话角色归属已失效")
+
+// ErrForeignOriginal:会话已按护栏核对为角色现主人,但查到的持久原件记的是此前的主人(角色过户前留下的)。
+// 包着 ErrOriginalPlayer,按它判断的调用方行为不变;恢复查询据此给确定结论(TeamMatchIntentForeign),不当故障。
+var ErrForeignOriginal = fmt.Errorf("%w: 原件属于角色此前的归属", ErrOriginalPlayer)
 
 // ConfigureRoleFence 只在装配时调用。角色归属锁本库的护栏副本(docs/design/horizontal-scale-logical-db.md §3),
 // 目录只有 data_service 连,这里不跨库读。副本表由 -migrate 建,这里只读核形状。

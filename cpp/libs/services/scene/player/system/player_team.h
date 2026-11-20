@@ -34,9 +34,10 @@
 class PlayerTeamRefreshEvent;
 
 // 队员离队长超过这个水平距离(服务器坐标单位)就瞬移归队。
-// 客户端 5 人纵队最长约 5.6(4 个槽位 x 1.4),取 8:队形内的正常落后不触发瞬移;
-// 同时小于 kMaxViewRadius(10),保证"不触发瞬移"的队员一定在队长的可见半径内。
-constexpr double kTeamRegroupDistance = 8.0;
+// 5 人纵队最长 12(4 个槽位 x 间距 3),取 24 留足余量:队形内的正常落后不触发瞬移;
+// 同时小于 kMaxViewRadius(50),保证"不触发瞬移"的队员一定在队长的可见半径内。
+// 2026-11-19 随间距放大(1.4 → 3)、视野放大(10 → 50)从 8 调到 24。
+constexpr double kTeamRegroupDistance = 24.0;
 
 class PlayerTeamSystem
 {

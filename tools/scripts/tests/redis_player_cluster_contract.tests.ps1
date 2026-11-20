@@ -9,9 +9,10 @@
     两套集群同一份模板(deploy/k8s/manifests/infra/redis-cluster.yaml)、同一套部署函数,差别只在 Get-RedisCluster 的描述。本文件钉住:
       1. 清单模板:版本钉摘要、AOF everysec、noeviction、宣告 Service IP、OnDelete、建群 Job 只在全部空白时建群并核对 16384 个 slot;
       2. 纯函数:集群描述、拓扑、容量、变更判定、清单渲染(两套集群对象名互不重叠)、配置段形状;
-      3. 连接总账:每主节点 = Σ(每服务池上限 × 副本数) + scene 进程数,和主节点数无关;控制域那一份去掉这些池;控制集群接上服务前没有客户端;
+      3. 连接总账:每主节点 = Σ(每服务池上限 × 副本数) + scene 进程数,和主节点数无关;核心那一份只记没搬到集群的域;
       4. DryRun:dev 缺省两套都不建;-PlayerRedisMasters 3 时清单、ConfigMap、Secret、环境变量、WAITAOF 都到位,口令不进 ConfigMap;
-         -ControlRedisMasters 3 时只部署集群本身(清单、Secret、建群 Job、总账一行),还没有服务连它;staging / prod 缺参数在任何写操作之前拒绝;
+         开控制集群必须同时开玩家域集群(缺口第 34 条第 6b 批),两套都开时控制域客户端(Go 服务、gateway、scene)全部指向 redis-control,
+         gate 不连 Redis;staging / prod 缺参数在任何写操作之前拒绝;
       5. 告警:组与规则名单、形状,两套集群一条对一条;scene_manager 成员对账的指标名与取值从 Go 源码核对;
       6. compose 开发集群:3 主 3 从、同一个镜像摘要、一次性建群容器;
       7. 容量基准 redis_cluster_capacity.ps1 的判定:没压满就不算容量证据,节点重启或拓扑变化作废。
@@ -143,9 +144,9 @@ $devZoneRun = Invoke-ClusterDryRun -Arguments $ZoneArgs
 $devInfraRun = Invoke-ClusterDryRun -Arguments $InfraArgs -Env $InfraEnv
 $clusterZoneRun = Invoke-ClusterDryRun -Arguments ($ZoneArgs + @('-PlayerRedisMasters', '3')) -Env $ClusterEnv
 $clusterInfraRun = Invoke-ClusterDryRun -Arguments ($InfraArgs + @('-PlayerRedisMasters', '3')) -Env $ClusterInfraEnv
-# 控制集群(缺口第 34 条第 6a 批):只开它一套,和两套都开。
-$controlZoneRun = Invoke-ClusterDryRun -Arguments ($ZoneArgs + @('-ControlRedisMasters', '3')) -Env $ControlClusterEnv
-$controlInfraRun = Invoke-ClusterDryRun -Arguments ($InfraArgs + @('-ControlRedisMasters', '3')) -Env $ControlClusterInfraEnv
+# 控制集群(缺口第 34 条第 6a、6b 批):开控制集群必须同时开玩家域集群(Assert-RedisClusterPairing),合法形态只有两套都开;
+# 只开控制集群的负向用例见第 4 节。
+$bothZoneRun = Invoke-ClusterDryRun -Arguments ($ZoneArgs + @('-PlayerRedisMasters', '3', '-ControlRedisMasters', '3')) -Env (@{} + $ClusterEnv + $ControlClusterEnv)
 $bothInfraRun = Invoke-ClusterDryRun -Arguments ($InfraArgs + @('-PlayerRedisMasters', '3', '-ControlRedisMasters', '3')) -Env (@{} + $ClusterInfraEnv + $ControlClusterEnv)
 
 # ─────────────────────────────────────────────────────────────────
@@ -218,7 +219,10 @@ $pureFunctionNames = @(
     'Assert-InfraManifestPlaceholdersReplaced', 'New-PlayerRedisConfigYaml', 'New-NodePlayerRedisBlock',
     # 连接总账与它读文件的依赖($RepoRoot 按动态作用域读)。
     'Get-AuthoritativeScalar', 'Get-ManifestDeploymentReplicas', 'Get-RedisMaxClientsFromManifest', 'Get-RedisPoolMirror',
-    'Get-RedisPlayerPoolMirror', 'Get-RedisConnectionLedgerInputs', 'Get-RedisClusterConnectionLedgerInputs', 'Get-RedisConnectionLedger'
+    'Get-RedisPlayerPoolMirror', 'Get-RedisConnectionLedgerInputs', 'Get-RedisClusterConnectionLedgerInputs', 'Get-RedisConnectionLedger',
+    'Get-RedisPoolMirrorSource', 'Get-RedisControlClientRows',
+    # 成员反亲和按档位渲染(与 etcd、Kafka 同一个函数)。
+    'Get-QuorumMemberAntiAffinityYaml'
 )
 foreach ($fnAst in $deployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($pureFunctionNames -contains $fnAst.Name) {
@@ -307,7 +311,7 @@ Test-Case 'Get-RedisClusterChangeVerdict:真值表(缩容、下线、缺集群�
 Test-Case 'ConvertTo-RedisClusterManifest:每个节点一个 ClusterIP Service,占位全部替换;模板被改坏就 throw' {
     $topology = Get-RedisClusterTopologyFor -Cluster $PlayerCluster -Masters 3 -ReplicasPerMaster 2 -ReleaseProfileName 'prod' -InfraNamespace 'ns'
     $capacity = Resolve-RedisClusterCapacity -Cluster $PlayerCluster -MaxMemory '8gb' -Storage '64Gi' -ReleaseProfileName 'prod'
-    $manifest = ConvertTo-RedisClusterManifest -Template $TemplateText -Cluster $PlayerCluster -Topology $topology -Capacity $capacity -InfraNamespace 'ns'
+    $manifest = ConvertTo-RedisClusterManifest -Template $TemplateText -Cluster $PlayerCluster -Topology $topology -Capacity $capacity -InfraNamespace 'ns' -ReleaseProfileName 'prod'
     Assert-Equal -Expected 'redis-player/redis-player-cluster-init/9/3' -Actual ('{0}/{1}/{2}/{3}' -f $manifest.Name, $manifest.InitJob, $manifest.Nodes, $manifest.Masters) -Because '摘要字段'
     $content = $manifest.Content
     Assert-NotMatch -Text $content -Pattern '__[A-Z][A-Z0-9_]*__' -Because '占位全部替换'
@@ -326,17 +330,25 @@ Test-Case 'ConvertTo-RedisClusterManifest:每个节点一个 ClusterIP Service,�
     $docs = @($content -split '(?m)^---[ \t]*$' | Where-Object { $_ -cmatch '(?m)^kind:' })
     Assert-Equal -Expected 9 -Actual @($docs | Where-Object { $_ -cmatch 'mmorpg\.io/redis-player-node: "true"' }).Count -Because '每 Pod 的 Service 各是一份文档'
     Assert-Match -Text $content -Pattern '- name: REDISCLI_AUTH\s+valueFrom:\s+secretKeyRef:\s+name: redis-player-auth' -Because '建群 Job 用本集群的口令 Secret'
+    # 成员反亲和:prod 全部成员两两不同节点(主从角色会随故障转移互换,只能这样保证主和它的从不在同一台);dev 只是尽量分散。
+    $hard = '(?m)^        podAntiAffinity:\n(?:          #[^\n]*\n)*          requiredDuringSchedulingIgnoredDuringExecution:\n            - topologyKey: kubernetes\.io/hostname\n              labelSelector:\n                matchLabels:\n                  app: redis-player$'
+    Assert-Match -Text $content -Pattern $hard -Because 'prod 档的成员反亲和是 required(Get-QuorumMemberAntiAffinityYaml)'
+    Assert-NotMatch -Text $content -Pattern 'preferredDuringSchedulingIgnoredDuringExecution' -Because 'prod 档不留 preferred'
+    $devContent = (ConvertTo-RedisClusterManifest -Template $TemplateText -Cluster $PlayerCluster -Capacity $capacity -InfraNamespace 'ns' -ReleaseProfileName 'dev' `
+            -Topology (Get-RedisClusterTopologyFor -Cluster $PlayerCluster -Masters 3 -ReplicasPerMaster 1 -ReleaseProfileName 'dev' -InfraNamespace 'ns')).Content
+    Assert-Match -Text $devContent -Pattern '(?m)^          preferredDuringSchedulingIgnoredDuringExecution:\n            - weight: 100\n' -Because 'dev 档尽量分散,单节点 kind 照样起得来'
+    Assert-NotMatch -Text $devContent -Pattern 'requiredDuringSchedulingIgnoredDuringExecution' -Because 'dev 档不要求不同节点'
     $broken = $TemplateText.Replace('__REDIS_CLUSTER_ORDINAL__', '0')
     Assert-True -Condition ($broken -cne $TemplateText) -Because '夹具前提:模板里有序号占位'
-    $message = Get-ThrownMessage { ConvertTo-RedisClusterManifest -Template $broken -Cluster $PlayerCluster -Topology $topology -Capacity $capacity -InfraNamespace 'ns' }
+    $message = Get-ThrownMessage { ConvertTo-RedisClusterManifest -Template $broken -Cluster $PlayerCluster -Topology $topology -Capacity $capacity -InfraNamespace 'ns' -ReleaseProfileName 'prod' }
     Assert-Match -Text $message -Pattern '带序号占位的文档应恰好 1 份' -Because '模板没有序号占位就不能展开,不能悄悄只渲染一个 Service'
 }
 
 Test-Case 'ConvertTo-RedisClusterManifest:控制集群的对象名、标签、口令 Secret 全部带 redis-control 前缀,与玩家域那份没有一个对象同名' {
     $capacity = Resolve-RedisClusterCapacity -Cluster $ControlCluster -MaxMemory '4gb' -Storage '32Gi' -ReleaseProfileName 'prod'
-    $control = ConvertTo-RedisClusterManifest -Template $TemplateText -Cluster $ControlCluster -Capacity $capacity -InfraNamespace 'ns' `
+    $control = ConvertTo-RedisClusterManifest -Template $TemplateText -Cluster $ControlCluster -Capacity $capacity -InfraNamespace 'ns' -ReleaseProfileName 'prod' `
         -Topology (Get-RedisClusterTopologyFor -Cluster $ControlCluster -Masters 3 -ReplicasPerMaster 1 -ReleaseProfileName 'prod' -InfraNamespace 'ns')
-    $player = ConvertTo-RedisClusterManifest -Template $TemplateText -Cluster $PlayerCluster -Capacity $capacity -InfraNamespace 'ns' `
+    $player = ConvertTo-RedisClusterManifest -Template $TemplateText -Cluster $PlayerCluster -Capacity $capacity -InfraNamespace 'ns' -ReleaseProfileName 'prod' `
         -Topology (Get-RedisClusterTopologyFor -Cluster $PlayerCluster -Masters 3 -ReplicasPerMaster 1 -ReleaseProfileName 'prod' -InfraNamespace 'ns')
     Assert-Equal -Expected 'redis-control/redis-control-cluster-init/6/3' -Actual ('{0}/{1}/{2}/{3}' -f $control.Name, $control.InitJob, $control.Nodes, $control.Masters) -Because '摘要字段'
     $content = $control.Content
@@ -365,7 +377,7 @@ Test-Case 'New-PlayerRedisConfigYaml / New-NodePlayerRedisBlock:集群写种子�
     Assert-Equal -Expected '20' -Actual $flat['PlayerRedis.PoolSizePerNode'] -Because '池上限'
     Assert-Equal -Expected "PlayerRedis:`n  PoolSizePerNode: 20" -Actual (New-PlayerRedisConfigYaml -Section 'PlayerRedis' -Topology $none -PoolSizePerNode 20) -Because '没开集群只写池上限,地址由服务指向现有实例'
     Assert-Equal -Expected "LoginRedis:`n  PoolSizePerNode: 20" -Actual (New-PlayerRedisConfigYaml -Section 'LoginRedis' -Topology $none -PoolSizePerNode 20) -Because 'login 自己的登录域段同形:没开集群只写池上限,地址落到它的 Node.RedisClient'
-    Assert-Equal -Expected '' -Actual (New-NodePlayerRedisBlock -Topology $none) -Because '没开集群 node-config 不写这一段(缺失 = standalone,沿用 zoneredis)'
+    Assert-Equal -Expected '' -Actual (New-NodePlayerRedisBlock -Topology $none) -Because '没开集群 node-config 不写这一段(缺失 = 沿用 control_redis 的地址,C++ 仍建独立的玩家域客户端)'
     $node = (ConvertFrom-YamlToFlatMap -Text (New-NodePlayerRedisBlock -Topology $cluster)).Scalars
     Assert-Equal -Expected 'cluster' -Actual $node['player_redis.mode'] -Because 'mode'
     Assert-Equal -Expected 'redis-player-2.ns:6379' -Actual $node['player_redis.seeds[2]'] -Because '种子'
@@ -410,15 +422,23 @@ Test-Case '玩家域总账输入:每个服务的每节点连接 = PlayerRedis �
     }
 }
 
-Test-Case '控制集群总账输入:缺口第 34 条第 6b 批接上服务之前没有客户端(返回空表,写路径只打一行说明);maxclients 同一个模板' {
+Test-Case '控制集群总账输入:控制域客户端的行(缺口第 34 条第 6b 批),池与固定连接同核心那份,唤醒订阅按 slot 分组每副本 64 条;maxclients 同一个模板' {
     $inputs = Get-RedisClusterConnectionLedgerInputs -Cluster $ControlCluster
-    Assert-Equal -Expected 0 -Actual @($inputs.Clients).Count -Because '还没有服务连控制集群;接上一个服务 = 这里加一行,并删掉本用例'
-    Assert-Equal -Expected 40000 -Actual $inputs.MaxClients -Because '读 redis-cluster.yaml 的 MAXCLIENTS'
-    Assert-Match -Text (Get-ThrownMessage { Get-RedisConnectionLedger -Inputs $inputs -ZoneCount 1 -CppZoneProcesses 0 -BattleProcesses 0 -RolloutExtraPodsPerDeployment 0 -OpsReserve 0 -WarnRatio 0.8 }) `
-        -Pattern '输入 Clients 为空' -Because '空表不能算出 0 条连接冒充结论,所以写路径对空表只打说明行(Write-RedisClusterConnectionLedger)'
+    Assert-Equal -Expected 40000 -Actual $inputs.MaxClients -Because '读 redis-cluster.yaml 的 MAXCLIENTS(两套集群同一个值)'
+    Assert-Equal -Expected 1 -Actual $inputs.CppConnectionsPerProcess -Because '每个 scene 进程每个主节点 1 条(tlsControlRedis)'
+    $core = @(Get-RedisControlClientRows -Cluster $false)
+    Assert-Equal -Expected (@($core | ForEach-Object { $_.Name }) -join ',') -Actual (@($inputs.Clients | ForEach-Object { $_.Name }) -join ',') -Because '控制域客户端在核心与控制集群上是同一批服务'
+    foreach ($row in $inputs.Clients) {
+        $coreRow = @($core | Where-Object { $_.Name -eq $row.Name })[0]
+        $wantPubSub = if ([int]$coreRow.PubSub -gt 0) { 64 } else { 0 }
+        Assert-Equal -Expected ('{0}/{1}/{2}' -f $coreRow.ConfiguredPoolConns, $wantPubSub, $coreRow.Fixed) -Actual ('{0}/{1}/{2}' -f $row.ConfiguredPoolConns, $row.PubSub, $row.Fixed) `
+            -Because "$($row.Name):池与固定连接同核心那份;唤醒订阅单实例 1 条,集群上 64 条(按全落在一个主节点上记)"
+    }
+    Assert-Equal -Expected 'data-service,trade,guild' -Actual (@($inputs.Clients | Where-Object { [int]$_.PubSub -gt 0 } | ForEach-Object { $_.Name }) -join ',') `
+        -Because '订阅唤醒频道的只有这三个服务(scene 是发布方,不占订阅连接)'
+    # 空表那一支只是防御:Get-RedisConnectionLedger 对空表 fail-closed,写路径先拦下只打说明行。
     $body = ($deployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Write-RedisClusterConnectionLedger' }, $true)).Body.Extent.Text
     Assert-Match -Text $body -Pattern 'if \(@\(\$inputs\.Clients\)\.Count -eq 0\)' -Because '空表先拦下,再调总账函数'
-    Assert-Match -Text $body -Pattern 'no clients wired yet' -Because '说明行'
 }
 
 Test-Case '玩家域总账算式:每节点 = Z × Σ(zone 服务) + Σ(全局服务) + scene 进程数;gate、battle 不计' {
@@ -434,38 +454,27 @@ Test-Case '玩家域总账算式:每节点 = Z × Σ(zone 服务) + Σ(全局服
     Assert-Equal -Expected 32000 -Actual $ledger.WarnAt -Because '80% 水位,与核心总账同一纪律'
 }
 
-Test-Case '控制域总账:没建集群时这些池记在控制域;建了集群就搬走,只剩玩家域句柄的 mail / match 不留行;chat 不连 Redis,两份都没有它' {
-    $unsplit = Get-RedisConnectionLedgerInputs
-    $split = Get-RedisConnectionLedgerInputs -PlayerDomainSplit $true
+Test-Case '核心那份总账:两个域都在核心上 = 控制域行 + 玩家域行;玩家域搬走后 mail、match 不留行,控制域搬走后 gateway 不留行;chat 不连 Redis,哪份都没有它' {
+    $both = Get-RedisConnectionLedgerInputs
+    $controlOnly = Get-RedisConnectionLedgerInputs -PlayerOnCore $false
+    $playerOnly = Get-RedisConnectionLedgerInputs -ControlOnCore $false
     # 行是字典:脚本块返回时单行会被展开,字典的 .Count 和 [0] 都不是想要的,调用处要包 @()。
     $rowOf = { param($Inputs, $Name) $Inputs.Clients | Where-Object { $_.Name -eq $Name } }
-    # K8s 的 match 私有池始终指向 redis-match-cluster;身份回退删除后,它与 mail 在核心上都只剩玩家域池。
     foreach ($service in @('mail', 'match')) {
-        $unsplitRows = @(& $rowOf $unsplit $service)
-        Assert-Equal -Expected 1 -Actual $unsplitRows.Count -Because "没建集群时 $service 的玩家域句柄连这台 Redis"
-        $source = if ($service -eq 'match') { 'go/match/etc/match_service.yaml' } else { 'go/mail/etc/mail.yaml' }
-        $playerPool = [int](Get-EtcValue -RelativePath $source -KeyPath 'PlayerRedis.PoolSizePerNode')
-        Assert-Equal -Expected $playerPool -Actual $unsplitRows[0].ConfiguredPoolConns -Because "$service 在核心上的显式连接只有玩家域池"
-        Assert-Equal -Expected '0/0/0/0' -Actual ('{0}/{1}/{2}/{3}' -f $unsplitRows[0].DefaultPools, $unsplitRows[0].GoMaxProcs, $unsplitRows[0].PubSub, $unsplitRows[0].Fixed) `
-            -Because "$service 不再有独立的控制域池或订阅,不能沿用删除登录身份回退前的连接数"
-        Assert-Equal -Expected 0 -Actual @(& $rowOf $split $service).Count -Because "建了集群 $service 不再连这台 Redis,留 0 条的行总账函数会拒绝"
+        Assert-Equal -Expected 1 -Actual @(& $rowOf $both $service).Count -Because "两个域都在核心上时 $service 的玩家域句柄连核心(只有玩家域那一行)"
+        Assert-Equal -Expected 0 -Actual @(& $rowOf $controlOnly $service).Count -Because "玩家域搬走后 $service 不再连核心,留 0 条的行总账函数会拒绝"
     }
-    foreach ($inputs in @($unsplit, $split)) {
+    Assert-Equal -Expected 2 -Actual @(& $rowOf $both 'guild').Count -Because 'guild 两个域各一行(控制域:ControlRedis 池 + 申请配额池;玩家域:PlayerRedis 池 + 摘要池)'
+    Assert-Equal -Expected 1 -Actual @(& $rowOf $controlOnly 'gateway').Count -Because 'gateway 只连控制域(限流)'
+    Assert-Equal -Expected 0 -Actual @(& $rowOf $playerOnly 'gateway').Count -Because '控制域搬走后 gateway 不再连核心'
+    foreach ($inputs in @($both, $controlOnly, $playerOnly)) {
         Assert-Equal -Expected 0 -Actual @(& $rowOf $inputs 'chat').Count -Because 'chat 只认 gate 签名的会话身份原件、聊天权威在 SQL,不连 Redis'
     }
-    $loginPool = [int](Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.PoolSize')
-    Assert-Equal -Expected $loginPool -Actual @(& $rowOf $split 'login')[0].ConfiguredPoolConns -Because '建了集群 login 只剩 Node.RedisClient'
-    $smSplit = @(& $rowOf $split 'scene-manager')[0]
-    Assert-Equal -Expected '0/0/1' -Actual ('{0}/{1}/{2}' -f $smSplit.ConfiguredPoolConns, $smSplit.Fixed, $smSplit.DefaultPools) -Because '铸造通道搬到玩家域,控制域只剩 go-zero 缺省池'
-    $guildSplit = @(& $rowOf $split 'guild')[0]
-    $guildControl = [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'RedisClient.PoolSize') + [int](Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'PlayerLocatorRedis.PoolSize')
-    # 入帮申请配额专用池(go/guild/internal/logic/application_quota.go 的 ApplicationQuotaRedisPoolSize)连核心库,拆了玩家域也留下。
-    $quotaSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/internal/logic/application_quota.go'))
-    $quotaPool = [int][regex]::Match($quotaSource, '(?m)^\s*(?:const\s+)?ApplicationQuotaRedisPoolSize\s*=\s*(\d+)\s*$').Groups[1].Value
-    Assert-True -Condition ($quotaPool -gt 0) -Because "写死的配额池上限要从源码读到(实际 $quotaPool),写法变了同步本用例"
-    Assert-Equal -Expected "$guildControl/$quotaPool" -Actual ('{0}/{1}' -f $guildSplit.ConfiguredPoolConns, $guildSplit.Fixed) -Because 'guild 的两个控制域池与申请配额池留下,玩家域句柄、摘要池搬走'
-    $plan = @{ ZoneCount = 1; CppZoneProcesses = 6; BattleProcesses = 1; RolloutExtraPodsPerDeployment = 2; OpsReserve = 50; WarnRatio = 0.8 }
-    Assert-True -Condition ((Get-RedisConnectionLedger -Inputs $split @plan).Steady -lt (Get-RedisConnectionLedger -Inputs $unsplit @plan).Steady) -Because '搬走之后控制域的账变小,而且没有 0 条的行让总账函数拒绝'
+    $plan = @{ ZoneCount = 1; CppZoneProcesses = 6; BattleProcesses = 0; RolloutExtraPodsPerDeployment = 2; OpsReserve = 50; WarnRatio = 0.8; CppSurgeWorkloads = 1 }
+    $steadyBoth = (Get-RedisConnectionLedger -Inputs $both @plan).Steady
+    foreach ($partial in @($controlOnly, $playerOnly)) {
+        Assert-True -Condition ((Get-RedisConnectionLedger -Inputs $partial @plan).Steady -lt $steadyBoth) -Because '搬走一个域,核心的账变小,而且没有 0 条的行让总账函数拒绝'
+    }
 }
 
 Test-Case '负向:PlayerRedis.PoolSizePerNode 不是正整数时 throw 并点名;登录域池只有 login 有' {
@@ -503,7 +512,7 @@ Test-Case 'dev 缺省 zone-up:产物没有 redis-player,node-config 没有 playe
     Assert-NotMatch -Text $out -Pattern 'PLAYER_REDIS_PASSWORD' -Because '没开集群不注入口令'
     Assert-NotMatch -Text $out -Pattern 'Redis player connection ledger' -Because '没开集群不打玩家域总账'
     $node = Get-ConfigFlat -Output $out -ConfigMap 'node-config'
-    Assert-Equal -Expected 0 -Actual @($node.Scalars.Keys | Where-Object { $_ -like 'data.game_config.yaml.player_redis*' }).Count -Because '整段缺失 = standalone,沿用 zoneredis'
+    Assert-Equal -Expected 0 -Actual @($node.Scalars.Keys | Where-Object { $_ -like 'data.game_config.yaml.player_redis*' }).Count -Because '整段缺失 = 沿用 control_redis 的地址'
     foreach ($service in $ZoneServices) {
         $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config"
         $prefix = $ServiceConfigs[$service] + 'PlayerRedis.'
@@ -617,9 +626,9 @@ Test-Case '加主节点不增加每节点连接:-PlayerRedisMasters 3 与 6 的 
     Assert-Equal -Expected $three -Actual (& $steady $run.Output) -Because '每节点连接只取决于客户端进程数,加主节点没有用(§6.3)'
 }
 
-Test-Case '-ControlRedisMasters 3 的 infra-up:控制集群的清单、Secret、建群 Job 都渲染,占位全部替换;只开它时玩家域不建;口令不进产物' {
-    Assert-Equal -Expected 0 -Actual $controlInfraRun.ExitCode -Because "infra-up DryRun 必须成功。输出: $($controlInfraRun.Output)"
-    $out = $controlInfraRun.Output
+Test-Case '两套都开的 infra-up:控制集群的清单、Secret、建群 Job 都渲染,占位全部替换;口令不进产物' {
+    Assert-Equal -Expected 0 -Actual $bothInfraRun.ExitCode -Because "infra-up DryRun 必须成功。输出: $($bothInfraRun.Output)"
+    $out = $bothInfraRun.Output
     Assert-Match -Text $out -Pattern 'Redis control cluster: masters=3 replicas_per_master=1 nodes=6 maxmemory=256mb memory=512Mi storage=2Gi min_replicas_to_write=0 \(manifests/infra/redis-cluster\.yaml, name=redis-control\)' `
         -Because '入口一行把拓扑和容量打出来,点名是哪套集群'
     Assert-Match -Text $out -Pattern ("\[dry-run\] kubectl apply -n $Infra -f -\s+# Secret redis-control-auth \(key password; value hidden\)") -Because 'infra namespace 的 Secret 先于清单'
@@ -629,20 +638,72 @@ Test-Case '-ControlRedisMasters 3 的 infra-up:控制集群的清单、Secret、
     Assert-NotMatch -Text $block -Pattern '__[A-Z][A-Z0-9_]*__' -Because '占位全部替换'
     $perPod = @([regex]::Matches($block, '(?m)^  name: redis-control-(\d+)\s*$') | ForEach-Object { [int]$_.Groups[1].Value } | Sort-Object)
     Assert-Equal -Expected '0,1,2,3,4,5' -Actual ($perPod -join ',') -Because '每个节点一个 Service'
-    Assert-Match -Text $out -Pattern 'Redis control connection ledger: per_master ' -Because '写路径入口打印控制集群的总账一行'
-    Assert-NotMatch -Text $out -Pattern $ClusterObjectPattern -Because '只开控制集群时玩家域照旧不建'
-    Assert-NotMatch -Text $out -Pattern 'Redis player (cluster|connection ledger):' -Because '只开控制集群时不打玩家域那两行'
     Assert-NotMatch -Text $out -Pattern ([regex]::Escape($ControlClusterPassword)) -Because '口令不进任何产物与打印'
 }
 
-Test-Case '-ControlRedisMasters 3 的 zone-up:不 apply 集群,只打一行种子说明;dev 缺省 zone-up 与 infra-up 都不引用控制集群' {
-    Assert-Equal -Expected 0 -Actual $controlZoneRun.ExitCode -Because "zone-up DryRun 必须成功。输出: $($controlZoneRun.Output)"
-    Assert-Match -Text $controlZoneRun.Output -Pattern ('Redis control cluster: masters=3 seeds=' + [regex]::Escape($ControlSeeds -join ',') + ' \(this run only renders clients') `
+Test-Case '负向:dev 只开控制集群(-ControlRedisMasters 不带 -PlayerRedisMasters),zone-up 与 infra-up 都在任何写操作之前拒绝并说明原因' {
+    # 控制集群是 Redis Cluster 时玩家域必须在自己的集群上:scene-manager 对没写 PlayerRedis.Addrs 拒启,C++ scene 的 player_redis 缺段会整体沿用控制集群。
+    foreach ($case in @(
+            @{ Label = 'zone-up'; Args = $ZoneArgs + @('-ControlRedisMasters', '3'); Env = $ControlClusterEnv }
+            @{ Label = 'infra-up'; Args = $InfraArgs + @('-ControlRedisMasters', '3'); Env = $ControlClusterInfraEnv }
+        )) {
+        $run = Invoke-ClusterDryRun -Arguments $case.Args -Env $case.Env
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "$($case.Label):必须拒绝。输出: $($run.Output)"
+        Assert-Match -Text $run.Output -Pattern '-ControlRedisMasters 3 要同时给 -PlayerRedisMasters' -Because "$($case.Label):点名缺的参数与原因(Assert-RedisClusterPairing)"
+        Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because "$($case.Label):配对判定先于任何写操作"
+    }
+}
+
+Test-Case '两套都开的 zone-up:不 apply 集群;控制域客户端(zone 级 Go 服务、gateway、scene)全部指向 redis-control,gate 不连 Redis;核心总账只打一行「没有客户端」' {
+    Assert-Equal -Expected 0 -Actual $bothZoneRun.ExitCode -Because "zone-up DryRun 必须成功。输出: $($bothZoneRun.Output)"
+    $out = $bothZoneRun.Output
+    Assert-Match -Text $out -Pattern ('Redis control cluster: masters=3 seeds=' + [regex]::Escape($ControlSeeds -join ',') + ' \(this run only renders clients') `
         -Because 'zone-up 只渲染客户端;种子固定序号 0、1、2'
-    $clusterBlocks = @(Get-ManifestBlocks -Output $controlZoneRun.Output | Where-Object { $_ -cmatch '(?m)^kind: StatefulSet\s*$' -and $_ -cmatch '(?m)^  name: redis-control\s*$' })
+    $clusterBlocks = @(Get-ManifestBlocks -Output $out | Where-Object { $_ -cmatch '(?m)^kind: StatefulSet\s*$' -and $_ -cmatch '(?m)^  name: redis-(control|player)\s*$' })
     Assert-Equal -Expected 0 -Actual $clusterBlocks.Count -Because 'zone-up 不 apply 集群'
-    Assert-NotMatch -Text $controlZoneRun.Output -Pattern 'delete job redis-control-cluster-init' -Because 'zone-up 不动建群 Job'
-    Assert-NotMatch -Text $controlZoneRun.Output -Pattern ([regex]::Escape($ControlClusterPassword)) -Because '口令不进任何产物与打印'
+    Assert-NotMatch -Text $out -Pattern 'delete job redis-(control|player)-cluster-init' -Because 'zone-up 不动建群 Job'
+    Assert-Match -Text $out -Pattern 'kubectl apply -n mmorpg-zone-cluster-test -f -\s+# Secret redis-control-auth \(key password; value hidden\)' -Because 'Secret 不能跨 namespace 引用,zone 里也要一份'
+
+    # node-config:scene 读 control_redis(控制集群的种子)与 player_redis(玩家域集群),口令都不进 ConfigMap。
+    $node = Get-ConfigFlat -Output $out -ConfigMap 'node-config'
+    Assert-Equal -Expected 'cluster' -Actual (Get-FlatValue -Flat $node -KeyPath 'data.game_config.yaml.control_redis.mode') -Because 'control_redis 是集群'
+    foreach ($i in 0..2) {
+        Assert-Equal -Expected $ControlSeeds[$i] -Actual (Get-FlatValue -Flat $node -KeyPath "data.game_config.yaml.control_redis.seeds[$i]") -Because "control_redis 种子 $i"
+    }
+    Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $node -KeyPath 'data.game_config.yaml.control_redis.password') -Because 'control_redis 的口令写空串,scene 从 CONTROL_REDIS_PASSWORD 读'
+    Assert-Equal -Expected 'cluster' -Actual (Get-FlatValue -Flat $node -KeyPath 'data.game_config.yaml.player_redis.mode') -Because 'player_redis 在玩家域集群,与控制集群分开'
+    $scene = Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name 'scene'
+    Assert-Match -Text $scene -Pattern 'name: CONTROL_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef: \{name: redis-control-auth, key: password, optional: false\}' -Because 'scene 的控制域口令出自控制集群的 Secret'
+    Assert-Match -Text $scene -Pattern 'mmorpg\.io/control-redis-config-hash: "[0-9a-f]{12}"' -Because 'C++ 只在启动时读 control_redis,种子或口令变了要靠指纹滚动'
+    $gate = Get-WorkloadBlock -Output $out -Kind 'Deployment' -Name 'gate'
+    Assert-NotMatch -Text $gate -Pattern 'CONTROL_REDIS_PASSWORD|PLAYER_REDIS_PASSWORD|redis-config-hash' -Because 'gate 不连 Redis(缺口第 34 条第 3 批)'
+
+    # zone 级 Go 服务:ControlRedis 写控制集群的种子与 Cluster,口令写空串,容器从 Secret redis-control-auth 拿 SHARED_REDIS_PASSWORD。
+    foreach ($service in $ZoneServices) {
+        $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config"
+        $prefix = $ServiceConfigs[$service] + 'ControlRedis.'
+        foreach ($i in 0..2) {
+            Assert-Equal -Expected $ControlSeeds[$i] -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + "Addrs[$i]")) -Because "$service 的 ControlRedis 种子 $i"
+        }
+        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Cluster')) -Because "$service 的 ControlRedis 是集群"
+        Assert-Equal -Expected '' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Password')) -Because "$service 的 ControlRedis 口令写空串"
+        Assert-Equal -Expected 'SHARED_REDIS_PASSWORD' -Actual (Get-FlatValue -Flat $flat -KeyPath ($ServiceConfigs[$service] + 'SharedRedisPasswordEnv')) -Because "$service 指名口令变量"
+        Assert-Match -Text (Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name $service) -Name $service) -Pattern '- name: SHARED_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef:\s+name: redis-control-auth\s+key: password' `
+            -Because "$service 容器从控制集群的 Secret 拿口令"
+    }
+    # gateway 的限流在控制域:写 cluster.nodes(种子),不写单实例的 host / port。
+    $gateway = Get-ConfigFlat -Output $out -ConfigMap 'java-svc-gateway-config'
+    foreach ($i in 0..2) {
+        Assert-Equal -Expected $ControlSeeds[$i] -Actual (Get-FlatValue -Flat $gateway -KeyPath "data.application.yaml.spring.data.redis.cluster.nodes[$i]") -Because "gateway 的集群种子 $i"
+    }
+    Assert-True -Condition (-not $gateway.Scalars.Contains('data.application.yaml.spring.data.redis.host')) -Because '集群模式不写单实例地址'
+
+    Assert-Match -Text $out -Pattern 'Redis connection ledger: zones=\d+ no clients: the control and player domains are on their Redis Clusters' -Because '核心上哪个域都没有,只打一行说明'
+    Assert-Match -Text $out -Pattern 'Redis control connection ledger: per_master zones=\d+ scene_processes=\d+ steady=\d+ ' -Because '控制集群的总账按客户端行算'
+    Assert-NotMatch -Text $out -Pattern '\[Redis(Control|Player)?ConnectionLedger\]OverWarnRatio:' -Because '仓库的规划档在 80% 水位以内'
+    foreach ($password in @($ClusterPassword, $ControlClusterPassword)) {
+        Assert-NotMatch -Text $out -Pattern ([regex]::Escape($password)) -Because '口令不进任何产物与打印'
+    }
     foreach ($run in @($devZoneRun, $devInfraRun)) {
         Assert-NotMatch -Text $run.Output -Pattern $ControlClusterObjectPattern -Because 'dev 缺省不建控制集群,任何产物都不引用它'
         Assert-NotMatch -Text $run.Output -Pattern 'Redis control (cluster|connection ledger):' -Because 'dev 缺省不打控制集群那两行'
@@ -664,6 +725,18 @@ Test-Case '两套都开的 infra-up:各一套对象互不重名,玩家域先 app
     Assert-True -Condition ($friendAt -gt $controlAt) -Because '全局 Go 服务连这些集群,两套集群的清单都排在它们前面'
     Assert-Match -Text $out -Pattern 'Redis player connection ledger: per_master zones=' -Because '玩家域总账一行'
     Assert-Match -Text $out -Pattern 'Redis control connection ledger: per_master ' -Because '控制集群总账一行'
+    Assert-Match -Text $out -Pattern 'Redis connection ledger: zones=\d+ no clients: the control and player domains are on their Redis Clusters' -Because '核心上哪个域都没有,只打一行说明'
+    # 全局的控制域客户端指向控制集群,口令出自 redis-control-auth。match 的 Redis 段仍指向核心:本次没给核心口令,它不注入 SHARED_REDIS_PASSWORD
+    # (口令来源按服务分,Get-SharedRedisClientSource)。
+    foreach ($service in @('friend', 'guild', 'trade', 'player-inbox')) {
+        $flat = Get-ConfigFlat -Output $out -ConfigMap "go-svc-$service-config"
+        $prefix = $ServiceConfigs[$service] + 'ControlRedis.'
+        Assert-Equal -Expected $ControlSeeds[0] -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Addrs[0]')) -Because "$service 的 ControlRedis 种子"
+        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath ($prefix + 'Cluster')) -Because "$service 的 ControlRedis 是集群"
+        Assert-Match -Text (Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name $service) -Name $service) -Pattern '- name: SHARED_REDIS_PASSWORD\s+valueFrom:\s+secretKeyRef:\s+name: redis-control-auth\s+key: password' `
+            -Because "$service 容器从控制集群的 Secret 拿口令"
+    }
+    Assert-NotMatch -Text (Get-WorkloadBlock -Output $out -Kind (Get-ServiceWorkloadKind -Name 'match') -Name 'match') -Pattern 'SHARED_REDIS_PASSWORD' -Because 'match 的 Redis 段在核心,核心没口令就不注入'
     foreach ($password in @($ClusterPassword, $ControlClusterPassword)) {
         Assert-NotMatch -Text $out -Pattern ([regex]::Escape($password)) -Because '口令不进任何产物与打印'
     }

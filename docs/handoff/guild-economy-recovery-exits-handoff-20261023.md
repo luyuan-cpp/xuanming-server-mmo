@@ -417,3 +417,15 @@ Unity.exe -batchmode -nographics -projectPath D:\luyuan\mmorpg-client -runTests 
 2. 同一轮补变异红灯：§8.3 末第 2 步（含 §8.4 那一项）与 §8.5 第 2 步。每项做完立即恢复，再用 `git diff` 核对只剩原来的改动。
 3. 结果 XML、日志与源码摘要存到服务端 `build/verification/guild-recovery-notice-20261113/`。
 4. 要对当前服务端再跑联网冒烟时，先按客户端 `Docs/GuildUI.md` 联网验收节新补的业务就绪探针执行；失败时先留网关与 login 的日志。
+
+### 8.8 2026-11-13 Codex 回执与 2026-11-19 夹具写回
+
+§8.7 末「给 Codex」的第 1~3 步已做，证据在服务端 `build/verification/guild-recovery-notice-20261113/`（摘要 `final-verification-summary.json`、`mutation-summary.json`）。
+
+- **帮会 EditMode**：客户端 `67b9c589`，323/323，零跳过，27 条回归按名字全过。
+- **变异红灯**：四组共 16 条，都在预期断言处失败（`retirement-delay-red` 6、`confirming-click-replacement-red` 2、`applications-notice-red` 7、`reply-replacement-red` 1），每轮恢复后核对了源码的 SHA-256。变异跑在 `7f74de24`，涉及的帮会源码与用例和 `67b9c589` 一致。一秒确认那组只去掉运行时的等待门槛，测试用的计时常量保留。
+- **网络 EditMode**：HEAD 上 142/145。三条红都在 `GameClientReconnectTests` 的假网关：它还断言请求体里有账号名，而客户端 11-12 起 assign-gate 只发 `access_token`（第三方登录补全那批改的）。与帮会无关。Codex 在隔离副本里改了两处断言后 145/145。
+- **2026-11-19 Claude**：把那份补丁写回客户端仓 `Assets/Tests/EditMode/Net/GameClientReconnectTests.cs`（内容与 `client-67b9c589/assign-gate-reconnect-fixture.patch` 相同），未提交、未重跑。
+- **联网冒烟**：第 4 步没跑。当时本地栈没有运行中的 Guild 服务，Scene Manager 健康检查不过，login 源码与 Go 生成绑定也不一致（绑定之后已随主干重生入库）。
+
+到这里 §8.3~§8.5 的用例既有绿灯也有红灯作证，本功能没有待写的代码。剩下两件都归 Codex：网络组在客户端 HEAD 重跑一次（命令见 `docs/PROGRESS.md` 2026-11-19「落实 Codex 11-13 两份回执里的红项」第 6 步）；对当前服务端跑联网冒烟（同条第 7 步）。Java 版不涉及。

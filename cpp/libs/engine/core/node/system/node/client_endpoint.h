@@ -111,4 +111,23 @@ std::optional<EndpointComp> ClientFacing(const NodeInfo &node, bool required);
 // 来源的 env 取值(none / static / agones),供日志使用;越界返回 "unknown"。
 std::string_view SourceKindName(SourceKind kind);
 
+// ── 小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url,docs/design/minigame-websocket-gate.md W7)──
+//
+// 小游戏平台只许连事先登记的 wss 域名,所以它们经一个固定域名的边缘转进来:
+// client_ws_url = <基地址>/<endpoint.ip>/<endpoint.port>,边缘按路径里的地址连到本节点。
+// 用 endpoint(集群内地址)而不是 client_endpoint:边缘在集群内,直连 Pod。
+// 基地址由部署经 CLIENT_WS_BASE_URL 注入,只给 gate / battle;不设 = 本节点不接小游戏。
+inline constexpr const char kEnvWsBaseUrl[] = "CLIENT_WS_BASE_URL";
+
+// 解析并校验 CLIENT_WS_BASE_URL。未设置或空串:返回 true,out 为空。
+// 合法值以 wss:// 或 ws:// 开头,后面是主机[:端口][/路径],末尾的 '/' 去掉后写入 out。
+// 带查询串、片段、空白、未展开的 $(VAR) 或模板占位符的返回 false 并写 error(调用方据此致命退出)。
+bool ParseWsBaseUrl(const EnvLookup &env, std::string &out, std::string &error);
+
+// 是否是 IPv4 字面量(四段 0..255 的十进制)。边缘只按 IPv4 地址转发。
+bool IsIpv4Literal(std::string_view text);
+
+// 拼出 client_ws_url。base 为空、ip 不是 IPv4 字面量或 port 不在 1..65535 时返回空串(不自报)。
+std::string BuildWsUrl(std::string_view base, const EndpointComp &endpoint);
+
 } // namespace client_endpoint

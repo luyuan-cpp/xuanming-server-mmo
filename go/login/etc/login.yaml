@@ -464,6 +464,24 @@ AuthProviders:
 #     AppKey: "${NETEASE_APP_KEY}"
 #     AppSecret: "${NETEASE_APP_SECRET}"
 
+# 实名认证与未成年人防沉迷(docs/design/real-name-anti-addiction.md §5.8)。只在国内部署打开,整块缺省 = 关闭。
+# 开着时:PlatformManagedAuthTypes 之外的登录方式都要游戏方实名(/api/real-name 调国家系统),gate 上的 Login
+# 拦没实名的和不在可玩时段的未成年人,到点由续租踢线,上下线报给国家系统。Nppa 三项缺一拒绝启动;secretKey
+# 只从环境变量来。ExtraPlayDays 是法定节假日里不落在周五到周日的北京日期,运维按每年的国务院放假通知填。
+# AntiAddiction:
+#   Enabled: true
+#   PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]
+#   ExtraPlayDays: ["2026-10-01", "2026-10-02"]
+#   DailySubmitLimit: 5
+#   Nppa:
+#     AppId: "your-nppa-app-id"
+#     BizId: "your-game-bizid"
+#     SecretKeyEnv: LOGIN_NPPA_SECRET_KEY
+#     # 接口测试阶段换成企业端给的测试地址;正式环境留空用官方地址。
+#     CheckUrl: ""
+#     QueryUrl: ""
+#     LoginoutUrl: ""
+
 # AssignGate login queue (Redis ZSET-backed). When Enabled=false (default),
 # AssignGate signs and returns a gate token immediately, just like the legacy
 # behavior. When Enabled=true:
@@ -550,8 +568,4 @@ GateDrain:
   DrainedBelowPlayers: 0  # 在线 <= 它即判定排空
   Deadline: 25m           # 从标 draining 起等这么久还剩人也判定可缩容(打 ERROR);0 = 只认人走干净
   # 排空时把在线连接按限速迁到同 zone 其他 gate(msg 124 + 租约内重连回原场景,
-  # docs/design/gate-drain-session-migration.md)。子块可缺省,缺省即下面这组值。
-  Migrate:
-    Enabled: true         # 默认开(2026-11-12 定案);false 是应急开关,最多一个许可租期后所有 gate 停止迁移
-    RatePerSecond: 20     # 每台排空中的 gate 每秒最多发起的迁移数;0 等同关闭
-    StartAfter: 0s        # 标记 draining 之后多久开始迁移,留给玩家自然下线
+  # docs/design/gate-drain-session-migrati

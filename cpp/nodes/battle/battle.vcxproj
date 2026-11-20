@@ -25,6 +25,7 @@
     <ClCompile Include="logic\battle_room_manager.cpp" />
     <ClCompile Include="logic\battle_spectate_relay.cpp" />
     <ClCompile Include="client\battle_client_edge.cpp" />
+    <ClCompile Include="client\battle_connection_admission.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="rpc_replies\register_handler.cpp" />
   </ItemGroup>
@@ -34,6 +35,7 @@
     <ClInclude Include="battle_push_policy.h" />
     <ClInclude Include="battle_room_table.h" />
     <ClInclude Include="client\battle_client_edge.h" />
+    <ClInclude Include="client\battle_connection_admission.h" />
     <ClInclude Include="handler\grpc\battle_node.h" />
     <ClInclude Include="handler\rpc\battle_handler.h" />
     <ClInclude Include="logic\battle_room_manager.h" />

@@ -1614,13 +1614,14 @@ func (l *EnterSceneLogic) sendRedirectToGate(in *scene_manager.EnterSceneRequest
 	}
 
 	event := &kafkacontracts.RedirectToGateEvent{
-		PlayerId:       in.PlayerId,
-		SessionId:      in.SessionId,
-		TargetGateIp:   redirect.TargetGateIp,
-		TargetGatePort: redirect.TargetGatePort,
-		TokenPayload:   redirect.TokenPayload,
-		TokenSignature: redirect.TokenSignature,
-		TokenDeadline:  redirect.TokenDeadline,
+		PlayerId:        in.PlayerId,
+		SessionId:       in.SessionId,
+		TargetGateIp:    redirect.TargetGateIp,
+		TargetGatePort:  redirect.TargetGatePort,
+		TargetGateWsUrl: redirect.TargetGateWsUrl,
+		TokenPayload:    redirect.TokenPayload,
+		TokenSignature:  redirect.TokenSignature,
+		TokenDeadline:   redirect.TokenDeadline,
 	}
 	payload, err := proto.Marshal(event)
 	if err != nil {

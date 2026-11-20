@@ -38,7 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
     "commerce.gateway-secret=" + MallTracingHttpTest.GATEWAY_SECRET,
     "commerce.payment-secret=tracing-payment-test-only-key-000002",
     "commerce.delivery-secret=tracing-delivery-test-only-key-00003",
-    "commerce.admin-secret=tracing-admin-test-only-key-0000004"
+    "commerce.admin-secret=tracing-admin-test-only-key-0000004",
+    // 只核对日志里的 traceId,不往本机 Alloy 导出 span(阶段三的导出器,设计 §10.3),用例不依赖外部采集器。
+    "management.otlp.tracing.export.enabled=false"
 })
 @Import({MallTracingHttpTest.ProbeConfiguration.class, H2CommerceTestConfiguration.class})
 @ExtendWith(OutputCaptureExtension.class)

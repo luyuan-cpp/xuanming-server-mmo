@@ -1,6 +1,7 @@
 package commerce
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,6 +10,7 @@ import (
 	assetpb "proto/common/asset"
 	rollbackpb "proto/common/rollback"
 	tradepb "proto/trade"
+	"trade/internal/data"
 )
 
 // 成交交付「先买家、后卖家」与买家那条被拒时整单退回(delivery_order.go,数据覆写审计 r2-trade#1)。纯函数用例,不读库。
@@ -211,4 +213,72 @@ func TestLegacyContractWithBothLegsSentStillGoesManual(t *testing.T) {
 	require.Equal(t, Manual, r.Status)
 	require.Nil(t, leg(w, "seller_return"))
 	require.Nil(t, leg(w, "buyer_return"))
+}
+
+// ── 闸压着卖家所得时的人工处置(2026-11-20 独立评审修正)─────────────────
+
+// 交付阶段转人工时卖家所得还压着、没发出:人工补记结局放过它,别的腿照常补记。寄售、拍品的 buyer_receive 排在它前面,
+// 刚在同一个循环里补记成到账也一样放过。原先它被当成「还没发出」拒绝,这种合同一个人工动作都做不了。
+func TestManualSettlingPassesOverHeldSellerProceeds(t *testing.T) {
+	readApplied := func(context.Context, uint64) (data.LegOutcome, error) {
+		return data.LegOutcome{Status: tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED}, nil
+	}
+	w := &tradepb.TradeCommerceWorkflow{Stage: "manual", Legs: []*tradepb.TradeCommerceLeg{
+		manualLeg("seller_debit", 1, 3, 101, outcomeApplied, itemBundle(10, 1)),
+		manualLeg("buyer_receive", 2, 4, 104, 0, itemBundle(10, 1)),
+		manualLeg("seller_receive", 1, 4, 0, 0, currencyBundle(30)),
+	}}
+	require.NoError(t, settleLegOutcomes(context.Background(), w, readApplied, legSettling{}))
+	require.Equal(t, outcomeApplied, leg(w, "buyer_receive").Outcome, "买家那条照常补记")
+	require.Zero(t, leg(w, "seller_receive").OpId)
+	require.Zero(t, leg(w, "seller_receive").Outcome, "卖家所得没发出,没有结局可记")
+}
+
+// 卖家所得压着时整单退回:它和没到账的买家那条一起标被退回取代、永远不发,两条退回到账后按撤单结案。
+// 原先它没被标,finalCredits 一直等它,合同停在 return 每轮空转。
+func TestManualRefundSupersedesHeldSellerProceeds(t *testing.T) {
+	r, w := deliveringTrade()
+	buyer := leg(w, "buyer_receive")
+	buyer.OpId, buyer.Outcome = 104, outcomeRejected
+	markManual(r, w, manualReasonCorrupt, "坏数据", 1)
+
+	result, err := planAction(r, w, ManualRefund)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"buyer_receive", "seller_receive"}, result.SupersededLegs)
+	require.ElementsMatch(t, []string{"seller_debit/refund", "buyer_debit/refund"}, result.NewLegs)
+	require.Equal(t, string(ManualRefund), leg(w, "seller_receive").SupersededBy)
+	require.False(t, legReadyToSend(w, leg(w, "seller_receive")), "钱退回买家,卖家所得永远不发")
+
+	for i, role := range []string{"seller_debit/refund", "buyer_debit/refund"} {
+		l := leg(w, role)
+		l.OpId, l.Outcome = uint64(300+i), outcomeApplied
+	}
+	require.NoError(t, (&Engine{}).plan(r, w, 2000))
+	require.Equal(t, "done", w.Stage)
+	require.Equal(t, Cancelled, r.Status)
+}
+
+// 买家那份部分到账、缺口补发又被拒(卖家所得还压着、没到账):整单退回会把已经交出的那部分再退一遍,拒绝且不改合同;
+// 缺口用 reissue 再补,补发到账之后闸放行卖家所得。
+func TestManualRefundRefusedAfterPartialDelivery(t *testing.T) {
+	r, w := deliveringTrade()
+	buyer := leg(w, "buyer_receive")
+	buyer.OpId, buyer.Outcome, buyer.SupersededBy = 104, partialOutcome, "buyer_receive#2"
+	w.Legs = append(w.Legs, manualLeg("buyer_receive#2", 2, 4, 108, outcomeRejected, itemBundle(10, 1)))
+	require.NoError(t, (&Engine{}).plan(r, w, 1000))
+	require.Equal(t, Manual, r.Status)
+
+	before := proto.Clone(w)
+	_, err := planAction(r, w, ManualRefund)
+	requireNotAllowed(t, err)
+	require.True(t, proto.Equal(before, w), "拒绝时不改合同")
+
+	result, err := planAction(r, w, ManualReissue)
+	require.NoError(t, err)
+	require.Equal(t, []string{"buyer_receive#3"}, result.NewLegs)
+	require.Equal(t, "deliver", w.Stage)
+	require.False(t, legReadyToSend(w, leg(w, "seller_receive")), "补发还没到账,卖家所得仍压着")
+	third := leg(w, "buyer_receive#3")
+	third.OpId, third.Outcome = 109, outcomeApplied
+	require.True(t, legReadyToSend(w, leg(w, "seller_receive")), "缺口补齐,放行卖家所得")
 }

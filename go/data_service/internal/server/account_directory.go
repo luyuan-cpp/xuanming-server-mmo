@@ -81,6 +81,11 @@ func (s *DataServiceServer) ReadAccountDirectory(ctx context.Context, in *dspb.R
 	if err := s.admitDirectory(ctx, "ReadAccountDirectory", in); err != nil {
 		return nil, err
 	}
+	// 注销装配了就顺带回注销状态(同一条语句读出,docs/design/account-deletion.md §4.3);没装配时照旧只回列表。
+	if s.svcCtx.AccountDeletions != nil {
+		out, err := s.svcCtx.AccountDeletions.ReadWithLifecycle(ctx, in.Account, in.CreateIfMissing)
+		return out, directoryError(err)
+	}
 	out, err := s.svcCtx.AccountDirectory.Read(ctx, in.Account, in.CreateIfMissing)
 	if err != nil {
 		return nil, directoryError(err)
@@ -120,7 +125,18 @@ func (s *DataServiceServer) LookupAccountRole(ctx context.Context, in *dspb.Look
 		}
 	}
 	out, err := s.svcCtx.AccountDirectory.Lookup(ctx, in.PlayerId)
-	return out, directoryError(err)
+	if err != nil || !in.IncludeAccountState {
+		return out, directoryError(err)
+	}
+	// EnterGame 的入口闸门(docs/design/account-deletion.md §4.3):读不到状态就不放行,调用方重试。没装配注销时没有注销中的账号。
+	if s.svcCtx.AccountDeletions != nil {
+		state, err := s.svcCtx.AccountDeletions.AccountDeletionState(ctx, out.Account)
+		if err != nil {
+			return nil, directoryError(err)
+		}
+		out.AccountDeletionState = state
+	}
+	return out, nil
 }
 
 // BatchGetPlayerDisplay 只读、不鉴权,与 BatchGetPlayerName 同级:只有展示字段。
@@ -205,4 +221,38 @@ func (s *DataServiceServer) RemoveAccountRoles(ctx context.Context, in *dspb.Rem
 		return nil, directoryError(err)
 	}
 	return &emptypb.Empty{}, nil
+}
+
+// SetAccountRealName 把国家防沉迷系统给的 pi 写到账号行上,只写一次,只认 login(docs/design/real-name-anti-addiction.md §5.1)。
+func (s *DataServiceServer) SetAccountRealName(ctx context.Context, in *dspb.SetAccountRealNameRequest) (*dspb.SetAccountRealNameResponse, error) {
+	if err := s.admitDirectory(ctx, "SetAccountRealName", in); err != nil {
+		return nil, err
+	}
+	if s.svcCtx.AccountRealNames == nil {
+		return nil, status.Error(codes.Unavailable, "account real name store not configured")
+	}
+	stored, err := s.svcCtx.AccountRealNames.SetRealName(ctx, in.Account, in.RealNamePi)
+	if err != nil {
+		return nil, directoryError(err)
+	}
+	return &dspb.SetAccountRealNameResponse{RealNamePi: stored}, nil
+}
+
+// GetAccountRealName 给充值限额闸按玩家查实名,只读,只认 payment(§5.6)。
+func (s *DataServiceServer) GetAccountRealName(ctx context.Context, in *dspb.GetAccountRealNameRequest) (*dspb.GetAccountRealNameResponse, error) {
+	if s.svcCtx.AccountRealNames == nil || s.svcCtx.PaymentDirectoryAuth == nil {
+		return nil, status.Error(codes.Unavailable, "account real name lookup not configured")
+	}
+	caller, err := s.svcCtx.PaymentDirectoryAuth.Verify(ctx, accountdirectory.MethodPrefix+"GetAccountRealName", in)
+	if err != nil || caller != accountdirectory.PaymentCaller {
+		return nil, status.Error(codes.PermissionDenied, "real name lookup proof invalid")
+	}
+	if in.PlayerId == 0 {
+		return nil, status.Error(codes.InvalidArgument, "player_id required")
+	}
+	pi, found, err := s.svcCtx.AccountRealNames.RealNameOfPlayer(ctx, in.PlayerId)
+	if err != nil {
+		return nil, directoryError(err)
+	}
+	return &dspb.GetAccountRealNameResponse{Found: found, RealNamePi: pi}, nil
 }

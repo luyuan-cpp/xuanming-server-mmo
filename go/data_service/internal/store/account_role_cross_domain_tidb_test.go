@@ -30,6 +30,10 @@ type fakeFences struct {
 	probed   []*rfpb.RoleFenceState
 	prepared []*rfpb.RoleFenceState
 	pushed   []*rfpb.RoleFenceState
+	// blockers 是 DryRunBlockers 在有挂起时回的原因;purged 记下 Purge 收到的墓碑,purgeFails 让 Purge 回失败。
+	blockers   []string
+	purged     []*rfpb.RoleFenceState
+	purgeFails bool
 }
 
 func (f *fakeFences) DryRun(_ context.Context, state *rfpb.RoleFenceState) rolefence.PrepareOutcome {
@@ -68,6 +72,28 @@ func (f *fakeFences) Push(_ context.Context, state *rfpb.RoleFenceState) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.pushed = append(f.pushed, proto.Clone(state).(*rfpb.RoleFenceState))
+}
+
+// DryRunBlockers 用试探的结论;有挂起时回 blockers(没设就回 fake_blocker)。
+func (f *fakeFences) DryRunBlockers(ctx context.Context, state *rfpb.RoleFenceState) (rolefence.PrepareOutcome, []string) {
+	outcome := f.DryRun(ctx, state)
+	if outcome != rolefence.PrepareBlocked {
+		return outcome, nil
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.blockers) == 0 {
+		return outcome, []string{"fake_blocker"}
+	}
+	return outcome, f.blockers
+}
+
+// Purge 记下清过的墓碑;purgeFails 置真时回失败(小表留着,后台接着做)。
+func (f *fakeFences) Purge(_ context.Context, state *rfpb.RoleFenceState) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.purged = append(f.purged, proto.Clone(state).(*rfpb.RoleFenceState))
+	return !f.purgeFails
 }
 
 func (f *fakeFences) set(outcome rolefence.PrepareOutcome) {

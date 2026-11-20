@@ -296,7 +296,7 @@ data-service 照常运行,不停:它同时管路由读与号段,停了玩家就�
 
 | 环节 | 上限 |
 |---|---|
-| scene 存盘请求(`PlayerStoreClient::Options::maxRequestBytes`) | 4 MiB − 64 KiB。其中审计记录一笔至多 512 KiB(`AuditOutbox::kMaxBytesPerSave`,带不完的由紧接着的下一笔带);单条流水 / 快照请求 64 KiB(`kMaxRecordBytes`,超了在 scene 拒收并计 `scene_audit_outbox_records_dropped_total{reason="too_large"}`) |
+| scene 存盘请求(`PlayerStoreClient::Options::maxRequestBytes`) | 16 MiB − 64 KiB(传输上限 `player_store_path::kMaxSaveRequestBytes` = go/db 的 gRPC 接收上限 `playerstore.MaxSaveRequestBytes`,2026-11-19 起)。到期的审计记录一笔全部带上,至多 8 MiB(每名玩家队列的上限 `AuditOutbox::kMaxBytesPerPlayer`,到了丢最旧的并计 `reason="overflow"`);单条流水 / 快照请求 64 KiB(`kMaxRecordBytes`,超了在 scene 拒收并计 `scene_audit_outbox_records_dropped_total{reason="too_large"}`) |
 | go/db 拼出的一份快照(`playerstore.MaxAuditSnapshotBytes`) | **4 MiB**。超了跳过这份快照、存档照常提交,计 `db_audit_outbox_records_skipped_total{reason="too_large"}`;单条流水 64 KiB 同理 |
 | 发件箱一行(`player_audit_outbox.payload`) | MEDIUMBLOB 16 MiB − 1;TiDB 上一行受 `txn-entry-size-limit` 约束(默认 6MB),4 MiB 的快照放得下 |
 | 转发的一次请求(kafka-go `BatchBytes`,`go/db/internal/auditoutbox/kafka.go`) | 流水 1 MiB(流水 topic 沿用 broker 缺省的 `max.message.bytes`);快照 16 MiB(= 快照 topic 的 `max.message.bytes`)。单行超过「上限 − 1 KiB」的不发,留在发件箱,积压年龄告警会响 |

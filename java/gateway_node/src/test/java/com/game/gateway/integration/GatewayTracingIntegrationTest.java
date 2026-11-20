@@ -59,7 +59,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code traceparent}。经过的是生产的 {@link LoginRpcClient} Bean、它的通道,以及 Spring Boot 的真实追踪装配
  * (HTTP 观测过滤器、OpenTelemetry 桥、MDC)。
  */
-@SpringBootTest(classes = LoginEndpointIntegrationTest.H2HttpApplication.class)
+// span 只核对线上的 traceparent 与日志,不往本机 Alloy 导出(阶段三的导出器,设计 §10.3),用例不依赖外部采集器。
+@SpringBootTest(classes = LoginEndpointIntegrationTest.H2HttpApplication.class,
+        properties = "management.otlp.tracing.export.enabled=false")
 @AutoConfigureMockMvc
 @AutoConfigureObservability(metrics = false)
 @ActiveProfiles("test")

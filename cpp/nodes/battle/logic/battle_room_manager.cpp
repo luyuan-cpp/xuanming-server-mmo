@@ -279,8 +279,7 @@ namespace
         return false;
     }
 
-    // 配置载体:GameConfig proto 只承载 scene_node_type/zone_id/zone_redis 且 proto 已冻结
-    // (本轮不改 proto),故这里直接用 yaml-cpp 读同一份 etc/game_config.yaml 的
+    // 配置载体:这个键只有 battle 读,没放进 GameConfig proto,这里直接用 yaml-cpp 读同一份 etc/game_config.yaml 的
     // `battle_table_fingerprint_mode` 键(与 Node::LoadConfigs 同路径规则:GAME_CONFIG_PATH
     // 环境变量优先),再允许 BATTLE_TABLE_FINGERPRINT_MODE 环境变量覆盖(K8s 灰度用)。
     // 进程内只读一次;缺键/读失败一律回默认 warn(灰度期宁可多告警不误拒开局)。
@@ -2169,6 +2168,8 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
     out.set_battle_id(room.battleId);
     out.set_host(clientFacing->ip());
     out.set_port(clientFacing->port());
+    // 小游戏客户端连这个 WebSocket 地址(docs/design/minigame-websocket-gate.md W9);没自报时为空串,原生客户端不读它。
+    out.set_ws_url(self.client_ws_url());
     out.set_token_payload(payloadBytes);
     out.set_token_signature(signature);
     out.set_expire_at_ms(room.deadlineMs);

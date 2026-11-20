@@ -614,19 +614,8 @@ func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWo
 	if r.Kind == 6 {
 		return e.planRmb(r, w, now)
 	}
-	if w.Stage == "official_deliver" {
-		addLeg(w, "official_credit", r.BuyerPlayerId, 4, w.OfficialBundle)
-		l := leg(w, "official_credit")
-		if !done(l) {
-			return nil
-		}
-		if applied(l) {
-			w.Stage = "done"
-			r.Status = Settled
-		} else {
-			w.Stage = "official_refund"
-			r.Status = 8
-		}
+	if w.Stage == stageOfficialDeliver {
+		planOfficial(r, w, now) // 发放跟着付款的最新结论走:首次发放、撤销后扣回、撤回后补发(official_reversal.go)
 		return nil
 	}
 	if w.Stage == "offer_escrow" {
@@ -966,7 +955,7 @@ func (e *Engine) advance(ctx context.Context, old *tradepb.TradeCommerceRecord) 
 				return err
 			}
 		}
-		if w.Stage == "done" || w.Stage == "rmb_delivered" || w.Stage == "rmb_returned" {
+		if w.Stage == "done" || w.Stage == stageOfficialReversed || w.Stage == "rmb_delivered" || w.Stage == "rmb_returned" {
 			if err := e.Repo.Ops.MarkCommerceOpsConsumedTx(ctx, tx, r.CommerceId); err != nil {
 				return err
 			}

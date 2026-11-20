@@ -13,7 +13,7 @@
 // Redis Cluster 上可以执行;不同 zone 落在不同槽,随槽散到各主节点。下面的 <z> 是十进制 zone 号。
 //
 //	queue:{q:<z>}                    ZSET   member=queueId, score=enqueue unix ms
-//	admit:{q:<z>}:<queueId>          STRING JSON AdmitSlot{node_id, ip, port, zone_id},TTL = AdmitTTL
+//	admit:{q:<z>}:<queueId>          STRING JSON AdmitSlot{node_id, ip, port, zone_id[, ws_url]},TTL = AdmitTTL
 //	                                 (只记放行时选好的 gate,不含签名;gate 票在取走时由 consumeAdmitAndSign 现签。
 //	                                 R17 R1(2026-06-04)之前存的是已签好的 {ip, port, payload, signature, deadline},
 //	                                 票在 Redis 里就开始耗有效期)
@@ -128,8 +128,10 @@ const (
 // via PickAndSignGateToken because there is no Redis caching between sign
 // and use; the field shape is shared for handler-side simplicity.
 type AdmitToken struct {
-	IP             string `json:"ip"`
-	Port           uint32 `json:"port"`
+	IP   string `json:"ip"`
+	Port uint32 `json:"port"`
+	// WsURL 是同一台 gate 给小游戏客户端的 WebSocket 地址(GateCandidate.WsURL);空串 = 不接小游戏。
+	WsURL          string `json:"ws_url,omitempty"`
 	TokenPayload   []byte `json:"token_payload"`
 	TokenSignature []byte `json:"token_signature"`
 	TokenDeadline  int64  `json:"token_deadline"`
@@ -156,6 +158,9 @@ type AdmitSlot struct {
 	IP     string `json:"ip"`
 	Port   uint32 `json:"port"`
 	ZoneID uint32 `json:"zone_id"`
+	// WsURL 与 IP / Port 同一条路:取走时读不到候选才用得上这里记的这份(recheckAdmitGate)。
+	// omitempty:不接小游戏的 gate 不多占 Redis,旧形状的记录照常解析。
+	WsURL string `json:"ws_url,omitempty"`
 }
 
 // EnqueueResult bundles everything the AssignGate handler needs to build a

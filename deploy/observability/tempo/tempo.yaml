@@ -1,0 +1,31 @@
+# 本机 Tempo(span 库,docs/design/distributed-tracing.md §10.3):只收本机 Alloy 尾部采样之后的 OTLP/gRPC,保留 7 天(与 Loki 一致)。
+# 由 deploy/docker-compose.observability.yml 挂进容器;Grafana 经 http://tempo:3200 查询。集群里那份在 deploy/k8s/manifests/infra/tempo.yaml。
+stream_over_http_enabled: true
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 168h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false

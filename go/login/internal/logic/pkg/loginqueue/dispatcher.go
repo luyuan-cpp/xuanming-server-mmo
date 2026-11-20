@@ -426,6 +426,7 @@ func newBatchPickFn(candidates []GateCandidate) PickAdmitSlotFn {
 			IP:     gate.IP,
 			Port:   gate.Port,
 			ZoneID: gate.ZoneID,
+			WsURL:  gate.WsURL,
 		}, nil
 	}
 }

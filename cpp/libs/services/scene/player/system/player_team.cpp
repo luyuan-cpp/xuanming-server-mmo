@@ -681,7 +681,7 @@ void PlayerTeamSystem::RegroupToLeader(entt::entity player, uint64_t leaderId)
 
 	// 兴趣表只有在双方都已经被 AoiSystem::Update 放进格子(有 Hex)之后才说明问题。
 	// 任一方刚进场 / 刚被瞬移、还没轮到下一次 Update 时表是空的:那不是"看不见",而是"还没评估"。
-	// 此时只看距离 —— 相距不超过 kTeamRegroupDistance(< 可见半径 10)的两个人必在同格或邻格,
+	// 此时只看距离 —— 相距不超过 kTeamRegroupDistance(< 可见半径 50 = 格子尺寸)的两个人必在同格或邻格,
 	// 后进格的那一方做首次进场评估时会把双向可见性一起建好。
 	// 不这样区分的话:进场链(三跳 Redis 回调通常早于首次 Update)每次都会瞬移;
 	// 一次瞬移之后、下一次 Update 之前再来一次跟随检查,还会重复瞬移。

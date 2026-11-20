@@ -131,9 +131,11 @@ func signRedirectToGate(nodes []*commonpb.NodeInfo, marks gateMarks, requireClie
 		// endpoint 是集群内身份(PodIP),external 模式下客户端连不上(D76)。
 		TargetGateIp:   best.host,
 		TargetGatePort: best.port,
-		TokenPayload:   payloadBytes,
-		TokenSignature: signature,
-		TokenDeadline:  expireTS,
+		// 小游戏客户端连的 WebSocket 地址,同一台 gate 自报(docs/design/minigame-websocket-gate.md W7);没自报为空串。
+		TargetGateWsUrl: best.node.GetClientWsUrl(),
+		TokenPayload:    payloadBytes,
+		TokenSignature:  signature,
+		TokenDeadline:   expireTS,
 	}, nil
 }
 

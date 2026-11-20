@@ -4,10 +4,10 @@
 # (docs/design/redis-player-store-cluster.md §7、§8),两套集群同一份模板、同一套部署函数;处置见 docs/ops/redis-player-cluster-runbook.md(两套集群共用)。
 # 本文件与 redis-player-alerts.yaml 一条对一条:规则名前缀、组名、pod 选择器与说明文字不同,表达式、for、severity 相同。改一边的阈值时两边一起改
 # (契约测试 redis_player_cluster_contract 逐条比对两份文件)。
-# 单实例控制域(redis、redis-ha、redis-queue-g<N>、redis-ctl-g<N>、redis-match-cluster)的规则在 deploy/k8s/redis-alerts.yaml,不在这里。
+# 核心单实例 redis(只有 dev 部署)与 match 私有集群 redis-match-cluster 的规则在 deploy/k8s/redis-alerts.yaml,不在这里。
 #
 # 控制集群放的是除玩家域、登录域与 match 私有键之外的全部 Redis 用途(场景路由、排队、选主与租约、gate 标记、限流、资产操作唤醒等,清单见设计 §7)。
-# 缺口第 34 条第 6b 批把各服务接上之前没有客户端,下面的规则照样有数据(exporter 只看节点本身),集群本身的故障照常报。
+# 第 6b-1 批起全部控制域客户端(Go 服务、gateway、scene)都连它;下面的规则只看节点本身(exporter)。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 redis-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/redis-control-alerts.yaml

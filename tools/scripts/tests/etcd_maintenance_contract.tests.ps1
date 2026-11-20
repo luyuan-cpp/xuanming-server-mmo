@@ -205,6 +205,16 @@ Test-Case '可观测:三套都带抓取注解;主 etcd 的探针排除 NOSPACE' 
     Assert-Equal -Expected '/health?exclude=NOSPACE&serializable=true' -Actual $livenessPath -Because 'NOSPACE 告警时不把三个成员一起反复重启(runbook §2 / §7)'
 }
 
+Test-Case '反亲和:主 etcd 的成员反亲和交给 Apply-Infra 按档位渲染;发号器两套只在 staging / prod 部署,自己的成员两两不同节点是硬约束' {
+    $etcd = Get-NonCommentText (Read-RepoText $script:EtcdPath)
+    Assert-Match -Text $etcd -Pattern '(?m)^        podAntiAffinity:[ ]*\n          __ETCD_MEMBER_ANTI_AFFINITY__[ ]*$' -Because '主 etcd 在 dev 也部署:staging / prod 要 required、单节点 kind 要 preferred,由 Get-QuorumMemberAntiAffinityYaml 渲染'
+    foreach ($name in @('etcd-id-secondary', 'etcd-id-registry')) {
+        $code = Get-NonCommentText (Read-RepoText $script:StatefulSetPaths[$name])
+        $hardPattern = 'requiredDuringSchedulingIgnoredDuringExecution:[ ]*\n[ ]+- topologyKey: kubernetes\.io/hostname[ ]*\n[ ]+labelSelector:[ ]*\n[ ]+matchLabels:[ ]*\n[ ]+app: ' + [regex]::Escape($name) + '[ ]*\n'
+        Assert-Match -Text $code -Pattern $hardPattern -Because "${name}:只在 staging / prod 部署,两个成员落在同一节点时那个节点一挂 quorum 就没了"
+    }
+}
+
 Test-Case '压缩 CronJob 已退役:清单删除;Apply-Infra 不再 apply 它,在 etcd.yaml 那一支删掉集群里的残留' {
     Assert-True -Condition (-not (Test-Path -LiteralPath $script:MaintenancePath)) -Because 'etcd-maintenance.yaml 已退役(官方镜像没有 shell,内置压缩做同一件事),不能再出现'
     $ast = [System.Management.Automation.Language.Parser]::ParseFile($script:DeployPath, [ref]$null, [ref]$null)

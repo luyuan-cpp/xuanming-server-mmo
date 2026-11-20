@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,6 +103,9 @@ const (
 	resubscribeMaxDelay  = 30 * time.Second
 	// logEveryFailures:同一组连续失败时只在第 1 次与之后每这么多次打一条 ERROR,集群整体不可用时不刷屏。
 	logEveryFailures = 10
+	// ownerCheckInterval:绑了片的负责者(BindShardOwner)时,多久重算一次本副本负责哪些片。分工表本身每 5 秒整表读一次
+	// (workshard.RefreshEvery),这里只读内存,一秒一算换主时多不出几秒的空窗。
+	ownerCheckInterval = time.Second
 	// maxLoggedPayload 是非法消息写进日志时保留的最大字节数:负载来自网络,不能原样整段打进日志。
 	maxLoggedPayload = 32
 )
@@ -119,6 +123,12 @@ type Waker interface {
 // 同名指标在一个注册表里只能注册一次,订阅端与 Loop 各管一段 result(见 assetop.WakeResult)。
 type Counter interface {
 	IncWake(assetop.WakeResult)
+}
+
+// shardGauge 是 Counter 的可选能力:报本副本此刻已确认订上的片数(*assetop.Metrics 的 assetop_wake_subscribed_shards)。
+// 只订负责的片之后,哪一片没人订只能从它看出来(各副本之和少于 64)。
+type shardGauge interface {
+	SetWakeSubscribedShards(n int)
 }
 
 // Config 是订阅端的装配参数。零值字段取默认值。
@@ -208,23 +218,35 @@ func (p retryPolicy) delay(failures int, jitter func(int64) int64) time.Duration
 	return half + time.Duration(jitter(int64(d-half)))
 }
 
-// Subscriber 订阅全部唤醒频道并把唤醒交给 Waker。
+// Subscriber 订阅唤醒频道并把唤醒交给 Waker。
 //
-// 生命周期:New → Start(ctx) → Stop()。Start / Stop 都可重复调用;Stop 之后 Start 是空操作。
-// 每个订阅组一个订阅循环;所有后台 goroutine(订阅循环与在途唤醒)都记在 wg 里,Stop 返回时它们都已退出。
+// 生命周期:New → [BindShardOwner] → Start(ctx) → Stop()。Start / Stop 都可重复调用;Stop 之后 Start 是空操作。
+// 一个管理循环按负责的片维持订阅组,每组一个订阅循环;所有后台 goroutine(管理循环、订阅循环与在途唤醒)都记在 wg 里,
+// Stop 返回时它们都已退出。
 //
-// 缺口第 25 条(资产重投按分片分工)落地之前,每个副本都订全部 64 片,每条唤醒仍投给每个订阅副本;
-// 扇出随 zone 数增长的问题见设计 §4.6,本包不解决。
+// 订哪些片(设计 §4.6):绑了片的负责者就只订本副本负责的片,每条唤醒只投给各服务负责那一片的那个副本,扇出不随副本数、
+// zone 数增长;没绑(单测、没有分工的装配)订全部 64 片。片换主的几秒里某一片可能两个副本都订(去重键与 Claim CAS 挡住),
+// 也可能暂时没人订(那几秒的唤醒退回原退避),与重投分片的口径相同(docs/design/assetop-redelivery-sharding-20261110.md §3)。
 type Subscriber struct {
 	bus     bus
 	cfg     Config
 	waker   Waker
 	counter Counter
 
-	// groups 是订阅组(bus.groups 的结果,构造时核过「每个频道恰好一次」),每组一个订阅循环。构造后只读。
+	// groups 是全部片的订阅组(bus.groups 的结果,构造时核过「每个频道恰好一次」)。构造后只读;实际订阅按负责的片另算。
 	groups [][]string
 	// retry 是重订的退避。构造后只读(单测在 Start 之前改小)。
 	retry retryPolicy
+	// owns 报告本副本负不负责第 shard 片(BindShardOwner 在 Start 之前写一次,之后只读);nil = 全部片。
+	owns func(shard int) bool
+	// ownerCheck 是重算负责片的间隔。构造后只读(单测在 Start 之前改小)。
+	ownerCheck time.Duration
+
+	// gauge 报已确认订上的片数(assetop_wake_subscribed_shards);counter 不带这项能力时为 nil。构造后只读。
+	gauge shardGauge
+	// subscribedMu 保护 subscribed:各订阅组的循环并发增减,加锁让报出去的值按变更的先后排。
+	subscribedMu sync.Mutex
+	subscribed   int
 
 	// slots 是在途唤醒的名额,容量 = Concurrency;拿不到就丢(不排队:唤醒越排越旧越没用)。
 	slots chan struct{}
@@ -263,15 +285,38 @@ func newSubscriber(b bus, cfg Config, waker Waker, counter Counter) (*Subscriber
 	if err := validateGroups(groups); err != nil {
 		return nil, err
 	}
+	gauge, _ := counter.(shardGauge)
 	return &Subscriber{
-		bus:     b,
-		cfg:     cfg,
-		waker:   waker,
-		counter: counter,
-		groups:  groups,
-		retry:   retryPolicy{base: resubscribeBaseDelay, max: resubscribeMaxDelay},
-		slots:   make(chan struct{}, cfg.Concurrency),
+		bus:        b,
+		cfg:        cfg,
+		waker:      waker,
+		counter:    counter,
+		gauge:      gauge,
+		groups:     groups,
+		retry:      retryPolicy{base: resubscribeBaseDelay, max: resubscribeMaxDelay},
+		ownerCheck: ownerCheckInterval,
+		slots:      make(chan struct{}, cfg.Concurrency),
 	}, nil
+}
+
+// BindShardOwner 让订阅只订本副本负责的片(设计 §4.6)。owns(shard) 的片号是 player_id % ShardCount;生产传
+// 重投循环用的那张分工表(workshard.ShardOwner(members.Owns, kind)),负责某个玩家重投的副本也收他的唤醒。
+// 管理循环每 ownerCheck 重算一次,新负责的片起订阅,不再负责的片退订。
+// 必须在 Start 之前调用;owns 为 nil、Start / Stop 之后调用都回错误,装配方据此拒启。nil 接收者回 nil(唤醒关着)。
+func (s *Subscriber) BindShardOwner(owns func(shard int) bool) error {
+	if s == nil {
+		return nil
+	}
+	if owns == nil {
+		return errors.New("assetopwake: BindShardOwner needs a non-nil owns func")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.started || s.stopped {
+		return errors.New("assetopwake: BindShardOwner must be called before Start")
+	}
+	s.owns = owns
+	return nil
 }
 
 // validateGroups 核对订阅组恰好覆盖每个唤醒频道一次、没有空组:漏掉的那几片会静默收不到唤醒,构造时就拒绝。
@@ -316,15 +361,90 @@ func (s *Subscriber) Start(ctx context.Context) {
 	s.started = true
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
-	for _, group := range s.groups {
+	s.wg.Add(1)
+	safego.Go("assetopwake.supervise", func() {
+		defer s.wg.Done()
+		s.supervise(runCtx)
+	})
+	logx.Infof("[AssetOpWake] Subscribing to wake shard channels prefix=%s shards=%d groups=%d owned_only=%t service=%s concurrency=%d",
+		ChannelPrefix, ShardCount, len(s.groups), s.owns != nil, s.cfg.Service, s.cfg.Concurrency)
+}
+
+// supervise 按负责的片维持订阅组,直到 ctx 结束;退出前停掉它起的全部订阅循环(它们记在 wg 里,Stop 等它们)。
+// 没绑负责者时只算一次(全部片)。
+func (s *Subscriber) supervise(ctx context.Context) {
+	running := make(map[string]context.CancelFunc)
+	defer func() {
+		for _, stop := range running {
+			stop()
+		}
+	}()
+	s.reconcileGroups(ctx, running)
+	if s.owns == nil {
+		<-ctx.Done()
+		return
+	}
+	ticker := time.NewTicker(s.ownerCheck)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.reconcileGroups(ctx, running)
+		}
+	}
+}
+
+// reconcileGroups 让 running(组键 → 停止函数)与负责的片对齐:不再要的组停掉,新要的组起订阅循环。
+// 组随负责的片变化:集群上一片一组,单机上全部负责的片一组(集合变了就整组换一条订阅)。
+func (s *Subscriber) reconcileGroups(ctx context.Context, running map[string]context.CancelFunc) {
+	owned := s.ownedChannels()
+	wanted := make(map[string][]string)
+	for _, group := range s.bus.groups(owned) {
+		if len(group) > 0 { // 一片都不负责时单机形状会给出一个空组:不订
+			wanted[strings.Join(group, " ")] = group
+		}
+	}
+	changed := false
+	for key, stop := range running {
+		if _, keep := wanted[key]; !keep {
+			stop()
+			delete(running, key)
+			changed = true
+		}
+	}
+	for key, group := range wanted {
+		if _, ok := running[key]; ok {
+			continue
+		}
+		groupCtx, stop := context.WithCancel(ctx)
+		running[key] = stop
+		changed = true
 		s.wg.Add(1)
 		safego.Go("assetopwake.subscribe", func() {
 			defer s.wg.Done()
-			s.run(runCtx, group)
+			s.run(groupCtx, group)
 		})
 	}
-	logx.Infof("[AssetOpWake] Subscribing to wake shard channels prefix=%s shards=%d subscriptions=%d service=%s concurrency=%d",
-		ChannelPrefix, ShardCount, len(s.groups), s.cfg.Service, s.cfg.Concurrency)
+	if changed && s.owns != nil {
+		logx.Infof("[AssetOpWake] Owned wake shards changed service=%s shards=%d subscriptions=%d",
+			s.cfg.Service, len(owned), len(running))
+	}
+}
+
+// ownedChannels 按片号顺序返回本副本负责的片的频道;没绑负责者时是全部片。
+func (s *Subscriber) ownedChannels() []string {
+	if s.owns == nil {
+		return ShardChannels()
+	}
+	channels := make([]string, 0, ShardCount)
+	for shard := range ShardCount {
+		if s.owns(shard) {
+			channels = append(channels, ShardChannel(uint64(shard)))
+		}
+	}
+	return channels
 }
 
 // Stop 取消订阅并等所有在途唤醒结束。取消会让在途唤醒立刻停止领新行,正在处理的那一行的投递
@@ -374,6 +494,8 @@ func (s *Subscriber) consume(ctx context.Context, group []string, failures *int)
 		return err
 	}
 	defer func() { _ = sub.close() }()
+	s.noteSubscribed(len(group))
+	defer s.noteSubscribed(-len(group))
 	if *failures > 0 {
 		logx.Infof("[AssetOpWake] Wake shard subscription restored channels=%s after %d interruption(s)",
 			describeGroup(group), *failures)
@@ -389,6 +511,16 @@ func (s *Subscriber) consume(ctx context.Context, group []string, failures *int)
 			return err
 		}
 		s.handle(ctx, payload)
+	}
+}
+
+// noteSubscribed 增减已确认订上的片数并报到 gauge(没接指标时只记数)。
+func (s *Subscriber) noteSubscribed(delta int) {
+	s.subscribedMu.Lock()
+	defer s.subscribedMu.Unlock()
+	s.subscribed += delta
+	if s.gauge != nil {
+		s.gauge.SetWakeSubscribedShards(s.subscribed)
 	}
 }
 

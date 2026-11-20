@@ -63,7 +63,7 @@
 
 - **坐标/Transform 用 double**：`Location` / `Rotation` / `Scale` / `Vector3` / `Velocity` / `Acceleration` 的 x/y/z 必须 `double`，匹配 UE 客户端精度
 - **BaseAttributesComp 用 uint64**：`strength` / `stamina` / `health` / `mana` / `critchance` / `armor` / `resistance` / `speed` 必须 `uint64`，避免战斗公式 cast 时窄化
-- **SnowFlake GUID 用 uint64**：`player_id` / `entity` / `scene_id` / `item_id` / `buff_id` / `skill_id`（运行时实例）/ `tx_id` / `snapshot_id` 必须 `uint64`
+- **64 位 ID 用 uint64**：发号器的永久 ID（`player_id` / `item_id` / `tx_id` / `snapshot_id` 等）、SnowFlake 的 `scene_id`、运行时实例 ID（`entity` / `buff_id` / `skill_id`）必须 `uint64`；号源见 §7 第 1 条，不能按字段名推断位布局
 - **单调计数 / 代次用 uint64**：`session_incarnation` / `gate_call_seq`
 - **Unix 时间戳用 uint64/int64**：`created_at` / `expires_at` / `castTime` / `last_time` / `start` 等必须 64-bit
 - **货币用 uint64**：`CurrencyComp.values` / `owed` / `paid` / `balance_before/after`

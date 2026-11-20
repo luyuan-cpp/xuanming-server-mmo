@@ -68,10 +68,10 @@ const (
 	// 抢同一行(§4.19 seq.go 末段)。与 loopLease 同值。
 	commitDeliveryDelay = loopLease
 
-	// assetOpWorkKind 是资产指令重投按片分工的归属键前缀:片号 = player_id % 64(缺口清单第 25 条,
+	// AssetOpWorkKind 是资产指令重投按片分工的归属键前缀:片号 = player_id % 64(缺口清单第 25 条,
 	// docs/design/assetop-redelivery-sharding-20261110.md)。同一份成员表还给合同推进(trade-commerce)和
-	// 收据 ACK(trade-receipt-ack)用,类别键各不相同才各自独立分工。
-	assetOpWorkKind = "trade-assetop"
+	// 收据 ACK(trade-receipt-ack)用,类别键各不相同才各自独立分工。落地唤醒的订阅按同一个键分片(svc.AssetChannel.BindWorkOwner)。
+	AssetOpWorkKind = "trade-assetop"
 )
 
 // LeaseDuration 是重投循环每领一行持有的租约时长。人工终结工具(cmd/assetopfix)按它和 assetop.ManualQuietFloor
@@ -293,7 +293,7 @@ func (p *Pipeline) BindWorkOwner(owns func(key string) bool) error {
 	if p == nil {
 		return ErrSignerMissing
 	}
-	return p.loop.BindWorkOwner(assetOpWorkKind, owns)
+	return p.loop.BindWorkOwner(AssetOpWorkKind, owns)
 }
 
 // WakePlayer 立即重投某个玩家的全部 PENDING 行(落地唤醒,docs/design/landing-recovery-sync-digest.md §5.3),

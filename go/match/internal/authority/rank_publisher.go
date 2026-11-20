@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"match/internal/metrics"
 	rankpb "proto/rank"
+	"shared/grpckeepalive"
 	"shared/serviceauth"
 	"shared/tracing"
 )
@@ -46,8 +47,10 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 		}
 	}
 	// 裸客户端不经 zrpc,traceparent 由 shared/tracing 的拦截器写(docs/design/distributed-tracing.md §6.2)。
+	// K8s 上 endpoint 是 rank 的 Service 地址,整条连接落在一个 Pod 上:keepalive 让对端整机消失后的半开连接
+	// 在一次调用后 20 秒内断开重连,而不是等内核重传约 15 分钟(shared/grpckeepalive)。
 	conn, e := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()))
+		grpc.WithChainUnaryInterceptor(tracing.UnaryClientInterceptor()), grpckeepalive.DialOption())
 	if e != nil {
 		logx.Error("rating rank publisher connection initialization failed")
 		return

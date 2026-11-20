@@ -122,7 +122,7 @@ type AssetChannel struct {
 	// (第 25 条)共用,Commerce.Owns 与 Pipeline 的重投循环(Pipeline.BindWorkOwner)绑的都是它。
 	// 只在跑全局后台的副本上读;nil 时两者都不分工、做全部片。
 	Members *workshard.Membership
-	// Wake 落地唤醒订阅(shared/assetopwake,设计 §5.3):用 ControlRedis 句柄 SSUBSCRIBE 全部 64 个分片频道 assetop:wake:{aw:N},
+	// Wake 落地唤醒订阅(shared/assetopwake,设计 §5.3):用 ControlRedis 句柄只 SSUBSCRIBE 本副本负责的分片频道 assetop:wake:{aw:N}(BindWorkOwner),
 	// 把玩家落地交给 Pipeline.WakePlayer。AssetOp.Wake 显式关闭时为 nil(nil 接收者的 Start / Stop 安全)。
 	Wake *assetopwake.Subscriber
 
@@ -152,6 +152,16 @@ type AssetChannel struct {
 
 // Enabled 报告资产通道是否可用(能签名 = 能真的发出资产 RPC)。
 func (a *AssetChannel) Enabled() bool { return a != nil && a.Pipeline != nil }
+
+// BindWorkOwner 让资产指令重投的到期扫描与落地唤醒的订阅按同一张分工表、同一个类别键分片(缺口清单第 25 条;
+// docs/design/redis-cluster-all-domains-20261110.md §4.6):负责某个玩家重投的副本也是唯一订他那一片唤醒的副本。
+// 必须在 Start 之前调用;绑不上回错误,装配方拒启。唤醒关着(Wake 为 nil)时只绑重投。
+func (a *AssetChannel) BindWorkOwner(owns func(key string) bool) error {
+	if err := a.Pipeline.BindWorkOwner(owns); err != nil {
+		return err
+	}
+	return a.Wake.BindShardOwner(func(shard int) bool { return owns(workshard.ShardKey(reconcile.AssetOpWorkKind, shard)) })
+}
 
 // newAssetChannel 建整套依赖。返回错误 = 启动致命(共享 Redis 连不上、outbox 表名非法、
 // op_id 号段建不出来);密钥缺失只降级,不返回错误。

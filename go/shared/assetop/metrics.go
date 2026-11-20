@@ -49,6 +49,11 @@ type Metrics struct {
 	// 告警(deploy/k8s/asset-channel-alerts.yaml 的 asset-channel.work-shards 组)按 sum by (namespace, service) 判它是否为 64。
 	ownedShards *prometheus.GaugeVec
 
+	// wakeSubscribedShards 是全部 Redis 上 Cluster 第 3 批追加(docs/design/redis-cluster-all-domains-20261110.md §4.6):本副本此刻
+	// 已确认订上的落地唤醒片数(shared/assetopwake 只订本副本负责的片)。形状与 ownedShards 相同;各 stable 副本加起来应为 64,
+	// 少于 64 = 有片的唤醒没人收(退回原退避)。告警在 asset-channel-alerts.yaml。
+	wakeSubscribedShards *prometheus.GaugeVec
+
 	// loopLive 是缺口清单第 25 条第四批追加(设计 §14.3):重投循环(Loop.Run)的活性,指标 assetop_loop_last_run_unixtime。
 	// 写入与删除的口径在 shared/looplive 的包注释,所有按片分工的循环共用一份。告警 AssetOpRedeliveryLoopStalled
 	// (asset-channel-alerts.yaml 的 asset-channel.loop-liveness 组)按副本逐条判它停住多久:分片之后停住的副本名下的片没人扫,
@@ -185,6 +190,12 @@ func newMetrics(reg prometheus.Registerer, service string) *Metrics {
 			Name: "assetop_owned_shards",
 			Help: "本副本此刻负责的到期扫描分片数(0..64,按 player_id 分片);各 stable 副本加起来应为 64," +
 				"成员表变化的几秒里会多或少几片。只有绑了按片分工的重投循环才报",
+			ConstLabels: labels,
+		}, nil),
+		wakeSubscribedShards: f.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "assetop_wake_subscribed_shards",
+			Help: "本副本此刻已确认订上的落地唤醒分片数(0..64,按 player_id 分片);各 stable 副本加起来应为 64," +
+				"成员表变化或重订的几秒里会多或少几片。只有起了落地唤醒订阅的副本才报",
 			ConstLabels: labels,
 		}, nil),
 		loopLive: looplive.NewRegistered(reg, prometheus.GaugeOpts{
@@ -343,6 +354,14 @@ func (m *Metrics) setOwnedShards(n int) {
 		return
 	}
 	m.ownedShards.WithLabelValues().Set(float64(n))
+}
+
+// SetWakeSubscribedShards 记本副本此刻已确认订上的落地唤醒片数(shared/assetopwake 在每次订上与断开时调)。
+func (m *Metrics) SetWakeSubscribedShards(n int) {
+	if m == nil {
+		return
+	}
+	m.wakeSubscribedShards.WithLabelValues().Set(float64(n))
 }
 
 // loopLiveness 返回重投循环的活性 gauge。不接指标(m 为 nil)时回 nil:looplive.Gauge 的 nil 接收者照常跑每一轮,只是不写时刻。

@@ -181,6 +181,8 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 $ServiceCatalogue = [ordered]@{
     mail = @{ Dir = "mail"; Entry = "mail.go"; Port = 50900; Desc = "Mail (global authoritative mailbox + attachment delivery)"; ConfigFlag = "-f"; ConfigFile = "etc/mail.yaml"; AllowMultiInstance = $true; Tier = 1 }
     rank = @{ Dir = "rank"; Entry = "rank.go"; Port = 51100; Desc = "Rank (global generations, freeze and rewards)"; ConfigFlag = "-f"; ConfigFile = "etc/rank.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    # 按包构建/运行:payment.go 依赖同目录 channels.go。本机要先设 COMMERCE_PAYMENT_SECRET(与商城同值)和 PAYMENT_DEVPAY_SECRET(docs/design/payment-recharge.md 22.9)。
+    payment = @{ Dir = "payment"; Entry = "."; Port = 51200; Desc = "Payment (real-money channels, callbacks, mall sync)"; ConfigFlag = "-f"; ConfigFile = "etc/payment.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # 按包构建/运行:db.go 依赖同目录 player_store_wiring.go,单文件 go build 找不到 newPlayerStoreServer。
     db              = @{ Dir = "db";              Entry = ".";                        Port = 6000;  Desc = "DB (PlayerStore gRPC + TiDB)";      ConfigFlag = "-f";            ConfigFile = "etc/db.yaml";                    AllowMultiInstance = $true;  Tier = 0; StopTimeoutSeconds = 35 }
     data_service    = @{ Dir = "data_service";    Entry = "data_service.go";          Port = 9000;  Desc = "Data Service (global directory + id issuer)"; ConfigFlag = "-f";            ConfigFile = "etc/data_service.yaml";          AllowMultiInstance = $true;  Tier = 0 }
@@ -1072,9 +1074,9 @@ function Start-ServiceInstance {
     $cfg = Resolve-InstanceConfig -Name $Name -Info $Info -Index $Index -Total $Total -ReservedPorts $ReservedPorts
     $writerEnvironment=$null
     $bootMaintenanceArgs=@()
-    if ($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','match','trade','player_inbox')) {
+    if ($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','payment','match','trade','player_inbox')) {
         $selectedConfig=''
-        $writerEnvironment=Get-SqlWriterBootEnvironment -InstanceKey $instanceKey -RepoRoot $RepoRoot -ServiceName $Name -SelectedRuntimeConfigFile ([ref]$selectedConfig) -PreparedRuntimeArguments ([ref]$bootMaintenanceArgs) -PrepareOnlySupported:($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','match','trade','player_inbox'))
+        $writerEnvironment=Get-SqlWriterBootEnvironment -InstanceKey $instanceKey -RepoRoot $RepoRoot -ServiceName $Name -SelectedRuntimeConfigFile ([ref]$selectedConfig) -PreparedRuntimeArguments ([ref]$bootMaintenanceArgs) -PrepareOnlySupported:($Name -in @('db','data_service','login','chat','friend','guild','mail','rank','payment','match','trade','player_inbox'))
         $listen=(Get-YamlScalar -Path $selectedConfig -KeyPath 'ListenOn').Value
         if($listen -cnotmatch '^(?:\[[0-9A-Fa-f:]+\]|[A-Za-z0-9_.-]+):(?<port>[1-9][0-9]{0,4})$' -or [int]$Matches.port -ne $cfg.Port){throw '每boot完整配置的ListenOn与本次实例固定端口不符，不能写回或挪用别人的配置'}
         if($Zone -gt 0 -and (Get-InstanceConfigZoneId -ConfigPath $selectedConfig) -ne $Zone){throw '每boot完整配置ZoneId与本次实例不符'}
@@ -1130,7 +1132,7 @@ function Start-ServiceInstance {
 	$savedMatchMigrationPassword = [Environment]::GetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'Process')
 	$savedDatabaseAllowlist = [Environment]::GetEnvironmentVariable('DB_ALLOWED_DATABASES','Process')
     try {
-        if ($Name -in @('login','chat','friend','guild','trade','match','mail','rank')) {
+        if ($Name -in @('login','chat','friend','guild','trade','match','mail','rank','payment')) {
             $previousGateIdentityEnvironment = Enter-LocalGateIdentityEnvironment -RepoRoot $RepoRoot
         }
         if($null -ne $writerEnvironment){$savedWriterEnvironment=Enter-SqlWriterBootEnvironment -Environment $writerEnvironment}

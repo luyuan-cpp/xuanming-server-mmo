@@ -22,6 +22,7 @@
     <ClCompile Include="time\comp\timer_task_comp.cpp" />
     <ClCompile Include="time\system\time.cpp" />
     <ClCompile Include="network\codec\codec.cpp" />
+    <ClCompile Include="network\codec\websocket.cpp" />
     <ClCompile Include="network\rpc_channel.cpp" />
     <ClCompile Include="network\rpc_channel_stats.cpp" />
     <ClCompile Include="network\grpc_trace_hooks.cpp" />
@@ -94,6 +95,7 @@
     <ClInclude Include="time\system\time_meter.h" />
     <ClInclude Include="network\codec\codec.h" />
     <ClInclude Include="network\codec\dispatcher.h" />
+    <ClInclude Include="network\codec\websocket.h" />
     <ClInclude Include="network\rpc_channel.h" />
     <ClInclude Include="network\rpc_channel_stats.h" />
     <ClInclude Include="network\rpc_trace_envelope.h" />
@@ -114,6 +116,7 @@
     <ClInclude Include="network\rpc_done_callback.h" />
     <ClInclude Include="network\rpc_link_liveness.h" />
     <ClInclude Include="network\client_liveness.h" />
+    <ClInclude Include="network\accept_admission.h" />
     <ClInclude Include="network\grpc_client_call.h" />
     <ClInclude Include="network\grpc_unary_call.h" />
     <ClInclude Include="network\rpc_status.h" />

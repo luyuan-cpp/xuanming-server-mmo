@@ -113,6 +113,10 @@ type ServiceContext struct {
 	MatchRedis  *redis.Redis
 	PlayerRedis redv9.UniversalClient
 
+	// SpectateLobby 是观战列表读的 1 秒进程内缓存:三把全服观战索引拆成 16 桶之后,列表读要跨桶合并(spectate_lobby_cache.go)。
+	// 手工构造的单测 ServiceContext 不填时为 nil,列表每次回源。
+	SpectateLobby *SpectateLobbyCache
+
 	// SyncDigest 组队名册提交后给受影响玩家的落地摘要 bump TEAM / TEAM_INVITE
 	// (docs/design/landing-recovery-sync-digest.md §3.3),由 team.NewService 取用。
 	// 句柄必须是 PlayerRedis:player:{id}:sync_digest 是 C++ scene 读的玩家域键,MatchRedis C++ 读不到。
@@ -276,6 +280,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		Config:             c,
 		MatchRedis:         matchRds,
 		PlayerRedis:        playerRedis,
+		SpectateLobby:      NewSpectateLobbyCache(time.Now),
 		SyncDigest:         playersync.NewBumper(playersync.NewGoRedisEvaler(playerRedis), "team"),
 		Etcd:               etcdCli,
 		GateCommandBuilder: matchkafka.NewGateCommandBuilder(),

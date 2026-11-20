@@ -174,7 +174,7 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 
 ### 3.5 本地缓存(弱依赖)
 
-- 文件:`<数据目录>/snowflake-<kind>.json` = `{cluster, id, uuid, incarnation, lastWatermark, lastAckWall}`,每次水位写成功后原子更新(写临时文件 + rename)。
+- 文件:`<数据目录>/snowflake-<kind>.json` = `{cluster, id, uuid, incarnation, lastWatermark, lastAckWall}`,写临时文件 + rename 原子替换。写盘时机以 §7.5-5 为准(稳态零写盘):申领 / reclaim 后第一次 Ack 落一次身份,水位写失败的故障期每拍落本地高水位,`Close()` 落最终值(`allocator.go` 的 `cache` 注释);2026-11-20 评审改正,原写「每次水位写成功后更新」。
 - 启动:etcd 可达 → 正常申领(缓存只做日志关联);etcd 不可达 且 `now − lastAckWall < F` → 用缓存 id 起,`SetGuardTime(max(now, lastWatermark + lead))`,后台每 2s 重试注册,注册成功前 lastAck 不推进(所以最多再撑 F);超过 F 仍未注册 → fence。
 - 缓存另记落盘那一刻观测到的水位 key 的 ModRevision(`watermarkRev`,Go 实现,2026-11-05 加;同批加的毫秒水位 `watermarkMsRev` 2026-11-12 随毫秒水位删除,旧文件里的这个字段读时被忽略)。etcd 回来时前任的 slots key 多半已随 lease 过期,重新注册走 3.4 的重建分支,靠它做 revision 比较。它只在既有落盘时机抄入、不额外写盘:优雅退出与故障期崩溃时是准的;稳态崩溃时落后于前任后来的写入,缺字段的旧文件读成 0 —— 两者都只会让重建 fence(多一次重启),不会放行。
 - etcd 不可达 且缓存过期 → 等 etcd(今天的行为)。
@@ -182,7 +182,7 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 ### 3.5.1 落码注记(2026-09-08,与上文设计的差异)
 
 - **Go**(`go/shared/snowflakealloc`):键前缀 `/snowflake/<kind>/c<cluster>/{slots,affinity,released,watermark}`;kind 现在只有 `scene-manager`(`login-player`、`guild`、`match` 已退役;login 专用的毫秒水位 `watermark_ms`、3/10 位布局与 `SyncWatermark` / `AttachFencer` / `FenceClock` 接口 2026-11-12 删除);水位 Put 是 `If Value(slots/<slot>)==uuid` 的 txn,写成功即所有权证明并推进 FenceClock;按水位年龄的自 fence 是**可恢复**的(`ErrWatermarkStale`,下一次水位写成功即恢复),永久 `Fence()` 只在确认被接管时;本地缓存文件 `snowflake-<kind>-<affinity>.json`,新增配置键 `SnowflakeCacheDir`(默认 `../../run/snowflake`,k8s 里由 ConfigMap 指到 emptyDir);cluster 0 兼容读旧 `snowflake_guard`(login 的 `guard_ms` 已随毫秒水位删除)并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用。
-- **C++**(`cpp/libs/engine/core/node/system/snowflake/`):不写 affinity/released;申领 txn = `If Create(slots)==0 Then [Put slots(lease), Put watermark]`(第一笔水位与申领原子);**没有单独的 watch**,每个 tick 的水位 txn 自带 `Value==uuid` 比较,失败即按"被删/被抢"分支处理(重挂或永久 fence),等价且少一条流;`CLUSTER_ID` 环境变量覆盖;`SNOWFLAKE_QUARANTINE_SEC` 仅供故障注入;缓存文件 `<SNOWFLAKE_CACHE_DIR or ./data>/snowflake-scene-item.json`,与 Go 不共享;顺手修了 LeaseGrant RPC 失败会永久卡住注册的老问题(10s 超时重试)。
+- **C++**(已删:scene-item 改走号段之后 C++ 不再申领槽位,这套客户端已删,`SnowFlakeManager` 2026-11-12 删除;下面是当时的实现,保留作历史)(`cpp/libs/engine/core/node/system/snowflake/`):不写 affinity/released;申领 txn = `If Create(slots)==0 Then [Put slots(lease), Put watermark]`(第一笔水位与申领原子);**没有单独的 watch**,每个 tick 的水位 txn 自带 `Value==uuid` 比较,失败即按"被删/被抢"分支处理(重挂或永久 fence),等价且少一条流;`CLUSTER_ID` 环境变量覆盖;`SNOWFLAKE_QUARANTINE_SEC` 仅供故障注入;缓存文件 `<SNOWFLAKE_CACHE_DIR or ./data>/snowflake-scene-item.json`,与 Go 不共享;顺手修了 LeaseGrant RPC 失败会永久卡住注册的老问题(10s 超时重试)。
 - 两端共用 `go/shared/snowflakealloc/testdata/selection_vectors.json`(15 例)做选号一致性测试,C++ 侧以 YAML 1.2 flow 方式读同一文件。
 
 ### 3.6 观测:三字段

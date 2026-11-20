@@ -1,6 +1,6 @@
 # 分布式日志关联与链路追踪（todo.md #152）
 
-> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 3 批（§5.5、§5.6，外加 `ScopedRoot` 与 `Bind`）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 4 批（§5.3、§5.5 路由 lane、§6.2 第 1 项）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 5 批（§5.4、§6.2 的 Kafka 载体与第 2 项）2026-11-11 已落码，未编译、未测试，待 Codex 验证；第 4、5 批留下的补尾（client_rpc_router 拨号、scene_manager 玩家拦截器、login 发 gate 的命令、mail / match / guild / chat 的生产消费点、几处不继承请求 ctx 的发送）2026-11-11 全部接完，未编译（§6.2）；第 6 批（§7，gateway_node）2026-11-11 已落码，未编译、未测试，待 Codex 验证（config_node 与商城 2026-11-12 补上）；第 7 批（§9.1 本地 Alloy、§9.3 看板与文档）2026-11-11 已改完配置，没有试跑，待 Codex 校验与冒烟。同日又清掉了原先留到以后的几项：C++ 控制面命令与 gRPC 服务端两个统一入口装玩家上下文（§5.5）、高频消息不设关闭名单定案（§5.5）、行尾后缀兼容核对（§8.2），未编译。阶段一到此全部落码；阶段二（§10.2，K8s 采集）2026-11-12 已落码，没有运行，待 Codex 配置校验、契约测试与 kind 端到端核对。2026-11-12 又按标准做法清掉剩下的暂缓项与待定项（负责人要求不等以后、不等压测）：不经协程的 Redis 回包接上 trace（§4.3）；Go 调商城的 HTTP 出站、网关调商城后台都带 `traceparent`，商城与 config_node 接上 Micrometer Tracing，公网过滤器的名单改读配置（§6.2、§7）；`error_reporter` 事件带上下文、Go 对 C++ 的 gRPC 互通用例补上 trace 一项（§11、§13）；§13 四条全部定案。这些都未编译、未测试，待 Codex 验证。阶段三（§10.3，可选）方案已定，没有开始写。**
+> **状态：** 2026-11-06 按代码现状重写，取代 2026-05-14 版的分片计划（那一版只落了 W3C 原语和线程局部上下文）。**阶段一第 1 批（§5.7、§4.1、§5.1）2026-11-06 已落码，11-08 Codex 全量运行 rpc_controller_test 时本批 20 条用例全部通过（证据 `build/verification/naming-audit-20261108/cpp-tests/rpc_controller_test/`）；第 2 批（§5.2）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 3 批（§5.5、§5.6，外加 `ScopedRoot` 与 `Bind`）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 4 批（§5.3、§5.5 路由 lane、§6.2 第 1 项）2026-11-10 已落码，未编译、未测试，待 Codex 验证；第 5 批（§5.4、§6.2 的 Kafka 载体与第 2 项）2026-11-11 已落码，未编译、未测试，待 Codex 验证；第 4、5 批留下的补尾（client_rpc_router 拨号、scene_manager 玩家拦截器、login 发 gate 的命令、mail / match / guild / chat 的生产消费点、几处不继承请求 ctx 的发送）2026-11-11 全部接完，未编译（§6.2）；第 6 批（§7，gateway_node）2026-11-11 已落码，未编译、未测试，待 Codex 验证（config_node 与商城 2026-11-12 补上）；第 7 批（§9.1 本地 Alloy、§9.3 看板与文档）2026-11-11 已改完配置，没有试跑，待 Codex 校验与冒烟。同日又清掉了原先留到以后的几项：C++ 控制面命令与 gRPC 服务端两个统一入口装玩家上下文（§5.5）、高频消息不设关闭名单定案（§5.5）、行尾后缀兼容核对（§8.2），未编译。阶段一到此全部落码；阶段二（§10.2，K8s 采集）2026-11-12 已落码，没有运行，待 Codex 配置校验、契约测试与 kind 端到端核对。2026-11-12 又按标准做法清掉剩下的暂缓项与待定项（负责人要求不等以后、不等压测）：不经协程的 Redis 回包接上 trace（§4.3）；Go 调商城的 HTTP 出站、网关调商城后台都带 `traceparent`，商城与 config_node 接上 Micrometer Tracing，公网过滤器的名单改读配置（§6.2、§7）；`error_reporter` 事件带上下文、Go 对 C++ 的 gRPC 互通用例补上 trace 一项（§11、§13）；§13 四条全部定案。这些都未编译、未测试，待 Codex 验证。阶段三（§10.3，span 导出到 Tempo）2026-11-12 起落码、11-19 写完：C++ 在 muduo 上自己写 OTLP/HTTP 导出器（11-14 Codex 编 gate / scene / battle 时已带着早期版本编过，之后按负责人 11-19「C++ 节点除主线程不再开线程」从专用线程改挂主 EventLoop），接缝产生 server / consumer / client / producer span，异步恢复改为原样装回捕获的上下文（§4.2）；Go 各服务配 `Telemetry`、本仓三个 Java 服务接 OTLP/HTTP、本机 Alloy + Tempo + Grafana 与 K8s 两级 Alloy（节点级按 trace_id 分给网关级尾部采样）也都写完。单测、契约测试与配置都没运行，待 Codex 验证（步骤在 `docs/PROGRESS.md` 2026-11-19「分布式日志阶段三」条目）。**
 > **范围：** 本仓的 C++ 节点、Go 微服务、`java/gateway_node`。Java 版服务器守同一份约定、自己实现，见 §12。
 > **相关：** 现有采集链路见 [grafana-loki-local-logs.md](../ops/grafana-loki-local-logs.md)；RPC0 信封见 [muduo-rpc-channel.md](muduo-rpc-channel.md) §4.1；muduo_grpc 见 [grpc-muduo-transport.md](grpc-muduo-transport.md)。
 
@@ -33,7 +33,7 @@
 
 **非目标**
 
-- 本期不导出 span，不上 Tempo（阶段三，§10.3）。
+- 阶段一、二不导出 span；span 导出与 Tempo 是阶段三（§10.3，2026-11-19 写完）。不用 span 代替日志：日志不采样，`trace_id` 照样在每行日志里。
 - 不自建日志服务器，不把日志经游戏 RPC 发出去。日志写本地文件或 stdout，再由采集器送走；Loki 挂了，游戏不受影响。
 - 不改客户端契约：客户端帧、`TipInfoMessage` 都不动。
 - 运营、BI、审计流水不在本文范围，见 §2.1。
@@ -79,7 +79,7 @@
 ### 3.4 采样
 
 - 三端头部采样一律「采」：C++ 新根的 flags 为 `01`；go-zero 的 Sampler 保持默认 1.0；Java 设 `management.tracing.sampling.probability: 1.0`（Spring Boot 默认是 0.1，要改）。
-- 本期不导出 span，flags 只是一个标记，没有成本。真正的取舍放在阶段三的采集器尾部采样，策略已定（§10.3）。
+- 量的取舍放在采集器的尾部采样（§10.3）：所有 span 都送到 Alloy，由它决定整条 trace 留不留。C++ 按 ParentBased 处理收到的 flags：上游显式不采（`00`）的上下文照样接续、往下传，但不记录 span。
 
 ## 4. C++ 线程局部上下文（正确性的核心）
 
@@ -90,8 +90,9 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 每线程一份**日志上下文**：`TraceContext` 加 `player_id`（0 表示无）。沿用 `thread_context/trace_context_tls.{h,cpp}`：
 
 - 读：`Current()`、`CurrentPlayerId()`、`CurrentTraceHex()`（48 个十六进制字符，给日志后缀用，§5.1）。
-- 装：`ScopedRoot`（不看当前、总是开新根，给入口用）、`ScopedSpan`（有 trace 建子 span，没有就开根）、`ScopedSpan(parent)`（恢复捕获值）、`ScopedPlayerId`；`Set()` 只给作用域类的实现用。
-- 包：`Bind(fn)`，记下包装时的 trace，执行时用 `ScopedSpan(captured)` 装回；只给一次性续跑用（§4.3）。
+- 装：`ScopedRoot`（不看当前、总是开新根，给入口用）、`ScopedIncoming(incoming)`（接续收到的上下文）、`ScopedSpan(captured)`（原样装回捕获值）、`ScopedPlayerId`；`Set()` 只给作用域类的实现用。`ScopedSpan()`（有 trace 建子 span，没有就开根）只记日志、不导出，只给单测与无名的内部作用域用，请求路径上不要用。
+- 包：`Bind(fn)`，记下包装时的 trace，执行时用 `ScopedSpan(captured)` 原样装回；只给一次性续跑用（§4.3）。
+- 记 span（阶段三，§10.3）：`ScopedRoot` / `ScopedIncoming` 的带名字构造在作用域结束时交出 server / consumer span；出站用 `PendingSpan`（发起时 `StartChildOf(Current(), …)`、完成时 `End()`，不装进线程上下文）；`MarkCurrentSpanError` 标最内层的在录 span。没装导出去处（`InstallSpanSink`）时这些都只多一次原子读，不读时钟。
 - 线程局部变量放在 `detail` 里，不对外暴露。
 
 ### 4.2 安装规则
@@ -100,7 +101,7 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 2. 入口只有三种动作：
    - **开根**：§3.3 列出的入口。
    - **接续**：带上下文的入站（RPC0 / gRPC / Kafka），在收到的上下文下面建子 span；不合法就开根。
-   - **恢复**：异步回调执行时，装回投递时捕获的上下文。沿用 `ScopedSpan(parent)`，在捕获的值下面建子 span。
+   - **恢复**：异步回调执行时，原样装回投递时捕获的上下文（`ScopedSpan(captured)`，同一个 span_id）。阶段三起改成这样（原来是在捕获值下面再建一个只记日志的子 span）：这是 OTel 的 Context 语义，回调里打的日志与发起的出站调用都挂在捕获的那个 span 上，而它是导出过的；要是另建子 span，回调里发起的 client span 会以一个 Tempo 里不存在的 span 为父，成了孤儿。
 3. **宁可丢，不可错。** 丢了上下文，只是这几行日志查不到；挂错上下文，会把人引到另一个请求上。所以只有一次性续跑才捕获，周期任务永不捕获。
 
 ### 4.3 异步原语逐个对齐
@@ -147,8 +148,8 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 - **字节序**：按大端拼。这样 `%016llx%016llx` 打出来就和 `TraceId::ToHex()` 一致，抓包能直接对上日志。
 - **合法性**：trace_id 全 0 或 parent_span_id 为 0，都当作没有。flags 只取低 8 位。
 - **读写只有一处**：`cpp/libs/engine/core/network/rpc_trace_envelope.h` 的 `WriteTraceToRpcEnvelope` / `ReadTraceFromRpcEnvelope`。全仓只有 RpcChannel 构造 REQUEST 帧（2026-11-10 核对）。
-- **发送**：`RpcChannel::CallMethodWithResponseType` 和 `RpcChannel::SendRequest` 建信封时写入当前上下文；上下文无效就什么都不写。RESPONSE、RPC_ERROR、HEARTBEAT 不写：回包由调用方自己恢复捕获的上下文。
-- **接收**：`CallServiceMethod` 开头读出信封上的 trace，交给 `tracing::ScopedIncoming`：合法就 `ChildSpan`，否则 `NewRoot`，退出时恢复。原来的 `ScopedDispatchTrace` 第 4 批并进了这个通用作用域类，gRPC 入站用的也是它。派发前的拒绝（未知方法、解析失败等）也在这个作用域里，拒绝日志同样带 trace。
+- **发送**：`RpcChannel::CallMethodWithResponseType` 和 `RpcChannel::SendRequest` 建信封时写入这次调用的 client span 的上下文（阶段三起：当前 span 的子 span，`parent_span_id` 是 client span 的 id，§10.3）；当前没有 trace 就什么都不写。RESPONSE、RPC_ERROR、HEARTBEAT 不写：回包由调用方自己恢复捕获的上下文。
+- **接收**：`CallServiceMethod` 开头读出信封上的 trace，交给 `tracing::ScopedIncoming`：合法就 `ChildSpan`，否则 `NewRoot`，退出时恢复；这个子 span 就是本次派发的 server span。原来的 `ScopedDispatchTrace` 第 4 批并进了这个通用作用域类，gRPC 入站用的也是它。派发前的拒绝（未知方法、解析失败等）也在这个作用域里，拒绝日志同样带 trace，server span 标成错误（说明是错误码名）。
 - **兼容**：旧收方忽略新字段；旧发方不填，新收方开根。项目未上线，混跑不阻塞。
 - 改 proto 后按 AGENTS §4 重新生成（未获客户端任务授权，用 `proto_gen.no-unity.yaml`），并完整编译受影响的 C++ / Go。muduo-rpc-channel.md §4.1 的线格式已同步。
 - **测试**：信封读写的纯函数在 `rpc_trace_envelope_test.cpp`；端到端在 `rpc_channel_loopback_test.cpp` 第五节，覆盖客户端帧、对端 handler、回包回调、不合法信封。
@@ -157,13 +158,13 @@ C++ 的业务逻辑跑在 muduo 的 EventLoop 线程上，一个线程交替处�
 
 第 4 批已做。`muduo_grpc` 是独立工程（`muduo_grpc.vcxproj`，只依赖 muduo、boost、nghttp2），不认识线程局部上下文。所以不在里面读 TLS，而是加两个可选钩子，契约写在 [grpc-muduo-transport.md](grpc-muduo-transport.md) §18：
 
-- **出站钩子** `ChannelOptions::unaryInterceptor`：在 `Channel::StartUnaryCall` 入口执行，紧接在判空 `done` 之后，运行在调用线程上。它早于停机、在途上限、消息大小、metadata 和截止这几项检查，所以本地拒绝也拿到包装后的回调。它可以往 metadata 追加键，返回值替换完成回调；返回空回调按编程错误 `LOG_FATAL`。为空表示不拦截。
-- **派发钩子** `ServerOptions::dispatchInterceptor`：派发泵调用 handler 时包一层，参数是本次调用的 metadata 和一个 `invoke`。钩子多调 `invoke` 的被忽略；一次都没调的，服务端补调一次并打 ERROR。所以 handler 恰好执行一次。为空表示直接调用。
+- **出站钩子** `ChannelOptions::unaryInterceptor`：在 `Channel::StartUnaryCall` 入口执行，紧接在判空 `done` 之后，运行在调用线程上。它早于停机、在途上限、消息大小、metadata 和截止这几项检查，所以本地拒绝也拿到包装后的回调。参数是本次调用的 `:path`（阶段三加的，给 client span 命名）、metadata 和完成回调；它可以往 metadata 追加键，返回值替换完成回调；返回空回调按编程错误 `LOG_FATAL`。为空表示不拦截。
+- **派发钩子** `ServerOptions::dispatchInterceptor`：派发泵调用 handler 时包一层，参数是本次调用的 `:path`（方法表里的串，服务端存活期间有效，阶段三加的）、metadata 和一个 `invoke`。钩子多调 `invoke` 的被忽略；一次都没调的，服务端补调一次并打 ERROR。所以 handler 恰好执行一次。为空表示直接调用。
 
 engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,cpp}`：
 
-- **出站** `grpc_tracing::InjectTraceIntoUnaryCall`：当前上下文有效、且调用方没写过 `traceparent` 时写入；完成回调用 `tracing::Bind` 包一层，在发起时的 trace 下执行，做法与 RpcChannel 的 `Deliver` 一致。完成契约不变：恰好一次、在 loop 线程上、不在 Send 栈内同步回调。
-- **入站** `grpc_tracing::DispatchUnderIncomingTrace`：从 metadata 取 `traceparent`，用 `tracing::ScopedIncoming` 接续或开根（与 RPC0 派发同一条规则，同一个作用域类）；作用域覆盖整个同步 handler，包括守护段。守护段发起异步步骤、之后再 `Proceed()` 的情况，由那个异步原语自己的恢复传下去（§4.3）。
+- **出站** `grpc_tracing::InjectTraceIntoUnaryCall`：当前上下文有效、且调用方没写过 `traceparent` 时，开一个 client span（名字 `pkg.Svc/Method`），把它的上下文写成 `traceparent`；调用方已经写了（转发）就原样留着，不另开 client span。完成回调包一层：先结束 client span（记 `rpc.grpc.status_code`，非 OK 标成错误），再在发起时的 trace 下执行原回调，做法与 RpcChannel 的 `Deliver` 一致。完成契约不变：恰好一次、在 loop 线程上、不在 Send 栈内同步回调。
+- **入站** `grpc_tracing::DispatchUnderIncomingTrace`：从 metadata 取 `traceparent`，用 `tracing::ScopedIncoming` 接续或开根（与 RPC0 派发同一条规则，同一个作用域类），这个子 span 就是 server span；作用域覆盖整个同步 handler，包括守护段。守护段发起异步步骤、之后再 `Proceed()` 的情况，由那个异步原语自己的恢复传下去（§4.3），server span 不随之延长。
 - **不经通道的本地完成**：生成客户端缺通道、序列化失败时走 `QueueGrpcLocalCompletion`（`grpc_client_runtime.h`），不经过出站钩子，那里另用 `tracing::Bind` 包一层。
 - **注册点**：业务通道在 `node_connector.cpp`，节点服务端在 `node.cpp` 建 `ServerOptions` 处。etcd 通道（`muduo_etcd_transport.cpp`）不装。
 - 生成的客户端桩（`cpp/generated/grpc_client/`）和各 `*Impl::RegisterMethods` 都不用改。双向流不经过钩子，目前没有业务流需要追踪。
@@ -376,23 +377,68 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 - init 容器与 infra 组件的输出不进 Loki；C++ 容器 stderr 的 gRPC / librdkafka 行带 `level`，未捕获异常记 `fatal`。
 - 3 副本 Loki（`-LokiReplicas 3`）下同样查得到。
 
-### 10.3 阶段三（可选）：span 与 Tempo
+### 10.3 阶段三：span 与 Tempo
 
-方案 2026-11-12 定案（负责人要求不等压测、按标准做法先定），代码没有开始写。
+方案 2026-11-12 定案（负责人要求不等压测、按标准做法先定）；2026-11-12 起落码、11-19 写完，未编译、未测试，验证步骤在 `docs/PROGRESS.md` 2026-11-19「分布式日志阶段三」条目。
 
-**导出：三种语言一律走 OTLP，送本机的 Alloy**
+**导出：三种语言一律走 OTLP，送本机（K8s 上是本节点）的 Alloy**
 
-- Go：go-zero 的 `Telemetry.Endpoint` 指向本机 Alloy 的 OTLP/gRPC 端口（4317），`Batcher: otlpgrpc`。框架自带，不写代码。
-- Java：加 `io.opentelemetry:opentelemetry-exporter-otlp`，`management.otlp.tracing.endpoint` 指向本机 Alloy 的 `http://…:4318/v1/traces`，用 Spring Boot 自带的 OTLP/HTTP 导出器。
-- C++：OTLP/HTTP，protobuf 编码（`POST /v1/traces`，`Content-Type: application/x-protobuf`，端口 4318），在 muduo 上自己写导出器。
-  - 不引入 OpenTelemetry C++ SDK：它的 OTLP/gRPC 导出器会拉起 gRPC 运行时线程，和「运行期不起 gRPC 线程」的目标冲突。OTLP/HTTP 是 OTLP 规范里与 gRPC 并列的标准传输，Alloy 原生接收。消息用官方 `opentelemetry-proto` 的 `ExportTraceServiceRequest`，按 AGENTS §4 放进 proto 生成，用仓库已有的 protobuf 库编码。
-  - 不写本地文件再由采集器读：多一跳磁盘 I/O 和文件轮转，丢数据的环节也多一处。
-  - 线程与攒批照 OTel SDK 规范里的 BatchSpanProcessor。每个进程一个专用导出线程（muduo `EventLoopThread`，线程数固定）；业务线程只把结束的 span 放进有界队列。参数取规范默认值：队列上限 2048，每批最多 512，5 秒发一批，导出超时 30 秒。队列满了丢新来的 span 并计数（`spans_dropped_total` 指标），绝不阻塞业务线程。Alloy 连不上时这一批丢弃并计数，不重试堆积。
-  - span 由现有接缝产生，业务代码不改：
-    - 入站是 server / consumer span：RPC0 派发、gRPC 派发、Kafka 消费、gate 的客户端消息根。
-    - 出站是 client / producer span：RPC0 从调用到 `Deliver`、gRPC 客户端调用、Kafka 生产。
-    - 这些作用域现在已经在生成 span_id。阶段三只是在作用域结束时，把 trace_id、span_id、父 span_id、名字、类型、起止时间和状态交给导出队列。
-    - 名字用方法名、消息名或 topic，不带玩家 id 这类高基数值。
+| | 协议与端口 | 本机配置 | K8s |
+|---|---|---|---|
+| Go | OTLP/gRPC 4317，go-zero 自带，不写代码 | 15 个服务的 etc 加 `Telemetry`：`Name`、`Endpoint: 127.0.0.1:4317`、`Sampler: 1.0`、`Batcher: otlpgrpc` | `k8s_deploy.ps1` 的 `Set-GoSvcTelemetryBlock` 把这一段换成集群地址 |
+| Java | OTLP/HTTP 4318，Spring Boot 自带导出器 | `gateway_node`、`mall_game`、`config_node` 的 `pom.xml` 加 `io.opentelemetry:opentelemetry-exporter-otlp`（BOM 管版本），`application.yaml` 设 `management.otlp.tracing.endpoint: http://127.0.0.1:4318/v1/traces` | 集群里只有 gateway，ConfigMap 写集群地址 |
+| C++ | OTLP/HTTP 4318，protobuf 编码，在 muduo 上自写导出器 | `base_deploy_config.yaml` 的 `Tracing.OtlpTracesEndpoint`（缺省 `http://127.0.0.1:4318/v1/traces`） | 节点 ConfigMap 写集群地址 |
+
+- 集群地址只由 `Get-TraceAgentEndpoints` 一处给出：`pod-log-collector-otlp.<infra>:4317`（gRPC）与 `http://pod-log-collector-otlp.<infra>:4318/v1/traces`（HTTP）。与日志采集同开同关：`-NoCppLogSidecar` 时集群里没有采集器，Go 写 `Telemetry.Disabled: true`，gateway 写 `management.otlp.tracing.export.enabled: false`，C++ 不写地址，三种都不导出，也不会对着不存在的地址反复连。
+- Java 的集成测试不导出：`GatewayTracingIntegrationTest`、`MallTracingHttpTest` 起完整上下文时设 `management.otlp.tracing.export.enabled=false`，不依赖本机有没有 Alloy。
+
+**C++ 导出器**（`cpp/libs/engine/core/tracing/`）
+
+- 不引入 OpenTelemetry C++ SDK：它的 OTLP/gRPC 导出器会拉起 gRPC 运行时线程，和「运行期不起 gRPC 线程」的目标冲突。OTLP/HTTP 是 OTLP 规范里与 gRPC 并列的标准传输，Alloy 原生接收。也不写本地文件再由采集器读：多一跳磁盘 I/O 和文件轮转，丢数据的环节也多一处。
+- 消息用官方 opentelemetry-proto v1.3.1 的 `ExportTraceServiceRequest`，原样收进 `proto/opentelemetry/`（只改 import 路径、删掉不用的 `TraceService`），按 AGENTS §4 生成 C++。统一 Go 生成跳过这个目录（`unified.go` 的 `unifiedGoExcludedDirs`）：go-zero 依赖的 `go.opentelemetry.io/proto/otlp` 已经注册了同名消息，再生成一份会在 protobuf 注册表里冲突，进程启动即 panic。
+- 文件分工：
+  - `span_record.h`：一个结束的 span（定长、可平凡拷贝；名字最多 96 字节，错误说明最多 64 字节，超长截断）与去处接口 `SpanSink`。
+  - `span_export_queue.{h,cpp}`：有界队列。线程安全：Kafka 消费的就地执行会在 poll 线程上结束 consumer span。
+  - `otlp_trace_encoder.{h,cpp}`：一批 span 编成请求。
+  - `otlp_http.{h,cpp}`：地址解析、取值规则、请求拼装、响应解析，都是纯函数。
+  - `otlp_span_exporter.{h,cpp}`：攒批、连接、超时、退避、停机冲刷与 `/metrics` 指标。
+- **线程**：挂在节点的主 EventLoop 上，不另起线程（负责人 2026-11-19：C++ 节点除主线程不再开线程；原方案是专用的 `EventLoopThread`）。网络都是 muduo 的非阻塞 I/O；唯一会阻塞的主机名解析在启动时做一次，运行期只用解析好的地址：本机是 127.0.0.1，K8s 上是 Service 的 ClusterIP，Service 存在期间不变。主线程上多出来的只有每批的 protobuf 编码。
+- **攒批**照 OTel SDK 规范的 BatchSpanProcessor，参数取规范默认值：队列上限 2048，每批最多 512，5 秒发一批（攒够一批提前发），导出超时 30 秒，同一时刻最多一个在途请求。HTTP/1.1 长连接，对端关了下一批重连；响应按 `Content-Length`、chunked、读到关闭三种取正文。
+- **失败一律丢，不重试堆积**：
+  - 队列满：丢新来的 span（`spans_dropped_total{reason="queue_full"}`），绝不阻塞业务。
+  - 连不上、超时、连接中断、非 2xx、响应不合法：这一批丢掉（`reason="export_failed"`）。
+  - 连不上、超时与连接中断按 1 秒起、翻倍、封顶 60 秒退避；退避期间每到该发的时候丢一批最旧的，队列不会一直顶满，也不会每 5 秒刷一遍 muduo 的连接日志。对端回 4xx / 5xx 说明是通的，不退避。
+  - 日志只在状态变化时打：转为失败打一行 WARN（带原因），恢复时打一行 INFO（带期间失败的批数）。
+- **配置**（`otlp_http.h` 的 `ResolveOtlpExportSettings`，用 OTel 规范的环境变量名）：`OTEL_SDK_DISABLED=true` 或 `OTEL_TRACES_EXPORTER=none` 关掉；地址按 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` > `OTEL_EXPORTER_OTLP_ENDPOINT`（补 `/v1/traces`）> `Tracing.OtlpTracesEndpoint` 取，都没有就不导出；协议变量只认 `http/protobuf`。地址只认 `http://`，不带凭据、查询与片段，主机是 IPv4 或主机名。写错按启动配置错误拒启（报错只点名变量、不回显地址）；主机名解析不了只打 ERROR、不导出，不拒启：链路追踪不在业务链路上。
+- **资源属性**：`service.name`（gate / scene / battle，与 Loki 的 `service` 标签同值）、`service.namespace=mmorpg`、`service.instance.id`（节点 UUID）、`service.version`（构建号）、`mmorpg.zone_id`、`telemetry.sdk.name=mmorpg-cpp`、`telemetry.sdk.language=cpp`；作用域名 `mmorpg.cpp.tracing`。
+- **停机**：`Node::FinalizeTeardownInLoop` 在 RPC 通道、Kafka、Redis 都收尾之后，先摘去处，再在 2 秒内把剩下的发出去；没冲完就让一轮（50 毫秒）再进来，与前面等本机工作的写法相同；冲不完的丢掉（`reason="shutdown"`）。这一步在 `logSystem.stop()` 之前，收尾日志写得出去。
+- **指标**（采集器 `span_export`）：`spans_exported_total`、`spans_dropped_total{reason}`、`span_export_batches_total{result="ok"|"failed"}`、`span_export_queue_size`，都不带高基数 label。
+
+**span 由现有接缝产生，业务代码不改**
+
+| 接缝 | 类型 | 名字 | 量的是 | 标成错误 |
+|---|---|---|---|---|
+| gate 客户端消息 | SERVER（根） | 客户端消息表里的 `服务/方法`；不认识的消息号记 `gate.client/<unknown_method>` | 派发的同步部分 | — |
+| gate 建连、断线、验 token | SERVER（根） | `gate.connect` / `gate.disconnect` / `gate.token_verify` | 同上 | — |
+| RPC0 调用 | CLIENT | `服务/方法`（消息注册表；不认识的消息号记 `<unknown_method>`） | 发出到 `Deliver`，不含回调本身 | 回包状态不是 OK（超时、断线等），说明是状态名 |
+| RPC0 单向请求 | CLIENT | 同上 | 发出即结束 | — |
+| RPC0 派发 | SERVER | 同上 | 派发的同步部分 | 派发前拒绝（说明是错误码名）、handler 失败 |
+| gRPC 客户端 | CLIENT | `pkg.Svc/Method` | 发起到完成回调，不含回调本身 | 状态不是 OK；都记 `rpc.grpc.status_code` |
+| gRPC 派发 | SERVER | 同上 | handler 的同步部分 | — |
+| Kafka 生产 | PRODUCER | topic | 交给 librdkafka 的那次 `produce` | `produce` 失败，说明是 librdkafka 的错误串 |
+| Kafka 消费 | CONSUMER | topic | 业务回调 | — |
+
+- 属性只有几个低基数的：`rpc.system`（`mmorpg_rpc0` / `grpc` / `mmorpg_client`）、`messaging.system=kafka`、`rpc.grpc.status_code`。名字和属性都不带玩家 id 这类高基数值；按玩家查从 Tempo 跳到 Loki，看日志里的 `player_id`。
+- 入站 span 的父 span 来自对端时标成远端（OTLP `Span.flags` 的 `HAS_IS_REMOTE` / `IS_REMOTE` 位）。
+- 只记采样位为 1 的上下文（ParentBased，§3.4）；没装去处时接缝只多一次原子读，不读时钟。
+- 异步回调原样装回捕获的上下文（§4.2），回调里打的日志与发起的调用都挂在发起时的 span 上，不产生孤儿。
+
+**已知局限**（有意取舍，不另做）：
+
+- server span 只量派发的同步部分：`RpcDoneCallback::Adopt` 延后回复、gRPC 守护段异步之后再 `Proceed()` 的，server span 不随之延长。真正的耗时在下游的 client span 上看得到。
+- 本地就没发出去的调用不记 client span：RPC0 的两种 notSent，gRPC 缺通道、序列化失败（`QueueGrpcLocalCompletion`）。日志照常带 trace。
+- Kafka producer span 只到交给 librdkafka 为止，不等 broker 确认；投递失败看 librdkafka 的日志与现有指标。
+- K8s 上网关级 Alloy 的 Pod 被替换时，它正在等 `decision_wait` 的 trace 会丢。只影响追踪，不影响日志。
 
 **采样**
 
@@ -402,9 +448,17 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
   2. trace 总耗时 ≥ 1 秒：全留。游戏里一次请求要在玩家察觉不到的时间里完成，超过 1 秒的都值得看。不按接口分别设阈值，免得维护一张阈值表。
   3. 其余按 trace_id 概率留 10%（`probabilistic`）。
 - `decision_wait` 30 秒，`num_traces` 50000，都取组件默认值：EnterGame 这类异步链，span 可能在根 span 结束十几秒后才到。
-- 尾部采样要求同一条 trace 的 span 落到同一个采样实例。本机只有一个 Alloy，直接采样。K8s 上由节点级 Alloy（阶段二的 DaemonSet）用 `otelcol.exporter.loadbalancing` 按 trace_id 分发到网关级 Alloy，在那里采样后送 Tempo。
+- 尾部采样要求同一条 trace 的 span 落到同一个采样实例。本机只有一个 Alloy，直接采样；K8s 上见下面的拓扑。
+- 三条策略写在两处（本机 `config.alloy`、集群的 `trace-gateway` 配置），由契约测试逐项比对（§11）。
 
-**存储与查询**：Tempo 单租户，保留 7 天，与 Loki 一致。Grafana 里两个方向都能跳：Loki 数据源的派生字段按 `trace_id` 跳到 Tempo，Tempo 数据源的 trace 按 `trace_id` 跳回 Loki。
+**拓扑**
+
+- 本机（`deploy/docker-compose.observability.yml`）：Alloy 在 `127.0.0.1:4317` / `4318` 收 OTLP，尾部采样后送 Tempo。Tempo 是 `grafana/tempo:2.6.1` 单体模式（配置 `deploy/observability/tempo/tempo.yaml`），单租户，保留 7 天，与 Loki 一致，查询端口 3200。
+- K8s（`deploy/k8s/manifests/infra/`）：
+  1. 应用 → Service `pod-log-collector-otlp`（`internalTrafficPolicy: Local`，只落到同节点的采集器；DaemonSet 容忍所有污点，每个节点都有一个）→ 节点级 Alloy，即阶段二的 DaemonSet（`pod-log-collector.yaml`）。节点级不采样，只用 `otelcol.exporter.loadbalancing` 按 trace_id 分发，经 headless Service `trace-gateway-headless` 的 DNS 找到网关级的各个 Pod。
+  2. → 网关级 Alloy（同一份清单里的 Deployment `trace-gateway`，2 副本）尾部采样 → `tempo.<infra>:4317`。
+  3. Tempo（`tempo.yaml`）：单体模式，单租户，PVC 10Gi，保留 168 小时。`Apply-Infra` 与日志采集器一起部署，`-NoCppLogSidecar` 时都不部署。
+- **Grafana 两个方向都能跳**（`deploy/observability/grafana/provisioning/datasources/`）：Loki 数据源的派生字段按结构化元数据 `trace_id` 跳到 Tempo；Tempo 数据源的 `tracesToLogsV2` 按 trace_id 查回 Loki（`{job=~".+"} | trace_id="…"`，span 起止各放宽 5 分钟，盖住异步链里晚到的日志），另开服务关系图。没被尾部采样留下的 trace 在 Tempo 里查不到，日志照样在。
 
 ## 11. 测试与验收（Codex 执行，AGENTS §10.1）
 
@@ -432,6 +486,14 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
   - 同 slot 停等：每条回调挂自己提交时的 trace；提交时没有 trace 的，回调里也没有。
   - Shutdown 在调用方栈上同步收尾排队命令时，回调挂提交时的 trace，不挂调用 Shutdown 的那一条。
   - 直接调 Hiredis 的两处调用点靠冒烟。
+- span 导出（阶段三，2026-11-19 写完，都在 rpc_controller_test）：
+  - `span_recording_test.cpp` 10 条：没装去处什么都不记；`ScopedRoot` 记根 server span；`ScopedIncoming` 接续远端父、对不合法的开根；采样位为 0 的照样接续但不记；无名作用域不记；`PendingSpan` 是调用方的子 span 且只结束一次，没有父就是空的；恢复装回的是捕获的那个 span，其下的子 span 父 id 对得上（§4.2）；`MarkCurrentSpanError` 只标最内层在录的；名字拼接与截断。
+  - `span_export_queue_test.cpp` 6 条：满了丢新的并计数；按先进先出、按批取、环形回绕；队列长度到一批时只通知一次；`DiscardAll` 计停机丢弃；退化的容量与批大小被夹住；多线程提交不超容量。
+  - `otlp_trace_encoder_test.cpp` 2 条：编出的请求用生成的消息解析回来，资源、作用域与每个 span 字段逐项对上（含 flags 的远端位与 gRPC 状态码）；可选的资源属性不写，空批照样能解析。
+  - `otlp_http_test.cpp` 13 条：地址的合法写法与各种拒绝；基地址补 `/v1/traces`；环境变量的优先级、关闭开关、不支持的选择报错且不回显值；请求按 HTTP/1.1 拼装；响应的 Content-Length、chunked（带 trailer 与扩展）、连接复用判定、1xx 与无正文、畸形响应。
+  - `otlp_span_exporter_test.cpp` 10 条，进程内起假采集器走真 TCP：按周期发且符合 OTLP/HTTP 契约；攒够一批提前发；多批复用一条连接；chunked 加关闭的响应算成功、下一批重连；对端拒收丢批且不重试不退避；连不上丢批并退避；导出超时丢批并关连接；停机把剩下的发完；对端不回时停机按时限结束；没冲刷就析构按停机丢弃计数。
+  - 改了原有用例：`trace_context_test.cpp` 的 `ScopedSpanWithCapturedContextRestoresItExactly`（恢复后 span_id 与捕获值相同，`Bind` 同样）；`rpc_channel_loopback_test.cpp` 的 `RequestFramesCarryTheCallerTrace` 改为信封带 client span（与调用方 span 不同），并核对单向请求的 client span；新加 `ClientAndServerSpansFormOneTreeAcrossTheConnection`、`RejectedDispatchMarksTheServerSpanAsAnError`；`grpc_client_loopback_test.cpp` 新加 `ClientAndServerSpansAreRecordedAndLinked`、`FailedCallMarksTheClientSpanWithTheGrpcStatus`；`muduo_grpc_test/server_test.cpp` 的 4 条钩子用例跟着新签名改，并核对钩子拿到的 `:path`。
+  - Kafka 生产、消费与 gate 入口的 span 要连 broker 或起整个 gate，靠冒烟：本机起服后在 Tempo 里查得到 gate → scene 的 RPC0 链、scene → Kafka → data_service 的链。
 - `error_reporter`（2026-11-12，`error_reporter_test.cpp` 6 条）：
   - JSONL：没有上下文时三个键都不写；有 trace 与玩家时写 `trace_id`、`span_id`，`player_id` 写成字符串（含 uint64 最大值）；只有玩家时只写 `player_id`。
   - `Buffer::Record` 原样保留传入的上下文。
@@ -461,6 +523,7 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 - `service/MallAdminClientTest` 加 1 条（2026-11-12）：用只做注入那一步的发送端处理器，核对观测写入的 `traceparent` 随请求上线、签名照常可验；NOOP 注册表下不带这个头。夹具与 `controller/MallAdminControllerTest` 的构造改为传注册表，其余用例的语义不变。
 - mall_game 的 `MallTracingHttpTest` 1 条（2026-11-12）：起完整上下文（H2），带 HMAC 签名和 `traceparent` 调一个只在用例里注册的探针接口；探针回的当前 traceId，以及它打的那行 logstash 日志里的 `traceId`，都等于调用方的。mall_game 新加的两个依赖（Spring Boot 3.5.16 的 actuator、对应版本的 `micrometer-tracing-bridge-otel`）要从 Maven 仓库拉取。R 双区夹具会改写商城 `application.yaml` 里的数据源等键，新加的是两个顶层块、原有键路径没变；`tools/scripts/tests/sql_boot_catalog_java.tests.ps1` 拿真实配置走这条改写，跑一遍确认照常。
 - config_node 没有测试工程，靠冒烟：带 `traceparent` 调 `POST /api/reload`，它打的那行 `Tables reloaded` 日志带同一个 `traceId`。
+- 阶段三（2026-11-19）：`GatewayTracingIntegrationTest`、`MallTracingHttpTest` 加 `management.otlp.tracing.export.enabled=false`，起完整上下文时不往本机 4318 发；原有断言不变。三个服务新加的 `opentelemetry-exporter-otlp` 要从 Maven 仓库拉取。
 
 **采集**（第 7 批）：按 grafana-loki-local-logs.md §5.1、§5.2 校验 Alloy 配置并不入库试跑。拿一个只有几行的样本目录挂成 `/host/run/logs`，三种语言的新旧行型都放进去，逐行核对结构化元数据：
 
@@ -477,12 +540,19 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 - 契约测试 `tools/scripts/tests/k8s_log_collection_contract.tests.ps1`（`pwsh -NoProfile -File` 直接跑，不连集群）：C++ sidecar 的两条正则、DaemonSet 的 Go / Java 每段与 Java 多行合并、C++ 容器 stderr 的两段，都与本机 `config.alloy` 逐段相同（只许去掉取时间的几步）；三份配置里三个字段都不做标签；DaemonSet 清单的渲染（占位、指纹确定且与行尾无关、非法命名空间与缺指纹占位拒绝）；`-LokiPushUrl` 的校验与报错不回显；部署判定；DryRun 单副本 / 3 副本 / 外部 Loki / 关 sidecar / 带凭据 / `infra-down` 六种。设了 `MMORPG_DUMP_ALLOY_CONFIG_DIR` 时另把渲染出的两份 Alloy 配置写出来，给 `alloy fmt` 用。
 - kind 端到端：夹具 `deploy/k8s/e2e/log-collection-check.yaml` 起三个假 Pod（Go、Java 各打几种行型，假 gate 往共享卷写带后缀的 muduo 行、往 stderr 写 gRPC / librdkafka / 未捕获异常），按 §10.2 的验收逐条查 Loki；结构化元数据用 `X-Loki-Response-Encoding-Flags: categorize-labels` 请求头取回来核对。
 
-**端到端**：本机起服，机器人登录一次，用 `trace_id` 查询，核对 §10.1 第 7 批的验收；再按 AGENTS §6 跑一轮登录压测，出对比表。
+**span 采集与生成器**（阶段三，2026-11-19 写好，未运行）：
+
+- 契约测试 `k8s_log_collection_contract.tests.ps1` 加 5 条：尾部采样三条策略与两个参数在本机和网关级逐字相同；本机与网关级采样后写 Tempo，节点级只收 OTLP、不采样、按 trace_id 分给 headless Service；业务 Pod 的入口 Service 只落本节点，名字与部署脚本写进三种语言配置的一致，网关级两副本、随指纹滚动；三种语言的地址与日志采集同开同关，Go 配置里本机那段 `Telemetry` 整段换成集群那一段；DryRun 下 `infra-up` 部署 Tempo、battle 的节点 ConfigMap 写本节点采集器，`-NoCppLogSidecar` 时都不写。设了 `MMORPG_DUMP_ALLOY_CONFIG_DIR` 时另写出 `trace-gateway.alloy`。
+- 四份 Alloy 配置（本机 `config.alloy`、渲染出的 `pod-log-collector.alloy`、`trace-gateway.alloy`、`cpp-log-sidecar.alloy`）都过一遍 `alloy fmt`。
+- 生成器：`unified_output_test.go` 加 `TestPruneUnifiedGoExcludedDirsDropsOnlyTheListedTopLevelDirectories`，只删名单里的顶层目录，同名的子目录不动。
+
+**端到端**：本机起服，机器人登录一次，用 `trace_id` 查询，核对 §10.1 第 7 批的验收；再按 AGENTS §6 跑一轮登录压测，出对比表。阶段三另核对：`dev.bat obs` 之后登录一次，在 Tempo 里按日志上的 trace_id 查得到三种语言的 span，父子关系连成一棵树（gate 的客户端消息根下面是 scene 的 server span）；Loki 与 Tempo 两个方向的跳转可用；关掉观测台，各进程照常服务，C++ 的 `spans_dropped_total{reason="export_failed"}` 上涨、只打一行 WARN。
 
 ## 12. 双版本（AGENTS §12）
 
 - 本文不改客户端契约，两版不需要同批改。
 - Java 版服务器（`xuanming-server-mmo`）守同一份约定（§3：`traceparent`、三个日志字段、开根规则与信任边界），在它自己的内部 RPC、Kafka 和日志上实现。状态：**待做**。本仓落码完成后，按 AGENTS §12 在 Java 仓的 `PARITY.md` 登记。
+- 阶段三的 span 导出同样只登记待做（2026-11-19 记进 Java 仓 `PARITY.md`）：Java 版用 OTLP 送采集器，span 名、类型与尾部采样口径照 §10.3。
 
 ## 13. 定案（原待定项，2026-11-12 按标准做法定）
 
@@ -491,7 +561,7 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
    - gate 对每条客户端消息开根（§3.3），一个玩家的一次会话本来就是许多条 trace，稳定的检索键是玩家 id，不是某一条 trace_id。
    - W3C Trace Context 规定的是上下文怎么往下游传，回传给调用方不是必需项。
    - 回 trace_id 要改 `TipInfoMessage` 这个客户端契约，两版服务器和 Unity 客户端都得同批改，换来的只是省掉一次按玩家查。客户端契约保持不变（§2）。
-2. **阶段三 C++ 用 OTLP/HTTP（protobuf 编码）直送本机 Alloy。** 导出器写在 muduo 上，跑在单独的导出线程里，攒批参数取 OTel 规范默认值（§10.3）。
+2. **阶段三 C++ 用 OTLP/HTTP（protobuf 编码）直送本机 Alloy。** 导出器写在 muduo 上，攒批参数取 OTel 规范默认值（§10.3）。原定跑在单独的导出线程里，2026-11-19 按负责人「C++ 节点除主线程不再开线程」改挂主 EventLoop：网络本来就是非阻塞的，主机名只在启动时解析一次。
 3. **尾部采样：有错误的 trace 全留，总耗时 ≥ 1 秒的全留，其余按 trace_id 留 10%；头部一律全采**（§10.3）。
 4. **`error_reporter`（#250）的事件带 `trace_id` / `span_id` / `player_id`**（2026-11-12 已落码，未编译）。录入时取当前线程的上下文；SIGUSR2 转储的 JSONL 按「有值才写」输出，`player_id` 写成十进制字符串（`error_reporter.h`，用例见 §11）。拿转储里的 trace_id 就能在 Loki 查到这次请求在各服务的日志。
 
@@ -501,3 +571,5 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 - OpenTelemetry：https://opentelemetry.io
 - todo.md #152（本题）、#27（线上快速定位）、#250（错误聚合）
 - 代码：`cpp/libs/engine/core/tracing/trace_context.h`、`cpp/libs/engine/thread_context/trace_context_tls.{h,cpp}`、`cpp/libs/engine/core/network/rpc_channel.cpp`、`cpp/libs/engine/muduo_grpc/{channel,server}.cpp`、`cpp/libs/engine/infra/messaging/kafka/`、`deploy/observability/alloy/config.alloy`
+- 阶段三：`cpp/libs/engine/core/tracing/{span_record.h,span_export_queue,otlp_trace_encoder,otlp_http,otlp_span_exporter}`、`proto/opentelemetry/`、`deploy/observability/tempo/`、`deploy/k8s/manifests/infra/{pod-log-collector,tempo}.yaml`
+- OTLP 规范（OTLP/HTTP 与 BatchSpanProcessor 默认值）：https://opentelemetry.io/docs/specs/otlp/ 、https://opentelemetry.io/docs/specs/otel/trace/sdk/#batching-processor

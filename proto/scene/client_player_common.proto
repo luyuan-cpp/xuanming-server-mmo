@@ -21,6 +21,9 @@ message RedirectToGateNotify {
   bytes  token_payload = 3;    // serialized GateTokenPayload for target gate
   bytes  token_signature = 4;  // HMAC-SHA256 signature
   int64  token_deadline = 5;   // unix seconds
+  // 目标 gate 的 WebSocket 地址:小游戏客户端连它,原生客户端仍连 target_ip / target_port;空串 = 目标 gate 不接小游戏
+  // (docs/design/minigame-websocket-gate.md W7)。
+  string target_ws_url = 6;
 }
 
 service SceneClientPlayerCommon 

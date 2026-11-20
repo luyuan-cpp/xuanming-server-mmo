@@ -8,6 +8,8 @@
 
 #include "network/codec/codec.h"
 
+#include "network/codec/websocket.h"
+
 #include <cassert>
 #include <cstdint>
 #include "muduo/base/Logging.h"
@@ -161,7 +163,11 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
     return;
   }
 
-  while (buf->readableBytes() >= kMinMessageLen + kHeaderLen)
+  // WebSocket 连接(小游戏):先去掉帧头,剩下的仍是同一套客户端帧;原始 TCP 原样返回 buf。
+  // 单个 WebSocket 帧的载荷上限 = 一个最大的客户端帧(长度前缀 + maxMessageLen_)。
+  buf = websocket::Unwrap(conn, buf, static_cast<size_t>(maxMessageLen_) + kHeaderLen);
+
+  while (buf != nullptr && buf->readableBytes() >= kMinMessageLen + kHeaderLen)
   {
     const int32_t len = buf->peekInt32();
     if (len > maxMessageLen_ || len < kMinMessageLen)
@@ -195,6 +201,22 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
       break;
     }
   }
+
+  // 本批解析完再处理对端的 Close 帧与协议错误,与 TCP「先处理数据、后处理 FIN」同序。
+  websocket::FinishRead(conn);
+}
+
+void ProtobufCodec::send(const TcpConnectionPtr& conn,
+                         const google::protobuf::Message& message)
+{
+  // FIXME: serialize to TcpConnection::outputBuffer()
+  Buffer buf;
+  fillEmptyBuffer(&buf, message);
+  if (websocket::IsUpgraded(conn))
+  {
+    websocket::Frame(&buf);
+  }
+  conn->send(&buf);
 }
 
 google::protobuf::Message* ProtobufCodec::createMessage(const std::string& typeName)

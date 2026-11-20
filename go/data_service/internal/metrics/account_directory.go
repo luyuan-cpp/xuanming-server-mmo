@@ -56,13 +56,28 @@ var (
 			"They are skipped by the background sweep and rechecked in a small separate lane; every replica reports the same total, alert on max.",
 	})
 
+	// 冷静期满超过 24 小时还没删完的注销账号数(各账号片合计,store.AccountDeletionsOverdue;docs/design/account-deletion.md §4.5)。
+	// 每个副本报同一个值,告警 DataServiceAccountDeletionOverdue 取 max。不预置,理由同 account_role_ref_held。
+	accountDeletionOverdue = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "account_deletion_overdue",
+		Help: "Account deletions that became due more than 24h ago and are still unfinished, across all account shards " +
+			"(a role keeps being blocked, a ref is held for review, the executor is down). Every replica reports the same total; alert on max.",
+	})
+
 	accountDirectoryRegisterOnce sync.Once
 )
 
 func registerAccountDirectory() {
 	accountDirectoryRegisterOnce.Do(func() {
-		prometheus.MustRegister(roleNameBindFailuresTotal, roleRemovalSettleFailuresTotal, roleRemovalResumeTotal, roleRefHeld)
+		prometheus.MustRegister(roleNameBindFailuresTotal, roleRemovalSettleFailuresTotal, roleRemovalResumeTotal, roleRefHeld, accountDeletionOverdue)
 	})
+}
+
+// SetAccountDeletionOverdue 写逾期的注销账号数。
+func SetAccountDeletionOverdue(n int) {
+	registerAccountDirectory()
+	accountDeletionOverdue.Set(float64(n))
 }
 
 // PrimeAccountDirectory 预置全部封闭集合为 0(理由同 PrimeRoute:这几种失败一辈子可能只发生几次,序列不预先存在的话

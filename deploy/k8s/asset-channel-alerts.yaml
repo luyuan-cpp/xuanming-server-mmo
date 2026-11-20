@@ -244,6 +244,35 @@ spec:
               缺片不会自愈:登记着却不跑重投循环的副本不退出、不恢复,它名下的片就一直没人扫;trade 的合同推进与收据 ACK 用同一份成员表,
               托管资产也会跟着停在合同里。先按 AssetOpOwnedShardsMissing 找出那个副本,让它的配置与其余副本一致后重启,或把它缩掉。
 
+    # 落地唤醒订阅的按片分工(docs/design/redis-cluster-all-domains-20261110.md §4.6)。shared/assetopwake 只订本副本负责的片,
+    # assetop_wake_subscribed_shards 是每个副本此刻已确认订上的片数(订上加、断开减,Stop 后归 0;没绑分工的副本报 64),
+    # 同一服务各副本之和应为 64(go/shared/assetopwake 的 ShardCount)。只有起了唤醒订阅的副本才报:guild / trade(AssetOp.Wake)
+    # 与 data_service(Recall.Enabled)。
+    # 按 (service) 聚合,不带 namespace(与上面 work-shards 组不同):data_service 的唤醒成员表跨全部 zone
+    # (前缀 DataServiceNodeService.rpc/,与重投的本 zone 成员表分开),每片由全服一个 data_service 副本订,
+    # 单看一个 zone namespace 本来就不足 64;guild / trade 是全局服务,只在 infra namespace,加不加 namespace 结果不变。
+    # 低于 64 = 有片的唤醒没人收:多半是在 etcd 登记着却没起订阅的副本(某个 zone 关了 Recall.Enabled、晚升级、
+    # 滚动修改 AssetOp.Wake 的窗口),或订阅一直重连不上(控制集群不可用、属主一直回 MOVED)。
+    # 高于 64 只是重复订(换主的几秒,或某副本连续 30 秒读不到成员表就订全部片),去重键挡住重复唤醒,不告警。
+    - name: asset-channel.wake-shards
+      interval: 60s
+      rules:
+        - alert: AssetOpWakeShardsUnsubscribed
+          expr: |
+            sum by (service) (assetop_wake_subscribed_shards) < 64
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.service }} 的落地唤醒有片没人订"
+            description: >-
+              各副本已订上的落地唤醒片数加起来只有 {{ $value | printf "%.0f" }} 片(应为 64)。没人订的片,玩家进场时不再立即补投:
+              在线玩家的未决资产指令等原退避(最长约 60 秒),离线时停放的行要等下一档停放重试(最长 30 分钟),资产到账被拖住(不丢)。
+              对比该服务在 etcd 登记的 stable 实例(guild / trade 是 infra namespace 本服务的 zone 前缀;data_service 是全部 zone 的
+              DataServiceNodeService.rpc/)与报这个 gauge 的副本:登记着却没有序列的那个,查它的 AssetOp.Wake(data_service 是
+              Recall.Enabled)是否与其余副本一致;有序列却偏少的,看它日志里的 "[AssetOpWake] Wake shard subscription interrupted"
+              与控制集群的状态(redis-cli --cluster check)。
+
     # 周期循环的活性(缺口清单第 25 条第四批,docs/design/assetop-redelivery-sharding-20261110.md §14.3;口径只有一份,
     # 在 go/shared/looplive)。每个循环一个「最近一次跑完一轮的时刻」gauge(Unix 秒):起来时写一次;每一轮正常返回(成败都算)就写,
     # panic 的那一轮被兜住、不写,循环接着跑;循环有意停止(停机排空)时删掉序列,异常退出时旧值留着。

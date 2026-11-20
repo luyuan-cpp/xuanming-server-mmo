@@ -6,7 +6,8 @@
 //   * ScopedSpan、ScopedPlayerId 退出时恢复进入前的值,嵌套也一样;ScopedRoot 不接当前 trace,总是开新根;
 //     ScopedIncoming 收到合法的上下文就建子 span,不合法就开新根,两种情况都不接线程上残留的上下文;
 //   * CurrentTraceHex 跟着当前 trace 走,包括绕过作用域直接 Set 的情况(缓存比对原值,不会读到过期值);
-//   * Bind 记下包装那一刻的 trace,执行时在它下面建子 span;包装时没有 trace 就在无 trace 下执行,执行完恢复。
+//   * ScopedSpan(captured) 与 Bind 原样装回捕获的上下文(同一个 span_id,阶段三起的 OTel Context 语义,
+//     docs/design/distributed-tracing.md §4.2);包装时没有 trace 就在无 trace 下执行,执行完恢复。
 //
 // 与 rpc_controller_test.cpp 同一工程、同一个 main。线程局部的用例都在 gtest 主线程上跑,
 // 夹具在开始和结束时把本线程的 trace 复位,不让上下文漏给同进程里后面的用例。
@@ -140,13 +141,14 @@ TEST_F(TraceContextTlsTest, ScopedSpanRestoresPreviousTrace)
     EXPECT_FALSE(tracing::Current().IsValid());
 }
 
-TEST_F(TraceContextTlsTest, ScopedSpanWithParentInstallsChildOfParent)
+TEST_F(TraceContextTlsTest, ScopedSpanWithCapturedContextRestoresItExactly)
 {
     const tracing::TraceContext captured = tracing::NewRoot();
     {
         tracing::ScopedSpan restored(captured);
         EXPECT_EQ(tracing::Current().trace_id.bytes, captured.trace_id.bytes);
-        EXPECT_NE(tracing::Current().span_id.bytes, captured.span_id.bytes);
+        EXPECT_EQ(tracing::Current().span_id.bytes, captured.span_id.bytes)
+            << "原样装回:回调里的日志与出站 span 挂在捕获的那个(导出过的)span 上";
     }
     EXPECT_FALSE(tracing::Current().IsValid());
 
@@ -244,7 +246,7 @@ TEST_F(TraceContextTlsTest, BindRunsUnderTheTraceCapturedAtBindTime)
     tracing::Set(other);   // 执行时线程上是另一条 trace
     continuation();
     EXPECT_EQ(seen.trace_id.bytes, request.trace_id.bytes);
-    EXPECT_NE(seen.span_id.bytes, request.span_id.bytes);   // 在捕获值下建了子 span
+    EXPECT_EQ(seen.span_id.bytes, request.span_id.bytes);   // 原样装回捕获值
     EXPECT_EQ(tracing::Current().trace_id.bytes, other.trace_id.bytes);   // 执行完恢复
 }
 

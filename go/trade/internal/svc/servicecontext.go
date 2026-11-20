@@ -227,8 +227,9 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		commerceEngine.Owns = members.Owns
 		assets.Members = members
 		// 资产指令重投的到期扫描按玩家分片,用同一份成员表(缺口清单第 25 条,
-		// docs/design/assetop-redelivery-sharding-20261110.md)。绑不上就拒启:绑了分工却扫全部行,扩副本时看不出来。
-		if err := assets.Pipeline.BindWorkOwner(members.Owns); err != nil {
+		// docs/design/assetop-redelivery-sharding-20261110.md);落地唤醒的订阅也按它只订本副本负责的片。
+		// 绑不上就拒启:绑了分工却扫全部行,扩副本时看不出来。
+		if err := assets.BindWorkOwner(members.Owns); err != nil {
 			panic(fmt.Errorf("trade: bind asset redelivery work owner: %w", err))
 		}
 		assets.Commerce = commerceEngine

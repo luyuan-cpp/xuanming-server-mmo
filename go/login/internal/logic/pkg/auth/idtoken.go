@@ -120,49 +120,65 @@ type idTokenClaims struct {
 
 // verify 校验令牌,返回 sub(渠道内稳定的用户标识)。
 func (v *idTokenVerifier) verify(ctx context.Context, raw string) (string, error) {
+	claims, err := v.verifyClaims(ctx, raw)
+	if err != nil {
+		return "", err
+	}
+	return claims.Sub, nil
+}
+
+// verifyClaims 校验令牌并返回已核过的声明。一次性消费要用 exp 定登记的 TTL。
+func (v *idTokenVerifier) verifyClaims(ctx context.Context, raw string) (*idTokenClaims, error) {
 	if raw == "" {
-		return "", fmt.Errorf("%s: empty identity token", v.provider)
+		return nil, fmt.Errorf("%s: empty identity token", v.provider)
 	}
 	if len(raw) > maxIdTokenBytes {
-		return "", fmt.Errorf("%s: identity token too long", v.provider)
+		return nil, fmt.Errorf("%s: identity token too long", v.provider)
 	}
 	parts := strings.Split(raw, ".")
 	if len(parts) != 3 {
-		return "", fmt.Errorf("%s: identity token is not a JWS compact serialization", v.provider)
+		return nil, fmt.Errorf("%s: identity token is not a JWS compact serialization", v.provider)
 	}
 
 	var header idTokenHeader
 	if err := decodeJWTSegment(parts[0], &header); err != nil {
-		return "", fmt.Errorf("%s: bad token header", v.provider)
+		return nil, fmt.Errorf("%s: bad token header", v.provider)
 	}
 	if header.Alg != "RS256" {
-		return "", fmt.Errorf("%s: unsupported token alg %q", v.provider, header.Alg)
+		return nil, fmt.Errorf("%s: unsupported token alg %q", v.provider, header.Alg)
 	}
 	if header.Kid == "" {
-		return "", fmt.Errorf("%s: token header has no kid", v.provider)
+		return nil, fmt.Errorf("%s: token header has no kid", v.provider)
 	}
 	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
-		return "", fmt.Errorf("%s: bad token signature encoding", v.provider)
+		return nil, fmt.Errorf("%s: bad token signature encoding", v.provider)
 	}
 
 	key, err := v.key(ctx, header.Kid)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
 	if err := rsa.VerifyPKCS1v15(key, crypto.SHA256, digest[:], signature); err != nil {
-		return "", fmt.Errorf("%s: token signature invalid", v.provider)
+		return nil, fmt.Errorf("%s: token signature invalid", v.provider)
 	}
 
 	var claims idTokenClaims
 	if err := decodeJWTSegment(parts[1], &claims); err != nil {
-		return "", fmt.Errorf("%s: bad token claims", v.provider)
+		return nil, fmt.Errorf("%s: bad token claims", v.provider)
 	}
 	if err := v.checkClaims(&claims); err != nil {
-		return "", err
+		return nil, err
 	}
-	return claims.Sub, nil
+	return &claims, nil
+}
+
+// usedFor 是一枚已校验的令牌在一次性消费登记里该留多久:到 exp 加时钟偏差为止,至少 1 秒(PX 不收 0)。
+func (v *idTokenVerifier) usedFor(c *idTokenClaims) time.Duration {
+	exp, _ := c.Exp.Int64() // checkClaims 已核过
+	ttl := time.Unix(exp, 0).Add(idTokenLeeway).Sub(v.now())
+	return max(ttl, time.Second)
 }
 
 func (v *idTokenVerifier) checkClaims(c *idTokenClaims) error {

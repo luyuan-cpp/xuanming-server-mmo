@@ -150,6 +150,14 @@ type ServiceContext struct {
 	closeCompleted            bool
 	upstreamClosers           []interface{ Close() error }
 	AccountDirectory          accountdirectory.Directory
+	// AccountDeletions 是账号注销在目录上的动作(docs/design/account-deletion.md §4),鉴权同 AccountDirectory(只认 login)。
+	// 冷静期配置非法时为 nil,四个注销 RPC 回 Unavailable,ReadAccountDirectory 照常、不带注销状态。DeletionCoolingOff 随它一起装配。
+	AccountDeletions          AccountDeletionStore
+	DeletionCoolingOff        time.Duration
+	// AccountRealNames 是账号行上的实名列(docs/design/real-name-anti-addiction.md §5.1):写只认 login,按玩家读只认 payment。
+	AccountRealNames AccountRealNameStore
+	// PaymentDirectoryAuth 验 go/payment 的调用证明,只给 GetAccountRealName 用;密钥缺失时为 nil,该 RPC 回 Unavailable。
+	PaymentDirectoryAuth *serviceauth.Verifier
 	AccountDirectoryAuth      *serviceauth.Verifier
 	SceneManagerDirectoryAuth *serviceauth.Verifier
 	AccountRoleTrades         accountdirectory.RoleTrades
@@ -478,6 +486,19 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	}
 	if directory != nil {
 		s.AccountDirectory = directory
+		if coolingOff, err := c.AccountDirectory.DeletionCoolingOff(); err != nil {
+			logx.Errorf("[account-deletion] invalid AccountDirectory config; account deletion RPCs disabled: %v", err)
+		} else {
+			s.AccountDeletions = directory
+			s.DeletionCoolingOff = coolingOff
+			logx.Infof("[account-deletion] account deletion enabled: cooling_off=%s", coolingOff)
+		}
+		s.AccountRealNames = directory
+		if auth, err := serviceauth.New(map[string]string{accountdirectory.PaymentCaller: os.Getenv(accountdirectory.PaymentSecretEnv)}); err != nil {
+			logx.Errorf("[real-name] %s unavailable; GetAccountRealName disabled", accountdirectory.PaymentSecretEnv)
+		} else {
+			s.PaymentDirectoryAuth = auth
+		}
 		s.accountDirectoryCloser = directory
 		s.PlayerStoreAssets = directory
 		s.PlayerStoreProfiles = directory
@@ -736,9 +757,12 @@ func newIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 	}
 	// 地域码绑定到本部署环境(K8s 集群)的身份,运行期从集群读(internal/clusteridentity);dev 不核绑定,不读。
 	// 这里只接上读取器、不读:构造不做 IO,第一次预留或运维操作才读,读不到那一次失败,不写任何记录。
+	// 同一个读取器还给出 API server 的时钟,登记处丢码重新登记时和本机时钟取较晚的那个。
 	var deployment func(context.Context) (string, error)
+	var referenceNow func(context.Context) (time.Time, error)
 	if !c.IdSegment.AllowAutoSeed {
-		deployment = clusteridentity.InCluster().Read
+		cluster := clusteridentity.InCluster()
+		deployment, referenceNow = cluster.Read, cluster.Now
 	}
 	issuer, err := idissuer.New(idissuer.Options{
 		Primary:        primary,
@@ -748,6 +772,7 @@ func newIdIssuer(c config.Config) (*idissuer.Issuer, error) {
 		AllowBootstrap: c.IdSegment.AllowAutoSeed,
 		Tags:           c.IdSegment.EffectiveTags(),
 		Deployment:     deployment,
+		ReferenceNow:   referenceNow,
 		OnReserve:      metrics.ObserveIdIssuerReserve,
 	})
 	if err != nil {

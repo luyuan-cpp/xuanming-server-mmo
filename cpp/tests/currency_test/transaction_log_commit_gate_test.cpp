@@ -1,5 +1,5 @@
 // 审计发件箱的 scene 一侧(audit_outbox.h,docs/design/player-audit-outbox.md §5):流水与快照请求按玩家排队,
-// 随存盘请求交出去(一笔带不完就分笔)、提交后放行、改动没落库时丢弃;流水只有这一条出路,没有单一玩家或没开发件箱时拒收。
+// 随存盘请求一笔全部交出去、提交后放行、改动没落库时丢弃;流水只有这一条出路,没有单一玩家或没开发件箱时拒收。
 // 每种丢弃按原因计数(audit_outbox_stats.h);资产变动通知(TransactionLogSystem::SetAssetChangedHook)不论收下还是拒收都发。
 // 文件名沿用 11-05 的流水提交闸门(它被审计发件箱取代);存盘状态机何时交出、何时放行在 player_store_client_test.cpp。
 #include <gtest/gtest.h>
@@ -83,12 +83,11 @@ namespace
             return request;
         }
 
-        // 一次 AttachDue 的全部产出:两类记录,加上「带到哪条、还有没有」。
+        // 一次 AttachDue 的全部产出:两类记录。
         struct Attached
         {
             google::protobuf::RepeatedPtrField<TransactionLogEntry> logs;
             google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> snapshots;
-            AuditOutbox::Attached result;
 
             std::vector<uint64_t> TxIds() const
             {
@@ -114,7 +113,7 @@ namespace
         static Attached Attach(uint64_t player, uint64_t mark)
         {
             Attached out;
-            out.result = AuditOutbox::AttachDue(player, mark, out.logs, out.snapshots);
+            AuditOutbox::AttachDue(player, mark, out.logs, out.snapshots);
             return out;
         }
     };
@@ -144,9 +143,7 @@ namespace
         EXPECT_TRUE(AuditOutbox::HasDue(kPlayerA, snapshotMark));
 
         const auto attached = Attach(kPlayerA, snapshotMark);
-        EXPECT_EQ(attached.TxIds(), (std::vector<uint64_t>{1, 2}));
-        EXPECT_EQ(attached.result.through, snapshotMark) << "带到这份快照里的最后一条";
-        EXPECT_FALSE(attached.result.more);
+        EXPECT_EQ(attached.TxIds(), (std::vector<uint64_t>{1, 2})) << "带到这份快照里的最后一条";
         EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), 3u) << "交出去不删:被拒时要随下一笔再交";
 
         AuditOutbox::AckThrough(kPlayerA, snapshotMark);
@@ -159,7 +156,7 @@ namespace
         EXPECT_EQ(AuditOutbox::PendingBytes(kPlayerA), 0u);
     }
 
-    // 没有到期记录时什么都不带:through 为 0、more 为假。
+    // 没有到期记录时什么都不带。
     TEST_F(AuditOutboxTest, AttachWithNothingDueCarriesNothing)
     {
         AuditOutbox::Enable(true);
@@ -168,9 +165,8 @@ namespace
 
         const auto attached = Attach(kPlayerA, emptyMark);
         EXPECT_EQ(attached.logs_size(), 0);
-        EXPECT_EQ(attached.result.through, 0u);
-        EXPECT_FALSE(attached.result.more);
-        EXPECT_EQ(Attach(kPlayerB, AuditOutbox::Mark()).result.through, 0u) << "没有队列的玩家";
+        EXPECT_EQ(attached.snapshots_size(), 0);
+        EXPECT_EQ(Attach(kPlayerB, AuditOutbox::Mark()).logs_size(), 0) << "没有队列的玩家";
     }
 
     // 被拒的那一笔不放行:记录留在队列,下一笔(水位更大)照样把它们交出去。
@@ -269,72 +265,52 @@ namespace
         EXPECT_EQ(attached.TxIds(), (std::vector<uint64_t>{1}));
         ASSERT_EQ(attached.snapshots_size(), 1);
         EXPECT_EQ(attached.snapshots(0).snapshot_id(), 77u);
-        EXPECT_EQ(attached.result.through, mark);
 
         AuditOutbox::AckThrough(kPlayerA, mark);
         EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), 1u);
     }
 
-    // 排着的记录超过一笔的预算时不丢:一笔最多带 kMaxBytesPerSave,放行到带上的最后一条之后,下一笔接着带,直到交完(设计 §5.1)。
-    TEST_F(AuditOutboxTest, OneSaveCarriesAtMostItsBudgetAndTheRestFollowsInOrder)
+    // 排了很多(存盘中断很久之后)也是一笔带完,按记录顺序、不重不漏:改动和描述它的记录总在同一个事务里提交(设计 §5.1)。
+    TEST_F(AuditOutboxTest, OneSaveCarriesEverythingDueInOrder)
     {
         AuditOutbox::Enable(true);
-        constexpr uint64_t kRecords = 200; // 200 条约 10 KiB 的流水 ≈ 2 MiB,是一笔预算的近 4 倍
+        constexpr uint64_t kRecords = 200; // 200 条约 10 KiB 的流水 ≈ 2 MiB,是原先一笔预算 512 KiB 的近 4 倍
         for (uint64_t txId = 1; txId <= kRecords; ++txId)
         {
             TransactionLogSystem::RecordEntry(BigGain(txId, kPlayerA, 10 * 1024));
         }
-        ASSERT_EQ(AuditOutbox::PendingCount(kPlayerA), kRecords) << "超过一笔的预算并不丢";
+        ASSERT_EQ(AuditOutbox::PendingCount(kPlayerA), kRecords);
         const uint64_t snapshotMark = AuditOutbox::Mark();
 
-        std::vector<uint64_t> carried;
-        int saves = 0;
-        for (;; ++saves)
-        {
-            ASSERT_LT(saves, 16) << "分笔必须能交完";
-            const auto attached = Attach(kPlayerA, snapshotMark);
-            ASSERT_GT(attached.logs_size(), 0) << "每一笔至少带走一条";
-            EXPECT_LE(attached.LogBytes(), AuditOutbox::kMaxBytesPerSave);
-            const auto ids = attached.TxIds();
-            carried.insert(carried.end(), ids.begin(), ids.end());
-            if (!attached.result.more)
-            {
-                AuditOutbox::AckThrough(kPlayerA, snapshotMark);
-                break;
-            }
-            EXPECT_LT(attached.result.through, snapshotMark);
-            const std::size_t before = AuditOutbox::PendingCount(kPlayerA);
-            // 这一笔提交了:只放行到带上的最后一条,没带上的还没进库。
-            AuditOutbox::AckThrough(kPlayerA, attached.result.through);
-            EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), before - static_cast<std::size_t>(attached.logs_size()));
-        }
-
-        EXPECT_GE(saves + 1, 4) << "2 MiB 的记录至少要 4 笔才交得完(saves 是最后一笔的下标)";
-        ASSERT_EQ(carried.size(), kRecords);
+        const auto attached = Attach(kPlayerA, snapshotMark);
+        const auto ids = attached.TxIds();
+        ASSERT_EQ(ids.size(), kRecords);
         for (uint64_t i = 0; i < kRecords; ++i)
         {
-            ASSERT_EQ(carried[i], i + 1) << "按记录顺序,不重不漏";
+            ASSERT_EQ(ids[i], i + 1) << "按记录顺序,不重不漏";
         }
+        EXPECT_LE(attached.LogBytes(), AuditOutbox::kMaxBytesPerPlayer);
+
+        AuditOutbox::AckThrough(kPlayerA, snapshotMark);
         EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), 0u);
         EXPECT_EQ(AuditOutbox::PendingBytes(kPlayerA), 0u);
     }
 
-    // 没放行(这一笔被拒或结果未知)时,下一次还是从同一条开始带。
-    TEST_F(AuditOutboxTest, BudgetedAttachRestartsFromTheSameRecordUntilAcked)
+    // 没放行(这一笔被拒或结果未知)时,下一次还是交出同样的记录。
+    TEST_F(AuditOutboxTest, AttachRepeatsTheSameRecordsUntilAcked)
     {
         AuditOutbox::Enable(true);
-        for (uint64_t txId = 1; txId <= 120; ++txId)
+        for (uint64_t txId = 1; txId <= 3; ++txId)
         {
-            TransactionLogSystem::RecordEntry(BigGain(txId, kPlayerA, 10 * 1024));
+            TransactionLogSystem::RecordEntry(Gain(txId, kPlayerA));
         }
         const uint64_t mark = AuditOutbox::Mark();
 
         const auto first = Attach(kPlayerA, mark);
         const auto again = Attach(kPlayerA, mark);
 
-        ASSERT_TRUE(first.result.more);
+        EXPECT_EQ(first.TxIds(), (std::vector<uint64_t>{1, 2, 3}));
         EXPECT_EQ(first.TxIds(), again.TxIds());
-        EXPECT_EQ(first.result.through, again.result.through);
     }
 
     // 条数上限只为封住内存:排到上限(存盘中断很久)才丢最旧的。
@@ -351,26 +327,14 @@ namespace
         EXPECT_EQ(AuditOutbox::PendingCount(kPlayerA), kCap);
         EXPECT_EQ(Dropped(DropReason::kOverflow) - before, 2u) << "挤掉一条计一次";
 
-        // 丢的是最旧的两条:第一笔从第 3 条带起;逐笔交完,最后一条是最新的。
-        const uint64_t mark = AuditOutbox::Mark();
-        uint64_t nextTxId = 3;
-        for (int saves = 0;; ++saves)
-        {
-            ASSERT_LT(saves, 64);
-            const auto attached = Attach(kPlayerA, mark);
-            ASSERT_GT(attached.logs_size(), 0);
-            EXPECT_EQ(attached.logs(0).tx_id(), nextTxId);
-            nextTxId = attached.logs(attached.logs_size() - 1).tx_id() + 1;
-            if (!attached.result.more)
-            {
-                break;
-            }
-            AuditOutbox::AckThrough(kPlayerA, attached.result.through);
-        }
-        EXPECT_EQ(nextTxId, kCap + 3) << "最新的一条(kCap + 2)还在";
+        // 丢的是最旧的两条:从第 3 条带起,最后一条是最新的;排满的队列也是一笔带完。
+        const auto attached = Attach(kPlayerA, AuditOutbox::Mark());
+        ASSERT_EQ(static_cast<uint64_t>(attached.logs_size()), kCap);
+        EXPECT_EQ(attached.logs(0).tx_id(), 3u);
+        EXPECT_EQ(attached.logs(attached.logs_size() - 1).tx_id(), kCap + 2) << "最新的一条还在";
     }
 
-    // 字节上限同样只为封住内存:远大于一笔的预算,到了才丢最旧的。
+    // 字节上限同样封住内存:到了才丢最旧的,留下的仍是一笔带完。
     TEST_F(AuditOutboxTest, OverflowByBytesDropsTheOldest)
     {
         AuditOutbox::Enable(true);
@@ -382,12 +346,11 @@ namespace
         }
 
         EXPECT_LE(AuditOutbox::PendingBytes(kPlayerA), AuditOutbox::kMaxBytesPerPlayer);
-        EXPECT_GT(AuditOutbox::PendingBytes(kPlayerA), AuditOutbox::kMaxBytesPerSave) << "队列上限远大于一笔的预算";
         const std::size_t kept = AuditOutbox::PendingCount(kPlayerA);
         EXPECT_LT(kept, kRecords);
         EXPECT_EQ(Dropped(DropReason::kOverflow) - before, kRecords - kept) << "挤掉几条计几次";
         const auto attached = Attach(kPlayerA, AuditOutbox::Mark());
-        ASSERT_GT(attached.logs_size(), 0);
+        ASSERT_EQ(static_cast<std::size_t>(attached.logs_size()), kept) << "排满的队列也是一笔带完";
         EXPECT_EQ(attached.logs(0).tx_id(), kRecords - kept + 1) << "丢的是最旧的,留下的从这条开始";
     }
 

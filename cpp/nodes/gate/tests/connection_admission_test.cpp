@@ -1,7 +1,9 @@
 // gate 客户端连接准入(handler/rpc/connection_admission.h,docs/design/gate-connection-admission-control.md P1-1 ~ P1-4)。
 //
 // 不进 gate.vcxproj,登记在 cpp/tests/routing_identity_test/routing_identity_test.vcxproj。分两组:
-//   - 纯逻辑:拒绝原因、缺省速率的推导、环境变量解析、速率闸(GCRA)、判定顺序、直方图分桶。时刻全部注入,整数时长,边界值精确;
+//   - 纯逻辑:拒绝原因、session id 空间的硬上限、GATE_* 环境变量、判定顺序。时刻全部注入,整数时长,边界值精确。
+//     与 battle 直连共用的速率闸(GCRA)、缺省速率推导、环境变量解析与握手直方图在 core 的 network/accept_admission.h,
+//     由 cpp/tests/rpc_controller_test/accept_admission_test.cpp 测;
 //   - 装配:AdmitConnection 按原因计数,未验签占位随验签 / 会话销毁归还,指标页的样本行。会话表用进程里的 tlsSessionManager
 //     (来自 gate.lib),每个用例前后清空;计数是 thread_local,SetUp 里 ResetForTesting。
 // 「准入回调在 accept 之后、TcpConnection 建出来之前执行,被拒的连接收到 RST」是 muduo 那一层的行为,
@@ -32,16 +34,6 @@ using std::chrono::seconds;
 
 // 离时钟零点足够远的起点:速率闸把零点当「桶是满的」,用例不该碰巧落在零点上。
 const SteadyTime kT0 = SteadyTime{} + std::chrono::hours(1);
-
-int TakeAll(AcceptRateGate &gate, const SteadyTime now, const int cap = 1'000'000)
-{
-	int taken = 0;
-	while (taken < cap && gate.TryTake(now))
-	{
-		++taken;
-	}
-	return taken;
-}
 
 uint64_t Rejected(const RejectReason reason)
 {
@@ -79,33 +71,7 @@ TEST(ConnectionAdmissionPolicy, ZeroConfiguredLimitFallsBackToTheSessionIdSpace)
 	EXPECT_EQ(EffectiveMaxConnections(20000), 20000u);
 }
 
-// 缺省速率:桶深 = 上限(从零接回一整台不被拒),持续速率 = 上限的 1%/秒,下限 100/秒。
-TEST(ConnectionAdmissionPolicy, DefaultRateIsOnePercentOfCapacityPerSecondWithAFullCapacityBurst)
-{
-	EXPECT_EQ(DefaultRateLimit(20000), (RateLimit{200, 20000}));
-	EXPECT_EQ(DefaultRateLimit(131071), (RateLimit{1310, 131071}));
-	// 上限配得很小时速率闸不该成为瓶颈:速率取下限,桶深至少一秒的量。
-	EXPECT_EQ(DefaultRateLimit(10000), (RateLimit{100, 10000}));
-	EXPECT_EQ(DefaultRateLimit(5), (RateLimit{100, 100}));
-	// 握手期限 10s 内,一个从不验签的来源稳态下最多占住上限的 10%(设计稿 P1-3 的推导)。
-	const RateLimit limit = DefaultRateLimit(20000);
-	const auto handshakeSeconds =
-		std::chrono::duration_cast<seconds>(client_liveness::kClientLiveness.handshakeTimeout).count();
-	EXPECT_EQ(limit.perSecond * handshakeSeconds, 20000 / 10);
-}
-
-TEST(ConnectionAdmissionPolicy, OptionalPositiveEnvAcceptsOnlyCanonicalDecimals)
-{
-	EXPECT_EQ(ParseOptionalPositive(nullptr, 1000), 0u) << "未设";
-	EXPECT_EQ(ParseOptionalPositive("", 1000), 0u) << "空串按未设";
-	EXPECT_EQ(ParseOptionalPositive("1", 1000), 1u);
-	EXPECT_EQ(ParseOptionalPositive("1000", 1000), 1000u) << "上界本身合法";
-	for (const char *bad : {"0", "01", "-1", "+1", " 1", "1 ", "abc", "1.5", "0x10", "1001", "99999999999"})
-	{
-		EXPECT_FALSE(ParseOptionalPositive(bad, 1000).has_value()) << "应拒绝: '" << bad << "'";
-	}
-}
-
+// gate 的转发口带的是 GATE_* 两个变量名;解析规则本身在 accept_admission_test.cpp。
 TEST(ConnectionAdmissionPolicy, RateLimitResolvesFromEnvOrFallsBackToTheDefault)
 {
 	std::string error;
@@ -129,88 +95,7 @@ TEST(ConnectionAdmissionPolicy, RateLimitResolvesFromEnvOrFallsBackToTheDefault)
 	error.clear();
 	EXPECT_FALSE(ResolveRateLimit("1000001", nullptr, 20000, error).has_value()) << "超过上界";
 	EXPECT_FALSE(error.empty());
-}
-
-TEST(AcceptRateGate, StartsWithAFullBurst)
-{
-	AcceptRateGate gate(RateLimit{10, 20});
-	EXPECT_EQ(TakeAll(gate, kT0), 20);
-	EXPECT_FALSE(gate.TryTake(kT0)) << "同一时刻用完之后不能再接";
-}
-
-TEST(AcceptRateGate, ReleasesOneConnectionPerIntervalAfterTheBurst)
-{
-	AcceptRateGate gate(RateLimit{10, 20});
-	TakeAll(gate, kT0);
-	// 每秒 10 条:每 100ms 放行一条。
-	EXPECT_TRUE(gate.TryTake(kT0 + milliseconds(100)));
-	EXPECT_FALSE(gate.TryTake(kT0 + milliseconds(100)));
-	EXPECT_FALSE(gate.TryTake(kT0 + milliseconds(150))) << "不到一个间隔不放行";
-	EXPECT_TRUE(gate.TryTake(kT0 + milliseconds(200)));
-}
-
-TEST(AcceptRateGate, NeverAccumulatesBeyondTheBurst)
-{
-	AcceptRateGate gate(RateLimit{10, 20});
-	TakeAll(gate, kT0);
-	EXPECT_EQ(TakeAll(gate, kT0 + std::chrono::minutes(10)), 20) << "空闲再久也只攒满一个桶";
-}
-
-// 任意时间窗 T 内放行的条数 ≤ 桶深 + 速率 × T:这是速率闸给「不停建连又立刻关」定的上界。
-TEST(AcceptRateGate, AdmitsAtMostBurstPlusRateTimesWindow)
-{
-	AcceptRateGate gate(RateLimit{200, 1000});
-	int admitted = 0;
-	// 10 秒里每毫秒来 5 条(5000 条/秒,远超速率)。
-	for (int ms = 0; ms < 10'000; ++ms)
-	{
-		for (int i = 0; i < 5; ++i)
-		{
-			admitted += gate.TryTake(kT0 + milliseconds(ms)) ? 1 : 0;
-		}
-	}
-	EXPECT_LE(admitted, 1000 + 200 * 10);
-	EXPECT_GE(admitted, 1000 + 200 * 10 - 1) << "洪水期间也恰好按速率放行,不少放";
-}
-
-// 拒绝不改状态:被拒的洪水不会把之后的名额往后推。
-TEST(AcceptRateGate, RejectionsDoNotConsumeOrDelayTokens)
-{
-	AcceptRateGate gate(RateLimit{10, 1});
-	EXPECT_TRUE(gate.TryTake(kT0));
-	for (int i = 0; i < 10'000; ++i)
-	{
-		EXPECT_FALSE(gate.TryTake(kT0 + milliseconds(50)));
-	}
-	EXPECT_TRUE(gate.TryTake(kT0 + milliseconds(100))) << "到点照常放行";
-}
-
-TEST(AcceptRateGate, ClockGoingBackwardsOnlyRejects)
-{
-	AcceptRateGate gate(RateLimit{10, 2});
-	EXPECT_EQ(TakeAll(gate, kT0), 2);
-	EXPECT_FALSE(gate.TryTake(kT0 - seconds(30))) << "时刻倒退不会多放行";
-	EXPECT_TRUE(gate.TryTake(kT0 + milliseconds(100)));
-}
-
-TEST(AcceptRateGate, ResetAppliesTheNewLimitAndRefillsTheBucket)
-{
-	AcceptRateGate gate(RateLimit{10, 2});
-	TakeAll(gate, kT0);
-	gate.Reset(RateLimit{1000, 5});
-	EXPECT_EQ(gate.Limit(), (RateLimit{1000, 5}));
-	EXPECT_EQ(TakeAll(gate, kT0), 5);
-	EXPECT_TRUE(gate.TryTake(kT0 + milliseconds(1))) << "每秒 1000 条:1ms 一条";
-}
-
-// 0 不会除零,也不会变成「永远拒绝」:按 1 处理。
-TEST(AcceptRateGate, ZeroParametersAreTreatedAsOne)
-{
-	AcceptRateGate gate(RateLimit{0, 0});
-	EXPECT_EQ(gate.Limit(), (RateLimit{1, 1}));
-	EXPECT_TRUE(gate.TryTake(kT0));
-	EXPECT_FALSE(gate.TryTake(kT0 + milliseconds(999)));
-	EXPECT_TRUE(gate.TryTake(kT0 + seconds(1)));
+	EXPECT_NE(error.find("GateMaxConnections"), std::string::npos) << "说明里点名的是 gate 的上限配置项: " << error;
 }
 
 // 判定顺序:关源 → 总量 → 速率;只有放行才从速率闸取名额。
@@ -229,18 +114,6 @@ TEST(ConnectionAdmissionPolicy, DecideChecksSourceThenCapacityThenRate)
 		Decide(AdmissionState{.sourceClosed = false, .currentSessions = 9, .maxConnections = 10}, gate, kT0).has_value());
 	EXPECT_EQ(Decide(AdmissionState{.sourceClosed = false, .currentSessions = 9, .maxConnections = 10}, gate, kT0),
 			  RejectReason::kAcceptRate);
-}
-
-TEST(ConnectionAdmissionPolicy, HandshakeBucketsAreInclusiveUpperBounds)
-{
-	EXPECT_EQ(HandshakeBucketIndex(0), 0u);
-	EXPECT_EQ(HandshakeBucketIndex(10), 0u) << "上界含本身(le)";
-	EXPECT_EQ(HandshakeBucketIndex(11), 1u);
-	EXPECT_EQ(HandshakeBucketIndex(1000), 6u);
-	EXPECT_EQ(HandshakeBucketIndex(10000), kHandshakeUpperBoundsMs.size() - 1);
-	EXPECT_EQ(HandshakeBucketIndex(10001), kHandshakeUpperBoundsMs.size()) << "超过最大上界落 +Inf";
-	// 最大的有限上界就是握手期限:期限内完成的握手都落在有限桶里。
-	EXPECT_EQ(milliseconds(kHandshakeUpperBoundsMs.back()), client_liveness::kClientLiveness.handshakeTimeout);
 }
 
 // ---------------------------------------------------------------------------

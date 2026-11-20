@@ -149,22 +149,22 @@ func (f *flowSteps) refList(account string) []roleRef {
 	return refs
 }
 
-func (f *flowSteps) readAccount(_ context.Context, account string) (bool, []roleRef, error) {
+func (f *flowSteps) readAccount(_ context.Context, account string) (accountRow, []roleRef, error) {
 	if err := f.step("readAccount"); err != nil {
-		return false, nil, err
+		return accountRow{}, nil, err
 	}
 	if !f.accounts[account] {
-		return false, nil, nil
+		return accountRow{}, nil, nil
 	}
-	return true, f.refList(account), nil
+	return accountRow{exists: true}, f.refList(account), nil
 }
 
-func (f *flowSteps) ensureAccount(_ context.Context, account string) error {
+func (f *flowSteps) ensureAccount(_ context.Context, account string) (uint64, error) {
 	if err := f.step("ensureAccount"); err != nil {
-		return err
+		return 0, err
 	}
 	f.accounts[account] = true
-	return nil
+	return 0, nil
 }
 
 func (f *flowSteps) readRef(_ context.Context, account string, player uint64) (*roleRef, error) {

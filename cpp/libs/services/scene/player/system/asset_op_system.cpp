@@ -81,7 +81,7 @@ enum class AssetOpDirection : uint8_t
 	kCount
 };
 
-constexpr int kAssetOpMaxTxPerStream = 3;
+constexpr int kAssetOpMaxTxPerStream = 4;
 
 struct AssetOpStreamRule
 {
@@ -93,18 +93,19 @@ struct AssetOpStreamRule
 
 constexpr AssetOpStreamRule kAssetOpStreamRules[] = {
 	{ASSET_OP_STREAM_GUILD_DEBIT, AssetOpDirection::kDebit, 1,
-	 {TX_GUILD_DONATE, TX_UNKNOWN, TX_UNKNOWN}},
+	 {TX_GUILD_DONATE, TX_UNKNOWN, TX_UNKNOWN, TX_UNKNOWN}},
 	{ASSET_OP_STREAM_GUILD_CREDIT, AssetOpDirection::kCredit, 2,
-	 {TX_GUILD_SHOP, TX_GUILD_ACTIVITY_REWARD, TX_UNKNOWN}},
-	{ASSET_OP_STREAM_TRADE_DEBIT, AssetOpDirection::kDebit, 3,
-	 {TX_AUCTION_SELL, TX_TRADE, TX_AUCTION_BUY}},
+	 {TX_GUILD_SHOP, TX_GUILD_ACTIVITY_REWARD, TX_UNKNOWN, TX_UNKNOWN}},
+	// TX_PAYMENT_REVERSAL:真钱付款被渠道撤销后,把官方订单发放的物品或货币扣回(payment-recharge.md §22.6)。
+	{ASSET_OP_STREAM_TRADE_DEBIT, AssetOpDirection::kDebit, 4,
+	 {TX_AUCTION_SELL, TX_TRADE, TX_AUCTION_BUY, TX_PAYMENT_REVERSAL}},
 	// TX_AUCTION_RETURN:退回本人托管的资产,不判获取封禁(GainBlockService::CountsAsGain,审计 r2-trade#1)。
 	{ASSET_OP_STREAM_TRADE_CREDIT, AssetOpDirection::kCredit, 3,
-	 {TX_AUCTION_BUY, TX_TRADE, TX_AUCTION_RETURN}},
+	 {TX_AUCTION_BUY, TX_TRADE, TX_AUCTION_RETURN, TX_UNKNOWN}},
 	{ASSET_OP_STREAM_SYSTEM_CREDIT, AssetOpDirection::kCredit, 3,
-	 {TX_SYSTEM_GRANT, TX_MAIL_ATTACHMENT, TX_GM_GRANT}},
+	 {TX_SYSTEM_GRANT, TX_MAIL_ATTACHMENT, TX_GM_GRANT, TX_UNKNOWN}},
 	{ASSET_OP_STREAM_GM_RECALL, AssetOpDirection::kDebit, 1,
-	 {TX_BATCH_RECALL, TX_UNKNOWN, TX_UNKNOWN}},
+	 {TX_BATCH_RECALL, TX_UNKNOWN, TX_UNKNOWN, TX_UNKNOWN}},
 };
 static_assert(std::size(kAssetOpStreamRules) == 6, "流规则表与 AssetOpStream 的 6 条流脱节");
 

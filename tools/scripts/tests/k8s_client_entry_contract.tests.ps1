@@ -588,7 +588,7 @@ Test-Case '库:battle hostPort Deployment —— 只有客户端口 20000 占 ho
 }
 
 Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotations 段(sidecar 在前);都不给时不写 annotations,只给 sidecar 时与之前逐字相同' {
-    # k8s_deploy.ps1 经 -PodAnnotations 传 zone Redis 口令指纹(P0-A 第二批,Get-CppZoneRedisAuthAnnotations)。同一个 Pod 模板只能有一个
+    # k8s_deploy.ps1 经 -PodAnnotations 传工作负载密钥指纹与抓取注解(New-CppNodePodCommon)。同一个 Pod 模板只能有一个
     # annotations: 段(重复键的 YAML 各解析器行为不一),所以它与 sidecar 指纹必须由 Get-ClientEntryPodAnnotationBlock 一次写出。
     $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; LogVolumeSizeLimit = '2Gi' }
     $sidecarArgs = @{
@@ -596,7 +596,7 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
         SidecarVolumeYaml    = "- name: alloy-config`n  configMap:`n    name: cpp-log-sidecar-config"
         SidecarConfigHash    = 'abcdefabcdef'
     }
-    $extra = [ordered]@{ 'mmorpg.io/zone-redis-auth-hash' = '0123456789ab' }
+    $extra = [ordered]@{ 'mmorpg.io/gate-token-hash' = '0123456789ab' }
     $commons = [ordered]@{
         none        = New-ClientEntryPodCommon @commonArgs
         sidecarOnly = New-ClientEntryPodCommon @commonArgs @sidecarArgs
@@ -604,14 +604,14 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
         both        = New-ClientEntryPodCommon @commonArgs @sidecarArgs -PodAnnotations $extra
     }
     # 拷贝语义:打包之后再改调用方的字典,不影响已打包的 PodCommon(下面断言里仍是 0123456789ab)。
-    $extra['mmorpg.io/zone-redis-auth-hash'] = 'ffffffffffff'
+    $extra['mmorpg.io/gate-token-hash'] = 'ffffffffffff'
     $renderers = @(
         @{ Name = 'gate StatefulSet'; Indent = '      '; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
         @{ Name = 'battle Fleet'; Indent = '          '; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
         @{ Name = 'battle hostPort'; Indent = '      '; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
     )
     $sidecarLine = '  mmorpg\.io/cpp-log-sidecar-config-hash: "abcdefabcdef"\n'
-    $extraLine = '  mmorpg\.io/zone-redis-auth-hash: "0123456789ab"\n'
+    $extraLine = '  mmorpg\.io/gate-token-hash: "0123456789ab"\n'
     foreach ($r in $renderers) {
         $ind = $r.Indent
         $docs = @{}
@@ -625,9 +625,9 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
 
     foreach ($bad in @(
         @{ Why = '附加注解与 sidecar 注解重名'; Args = $sidecarArgs; Extra = [ordered]@{ 'mmorpg.io/cpp-log-sidecar-config-hash' = '0123456789ab' }; Pattern = '重名' }
-        @{ Why = '值含换行'; Args = @{}; Extra = [ordered]@{ 'mmorpg.io/zone-redis-auth-hash' = "0123`n456789ab" }; Pattern = '控制字符' }
-        @{ Why = '值为空'; Args = @{}; Extra = [ordered]@{ 'mmorpg.io/zone-redis-auth-hash' = '' }; Pattern = '值为空' }
-        @{ Why = '键不是 DNS 前缀/名字形状'; Args = @{}; Extra = [ordered]@{ 'Zone Redis Hash' = '0123456789ab' }; Pattern = '小写 DNS 前缀/名字' }
+        @{ Why = '值含换行'; Args = @{}; Extra = [ordered]@{ 'mmorpg.io/gate-token-hash' = "0123`n456789ab" }; Pattern = '控制字符' }
+        @{ Why = '值为空'; Args = @{}; Extra = [ordered]@{ 'mmorpg.io/gate-token-hash' = '' }; Pattern = '值为空' }
+        @{ Why = '键不是 DNS 前缀/名字形状'; Args = @{}; Extra = [ordered]@{ 'Gate Token Hash' = '0123456789ab' }; Pattern = '小写 DNS 前缀/名字' }
     )) {
         $badArgs = $bad.Args
         $pc = New-ClientEntryPodCommon @commonArgs @badArgs -PodAnnotations $bad.Extra
@@ -638,10 +638,10 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
 }
 
 Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共 env 之后,三个生成器都写;不给或空列表时逐字不变;名字非法、缺键、重名在打包时 throw' {
-    # k8s_deploy.ps1 经 -SecretEnv 传 zone Redis 口令 ZONE_REDIS_PASSWORD(Get-CppZoneRedisSecretEnvEntries):口令只在 Secret redis-auth 里,
-    # 不进 battle-node-config / node-config。optional: false 让 Secret 缺失的 Pod 停在 CreateContainerConfigError,不带空口令起来。
+    # k8s_deploy.ps1 经 -SecretEnv 传 gate / battle 的工作负载密钥(Get-CppNodeWorkloadSecretEnvEntries,如 Secret gate-token 的 MMORPG_GATE_TOKEN_SECRET):
+    # 密钥只在 Secret 里,不进 battle-node-config / node-config。optional: false 让 Secret 缺失的 Pod 停在 CreateContainerConfigError,不带空值起来。
     $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; LogVolumeSizeLimit = '2Gi' }
-    $secretEnv = @(@{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'redis-auth'; SecretKey = 'password' })
+    $secretEnv = @(@{ Name = 'MMORPG_GATE_TOKEN_SECRET'; SecretName = 'gate-token'; SecretKey = 'secret' })
     $plain = New-ClientEntryPodCommon @commonArgs
     $emptySecret = New-ClientEntryPodCommon @commonArgs -SecretEnv @()
     $withSecret = New-ClientEntryPodCommon @commonArgs -SecretEnv $secretEnv
@@ -652,23 +652,23 @@ Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共
         @{ Name = 'battle Fleet'; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
         @{ Name = 'battle hostPort'; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
     )
-    $refPattern = '(?m)^(?<ind>[ ]+)- name: ZONE_REDIS_PASSWORD\n\k<ind>  valueFrom:\n\k<ind>    secretKeyRef:\n\k<ind>      name: redis-auth\n\k<ind>      key: password\n\k<ind>      optional: false$'
+    $refPattern = '(?m)^(?<ind>[ ]+)- name: MMORPG_GATE_TOKEN_SECRET\n\k<ind>  valueFrom:\n\k<ind>    secretKeyRef:\n\k<ind>      name: gate-token\n\k<ind>      key: secret\n\k<ind>      optional: false$'
     foreach ($r in $renderers) {
         $plainDoc = ConvertTo-LfText (& $r.Render $plain)
         $emptyDoc = ConvertTo-LfText (& $r.Render $emptySecret)
         $secretDoc = ConvertTo-LfText (& $r.Render $withSecret)
         Assert-True -Condition ($plainDoc -ceq $emptyDoc) -Because "$($r.Name):空列表与不传逐字相同(dev 无口令时生成物不变)"
-        Assert-NotMatch -Text $plainDoc -Pattern 'ZONE_REDIS_PASSWORD' -Because "$($r.Name):不传时不写"
+        Assert-NotMatch -Text $plainDoc -Pattern 'MMORPG_GATE_TOKEN_SECRET' -Because "$($r.Name):不传时不写"
         Assert-Match -Text $secretDoc -Pattern $refPattern -Because "$($r.Name):渲染成 secretKeyRef,且 optional: false"
-        Assert-Equal -Expected 1 -Actual ([regex]::Matches($secretDoc, '(?m)^[ ]+- name: ZONE_REDIS_PASSWORD$').Count) -Because "$($r.Name):只写一份"
-        Assert-True -Condition ($secretDoc.IndexOf('- name: RPC_PORT') -ge 0 -and $secretDoc.IndexOf('- name: RPC_PORT') -lt $secretDoc.IndexOf('- name: ZONE_REDIS_PASSWORD')) -Because "$($r.Name):接在公共 env 之后(排在前面的 env 才能被 `$(VAR) 引用,它不被任何 env 引用,放最后不影响展开)"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($secretDoc, '(?m)^[ ]+- name: MMORPG_GATE_TOKEN_SECRET$').Count) -Because "$($r.Name):只写一份"
+        Assert-True -Condition ($secretDoc.IndexOf('- name: RPC_PORT') -ge 0 -and $secretDoc.IndexOf('- name: RPC_PORT') -lt $secretDoc.IndexOf('- name: MMORPG_GATE_TOKEN_SECRET')) -Because "$($r.Name):接在公共 env 之后(排在前面的 env 才能被 `$(VAR) 引用,它不被任何 env 引用,放最后不影响展开)"
         Assert-NotMatch -Text $secretDoc -Pattern 'changed-after-pack' -Because "$($r.Name):打包时拷一份,之后改调用方的列表不影响"
     }
 
     foreach ($bad in @(
-        @{ Why = '名字不是大写环境变量名'; Env = @(@{ Name = 'zone-redis'; SecretName = 'redis-auth'; SecretKey = 'password' }); Pattern = '大写环境变量名' }
-        @{ Why = '缺 SecretKey'; Env = @(@{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'redis-auth'; SecretKey = '' }); Pattern = '同时给 SecretName 与 SecretKey' }
-        @{ Why = '重名'; Env = @(@{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'a'; SecretKey = 'k' }, @{ Name = 'ZONE_REDIS_PASSWORD'; SecretName = 'b'; SecretKey = 'k' }); Pattern = '不止一次' }
+        @{ Why = '名字不是大写环境变量名'; Env = @(@{ Name = 'gate-token'; SecretName = 'gate-token'; SecretKey = 'secret' }); Pattern = '大写环境变量名' }
+        @{ Why = '缺 SecretKey'; Env = @(@{ Name = 'MMORPG_GATE_TOKEN_SECRET'; SecretName = 'gate-token'; SecretKey = '' }); Pattern = '同时给 SecretName 与 SecretKey' }
+        @{ Why = '重名'; Env = @(@{ Name = 'MMORPG_GATE_TOKEN_SECRET'; SecretName = 'a'; SecretKey = 'k' }, @{ Name = 'MMORPG_GATE_TOKEN_SECRET'; SecretName = 'b'; SecretKey = 'k' }); Pattern = '不止一次' }
     )) {
         $err = $null
         try { New-ClientEntryPodCommon @commonArgs -SecretEnv $bad.Env | Out-Null } catch { $err = $_.Exception.Message }
@@ -1869,8 +1869,7 @@ function Invoke-Wrapper {
 # AllowDisruptiveSwitch:会踢人的切换只能由调用方显式确认,包装层漏传 = 维护窗口里切不过去。钉进清单,删掉任一处透传即红。
 $ClientEntryWrapperKeys = @('ClientEntryMode', 'ClientPublicHost', 'GateClientHostTemplate', 'GateNodePortBase', 'GateExternalTrafficPolicy', 'BattleOrchestrator',
     'RequireClientEndpoint', 'AllowDisruptiveSwitch')
-# 共享 Redis 按用途拆实例(G4a 第 1a 批)三条包装链都透传的键(非 auto / 非空 / 被指定时才传,见各包装函数)。
-$RedisSplitWrapperKeys = @('RedisSplit', 'ConfirmRedisSplitSwitch', 'RedisQueueMaxMemory', 'RedisCtlMaxMemory', 'ConfirmRedisCtlSwitch')
+# 共享 Redis 按用途拆实例的 -RedisSplit 系列参数随 queue / ctl 单实例在缺口第 34 条第 6b 批退役(控制域上了 redis-control),包装链不再透传。
 # 玩家域与控制两套 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例(玩家域)或不建集群(控制)。
 $PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage',
     'ControlRedisMasters', 'ControlRedisReplicasPerMaster', 'ControlRedisMaxMemory', 'ControlRedisStorage')
@@ -1886,11 +1885,11 @@ $WrapperPairs = @(
             # Apple / Google 登录的四个参数,口径同上。
             'LoginAppleClientId', 'LoginAppleEndpoint', 'LoginGoogleClientId', 'LoginGoogleEndpoint',
             # B0-4 nofile 豁免开关:不粘滞,包装入口漏传 = 以 warn 运行的环境经包装入口重新部署时落回 enforce、硬限不够即拒启。
-            # 其后 + 拼上共享 Redis 按用途拆实例(G4a 第 1a 批)的键:漏传 -RedisSplit = 想切回共享拓扑(被 k8s_deploy 的切换闸拦下),
-            # 漏传确认 / 容量 = 切不过去;k8s-redis-wipe 的确认开关只走这一条包装链。用 + 拼接而不写进本逗号列表:逗号比 + 结合得紧,会变成嵌套数组。
-            'NodeOpenFileLimitMode') + $RedisSplitWrapperKeys + @('ConfirmWipeAllRedis') + $PlayerRedisWrapperKeys + $LogicalDbWrapperKeys },
-    @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sImage'; Downstream = 'k8s_image.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $RedisSplitWrapperKeys + $PlayerRedisWrapperKeys },
-    @{ Source = 'k8s_image.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $RedisSplitWrapperKeys + $PlayerRedisWrapperKeys }
+            # 其后 + 拼上 k8s-redis-wipe 的确认开关(只走这一条包装链)与两套 Redis Cluster、逻辑库的键。
+            # 用 + 拼接而不写进本逗号列表:逗号比 + 结合得紧,会变成嵌套数组。
+            'NodeOpenFileLimitMode') + @('ConfirmWipeAllRedis') + $PlayerRedisWrapperKeys + $LogicalDbWrapperKeys },
+    @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sImage'; Downstream = 'k8s_image.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $PlayerRedisWrapperKeys },
+    @{ Source = 'k8s_image.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $PlayerRedisWrapperKeys }
 )
 foreach ($pair in $WrapperPairs) {
     Test-Case "AST 契约:$($pair.Source)::$($pair.Function) → $($pair.Downstream) 的每个 splat 键都是下游 param 块声明过的参数" {

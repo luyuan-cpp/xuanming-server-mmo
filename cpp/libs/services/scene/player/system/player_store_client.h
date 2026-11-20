@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "engine/config/player_store_path.h"
 #include "engine/core/type_define/type_define.h"
 #include "player/system/player_store_projection.h"
 #include "proto/player_store/player_store.pb.h"
@@ -92,15 +93,6 @@ public:
     using SendClaimFn = std::function<bool(const playerstore::LoadAndClaimRequest &request, ClaimDone done)>;
     using Clock = std::chrono::steady_clock;
 
-    // Options::attachAudit 的结果(与 AuditOutbox::Attached 同形,状态机不依赖审计模块)。
-    struct AuditAttachment
-    {
-        // 这一笔带走的最后一条审计记录的水位;一条都没带时是 0。
-        uint64_t through{0};
-        // 水位不大于这份快照的审计记录还有没带上的(超过了一笔的预算)。
-        bool more{false};
-    };
-
     struct Options
     {
         SendFn send;
@@ -117,9 +109,9 @@ public:
         double retryMaxSec{5.0};
         // 可选:退避的抖动,入参是基础延迟,返回实际延迟。go/db 重启时在途的存盘同一拍失败,不抖就一起重试。
         std::function<double(double delaySec)> jitter;
-        // 一笔存盘序列化后的上限,比传输上限(4 MiB)留出签名的余量。超过的发不出去:通道在本地就拒了,
-        // 那会被当成结果未知永远重试,所以这里按 TOO_LARGE 处理。
-        std::size_t maxRequestBytes{(4u * 1024 * 1024) - (64u * 1024)};
+        // 一笔存盘序列化后的上限,比传输上限(player_store_path::kMaxSaveRequestBytes)留出签名的余量。超过的发不出去:
+        // 通道在本地就拒了,那会被当成结果未知永远重试,所以这里按 TOO_LARGE 处理。
+        std::size_t maxRequestBytes{player_store_path::kMaxSaveRequestBytes - (64u * 1024)};
 
         SendClaimFn sendClaim;
         // 发送时才组请求:载入期间路由可能已经覆盖了待入场上下文。nullopt = 这次载入已经放弃。
@@ -148,11 +140,10 @@ public:
         std::function<void(Guid playerId, uint64_t commitMark)> onCommittedThrough;
         // 可选:审计发件箱,要和 commitMark 一起接。auditDue 回答这名玩家水位不大于这份快照的审计记录还有没有:有就算没有脏行
         // 也写一笔(净变化为零的改动同样有流水要交),定时存盘也不推迟。attachAudit 在组请求时把它们拷进请求;
-        // 重试发的是同一份请求,审计记录和行一样同内容、同序号。
-        // 一笔能带的审计记录有预算(AuditOutbox::kMaxBytesPerSave),带不完时 attachAudit 回 more=true:这一笔先提交行和前一段记录、
-        // 不带 release,提交之后状态机紧接着再发一笔带剩下的;调用方要的 release 与回调都留给最后一笔(设计 §5.2「分笔」)。
+        // 重试发的是同一份请求,审计记录和行一样同内容、同序号。到期的记录一笔全部带上(AuditOutbox::kMaxBytesPerPlayer 装得进
+        // maxRequestBytes),提交之后按这份快照的水位放行:不分笔,改动和描述它的记录总在同一个事务里(设计 §5.2)。
         std::function<bool(Guid playerId, uint64_t commitMark)> auditDue;
-        std::function<AuditAttachment(Guid playerId, uint64_t commitMark, playerstore::SavePlayerRequest &request)> attachAudit;
+        std::function<void(Guid playerId, uint64_t commitMark, playerstore::SavePlayerRequest &request)> attachAudit;
     };
 
     explicit PlayerStoreClient(Options options);
@@ -224,16 +215,10 @@ private:
         // 提交成功后写进 confirmed 的字节,不含探针。
         player_store_rows::KindBytes confirmOnCommit;
         Callbacks callbacks;
-        // 这份快照的提交水位(Options::commitMark)。
+        // 这份快照的提交水位(Options::commitMark)。提交并确认写了发件箱之后按它放行审计记录。
         uint64_t commitMark{0};
-        // 提交并确认写了发件箱之后,交给 onCommittedThrough 的水位:到期的审计记录都带上了就是 commitMark,
-        // 一笔带不完时是带上的最后一条的水位(剩下的还没进库,不能放行)。
-        uint64_t auditAckMark{0};
         // 请求里带了审计记录:提交时还要 go/db 回 audit_outbox_written 才放行(旧 go/db 会静默丢掉审计字段)。
         bool carriesAudit{false};
-        // 到期的审计记录这一笔带不完时有值:调用方原本的提交要求。这一笔发出去时不带 release;它提交之后紧接着再发一笔
-        // 带剩下的记录,release 与回调都留给那一笔(Finish)。
-        std::optional<SubmitOptions> continuation;
     };
 
     struct Pending
@@ -258,9 +243,6 @@ private:
         KindSet uncertain;
         // 上一次提交带着 release:库里 released=1,后面的存盘即使没有脏行也要写一笔把它清掉。
         bool releaseCommitted{false};
-        // 上一笔带了审计记录、存档提交了、go/db 却没写发件箱(go/db 比 scene 旧):这些记录放行不了,会一直到期。
-        // 这期间不分笔 —— 分笔是为了把记录交完,交不出去时分笔只会让存盘一笔接一笔空转。下一次确认写了发件箱时清掉。
-        bool auditStalled{false};
         // 库里已确认的代次与序号:认领或上一次提交的值。代次落后于 ownerEpoch 时必须写一笔。
         uint64_t committedOwnerEpoch{0};
         uint64_t committedSaveSeq{0};
@@ -309,7 +291,6 @@ private:
     void ScheduleRetry(Guid playerId, State &state);
     void HandleSaveResponse(Guid playerId, State &state, const playerstore::SavePlayerResponse &response);
     // committed 时更新已确认的行;auditWritten 为假(带了审计记录而 go/db 没写发件箱)时不放行审计记录,留到下一笔再交。
-    // 提交的这一笔审计记录没带完时不回调,把调用方的要求和回调交给紧接着的下一笔(InFlight::continuation)。
     void Finish(Guid playerId, State &state, const SaveResult &result, bool committed, bool auditWritten = true);
     void Advance(Guid playerId);
     // 这个玩家的存盘都落定了:通知调用方,再放行等着它的认领。

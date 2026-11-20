@@ -1,6 +1,8 @@
 package authority
 
 import (
+	"context"
+	"database/sql"
 	"strings"
 	"testing"
 
@@ -63,7 +65,7 @@ func TestTeamMatchIntentPreservesOriginalFormationOutcome(t *testing.T) {
 }
 
 func TestTeamMatchIntentMissingNeedsConfirmedCancellation(t *testing.T) {
-	for _, source := range []string{"missing", "cancel before launch", "legacy direct cancelled", "different owner"} {
+	for _, source := range []string{"missing", "cancel before launch", "legacy direct cancelled"} {
 		t.Run(source, func(t *testing.T) {
 			recorder := newSQLTraceRecorder()
 			s := sqlTraceStore(t, recorder)
@@ -71,10 +73,6 @@ func TestTeamMatchIntentMissingNeedsConfirmedCancellation(t *testing.T) {
 			data, err := DecodeTeamLaunch(launch)
 			require.NoError(t, err)
 			recorder.query = func(statement string) *sqlTraceRows {
-				if source == "different owner" && strings.HasPrefix(statement, "SELECT "+teamLaunchColumns+" FROM team_launch") {
-					launch.OwnerRevision++
-					return sqlTraceLaunchRow(launch)
-				}
 				if source == "legacy direct cancelled" && strings.HasPrefix(statement, "SELECT battle_id,payload,cancelled,owner_account,owner_revision FROM match_direct_intent") {
 					return sqlTraceRow(uint64(0), []byte{}, true, launch.OwnerAccount, launch.OwnerRevision)
 				}
@@ -85,9 +83,6 @@ func TestTeamMatchIntentMissingNeedsConfirmedCancellation(t *testing.T) {
 			}
 			intent, err := s.TeamMatchIntent(sqlTraceActor(t, launch.ActorId), launch.ActorId, data.Original.Request.RequestId)
 			switch source {
-			case "different owner":
-				require.ErrorIs(t, err, ErrOriginalPlayer)
-				require.Nil(t, intent)
 			case "missing":
 				require.NoError(t, err)
 				require.Nil(t, intent, "no committed original is not proof that a late request cannot still commit")
@@ -99,4 +94,59 @@ func TestTeamMatchIntentMissingNeedsConfirmedCancellation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// 角色过户之后,现主人(会话已按护栏核对)查到的整队原件、旧直接成局意图或撤销墓碑记的是此前的主人:
+// 给确定结论 TeamMatchIntentForeign,不报故障,也不写任何行。
+func TestTeamMatchIntentPredecessorOriginalIsDefinitive(t *testing.T) {
+	for _, source := range []string{"team launch", "legacy direct", "cancel tombstone"} {
+		t.Run(source, func(t *testing.T) {
+			recorder := newSQLTraceRecorder()
+			s := sqlTraceStore(t, recorder)
+			launch, _, _ := sqlTraceTeamLaunch(t, pb.MatchMode_MATCH_MODE_PVP_TEAM)
+			data, err := DecodeTeamLaunch(launch)
+			require.NoError(t, err)
+			const previousAccount = "previous-owner"
+			previousRevision := launch.OwnerRevision - 1
+			recorder.query = func(statement string) *sqlTraceRows {
+				switch {
+				case source == "team launch" && strings.HasPrefix(statement, "SELECT "+teamLaunchColumns+" FROM team_launch"):
+					previous := proto.Clone(launch).(*team.TeamLaunchRecord)
+					previous.OwnerAccount, previous.OwnerRevision = previousAccount, previousRevision
+					return sqlTraceLaunchRow(previous)
+				case source == "legacy direct" && strings.HasPrefix(statement, "SELECT battle_id,payload,cancelled,owner_account,owner_revision FROM match_direct_intent"):
+					return sqlTraceRow(uint64(9001), []byte{}, false, previousAccount, previousRevision)
+				case source == "cancel tombstone" && strings.HasPrefix(statement, "SELECT cancelled,owner_account,owner_revision FROM match_join_intent"):
+					return sqlTraceRow(true, previousAccount, previousRevision)
+				}
+				return nil
+			}
+			intent, err := s.TeamMatchIntent(sqlTraceActor(t, launch.ActorId), launch.ActorId, data.Original.Request.RequestId)
+			require.NoError(t, err, "a predecessor's original is a definitive answer, not a fault")
+			require.True(t, proto.Equal(&team.TeamMatchIntent{RequestId: data.Original.Request.RequestId, State: TeamMatchIntentForeign}, intent), "intent=%v", intent)
+			for _, statement := range recorder.recorded() {
+				require.False(t, strings.HasPrefix(statement, "UPDATE ") || strings.HasPrefix(statement, "INSERT "), "recovery must not create or change an operation: %s", statement)
+			}
+		})
+	}
+}
+
+// 会话本身已不归角色现主人(护栏拒绝)时不是「过户前的原件」:照旧回 ErrOriginalPlayer,不给确定结论。
+func TestTeamMatchIntentStaleSessionIsNotPredecessorOriginal(t *testing.T) {
+	recorder := newSQLTraceRecorder()
+	s := sqlTraceStore(t, recorder)
+	s.roleGuard = func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return ErrOriginalPlayer }
+	launch, _, _ := sqlTraceTeamLaunch(t, pb.MatchMode_MATCH_MODE_PVP_TEAM)
+	data, err := DecodeTeamLaunch(launch)
+	require.NoError(t, err)
+	recorder.query = func(statement string) *sqlTraceRows {
+		if strings.HasPrefix(statement, "SELECT "+teamLaunchColumns+" FROM team_launch") {
+			return sqlTraceLaunchRow(launch)
+		}
+		return nil
+	}
+	intent, err := s.TeamMatchIntent(sqlTraceActor(t, launch.ActorId), launch.ActorId, data.Original.Request.RequestId)
+	require.ErrorIs(t, err, ErrOriginalPlayer)
+	require.NotErrorIs(t, err, ErrForeignOriginal)
+	require.Nil(t, intent)
 }

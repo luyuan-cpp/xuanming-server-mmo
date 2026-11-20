@@ -379,24 +379,12 @@ PlayerStoreClient::StartResult PlayerStoreClient::Start(Guid playerId, State &st
     request.set_schema_gen(submitOptions.schemaGen);
     request.set_instance_id(options_.instanceId());
     request.set_release(submitOptions.release);
-    // 审计记录随这一笔交出去:go/db 在提交存档的同一个事务里写进发件箱。只在这里拷一次,重试发的是同一份请求。
-    AuditAttachment attached;
+    // 审计记录随这一笔交出去:go/db 在提交存档的同一个事务里写进发件箱。到期的一笔全部带上,只在这里拷一次,重试发的是同一份请求。
     if (options_.attachAudit)
     {
-        attached = options_.attachAudit(playerId, commitMark, request);
+        options_.attachAudit(playerId, commitMark, request);
     }
     inflight.carriesAudit = request.transaction_logs_size() > 0 || request.audit_snapshots_size() > 0;
-    // 都带上了:这份快照里的审计记录提交后全部放行。没带完:只放行到带上的最后一条,剩下的还没进库。
-    inflight.auditAckMark = attached.more ? attached.through : commitMark;
-    if (attached.more && !state.auditStalled)
-    {
-        // 到期的审计记录超过一笔的预算(存盘中断很久之后才会出现):分笔。这一笔先把行和前一段记录提交,不带 release:
-        // release 之后别的节点可以认领,剩下的记录就没有机会由本节点提交了。调用方要的 release 与回调留给最后一笔(Finish)。
-        // 行已经随这一笔写了,续笔不必再被强制写一次。
-        inflight.continuation = submitOptions;
-        inflight.continuation->force = false;
-        request.set_release(false);
-    }
 
     std::string stampedProfile;
     const bool stamped = options_.stampProfile && dirty.any();
@@ -615,28 +603,10 @@ void PlayerStoreClient::Finish(Guid playerId, State &state, const SaveResult &re
         state.releaseCommitted = finished.request.release();
         state.committedOwnerEpoch = finished.request.owner_epoch();
         state.committedSaveSeq = finished.request.save_seq();
-        if (finished.carriesAudit)
-        {
-            state.auditStalled = !auditWritten;
-        }
         // 先放行再回调:回调里可能销毁实体,那之后还没放行的会被当成没落库丢掉。
         if (auditWritten)
         {
-            NotifyCommittedThrough(playerId, finished.auditAckMark);
-        }
-        if (finished.continuation.has_value() && !state.pending.has_value())
-        {
-            // 这一笔的审计记录没带完(Start 里分笔):行已经提交,紧接着再发一笔带剩下的记录,内容就是刚确认的行(没有脏行)。
-            // 调用方的 release 与回调都交给它 —— 对调用方来说,这次存盘到最后一笔提交才算完成;它被拒,调用方看到的就是被拒。
-            // 排队位置上已经有更新的快照时不用补:那份的水位更大,会带走剩下的记录,release 也以它为准,这一笔照常回调。
-            Pending next;
-            next.rows = state.confirmed;
-            next.options = *finished.continuation;
-            next.callbacks = std::move(finished.callbacks);
-            next.commitMark = finished.commitMark;
-            state.pending.emplace(std::move(next));
-            Advance(playerId);
-            return;
+            NotifyCommittedThrough(playerId, finished.commitMark);
         }
     }
     // 回调里可能再次 Submit(进 pending),也可能 Forget,之后不再使用 state。

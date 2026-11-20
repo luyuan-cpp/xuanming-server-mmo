@@ -1,4 +1,4 @@
-# Prometheus alert rules for the control-domain Redis instances(控制域 Redis:核心 redis / redis-ha、排队实例 redis-queue-g<N>、redis-match-cluster)。
+# Prometheus alert rules for the core Redis instance and the match private cluster(核心单实例 redis,只有 dev 部署;match 私有集群 redis-match-cluster)。
 #
 # 来源:shared-redis-split-by-purpose.md §25.3(2026-10-23 拍板记录,原 §13 第 6 条「Redis 监控直接上 redis_exporter」)。
 #       两套 Redis Cluster 的告警在 deploy/k8s/redis-player-alerts.yaml(redis-player)与 redis-control-alerts.yaml(redis-control),不在本文件。
@@ -8,7 +8,7 @@
 #   kubectl apply -n observability -f deploy/k8s/redis-alerts.yaml
 #
 # Scrape prerequisites:
-#   - 每个 Redis Pod 带 redis-exporter sidecar(deploy/k8s/manifests/infra/redis.yaml、redis-ha.yaml、redis-purpose.yaml、redis-purpose-ha.yaml、redis-match-cluster.yaml),
+#   - 每个 Redis Pod 带 redis-exporter sidecar(deploy/k8s/manifests/infra/redis.yaml、redis-match-cluster.yaml),
 #     指标端口 9121,Pod 模板带 prometheus.io/scrape|port|path 注解。还需要一个指向该端口的 PodMonitor(或按注解抓取的配置),
 #     否则下面全部规则没有数据:空表达式不报错,和「一切正常」长得一样。
 #   - namespace、pod 两个 label 由抓取配置附加。告警只用这两个 label,不用任何玩家维度(低基数)。
@@ -109,7 +109,7 @@ spec:
             summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} AOF 写失败"
             description: "aof_last_write_status 不是 ok 已超过 1 分钟。检查 PVC 容量与节点磁盘;不处理时实例一旦重启就会丢失最近的写。"
 
-        # 从节点与主节点断链(高可用形态与 Cluster 形态都适用,只有从节点导出这个指标)。
+        # 从节点与主节点断链(Cluster 形态,只有从节点导出这个指标)。
         - alert: RedisReplicaLinkDown
           expr: |
             redis_master_link_up == 0
@@ -118,7 +118,7 @@ spec:
             severity: critical
           annotations:
             summary: "Redis 从节点 {{ $labels.namespace }}/{{ $labels.pod }} 与主节点断链"
-            description: "master_link_status 为 down 已超过 1 分钟。此时主节点故障会丢失未同步的写;高可用形态下 min-replicas-to-write 可能随之拒写。"
+            description: "master_link_status 为 down 已超过 1 分钟。此时主节点故障会丢失未同步的写;设了 min-replicas-to-write 的集群可能随之拒写。"
 
         # Cluster 状态不是 ok(redis-match-cluster):有 slot 无主或节点失联,相关键的读写报 CLUSTERDOWN。
         - alert: RedisClusterStateNotOk

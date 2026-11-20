@@ -32,6 +32,7 @@
 #include "muduo/net/TcpConnection.h"
 #include "engine/core/type_define/type_define.h"
 #include "network/codec/codec.h"
+#include "network/codec/websocket.h"
 #include "proto/common/base/message.pb.h"
 
 class BroadcastToPlayersRequest;
@@ -85,14 +86,28 @@ namespace gate_push
 
 		void SendTo(const muduo::net::TcpConnectionPtr &conn) const
 		{
-			conn->send(bytes_.peek(), static_cast<int>(bytes_.readableBytes()));
+			const muduo::net::Buffer &bytes = websocket::IsUpgraded(conn) ? WebSocketBytes() : bytes_;
+			conn->send(bytes.peek(), static_cast<int>(bytes.readableBytes()));
 		}
 
 		const char *data() const { return bytes_.peek(); }
 		std::size_t size() const { return bytes_.readableBytes(); }
 
 	private:
+		// 小游戏连接(WebSocket)收的是同一份帧字节前面加一个帧头(network/codec/websocket.h)。服务端帧不加掩码,
+		// 所有连接收到的字节相同,所以仍然只编码一次;第一次遇到 WebSocket 连接时才拼这一份。
+		const muduo::net::Buffer &WebSocketBytes() const
+		{
+			if (webSocketBytes_.readableBytes() == 0)
+			{
+				webSocketBytes_ = bytes_;
+				websocket::Frame(&webSocketBytes_);
+			}
+			return webSocketBytes_;
+		}
+
 		muduo::net::Buffer bytes_;
+		mutable muduo::net::Buffer webSocketBytes_{0};
 	};
 
 	// 取消息里的 message_content,缺失返回空指针。message 字段有存在位,缺失时 message_content() 是默认实例,

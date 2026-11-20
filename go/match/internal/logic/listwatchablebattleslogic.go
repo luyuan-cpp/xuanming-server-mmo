@@ -2,7 +2,6 @@ package logic
 
 import (
 	"context"
-	"math"
 	"strconv"
 
 	"match/internal/svc"
@@ -11,12 +10,20 @@ import (
 	"shared/releasetrack"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // 观战列表条数:0 = 用默认;上限收口防一次拉爆(索引里最多也就几百场)。
 const (
 	defaultWatchableListLimit = 20
 	maxWatchableListLimit     = 50
+)
+
+// 列表读回源时各取多少条:一个请求最多看 2×limit 条活跃候选(stable 观众在 canary 镜像非空时多读一倍)与 limit 条赛事局。
+// 缓存按上限取一份,各请求截自己要的前缀:全服前 k 一定是全服前 n 的前缀(k ≤ n)。
+const (
+	spectateLobbyActiveMax   = 2 * maxWatchableListLimit
+	spectateLobbyFeaturedMax = maxWatchableListLimit
 )
 
 type ListWatchableBattlesLogic struct {
@@ -41,6 +48,8 @@ func NewListWatchableBattlesLogic(ctx context.Context, svcCtx *svc.ServiceContex
 //
 // 运营标记的赛事局(featured,§15.6)排在最前。它们从赛事局索引取,不从活跃集合的前 limit 条里挑:活跃集合按开局时间
 // 倒序,比赛开打几分钟后就被新局挤出第一页,只在页内排序的话赛事局恰恰看不到。
+//
+// 两把索引都拆成 16 个桶,读的是本副本 1 秒缓存里的合并结果(readSpectateLobby),列表最多旧 1 秒。
 func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchableBattlesRequest) (*matchpb.ListWatchableBattlesResponse, error) {
 	limit := in.Limit
 	if limit == 0 {
@@ -63,17 +72,18 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 		scan = 2 * limit
 	}
 
-	pairs, err := l.svcCtx.MatchRedis.ZrevrangeWithScores(spectateBattlesActiveKey, 0, int64(scan)-1)
+	lobby, err := readSpectateLobby(l.svcCtx)
 	if err != nil {
 		l.Errorf("[spectate] Failed to read spectator index: %v", err)
 		return nil, err
 	}
+	pairs := lobby.Active[:min(int(scan), len(lobby.Active))]
 
 	staleBefore := spectateStaleBeforeMs()
 	battles := make([]*matchpb.BattleWatchSummary, 0, len(pairs))
 	listed := make(map[uint64]bool)
 	// 每条都要读一次权威库:请求已取消或超时就停,剩下的读只会白占连接池(撮合与观战原件事务共用它)。
-	for _, battleId := range l.featuredBattleIds(limit) {
+	for _, battleId := range l.featuredBattleIds(lobby.Featured[:min(int(limit), len(lobby.Featured))]) {
 		if err := l.ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -93,9 +103,7 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 		battleId, err := strconv.ParseUint(pair.Key, 10, 64)
 		if err != nil {
 			l.Errorf("[spectate] Invalid member %q in spectator index; removing", pair.Key)
-			if _, err := l.svcCtx.MatchRedis.Zrem(spectateBattlesActiveKey, pair.Key); err != nil {
-				l.Errorf("[spectate] Failed to remove invalid member: %v", err)
-			}
+			removeSpectateIndexGarbage(l.svcCtx, spectateActiveIndex, pair.Key)
 			continue
 		}
 		if listed[battleId] {
@@ -112,27 +120,42 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 	return &matchpb.ListWatchableBattlesResponse{Battles: battles}, nil
 }
 
-// featuredBattleIds 读赛事局索引里未到期的成员,后标记的在前。读失败只记日志:赛事局排序只是展示,不能因此让整个列表失败。
-func (l *ListWatchableBattlesLogic) featuredBattleIds(limit uint32) []uint64 {
-	pairs, err := l.svcCtx.MatchRedis.ZrevrangebyscoreWithScoresAndLimitCtx(l.ctx, spectateFeaturedActiveKey,
-		int64(nowMs()), math.MaxInt64, 0, int(limit))
-	if err != nil {
-		l.Errorf("[spectate] Failed to read featured index: %v", err)
-		return nil
-	}
+// featuredBattleIds 解析赛事局索引里未到期的成员(后标记的在前),坏成员现场摘掉。
+func (l *ListWatchableBattlesLogic) featuredBattleIds(pairs []redis.Pair) []uint64 {
 	ids := make([]uint64, 0, len(pairs))
 	for _, pair := range pairs {
 		battleId, err := strconv.ParseUint(pair.Key, 10, 64)
 		if err != nil {
 			l.Errorf("[spectate] Invalid member %q in featured index; removing", pair.Key)
-			if _, err := l.svcCtx.MatchRedis.Zrem(spectateFeaturedActiveKey, pair.Key); err != nil {
-				l.Errorf("[spectate] Failed to remove invalid featured member: %v", err)
-			}
+			removeSpectateIndexGarbage(l.svcCtx, spectateFeaturedIndex, pair.Key)
 			continue
 		}
 		ids = append(ids, battleId)
 	}
 	return ids
+}
+
+// readSpectateLobby 是观战列表的读:经本副本的 1 秒缓存(svc.SpectateLobbyCache),过期时同一时刻只有一个请求回源。
+// 没装配缓存(手工构造的单测 ServiceContext)时每次回源。
+func readSpectateLobby(s *svc.ServiceContext) (svc.SpectateLobbySnapshot, error) {
+	return s.SpectateLobby.Load(func() (svc.SpectateLobbySnapshot, error) { return loadSpectateLobby(s) })
+}
+
+// loadSpectateLobby 回源:活跃集合开局最晚的前 spectateLobbyActiveMax 条与赛事局索引未到期的前 spectateLobbyFeaturedMax 条,
+// 各是 16 个桶在一个 pipeline 里读完再合并。活跃集合读失败整个列表失败(不能把故障伪装成「没有可观战的战斗」);
+// 赛事局读失败只记日志,赛事局排序只是展示。回源由同一时刻的多个请求共用,不挂在其中某一个请求的 ctx 上。
+func loadSpectateLobby(s *svc.ServiceContext) (svc.SpectateLobbySnapshot, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+	defer cancel()
+	active, err := spectateActiveIndex.top(ctx, s.MatchRedis, spectateLobbyActiveMax)
+	if err != nil {
+		return svc.SpectateLobbySnapshot{}, err
+	}
+	featured, err := spectateFeaturedIndex.topFrom(ctx, s.MatchRedis, int64(nowMs()), spectateLobbyFeaturedMax)
+	if err != nil {
+		logx.Errorf("[spectate] Failed to read featured index: %v", err)
+	}
+	return svc.SpectateLobbySnapshot{Featured: featured, Active: active}, nil
 }
 
 // watchableSummary 读一场的摘要;不能列出时返回 nil,并按原因清理索引:成局不存在或终局已落定即残留,这场的观战数据一起删;

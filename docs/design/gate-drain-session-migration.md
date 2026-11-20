@@ -3,8 +3,9 @@
 > **状态**：设计稿 2026-11-05（Claude）。负责人在问答「gate 重启或灰度、金丝雀发布时 IP 和端口变了怎么办」之后点了「写设计稿」，11-06 点了「按建议落批 A」，§12 四项按本文的建议值执行。
 > - **批 A（login、协议、robot、排空脚本）**：11-06 已落码，落码与本文的差异见 §17。协议生成物已随主干快照提交（`a8af9372d` 等），**仍未编译、未测试**，Codex 验证清单在 `docs/PROGRESS.md` 2026-11-06 同名条目。
 > - **批 B（gate）**：11-10 已落码（负责人要求全部在 main 上做完），**未编译、未测试**，落码记录与验证清单见 §18 与 `docs/PROGRESS.md` 2026-11-10 同名条目。服务端到这里功能完整；迁移开关 `GateDrain.Migrate.Enabled` 当时默认关，11-12 收尾批改为默认开（§12 第 1 条）。
-> - **收尾批（2026-11-12）**：负责人要求「以后修的现在修、不等压测先按标准定」。客户端的跳数清零已落码，`Migrate.Enabled` 改为默认开，速率定为 20，选目标优先不在外出构建上的 gate（§7.3），gate 与 battle 的部署注入构建标识；另加一条守卫用例钉住 login 的 goctl 服务包装必须有 `RequestGateMigration`（**现在还没有，Codex 第一步跑 `go/build.ps1` 重生**）。落码记录见 §19，未编译、未测试。
-> - **收尾批续（2026-11-12）**：把原先留作残余或「以后再做」的几项都做掉：login 在会话记录被旧连接的断线通知改掉时重做进场提交，不再回 3023（§5）；客户端转移途中再收到 124 照跟（§10 第 4 条、§13）；接回时角色不离场、邻居看不到他闪一下（§13）；gate 迁移计数接上 `/metrics`（§8）；排空脚本估算同 zone 剩余容量、模板没变的重启先让 StatefulSet 修订变一次（§6、§7.3）；补 `PushRedirect` 的单测与 robot 迁移冒烟（§11）。落码记录见 §20，**未编译、未测试**。
+> - **收尾批（2026-11-12）**：负责人要求「以后修的现在修、不等压测先按标准定」。客户端的跳数清零已落码，`Migrate.Enabled` 改为默认开，速率定为 20，选目标优先不在外出构建上的 gate（§7.3），gate 与 battle 的部署注入构建标识；另加一条守卫用例钉住 login 的 goctl 服务包装必须有 `RequestGateMigration`（包装已重生入库，守卫用例 11-13 为绿，见 §21）。落码记录见 §19。
+> - **收尾批续（2026-11-12）**：把原先留作残余或「以后再做」的几项都做掉：login 在会话记录被旧连接的断线通知改掉时重做进场提交，不再回 3023（§5）；客户端转移途中再收到 124 照跟（§10 第 4 条、§13）；接回时角色不离场、邻居看不到他闪一下（§13）；gate 迁移计数接上 `/metrics`（§8）；排空脚本估算同 zone 剩余容量、模板没变的重启先让 StatefulSet 修订变一次（§6、§7.3）；补 `PushRedirect` 的单测与 robot 迁移冒烟（§11）。落码记录见 §20。
+> - **验证（2026-11-13 Codex，11-19 补修）**：gate 与 AOI 单测、login / player_locator / robot 的定向用例、客户端网络组都跑过；`cross_zone_test`、排空脚本用例与两台 gate 冒烟还没有通过记录。逐项见 §21。
 > - **Java 版**：待做，已在 Java 仓 `PARITY.md` 登记（§15）。
 > **核对基线**：HEAD `961f334a0` 加 11-05 工作区。当天二十多个会话同时在改，`gate_redirect.go`、`player_lifecycle.cpp`、`client_session_handler.cpp` 等文件都有别人未提交的改动，文中位置按函数名找，不写行号。
 > **上线状态**：未上线（见 [存盘围栏设计](db-write-fencing-mysql.md) 文末）。不为旧部署补兼容；新旧版本并存只考虑本功能自己滚动上线的那一段（§9）。
@@ -470,7 +471,7 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 | `go/login/internal/config/config.go`、`gate_drain_conf_test.go`、`go/login/etc/login.yaml` | `Migrate.Enabled` 的 default 改 true；用例补「只写 Enabled: false 能关」「只写速率时开关仍是开」 |
 | `go/login/internal/logic/pkg/loginqueue/{gatetoken.go,gatedrain_migrate.go,gatedrain_migrate_test.go}` | `GateCandidate.Build`；`PickMigrationTarget` 在合格目标里优先不在外出构建上的（`outgoingBuilds`、`preferIncomingBuild`）；4 条用例 |
 | `go/login/internal/svc/{servicecontext.go,gate_migration_test.go}` | `buildGateCandidates` 带上 `NodeInfo.build`；接线用例 `TestPlanGateMigration_PrefersGatesOffTheOutgoingBuild` |
-| `go/login/goctl_wrappers_test.go`（新） | 逐个服务核对 goctl 服务包装实现了 pb 里的每个方法。**现在是红的**：`clientplayerloginserver.go` 还没有 `RequestGateMigration`，要先跑 `go/build.ps1` 重生 |
+| `go/login/goctl_wrappers_test.go`（新） | 逐个服务核对 goctl 服务包装实现了 pb 里的每个方法。落码时是红的（`clientplayerloginserver.go` 还没有 `RequestGateMigration`）；包装重生入库后为绿（§21） |
 | `tools/scripts/k8s_gate_drain.ps1`、`tests/k8s_gate_drain.tests.ps1` | 缺省迁移开关与 login 结构体同步为开；用例改为「缺省开、显式 false 关」 |
 | `tools/scripts/k8s_deploy.ps1`、`lib/k8s_client_entry.ps1`、`tests/scene_planned_drain_deploy.tests.ps1` | gate 与 battle 的每种编排都注入 `MMORPG_BUILD_LABEL`（`Get-CppBuildLabelEnvLines`、`PodCommon.BuildLabel`）；Deployment 与 StatefulSet 形态再经 downward API 注入 `MMORPG_POD_REVISION`（Fleet 不注入） |
 | `cpp/libs/engine/core/node/system/node/node_planned_drain.h`、`cpp/tests/cross_zone_test/planned_drain_test.cpp` | `ComposeBuildLabel`：`NodeInfo.build` = 构建标识 `@` 工作负载修订（`Node::InitRpcServer` 注册时写入，scene 计划排空批已落码）；用例 `PlannedDrainBuildLabel.*` |
@@ -508,9 +509,37 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 
 命令、顺序与通过标准在 `docs/PROGRESS.md` 2026-11-12「gate 排空迁移收尾批续」条目。要点：
 
-- **第一步仍是 `go/build.ps1` 重生 login 的 goctl 包装**（§18.3），不然 gate 要票一律 UNIMPLEMENTED，冒烟停在 G3-mark。
+- login 的 goctl 包装已重生入库（主工作区 `clientplayerloginserver.go` 有 `RequestGateMigration`），不用再跑 `go/build.ps1`。以后给 `login.proto` 的服务加方法时才要重跑（§18.3），不然新方法一律 UNIMPLEMENTED。
 - 改了 scene 库与 gate：先整解 `msbuild /m:1`，再跑 `routing_identity_test`、`cross_zone_test`、`aoi_delivery_test`（`run_cpp_tests.ps1 -Build` 不重编库）。
 - robot 先 `go mod vendor`（新引用 `shared/gatepick`）。
 - 排空脚本的契约用例里，gate 标记键形归「Redis 上 Cluster 第 4 批」同日在改，那几条红时先分清是哪一批的。
 
-没有运行结果之前，本节所有内容都只是静态落码。
+没有运行结果之前，本节所有内容都只是静态落码。运行结果见 §21。
+
+## 21. 验证回执与补修（2026-11-13 Codex，2026-11-19 Claude）
+
+Codex 11-13 在隔离副本里按 §20.2 跑了一轮，原始日志在 `build/verification/gate-drain-closeout-20261112/`。客户端那一半的日志在 `build/verification/guild-recovery-notice-20261113/`。
+
+| 项 | 结果 |
+|---|---|
+| C++ `scene.lib`、gate、battle | 构建通过 |
+| `routing_identity_test` | 437/437，含 `GateRedirectDelivery.*` 6 条与迁移指标断言 |
+| `aoi_test`、`aoi_delivery_test` | 89/89、72/72，含 `ResendVisibleTargets*` 2 条 |
+| login | 构建通过；goctl 包装守卫、5 条 `SetSession`、24 条进场定向用例全过 |
+| player_locator、robot | 构建通过；robot 重定向 10/10 |
+| 客户端网络组（`67b9c589`） | 夹具改过之后 145/145，含 §19、§20 的重定向用例 |
+
+当时的红项与处置：
+
+| 红项 | 处置 |
+|---|---|
+| scene 节点在 `id_segment_transport.h` 被裸指针成员检查拦下，`scene.exe` 没编出来 | 11-14 已改，同日三个节点构建通过 |
+| `cross_zone_test` 在 `player_handoff_gate_test.cpp` 被同一检查拦下，整个工程没跑 | 11-19 改成借用引用与 `std::string_view`，未编译 |
+| login 全量里 `password_schema_test.go` 把 SQL 注释算进建表语句 | 11-19 已改，未运行；与迁移无关 |
+| player_locator 的 `session_reconciler_test.go` 传错 Redis 客户端类型 | 已入库；与迁移无关 |
+| 排空脚本用例 61/62，红的一条按旧键名写法断言 login 源码 | 11-19 改成现在的 `gatepick.DrainingKey` 写法，未运行 |
+| 客户端重连夹具还等 `account`（11-12 起 assign-gate 发 `access_token`） | 11-19 把 Codex 的补丁写回客户端仓，未重跑 |
+
+还没有通过记录的：Windows 整解、`cross_zone_test`（`ConnectionLostHoldReentry.*`、`SceneEntryPermissionTest.*` 新增 3 条、`PlayerHandoffGate.*`）、player_locator 的 `TestSetSession_*` 三条新增（11-13 同包别的测试编不过，整包没跑到）、排空脚本用例全绿、两台 gate 的迁移冒烟、§11 的压测核对。命令在 `docs/PROGRESS.md` 2026-11-19「落实 Codex 11-13 两份回执里的红项」。
+
+代码没有待写的部分。剩下的残余只有 §13 那一条固有代价，以及 Java 版待做（§15）。

@@ -505,9 +505,10 @@ func (s *Store) requestCancelledOnce(ctx context.Context, pid uint64, request st
 	if e != nil {
 		return false, e
 	}
+	// lockActor 已核对会话是角色现主人,墓碑主人不同就只能是过户前留下的。
 	actor := originalPlayer(ctx, pid)
 	if owner != actor.OwnerAccount || revision != actor.OwnerRevision {
-		return false, ErrOriginalPlayer
+		return false, ErrForeignOriginal
 	}
 	return cancelled, tx.Commit()
 }
@@ -763,8 +764,9 @@ func (s *Store) findDirectOnce(ctx context.Context, key *pb.MatchDirectIntentRec
 	if e != nil {
 		return nil, nil, e
 	}
+	// kind 2 以外已由 lockActor 核对会话是角色现主人,原件主人不同就只能是过户前留下的。
 	if key.Kind != 2 && (owner != actor.OwnerAccount || revision != actor.OwnerRevision) {
-		return nil, nil, ErrOriginalPlayer
+		return nil, nil, ErrForeignOriginal
 	}
 	if e = tx.Commit(); e != nil {
 		return nil, nil, e

@@ -26,6 +26,8 @@ type AuthProviderSecrets struct {
 	// 小游戏渠道调 code2Session 用的 AppSecret。
 	WeChatMiniGameAppSecret string
 	DouyinMiniGameAppSecret string
+	// Sign in with Apple 私钥的 PEM 原文(注销时签 client_secret 撤销令牌);空 = 没配撤销。格式由 auth.NewAppleRevoker 在启动时解析。
+	ApplePrivateKeyPEM string
 }
 
 // containsUnexpandedPlaceholder 判断值里是否有没被展开的 ${...}。
@@ -109,15 +111,27 @@ func resolveAuthProviders(cfg AuthConfig, relaxed bool, lookup func(string) (str
 		out.DouyinMiniGameAppSecret = secret
 	}
 
-	// 身份令牌渠道没有密钥要解析,只校验 ClientId 与 Endpoint。
+	// 身份令牌渠道登录没有密钥,只校验 ClientId 与 Endpoint;Apple 另有可选的撤销私钥。
 	if a := cfg.Apple; a != nil {
 		if err := checkIdTokenProvider("Apple", a, relaxed); err != nil {
 			return AuthProviderSecrets{}, warnings, err
 		}
+		key, err := resolveAppleRevokeKey(a, lookup)
+		if err != nil {
+			return AuthProviderSecrets{}, warnings, err
+		}
+		if key == "" {
+			warnings = append(warnings, "AuthProviders.Apple has no TeamId/KeyId/PrivateKeyEnv: Sign in with Apple tokens are not revoked on account deletion; "+
+				"players are told to remove the app in their Apple ID settings instead")
+		}
+		out.ApplePrivateKeyPEM = key
 	}
 	if g := cfg.Google; g != nil {
 		if err := checkIdTokenProvider("Google", g, relaxed); err != nil {
 			return AuthProviderSecrets{}, warnings, err
+		}
+		if g.TeamId != "" || g.KeyId != "" || g.PrivateKeyEnv != "" {
+			return AuthProviderSecrets{}, warnings, fmt.Errorf("AuthProviders.Google does not take TeamId/KeyId/PrivateKeyEnv: they are Sign in with Apple settings")
 		}
 		// Google 的 OAuth 客户端 ID 都以这个后缀结尾。写成别的(项目编号、客户端密钥、Android 包名)起服零报错,
 		// 但每个令牌都按 aud 不符被拒,玩家看到的只是「登录失败」。
@@ -149,6 +163,41 @@ func checkIdTokenProvider(name string, c *IdTokenAuthConf, relaxed bool) error {
 		return fmt.Errorf("AuthProviders.%s.ClientId has leading or trailing whitespace", name)
 	}
 	return checkOAuthEndpoint(name, c.Endpoint, relaxed)
+}
+
+// resolveAppleRevokeKey 校验撤销 Apple 令牌用的三项,返回私钥 PEM 原文;三项都没写回空串。
+// PEM 不走 checkCredentialValue:从文件建的 Secret 结尾本来就有换行,PEM 解析不在乎;格式错误由 auth.NewAppleRevoker 在启动时拒绝。
+func resolveAppleRevokeKey(a *IdTokenAuthConf, lookup func(string) (string, bool)) (string, error) {
+	if a.TeamId == "" && a.KeyId == "" && a.PrivateKeyEnv == "" {
+		return "", nil
+	}
+	for _, f := range [...]struct{ name, value string }{{"TeamId", a.TeamId}, {"KeyId", a.KeyId}} {
+		if !isAppleIdentifier(f.value) {
+			return "", fmt.Errorf("AuthProviders.Apple.%s must be the 10-character identifier from the Apple developer account", f.name)
+		}
+	}
+	name := strings.TrimSpace(a.PrivateKeyEnv)
+	if name == "" || containsUnexpandedPlaceholder(name) {
+		return "", fmt.Errorf("AuthProviders.Apple.PrivateKeyEnv must name the environment variable holding the .p8 key")
+	}
+	v, ok := lookup(name)
+	if !ok || strings.TrimSpace(v) == "" {
+		return "", fmt.Errorf("AuthProviders.Apple.PrivateKeyEnv=%q, but that environment variable is missing or empty", name)
+	}
+	return v, nil
+}
+
+// isAppleIdentifier:Team ID 与 Key ID 都是 10 位大写字母或数字。
+func isAppleIdentifier(v string) bool {
+	if len(v) != 10 {
+		return false
+	}
+	for _, c := range v {
+		if (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 // resolveMiniGameProvider 校验一个小游戏渠道段并解析它的 AppSecret。name 是配置段名,报错与告警里用它点名。

@@ -1,4 +1,5 @@
 #include "node_allocator.h"
+#include "node/system/node/client_endpoint.h"
 #include "node_id_selection.h"
 #include <muduo/base/Logging.h>
 #include "node.h"
@@ -7,6 +8,9 @@
 #include <network/node_utils.h>
 #include <thread_context/redis_manager.h>
 #include <core/utils/id/snow_flake.h>
+
+#include <cstdlib>
+#include <string>
 
 #ifdef _WIN32
 #include <WinSock2.h>
@@ -300,6 +304,22 @@ bool NodeAllocator::AcquireNodePort()
 		gNode->MutableNodeInfo().mutable_grpc_endpoint()->set_port(grpcPort);
 		LOG_INFO << "Assigned gRPC port: " << grpcPort
 				 << " (TCP " << assignedPort << " + " << kGrpcPortOffset << ")";
+	}
+
+	// 小游戏客户端的 WebSocket 地址(docs/design/minigame-websocket-gate.md W7):端口到这里才是终值。
+	// 基地址已在 Node::InitClientEndpoint 校验过;没注入 CLIENT_WS_BASE_URL(不接小游戏,或不是 gate / battle)时写空串。
+	{
+		std::string wsBaseUrl;
+		std::string wsError;
+		const client_endpoint::EnvLookup env = [](const char *name) -> const char *
+		{ return std::getenv(name); };
+		(void)client_endpoint::ParseWsBaseUrl(env, wsBaseUrl, wsError);
+		const std::string wsUrl = client_endpoint::BuildWsUrl(wsBaseUrl, GetNodeInfo().endpoint());
+		gNode->MutableNodeInfo().set_client_ws_url(wsUrl);
+		if (!wsUrl.empty())
+		{
+			LOG_INFO << "Client WebSocket URL: " << wsUrl;
+		}
 	}
 
 	LOG_INFO << "NodeType: " << gNode->GetNodeType()

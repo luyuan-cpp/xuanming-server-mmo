@@ -395,3 +395,59 @@ lib 的三个模板经新参数 `New-ClientEntryPodCommon -SecretEnv` 注入。d
   本节比对脚本按内容比的判据不变:它比的是 11-06 的旧脚本,旧脚本仍是乱序。
 - Java 版(AGENTS.md §12):核对了 `D:\luyuan\xuanming-server-mmo`,`deploy/` 下只有 compose、docker、sql、ci,没有 K8s 清单、ConfigMap 或 `secretKeyRef`。
   本批是本仓库 K8s 部署侧与 Go 配置加载的改动,**不适用**,不往 PARITY 加行。本仓库的 `java/gateway_node` 属于 C++/Go 版,代码不用改。
+
+## 10. 2026-11-19 收尾核对:原始交接 §3、§4.4 逐条现状
+
+负责人 11-19 原话:「服务器代码实现完毕了吗……没做完的话你就按最标准的方式去做……以后修的你不要等以后,现在修」。本节按原始交接 [handoff-global-singletons-10m-ccu-20261013.md](handoff-global-singletons-10m-ccu-20261013.md) §3 与 §4.4 逐条对 11-19 工作区核对(只读代码与文档,没有运行)。
+
+### 10.1 今天改的(未运行,待 Codex 验证)
+
+- **etcd 与 Kafka 的成员反亲和按档位渲染**(原始交接 §4.4「staging/prod 用 required 反亲和」):
+  - `etcd.yaml`、`kafka.yaml` 的反亲和改成占位 `__ETCD_MEMBER_ANTI_AFFINITY__` / `__KAFKA_MEMBER_ANTI_AFFINITY__`。
+  - Apply-Infra 的清单循环用新函数 `Get-QuorumMemberAntiAffinityYaml` 替换:staging / prod 渲染 required,任意两个成员不在同一节点,节点不够时多出的成员 Pending;dev 渲染 preferred,与改动前逐字相同,不触发滚动。
+  - 发号器的 `etcd-id-secondary.yaml` / `etcd-id-registry.yaml` 只在 staging / prod 部署,自己的成员直接写 required,对别的 etcd 的避让仍是 preferred。
+  - `redis-cluster.yaml` 同样是 preferred,归「控制面按 zone 化」会话的 6b 批,已发消息建议同样处理,本线没改。
+- **`k8s_image.ps1` 透传 `-InfraNamespace`**(§6.4 记的既有问题):以前不声明也不透传,release-all 在别的 infra namespace 上也会去 mmorpg-infra 部署、过重启闸。`dev_tools.ps1` 的 `Invoke-K8sImage` 同步透传。
+- 文件:`tools/scripts/k8s_deploy.ps1`(新函数 + 循环里两行)、`tools/scripts/k8s_image.ps1`、`tools/scripts/dev_tools.ps1`、`deploy/k8s/manifests/infra/{etcd,kafka,etcd-id-secondary,etcd-id-registry}.yaml`、`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(新用例「quorum 成员反亲和…」)、`tools/scripts/tests/etcd_maintenance_contract.tests.ps1`(新用例「反亲和:…」)、`deploy/k8s/README.md`(kind 一条)。五个 ps1 用 PowerShell 解析器静态查过,0 个语法错误(不是运行)。
+
+### 10.2 已由别的工作线做完,或前提已不成立(本线不再动)
+
+| 原始交接条目 | 现状 |
+|---|---|
+| §3 P0 Redis 高可用丢已确认存盘、go/db 连接错误耗预算 | go/db 的 Kafka 存盘消费路径已随「玩家存档直接提交 TiDB」删除,前提不成立 |
+| §3 P1 gate nofile | `Node::Initialize` 自抬软限(A0-2) |
+| §3 P1 Java gateway zone 容量 5000 | 已是 45000(`schema.sql`、`ZoneConfig.java`) |
+| §3 P1 核心 Redis 8Gi PVC / maxmemory | 核心 `redis-ha` 在 staging / prod 随 Redis 上 Cluster 第 6b 批退役,`redis.yaml` 只留 dev;生产用的控制集群与玩家集群已显式 maxmemory、noeviction、内存 requests = limits = 2 × maxmemory、非 dev 档必须显式给容量(`redis-cluster.yaml`、`Resolve-RedisClusterCapacity`) |
+| §3 P1 Kafka retention.bytes、`player_snapshot` 永久保留 | 审计两个 topic 按 topic 覆盖 retention.bytes;data_service 有 `AuditRetention` 定期清理 |
+| §3 P1 db 消费组全 zone 共用 | 已按 zone 命名 `db_rpc_consumer_group_z<N>` |
+| §3 P1 每次存盘 5 条 SQL(clientFoundRows) | 存盘已改直接提交;data_service 有意不开 clientFoundRows(ODKU 靠受影响 0 行判撞键,有回归用例守着) |
+| §3 P1 refresh token 每账号 32 枚 | login 已改成家族 + 轮换 + 重放吊销 |
+| §3 P1 `trade_asset_op` 不在 bootstrap 清单 | 四份清单都已有 |
+| §3 P2 每次存盘一条 LOG_INFO | 新存盘路径没有逐次 INFO |
+| §3 P2 `reassignSceneNode` 无 CAS | 已带 generation 条件写 |
+| §3 P2 login AssignGate 每请求读 etcd | 10-18 已改 list-watch 镜像 |
+| §3 P2 match `migrateLegacyQueues`、`dirty_keys_set` | 都已删 |
+| §4.4 C++ 每 2s 全量 Range 全部前缀 | 已改成按发现计划(scopes)只看本节点需要的前缀 |
+| §4.4 节点号线性 CAS 探测 | 已先取已占集合再选空位 |
+| §3 第 7 条卡片 `ProbeAndRetryOne` | battle 已不连 Redis(Redis 上 Cluster 第 3 批),函数已删 |
+| 11-05 的 C++ zone Redis 口令走 Secret | 被 Redis 上 Cluster 第 3 / 6b 批取代:只有 scene 连 Redis,口令变量改为 `CONTROL_REDIS_PASSWORD`,gate / battle 不再注入 |
+| §8.7 Go / gateway 口令走 Secret | §9 已做 |
+
+### 10.3 看过、决定不改
+
+- **Apply-Infra 无确认删除旧的 `deployment/etcd`、`deployment/kafka`**(§6.4):项目未上线,只有 2026-09 之前建的 dev 集群才会有这种 Deployment,而且 emptyDir 里本来就没有要保的数据(负责人 11-19「玩家数据可以完全清空」)。全新集群上这几行是空操作,上线后的集群也不会有这种 Deployment,不加确认闸。
+- **双口令轮换没有自动化**:换口令是运维步骤,按 README 做;上线前没有要轮换的口令。
+
+### 10.4 交验证(Codex 执行,仓库根,PowerShell 7;C++ / Go 不用重编)
+
+前置同 §8.6(清掉 `MMORPG_*` 环境变量)。在 §8.6、§9.5 的命令之外:
+
+1. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:新用例「quorum 成员反亲和(Get-QuorumMemberAntiAffinityYaml)…」PASS,其余与改动前相同。
+2. `pwsh -NoProfile -File tools/scripts/tests/etcd_maintenance_contract.tests.ps1`:全部 PASS(新增「反亲和:…」,共 9 条)。
+3. `pwsh -NoProfile -File tools/scripts/tests/id_issuer_deploy_contract.tests.ps1`:不应新增失败(两套发号 etcd 的反亲和改了写法)。
+4. 可选:`pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -SkipPreflight -SkipGoSvc -SkipJavaSvc -ReleaseProfile prod ...`(按 §8.6 的 prod 环境变量)看 etcd / kafka 的 StatefulSet 里是 `requiredDuringSchedulingIgnoredDuringExecution`。
+5. 上集群前:staging / prod 的节点数必须 ≥ 3,否则第 3 个 etcd 成员、第 3 个 broker 会 Pending(这是硬约束的本意)。
+
+### 10.5 Java 版
+
+本节两项都是本仓库 K8s 部署侧的改动,Java 版没有 K8s 清单,**不适用**,不往 PARITY 加行。

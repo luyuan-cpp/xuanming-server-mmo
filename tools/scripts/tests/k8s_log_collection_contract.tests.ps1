@@ -14,11 +14,14 @@
       4. 推送地址的校验:带凭据、引号、空白、非 http(s) 都拒绝,报错不回显地址;
       5. 部署判定:只有 infra-up 与不带 -SkipInfra 的 all-up 部署,-NoCppLogSidecar 两路一起关;只有 Apply-Infra 渲染与部署它;
       6. DryRun:单副本与 3 副本 Loki 下 DaemonSet 都推 loki.<infra>:3100;给了 -LokiPushUrl 推那个地址;关了 sidecar 不渲染;
-         带凭据的地址在任何清单之前拒绝;infra-down 按名字删 ClusterRoleBinding。
+         带凭据的地址在任何清单之前拒绝;infra-down 按名字删 ClusterRoleBinding;
+      7. span(阶段三,docs/design/distributed-tracing.md §10.3):尾部采样在本机与网关级逐字相同;节点级只收 OTLP、按 trace_id
+         分给网关级;入口 Service 只落本节点、与部署脚本写进三种语言配置的同名;Go 的 Telemetry 段整段换成集群那一段;
+         infra-up 部署 Tempo、C++ 的 node ConfigMap 写本节点采集器,-NoCppLogSidecar 时都不写。
     子进程一律 -DryRun(不连集群);纯函数按 AST 从 k8s_deploy.ps1 抽出,在本进程里直接调用。
 
     设了环境变量 MMORPG_DUMP_ALLOY_CONFIG_DIR 时,另按部署脚本的缺省命名空间(mmorpg-infra / mmorpg-zone)渲染一份,写进那个目录:
-    pod-log-collector.yaml(整份清单)、pod-log-collector.alloy、cpp-log-sidecar.alloy。给 alloy fmt 与 kind 上的端到端核对用
+    pod-log-collector.yaml(整份清单)、pod-log-collector.alloy、trace-gateway.alloy、cpp-log-sidecar.alloy。给 alloy fmt 与 kind 上的端到端核对用
     (docs/PROGRESS.md 2026-11-12「分布式日志阶段二」条目)。
 
 .EXAMPLE
@@ -36,7 +39,8 @@ Write-Host '=== k8s log collection contract tests ==='
 $parseErrors = $null
 $deployAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count -gt 0) { throw "部署脚本语法错误: $($parseErrors[0].Message)" }
-$deployFunctions = @('Get-CppLogSidecarConfigAlloy', 'New-PodLogCollectorManifestText', 'Assert-LokiPushUrlSafe', 'Test-PodLogCollectorDeployed')
+$deployFunctions = @('Get-CppLogSidecarConfigAlloy', 'New-PodLogCollectorManifestText', 'Assert-LokiPushUrlSafe', 'Test-PodLogCollectorDeployed',
+    'Get-TraceAgentEndpoints', 'Set-GoSvcTelemetryBlock')
 foreach ($node in $deployAst.FindAll({ param($a) $a -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($deployFunctions -contains $node.Name) { Set-Item -Path "Function:script:$($node.Name)" -Value $node.Body.GetScriptBlock() }
 }
@@ -290,6 +294,8 @@ if (-not [string]::IsNullOrWhiteSpace($dumpDir)) {
         -PushUrl $script:CppLogSidecarPushUrl -Image $AlloyImage
     [IO.File]::WriteAllText((Join-Path $dumpDir 'pod-log-collector.yaml'), $defaultManifest, $utf8)
     [IO.File]::WriteAllText((Join-Path $dumpDir 'pod-log-collector.alloy'), (Get-CollectorAlloyConfig -Manifest $defaultManifest), $utf8)
+    [IO.File]::WriteAllText((Join-Path $dumpDir 'trace-gateway.alloy'),
+        (Get-CollectorAlloyConfig -Manifest (Get-ManifestDocument -Manifest $defaultManifest -Kind 'ConfigMap' -Name 'trace-gateway')), $utf8)
     [IO.File]::WriteAllText((Join-Path $dumpDir 'cpp-log-sidecar.alloy'), (Get-CppLogSidecarConfigAlloy).Replace("`r`n", "`n"), $utf8)
     $script:CppLogSidecarPushUrl = $InClusterPushUrl
     Write-Host "Rendered log collection configs written to $dumpDir"
@@ -607,6 +613,109 @@ Test-Case 'DryRun:infra-down 删完命名空间再按名字删 ClusterRoleBindin
     Assert-True -Condition ($namespaceAt -ge 0 -and $bindingAt -gt $namespaceAt) -Because '集群级的绑定删命名空间带不走,要按名字删'
     Assert-NotMatch -Text $run.Output -Pattern 'delete clusterrole mmorpg-pod-log-reader' -Because '共用的 ClusterRole 留给同一集群里别的部署'
     $null = Get-ManifestDocument -Manifest $Rendered -Kind 'ClusterRoleBinding' -Name "mmorpg-pod-log-reader-$Infra"
+}
+
+# ──────────────────────────────────────────────
+# 5. span(阶段三,docs/design/distributed-tracing.md §10.3)
+# ──────────────────────────────────────────────
+$GatewayConfig = Remove-AlloyComments -Text (Get-CollectorAlloyConfig -Manifest (Get-ManifestDocument -Manifest $Rendered -Kind 'ConfigMap' -Name 'trace-gateway'))
+
+Test-Case 'span:尾部采样在本机与网关级逐字相同(错误全留、总耗时 ≥ 1 秒全留、其余按 trace_id 留 10%,decision_wait 30s、num_traces 50000)' {
+    $local = Get-AlloyComponent -Config $LocalConfig -Header 'otelcol.processor.tail_sampling "default"'
+    $gateway = Get-AlloyComponent -Config $GatewayConfig -Header 'otelcol.processor.tail_sampling "default"'
+    Assert-SameText -Expected ([regex]::Replace($local, '\s+', ' ').Trim()) -Actual ([regex]::Replace($gateway, '\s+', ' ').Trim()) `
+        -Because '本机与集群网关级的尾部采样要逐字相同(改了一边同批改另一边)'
+    foreach ($pattern in @('decision_wait\s*=\s*"30s"', 'num_traces\s*=\s*50000',
+            '(?s)type\s*=\s*"status_code"\s*status_code\s*\{\s*status_codes\s*=\s*\["ERROR"\]',
+            '(?s)type\s*=\s*"latency"\s*latency\s*\{\s*threshold_ms\s*=\s*1000\s*\}',
+            '(?s)type\s*=\s*"probabilistic"\s*probabilistic\s*\{\s*sampling_percentage\s*=\s*10\s*\}')) {
+        Assert-Match -Text $local -Pattern $pattern -Because "定案的采样口径:$pattern"
+    }
+    Assert-Equal -Expected 3 -Actual (@(Get-AlloySubBlocks -Block $local -Name 'policy').Count) -Because '只有这三条策略(任一条命中就留下整条 trace)'
+}
+
+Test-Case 'span:本机与网关级采样后写 Tempo;节点级只收 OTLP 不采样,按 trace_id 分给网关级的无头 Service' {
+    $localReceiver = Get-AlloyComponent -Config $LocalConfig -Header 'otelcol.receiver.otlp "default"'
+    foreach ($port in 4317, 4318) {
+        Assert-Match -Text $localReceiver -Pattern "endpoint\s*=\s*`"0\.0\.0\.0:$port`"" -Because "本机收 OTLP $port(4317 gRPC 给 Go,4318 HTTP 给 C++ 与 Java)"
+    }
+    Assert-Match -Text $localReceiver -Pattern 'traces\s*=\s*\[otelcol\.processor\.tail_sampling\.default\.input\]' -Because '本机只有一个 Alloy,直接尾部采样'
+    Assert-Match -Text (Get-AlloyComponent -Config $LocalConfig -Header 'otelcol.exporter.otlp "tempo"') -Pattern 'endpoint\s*=\s*"tempo:4317"' -Because '本机写 compose 里的 Tempo'
+
+    $nodeReceiver = Get-AlloyComponent -Config $CollectorConfig -Header 'otelcol.receiver.otlp "default"'
+    foreach ($port in 4317, 4318) {
+        Assert-Match -Text $nodeReceiver -Pattern "endpoint\s*=\s*`"0\.0\.0\.0:$port`"" -Because "节点级收 OTLP $port"
+    }
+    Assert-NotMatch -Text $CollectorConfig -Pattern 'otelcol\.processor\.tail_sampling' -Because '节点级不做尾部采样:一条 trace 的 span 散在各个节点上'
+    $loadBalancing = Get-AlloyComponent -Config $CollectorConfig -Header 'otelcol.exporter.loadbalancing "trace_gateway"'
+    Assert-Match -Text $loadBalancing -Pattern 'routing_key\s*=\s*"traceID"' -Because '按 trace_id 分,同一条 trace 落到同一个网关实例'
+    Assert-Match -Text $loadBalancing -Pattern ('(?s)dns\s*\{\s*hostname\s*=\s*"' + [regex]::Escape("trace-gateway-headless.$Infra.svc.cluster.local") + '"\s*port\s*=\s*"4317"') `
+        -Because '经无头 Service 解析出每个网关 Pod'
+
+    Assert-Match -Text (Get-AlloyComponent -Config $GatewayConfig -Header 'otelcol.receiver.otlp "default"') -Pattern 'traces\s*=\s*\[otelcol\.processor\.tail_sampling\.default\.input\]' -Because '网关级收进来先尾部采样'
+    Assert-Match -Text (Get-AlloyComponent -Config $GatewayConfig -Header 'otelcol.exporter.otlp "tempo"') -Pattern ('endpoint\s*=\s*"' + [regex]::Escape("tempo.${Infra}:4317") + '"') `
+        -Because '网关级写 infra 命名空间里的 Tempo(tempo.yaml)'
+}
+
+Test-Case 'span:业务 Pod 的入口 Service 只落本节点、名字与部署脚本写进三种语言配置的一致;网关级两副本、随指纹滚动' {
+    $entry = Get-ManifestDocument -Manifest $Rendered -Kind 'Service' -Name 'pod-log-collector-otlp'
+    Assert-Match -Text $entry -Pattern 'internalTrafficPolicy: Local' -Because '每个 Pod 只连本节点的采集器'
+    Assert-Match -Text $entry -Pattern '(?s)selector:\s*app: pod-log-collector\s' -Because '入口落到节点级采集器'
+    $ds = Get-ManifestDocument -Manifest $Rendered -Kind 'DaemonSet' -Name 'pod-log-collector'
+    foreach ($port in 4317, 4318) {
+        Assert-Match -Text $entry -Pattern "(?m)^\s*port: $port\s*$" -Because "入口 Service 开 $port"
+        Assert-Match -Text $ds -Pattern "containerPort: $port" -Because "采集器容器声明 $port"
+    }
+    $deployText = [IO.File]::ReadAllText((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'))
+    Assert-Match -Text $deployText -Pattern '(?m)^\$script:TraceAgentServiceName = "pod-log-collector-otlp"' -Because '部署脚本写进 Go / C++ / Java 配置的入口与清单里的 Service 同名'
+
+    Assert-Match -Text (Get-ManifestDocument -Manifest $Rendered -Kind 'Service' -Name 'trace-gateway-headless') -Pattern 'clusterIP: None' -Because '无头 Service,DNS 解析出每个 Pod'
+    $gateway = Get-ManifestDocument -Manifest $Rendered -Kind 'Deployment' -Name 'trace-gateway'
+    Assert-Match -Text $gateway -Pattern 'replicas: 2' -Because '网关级两副本'
+    Assert-Match -Text $gateway -Pattern 'mmorpg\.io/pod-log-collector-config-hash: "[0-9a-f]{12}"' -Because '改这份清单时网关级一起滚动'
+    Assert-Match -Text $gateway -Pattern ('image: ' + [regex]::Escape($AlloyImage) + '\s') -Because '与节点级同一个镜像'
+    foreach ($pattern in @('runAsNonRoot: true', 'readOnlyRootFilesystem: true', '(?s)capabilities:\s+drop:\s+- ALL')) {
+        Assert-Match -Text $gateway -Pattern $pattern -Because "网关级不读宿主机文件,不用 root:$pattern"
+    }
+    Assert-NotMatch -Text $gateway -Pattern 'hostPath' -Because '网关级不挂宿主机目录'
+}
+
+Test-Case 'span:三种语言的地址与日志采集同开同关;Go 配置里本机那段 Telemetry 整段换成集群这一段' {
+    $script:InfraNamespace = $Infra
+    $script:TraceAgentServiceName = 'pod-log-collector-otlp'
+    $script:CppLogSidecarEnabled = $false
+    Assert-True -Condition ($null -eq (Get-TraceAgentEndpoints)) -Because '关了日志采集就没有节点采集器,三种语言都不导出'
+    $script:CppLogSidecarEnabled = $true
+    $agent = Get-TraceAgentEndpoints
+    Assert-SameText -Expected "pod-log-collector-otlp.${Infra}:4317" -Actual $agent.OtlpGrpc -Because 'go-zero 的 OTLP/gRPC 写 host:port'
+    Assert-SameText -Expected "http://pod-log-collector-otlp.${Infra}:4318/v1/traces" -Actual $agent.OtlpHttpTraces -Because 'C++ 与 Java 写完整的 OTLP/HTTP 地址'
+
+    $source = "Name: mail.rpc`nListenOn: 0.0.0.0:50900`nTelemetry:`n  Name: mail`n  Endpoint: 127.0.0.1:4317`n  Sampler: 1.0`n  Batcher: otlpgrpc`nKafkaBrokers: [kafka:9092]`n"
+    $on = Set-GoSvcTelemetryBlock -ConfigText $source -SvcName 'data-service' -TraceAgent $agent
+    Assert-NotMatch -Text $on -Pattern '127\.0\.0\.1:4317' -Because '本机那段整段去掉(集群里连不上)'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($on, '(?m)^Telemetry:').Count) -Because '只剩集群这一段'
+    Assert-Match -Text $on -Pattern ('(?m)^Telemetry:\n  Name: data_service\n  Endpoint: ' + [regex]::Escape($agent.OtlpGrpc) + '\n  Sampler: 1\.0\n  Batcher: otlpgrpc$') `
+        -Because '写在末尾;Name 与 Loki 的 service 标签同值(连字符换下划线)'
+    Assert-Match -Text $on -Pattern '(?m)^KafkaBrokers: \[kafka:9092\]$' -Because '别的键原样保留'
+    Assert-Match -Text (Set-GoSvcTelemetryBlock -ConfigText $source -SvcName 'mail' -TraceAgent $null) -Pattern '(?m)^Telemetry:\n  Name: mail\n  Disabled: true$' `
+        -Because '没有节点采集器时显式不导出'
+    Assert-Match -Text (Set-GoSvcTelemetryBlock -ConfigText "Name: rank.rpc`n" -SvcName 'rank' -TraceAgent $agent) -Pattern '(?s)\AName: rank\.rpc\n# span 导出.*\nTelemetry:\n' `
+        -Because '模板本来没有这段时只在末尾加'
+}
+
+Test-Case 'DryRun:infra-up 部署 Tempo,battle 的 node ConfigMap 写本节点采集器;-NoCppLogSidecar 时都不写' {
+    $run = Invoke-LogDryRun -Arguments $InfraArgs -Env $InfraEnv
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern 'claimName: tempo-data-pvc' -Because '与日志采集同开:部署 Tempo'
+    Assert-True -Condition ($run.Output.IndexOf('claimName: tempo-data-pvc') -lt $run.Output.IndexOf('kind: DaemonSet')) -Because 'Tempo 排在采集器之前'
+    Assert-Match -Text $run.Output -Pattern ('OtlpTracesEndpoint: "' + [regex]::Escape("http://pod-log-collector-otlp.${Infra}:4318/v1/traces") + '"') `
+        -Because 'battle-node-config 里 C++ 的导出地址是本节点采集器(不搬本机的 127.0.0.1)'
+    Assert-NotMatch -Text $run.Output -Pattern 'OtlpTracesEndpoint: "http://127\.0\.0\.1' -Because '本机地址不进集群'
+
+    $off = Invoke-LogDryRun -Arguments ($InfraArgs + @('-NoCppLogSidecar')) -Env $InfraEnv
+    Assert-Equal -Expected 0 -Actual $off.ExitCode -Because "输出: $($off.Output)"
+    Assert-NotMatch -Text $off.Output -Pattern 'claimName: tempo-data-pvc' -Because '关了日志采集不部署 Tempo'
+    Assert-Match -Text $off.Output -Pattern 'OtlpTracesEndpoint: ""' -Because '没有节点采集器:C++ 不导出'
 }
 
 exit (Complete-TestRun -SuiteName 'k8s log collection contract')

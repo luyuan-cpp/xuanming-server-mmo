@@ -56,12 +56,12 @@ param(
 # 迁移顺序:go/db 与 data_service 在前(data_service.yaml 的首次启动说明),其余互不依赖。
 # login 不连 SQL,但 go_services.ps1 同样要它的目录条目;gateway 由 start_game.ps1 单独拉起,同样消费 grant。
 function Get-LocalSqlBootWriterServices {
-    @('db', 'data_service', 'chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player_inbox', 'login', 'gateway')
+    @('db', 'data_service', 'chat', 'friend', 'guild', 'mail', 'rank', 'payment', 'match', 'trade', 'player_inbox', 'login', 'gateway')
 }
 
 # 与 start_game.ps1 的 $optionalServices 同义:建表失败只跳过它们,不拖垮登录和匹配。
 function Get-LocalSqlBootOptionalServices {
-    @('chat', 'friend', 'mail', 'rank', 'trade', 'player_inbox')
+    @('chat', 'friend', 'mail', 'rank', 'payment', 'trade', 'player_inbox')
 }
 
 function Get-LocalSqlBootNonWriterServices {
@@ -283,7 +283,7 @@ function New-LocalSqlBootSettings {
     }
 
     # 本机全部逻辑库。每个库自带一份写者闸门,写者连接的 DATABASE() 必须等于它的闸门所在的库(authoritysql pool.go、Java WriterAuthority)。
-    $schemas = ConvertTo-LocalSqlBootOrdinalSet -Values (@('mmorpg', $ledgerSchema, 'mmorpg_chat', 'mmorpg_friend', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_match', 'mmorpg_player_inbox', 'mmorpg_rank', 'mmorpg_trade') + $directoryShards + $playerDatabases)
+    $schemas = ConvertTo-LocalSqlBootOrdinalSet -Values (@('mmorpg', $ledgerSchema, 'mmorpg_chat', 'mmorpg_friend', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_match', 'mmorpg_payment', 'mmorpg_player_inbox', 'mmorpg_rank', 'mmorpg_trade') + $directoryShards + $playerDatabases)
     foreach ($schema in $schemas) { $null = ConvertTo-AuthoritySqlIdentifier $schema }
 
     return [pscustomobject]@{
@@ -387,7 +387,7 @@ function New-LocalSqlBootDsn {
     return "${User}:${Password}@tcp(${Endpoint})/${Database}?${Parameters}"
 }
 
-# 只有 maintenance_drain.ps1 的 runtimeEnvironment 白名单里的变量:chat、guild、mail、rank 的 DSN 与 match 的口令。其余服务的账号写在配置里。
+# 只有 maintenance_drain.ps1 的 runtimeEnvironment 白名单里的变量:chat、guild、mail、rank、payment 的 DSN 与 match 的口令。其余服务的账号写在配置里。
 function Get-LocalSqlBootRuntimeEnvironment {
     param([Parameter(Mandatory)]$Settings, [Parameter(Mandatory)][string]$Service, [Parameter(Mandatory)][string]$User, [Parameter(Mandatory)][string]$Password)
     switch -CaseSensitive ($Service) {
@@ -395,6 +395,7 @@ function Get-LocalSqlBootRuntimeEnvironment {
         'guild' { return @{ MMORPG_GUILD_SQL_DSN = (New-LocalSqlBootDsn -User $User -Password $Password -Endpoint $Settings.Endpoint -Database 'mmorpg_guild' -Parameters 'charset=utf8mb4&parseTime=true&loc=Local') } }
         'mail' { return @{ MMORPG_MAIL_SQL_DSN = (New-LocalSqlBootDsn -User $User -Password $Password -Endpoint $Settings.Endpoint -Database 'mmorpg_mail') } }
         'rank' { return @{ MMORPG_RANK_SQL_DSN = (New-LocalSqlBootDsn -User $User -Password $Password -Endpoint $Settings.Endpoint -Database 'mmorpg_rank') } }
+        'payment' { return @{ MMORPG_PAYMENT_SQL_DSN = (New-LocalSqlBootDsn -User $User -Password $Password -Endpoint $Settings.Endpoint -Database 'mmorpg_payment') } }
         'match' { return @{ MATCH_MYSQL_PASSWORD = $Password } }
     }
     return @{}
@@ -500,6 +501,10 @@ function Get-LocalSqlBootConfigPatch {
             $values['Backend'] = $backend
         }
         'rank' {
+            $values['Etcd.Key'] = '""'
+            $values['Backend'] = $backend
+        }
+        'payment' {
             $values['Etcd.Key'] = '""'
             $values['Backend'] = $backend
         }
@@ -986,6 +991,7 @@ function Get-LocalSqlBootGrantManifest {
         guild = @{ Own = @('mmorpg_guild'); Cross = @() }
         mail = @{ Own = @('mmorpg_mail'); Cross = @() }
         rank = @{ Own = @('mmorpg_rank'); Cross = @() }
+        payment = @{ Own = @('mmorpg_payment'); Cross = @() }
         match = @{ Own = @('mmorpg_match'); Cross = @() }
         trade = @{ Own = @('mmorpg_trade'); Cross = @() }
         player_inbox = @{ Own = @('mmorpg_player_inbox'); Cross = @() }

@@ -105,6 +105,13 @@ func (s *TransactionLogStore) claimRetentionShard(ctx context.Context, shard uin
 	return claimSQLRetentionShard(ctx, s.db, s.dbName, "txlog", deleteOldLogsInShardSQL, shard)
 }
 
+const oldestLogInShardSQL = `SELECT timestamp_sec FROM transaction_log WHERE shard = ? ORDER BY timestamp_sec LIMIT 1`
+
+// oldestRetentionTimestamp 流水表现存最老一行的 timestamp_sec,由 RunAuditRetention 每轮报一次(audit_retention.go)。
+func (s *TransactionLogStore) oldestRetentionTimestamp(ctx context.Context) (uint64, bool, error) {
+	return oldestSQLTimestamp(ctx, s.db, oldestLogInShardSQL)
+}
+
 // Close releases the database connection.
 func (s *TransactionLogStore) Close() error {
 	return s.db.Close()

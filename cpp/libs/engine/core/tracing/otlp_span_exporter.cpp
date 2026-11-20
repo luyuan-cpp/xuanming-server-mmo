@@ -1,7 +1,6 @@
 #include "core/tracing/otlp_span_exporter.h"
 
 #include <algorithm>
-#include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -13,8 +12,6 @@
 #include "muduo/base/Logging.h"
 #include "muduo/net/Buffer.h"
 #include "muduo/net/EventLoop.h"
-#include "muduo/net/EventLoopThread.h"
-#include "muduo/net/InetAddress.h"
 #include "muduo/net/TcpClient.h"
 #include "muduo_grpc/address.h"
 
@@ -31,7 +28,7 @@ double ToSeconds(std::chrono::milliseconds duration)
 
 // 一条到采集器的 TCP 连接(一个对象只对应一次连接,重连就换新对象,同 muduo_grpc::Http2Transport)。
 // 不 enableRetry:重连与退避由导出器决定。muduo 的回调只绑 weak_ptr<自己>(AGENTS.md §11.7),
-// 对象析构前显式 forceClose,不依赖 ~TcpClient 的 use_count 判断。只在导出线程上使用与析构(析构排进 queueInLoop)。
+// 对象析构前显式 forceClose,不依赖 ~TcpClient 的 use_count 判断。只在 loop 线程上使用与析构(析构排进 queueInLoop)。
 class HttpConnection : public std::enable_shared_from_this<HttpConnection> {
 public:
     struct Callbacks {
@@ -131,7 +128,7 @@ public:
     }
 
 private:
-    muduo::net::EventLoop& loop_; // 借用导出线程的 loop,连接在该线程结束前释放
+    muduo::net::EventLoop& loop_; // 借用节点的 loop,连接对象在它析构之前释放
     muduo::net::TcpClient client_;
     uint64_t id_;
     Callbacks callbacks_;
@@ -140,40 +137,34 @@ private:
 
 } // namespace
 
-// 停机收尾的完成信号:导出线程在收尾的最后一跳里置位,调用 Shutdown 的线程等它。
-struct OtlpSpanExporter::Latch {
-    std::mutex mutex;
-    std::condition_variable cv;
-    bool done{false};
-
-    void Signal()
-    {
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            done = true;
-        }
-        cv.notify_all();
+std::optional<muduo::net::InetAddress> ResolveOtlpEndpoint(const OtlpHttpEndpoint& endpoint)
+{
+    // muduo 的 InetAddress 遇到非法 IP 只打一行日志并留下 0.0.0.0,所以先按规范 IPv4 校验(muduo_grpc/address.h)。
+    if (muduo_grpc::IsCanonicalIpv4(endpoint.host)) {
+        return muduo::net::InetAddress(endpoint.host, endpoint.port);
     }
-
-    bool WaitFor(std::chrono::milliseconds timeout)
-    {
-        std::unique_lock<std::mutex> lock(mutex);
-        return cv.wait_for(lock, timeout, [this] { return done; });
+    muduo::net::InetAddress address(endpoint.port);
+    if (!muduo::net::InetAddress::resolve(endpoint.host, &address)) {
+        return std::nullopt;
     }
-};
+    return address;
+}
 
 class OtlpSpanExporter::Impl : public std::enable_shared_from_this<OtlpSpanExporter::Impl> {
 public:
-    Impl(muduo::net::EventLoop& loop, SpanExportQueue& queue, SpanExportStats& stats, OtlpSpanExporterOptions options,
-         std::shared_ptr<OtlpSpanExporter::Latch> latch)
-        : loop_(loop), queue_(queue), stats_(stats), options_(std::move(options)), latch_(std::move(latch)),
-          url_(options_.endpoint.ToUrl())
+    Impl(muduo::net::EventLoop& loop, SpanExportQueue& queue, SpanExportStats& stats, OtlpSpanExporterOptions options)
+        : loop_(loop), queue_(queue), stats_(stats), options_(std::move(options)), url_(options_.endpoint.ToUrl())
     {
         options_.maxExportBatchSize = std::max<size_t>(options_.maxExportBatchSize, 1);
     }
 
-    void StartInLoop()
+    void Start()
     {
+        loop_.assertInLoopThread();
+        if (started_) {
+            return;
+        }
+        started_ = true;
         std::weak_ptr<Impl> weakSelf = weak_from_this();
         // 周期定时器只绑 weak:Impl 先没了就是空操作。
         periodicTimer_ = loop_.runEvery(ToSeconds(options_.scheduleDelay), [weakSelf] {
@@ -182,7 +173,8 @@ public:
             }
         });
         periodicTimerArmed_ = true;
-        // 攒够一批时提前发。回调在 Submit 的线程上、持队列锁执行,只做一次 queueInLoop;摘回调(停机)之后 loop_ 不会再被碰到。
+        // 攒够一批时提前发。回调在 Submit 的线程上、持队列锁执行,只做一次 queueInLoop(Kafka 的 poll 线程就地派发时也安全);
+        // 停机摘掉回调之后 loop 不会再被碰到,摘回调与 Submit 持同一把锁。
         muduo::net::EventLoop* loop = &loop_;
         queue_.SetBatchReadyCallback([loop, weakSelf] {
             loop->queueInLoop([weakSelf] {
@@ -193,9 +185,10 @@ public:
         });
     }
 
-    void BeginShutdownInLoop()
+    void BeginShutdown()
     {
-        if (shuttingDown_) {
+        loop_.assertInLoopThread();
+        if (shuttingDown_ || finished_) {
             return;
         }
         shuttingDown_ = true;
@@ -211,6 +204,23 @@ public:
         });
         shutdownTimerArmed_ = true;
         ContinueShutdown();
+    }
+
+    bool Finished() const { return finished_; }
+
+    // 析构前收口(没走完停机冲刷就析构时):不再发,剩下的按停机丢弃计数。
+    void StopNow()
+    {
+        if (!finished_) {
+            queue_.SetBatchReadyCallback(nullptr);
+            if (phase_ != Phase::kIdle && inFlightSpans_ > 0) {
+                stats_.failedSpans.fetch_add(inFlightSpans_, std::memory_order_relaxed);
+                stats_.failedBatches.fetch_add(1, std::memory_order_relaxed);
+                inFlightSpans_ = 0;
+            }
+            phase_ = Phase::kIdle;
+            FinishShutdown();
+        }
     }
 
 private:
@@ -233,24 +243,7 @@ private:
             if (shuttingDown_) {
                 FinishShutdown();
             }
-            return;   // 空闲的周期:不解析、不建连
-        }
-        const bool reuse = connection_ && connection_->Connected();
-        std::optional<muduo::net::InetAddress> address;
-        if (!reuse) {
-            ReleaseConnection();
-            // 停机冲刷不做 DNS 解析(阻塞可能拖过停机时限):主机是 IPv4 字面量才在停机时新建连接,否则剩下的按停机丢弃计数。
-            address = ResolveEndpoint(/*allowDns=*/!shuttingDown_);
-            if (!address) {
-                if (shuttingDown_) {
-                    FinishShutdown();
-                    return;
-                }
-                inFlightSpans_ = queue_.PopBatch(batch_, options_.maxExportBatchSize);
-                batch_.clear();
-                FailInFlight("cannot resolve " + options_.endpoint.host, /*backoff=*/true);
-                return;
-            }
+            return;   // 空闲的周期:不建连
         }
         batch_.clear();
         inFlightSpans_ = queue_.PopBatch(batch_, options_.maxExportBatchSize);
@@ -263,10 +256,11 @@ private:
         request_ = BuildOtlpHttpRequest(options_.endpoint, body);
         ArmExportDeadline();
 
-        if (reuse) {
+        if (connection_ && connection_->Connected()) {
             SendInFlight();
             return;
         }
+        ReleaseConnection();
         std::weak_ptr<Impl> weakSelf = weak_from_this();
         HttpConnection::Callbacks callbacks;
         callbacks.onUp = [weakSelf](uint64_t id) {
@@ -285,8 +279,8 @@ private:
         callbacks.onConnectFailed = [weakSelf](uint64_t id, int savedErrno) {
             if (const auto self = weakSelf.lock()) self->OnConnectFailed(id, savedErrno);
         };
-        connection_ = std::make_shared<HttpConnection>(loop_, *address, nextConnectionId_++, std::move(callbacks));
-        connectionId_ = nextConnectionId_ - 1;
+        connectionId_ = nextConnectionId_++;
+        connection_ = std::make_shared<HttpConnection>(loop_, options_.address, connectionId_, std::move(callbacks));
         phase_ = Phase::kConnecting;
         connection_->Connect();
     }
@@ -555,33 +549,9 @@ private:
         if (discarded > 0) {
             LOG_WARN << "[Tracing] span exporter stopped with " << discarded << " span(s) not exported";
         }
+        // 连接对象排在队尾析构(不在它自己的回调栈上);~TcpClient 再排的 forceCloseInLoop / connectDestroyed 由
+        // 节点拆除末尾的两跳 queueInLoop 排空(AGENTS.md §11.7)。
         CloseConnection();
-        // 连接对象排在队尾析构(不在它自己的回调栈上);~TcpClient 再排的 forceCloseInLoop / connectDestroyed /
-        // Connector 的 resetChannel 由下面三跳 queueInLoop 排空之后才放行(AGENTS.md §11.7)。
-        std::shared_ptr<OtlpSpanExporter::Latch> latch = latch_;
-        muduo::net::EventLoop* loop = &loop_;
-        loop_.queueInLoop([loop, latch] {
-            loop->queueInLoop([loop, latch] {
-                loop->queueInLoop([latch] { latch->Signal(); });
-            });
-        });
-    }
-
-    std::optional<muduo::net::InetAddress> ResolveEndpoint(bool allowDns)
-    {
-        const OtlpHttpEndpoint& endpoint = options_.endpoint;
-        // muduo 的 InetAddress 遇到非法 IP 只打一行日志并留下 0.0.0.0,所以先按规范 IPv4 校验(muduo_grpc/address.h)。
-        if (muduo_grpc::IsCanonicalIpv4(endpoint.host)) {
-            return muduo::net::InetAddress(endpoint.host, endpoint.port);
-        }
-        if (!allowDns) {
-            return std::nullopt;
-        }
-        muduo::net::InetAddress address(endpoint.port);
-        if (!muduo::net::InetAddress::resolve(endpoint.host, &address)) {
-            return std::nullopt;
-        }
-        return address;
     }
 
     void CloseConnection()
@@ -611,13 +581,13 @@ private:
         }
     }
 
-    muduo::net::EventLoop& loop_; // 借用导出线程的 loop,收尾完成后不再访问
+    muduo::net::EventLoop& loop_; // 借用节点的 loop;Impl 只在它的线程上使用,先于它析构
     SpanExportQueue& queue_;
     SpanExportStats& stats_;
     OtlpSpanExporterOptions options_;
-    std::shared_ptr<OtlpSpanExporter::Latch> latch_;
     const std::string url_;
 
+    bool started_{false};
     Phase phase_{Phase::kIdle};
     std::vector<SpanRecord> batch_;
     std::string request_;
@@ -646,50 +616,30 @@ private:
     bool shutdownTimerArmed_{false};
 };
 
-OtlpSpanExporter::OtlpSpanExporter(SpanExportQueue& queue, SpanExportStats& stats, OtlpSpanExporterOptions options)
-    : queue_(queue), stats_(stats), options_(std::move(options))
+OtlpSpanExporter::OtlpSpanExporter(muduo::net::EventLoop& loop, SpanExportQueue& queue, SpanExportStats& stats,
+                                   OtlpSpanExporterOptions options)
+    : impl_(std::make_shared<Impl>(loop, queue, stats, std::move(options)))
 {
 }
 
 OtlpSpanExporter::~OtlpSpanExporter()
 {
-    Shutdown();
+    impl_->StopNow();
 }
 
 void OtlpSpanExporter::Start()
 {
-    if (started_) {
-        return;
-    }
-    started_ = true;
-    thread_ = std::make_unique<muduo::net::EventLoopThread>(muduo::net::EventLoopThread::ThreadInitCallback(),
-                                                           "span-export");
-    loop_ = std::ref(*thread_->startLoop());
-    latch_ = std::make_shared<Latch>();
-    // Impl 在本线程上构造(只存参数,不碰 loop),之后它的全部状态只在导出线程上读写。
-    impl_ = std::make_shared<Impl>(loop_->get(), queue_, stats_, options_, latch_);
-    loop_->get().runInLoop([impl = impl_] { impl->StartInLoop(); });
+    impl_->Start();
 }
 
-void OtlpSpanExporter::Shutdown()
+void OtlpSpanExporter::BeginShutdown()
 {
-    if (!started_ || stopped_) {
-        return;
-    }
-    stopped_ = true;
-    loop_->get().runInLoop([impl = impl_] { impl->BeginShutdownInLoop(); });
-    // 收尾本身以 shutdownTimeout 为限(导出线程上的定时器),多等 2 秒给收尾的几跳 queueInLoop 与线程调度。
-    if (!latch_->WaitFor(options_.shutdownTimeout + std::chrono::seconds(2))) {
-        // 导出线程卡住了(例如解析主机名阻塞):不能在本线程上拆它的 loop、连接与定时器。有意泄漏,进程正在退出。
-        LOG_ERROR << "[Tracing] span exporter thread did not finish its shutdown in time; leaving it running until process exit";
-        (void)thread_.release();
-        (void)new std::shared_ptr<Impl>(std::move(impl_));
-        return;
-    }
-    // ~EventLoopThread:quit + join。Impl 在导出线程上已经释放了连接、取消了定时器,之后在本线程上析构是安全的。
-    thread_.reset();
-    impl_.reset();
-    loop_.reset();
+    impl_->BeginShutdown();
+}
+
+bool OtlpSpanExporter::Finished() const
+{
+    return impl_->Finished();
 }
 
 SpanExportStats& ProcessSpanExportStats()

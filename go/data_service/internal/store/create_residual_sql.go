@@ -50,15 +50,27 @@ func (st *sqlResidualSteps) scanNames(ctx context.Context, slot int, after strin
 	return out, rows.Err()
 }
 
-// orphanEvidence 见 residualSteps。读路由行(玩家片)、存档库这名玩家的行头、这名角色在各账号片上的 ref,都是一致读、不取锁;
+// orphanEvidence 见 residualSteps。读这名角色在各账号片上的 ref、路由行(玩家片)、存档库这名玩家的行头,都是一致读、不取锁;
 // 口径同后台判陈旧的 committedEvidence(名字已绑定那一条不用看:孤儿名字本来就是预留态)。
+// ref 先读、不管有没有路由行:目录建角先核路由行才写 ref(initialStorage),login 在登记路由之前回滚时一条 ref 都没有。
+// 有 ref 却没有路由行是玩家片恢复点早于登记路由:ACTIVE 的是提交过;只有 PENDING 的找不到存档库,证据核不全(no_route)。都不释放。
 func (st *sqlResidualSteps) orphanEvidence(ctx context.Context, player uint64) (string, error) {
+	refs, err := readRefsOfPlayer(ctx, st.shards, player)
+	if err != nil {
+		return "", err
+	}
+	if slices.ContainsFunc(refs, func(r playerRefState) bool { return r.State == refStateActive }) {
+		return committedEvidenceRefActive, nil
+	}
 	routes, err := loadRoutes(ctx, st.shards.forPlayer(player), []uint64{player})
 	if err != nil {
 		return "", err
 	}
 	route, routed := routes[player]
 	if !routed || !route.HasPlacement() {
+		if len(refs) > 0 {
+			return committedEvidenceNoRoute, nil
+		}
 		return "", nil
 	}
 	if !st.stores.Allowed(route.StorageID) {
@@ -74,13 +86,6 @@ func (st *sqlResidualSteps) orphanEvidence(ctx context.Context, player uint64) (
 	}
 	if played {
 		return committedEvidenceStoreSaved, nil
-	}
-	refs, err := readRefsOfPlayer(ctx, st.shards, player)
-	if err != nil {
-		return "", err
-	}
-	if slices.ContainsFunc(refs, func(r playerRefState) bool { return r.State == refStateActive }) {
-		return committedEvidenceRefActive, nil
 	}
 	return "", nil
 }

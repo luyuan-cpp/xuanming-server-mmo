@@ -230,6 +230,8 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
 
 唯一的配套改动在错误分类：票行复核失败（票已被别的段认领、撤单、回队退避、过期、探测原件刷新，或放置机房已不在硬延迟内）原来回一个普通错误，撮合侧当成结局未知，记一次排空 HOLD（`HoldRelay`）。拆分后跨机房段和机房段撞车是常态，这样每次排空都会停在 HOLD。改为哨兵 `authority.ErrClaimStale`（文案不变），归进 `expectedClaimRejection`：事务在提交之前就回滚了，什么都没写，结局是已知的。
 
+组队池（PVE_TEAM / PVP_TEAM）里撞的是整队时，后到的一方走不到票行复核：`ClaimTeamUnits` 先过入场守卫，守卫看到整队原件已经带着别的 `battle_id`（先提交的那一局写的），回 `authority.ErrMatchEntryOccupied`。2026-11-19 核实它原先不在 `expectedClaimRejection` 里，组队池每撞一次整队就记一次排空 HOLD，同样在提交之前回滚、结局已知，现已归进去。钉住的用例：team 包 `TestTeamTiDBSecondClaimOfClaimedUnitsIsRejectedWholly`（第二次认领同一批整队回这个错误、整笔回滚、票仍归先成的那一局），logic 包 `TestExpectedClaimRejectionCoversClaimedTeamUnits`。
+
 **8. 指标**
 
 - `match_pool_owned{role}`：本副本负责的撮合段数，role 取 pool / region / sub / cross。告警 `MatchPoolsUnowned`（`sum(match_pool_owned) == 0`）不用改；多副本冒烟的核对口径从「之和 = 池数」改成「之和 = 段数」。

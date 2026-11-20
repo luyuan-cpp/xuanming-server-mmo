@@ -140,17 +140,12 @@ spec:
       # 给 controlled shutdown 与日志 flush 留时间;被 SIGKILL 打断只会导致下次启动做
       # 一次日志恢复(数据仍在 PVC 上),但恢复期 broker 不可用,能避免就避免。
       terminationGracePeriodSeconds: 60
-      # 多 broker 时尽量一台机器一个:一台节点宕机最多带走一个 broker(副本数 3 + min.insync 2 容得下)。
-      # 用 preferred 而不是 required:本机 kind 只有一个节点,硬约束会让第 2、3 个 Pod 永远 Pending。
+      # 多 broker 时一台机器一个:一台节点宕机最多带走一个 broker(副本数 3 + min.insync 2 容得下,KRaft 选举组也还在多数)。
+      # staging / prod 渲染成 required;dev 渲染成 preferred(本机 kind 只有一个节点,硬约束会让第 2、3 个 Pod 永远 Pending)。
+      # Apply-Infra 按 -ReleaseProfile 替换(Get-QuorumMemberAntiAffinityYaml)。
       affinity:
         podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    app: kafka
+          __KAFKA_MEMBER_ANTI_AFFINITY__
       containers:
         - name: kafka
           # 镜像钉 tag@digest(2026-10-15)。浮动的 :latest 配 PVC 上的持久日志目录,一次重启就可能让新版本 broker

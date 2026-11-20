@@ -11,6 +11,13 @@
       - 缺片阈值就是 go/shared/workshard 的 Shards;
       - 绑了分工的四个重投循环(guild / trade / mail / data_service 的回收)都拿到了 assetop.Metrics,否则那个服务没有序列、规则对它永远不响;
       - 规则名单、severity / for / summary / description,两条规则按同一组 label 聚合,告警名在 deploy/k8s 的告警文件里不重名。
+    同一文件的 asset-channel.wake-shards 组(落地唤醒订阅按片分工,docs/design/redis-cluster-all-domains-20261110.md §4.6)
+    也在这里核对:
+      - assetop_wake_subscribed_shards 由 go/shared/assetop/metrics.go 注册,只带常量 service label;
+      - 缺片阈值就是 go/shared/assetopwake 的 ShardCount;
+      - 按 (service) 聚合、不带 namespace,前提是 data_service 的唤醒成员表跨全部 zone(recall_channel.go 的 recallWakeMembersPrefix
+        不带 zone);那张表改回按 zone 圈的话,这条规则要跟着改回 (namespace, service);
+      - 三个订阅方(guild / trade / data_service)都绑了片的负责者,并把 assetop.Metrics 交给 assetopwake.New,否则没有序列。
     只读文本,不执行部署入口,不访问集群。规则语法由 promtool 另验。
 
 .EXAMPLE
@@ -55,6 +62,12 @@ $script:WorkshardGo = Read-RepoText -RelativePath 'go/shared/workshard/workshard
 $script:Group = Get-AlertGroupText -Text $script:Alerts -Group 'asset-channel.work-shards'
 $script:Rules = @(Get-AlertRules -GroupText $script:Group)
 $script:Names = @('AssetOpOwnedShardsMissing', 'AssetOpOwnedShardsMissingBacklogAging')
+$script:WakeGo = Read-RepoText -RelativePath 'go/shared/assetopwake/wake.go'
+$script:WakeGroup = Get-AlertGroupText -Text $script:Alerts -Group 'asset-channel.wake-shards'
+$script:WakeRules = @(Get-AlertRules -GroupText $script:WakeGroup)
+$script:WakeNames = @('AssetOpWakeShardsUnsubscribed')
+# 起落地唤醒订阅的三个服务;每个文件里只有一处 assetopwake.New。
+$script:WakeSubscribers = @('go/guild/internal/svc/asset_op.go', 'go/trade/internal/svc/assetchannel.go', 'go/data_service/internal/svc/recall_channel.go')
 
 function Get-Rule {
     param([Parameter(Mandatory = $true)][string]$Name)
@@ -121,11 +134,51 @@ Test-Case '绑了分工的四个重投循环都拿到 assetop.Metrics(否则那�
     Assert-Match -Text (Read-RepoText -RelativePath 'go/mail/mail.go') -Pattern 'assetop\.NewMetrics\(prometheus\.DefaultRegisterer, assetOpCaller\)' -Because 'mail 的 assetop 指标注册在默认注册表上(domainhost 的 /metrics 只暴露它)'
 }
 
-Test-Case '两条告警的名字在 deploy/k8s 的全部告警文件里各只出现一次' {
+Test-Case 'wake-shards 组:规则名单、severity、for、summary、description 钉死' {
+    Assert-Match -Text $script:WakeGroup -Pattern '(?m)^      interval:[ ]*60s[ ]*$' -Because '与 work-shards 组同一评估间隔'
+    Assert-Equal -Expected ($script:WakeNames -join ',') -Actual (($script:WakeRules | ForEach-Object { $_.Name }) -join ',') -Because '规则名单钉死(唤醒缺片)'
+    $body = $script:WakeRules[0].Body
+    # 缺片 warning、持续 5 分钟,与 AssetOpOwnedShardsMissing 同一口径:换主、重订的抖动在几秒到几十秒内收敛。
+    Assert-Match -Text $body -Pattern '(?m)^            severity:[ ]*warning[ ]*$' -Because 'AssetOpWakeShardsUnsubscribed 的 severity'
+    Assert-Match -Text $body -Pattern '(?m)^          for:[ ]*5m[ ]*$' -Because 'AssetOpWakeShardsUnsubscribed 的 for'
+    foreach ($key in @('summary', 'description')) {
+        Assert-Match -Text $body -Pattern ('(?m)^            {0}:' -f $key) -Because "AssetOpWakeShardsUnsubscribed 要有 $key"
+    }
+}
+
+Test-Case '唤醒缺片:指标由 metrics.go 注册、不带可变 label,阈值是 assetopwake.ShardCount,按 (service) 聚合' {
+    $referenced = @([regex]::Matches($script:WakeGroup, '\bassetop_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Assert-Equal -Expected 'assetop_wake_subscribed_shards' -Actual ($referenced -join ',') -Because '只引用已订上的唤醒片数一个 gauge'
+    Assert-Match -Text $script:MetricsGo -Pattern '(?s)Name:\s*"assetop_wake_subscribed_shards",.*?ConstLabels: labels,\s*\}, nil\)' -Because 'assetop_wake_subscribed_shards 由 go/shared/assetop/metrics.go 注册且不带可变 label:按 service 求和才是一个服务已订上的总片数'
+    $count = [regex]::Match($script:WakeGo, '(?m)^\s*ShardCount\s*=\s*(?<n>\d+)\s*$')
+    Assert-True -Condition $count.Success -Because '夹具前提:能从 go/shared/assetopwake/wake.go 读到 ShardCount'
+    $expr = [regex]::Match($script:WakeRules[0].Body, '(?ms)^          expr: \|\n(?<e>.*?)(?=^          for:)').Groups['e'].Value
+    Assert-Match -Text $expr -Pattern ('^\s*sum by \(service\) \(assetop_wake_subscribed_shards\) < {0}\s*$' -f $count.Groups['n'].Value) -Because '缺片的式子是 sum by (service) (assetop_wake_subscribed_shards) < ShardCount(片数改了,阈值跟着改)'
+    # 不带 namespace 的前提:data_service 的唤醒成员表跨全部 zone。改回按 zone 圈,每个 zone namespace 都会各订满 64 片,
+    # 按 service 求和变成 64 × zone 数,缺片就看不出来了。
+    $recall = Read-RepoText -RelativePath 'go/data_service/internal/svc/recall_channel.go'
+    Assert-Match -Text $recall -Pattern '(?s)func recallWakeMembersPrefix\(\) string \{\s*return base\.ENodeType_name\[int32\(base\.ENodeType_DataServiceNodeService\)\] \+ "\.rpc/"\s*\}' -Because 'data_service 的唤醒成员表前缀不带 zone(全部 zone 的 stable data_service 一张表)'
+    Assert-Match -Text $recall -Pattern 'workshard\.NewMembership\(recallWakeMembersPrefix\(\)\)' -Because '唤醒订阅用的就是这张跨 zone 的成员表'
+}
+
+Test-Case '三个订阅方都绑了片的负责者,并把 assetop.Metrics 交给 assetopwake.New(否则没有 assetop_wake_subscribed_shards 序列)' {
+    foreach ($path in $script:WakeSubscribers) {
+        $text = Read-RepoText -RelativePath $path
+        Assert-Match -Text $text -Pattern '\.BindShardOwner\(' -Because "$path 的唤醒订阅要只订本副本负责的片"
+        $calls = @([regex]::Matches($text, 'assetopwake\.New\('))
+        Assert-Equal -Expected 1 -Actual $calls.Count -Because "夹具前提:$path 里只有一处 assetopwake.New"
+        # 最后一个实参(counter)到收尾的右括号为止;中间的实参可能跨行(guild 的 Config 字面量)。
+        $last = [regex]::Match($text.Substring($calls[0].Index), '(?s)^assetopwake\.New\(.*?,\s*(?<counter>\w+)\)')
+        Assert-True -Condition $last.Success -Because "夹具前提:能读到 $path 里 assetopwake.New 的最后一个实参"
+        Assert-True -Condition ($last.Groups['counter'].Value -cne 'nil') -Because "$path 传给 assetopwake.New 的 counter 不能是 nil"
+    }
+}
+
+Test-Case '各条告警的名字在 deploy/k8s 的全部告警文件里各只出现一次' {
     $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
             ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
         } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
-    foreach ($name in $script:Names) {
+    foreach ($name in @($script:Names + $script:WakeNames)) {
         Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq $name })).Count -Because "$name 在 Alertmanager 里按 alertname 分组,重名会互相掩盖"
     }
 }

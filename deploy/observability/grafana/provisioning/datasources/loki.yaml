@@ -12,3 +12,13 @@ datasources:
     jsonData:
       maxLines: 2000
       timeout: 60
+      # 日志 → trace(docs/design/distributed-tracing.md §10.3):三种语言的日志都把 trace_id 放在结构化元数据里(§9.1),
+      # 按这个键做派生字段,点一下跳到 Tempo 里的这条 trace。没被尾部采样留下的 trace 在 Tempo 里查不到,日志照样在。
+      # 「$$」是 provisioning 文件里 $ 的转义。
+      derivedFields:
+        - name: trace_id
+          matcherType: label
+          matcherRegex: trace_id
+          datasourceUid: tempo
+          url: "$${__value.raw}"
+          urlDisplayLabel: "在 Tempo 里看这条 trace"

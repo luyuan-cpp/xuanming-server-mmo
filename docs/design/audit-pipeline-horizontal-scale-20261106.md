@@ -71,6 +71,10 @@
     - 要新增一个建未来分区、删过期分区的定时任务:预建失败会让写入失败、审计消费卡住,多了一个新的故障面;
     - 按 `player_id`、`item_uuid` 查的 GM 与回档查询要逐个分区探本地索引,快照 30 个分区、流水 180 个分区,读放大几十到上百倍。
   - 改用 TiDB 的 TTL 表也不划算:它同样是后台 DELETE,只是换成 TiDB 来调度,省不了删除量,还丢掉了 MySQL 开发环境的同构。
+  - 怎么发现清理跟不上(2026-11-19 补,未编译):每轮清理之后各副本按桶各做一次索引定位,读出这张表现存最老一行的时刻
+    (`store.oldestSQLTimestamp`,`SELECT <时间列> … WHERE shard = ? ORDER BY <时间列> LIMIT 1`,16 次;时间列不是索引首列,不带 shard 的 MIN 在 TiDB 上要扫整段索引),
+    导出 `data_service_audit_retention_oldest_age_seconds{table}` 与保留期 `data_service_audit_retention_max_age_seconds{table}`;
+    告警 `DataServiceAuditRetentionBehind`:最老一行比保留期还老一天以上、持续 1 小时。语句失败仍由 `DataServiceAuditRetentionFailing` 报。
   - 清理跟不上时的处置:先加 data_service 副本(删除吞吐线性涨),再调 `AuditRetention` 的批量;都不够才整体换成按天分区的建表方式,那时按上面四条一起设计。
 
 ## 3. 兼容与回滚

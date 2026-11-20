@@ -79,6 +79,7 @@
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "rpc/service_metadata/scene_admin_service_metadata.h"
 #include "rpc/service_metadata/scene_service_metadata.h"
+#include "span_test_support.h"
 #include "thread_context/trace_context_tls.h"
 
 using namespace std::chrono_literals;
@@ -2348,10 +2349,13 @@ TEST_F(RpcChannelLoopback, PreparedBootRejectsWireDispatchUntilAtomicOpenAndCann
 // 五、链路追踪(docs/design/distributed-tracing.md §5.2)
 // ===========================================================================
 
-// 被测客户端:REQUEST 帧带发起时的当前 trace(span_id 原样作 parent),不在 trace 里的调用一个字段都不带;单向请求同样带。
+// 被测客户端:REQUEST 帧带发起时的 trace,parent 是这次调用的 client span(当前 span 的子 span,§10.3);
+// 不在 trace 里的调用一个字段都不带;单向请求同样带,也有自己的 client span。
 TEST_F(RpcChannelLoopback, RequestFramesCarryTheCallerTrace)
 {
     ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());   // kRecorder:看被测客户端发出的原始帧
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
     auto log = std::make_shared<CallLog>();
     const std::size_t from = serverRecorder_.Count();
     tracing::TraceContext tracedCall;
@@ -2377,12 +2381,104 @@ TEST_F(RpcChannelLoopback, RequestFramesCarryTheCallerTrace)
     tracing::TraceContext seen;
     ASSERT_TRUE(ReadTraceFromRpcEnvelope(frames[0], seen)) << Describe(frames[0]);
     EXPECT_EQ(seen.trace_id.bytes, tracedCall.trace_id.bytes);
-    EXPECT_EQ(seen.span_id.bytes, tracedCall.span_id.bytes);
+    EXPECT_NE(seen.span_id.bytes, tracedCall.span_id.bytes) << "线上的 parent 是 client span,不是发起方的 span";
     EXPECT_EQ(seen.flags, tracedCall.flags);
+    const tracing::TraceContext callOnWire = seen;
     EXPECT_TRUE(HasNoTraceFields(frames[1])) << Describe(frames[1]);
     ASSERT_TRUE(ReadTraceFromRpcEnvelope(frames[2], seen)) << Describe(frames[2]);
     EXPECT_EQ(seen.trace_id.bytes, tracedOneWay.trace_id.bytes);
-    EXPECT_EQ(seen.span_id.bytes, tracedOneWay.span_id.bytes);
+    EXPECT_NE(seen.span_id.bytes, tracedOneWay.span_id.bytes);
+    const tracing::TraceContext oneWayOnWire = seen;
+
+    // 单向请求的 client span 发出即结束;带回包的那条要等 Deliver,kRecorder 不回包,这里只核对单向那条。
+    const auto spans = sink.Spans();
+    const auto oneWaySpan = std::find_if(spans.begin(), spans.end(), [&](const tracing::SpanRecord& span) {
+        return span.span_id.bytes == oneWayOnWire.span_id.bytes;
+    });
+    ASSERT_NE(oneWaySpan, spans.end()) << "单向请求记了 client span";
+    EXPECT_EQ(oneWaySpan->kind, tracing::SpanKind::kClient);
+    EXPECT_EQ(oneWaySpan->system, tracing::SpanSystem::kRpc0);
+    EXPECT_EQ(oneWaySpan->parent_span_id.bytes, tracedOneWay.span_id.bytes);
+    EXPECT_FALSE(oneWaySpan->Name().empty());
+    EXPECT_TRUE(std::none_of(spans.begin(), spans.end(), [&](const tracing::SpanRecord& span) {
+        return span.span_id.bytes == callOnWire.span_id.bytes;
+    })) << "带回包的调用还没 Deliver,client span 不该已经结束";
+}
+
+// 一次调用在两端各记一个 span,连成一棵树:client span 的父是发起方的 span,对端 server span 的父是 client span;
+// 回包回调原样回到发起方的上下文(§4.2、§10.3)。
+TEST_F(RpcChannelLoopback, ClientAndServerSpansFormOneTreeAcrossTheConnection)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    auto replyTrace = std::make_shared<std::optional<tracing::TraceContext>>();   // 只在 loop 线程上读写
+    tracing::TraceContext caller;
+    RunInLoopAndWait([&] {
+        tracing::ScopedSpan span;
+        caller = tracing::Current();
+        client_->CallMethod(
+            kProcessId, ProcessRequest(12),
+            [replyTrace](const RpcStatus& status, const MessagePtr&)
+            {
+                EXPECT_TRUE(status.ok()) << status.name();
+                *replyTrace = tracing::Current();
+            },
+            RpcCallOptions{kLongTimeout});
+    });
+    ASSERT_TRUE(WaitUntil([&] { return replyTrace->has_value(); })) << "reply callback never ran";
+    ASSERT_TRUE(WaitUntil([&] { return sink.Count() >= 2; }));
+
+    tracing::TraceContext callbackTrace;
+    RunInLoopAndWait([&] { callbackTrace = **replyTrace; });
+    EXPECT_EQ(callbackTrace.span_id.bytes, caller.span_id.bytes) << "回包回调原样回到发起方的 span";
+
+    const auto spans = sink.Spans();
+    const auto client = std::find_if(spans.begin(), spans.end(),
+                                     [](const tracing::SpanRecord& span) { return span.kind == tracing::SpanKind::kClient; });
+    const auto server = std::find_if(spans.begin(), spans.end(),
+                                     [](const tracing::SpanRecord& span) { return span.kind == tracing::SpanKind::kServer; });
+    ASSERT_NE(client, spans.end());
+    ASSERT_NE(server, spans.end());
+    EXPECT_EQ(client->trace_id.bytes, caller.trace_id.bytes);
+    EXPECT_EQ(server->trace_id.bytes, caller.trace_id.bytes);
+    EXPECT_EQ(client->parent_span_id.bytes, caller.span_id.bytes);
+    EXPECT_FALSE(client->parent_is_remote);
+    EXPECT_EQ(server->parent_span_id.bytes, client->span_id.bytes);
+    EXPECT_TRUE(server->parent_is_remote);
+    EXPECT_EQ(client->Name(), server->Name()) << "两端同一个方法名";
+    EXPECT_EQ(client->status, tracing::SpanStatus::kUnset);
+    EXPECT_EQ(server->status, tracing::SpanStatus::kUnset);
+    EXPECT_LE(client->start_unix_nano, server->start_unix_nano);
+}
+
+// 派发前的拒绝把这次派发的 server span 标成错误,说明是错误码名(§10.3)。
+TEST_F(RpcChannelLoopback, RejectedDispatchMarksTheServerSpanAsAnError)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectProbe());
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    const auto emptySlot = FindEmptyRegistrySlot();
+    ASSERT_TRUE(emptySlot.has_value()) << "registry has no empty slot to craft a rejected request";
+    const tracing::TraceContext upstream = tracing::NewRoot();
+    GameRpcMessage rejected = MakeRequestFrame(kCraftedIdBase + 31, *emptySlot, ProcessRequest(31));
+    WriteTraceToRpcEnvelope(upstream, rejected);
+    const std::size_t from = probeRecorder_.Count();
+    RunInLoopAndWait([&] { SendFromProbe(rejected); });
+    const auto replies = FramesBeforeBarrier(from, kCraftedIdBase + 32);
+    ASSERT_EQ(replies.size(), 1u) << Describe(replies);
+    EXPECT_EQ(replies[0].type(), RPC_ERROR) << Describe(replies[0]);
+
+    const auto spans = sink.Spans();
+    const auto server = std::find_if(spans.begin(), spans.end(), [&](const tracing::SpanRecord& span) {
+        return span.kind == tracing::SpanKind::kServer && span.trace_id.bytes == upstream.trace_id.bytes;
+    });
+    ASSERT_NE(server, spans.end());
+    EXPECT_EQ(server->status, tracing::SpanStatus::kError);
+    EXPECT_FALSE(server->StatusMessage().empty());
+    EXPECT_EQ(server->parent_span_id.bytes, upstream.span_id.bytes);
 }
 
 // 端到端:对端 handler 接上同一条 trace(子 span),回包回调回到发起方的 trace。

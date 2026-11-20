@@ -19,8 +19,9 @@ $GoSvcCatalogue = & ([scriptblock]::Create($catalog[0].Right.Extent.Text))
 $script:AssetOpCallers = & ([scriptblock]::Create($assetCallers[0].Right.Extent.Text))
 $script:AssetOpsOn = $false; $script:AssetOpSecrets = @{}
 $ReleaseProfile = 'dev'; $InfraNamespace = 'fixture-infra'
-# 玩家域 Redis Cluster:dev 不建;下面渲染 prod 时临时取 3(非 dev 档必须显式)。
+# 玩家域与控制两套 Redis Cluster:dev 不建;下面渲染 prod 时临时都取 3(非 dev 档必须显式,开控制集群也必须开玩家域集群)。
 $PlayerRedisMasters = 0; $PlayerRedisReplicasPerMaster = 1
+$ControlRedisMasters = 0; $ControlRedisReplicasPerMaster = 1
 $GlobalDbName = 'fixture_global'
 $GlobalAuthorityTiDBHost = 'fixture-global-tidb:4000'
 $TradeTiDBHost = $GlobalAuthorityTiDBHost; $FriendTiDBHost = $GlobalAuthorityTiDBHost
@@ -71,7 +72,7 @@ Assert-Render ($guildLoginKeys.Count -eq 0) "帮会不该渲染登录态段（�
 Assert-Render ($guild['MySQL.DbPlacement.DefaultCluster'] -eq 'main' -and $guild['MySQL.DbPlacement.SqlClusters.main.Hosts'] -eq $GlobalAuthorityTiDBHost) '帮会缺 DbPlacement，或默认集群不是权威入口'
 Assert-Render ($mail['DbPlacement.DefaultCluster'] -eq 'main' -and $mail['DbPlacement.SqlClusters.main.Hosts'] -eq $GlobalAuthorityTiDBHost) '邮件缺顶层 DbPlacement'
 Assert-Render ($mail['GuildRpc.Endpoints'] -eq '[guild.fixture-infra:50300]') '邮件读帮会要连 infra 里的 guild Service，不是本机地址'
-foreach ($key in @('Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Activity.TrialResult.Topic','Activity.TrialResult.Partitions','IdSegment.Step','MySQL.MaxOpenConn','RedisClient.PoolSize','PlayerLocatorRedis.PoolSize')) {
+foreach ($key in @('Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Activity.TrialResult.Topic','Activity.TrialResult.Partitions','IdSegment.Step','MySQL.MaxOpenConn','ControlRedis.PoolSizePerNode')) {
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath $key
     Assert-Render ($source.Found -and $guild[$key] -eq $source.Value) "帮会${key}未镜像权威配置"
 }
@@ -79,12 +80,18 @@ foreach ($key in @('Timeout','ApplicationQuotaPerMinute','AssetOp.Enabled','Acti
 $guildPlayerPool = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/guild/etc/guild.yaml') -KeyPath 'PlayerRedis.PoolSizePerNode'
 Assert-Render ($guildPlayerPool.Found -and $guild['PlayerRedis.PoolSizePerNode'] -eq $guildPlayerPool.Value) '帮会玩家域池未镜像权威配置'
 Assert-Render ([string]::IsNullOrEmpty($guild['PlayerRedis.Addrs[0]'])) '帮会不建集群时玩家域不写地址'
-$ReleaseProfile = 'prod'; $PlayerRedisMasters = 3; $guildProd = Read-RenderedConfig 'guild'; $ReleaseProfile = 'dev'; $PlayerRedisMasters = 0
+# 控制域(缺口第 34 条第 5、6b 批):dev 没开控制集群,ControlRedis 指向核心单实例;口令恒写空串。
+Assert-Render ($guild['ControlRedis.Addrs[0]'] -eq 'redis.fixture-infra:6379' -and -not $guild.Contains('ControlRedis.Cluster') -and $guild['ControlRedis.Password'] -eq '') '帮会的 ControlRedis 必须指向控制端点(dev 是核心单实例)'
+foreach ($retired in @('RedisClient', 'PlayerLocatorRedis')) {
+    Assert-Render (-not @($guild.Keys | Where-Object { ([string]$_).StartsWith("$retired.", [StringComparison]::Ordinal) }).Count) "帮会的控制域句柄只剩 ControlRedis,不该再渲染 $retired"
+}
+$ReleaseProfile = 'prod'; $PlayerRedisMasters = 3; $ControlRedisMasters = 3; $guildProd = Read-RenderedConfig 'guild'; $ReleaseProfile = 'dev'; $PlayerRedisMasters = 0; $ControlRedisMasters = 0
 Assert-Render ($guildProd['Mode'] -eq 'pro' -and $guildProd['Schema.AutoMigrate'] -eq 'false' -and $guildProd['MySQL.Backend'] -eq 'tidb') '帮会生产实例缺省 tidb 档，禁开发模式或自行迁表'
 Assert-Render ($guildProd['AssetOp.Enabled'] -eq 'false') '父快照围栏门禁未验收前，生产帮会资产通道不得自动启用'
-$ReleaseProfile = 'prod'; $PlayerRedisMasters = 3; $KafkaBrokers = 1; $rejected = $false
+Assert-Render ($guildProd['ControlRedis.Addrs[0]'] -eq 'redis-control-0.fixture-infra:6379' -and $guildProd['ControlRedis.Cluster'] -eq 'true') '生产帮会的 ControlRedis 必须指向控制集群的种子'
+$ReleaseProfile = 'prod'; $PlayerRedisMasters = 3; $ControlRedisMasters = 3; $KafkaBrokers = 1; $rejected = $false
 try { $null = Read-RenderedConfig 'guild' } catch { $rejected = $_.Exception.Message -match 'Kafka' }
-$ReleaseProfile = 'dev'; $PlayerRedisMasters = 0; $KafkaBrokers = 3
+$ReleaseProfile = 'dev'; $PlayerRedisMasters = 0; $ControlRedisMasters = 0; $KafkaBrokers = 3
 Assert-Render $rejected '全球帮会历练不得在单broker上部署'
 # 帮会实例的 DSN 来自本 boot 选中的环境文件,迁移 Job 的 DSN 来自 schemaPermissionSecret(账号是 schema 主体)。
 $guildMigrate = Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/guild-migrate.yaml') -Raw
@@ -92,19 +99,20 @@ Assert-Render ($guildMigrate.Contains('name: MMORPG_GUILD_SQL_DSN') -and $guildM
 $guildManifest = Get-Content -LiteralPath (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/guild.yaml') -Raw
 Assert-Render ($guildManifest.Contains('MMORPG_GUILD_SQL_DSN="$(cat /app/etc/private/env/MMORPG_GUILD_SQL_DSN)"'.Replace('"', '\"'))) '帮会实例的DSN必须来自本boot选中的环境文件'
 Assert-Render ($guildManifest.Contains('name: POD_IP') -and $guildManifest.Contains('key: asset-guild')) '帮会缺可路由地址或资产签名引用'
-$guildLedger = (Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'guild' }
+# 两个域都在核心上(dev 缺省)时核心那份 = 控制域行 + 玩家域行,帮会两张表各一行:按行加起来比。
+$guildLedgerRows = @((Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'guild' })
 $guildPools = Get-RedisPoolMirror -Target 'guild'
-# 不建集群时,玩家域的池也记在这台 Redis 上;帮会没有登录域池。
 $guildPlayerPools = Get-RedisPlayerPoolMirror -Target 'guild'
-Assert-Render ($guildPools.Count -eq 2 -and $guildPlayerPools.Login -eq 0) '帮会只有两个控制域显式池，没有登录域池'
-$expectedPools = $guildPools['RedisClient.PoolSize'] + $guildPools['PlayerLocatorRedis.PoolSize'] + $guildPlayerPools.Player
+Assert-Render ($guildPools.Count -eq 1 -and $guildPools.Contains('ControlRedis.PoolSizePerNode') -and $guildPlayerPools.Login -eq 0) '帮会只有一个控制域显式池(ControlRedis),没有登录域池'
 $guildSvcSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'go/guild/internal/svc/servicecontext.go') -Raw
 $syncPool = [regex]::Match($guildSvcSource, '(?m)^\s*(?:const\s+)?playerSyncRedisPoolSize\s*=\s*(\d+)\s*$')
-# 不建集群时 Fixed = 申请配额专用池(连核心库) + 摘要 bump 池(回落到核心库)。
+# Fixed = 申请配额专用池(控制域那一行) + 摘要 bump 池(玩家域那一行)。
 $guildQuotaSource = Get-Content -LiteralPath (Join-Path $RepoRoot 'go/guild/internal/logic/application_quota.go') -Raw
 $quotaPool = [regex]::Match($guildQuotaSource, '(?m)^\s*(?:const\s+)?ApplicationQuotaRedisPoolSize\s*=\s*(\d+)\s*$')
-Assert-Render ($syncPool.Success -and $quotaPool.Success -and $guildLedger.Fixed -eq ([int]$syncPool.Groups[1].Value + [int]$quotaPool.Groups[1].Value)) '帮会摘要专用池与申请配额池的预算与实际源码不符'
-Assert-Render ($guildLedger.ConfiguredPoolConns -eq $expectedPools -and $guildLedger.PubSub -eq 1) '帮会的池与唤醒订阅未进入Redis连接总账'
+$guildSum = { param([string]$Field) $sum = 0; foreach ($row in $guildLedgerRows) { $sum += [int]$row[$Field] }; $sum }
+Assert-Render ($guildLedgerRows.Count -eq 2) '帮会在核心那份里应当是控制域、玩家域各一行'
+Assert-Render ($syncPool.Success -and $quotaPool.Success -and (& $guildSum 'Fixed') -eq ([int]$syncPool.Groups[1].Value + [int]$quotaPool.Groups[1].Value)) '帮会摘要专用池与申请配额池的预算与实际源码不符'
+Assert-Render ((& $guildSum 'ConfiguredPoolConns') -eq ($guildPools['ControlRedis.PoolSizePerNode'] + $guildPlayerPools.Player) -and (& $guildSum 'PubSub') -eq 1) '帮会的池与唤醒订阅未进入Redis连接总账'
 Assert-Render ($mail['KafkaBrokers[0]'] -eq 'kafka.fixture-infra:9092' -or $mail['KafkaBrokers'] -match 'kafka\.fixture-infra:9092') '邮件提醒不能拨本地Kafka'
 $trade = Read-RenderedConfig 'trade'
 Assert-Render ($trade['MySQL.Host'] -eq $TradeTiDBHost) '交易没有使用显式全服TiDB入口'

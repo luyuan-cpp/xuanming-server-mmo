@@ -239,14 +239,6 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
-	// MySQL 口令(MySQLPasswordEnv):-migrate、发号器运维入口与常驻启动都连库,所以在分流之前填。K8s 上写者与迁移 Job 读运维预置
-	// Secret 里的配置,口令就写在配置里、不指名变量,这里不改动它;只有 route-tool Job 挂的 ConfigMap 指名变量,那条路在 routetoolcli 里填。
-	var mysqlAuthErr error
-	c, mysqlAuthErr = c.ResolveMySQLPassword(os.LookupEnv)
-	if mysqlAuthErr != nil {
-		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", mysqlAuthErr)
-		os.Exit(1)
-	}
 
 	if entry == entryMigrate {
 		os.Exit(runMigration(c))
@@ -854,6 +846,7 @@ func startAuditRetention(rc config.AuditRetentionConfig, svcCtx *svc.ServiceCont
 				logx.Errorf("[AuditRetention] delete from %s failed: %v", table, err)
 			}
 		},
+		ObserveOldest: metrics.SetAuditRetentionOldest,
 	}
 	safego.Go("data_service.audit_retention", func() {
 		store.RunAuditRetention(context.Background(), opts, snapshots, txLogs)

@@ -1,0 +1,142 @@
+# Tempo:集群内的 span 库(docs/design/distributed-tracing.md §10.3,阶段三)。
+#
+# 链路:C++ / Go / Java 把 span 经 OTLP 发本节点的 Alloy(pod-log-collector.yaml 的 DaemonSet,Service pod-log-collector-otlp),
+# 它按 trace_id 转给网关级 Alloy(同一份清单里的 Deployment trace-gateway),网关级在那里收齐一条 trace、尾部采样
+# (错误全留、总耗时 ≥ 1 秒全留、其余留 10%),再写到这里。Tempo 只收网关级 Alloy 的 OTLP/gRPC(4317),不直接对业务 Pod 开放。
+# 保留 7 天,与 Loki 一致;Grafana 里 Loki 的 trace_id 跳 Tempo、Tempo 的 trace 跳回 Loki(本机观测台的数据源配置)。
+#
+# 规模定位:单副本 single-binary + 本地盘(PVC),给 kind 与 dev 用。由 k8s_deploy.ps1 的 Apply-Infra 部署,与日志采集同开同关
+# (-NoCppLogSidecar 两路都关,这里也不部署)。镜像版本钉死,升级前先在 kind 上跑设计稿 §11 的阶段三核对。
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+  labels:
+    app: tempo
+spec:
+  selector:
+    app: tempo
+  ports:
+    - name: http
+      port: 3200
+      targetPort: 3200
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tempo-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName 有意不写死 —— 交给集群默认 StorageClass(kind 上是 standard)。
+---
+# 改完这份配置要手动重启 Tempo(同 loki.yaml 的说明:只改 ConfigMap 不会滚动 Deployment):
+#   kubectl -n mmorpg-infra rollout restart deploy/tempo
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+data:
+  tempo.yaml: |
+    stream_over_http_enabled: true
+    server:
+      http_listen_port: 3200
+      log_level: warn
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+
+    ingester:
+      max_block_duration: 5m
+
+    compactor:
+      compaction:
+        block_retention: 168h
+
+    storage:
+      trace:
+        backend: local
+        wal:
+          path: /var/tempo/wal
+        local:
+          path: /var/tempo/blocks
+
+    usage_report:
+      reporting_enabled: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  labels:
+    app: tempo
+spec:
+  replicas: 1
+  # PVC 是 RWO,滚更时新旧 Pod 不能同时挂;必须 Recreate。
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tempo
+  template:
+    metadata:
+      labels:
+        app: tempo
+    spec:
+      securityContext:
+        # grafana/tempo 镜像里的运行用户是 10001;PVC 要 fsGroup 才写得进去。
+        runAsUser: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        fsGroup: 10001
+      containers:
+        - name: tempo
+          image: grafana/tempo:2.6.1
+          args:
+            - -config.file=/etc/tempo/tempo.yaml
+          ports:
+            - containerPort: 3200
+              name: http
+            - containerPort: 4317
+              name: otlp-grpc
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3200
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tempo
+              readOnly: true
+            - name: data
+              mountPath: /var/tempo
+      volumes:
+        - name: config
+          configMap:
+            name: tempo-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: tempo-data-pvc

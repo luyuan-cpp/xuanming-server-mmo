@@ -47,6 +47,7 @@ function Get-FixtureTableRows {
         mmorpg_match = @('match_authority_ticket', 'match_battle_completion', 'team_launch', 'team_launch_role', 'schema_migrations')
         mmorpg_player_inbox = @('player_inbox_item', 'schema_migrations')
         mmorpg_rank = @('rank_score', 'schema_migrations')
+        mmorpg_payment = @('payment_intent', 'payment_txn', 'payment_channel_cursor', 'schema_migrations')
         mmorpg_trade = @('trade_commerce', 'trade_asset_op', 'schema_migrations')
         # 存档库只有地域存档库(A17c):夹具仓库的 go/login 是 dev 地域 0、K=1,分片用例另造 K=2 的 login。
         player_store_1000000_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')

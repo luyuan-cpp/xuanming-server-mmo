@@ -335,7 +335,8 @@ double TeamFollowFormation::ProtectOdo() const
 
 double TeamFollowFormation::KeepOdo() const
 {
-	double keep = trail_.HeadOdo() - kTrailKeepBehindHead;
+	// 头部之后至少保留到队尾槽位再往后一个间距:第一名队员加入时能落到"队长身后的路上",而不是队长旁边。
+	double keep = trail_.HeadOdo() - static_cast<double>(kTeamFollowMaxMembers + 1) * spacing_;
 	for (const auto& member : members_)
 	{
 		if (!member.needsPlacement)

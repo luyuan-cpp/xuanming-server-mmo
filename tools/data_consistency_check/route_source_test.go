@@ -1,6 +1,6 @@
 package main
 
-// route_source.go 与 checkFriendOrphans 的单测。本 module 只依赖 go-sql-driver/mysql 与 go-redis,没有 sqlmock:
+// route_source.go 与 checkFriendOrphans 的单测。本 module 依赖 go-sql-driver/mysql、go-redis 与本仓 shared(go.mod replace),没有 sqlmock:
 // dbRouteSource 的循环经 routeTable 假实现驱动,sqlRouteTable 的语句与参数经下面注册的最小 database/sql 假驱动核对。
 // 真库语义见 route_source_integration_test.go。
 

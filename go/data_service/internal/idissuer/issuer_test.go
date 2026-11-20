@@ -1183,6 +1183,50 @@ func TestRecovery_ReRegisteringNeedsAClockInRange(t *testing.T) {
 	}
 }
 
+// 重新登记的时间上界取本机时钟和参考时钟(生产是 K8s API server 的)里较晚的那个:本机时钟慢了也盖得住;
+// 参考时钟慢时照旧按本机时钟。
+func TestRecovery_ReRegisteringUsesTheLaterOfTheTwoClocks(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		reference time.Time
+		want      time.Time
+	}{
+		{"the local clock is slow", testNow.Add(3 * 24 * time.Hour), testNow.Add(3 * 24 * time.Hour)},
+		{"the reference clock is slow", testNow.Add(-3 * 24 * time.Hour), testNow},
+	} {
+		h := newHarness(t)
+		h.production(1)
+		h.registry.drop(1)
+		reference := tc.reference
+		iss := h.prodIssuer(1, func(o *Options) {
+			o.ReferenceNow = func(context.Context) (time.Time, error) { return reference, nil }
+		})
+		if _, err := iss.Recover(context.Background(), false); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if c, _ := h.registry.get(1); c.HighWater != reRegisterBound(1, tc.want) {
+			t.Fatalf("%s: high_water=%d, want %d", tc.name, c.HighWater, reRegisterBound(1, tc.want))
+		}
+	}
+}
+
+// 参考时钟读不到(API server 不可达):拒绝重新登记,什么都不写,重跑即可。
+func TestRecovery_ReRegisteringRefusesWithoutTheReferenceClock(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	h.registry.drop(1)
+	down := errors.New("kubernetes api unreachable")
+	iss := h.prodIssuer(1, func(o *Options) {
+		o.ReferenceNow = func(context.Context) (time.Time, error) { return time.Time{}, down }
+	})
+	if _, err := iss.Recover(context.Background(), false); !errors.Is(err, down) {
+		t.Fatalf("err=%v, want the reference clock error", err)
+	}
+	if _, registered := h.registry.get(1); registered {
+		t.Fatal("the refusal must not re-register the code")
+	}
+}
+
 // 重新登记之后抬本地记录中断(副记录写失败):报错并提示重跑;重跑走「登记处在、本地落后」那一支,把本地两份抬齐;
 // 再跑一次什么也不做。
 func TestRecovery_ARerunFinishesRaisingTheLocalRecords(t *testing.T) {
@@ -2328,6 +2372,29 @@ func TestClock_CounterFarAheadIsReported(t *testing.T) {
 	}
 	if obs.count(ReserveAheadOfClock) != 1 || obs.count(ReserveOK) != 1 || len(obs.seen) != 2 {
 		t.Fatalf("observed %v", obs.seen)
+	}
+}
+
+// 计数器比时钟超前一天以上:新块改成 shrunkBlockSize,崩溃循环每重启一次只推前 16 秒;时钟追到一天以内,恢复整块。
+func TestReserve_BlocksShrinkWhileTheCounterIsADayAheadOfTheClock(t *testing.T) {
+	h := newHarness(t)
+	h.production(1)
+	fullBlocks := func(o *Options) { o.BlockSize = DefaultBlockSize }
+	ahead := uint64(1)<<regionShift | (uint64(26_000_000)+shrinkAheadSeconds)<<seqBits
+	h.primary.set(ahead)
+	h.secondary.set(ahead)
+	h.registry.setHighWater(1, ahead)
+	a := &allocated{t: t}
+	lo, _ := a.take(h.prodIssuer(1, fullBlocks), 100)
+	if lo != ahead || h.primary.get()-lo != shrunkBlockSize {
+		t.Fatalf("block [%d, %d), want %d ids from %d", lo, h.primary.get(), shrunkBlockSize, ahead)
+	}
+	// 小块之后计数器超前一天零 16 秒;时钟走 20 秒,超前就不到一天了。
+	h.setClock(testNow.Add(20 * time.Second))
+	before := h.primary.get()
+	lo, _ = a.take(h.prodIssuer(1, fullBlocks), 100)
+	if lo != before || h.primary.get()-lo != DefaultBlockSize {
+		t.Fatalf("block [%d, %d), want the full %d ids once the counter is less than a day ahead", lo, h.primary.get(), DefaultBlockSize)
 	}
 }
 

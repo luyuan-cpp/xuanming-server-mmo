@@ -321,6 +321,29 @@ TEST_F(AssetOpSystemTest, DebitInsufficientRejectedFixed)
 	EXPECT_EQ(100u, Gold());
 }
 
+// 真钱付款被渠道撤销后的扣回(TX_PAYMENT_REVERSAL,payment-recharge.md §22.6)走交易扣出流:
+// 够扣就扣掉;不够是固定的拒绝(交易服务据此转人工),不透支。
+TEST_F(AssetOpSystemTest, PaymentReversalDebitsOnTradeStreamAndNeverOverdraws)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+
+	::AssetOpRequest first = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 60, TX_PAYMENT_REVERSAL);
+	SignForTest("debit", first, "trade");
+	::AssetOpResponse applied;
+	PlayerAssetOpSystem::Debit(first, applied);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
+	EXPECT_EQ(40u, Gold());
+	CompleteFakeSave();
+
+	::AssetOpRequest second = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 2, 60, TX_PAYMENT_REVERSAL);
+	SignForTest("debit", second, "trade");
+	::AssetOpResponse rejected;
+	PlayerAssetOpSystem::Debit(second, rejected);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, rejected.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetCurrencyInsufficient), rejected.reason().id());
+	EXPECT_EQ(40u, Gold());
+}
+
 // ── 找人 / 闸门 ─────────────────────────────────────────────────────────────
 
 TEST_F(AssetOpSystemTest, NotOnNode)

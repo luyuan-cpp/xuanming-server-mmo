@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include "muduo/base/Logging.h"
+#include "table/code/all_table.h"
 #include "table/code/test_table.h"
 #include "table/code/testmultikey_table.h"
 #include "table/code/testmultikey_table_comp.h"
@@ -904,6 +905,25 @@ TEST(LookupGuardMacro, OrContinueDoesNotSkipWhenRowPresent)
 		++reachedBody;
 	}
 	EXPECT_EQ(reachedBody, 1);
+}
+
+// LoadTablesAsync 每次调用自带一组加载线程,返回前全部 join。早先用函数内静态门闩,只能调一次:
+// 第二次调用不等加载完就跑 LoadSuccess。那是数据竞争,普通构建下没法稳定复现成失败,
+// 所以这里守的是可观察的契约:连调两次,每次返回时回调都已跑过,表照常可查。
+TEST(LoadTablesAsyncTest, CanBeCalledRepeatedly)
+{
+	// 加载线程经 InitThreadLocalConfig() 从进程级那份拷配置;测试的 main 只装了本线程这份。
+	gNodeConfigManager = tlsNodeConfigManager;
+
+	int loaded = 0;
+	OnTablesLoadSuccess([&loaded] { ++loaded; });
+	LoadTablesAsync();
+	EXPECT_EQ(loaded, 1);
+	LoadTablesAsync();
+	EXPECT_EQ(loaded, 2);
+	OnTablesLoadSuccess({}); // 回调按引用抓着本用例的局部变量,用完摘掉
+
+	EXPECT_NE(TestTableManager::Instance().FindByIdSilent(1u).first, nullptr);
 }
 
 int main(int argc, char **argv)

@@ -26,14 +26,14 @@ import (
 // 观战索引(设计文档 §10.4;spectate:* 只有 match 读写,不变量 7)。权威落点与观战占用都在 SQL
 // (match_formation / match_spectator),这里只是协调用途的展示索引,丢了不影响开局与补签:
 //
-//	spectate:battles:active       zset    member=battle_id 十进制,score=created_at_ms;只收公开局
+//	spectate:battles:active:{sba:<k>}   zset × 16   member=battle_id 十进制,score=created_at_ms;只收公开局,按 battle_id % 16 落桶
 //
-// 观战档位与 L1 / L2 准入用的键见 spectate_tier.go。一场战斗的观战记录不进 Redis,读的时候由 SQL 成局现算(loadSpectateBattle)。
+// 拆桶、键形与跨桶读见 spectate_index.go(spectateActiveIndex);观战档位与 L1 / L2 准入用的键见 spectate_tier.go。
+// 一场战斗的观战记录不进 Redis,读的时候由 SQL 成局现算(loadSpectateBattle)。
 //
 // 私密局(可见性非 PUBLIC,见 spectate_visibility.go)不进活跃集合。ZSET 成员没有 TTL,靠这几条路清理:
 // 战斗终局提交时当场摘除(releaseSpectateOnOutcome)、battle 报房间不存在时懒剔除、读到过期 score 时现场剔除、
-// 定期 ZREMRANGEBYSCORE 兜底(cleanupExpiredSpectateIndex)。
-const spectateBattlesActiveKey = "spectate:battles:active"
+// 定期逐桶 ZREMRANGEBYSCORE 兜底(cleanupExpiredSpectateIndex)。
 
 // battle 节点观战 RPC 超时(与 gather 的 prepare/rollback 同量级)。removeObserverTimeout 进备战预算(matchedTicketTTLFor)。
 const (
@@ -55,7 +55,7 @@ const spectateTTLSeconds = catalog.MaxBattleSeconds + int(authority.WorkLeaseMs/
 // 拨号和内部重试之间的退避,socket 读仍可能等满 go-redis 默认 ReadTimeout(3s);这些命令都在开局关键路径之外,不进备战预算。
 const spectateRedisOpTimeout = time.Second
 
-// addSpectateActive 开局成功后把这场战斗加入活跃集合 spectate:battles:active(观战列表与随机选场)。best-effort,失败只记日志,
+// addSpectateActive 开局成功后把这场战斗加入活跃集合本场所在的桶(观战列表与随机选场)。best-effort,失败只记日志,
 // 只是该场不进观战列表。活跃集合只收公开局:这里是唯一的 ZADD,在这里拒收非公开局,任何调用方都没法把私密局放进观战列表与随机选场。
 // visibility 必须取建房原件冻结的 CreateBattleRequest.spectate_visibility,不得按模式另算一份:与 battle 房间同源,
 // 执法点之间才不会各说各话。createdAtMs 与 CreateBattleRequest.created_at_ms 同一时刻取值,过期判定对齐 deadline。
@@ -66,7 +66,7 @@ func addSpectateActive(svcCtx *svc.ServiceContext, battleId, createdAtMs uint64,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
 	defer cancel()
-	if _, err := svcCtx.MatchRedis.ZaddCtx(ctx, spectateBattlesActiveKey, int64(createdAtMs), strconv.FormatUint(battleId, 10)); err != nil {
+	if _, err := svcCtx.MatchRedis.ZaddCtx(ctx, spectateActiveIndex.keyFor(battleId), int64(createdAtMs), strconv.FormatUint(battleId, 10)); err != nil {
 		logx.Errorf("[spectate] Spectator index ZADD failed (replacement tickets unaffected; battle excluded from spectator list) battle=%d: %v",
 			battleId, err)
 		return
@@ -130,10 +130,10 @@ func spectateRecordFromFormation(f *matchpb.MatchFormationRecord) (*matchpb.Spec
 func removeSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) {
 	removeSpectateActiveMember(svcCtx, battleId)
 	member := strconv.FormatUint(battleId, 10)
-	if _, err := svcCtx.MatchRedis.Zrem(spectateBroadcastActiveKey, member); err != nil {
+	if _, err := svcCtx.MatchRedis.Zrem(spectateBroadcastIndex.keyFor(battleId), member); err != nil {
 		logx.Errorf("[spectate] Failed to release broadcast quota battle=%d: %v", battleId, err)
 	}
-	if _, err := svcCtx.MatchRedis.Zrem(spectateFeaturedActiveKey, member); err != nil {
+	if _, err := svcCtx.MatchRedis.Zrem(spectateFeaturedIndex.keyFor(battleId), member); err != nil {
 		logx.Errorf("[spectate] Failed to remove featured index member battle=%d: %v", battleId, err)
 	}
 	// 这三个键共用 hash tag {id},落同一 slot,可以一条 DEL。
@@ -153,10 +153,13 @@ func releaseSpectateOnOutcome(svcCtx *svc.ServiceContext, battleId uint64) {
 }
 
 // removeSpectateActiveMember 只从活跃集合摘掉一场、不碰其余观战键:不该出现在集合里的私密成员走这里。
+// 本副本的列表缓存同时忘掉它(removeSpectateBattle 也经这里),同一秒里后来的列表请求不再读它、再摘一次。
 func removeSpectateActiveMember(svcCtx *svc.ServiceContext, battleId uint64) {
-	if _, err := svcCtx.MatchRedis.Zrem(spectateBattlesActiveKey, strconv.FormatUint(battleId, 10)); err != nil {
+	member := strconv.FormatUint(battleId, 10)
+	if _, err := svcCtx.MatchRedis.Zrem(spectateActiveIndex.keyFor(battleId), member); err != nil {
 		logx.Errorf("[spectate] Spectator index ZREM failed battle=%d: %v", battleId, err)
 	}
+	svcCtx.SpectateLobby.Forget(member)
 }
 
 // spectateStaleBeforeMs 返回过期分界:score(created_at_ms)早于该值的战斗
@@ -165,24 +168,26 @@ func spectateStaleBeforeMs() uint64 {
 	return nowMs() - uint64(spectateTTLSeconds)*1000
 }
 
-// pickRandomBattle 随机挑一场可观战战斗:ZCARD 取规模 + 随机下标 ZRANGE 单点读,
-// 避免全量拉 ZSET。挑到过期/非法成员现场懒剔除后换一个,最多尝试 3 次;
-// 挑不到返回 (0, nil)。随机用 math/rand 即可:选场不要求确定性
-// (种子 RNG 纪律只约束 battle 引擎内部)。
+// pickRandomBattle 随机挑一场可观战战斗:一个 pipeline 取各桶 ZCARD,全服随机下标按累计和落到某个桶,
+// 在那个桶里 ZRANGE 单点读(spectateIndex.at),避免全量拉 ZSET,每场被挑中的概率仍然均匀。
+// 挑到过期/非法成员现场懒剔除后换一个,最多尝试 3 次;挑不到返回 (0, nil)。随机用 math/rand 即可:
+// 选场不要求确定性(种子 RNG 纪律只约束 battle 引擎内部)。不走列表缓存:每次都读 Redis。
 func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+	defer cancel()
 	staleBefore := spectateStaleBeforeMs()
 	for attempt := 0; attempt < 3; attempt++ {
-		count, err := svcCtx.MatchRedis.Zcard(spectateBattlesActiveKey)
+		counts, err := spectateActiveIndex.counts(ctx, svcCtx.MatchRedis)
 		if err != nil {
-			return 0, fmt.Errorf("观战索引 ZCARD 失败: %w", err)
+			return 0, fmt.Errorf("count the spectator index buckets: %w", err)
 		}
-		if count <= 0 {
+		total := sumSpectateBuckets(counts)
+		if total <= 0 {
 			return 0, nil
 		}
-		idx := int64(rand.Intn(count))
-		pairs, err := svcCtx.MatchRedis.ZrangeWithScores(spectateBattlesActiveKey, idx, idx)
+		pairs, err := spectateActiveIndex.at(ctx, svcCtx.MatchRedis, counts, rand.Int63n(total))
 		if err != nil {
-			return 0, fmt.Errorf("观战索引 ZRANGE 失败: %w", err)
+			return 0, fmt.Errorf("read the spectator index: %w", err)
 		}
 		if len(pairs) == 0 {
 			// 并发剔除导致下标越界,重试。
@@ -191,9 +196,7 @@ func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
 		battleId, err := strconv.ParseUint(pairs[0].Key, 10, 64)
 		if err != nil {
 			logx.Errorf("[spectate] Invalid member %q in spectator index; removing", pairs[0].Key)
-			if _, err := svcCtx.MatchRedis.Zrem(spectateBattlesActiveKey, pairs[0].Key); err != nil {
-				logx.Errorf("[spectate] Failed to remove invalid member: %v", err)
-			}
+			removeSpectateIndexGarbage(svcCtx, spectateActiveIndex, pairs[0].Key)
 			continue
 		}
 		if uint64(pairs[0].Score) < staleBefore {
@@ -275,14 +278,16 @@ func battleInstanceRegistered(svcCtx *svc.ServiceContext, node uint32, instance 
 }
 
 // cleanupExpiredSpectateIndex 清理观战索引里 score 早于 TTL 窗口的残留成员
-// (ZSET 成员没有 TTL,只能靠懒剔除 + 这里的定期兜底)。O(log N + M) 轻量,多实例重复执行幂等,
-// 由 startGlobalSpectateMaintenance 的低频循环执行。
+// (ZSET 成员没有 TTL,只能靠懒剔除 + 这里的定期兜底)。每个桶各一条 ZREMRANGEBYSCORE,同一个 pipeline 发出;
+// 每桶 O(log N + M) 轻量,多实例重复执行幂等,由 startGlobalSpectateMaintenance 的低频循环执行。
 func cleanupExpiredSpectateIndex(svcCtx *svc.ServiceContext) {
 	staleBefore := int64(spectateStaleBeforeMs())
 	if staleBefore <= 0 {
 		return
 	}
-	removed, err := svcCtx.MatchRedis.Zremrangebyscore(spectateBattlesActiveKey, 0, staleBefore)
+	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+	defer cancel()
+	removed, err := spectateActiveIndex.removeByScore(ctx, svcCtx.MatchRedis, staleBefore)
 	if err != nil {
 		logx.Errorf("[spectate] Failed to clean expired spectator index entries: %v", err)
 		return
@@ -290,8 +295,8 @@ func cleanupExpiredSpectateIndex(svcCtx *svc.ServiceContext) {
 	if removed > 0 {
 		logx.Infof("[spectate] Cleaned %d expired spectator index entries", removed)
 	}
-	// 赛事局索引成员的 score 是到期毫秒,同一轮顺手清(L2 配额的过期项由抢配额的 Lua 自己清)。
-	if _, err := svcCtx.MatchRedis.Zremrangebyscore(spectateFeaturedActiveKey, 0, int64(nowMs())); err != nil {
+	// 赛事局索引成员的 score 是到期毫秒,同一轮顺手清(L2 配额的过期项由抢配额时逐桶清,见 liveBroadcastQuota)。
+	if _, err := spectateFeaturedIndex.removeByScore(ctx, svcCtx.MatchRedis, int64(nowMs())); err != nil {
 		logx.Errorf("[spectate] Failed to clean expired featured index entries: %v", err)
 	}
 }

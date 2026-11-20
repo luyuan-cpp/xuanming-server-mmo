@@ -388,7 +388,7 @@ ratio against your observed steady-state failure rate.
 | `SceneOwnershipNodeIdTakenOver` | critical | 某个 scene Pod 读到自己的节点号已被更新的登记(别的进程)接走,正在把本地场景全部排空。查这个 Pod 到 etcd 的网络;`scene_ownership_releasing_scenes` 回到 0 之后重启它。它重连 etcd 时也会因分配键冲突自行疏散退出 |
 | `SceneOwnershipOwnHolderUnknown` | warning | (2026-11-11 落码,代码与规则未编译、未实测)某个 Pod 托管着场景,`scene_ownership_own_holder_known` 却持续 10 分钟是 0:它一直没读到自己的节点号持有者记录,这期间号要是被新进程接走,它认不出来。同时亮着 `SceneOwnershipReconcileBlind` 就按那条修节点到控制域的读;没有就查 scene_manager 的 `[NodeHolder] publishing the holder ... failed` 日志与它到控制域 Redis 的写入,修好之后约一分钟内恢复为 1。修不好、而这个 Pod 又与 etcd 失联(日志里续租失败)时,`etcdctl get SceneNodeService.rpc/ --prefix` 找到这个节点号现在的登记,`nodeUuid` 不是这个 Pod 的就重启它(它名下的场景已经改派,重启只断开还连在它上面的玩家)。设计稿 §9 第 1 条 |
 | `SceneOwnershipReleaseBacklog` | warning | 某个 Pod 排空中与等预算的场景数持续 15 分钟大于 0。`release_deferred_scenes` 高 = 住户预算不够(按压测余量调大 `kMaxRelocationsPerSweep`);`releasing_scenes` 高 = 住户改派不收敛,看 `[RelocateConfirm]` / `[SceneDrain]` 日志与 scene_manager 是否可达 |
-| `SceneOwnershipReconcileBlind` | warning | 某个 Pod 10 分钟里过半轮次读不到控制域,持续 5 分钟。查它到 `scene_control_redis` 的连接(`metric=zone_redis_liveness_timeout`、AUTH 失败、DNS);控制域 Redis 本身的告警在 `redis-alerts.yaml` |
+| `SceneOwnershipReconcileBlind` | warning | 某个 Pod 10 分钟里过半轮次读不到控制域,持续 5 分钟。查它到控制集群(node-config 的 `control_redis`)的连接(`[ControlRedis]` 计数行、`metric=zone_redis_liveness_timeout`、AUTH 失败、DNS);控制集群本身的告警在 `redis-control-alerts.yaml` |
 
 ```
 kubectl apply -n observability -f deploy/k8s/scene-ownership-alerts.yaml

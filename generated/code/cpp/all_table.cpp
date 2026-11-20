@@ -2,7 +2,6 @@
 #include "all_table.h"
 
 #include <thread>
-#include "muduo/base/CountDownLatch.h"
 
 #include "activityschedule_table.h"
 #include "activityvitalityreward_table.h"
@@ -284,433 +283,330 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(53);
+    // 每次调用各起一组线程,走出这对花括号时全部 join(std::jthread 析构即 join):可以重复调用,
+    // LoadSuccess 不会和加载并发。别改回 detach 加函数内静态门闩,那样第二次调用不会等加载完。
+    // shortcut: 每张表一条线程,表数量远多于 CPU 核数时改成按核数限流的线程池。
+    {
 
-    std::thread ActivityScheduleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ActivityScheduleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ActivityScheduleLoadThread.detach();
+        std::jthread ActivityScheduleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ActivityScheduleTableManager::Instance().Load();
+        });
 
-    std::thread ActivityVitalityRewardLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ActivityVitalityRewardTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ActivityVitalityRewardLoadThread.detach();
+        std::jthread ActivityVitalityRewardLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ActivityVitalityRewardTableManager::Instance().Load();
+        });
 
-    std::thread ActivityVitalityRuleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ActivityVitalityRuleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ActivityVitalityRuleLoadThread.detach();
+        std::jthread ActivityVitalityRuleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ActivityVitalityRuleTableManager::Instance().Load();
+        });
 
-    std::thread ActorActionCombatStateLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ActorActionCombatStateTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ActorActionCombatStateLoadThread.detach();
+        std::jthread ActorActionCombatStateLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ActorActionCombatStateTableManager::Instance().Load();
+        });
 
-    std::thread ActorActionStateLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ActorActionStateTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ActorActionStateLoadThread.detach();
+        std::jthread ActorActionStateLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ActorActionStateTableManager::Instance().Load();
+        });
 
-    std::thread AttributeAllocRatioLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        AttributeAllocRatioTableManager::Instance().Load();
-        latch.countDown();
-    });
-    AttributeAllocRatioLoadThread.detach();
+        std::jthread AttributeAllocRatioLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            AttributeAllocRatioTableManager::Instance().Load();
+        });
 
-    std::thread AttributeAutoPlanLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        AttributeAutoPlanTableManager::Instance().Load();
-        latch.countDown();
-    });
-    AttributeAutoPlanLoadThread.detach();
+        std::jthread AttributeAutoPlanLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            AttributeAutoPlanTableManager::Instance().Load();
+        });
 
-    std::thread AttributeDimensionLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        AttributeDimensionTableManager::Instance().Load();
-        latch.countDown();
-    });
-    AttributeDimensionLoadThread.detach();
+        std::jthread AttributeDimensionLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            AttributeDimensionTableManager::Instance().Load();
+        });
 
-    std::thread AttributePoolLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        AttributePoolTableManager::Instance().Load();
-        latch.countDown();
-    });
-    AttributePoolLoadThread.detach();
+        std::jthread AttributePoolLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            AttributePoolTableManager::Instance().Load();
+        });
 
-    std::thread AttributeRuleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        AttributeRuleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    AttributeRuleLoadThread.detach();
+        std::jthread AttributeRuleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            AttributeRuleTableManager::Instance().Load();
+        });
 
-    std::thread BaseSceneLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        BaseSceneTableManager::Instance().Load();
-        latch.countDown();
-    });
-    BaseSceneLoadThread.detach();
+        std::jthread BaseSceneLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            BaseSceneTableManager::Instance().Load();
+        });
 
-    std::thread BuffLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        BuffTableManager::Instance().Load();
-        latch.countDown();
-    });
-    BuffLoadThread.detach();
+        std::jthread BuffLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            BuffTableManager::Instance().Load();
+        });
 
-    std::thread ClassLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ClassTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ClassLoadThread.detach();
+        std::jthread ClassLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ClassTableManager::Instance().Load();
+        });
 
-    std::thread ConditionLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ConditionTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ConditionLoadThread.detach();
+        std::jthread ConditionLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ConditionTableManager::Instance().Load();
+        });
 
-    std::thread CooldownLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        CooldownTableManager::Instance().Load();
-        latch.countDown();
-    });
-    CooldownLoadThread.detach();
+        std::jthread CooldownLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            CooldownTableManager::Instance().Load();
+        });
 
-    std::thread DungeonLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        DungeonTableManager::Instance().Load();
-        latch.countDown();
-    });
-    DungeonLoadThread.detach();
+        std::jthread DungeonLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            DungeonTableManager::Instance().Load();
+        });
 
-    std::thread EquipAffixPoolLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipAffixPoolTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipAffixPoolLoadThread.detach();
+        std::jthread EquipAffixPoolLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipAffixPoolTableManager::Instance().Load();
+        });
 
-    std::thread EquipAffixRuleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipAffixRuleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipAffixRuleLoadThread.detach();
+        std::jthread EquipAffixRuleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipAffixRuleTableManager::Instance().Load();
+        });
 
-    std::thread EquipArtifactLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipArtifactTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipArtifactLoadThread.detach();
+        std::jthread EquipArtifactLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipArtifactTableManager::Instance().Load();
+        });
 
-    std::thread EquipAttributeLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipAttributeTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipAttributeLoadThread.detach();
+        std::jthread EquipAttributeLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipAttributeTableManager::Instance().Load();
+        });
 
-    std::thread EquipAttributeCapLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipAttributeCapTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipAttributeCapLoadThread.detach();
+        std::jthread EquipAttributeCapLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipAttributeCapTableManager::Instance().Load();
+        });
 
-    std::thread EquipEnhanceLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipEnhanceTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipEnhanceLoadThread.detach();
+        std::jthread EquipEnhanceLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipEnhanceTableManager::Instance().Load();
+        });
 
-    std::thread EquipGemLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipGemTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipGemLoadThread.detach();
+        std::jthread EquipGemLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipGemTableManager::Instance().Load();
+        });
 
-    std::thread EquipGemSocketLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipGemSocketTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipGemSocketLoadThread.detach();
+        std::jthread EquipGemSocketLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipGemSocketTableManager::Instance().Load();
+        });
 
-    std::thread EquipSlotLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipSlotTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipSlotLoadThread.detach();
+        std::jthread EquipSlotLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipSlotTableManager::Instance().Load();
+        });
 
-    std::thread EquipV1AffixLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        EquipV1AffixTableManager::Instance().Load();
-        latch.countDown();
-    });
-    EquipV1AffixLoadThread.detach();
+        std::jthread EquipV1AffixLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            EquipV1AffixTableManager::Instance().Load();
+        });
 
-    std::thread GlobalVariableLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        GlobalVariableTableManager::Instance().Load();
-        latch.countDown();
-    });
-    GlobalVariableLoadThread.detach();
+        std::jthread GlobalVariableLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            GlobalVariableTableManager::Instance().Load();
+        });
 
-    std::thread GuildActivityLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        GuildActivityTableManager::Instance().Load();
-        latch.countDown();
-    });
-    GuildActivityLoadThread.detach();
+        std::jthread GuildActivityLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            GuildActivityTableManager::Instance().Load();
+        });
 
-    std::thread GuildDonateLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        GuildDonateTableManager::Instance().Load();
-        latch.countDown();
-    });
-    GuildDonateLoadThread.detach();
+        std::jthread GuildDonateLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            GuildDonateTableManager::Instance().Load();
+        });
 
-    std::thread GuildLevelLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        GuildLevelTableManager::Instance().Load();
-        latch.countDown();
-    });
-    GuildLevelLoadThread.detach();
+        std::jthread GuildLevelLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            GuildLevelTableManager::Instance().Load();
+        });
 
-    std::thread GuildRuleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        GuildRuleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    GuildRuleLoadThread.detach();
+        std::jthread GuildRuleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            GuildRuleTableManager::Instance().Load();
+        });
 
-    std::thread GuildShopLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        GuildShopTableManager::Instance().Load();
-        latch.countDown();
-    });
-    GuildShopLoadThread.detach();
+        std::jthread GuildShopLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            GuildShopTableManager::Instance().Load();
+        });
 
-    std::thread ItemLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ItemTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ItemLoadThread.detach();
+        std::jthread ItemLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ItemTableManager::Instance().Load();
+        });
 
-    std::thread MessageLimiterLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        MessageLimiterTableManager::Instance().Load();
-        latch.countDown();
-    });
-    MessageLimiterLoadThread.detach();
+        std::jthread MessageLimiterLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            MessageLimiterTableManager::Instance().Load();
+        });
 
-    std::thread MirrorLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        MirrorTableManager::Instance().Load();
-        latch.countDown();
-    });
-    MirrorLoadThread.detach();
+        std::jthread MirrorLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            MirrorTableManager::Instance().Load();
+        });
 
-    std::thread MissionLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        MissionTableManager::Instance().Load();
-        latch.countDown();
-    });
-    MissionLoadThread.detach();
+        std::jthread MissionLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            MissionTableManager::Instance().Load();
+        });
 
-    std::thread MonsterLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        MonsterTableManager::Instance().Load();
-        latch.countDown();
-    });
-    MonsterLoadThread.detach();
+        std::jthread MonsterLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            MonsterTableManager::Instance().Load();
+        });
 
-    std::thread MysteryMerchantGoodsLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        MysteryMerchantGoodsTableManager::Instance().Load();
-        latch.countDown();
-    });
-    MysteryMerchantGoodsLoadThread.detach();
+        std::jthread MysteryMerchantGoodsLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            MysteryMerchantGoodsTableManager::Instance().Load();
+        });
 
-    std::thread MysteryMerchantRuleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        MysteryMerchantRuleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    MysteryMerchantRuleLoadThread.detach();
+        std::jthread MysteryMerchantRuleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            MysteryMerchantRuleTableManager::Instance().Load();
+        });
 
-    std::thread MysteryMerchantSpotLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        MysteryMerchantSpotTableManager::Instance().Load();
-        latch.countDown();
-    });
-    MysteryMerchantSpotLoadThread.detach();
+        std::jthread MysteryMerchantSpotLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            MysteryMerchantSpotTableManager::Instance().Load();
+        });
 
-    std::thread PetLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        PetTableManager::Instance().Load();
-        latch.countDown();
-    });
-    PetLoadThread.detach();
+        std::jthread PetLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            PetTableManager::Instance().Load();
+        });
 
-    std::thread PetEntryLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        PetEntryTableManager::Instance().Load();
-        latch.countDown();
-    });
-    PetEntryLoadThread.detach();
+        std::jthread PetEntryLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            PetEntryTableManager::Instance().Load();
+        });
 
-    std::thread PetRuleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        PetRuleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    PetRuleLoadThread.detach();
+        std::jthread PetRuleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            PetRuleTableManager::Instance().Load();
+        });
 
-    std::thread PetTierLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        PetTierTableManager::Instance().Load();
-        latch.countDown();
-    });
-    PetTierLoadThread.detach();
+        std::jthread PetTierLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            PetTierTableManager::Instance().Load();
+        });
 
-    std::thread PlayModeLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        PlayModeTableManager::Instance().Load();
-        latch.countDown();
-    });
-    PlayModeLoadThread.detach();
+        std::jthread PlayModeLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            PlayModeTableManager::Instance().Load();
+        });
 
-    std::thread RewardLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        RewardTableManager::Instance().Load();
-        latch.countDown();
-    });
-    RewardLoadThread.detach();
+        std::jthread RewardLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            RewardTableManager::Instance().Load();
+        });
 
-    std::thread RoleNameRuleLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        RoleNameRuleTableManager::Instance().Load();
-        latch.countDown();
-    });
-    RoleNameRuleLoadThread.detach();
+        std::jthread RoleNameRuleLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            RoleNameRuleTableManager::Instance().Load();
+        });
 
-    std::thread SkillLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        SkillTableManager::Instance().Load();
-        latch.countDown();
-    });
-    SkillLoadThread.detach();
+        std::jthread SkillLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            SkillTableManager::Instance().Load();
+        });
 
-    std::thread SkillPermissionLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        SkillPermissionTableManager::Instance().Load();
-        latch.countDown();
-    });
-    SkillPermissionLoadThread.detach();
+        std::jthread SkillPermissionLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            SkillPermissionTableManager::Instance().Load();
+        });
 
-    std::thread TestLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        TestTableManager::Instance().Load();
-        latch.countDown();
-    });
-    TestLoadThread.detach();
+        std::jthread TestLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            TestTableManager::Instance().Load();
+        });
 
-    std::thread TestMultiKeyLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        TestMultiKeyTableManager::Instance().Load();
-        latch.countDown();
-    });
-    TestMultiKeyLoadThread.detach();
+        std::jthread TestMultiKeyLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            TestMultiKeyTableManager::Instance().Load();
+        });
 
-    std::thread WorldLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        WorldTableManager::Instance().Load();
-        latch.countDown();
-    });
-    WorldLoadThread.detach();
+        std::jthread WorldLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            WorldTableManager::Instance().Load();
+        });
 
-    std::thread ZoneGroupLoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        ZoneGroupTableManager::Instance().Load();
-        latch.countDown();
-    });
-    ZoneGroupLoadThread.detach();
+        std::jthread ZoneGroupLoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            ZoneGroupTableManager::Instance().Load();
+        });
 
-    latch.wait();
+    }
 
 
     ActivityScheduleTableManager::Instance().LoadSuccess();

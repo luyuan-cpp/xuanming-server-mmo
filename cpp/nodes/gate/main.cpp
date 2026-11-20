@@ -25,6 +25,7 @@
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "thread_context/node_context_manager.h"
 #include "gate_codec.h"
+#include "network/codec/websocket.h"
 #include "gate_router_mode.h"
 #include "gate_security.h"
 #include "core/security/caller_auth.h"
@@ -669,6 +670,8 @@ int main(int argc, char *argv[])
                         n.GetTcpServer().setConnectionCallback(
                             [&context](const TcpConnectionPtr& conn) {
                                 if (context.sourceClosed && conn->connected()) { conn->forceClose(); return; }
+                                // 小游戏连接(WebSocket)的拆帧状态在 codec 层的线程局部表里,连接断开时删掉;原始 TCP 连接是空操作。
+                                if (!conn->connected()) { websocket::Forget(conn); }
                                 context.clientSessionHandler.OnConnection(conn);
                             });
                         n.GetTcpServer().setMessageCallback(

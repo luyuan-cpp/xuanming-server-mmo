@@ -2283,10 +2283,10 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
 ### V.2 结论
 
 1. **入队即跟随**(J-12 修订):`PlayerTeamSystem::OnRefreshEvent` 从 `kRefreshOnly` 改为 `kFollowLeader`。刷新信号只发给 TeamId 变了的人(`notify.go` `publish`:`Joined ∪ Left ∪ healed`),被移出者刷新后 TeamId 为 0、建队者是队长,真正被带走的只有新加入的队员。不扇出。Go 侧不改。
-2. **归队**:`CheckFollowLeader` 全部守卫通过后,队长在别的场景 → 既有的 EnterScene 跟随;**已在同一场景实例** → 新增 `RegroupToLeader`:两人互相不在对方 `AoiListComp` 里,或水平距离 > `kTeamRegroupDistance`(8),就把队员瞬移到队长的 Transform 位置。纯判定 `ShouldRegroup(distance, mutuallyVisible)` 在头文件内联,有单测。
-   - 取 8 的理由:客户端 5 人纵队最长 4 × 1.4 = 5.6,队形内的落后不触发;且小于 `kMaxViewRadius`(10)。
+2. **归队**:`CheckFollowLeader` 全部守卫通过后,队长在别的场景 → 既有的 EnterScene 跟随;**已在同一场景实例** → 新增 `RegroupToLeader`:两人互相不在对方 `AoiListComp` 里,或水平距离 > `kTeamRegroupDistance`(24),就把队员瞬移到队长的 Transform 位置。纯判定 `ShouldRegroup(distance, mutuallyVisible)` 在头文件内联,有单测。
+   - 取 24 的理由:5 人纵队最长 4 × 3 = 12,留足余量,队形内的落后不触发;且小于 `kMaxViewRadius`(50)。2026-11-19 随间距(1.4 → 3)与视野(10 → 50)放大从 8 调到 24。
    - 「互相不可见必须瞬移」是事实 2 的直接推论:不瞬移就永远看不见队长。
-   - **兴趣表只有在双方都已被 `AoiSystem::Update` 放进格子(有 `Hex`)之后才算数。** 任一方刚进场 / 刚被瞬移、还没轮到下一次 Update 时表是空的,那是「还没评估」不是「看不见」,此时只看距离:相距 ≤ 8 的两个人必在同格或邻格,后进格的一方做首次进场评估时会把双向可见性一起建好。不这样区分,进场链(三跳 Redis 回调通常早于首次 Update)每次都会瞬移,一次瞬移之后紧跟的第二次检查还会重复瞬移。
+   - **兴趣表只有在双方都已被 `AoiSystem::Update` 放进格子(有 `Hex`)之后才算数。** 任一方刚进场 / 刚被瞬移、还没轮到下一次 Update 时表是空的,那是「还没评估」不是「看不见」,此时只看距离:相距 ≤ 24(小于格子尺寸 50)的两个人必在同格或邻格,后进格的一方做首次进场评估时会把双向可见性一起建好。不这样区分,进场链(三跳 Redis 回调通常早于首次 Update)每次都会瞬移,一次瞬移之后紧跟的第二次检查还会重复瞬移。
    - 落在队长脚下(那是刚被导航裁决过的合法点);排成一列是客户端的事。
 3. **同场景瞬移原语** `MovementSystem::TeleportWithinScene(entity, location, rotation, reason)`(`spatial/system/movement.{h,cpp}`)。`TeleportS2C` 在协议里早就有,服务端此前没有任何发送点。做四件事:
    - 写 Transform、清零 Velocity(否则 `Update` 会从新位置按旧速度继续积分);
@@ -2300,7 +2300,7 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
    - **量**:客户端移动中每 0.25s 一条 MoveSync,急转弯时立即补一条(客户端自己限在约 8 条 / 秒以内;gate 对 132 的限流是每窗口 20 条),即每个移动中的玩家约 4~8 次 / 秒 × 互相可见的人数(兴趣表有容量上限)。66 那一路原样保留,没有动。
 6. **走路跟随**:2026-11-06 起分两种客户端。
    - **声明了跟随的新客户端由服务器驱动**([team-follow-server-trail.md](team-follow-server-trail.md)):scene 每 tick 把队长位置记成轨迹,
-     队员站在轨迹上离队长 槽位 × 1.4 的点,全队同速同起停;客户端不再上报队员的移动,只显示服务器广播。
+     队员站在轨迹上离队长 槽位 × 3 米(间距,2026-11-19 由 1.4 改定)的点,全队同速同起停;客户端不再上报队员的移动,只显示服务器广播。
      改的原因:客户端各自跟随时,路人看到的每名队员各带一段自己的网络延迟,队形在行进中参差、起停不齐,
      折返等情形只能在每个客户端里各修一遍(V.7、V.8);服务器驱动后所有人看到同一份队形,且不需要寻路(不用 dtCrowd)。
    - **旧客户端保持原样**(`mmorpg-client` 同名分支,见 V.4):队员的客户端自己把本地角色走到「沿队长轨迹往回数 槽位 × 1.4」的点上,照常上报移动,服务端照常裁决。
@@ -2410,18 +2410,17 @@ cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross
        修复后的出包与复验结果另起一条记在 `docs/PROGRESS.md`。
      - 机器人队长第一版在停步前空了 0.8 秒不上报,观察者把它外推成「冲过头再拉回」,队员因此停在队长前面 —— 那是测试脚本不像真实客户端,已改;
        顺带说明 V.4「停步回拉」那一支确实在起作用(回拉量超过 1.5 的上限时就会留下折返)。
-5. **观感:2026-11-12 定案,间距保留 1.4**(负责人要求不再挂着待定项,按标准做法定)。当时的测量:1 个世界单位约 12 像素,
-   人物贴图约 40 × 75 像素,间距 1.4 只有 17 像素,队员与队长的贴图叠住一半以上;像问道那样拉开一个身位约要 3.3。
-   定案理由:
-   - "一个身位"取决于角色贴图在地面上的比例。客户端 11-08 换了新角色(跑步帧 384 像素、每单位 39 像素,帧高约 9.85,
-     人物不透明区宽约 6~8),新角色的地面比例还标着待校准(资源清单 `visualValidation: game_scale_ground_anchor_pending`)。
-     现在按身宽定,美术定比例之后还得再改;按新角色量,一个身位 × 4 名队员是 24~32,超过视野半径 10、超过追赶上限 `kTeamFollowMaxLag`(24),
-     要连带改视野、改追赶参数、给队员之间加显式关注。
-   - 所以先保留紧凑纵队:整列 4 × 1.4 = 5.6 在视野半径之内,互相看得见不靠任何额外机制,10-13 已联机量过(队员停在队长身后 1.2~1.7);
-     贴图重叠由客户端按脚底先后排序(`QdaoBoySpriteAnimator.WorldSortingOrder`,离屏幕下沿近的画在前面)。
-   - "整列在视野里"从注释改成编译期断言(`player_team.cpp` 顶部:整列不超过归队阈值 8、归队阈值小于视野半径 10)。
-     美术比例定了要按身宽拉开时,改 `kTeamFollowSpacing` 一个常量,断言会先报错,提醒同时给队员之间加 AOI 显式关注
-     (`AoiFollowKind::kTeam` 已预留)、核对 `kTeamFollowMaxLag`。现在的跟随由服务器驱动,客户端没有自己的间距常量,不用改客户端。
+5. **观感:2026-11-19 负责人定,间距 3 米(原 1.4;同日先放大到 3 倍即 4.2,随后改定 3 米),玩家视野放大到 5 倍(10 → 50)**
+   ("跟随的时候间距太小")。1.4 时队员与队长的贴图叠住一半以上(当时 1 个世界单位约 12 像素,间距只有 17 像素)。连带改的常量:
+   - 整列 4 × 3 = 12,在视野半径 50 之内,队员之间不靠显式关注就互相看得见,`AoiFollowKind::kTeam` 继续不用。
+   - 归队阈值 `kTeamRegroupDistance` 8 → 24(整列 12 再留足余量),加入时最长走路
+     `kTeamFollowMaxApproachPath` 16 → 48(仍取归队阈值的两倍)。
+   - 视野放大要求格子不小于视野半径,`kAoiHexSize` 20 → 50,见 [AOI 单向关注](aoi-directed-interest.md)「空间关注的评估时机」。
+   - `kTeamFollowMaxLag`(24)不用改:它量的是每名队员落后自己槽位多少,与整列多长无关。
+   - 两条编译期断言照旧守着(`player_team.cpp` 顶部:整列不超过归队阈值、归队阈值小于视野半径)。跟随由服务器驱动,
+     客户端没有自己的间距常量,不用改客户端;贴图仍按脚底先后排序(`QdaoBoySpriteAnimator.WorldSortingOrder`)。
+   - 11-12 那次"先保留 1.4、等美术定比例"的定案由这次取代;新角色的地面比例(`game_scale_ground_anchor_pending`)校准后若还要调,
+     仍只改 `kTeamFollowSpacing`,断言会提示连带的阈值。
 6. **仍然没有运行证据**:3 人以上的纵队;跨节点;战斗冻结解除后的归队;走着掉线后 1 秒内停下;`cross_zone: true` 的 team_smoke 两种形态;带 `--gtest_shuffle` 的 aoi_test。
 7. **Java 版(AGENTS §12)**:待做。本机 `D:\luyuan\xuanming-server-mmo` 不存在,`PARITY.md` 未登记;需要对齐的客户端可见行为仍是 V.5 末条列的三项。
 

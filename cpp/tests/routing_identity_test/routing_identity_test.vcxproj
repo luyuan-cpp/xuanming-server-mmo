@@ -292,6 +292,12 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_redirect\</ObjectFileName>
     </ClCompile>
+    <!-- 小游戏客户端的 WebSocket 入口(libs/engine/core/network/codec/websocket.h,docs/design/minigame-websocket-gate.md):被测代码在 core.lib 里,
+         改了它要先重编 core 再编本工程;连接是回环 TCP(nodes/gate/tests/loopback_connection.h),广播帧用 gate_push::EncodedFrame(头文件内联)。 -->
+    <ClCompile Include="../../nodes/gate/tests/websocket_entry_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_websocket\</ObjectFileName>
+    </ClCompile>
     <!-- gate 客户端入口两道 login 相关闸的装配层(handler/rpc/client_entry_admission.h,2026-11-12):被测源码直接编进测试;
          回执信封经上面已编进来的路由 lane 装配层(client_request_lane.cpp)与真实的回环 TCP 写出(nodes/gate/tests/loopback_connection.h),
          会话表 tlsSessionManager 来自 gate.lib。ObjectFileName 的理由同上。 -->

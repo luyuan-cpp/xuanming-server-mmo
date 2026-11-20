@@ -13,7 +13,6 @@ import (
 	"shared/playerredis"
 	"shared/redisauth"
 	"shared/rolefence"
-	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/discov"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -33,7 +32,7 @@ type Config struct {
 	// Recall 是 GM 批量回收的资产通道,见 RecallConfig。
 	Recall RecallConfig `json:",optional"`
 	// ControlRedis 是控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.8、§5.1;2026-11-12 取代 SharedRedis 段):
-	// 落地唤醒分片频道 assetop:wake:{aw:N}(64 个,SSUBSCRIBE)和去重键,必须和 scene 发布的是同一集群。实例指错的表现是永远收不到唤醒,且不报错。
+	// 落地唤醒分片频道 assetop:wake:{aw:N}(64 个,本副本只 SSUBSCRIBE 全服分工里负责的片)和去重键,必须和 scene 发布的是同一集群。实例指错的表现是永远收不到唤醒,且不报错。
 	// 名字读缓存 player:name:<id>(routing.PlayerNameCache,只放可丢弃的读缓存)也在这里:2026-11-13 起取代独立的 NameCacheRedis 段。
 	// 键守卫是 clusterredis.ControlClusterKeys。名字缓存常驻就要连,所以常驻启动时必须显式写 Addrs(ValidateControlRedis)。
 	ControlRedis clusterredis.Config `json:",optional"`
@@ -41,12 +40,6 @@ type Config struct {
 	// Secret 里,经 secretKeyRef 注入;ConfigMap 里的口令写空串。不写 = 照用字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在常驻启动时填好,变量缺失或为空即拒启。ControlRedis.PasswordEnv 不用(变量缺失时静默落成空口令)。
 	SharedRedisPasswordEnv string `json:",optional"`
-	// MySQLPasswordEnv 是 SnapshotMySQL 口令所在的环境变量名(docs/design/workload-secrets-via-k8s-secret.md §4.2)。K8s 上只有部署脚本
-	// 渲染的 ConfigMap go-svc-data-service-config 写它:那份 ConfigMap 由 route-tool Job 直接挂载,口令经 Secret mysql-auth 注入。
-	// 写者常驻进程与 -migrate 读运维预置 Secret 里的配置,口令写在 SnapshotMySQL.Password 里、不写本键。
-	// 写了它,SnapshotMySQL.Password 必须写成空串(不写这一键会落回缺省值 apppass123,被当成字面量而拒绝);不写 = 照用字面量(本机)。
-	// 由 ResolveMySQLPassword 在加载配置后、任何入口连库之前填好,变量缺失或为空即拒启。
-	MySQLPasswordEnv string `json:",optional"`
 	// PlayerRedis 是玩家域:读位置键 player:{id}:location。没写 Addrs 时指向 ControlRedis。只有 Recall.Enabled=true 时才连。
 	PlayerRedis playerredis.Config `json:",optional"`
 
@@ -121,6 +114,18 @@ type AccountDirectoryConfig struct {
 	// 它与 SnapshotMySQL / PlayerName / RouteStore 的池一样连同一台全局库、计入连接总账(每个副本多占 MaxOpenConn 条):
 	// 调大前按 tools/scripts/k8s_deploy.ps1 的连接总账核对 max_connections,部署脚本从本键读取。
 	MaxOpenConn int `json:",optional"`
+	// DeletionCoolingOffSeconds 是账号注销的冷静期(docs/design/account-deletion.md §4.1,负责人 2026-11-19 定 7 天)。
+	// 只在 data_service 配一处,各区 login 不各配一份。合法区间 [0, 30 天];0 = 冷静期满即执行,只给测试。越界不装配注销 RPC。
+	DeletionCoolingOffSeconds int64 `json:",default=604800"`
+}
+
+// DeletionCoolingOff 校验并返回冷静期。
+func (c AccountDirectoryConfig) DeletionCoolingOff() (time.Duration, error) {
+	d := time.Duration(c.DeletionCoolingOffSeconds) * time.Second
+	if c.DeletionCoolingOffSeconds < 0 || d > 30*24*time.Hour {
+		return 0, fmt.Errorf("AccountDirectory.DeletionCoolingOffSeconds=%d out of range [0, 2592000]", c.DeletionCoolingOffSeconds)
+	}
+	return d, nil
 }
 
 // 账号目录池上限的缺省与边界(见 AccountDirectoryConfig.MaxOpenConn)。
@@ -252,18 +257,6 @@ func (c Config) EffectivePlayerRedis() playerredis.Config {
 func (c Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) (Config, error) {
 	err := redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
 		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
-	if err != nil {
-		return Config{}, err
-	}
-	return c, nil
-}
-
-// ResolveMySQLPassword 按 MySQLPasswordEnv 填 SnapshotMySQL.Password,返回填好的副本;规则见 secretenv.Fill。
-// 每个读配置后要连库的入口都调用:data_service.go 在 conf.MustLoad 之后、分流到 -migrate 与各运维入口之前;
-// -route-tool 自己读配置(routetoolcli),在它 conf.Load 之后。
-func (c Config) ResolveMySQLPassword(lookup func(string) (string, bool)) (Config, error) {
-	err := secretenv.Fill("MySQLPasswordEnv", c.MySQLPasswordEnv, lookup,
-		secretenv.Target{Field: "SnapshotMySQL.Password", Value: &c.SnapshotMySQL.Password})
 	if err != nil {
 		return Config{}, err
 	}

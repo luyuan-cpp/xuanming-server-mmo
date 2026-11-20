@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"time"
@@ -48,6 +49,9 @@ type AuditRetentionOptions struct {
 	Paused func() bool
 	// Observe 每条 DELETE 之后调用一次,取桶锁出错时也调用一次(deleted=0),接指标和日志。可以为 nil。
 	Observe func(table string, deleted int64, err error)
+	// ObserveOldest 每张表每轮清理之后调用一次:这张表现存最老一行的年龄(空表为 0)与配置的保留期,接告警
+	// DataServiceAuditRetentionBehind(清理跟不上时最老一行越来越老)。读最老一行失败的那一轮不调用。可以为 nil。
+	ObserveOldest func(table string, maxAge, oldestAge time.Duration)
 }
 
 // retentionShard 是一个桶的清理会话:持有这个桶的清理锁,deleteOlder 删一批本桶里早于 olderThan(Unix 秒)的行,
@@ -58,10 +62,12 @@ type retentionShard interface {
 }
 
 // auditRetentionTable 是一张要清理的表。claim 不等待地取第 shard 个桶的清理锁:ok=false = 别的实例正在删这个桶。
+// oldest 读这张表现存最老一行的时刻(Unix 秒),空表回 found=false;为 nil 时不报最老行。
 type auditRetentionTable struct {
 	name   string
 	maxAge time.Duration
 	claim  func(ctx context.Context, shard uint32) (retentionShard, bool, error)
+	oldest func(ctx context.Context) (oldest uint64, found bool, err error)
 }
 
 type auditRetention struct {
@@ -73,6 +79,8 @@ type auditRetention struct {
 	startShard func() uint32 // 每张表这一轮从哪个桶起步
 	paused     func() bool
 	observe    func(table string, deleted int64, err error)
+	// observeOldest 见 AuditRetentionOptions.ObserveOldest。
+	observeOldest func(table string, maxAge, oldestAge time.Duration)
 }
 
 // RunAuditRetention 定期删过期的 player_snapshot、transaction_log,阻塞到 ctx 取消。
@@ -82,16 +90,17 @@ type auditRetention struct {
 func RunAuditRetention(ctx context.Context, opts AuditRetentionOptions, snapshots *SnapshotStore, txLogs *TransactionLogStore) {
 	r := &auditRetention{
 		tables: []auditRetentionTable{
-			{name: AuditTablePlayerSnapshot, maxAge: opts.SnapshotMaxAge, claim: snapshots.claimRetentionShard},
-			{name: AuditTableTransactionLog, maxAge: opts.TransactionLogMaxAge, claim: txLogs.claimRetentionShard},
+			{name: AuditTablePlayerSnapshot, maxAge: opts.SnapshotMaxAge, claim: snapshots.claimRetentionShard, oldest: snapshots.oldestRetentionTimestamp},
+			{name: AuditTableTransactionLog, maxAge: opts.TransactionLogMaxAge, claim: txLogs.claimRetentionShard, oldest: txLogs.oldestRetentionTimestamp},
 		},
-		batchSize:  opts.BatchSize,
-		maxBatches: auditRetentionMaxBatchesPerShard,
-		pause:      auditRetentionPause,
-		now:        time.Now,
-		startShard: func() uint32 { return uint32(rand.N(AuditShardCount)) },
-		paused:     opts.Paused,
-		observe:    opts.Observe,
+		batchSize:     opts.BatchSize,
+		maxBatches:    auditRetentionMaxBatchesPerShard,
+		pause:         auditRetentionPause,
+		now:           time.Now,
+		startShard:    func() uint32 { return uint32(rand.N(AuditShardCount)) },
+		paused:        opts.Paused,
+		observe:       opts.Observe,
+		observeOldest: opts.ObserveOldest,
 	}
 	timer := time.NewTimer(rand.N(opts.Interval))
 	defer timer.Stop()
@@ -141,6 +150,46 @@ func (r *auditRetention) sweepTable(ctx context.Context, table auditRetentionTab
 	}
 	logx.Infof("[AuditRetention] %s: shards swept=%d skipped=%d (held by another instance or lock failed) deleted=%d older_than=%d",
 		table.name, swept, skipped, deleted, olderThan)
+	r.reportOldest(ctx, table)
+}
+
+// reportOldest 在一轮清理之后读这张表现存最老一行,把它的年龄报给 observeOldest。清理跟不上时最老一行会越来越老,
+// 这是唯一能直接看出来的信号(删除行数只能和写入行数比)。读失败只记日志、不影响清理;取消或排空时不读。
+func (r *auditRetention) reportOldest(ctx context.Context, table auditRetentionTable) {
+	if table.oldest == nil || r.observeOldest == nil || ctx.Err() != nil || r.isPaused() {
+		return
+	}
+	readCtx, cancel := context.WithTimeout(ctx, auditRetentionStatementTimeout)
+	oldest, found, err := table.oldest(readCtx)
+	cancel()
+	if err != nil {
+		logx.Errorf("[AuditRetention] %s: read oldest row failed: %v", table.name, err)
+		return
+	}
+	var age time.Duration
+	if found {
+		age = max(r.now().Sub(time.Unix(int64(oldest), 0)), 0)
+	}
+	r.observeOldest(table.name, table.maxAge, age)
+}
+
+// oldestSQLTimestamp 按桶各取一次最老一行的时刻,回全部桶里最小的;表是空的回 found=false。
+// query 只有一个占位符(shard),形如 SELECT <时间列> FROM <表> WHERE shard = ? ORDER BY <时间列> LIMIT 1,走 (shard, 时间) 索引:
+// 时间列不是索引首列,不带 shard 的 MIN 在 TiDB 上要扫整段索引,按桶分开取每次都只是一次索引定位。
+func oldestSQLTimestamp(ctx context.Context, db *sql.DB, query string) (oldest uint64, found bool, err error) {
+	for shard := uint32(0); shard < AuditShardCount; shard++ {
+		var ts uint64
+		if err := db.QueryRowContext(ctx, query, shard).Scan(&ts); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return 0, false, fmt.Errorf("shard %d: %w", shard, err)
+		}
+		if !found || ts < oldest {
+			oldest, found = ts, true
+		}
+	}
+	return oldest, found, nil
 }
 
 // sweepShard 取一个桶的清理锁,按批删,直到不满一批、出错、本桶预算用完、ctx 取消或进入排空,然后放锁。

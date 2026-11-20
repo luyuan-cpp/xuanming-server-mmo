@@ -538,6 +538,39 @@ func TestTeamTiDBWholeUnitsCrossWaitUnknownAndRecovery(t *testing.T) {
 	require.Empty(t, pinned.Commit.Decision.Record.MatchLockToken)
 }
 
+// 两个副本同时撮合同一个组队池(失联实例与接管实例,或跨机房段与机房段撞车),拿着同一份读页认领同一批整队:只成一局。
+// 后到的一方在入场守卫上看到整队原件已带别的 battle_id,整笔回滚,回 ErrMatchEntryOccupied(撮合侧按正常撞车处理,
+// 不记排空 HOLD,见 logic.expectedClaimRejection);票仍归先提交的那一局,后到的成局行不落库(global-match-hierarchical-pools.md §5.5)。
+func TestTeamTiDBSecondClaimOfClaimedUnitsIsRejectedWholly(t *testing.T) {
+	f := newNativeTeamFixture(t)
+	f.create(t, 1, 101)
+	f.inviteAndAccept(t, 1, 2, 101)
+	f.inviteAndAccept(t, 1, 3, 101)
+	f.create(t, 4, 404)
+	f.inviteAndAccept(t, 4, 5, 404)
+	a, b := f.queued(t, 1, 101), f.queued(t, 4, 404)
+	left, err := f.owner.TeamLaunchTickets(context.Background(), a)
+	require.NoError(t, err)
+	right, err := f.owner.TeamLaunchTickets(context.Background(), b)
+	require.NoError(t, err)
+	group := append(left, right...)
+	formation := func(battle uint64) *matchpb.MatchFormationRecord {
+		return &matchpb.MatchFormationRecord{BattleId: battle, OperationId: uuid.NewString(), PhysicalRegion: 1, TargetNodeId: 1, TargetInstanceId: uuid.NewString(), TargetEndpoint: "127.0.0.1:1", Mode: uint32(matchpb.MatchMode_MATCH_MODE_PVE_TEAM), ConfigId: 1}
+	}
+	require.NoError(t, f.owner.ClaimTeamUnits(context.Background(), formation(950), group, []*teampb.TeamLaunchRecord{a, b}))
+	require.ErrorIs(t, f.owner.ClaimTeamUnits(context.Background(), formation(951), group, []*teampb.TeamLaunchRecord{a, b}), authority.ErrMatchEntryOccupied)
+	var count int
+	require.NoError(t, f.owner.DB.QueryRow("SELECT COUNT(*) FROM match_formation WHERE battle_id=951").Scan(&count))
+	require.Zero(t, count, "后到的一方整笔回滚")
+	for _, ticket := range group {
+		var state uint32
+		var battle uint64
+		require.NoError(t, f.owner.DB.QueryRow("SELECT state,formation_id FROM match_authority_ticket WHERE player_id=?", ticket.PlayerId).Scan(&state, &battle))
+		require.Equal(t, uint32(2), state)
+		require.Equal(t, uint64(950), battle)
+	}
+}
+
 // 按池读整队不按 home 过滤:七支整队都在同一页,跨 home 能不能成局由撮合与提交点的范围树决定;
 // 提交点另核票上的 home 仍是玩家当前归属。
 func TestTeamTiDBCrossHomeUnitsShareThePoolAndWaitForScope(t *testing.T) {

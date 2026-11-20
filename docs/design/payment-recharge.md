@@ -1,6 +1,6 @@
 # 真钱充值设计(苹果 IAP / Google Play / 国内安卓 / 小游戏)
 
-> **状态:设计稿第 5 版(2026-10-20),未实现、未编译。** 本稿经过四轮只读对抗评审,共 27 个评审或核实 agent,每轮发现数如下:
+> **状态:2026-11-13 起落码,代码已写完、未编译通过、未联调;实现的事实记录在 §22(与前文冲突时以 §22 和代码为准),§7 已按实现重写。** 下面是第 5 版设计稿(2026-10-20)的评审记录:本稿经过四轮只读对抗评审,共 27 个评审或核实 agent,每轮发现数如下:
 >
 > | 轮次 | 新发现 | 其中 P0 |
 > |---|---|---|
@@ -297,50 +297,37 @@
 
 ## 7. 渠道插件接口(Go)
 
+事实源是 `go/payment/internal/channel/channel.go`(2026-11-13 落码)。以代码为准,本节只讲形状与原因。
+
 ```go
 type Channel interface {
-    Name() string
-    RevocationReversible() bool // 只有 apple 返回 true
-    CreateIntent(ctx context.Context, in IntentInput) (IntentOutput, error)
-    VerifyReceipt(ctx context.Context, in ReceiptInput) (VerifiedTxn, error)
-    // events 可为空(握手、模拟推送、非支付事件);Ack 在事件落库提交后才发出;验签失败返回 ErrBadSignature。
-    ParseNotification(r *http.Request) (events []Event, ack Ack, err error)
-    // 需要用户签名才能查的渠道返回 ErrQueryUnsupported。
-    Query(ctx context.Context, ref TxnRef) (VerifiedTxn, error)
-    // 谷歌 consume、华为消耗;微信是推送回包失败后的补通知(待核实)。
-    Finalize(ctx context.Context, txn VerifiedTxn) error
-    // req.IdempotencyKey 由被退那笔付款的交易键确定性派生(微信 out_refund_no、谷歌按 orderId),一笔付款一个键,不按订单;
-    // 调用前先按它查退款状态:已退款或退款处理中,直接返回结果,不再发起。
-    // 苹果、微信小游戏、抖音返回 ErrRefundUnsupported;谷歌 orders.refund 在 R2 核实前默认 revoke=false。
-    Refund(ctx context.Context, req RefundRequest) (RefundResult, error)
-    // 关单:只用于有限库存订单(§21),对该订单的全部尝试单号执行;
-    // 收据式渠道不参与有限库存订单,返回 ErrCloseUnsupported。
-    Close(ctx context.Context, ref TxnRef) (CloseResult, error)
-}
-
-type VerifiedTxn struct {
-    Channel, TransactionID, StoreProductID string
-    Quantity                               int64
-    IntentRef, AccountBinding, Storefront  string
-    ListAmount, PaidAmount                 int64
-    PaidCurrency                           string
-    PaidKnown                              bool
-    Environment                            string // production / sandbox
-    Fact                                   Fact   // Paid / Revoked / Pending
-    ObservedAtMs, RevokedAtMs              int64
+    ID() paymentpb.PayChannel
+    Name() string                 // devpay / wechat_pay / alipay / wechat_minigame / douyin_minigame / apple / google
+    Supports(currency string) bool
+    NeedsProduct() bool           // 按商品定价的渠道:SKU 必须登记了渠道商品号
+    Prepare(ctx context.Context, order Order, ref Ref) (Prepared, error)      // 下单:返回客户端 SDK 要的参数
+    Query(ctx context.Context, request QueryRequest) (QueryResult, error)     // 主动查单;没有查单接口返回 ErrQueryUnsupported
+    Close(ctx context.Context, outTradeNo string) error
+    Refund(ctx context.Context, request RefundRequest) (RefundResult, error)  // 没有退款接口返回 Failed + NO_REFUND_API
+    ParseNotification(r *http.Request, body []byte) (Notification, error)     // 验签失败返回 ErrBadSignature
+    WriteAck(w http.ResponseWriter, kind AckKind)                             // 事实落库之后才回成功
 }
 ```
 
-**`mock` 渠道**:
+可选能力各是一个小接口,渠道实现了才有:
 
-- 只在 go-zero 顶层 `Mode ∈ {dev, test}` 时允许启用,`MockNotify` 运行时再核对一次;
-- 收据格式为 `mock:<order_sn>:<nonce>`。
+| 接口 | 谁实现 | 用途 |
+|---|---|---|
+| `ReceiptChannel`(`Verify`、`AccountRef`) | apple、google | 客户端交凭证(`SubmitPurchase`)时向商店核验 |
+| `Finalizer`(`Finalize`) | google | 记账之后 consume |
+| `HistoryPoller`(`PollHistory`) | apple、google | 定时补拉通知历史与作废购买,兜住丢失的推送 |
+| `Handshaker`(`Handshake`) | wechat_minigame | 配置消息推送时的 GET 握手 |
 
-**robot mock 付款器(冒烟例外)**:
+与第 5 版设计的差异:
 
-- 只连 loopback、只认 dev 模式的商城,渠道名 `mock-dev`,签名测试向量在三种语言间共用。
-- 现状:商城还不拒收 mock 前缀,要等 §8.2.11 的渠道白名单。
-- go/payment 落码后,改为走它的 mock 渠道。
+- `CreateIntent` / `VerifyReceipt` / `RevocationReversible` 合并成上面的形状。撤销与撤回统一成「修订号」(§22.6),不再按渠道区分能不能撤回。
+- 退款单号由被退那笔付款确定性派生(`data.OutRefundNo`),发起前先按它查渠道退款状态。
+- `mock` 渠道改名 `devpay`:只在 go-zero `Mode ∈ {dev, test}` 可启用,回调用 `PAYMENT_DEVPAY_SECRET` 做 HMAC。它与商城自带的本地 mock 付款互不相干;商城在 `prod` 拒绝把 `devpay` 或 `mock*` 配进允许渠道。
 
 ## 8. 数据与改动面
 
@@ -936,6 +923,156 @@ Payment:
 - **关单握手**:见 §8.2.12。收据式渠道不参与。
 - **撤销**:按 §8.0 的"其它 SKU"分支,只更新守卫,不写权益待办。物品与实例的冲回由寄售计划定义;trade 收敛只覆盖货币。
 - **开工顺序**:充值 R1 先落地骨架(含非充值意图路径、异常付款、关单握手、退款待办改键);寄售第 13 步再接入。微信支付 / 支付宝渠道在 R3。
+
+## 22. 落码记录(2026-11-13 ~ 11-19):实现与第 5 版设计的对应
+
+本节是实现的事实记录。与前文冲突时以本节和代码为准;§7 已按实现重写,§5、§6、§8、§9 里与本节不同的细节是第 5 版的设计意图,没有逐段改写。
+
+### 22.1 范围与状态
+
+| 部分 | 位置 | 状态 |
+|---|---|---|
+| 支付服务(新) | `go/payment`(`PaymentNodeService = 19`,库 `mmorpg_payment`) | 已写完,协议已生成,未编译通过(缺 tip 段,已补) |
+| 商城 | `java/mall_game`:货币发放、付款修订、扣回待办、退款转人工 | 已写完,未编译 |
+| 交易服务 | `go/trade`:货币发放、扣回收敛 | 已写完,未编译 |
+| scene | `asset_op_system.cpp`:交易扣出流允许 `TX_PAYMENT_REVERSAL` | 已写完,未编译 |
+| 客户端 | `mmorpg-client`:`PaymentClient`、订单界面入口、安卓与小游戏的桥 | 已写完,未在 Unity 编译,未上真机 |
+| 部署 | 本机脚本已登记;K8s 清单、回调 Ingress、密钥 Secret | **未做** |
+| Java 版 | 独立仓 `PARITY.md` | 只登记待做 |
+
+支持的渠道:`wechat_pay`(微信支付 App,APIv3 公钥模式)、`alipay`(支付宝 App,RSA2 公钥模式)、`wechat_minigame`(微信小游戏道具直购)、
+`douyin_minigame`(抖音小游戏)、`apple`(StoreKit 2)、`google`(Play Billing)、`devpay`(本地联调)。
+
+### 22.2 组件与数据流
+
+```
+客户端 ──ClientPlayerPayment──▶ payment ──(payment 角色,HMAC)──▶ mall(订单、库存、付款回执)
+   │  渠道 SDK                    ▲  渠道回调 /notify/<渠道>            │ 交付待办 / 扣回待办(delivery 角色)
+   ▼                              │                                    ▼
+ 渠道(微信、支付宝、苹果…) ───────┘                                  trade ──资产指令──▶ scene
+```
+
+- 订单只在商城。payment 不存订单,只存「支付意图」(一张订单一个,定下渠道)和「渠道交易事实」(一笔渠道交易一行)。
+- 发货与扣回由 trade 经资产指令通道完成,payment 不碰玩家资产。
+- payment 多副本、无状态;后台任务靠行上的租约列(CAS UPDATE)互斥,canary 副本不跑后台任务。
+
+### 22.3 客户端协议
+
+`proto/payment/payment.proto` 的 `ClientPlayerPayment`(经 gate → 路由服到 payment):
+
+| 方法 | 作用 |
+|---|---|
+| `ListPayChannels(platform)` | 这个发行形态开放的支付方式,按展示顺序 |
+| `CreatePayIntent(order_id, channel, platform, login_code, device_os)` | 幂等。一张订单只有一个意图、一个渠道,换渠道须重新下单。返回渠道 SDK 要的全部参数 |
+| `GetPayIntent(order_id)` | SDK 返回后轮询;服务端会限频地主动查渠道 |
+| `SubmitPurchase(channel, order_id, 凭证)` | 商店渠道交凭证。gate 限制客户端请求 1KB,所以苹果只交 transaction id,谷歌交 purchase token |
+
+tip 码在 `data/tip/Tip.xlsx` 的 `//payment_error base=31000` 段(8 个码,都不是服务端故障)。
+
+### 22.4 支付服务的数据
+
+`proto/payment/payment_table.proto`,表由 `payment -migrate` 建:
+
+- `payment_intent`:主键是订单号拆成的两列(D-14 要求整数主键)。状态 CREATED / PAID / CLOSED。
+- `payment_txn`:主键 `(channel, txn_hi, txn_lo)`,后两列是渠道交易号 SHA-256 的前 16 字节,行里另存原文并在读回时比对。
+- `payment_channel_cursor`:苹果、谷歌历史补拉的游标与租约。
+
+记账顺序固定:**先把渠道事实写进本库,再回渠道成功,之后异步推给商城**。回调应答不依赖商城可用,所以能满足微信 5 秒、微信小游戏 3 秒的时限;
+落库失败回失败,渠道重发,处理幂等。推商城失败按退避一直重试(钱已经收了),商城明确拒收(400 / 409)才停下并记错误日志等人工。
+
+按商品定价的渠道(apple / google / wechat_minigame)报给商城的金额取商城冻结的订单金额,商店实收价另存在事实行里对账用。
+记账前核对:渠道商品号与 SKU 的登记一致、同币种时商店价等于订单价、账号标记与买家一致、测试交易在白名单内。核对不过的记为孤儿
+(`mall_state = ORPHAN`),不推商城、不 consume(谷歌 3 天后自动退款)。
+
+### 22.5 付款修订:一个只增的修订号
+
+渠道会改口:用户在 App Store / Google Play 申请退款成功、渠道作废交易、微信支付宝的商户后台手工退款,苹果还会把退款再撤回(`REFUND_REVERSED`)。
+这些统一成付款事实上的一个修订号 `fact_revision`:
+
+| 修订号 | 含义 |
+|---|---|
+| 0 | 原始付款 |
+| 奇数 | 已被渠道撤销(买家不该再持有这份发放) |
+| 大于 0 的偶数 | 撤销又被撤回(该持有) |
+
+每次翻转在 payment 用乐观 CAS 加 1,然后推给商城 `POST /internal/payments/revision`。商城只接受更大的修订号,重放与乱序都回当前值。
+payment 自己发起的退款(商城的退款待办)不算撤销,不动修订号。
+
+### 22.6 修订在商城与 trade 的处理
+
+商城(`PaymentRevisionStore`)按这笔付款现在的处境判一次:
+
+| 付款的处境 | 撤销(奇数) | 撤回撤销(偶数) |
+|---|---|---|
+| 有退款待办(迟到付款、交付被拒、重复付款、金额币种不符) | 待办转 `REVOKED`(渠道已退给用户,不用再退);订单本身那笔的订单转已退款 | 已 `REVOKED` 的待办转 `MANUAL`(钱又回到商户,由人决定) |
+| 寄售订单绑定的付款 | 只留档并记错误日志(卖家收入已入账,扣不回) | 同左 |
+| 官方订单绑定的付款 | 写扣回待办(一张订单一行,记最新修订号),订单转 `REVERSING` | 同左 |
+
+扣回待办经 `POST /internal/reversals/poll` 给 trade(delivery 角色),条款与交付待办逐字段相同,所以 trade 找回的是同一张合同。
+交付待办的包装里也带上最新修订号(`paymentRevision`),trade 不会因为先看到交付待办而把已撤销的订单先发出去再扣回来。
+
+trade(`go/trade/internal/commerce/official_reversal.go`)把修订号记在合同上,`planOfficial` 按腿的结局算出买家是否持有发放,对不上就补一条腿:
+
+| 情形 | 动作 | 结局 |
+|---|---|---|
+| 持有却已撤销 | 扣回腿 `official_reverse_<修订号>`,交易扣出流,`TX_PAYMENT_REVERSAL = 31` | 扣到:合同 `official_reversed`,回执 `REVERSED`,订单 `REVERSED`。扣不到(已用掉):转人工,回执 `MANUAL`,**不透支** |
+| 未持有却该持有 | 没发过走 `official_credit`,发过又扣回走 `official_regrant_<修订号>` | 到账:回执 `DELIVERED`。没到账:转人工 |
+| 没发过就被撤销 | 不发任何腿 | 交付回执 `VOIDED`,扣回回执 `REVERSED` |
+
+腿名带修订号,同一个修订号至多一条腿,重放不会重复扣或重复发。扣回腿没有截止时刻:玩家离线时等到他上线再扣。
+回执 `POST /internal/reversals/receipt` 按 (订单, 修订号) 幂等,只有最新修订号的回执推进订单。
+已转人工的合同只记新修订号,不自动重开。
+
+为什么扣不到就转人工而不是记欠款:游戏里没有货币欠款这个概念,加一个会牵动所有扣费路径;撤销本身罕见,先让人处理。
+
+### 22.7 货币发放与退款
+
+**货币发放(充值包)。** 官方 SKU 的发放物从「只能是物品」扩成二选一:物品(`item_config_id × count_per_unit`)或货币(`currency_type × currency_amount`)。
+下单时冻结进 `commerce_order_grant`,一单货币上限 9e15。货币种类 0 是银两,所以「有没有货币发放」看数量不看种类。
+trade 收货时用 `currencytype.IsKnown` 核对种类。管理接口 `CatalogAdminApi.Terms` 多了两个字段,旧的 8 参构造仍可用。
+
+**退款。** 商城的退款待办由 payment 轮询执行。渠道退成后回执商城;渠道退不了的(苹果没有开发者退款接口,或渠道明确失败)调
+`POST /internal/refunds/close` 把待办转 `MANUAL`,不再占着一页 100 条的待退款列表。渠道已自行退给用户的(修订号为奇数)不再发起退款。
+
+### 22.8 合规闸
+
+`Payment.Compliance.MinorSpendingGate` 目前只认 `none`。非 dev / test 模式下,`wechat_pay`、`alipay`、`apple`、`google` 四个 App 渠道**拒绝启用**
+(§12:未成年人充值限额未接入)。两个小游戏渠道由平台执行实名与限额,可以开。实名系统落码后在 `config.Validate` 与 `core.CreateIntent` 接入(见 `real-name-anti-addiction.md` §5.6)。
+### 22.9 配置、密钥与本机运行
+
+- **密钥**:配置里只写环境变量名,值由 Secret 注入:`COMMERCE_PAYMENT_SECRET`(与商城同值)、`PAYMENT_DEVPAY_SECRET`、`PAYMENT_WECHATPAY_PRIVATE_KEY`、
+  `PAYMENT_WECHATPAY_APIV3_KEY`、`PAYMENT_WECHATPAY_PUBLIC_KEY`、`PAYMENT_ALIPAY_PRIVATE_KEY`、`PAYMENT_ALIPAY_PUBLIC_KEY`、`PAYMENT_WECHAT_MINIGAME_APP_SECRET`、
+  `PAYMENT_WECHAT_MINIGAME_APP_KEY`、`PAYMENT_WECHAT_MINIGAME_PUSH_TOKEN`、`PAYMENT_DOUYIN_PUSH_TOKEN`、`PAYMENT_APPLE_PRIVATE_KEY`、`PAYMENT_APPLE_ROOT_CERTIFICATES`、
+  `PAYMENT_GOOGLE_SERVICE_ACCOUNT`。缺失、过短、带首尾空白都拒启,报错只点变量名。
+- **本机**:`go_services.ps1` 已登记 `payment`(端口 51200,回调 18130,指标 9280),库 `mmorpg_payment` 已进建库脚本与本机写者目录。
+  默认配置只开 `devpay`。启动前要自己设 `COMMERCE_PAYMENT_SECRET` 与 `PAYMENT_DEVPAY_SECRET`,并把 `devpay` 加进商城的 `COMMERCE_ALLOWED_PAYMENT_CHANNELS`。
+- **回调地址**:`https://<支付域名>/notify/<渠道名>`,要在各渠道后台登记。K8s 的 Ingress 与清单还没写。
+
+### 22.10 客户端
+
+`Assets/Scripts/Game/Jubaozhai/PaymentClient.cs`:选渠道 → `CreatePayIntent` → 平台桥拉起 SDK → 二段式渠道轮询 `GetPayIntent`(2 秒一次,最多 90 秒),
+商店渠道交 `SubmitPurchase`。SDK 的返回值不采信,到账只看服务端。入口在聚宝斋「我的订单」里待付款的官方订单。
+
+| 渠道 | 桥 | 还缺什么 |
+|---|---|---|
+| devpay | `DevPayBridge` | 无 |
+| 微信支付(安卓) | `WechatAppPayBridge`,反射调 OpenSDK | 打包带上 OpenSDK;包名下的 `wxapi.WXPayEntryActivity`;微信开放平台登记包名与签名 |
+| 支付宝(安卓) | `AlipayAppPayBridge`,反射调 `PayTask.payV2` | 打包带上支付宝 SDK |
+| 微信小游戏 | `WechatMinigamePayBridge` + `Assets/Plugins/WebGL/MinigamePay.jslib` | 小游戏转换工程里验证 |
+| 抖音小游戏 | `DouyinMinigamePayBridge` + 同一个 jslib | 同上 |
+| App Store | **没写** | 工程接入 StoreKit 2 插件后写一个 `PayBridge` 子类:购买时把 `app_account_token` 设为 appAccountToken,回 transaction id |
+| Google Play | **没写** | 工程接入 Play Billing 插件后写:`obfuscated_account_id` / `obfuscated_profile_id` 原样填入,回 purchase token |
+
+iOS 上的微信支付与支付宝不做:苹果审核规则 3.1.1 要求虚拟商品只走 IAP,服务端的平台白名单也不给 iOS 开这两个渠道。
+
+### 22.11 未做与风险
+
+1. K8s 部署(清单、迁移 Job、回调 Ingress、Secret、契约测试)没做,支付服务目前只能本机跑。
+2. 苹果、谷歌的客户端桥没写;安卓与小游戏的桥没上过真机。
+3. 没有任何渠道的真实商户号,所有渠道代码只对照官方文档与官方 SDK 源码写成,没有打过真实接口。抖音的文档当时打不开,按附录 A 的事实写。
+4. 四个 App 渠道在生产被合规闸挡着,要等实名与未成年人限额。
+5. 扣回扣不到时转人工,目前没有专门的处置工具,走 trade 现有的人工合同入口。
+6. 修订号、货币发放改了商城存储合同戳与 trade 合同摘要,旧库须清空重装(项目未上线)。
 
 ## 附录 A 平台事实(2026-10-19 核实,带官方链接)
 

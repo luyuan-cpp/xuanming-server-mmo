@@ -528,6 +528,11 @@ func TestHandleWatchPut_ZoneFlipRetiresOldZoneIdentity(t *testing.T) {
 		require.True(t, ok, "旧 zone 名下的孤儿实例要交给屏障后的收尾队列")
 		assert.Equal(t, []string{"7001"}, scope)
 		assert.Equal(t, []string{"99"}, loadSetMembersForTest(t, mr, newZone), "不登记越区身份，也不修改别区已有节点")
+		score, err := mr.ZScore(nodeLoadKey(newZone), "99")
+		require.NoError(t, err)
+		assert.Equal(t, float64(7), score, "别区节点的负载分数也不动")
+		assert.False(t, mr.Exists(nodeSceneNodeTypeKey(newZone, "10")), "不替别区登记节点类型")
+		assert.False(t, mr.Exists(nodeDeathAtKey(newZone, "10")), "不替别区写死亡标记")
 		assert.True(t, localGoneBarrierBlocks(sc, testZoneId, "10"), "每个副本都要记下旧身份消失的时刻")
 
 		logic := NewEnterSceneLogic(context.Background(), sc)

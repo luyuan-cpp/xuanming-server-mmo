@@ -539,6 +539,7 @@ func TestAutoscale_FinishDrainRemovesResidualMembersFromNodeSet(t *testing.T) {
 	const player uint64 = 7001
 	countBefore, err := mr.Get(nodeSceneCountKey(testZoneId, "10"))
 	require.NoError(t, err)
+	require.Equal(t, "2", countBefore, "前提:计数非 0,否则 Lua 的「大于 0 才扣」会让「不扣」空转通过")
 	seedSceneMembersVia(sc, 102, 1, player)
 	seedNodeMembersVia(sc, testZoneId, "10", 1, player)
 	_, err = mr.ZRem(testLoadKey(), "10")

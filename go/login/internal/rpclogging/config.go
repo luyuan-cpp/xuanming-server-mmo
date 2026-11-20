@@ -16,6 +16,8 @@ func ProtectCredentials(cfg *zrpc.RpcServerConf) {
 		loginpb.ClientPlayerLogin_RefreshToken_FullMethodName,
 		loginpb.LoginPreGate_AssignGate_FullMethodName,
 		loginpb.LoginPreGate_QueryQueueStatus_FullMethodName,
+		// 请求体是姓名和身份证号(docs/design/real-name-anti-addiction.md §5.2)。
+		loginpb.LoginPreGate_SubmitRealName_FullMethodName,
 	}
 	listed := make(map[string]struct{}, len(cfg.Middlewares.StatConf.IgnoreContentMethods)+len(methods))
 	for _, method := range cfg.Middlewares.StatConf.IgnoreContentMethods {

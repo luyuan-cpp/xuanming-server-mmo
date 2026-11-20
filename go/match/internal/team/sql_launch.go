@@ -33,6 +33,12 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		return s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
 	}
 	launch, err := s.svcCtx.Authority.TeamLaunch(ctx, caller, in.RequestId)
+	if errors.Is(err, authority.ErrForeignOriginal) {
+		// 请求号是角色过户前的主人用过的,现主人不能沿它提交:按业务拒绝回确定回执,客户端据此释放本机原意图。
+		response := s.respond(ctx, caller, uint32(table.CommonError_kInvalidParameter), 0)
+		response.MatchIntent = &teampb.TeamMatchIntent{RequestId: in.RequestId, State: authority.TeamMatchIntentForeign}
+		return response
+	}
 	if err != nil {
 		return s.respond(ctx, caller, ErrInternal, 0)
 	}

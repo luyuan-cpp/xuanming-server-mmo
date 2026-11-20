@@ -1,5 +1,5 @@
 // ============================================================================
-// Grafana Alloy 采集配置:把本机三种语言的服务日志文件送进 Loki。
+// Grafana Alloy 采集配置:把本机三种语言的服务日志文件送进 Loki;三种语言的 span 经 OTLP 收进来,尾部采样后送 Tempo(文末一段)。
 //
 // 宿主机目录 -> 容器目录(见 deploy/docker-compose.observability.yml):
 //   xuanming-server-mmo/run/logs -> /host/run/logs (只读)
@@ -574,3 +574,77 @@ loki.process "java" {
 //     values = { job = "cpp_files", lang = "cpp" }
 //   }
 // }
+
+// ============================================================================
+// span(docs/design/distributed-tracing.md §10.3,阶段三):三种语言都经 OTLP 送到这里,尾部采样后存进 Tempo。
+//   C++ 节点:OTLP/HTTP(protobuf)→ 4318(bin/etc/base_deploy_config.yaml 的 Tracing.OtlpTracesEndpoint)
+//   Go 服务:go-zero 的 OTLP/gRPC → 4317(各服务 etc 的 Telemetry 段)
+//   Java:Spring Boot 的 OTLP/HTTP → 4318(application.yaml 的 management.otlp.tracing.endpoint)
+// 本机只有这一个 Alloy,一条 trace 的 span 都在这里,直接尾部采样。K8s 上分两级(节点级按 trace_id 分给网关级,
+// 网关级采样后写 Tempo,deploy/k8s/manifests/infra/pod-log-collector.yaml),下面的 tail_sampling 段与网关级逐字相同,
+// 两边一致由 tools/scripts/tests/k8s_log_collection_contract.tests.ps1 核对:改这里要同批改那边。
+// ============================================================================
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    traces = [otelcol.processor.tail_sampling.default.input]
+  }
+}
+
+// 尾部采样:命中任一条就留下整条 trace。decision_wait 与 num_traces 取组件默认值:
+// EnterGame 这类异步链,span 可能在根 span 结束十几秒后才到。
+otelcol.processor.tail_sampling "default" {
+  decision_wait = "30s"
+  num_traces    = 50000
+
+  policy {
+    name = "errors"
+    type = "status_code"
+
+    status_code {
+      status_codes = ["ERROR"]
+    }
+  }
+
+  policy {
+    name = "slow"
+    type = "latency"
+
+    latency {
+      threshold_ms = 1000
+    }
+  }
+
+  policy {
+    name = "sampled"
+    type = "probabilistic"
+
+    probabilistic {
+      sampling_percentage = 10
+    }
+  }
+
+  output {
+    traces = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}

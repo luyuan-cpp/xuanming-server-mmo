@@ -21,7 +21,15 @@ import (
 
 const AccountDirectoryTableName = "account_directory"
 const AccountRoleTableName = "account_role"
-const accountDirectoryDDL = "CREATE TABLE IF NOT EXISTS account_directory (account VARBINARY(191) NOT NULL COMMENT 'pb:1',created_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:2',PRIMARY KEY(account)) ENGINE=InnoDB"
+// accountDirectoryDDL:deletion_* 五列是账号注销的状态(account_deletion.go,2026-11-19 加列;项目未上线,旧库重建)。
+// idx_account_directory_deletion 给执行者扫到期账号,正常账号都是 (0,0),扫描只碰注销中的那一小段。
+const accountDirectoryDDL = "CREATE TABLE IF NOT EXISTS account_directory (account VARBINARY(191) NOT NULL COMMENT 'pb:1',created_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:2'," +
+	"deletion_state INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:3',deletion_requested_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:4'," +
+	"deletion_execute_after_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:5',deletion_lease_until_ms BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:6'," +
+	"deletion_source INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:7'," +
+	// real_name_pi:国家防沉迷系统给的 pi,只写一次(account_real_name.go,2026-11-19 加列;项目未上线,旧库重建)。
+	"real_name_pi VARBINARY(38) NOT NULL DEFAULT '' COMMENT 'pb:8',PRIMARY KEY(account)," +
+	"INDEX idx_account_directory_deletion(deletion_state,deletion_execute_after_ms)) ENGINE=InnoDB"
 const accountRoleDDL = "CREATE TABLE IF NOT EXISTS account_role (player_id BIGINT UNSIGNED NOT NULL COMMENT 'pb:1',account VARBINARY(191) NOT NULL COMMENT 'pb:2',role_proto MEDIUMBLOB NOT NULL COMMENT 'pb:3',owner_revision BIGINT UNSIGNED NOT NULL COMMENT 'pb:4',updated_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:5',trade_listing_id BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:6',initial_player_commit BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:7',fence_version BIGINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'pb:8',prepare_token BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'pb:9',PRIMARY KEY(player_id) /*T![clustered_index] NONCLUSTERED */) ENGINE=InnoDB /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */"
 
 // AccountDirectoryStore 拥有账号目录和角色归属(docs/design/horizontal-scale-logical-db.md §5)。不访问认证 password 或 Redis。
@@ -48,6 +56,8 @@ type AccountDirectoryStore struct {
 	directoryReads []readSlots
 	// removalCursor 让删角收尾逐轮换起点。
 	removalCursor atomic.Uint64
+	// deletionCursor 让注销认领逐轮换起点(account_deletion.go)。
+	deletionCursor atomic.Uint64
 	// preparingCursor 让超时 PREPARING 的撤销逐轮换起点。
 	preparingCursor atomic.Uint64
 }
@@ -133,6 +143,17 @@ func assertAccountDirectoryShape(ctx context.Context, db *sql.DB, name string) e
 			return fmt.Errorf("账号目录必须逐字节比较: %s", shape.table)
 		}
 	}
+	// 回执只存账号摘要,没有 account 列,单独核列与主键。
+	if err := assertColumnsPresent(ctx, conn, name, &dbpb.AccountDeletionReceipt{}, AccountDeletionReceiptTableName); err != nil {
+		return err
+	}
+	keys, err := primaryKeyColumns(ctx, conn, name, AccountDeletionReceiptTableName)
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(keys, []string{"account_digest"}) {
+		return fmt.Errorf("账号目录主键不符: %s", AccountDeletionReceiptTableName)
+	}
 	return nil
 }
 
@@ -142,20 +163,27 @@ func (s *AccountDirectoryStore) playerTx(ctx context.Context, player uint64, act
 }
 
 func lockDirectory(ctx context.Context, tx *sql.Tx, account string, create bool) error {
+	_, err := lockDirectoryState(ctx, tx, account, create)
+	return err
+}
+
+// lockDirectoryState 锁账号行(create 时先建),顺带回注销状态(deletion_state)。建角、过户买入、注销的每一步都在这把锁里判状态。
+func lockDirectoryState(ctx context.Context, tx *sql.Tx, account string, create bool) (uint32, error) {
 	if !accountdirectory.ValidAccount(account) {
-		return accountdirectory.ErrInvalid
+		return 0, accountdirectory.ErrInvalid
 	}
 	if create {
 		if _, err := tx.ExecContext(ctx, "INSERT INTO account_directory(account,created_ms) VALUES (?,UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000) ON DUPLICATE KEY UPDATE account=account", []byte(account)); err != nil {
-			return err
+			return 0, err
 		}
 	}
 	var stored []byte
-	err := tx.QueryRowContext(ctx, "SELECT account FROM account_directory WHERE account=? FOR UPDATE", []byte(account)).Scan(&stored)
+	var state uint32
+	err := tx.QueryRowContext(ctx, "SELECT account,deletion_state FROM account_directory WHERE account=? FOR UPDATE", []byte(account)).Scan(&stored, &state)
 	if errors.Is(err, sql.ErrNoRows) {
-		return accountdirectory.ErrMissing
+		return 0, accountdirectory.ErrMissing
 	}
-	return err
+	return state, err
 }
 
 type directoryQuery interface {
@@ -169,28 +197,48 @@ type directoryQuery interface {
 // 读 ref,按玩家分片批量读 account_role,只留真相是这个账号的。ref 在提交点之前写,所以提交之后才开始的 Read 一定读得到
 // (强读会话,TiDB 读 leader、MySQL 档连主库)。调用方不依赖和在途操作排队:列表只用来展示和选角,改归属的操作在各自事务里
 // 按 owner_revision 复核,入场用 Lookup 强读复核;建角超时的恢复是先 Lookup 确认已提交,再 Read。
-// 目录行只增不删,所以目录行与 ref 分两条语句读没有一致性问题。
+// 目录行只有账号注销收尾会删,而且在这个账号一条 ref 都不剩之后(account_deletion.go):新 ref 要先拿账号行锁,行不在时建出来的是新账号。
+// 所以读路径只会看到「行 + ref」「行 + 0 条 ref」「没有行」,行与 ref 分两条语句读没有一致性问题。
 func (s *AccountDirectoryStore) Read(ctx context.Context, account string, create bool) (*base.AccountSimplePlayerList, error) {
-	if !accountdirectory.ValidAccount(account) {
-		return nil, accountdirectory.ErrInvalid
-	}
-	exists, refs, err := s.steps.readAccount(ctx, account)
+	out, err := s.ReadWithLifecycle(ctx, account, create)
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
+	return out.Players, nil
+}
+
+// ReadWithLifecycle 同 Read,另回账号行上的注销状态;这次读建了新行时还回同一账号以前注销完成的时刻(回执)。
+// 注销状态和目录行同一条语句读出来,登录路径不多一次查询。
+func (s *AccountDirectoryStore) ReadWithLifecycle(ctx context.Context, account string, create bool) (*dspb.AccountDirectoryResponse, error) {
+	if !accountdirectory.ValidAccount(account) {
+		return nil, accountdirectory.ErrInvalid
+	}
+	row, refs, err := s.steps.readAccount(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	var previousDeletedMs uint64
+	if !row.exists {
 		if !create {
 			return nil, accountdirectory.ErrMissing
 		}
-		if err := s.steps.ensureAccount(ctx, account); err != nil {
+		if previousDeletedMs, err = s.steps.ensureAccount(ctx, account); err != nil {
 			return nil, err
 		}
 		// 刚建的目录行上可能已经有并发建角写的 ref。
-		if _, refs, err = s.steps.readAccount(ctx, account); err != nil {
+		if row, refs, err = s.steps.readAccount(ctx, account); err != nil {
 			return nil, err
 		}
 	}
-	return s.rolesOfRefs(ctx, account, refs)
+	players, err := s.rolesOfRefs(ctx, account, refs)
+	if err != nil {
+		return nil, err
+	}
+	return &dspb.AccountDirectoryResponse{Players: players, RealNamePi: row.realNamePI, Lifecycle: &dspb.AccountLifecycle{
+		DeletionState:          dspb.AccountDeletionState(row.deletionState),
+		DeletionExecuteAfterMs: row.executeAfterMs,
+		PreviousDeletedMs:      previousDeletedMs,
+	}}, nil
 }
 
 // readRoleList 读当前列表。写操作提交之后用它回应答:读失败时调用方把结果当未知,按 player_id 强读消歧。

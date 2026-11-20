@@ -175,6 +175,7 @@ func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateRespon
 	case loginqueue.StatusAdmitted:
 		resp.Ip = state.Admit.IP
 		resp.Port = state.Admit.Port
+		resp.WsUrl = state.Admit.WsURL
 		resp.TokenPayload = state.Admit.TokenPayload
 		resp.TokenSignature = state.Admit.TokenSignature
 		resp.TokenDeadline = state.Admit.TokenDeadline
@@ -216,6 +217,7 @@ func (l *AssignGateLogic) signFastPath(zoneID uint32) (*loginpb.AssignGateRespon
 		Status:         uint32(loginqueue.StatusAdmitted),
 		Ip:             admit.IP,
 		Port:           admit.Port,
+		WsUrl:          admit.WsURL,
 		TokenPayload:   admit.TokenPayload,
 		TokenSignature: admit.TokenSignature,
 		TokenDeadline:  admit.TokenDeadline,

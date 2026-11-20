@@ -46,15 +46,21 @@ func legReadyToSend(w *tradepb.TradeCommerceWorkflow, l *tradepb.TradeCommerceLe
 	return l.GetOpId() == 0 && l.GetSupersededBy() == "" && !heldForBuyerFirst(w, l)
 }
 
-// heldForBuyerFirst 报告这条腿要不要压着,等买家那条交付腿到账之后才发。只压卖家所得(seller_receive 及其补发)。
+// heldForBuyerFirst 报告这条腿要不要压着,等买家那条交付腿到账之后才发。只压卖家所得(isSellerProceeds)。
 // 买家那条按 currentLeg 判:人工补齐买家那份(补发腿)到账之后,闸自动放行。
 func heldForBuyerFirst(w *tradepb.TradeCommerceWorkflow, l *tradepb.TradeCommerceLeg) bool {
-	base, _, _ := strings.Cut(l.GetRole(), "#")
-	if base != "seller_receive" {
+	if !isSellerProceeds(l) {
 		return false
 	}
 	buyer := currentLeg(w, "buyer_receive")
 	return buyer != nil && !applied(buyer)
+}
+
+// isSellerProceeds 报告这条腿是不是卖家所得(seller_receive 及其补发)。转人工的合同里还没发出的卖家所得只可能是被这道闸压着的,
+// 人工处置按它认:补记结局时放过(manual.go 的 settleLegOutcomes),整单退回时标被退回取代(manual_plan.go 的 applyRefund)。
+func isSellerProceeds(l *tradepb.TradeCommerceLeg) bool {
+	base, _, _ := strings.Cut(l.GetRole(), "#")
+	return base == "seller_receive"
 }
 
 // settleBuyerFirstDelivery 在交付阶段处理买家那条交付腿的终局,plan 在收尾判定(finalCredits)之前调用。

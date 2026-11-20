@@ -10,4 +10,9 @@ namespace player_store_path
 // 连 go/db 的通道要放大接收上限;收不下会按结果未知重试,这个角色就再也进不来了。
 inline constexpr std::size_t kMaxClaimResponseBytes = 8 * 1024 * 1024;
 
+// 存盘请求的传输上限,与 go/db 的 playerstore.MaxSaveRequestBytes 相同。一笔存盘带着这名玩家排着的全部审计记录
+// (AuditOutbox::kMaxBytesPerPlayer)和脏行,和存档在同一个事务里提交(docs/design/player-audit-outbox.md §5.1),
+// 可以超过默认的 4 MiB:连 go/db 的通道要放大发送上限,go/db 要放大接收上限。
+inline constexpr std::size_t kMaxSaveRequestBytes = 16 * 1024 * 1024;
+
 } // namespace player_store_path

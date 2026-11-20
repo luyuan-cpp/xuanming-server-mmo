@@ -1029,3 +1029,51 @@ pwsh -NoProfile -File tools/scripts/tests/id_issuer_deploy_contract.tests.ps1
 - 行为变化：没有指针时补墓碑被拒；有记录却没有指针时不能直接开启；重新登记把计数器放到时钟前面 7 天，之后几分钟有 `ahead_of_clock`；`Recover` 在本地落后时会写本地记录；每个副本每 10 秒多三次线性读（一次跨地域）。
 - 剩下的残余（设计 §6.3「还会不会重号」）：出事时没有一个发号进程活着，而且这个地域出现过 `ahead_of_clock`，或者时钟比当初预留时还慢；或者别的副本在最近一个检查间隔里预留、随即连同三份记录一起丢掉那一块。「没出现过 `ahead_of_clock`」靠运维查指标历史，没有自动化：丢码时登记处里的痕迹也跟着丢了。
 - Java 0.1.0-SNAPSHOT：不涉及，Java 版没有发号器和登记处，`PARITY.md` 11-05 的发号器待做照旧，不加行。
+
+## 12. 2026-11-19 第五批：缩小 §11.5 的残余（未编译、未运行，待 Codex 验证）
+
+用户问 §11.5 那条残余修了没有。答复是代码里修不掉、只能缩小，用户要求两处缓解都做。只动 `idissuer`、`clusteridentity`、`svc` 的发号器装配和文档。
+
+### 12.1 改了什么
+
+**① 计数器超前一天以上改预留小块**
+
+- 原来：每块固定 2^32 个号（256 秒的序号预算）。崩溃循环时每重启一次作废一块、下一块接着往上取，计数器比时钟跑得快，能推到 7 天以上（`ahead_of_clock`），重新登记的时间上界就不可靠了。
+- 现在：`nextStart` 改名 `nextBlock`，同时给出起点和大小。计数器比时钟超前 `shrinkAheadSeconds`（一天）以上时，新块是 `shrunkBlockSize`（2^28，16 秒的号）；追回一天以内恢复整块。每次重启只推前 16 秒，要持续每 16 秒重启一次才追得过时钟。
+- 代价：小块期间每块只够峰值用几分钟，登记处不可达时手里的号更快用完；重新登记把计数器放到时钟前面 7 天之后，也有六天左右用小块。一天的门槛远高于正常发布（一次发布每个副本作废一两块，几十个副本也只超前几个小时），正常运行用不到小块。
+- `BlockSize` 不大于 2^28 时没有变化（单测夹具是 2^26），已有用例的行为不变。
+
+**② 重新登记的时间上界取两个时钟里较晚的**
+
+- `clusteridentity.Reader.Now`：和读部署身份是同一个请求（GET kube-system），返回回应里 `Date` 头的时间，读不懂就报错。`Read` 和它共用新拆出的 `get`。
+- `Options.ReferenceNow`：生产由 `svc.newIdIssuer` 接到 `Reader.Now`；dev 为 nil，只看本机时钟。
+- `reRegisterHighWater(ctx, local)`：「现在」取本机时钟和 `ReferenceNow` 里较晚的那个；读失败就拒绝，什么都不写。`timeFloor` 改为 `floorAt(t)`。
+
+### 12.2 改动文件
+
+| 文件 | 改动 |
+|---|---|
+| `go/data_service/internal/idissuer/issuer.go` | `shrinkAheadSeconds`、`shrunkBlockSize`；`nextStart` → `nextBlock`；`timeFloor` → `floorAt`；`Options.ReferenceNow`；`reRegisterHighWater` 加参考时钟 |
+| `.../idissuer/issuer_test.go` | 新增 `TestReserve_BlocksShrinkWhileTheCounterIsADayAheadOfTheClock`、`TestRecovery_ReRegisteringUsesTheLaterOfTheTwoClocks`、`TestRecovery_ReRegisteringRefusesWithoutTheReferenceClock` |
+| `go/data_service/internal/clusteridentity/clusteridentity.go`、`clusteridentity_test.go` | `Now`、`get`；新增 `TestNow_ReturnsTheAPIServerDate` |
+| `go/data_service/internal/svc/servicecontext.go` | `newIdIssuer` 接上 `ReferenceNow`（同一个文件里账号注销的改动是别的会话的） |
+| 文档 | 设计 §6.3（时间上界、块大小、还会不会重号、测试覆盖）；发号器手册头注、§3 `ahead_of_clock` 一行、§4.3 |
+
+### 12.3 交 Codex
+
+工作目录 `go/data_service`，`GOTOOLCHAIN=local`。和 §11.3 合并成一轮即可；失败保留完整输出，不连续重试，不放宽断言。
+
+```powershell
+gofmt -l ./internal/idissuer ./internal/clusteridentity ./internal/svc
+go build -mod=readonly ./...
+go vet -mod=readonly ./internal/idissuer/ ./internal/clusteridentity/ ./internal/svc/
+go test -mod=readonly -count=1 -v -timeout 3m ./internal/idissuer/ ./internal/clusteridentity/
+go test -mod=readonly -count=1 -v -timeout 2m -run 'TestNewIdIssuer|TestCheckExpectedRegion' ./internal/svc/
+```
+
+通过标准：全部 exit 0，`gofmt -l` 无输出；§12.2 列的四个新用例实际运行并 PASS，`idissuer`、`clusteridentity` 0 SKIP；有 CGO 时再跑 `go test -race -count=1 ./internal/idissuer/`。
+
+### 12.4 剩下的
+
+- 残余（设计 §6.3「还会不会重号」）：三份记录一起出事、出事时没有一个发号进程活着，并且时钟曾跳到未来（让这个地域出现过 `ahead_of_clock`），或者本机时钟和 API server 的时钟都比当初预留时慢。两种都是时钟本身出错，没有别的证据可用。
+- Java 0.1.0-SNAPSHOT：不涉及，Java 版没有发号器，`PARITY.md` 照旧，不加行。

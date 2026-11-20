@@ -2,7 +2,6 @@
 #include "all_table.h"
 
 #include <thread>
-#include "muduo/base/CountDownLatch.h"
 
 {% for item in sheetnames -%}
 #include "{{ item | lower }}_table.h"
@@ -25,17 +24,18 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch({{ sheetnames | length }});
+    // 每次调用各起一组线程,走出这对花括号时全部 join(std::jthread 析构即 join):可以重复调用,
+    // LoadSuccess 不会和加载并发。别改回 detach 加函数内静态门闩,那样第二次调用不会等加载完。
+    // shortcut: 每张表一条线程,表数量远多于 CPU 核数时改成按核数限流的线程池。
+    {
 {% for item in sheetnames %}
-    std::thread {{ item }}LoadThread([]() {
-        void InitThreadLocalConfig();
-        InitThreadLocalConfig();
-        {{ item }}TableManager::Instance().Load();
-        latch.countDown();
-    });
-    {{ item }}LoadThread.detach();
+        std::jthread {{ item }}LoadThread([]() {
+            void InitThreadLocalConfig();
+            InitThreadLocalConfig();
+            {{ item }}TableManager::Instance().Load();
+        });
 {% endfor %}
-    latch.wait();
+    }
 
 {% for item in sheetnames %}
     {{ item }}TableManager::Instance().LoadSuccess();

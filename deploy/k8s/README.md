@@ -611,7 +611,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     (2026-11-05 改,服务器缺口清单第 29 条)限流不再用 Bucket4j,改成一段令牌桶 Lua(`ratelimit/RedisRateLimitStore.java`),rps / burst 每次随调用传进脚本,
     gateway 滚动完即对已有的桶生效(余量按新 burst 封顶),**不用清桶**;只是关掉限流也不用清:放行后桶键在补满的那一刻过期(秒级)。
     唯一要清的场合是**从 Bucket4j 版本升级到这一版**:旧桶键是 STRING、新脚本按 Hash 读,撞上就报 WRONGTYPE、按 fail-open 放行,直到旧键过期(约 1 小时加补满时间)。
-    升级前对 gateway 连的那个 Redis(拆分后是 `redis-queue-g<N>.<InfraNamespace>`,未拆是 `redis.<InfraNamespace>`;staging / prod 要带口令)执行一次:
+    升级前对 gateway 连的那个 Redis(控制端点:staging / prod 是控制集群 `redis-control`,要逐主节点执行;dev 是 `redis.<InfraNamespace>`;有口令时带上)执行一次:
     ```bash
     redis-cli --scan --pattern 'rl:zone:*' | xargs -r redis-cli DEL
     redis-cli --scan --pattern 'rl:ip:*'   | xargs -r redis-cli DEL
@@ -684,7 +684,9 @@ Pod 模板带只哈希这把密钥的指纹 `mmorpg.io/<Secret 名>-hash`,换密
   `kubectl exec -n mmorpg-infra etcd-0 -- etcdctl get --prefix --keys-only LoginNodeService.rpc/`。
 - **PVC 生命周期**:删 StatefulSet 不删 PVC,删 namespace(`infra-down`)才删。`infra-down` → `infra-up` 之后是一套空 etcd,
   同样按上一条重启节点。
-- **kind / minikube**:单节点也能跑(反亲和是 preferred),但 PVC 要有默认 StorageClass(kind 自带 local-path)。
+- **kind / minikube**:dev 档单节点也能跑(etcd 与 Kafka 的成员反亲和在 dev 档渲染成 preferred),但 PVC 要有默认 StorageClass(kind 自带 local-path)。
+  staging / prod 渲染成 required(`Get-QuorumMemberAntiAffinityYaml`):3 个 etcd 成员、3 个 broker 两两不在同一节点,节点少于 3 个时多出的成员 Pending;
+  发号器的 `etcd-id-secondary` / `etcd-id-registry` 只在 staging / prod 部署,清单里直接写 required。
   `infra-status` 现在会列 `sts` / `pvc` / `pdb`;etcd 起不来先看 PVC 是否 Pending。
 - **维护:MVCC 历史压缩与镜像(P0-C,2026-11-05 阶段 2 收尾)**:etcd 不压缩就保留每个 key 的全部历史,本仓库每 zone 每秒约 6 个
   revision(Go 发号水位等),写到配额就 NOSPACE:新注册、失租重注册、gate 上报、发号水位全部失败。
@@ -1023,8 +1025,9 @@ player-inbox 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue['player-
 - **工作负载**:`manifests/go-svc/player-inbox.yaml` = Service `player-inbox`(50950)+ Deployment(`replicas: 2`、podAntiAffinity、grpc 探针、
   `preStop sleep 5`、Downward API `POD_IP`、metrics 9270)+ 同文件 PDB `player-inbox-pdb`。ConfigMap `go-svc-player-inbox-config` 由脚本生成,
   值从 `go/player_inbox/etc/player_inbox.yaml` 镜像(`Name` / `Timeout` / `LeaseTTL` / `MySQL.DBName|MaxOpenConn|MaxIdleConn` / `DataServiceRpc.Timeout` /
-  `Kafka.WriteTimeoutMs` / `PlayerInbox.EnqueueTypes` 与六个后台循环参数,dev 档另镜像 `Mode` / `Schema.AutoMigrate`);`MySQL.Host`、`CoreRedis.Host`、
-  `Kafka.Brokers`、`DataServiceRpc.Etcd.Key` 的**值**由模板按集群形态写死,但**键**必须在服务 yaml 里出现,生成期逐个核对(go-zero 对写错的键静默忽略)。
+  `Kafka.WriteTimeoutMs` / `PlayerInbox.EnqueueTypes` 与六个后台循环参数,dev 档另镜像 `Mode` / `Schema.AutoMigrate`);`MySQL.Host`、
+  `Kafka.Brokers`、`DataServiceRpc.Etcd.Key` 的**值**由模板按集群形态写死,`ControlRedis` 段的地址取控制端点、池上限镜像 `ControlRedis.PoolSizePerNode`;
+  这几个**键**必须在服务 yaml 里出现,生成期逐个核对(go-zero 对写错的键静默忽略)。
   - **顶层 `Middlewares` 段整段复制**(评审 L12,`Get-AuthoritativeYamlBlock`):服务 yaml 的 `Middlewares.StatConf.IgnoreContentMethods` 列出
     `/player_inbox.PlayerInbox/FetchItems` 与 `/player_inbox.PlayerInbox/AckItems`,只屏蔽这两个方法的请求体日志(方法名、耗时、慢调用照常记;
     `PlayerInboxAdmin` 不屏蔽,它的请求体是审计线索)。go-zero 的 `Middlewares.Stat` 缺省 true,Go 侧 `config.Validate` 在 Stat 开着时要求两个方法都在列表里,
@@ -1121,17 +1124,17 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
   `terminationGracePeriodSeconds: 35`)+ 同文件 PDB `guild-pdb`。不挂 snowflake 卷:guild_id、op_id 只由号段发,guild 不申领槽位(2026-11-12 删)。
   多副本安全性来自帮会二期的设计(资产指令行级租约、清理随机偏移、哨兵行 GET_LOCK、历练结果消费组 `guild-trial`、对账 / 放弃选主),**未在真实多副本下验证**。
 - **ConfigMap**:`go-svc-guild-config` 按 `go/guild/etc/guild.yaml` 生成,标量逐个镜像;`AssetOp`、`Activity` 两大块**逐行原样搬运**(含取值说明),
-  唯一改写的是 `AssetOp.Enabled`(部署决策,现固定 `false`)。两个控制域 Redis 句柄都指向共享 Redis:`RedisClient`(DB 取服务 yaml,现为 0)、
-  `PlayerLocatorRedis`(DB 0,必须与 scene / scene_manager / battle 写在线、位置、历练结果的同一实例);玩家域句柄 `PlayerRedis` 见「玩家域 Redis Cluster」。
+  唯一改写的是 `AssetOp.Enabled`(部署决策,现固定 `false`)。控制域句柄只有 `ControlRedis` 一段(第 5 批取代 `RedisClient` / `PlayerLocatorRedis`),
+  地址取控制端点,与 scene 发布唤醒的是同一套 Redis;玩家域句柄 `PlayerRedis`(在线、位置、历练结果)见「玩家域 Redis Cluster」。
   guild 不读登录态:会话身份由 gate 签名,guild 只认签名原件,ConfigMap 里没有 `GlobalLoginSessions` / `LoginRedis`。
   生成期核对 `Activity.TrialResult.Partitions` == match 的 `ResultTopicPartitions`(不等就拒绝生成:结算消费者漏读分区,玩家白打且无报错)。
 - **建库 / 建表**:`mmorpg_guild` 只登记在 `deploy/mysql-init/00_init_zone_dbs.sql`;**存量 PVC 要手工建库**(同 friend 一节的命令,把库名换成 `mmorpg_guild`)。
   表由 `manifests/go-svc/guild-migrate.yaml`(派生自 trade-migrate,`args: ["-f", "/app/etc/guild.yaml", "-migrate"]`)按 `proto/guild/guild_db.proto` 建;
   staging/prod 恒等它 Complete 才 apply Deployment,ConfigMap 固定 `Schema.AutoMigrate: false`。
 - **连接数**:guild 以前不设 MySQL 池上限(`database/sql` 默认不限),同批给 `go/guild` 加了 `MySQL.MaxOpenConn / MaxIdleConn`(不写 = 20 / 5),
-  ConfigMap 镜像、MySQL 连接总账按 2 × 20 记账 —— 加上它之后规划档余量只剩 20,见「MySQL 连接总账」。Redis 连接总账按每副本 2P + 1 记账
-  (`RedisClient`、`PlayerLocatorRedis` 两个显式池 + 落地唤醒订阅);玩家域句柄 `PlayerRedis` 与摘要专用池(4)不建玩家域集群时也记在这一份,
-  建了就搬到玩家域那一份(见「Redis 连接上限与总账」与「玩家域 Redis Cluster」)。
+  ConfigMap 镜像、MySQL 连接总账按 2 × 20 记账 —— 加上它之后规划档余量只剩 20,见「MySQL 连接总账」。Redis 连接总账控制域那一行按每副本 P + 1 + 4 记账
+  (`ControlRedis` 池 + 落地唤醒订阅 + 申请配额专用池);玩家域句柄 `PlayerRedis` 与摘要专用池(4)记在玩家域那一行,不建玩家域集群时也在核心那份里
+  (见「Redis 连接上限与总账」与「玩家域 Redis Cluster」)。
 - **上线顺序**(`92-handoff.md` §13.3):battle → match → 路由服与 gate → guild(match 新而 battle 旧时结果不带活动上下文,玩家白打)。
   号段 `guild`、`guild_asset_op` 已登记在 data-service 的 `IdSegment.Tags` 里。
 - **镜像**:`tools/scripts/go_svc_image.ps1` 登记 `guild`(ImageName `mmorpg-guild`,与本目录条目一致,契约测试钉住);与路由服成对发布。
@@ -1520,7 +1523,8 @@ rank 与 trade / mail 同形:全局池服务(`$GoSvcCatalogue.rank`,`Global = $t
 > **已定(2026-11-12),压测出基线后可调**(AGENTS §6),不能据此下容量结论。依据:`MAXCLIENTS` 由负责人定;GOMAXPROCS 按 2 取的是 go-redis 缺省池(10 × GOMAXPROCS)在 2 核时的值,
 > 各服务的池上限现在显式写成这个数(见下文),不随 CPU limit 漂;运维余量 50 留给探针、运维 redis-cli 与 merge_zone / route_tool 这类一次性工具(下文 `peak` 公式);80% 告警水位给连接风暴(滚动、重连)留两成余量,到 `maxclients` 时新连接直接被拒(`ERR max number of clients reached`)。
 
-所有 zone 的 Go 服务连接池、Java gateway、每个 C++ 进程与全局池服务**共连 infra namespace 里那一个共享 Redis**(地址 `redis.<infra>:6379`)。
+核心单实例(infra namespace 的 `redis.<infra>:6379`)在 dev 承载控制域与玩家域;staging / prod 两个域都在各自的 Redis Cluster 上(下面「玩家域 Redis Cluster」
+与「控制 Redis Cluster」两节),核心那份总账只打一行 `no clients`(缺口第 34 条第 6b-1 批;核心单实例本身在 staging / prod 的退役归第 6b-2 批)。
 它有两种形态,按 `k8s_deploy.ps1 -RedisReplicas` 选:1 = 单实例(`manifests/infra/redis.yaml`),3 = 高可用(`redis-ha.yaml`,1 主 2 从 + 哨兵,客户端经两个代理连到主;
 staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这一份总账(`MAXCLIENTS` 只从 `redis.yaml` 读,`redis-ha.yaml` 必须同值);下文按单实例写的地方,高可用形态的差异见下一节。
 以前它没有显式 `maxclients`:上限是 Redis 缺省 10000,而且会被容器 nofile 硬限悄悄压低(需要 maxclients + 32 个 fd,不够就自己下调,只在启动日志里留一条;外部常识,待实测)。
@@ -1528,73 +1532,57 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
 
 - **上限在哪**:`redis.yaml` 的启动薄壳里 `MAXCLIENTS=40000` 只定义一次,两条 `exec redis-server`(有口令、无口令)都带 `--maxclients "$MAXCLIENTS"`;
   启动前打印一行 `redis fd limit: soft=<软限> hard=<硬限> need=<MAXCLIENTS+32> maxclients=<MAXCLIENTS>`,硬限不够时再打一行 `ERROR: nofile hard limit ...`。
-  **硬限不够不拒启**:唯一的 Redis 起不来等于全服停,这是有意的 fail-open,靠这行日志、部署后核对与(第 3 批的)告警兜住;补救是调节点上容器运行时的 `LimitNOFILE`
-  (K8s 清单层没有声明 ulimit 的字段)。不设 `timeout`(会踢掉常驻的空闲池连接与 C++ 唯一的那条连接),就绪探针不改。
+  **硬限不够不拒启**:唯一的 Redis 起不来等于全服停,这是有意的 fail-open,靠这行日志、部署后核对与告警兜住;补救是调节点上容器运行时的 `LimitNOFILE`
+  (K8s 清单层没有声明 ulimit 的字段)。不设 `timeout`(会踢掉常驻的空闲池连接与 C++ 的常驻连接),就绪探针不改。
   `deploy/docker-compose.yml` 的 redis 同值 `--maxclients 40000`(本机要 `--force-recreate redis` 才生效,见该文件注释)。
   静态契约:`tools/scripts/tests/redis_maxclients_contract.tests.ps1`(恰好定义一次、两条 exec 都带、打印 fd 限值、compose 同值、不 exit)。
 - **总账在哪**:`tools/scripts/k8s_deploy.ps1` 的「Redis 连接总账与重启闸」一节,形状与纪律同上面的 MySQL 连接总账。
   `Get-RedisConnectionPlan`(规划档;zone 数与滚动余量取自 `Get-MysqlConnectionPlan`)、`Get-RedisMaxClientsFromManifest`(读 `MAXCLIENTS`,不是恰好一处即 throw)、
-  `Get-RedisPoolMirror`(go-redis 直连池上限,读服务 yaml,不是正整数即 throw)、`Get-RedisConnectionLedgerInputs`(每副本上限常数表,每行带代码出处;
-  显式池上限经 `Get-RedisPoolMirror` 读;副本数读各 manifest)、`Get-RedisConnectionLedger`(纯函数)、`Write-RedisConnectionLedger`(写路径打印)。
-- **显式池上限(第 3 批,2026-10-16)**:连共享 Redis 的 go-redis 直连客户端都显式设了 `PoolSize`,值在各服务 yaml 里(当前都是 20 = 以前 K8s 上
-  GOMAXPROCS 按 2 时的缺省值,所以总账数字不变),ConfigMap 生成器镜像同一个键、总账读同一个键,池上限不再随 CPU limit 漂:
-
-  | 服务 | 键(服务 yaml) | ConfigMap |
-  |---|---|---|
-  | login | `go/login/etc/login.yaml` 的 `Node.RedisClient.PoolSize` | go-svc-login-config |
-  | player-locator | `go/player_locator/etc/player_locator.yaml` 的 `RedisClient.PoolSize` | go-svc-player-locator-config |
-  | trade | `go/trade/etc/trade.yaml` 的 `SharedRedis.PoolSize` | go-svc-trade-config |
-  | player-inbox | `go/player_inbox/etc/player_inbox.yaml` 的 `CoreRedis.PoolSize` | go-svc-player-inbox-config |
-
-  guild 2026-10-16 起由接入 K8s 那条线一并计入(`Get-RedisPoolMirror -Target guild` 读 `RedisClient` / `PlayerLocatorRedis`
-  两段的 `PoolSize`),ConfigMap 由它自己的生成器写。
-  data-service 的 `NameCacheRedis` 是 go-zero 客户端(见下面「设不了的」),只放可丢弃的名字读缓存。go/db 不连 Redis,不在总账里。
-  Go 侧语义:0 / 不写 = go-redis 缺省 10 × GOMAXPROCS(兼容旧 ConfigMap,滚动升级期间旧配置照常加载),负数起服即失败;部署侧要求正整数,
-  写路径入口算总账时先于任何集群写操作把这些键读一遍,不合格就拒绝(`Redis 连接池镜像:...`)。各服务启动日志打一行 `pool_size=<生效值>`,
-  用来核对 ConfigMap 里的值真的被加载(go-zero 对不认识的键静默忽略)。只设 `PoolSize`,不设 `MaxActiveConns`:Pub/Sub 专用连接走 `NewConn`、
-  不占池名额,但受 `MaxActiveConns` 约束,池满时订阅会直接失败(go-redis v9.16.0 / v9.17.3 / v9.18.0 的 `newConn`)。
-  **改值 = 重算总账**:看部署时打印的 `Redis connection ledger` 一行;池等满时调用方排队(go-redis `PoolTimeout`)。本机 Windows 以前是 10 × 核数,现在同样是 20 —— 压测对比时注意这一口径变化。
-  **设不了的**:go-zero 封装的客户端(data-service 的 `NameCacheRedis`、scene-manager、friend 的共享库句柄;match 的 go-zero 句柄在 K8s 上恒指向 redis-match-cluster,不在这台)—— go-zero v1.9.2 / v1.10.0 的
-  `redis.RedisConf` 没有池参数,`redisclientmanager.go` 不设 `PoolSize`、固定 `MinIdleConns: 8`,同一进程同一地址共用一个池。
-  这些仍按缺省池(10G)记账,CPU limit 的输入钉子只对它们生效。
-- **公式**(P = 该服务 yaml 里的显式 `PoolSize`;G = GOMAXPROCS,只用于缺省池。Go 1.27.2 容器感知,CPU limit 500m / `"1"` 预期都是 2;**未实测,待 S6**;
-  按 2 记。go-redis v9 缺省池上限 = 10 × G。池没有后台回收,一律按池上限记账):
+  `Get-RedisPoolMirror`(控制域池上限)与 `Get-RedisPlayerPoolMirror`(玩家域、登录域池上限)都读服务 yaml,不是正整数即 throw;
+  `Get-RedisControlClientRows`(控制域客户端行,每行带代码出处)、`Get-RedisConnectionLedgerInputs`(核心那份 = 在核心上的域的行,副本数读各 manifest)、
+  `Get-RedisConnectionLedger`(纯函数)、`Write-RedisConnectionLedger`(写路径打印)。
+- **池上限全部显式**(2026-11-12 起句柄全部是 `shared/clusterredis` / `shared/playerredis`,第 2b、4、5 批):控制域的键是各服务 yaml 的 `ControlRedis.PoolSizePerNode`
+  (login 没有这一段,本机回落 `Node.RedisClient`,池上限取 `Node.RedisClient.PoolSize`,K8s 上原样写进它的 `ControlRedis` 段);玩家域是 `PlayerRedis.PoolSizePerNode`,
+  login 另有 `LoginRedis.PoolSizePerNode`。集群上按每节点计。ConfigMap 生成器镜像同一个键、总账读同一个键;写路径入口先于任何集群写操作把这些键读一遍,
+  不是正整数就拒绝(`Redis 连接池镜像:...`)。go-zero 的 Redis 句柄已全部退役,这几份账里没有缺省大小的池,GOMAXPROCS 不再影响它们;只有 match 私有集群那份
+  (go-zero 集群客户端)还按缺省池(10G)记。**改值 = 重算总账**:看部署时打印的 `Redis connection ledger` 一行;池等满时调用方排队(`PoolTimeoutMs`)。
+- **公式**(P = 控制域池上限,PP = 玩家域池上限;池没有后台回收,一律按池上限记账):
   ```text
-  login           每副本 = P           # go-redis 池(登录排队复用它)
-  player-locator  每副本 = P
-  data-service    每副本 = 10G         # NameCacheRedis(go-zero,缺省池)
-  scene-manager   每副本 = 10G         # go-zero,缺省池
-  gateway(Java)  每副本 = 2           # Lettuce 共享连接 + 限流专用连接(staging / prod 缺省开限流;dev 关时实际 1,按 2 记)
-  friend          每副本 = 10G         # go-zero,缺省池(K8s 不配 FriendRedis,私有 key 回落这台)
-  trade           每副本 = P + 1       # 资产通道 + 落地唤醒订阅(资产通道开关缺省关,按开计)
-  guild           每副本 = 2P + 1 + 4 + 4  # RedisClient / PlayerLocatorRedis 两个显式池 + 落地唤醒订阅 + 申请配额专用池(代码写死 4,控制域,拆了玩家域也留下) + 摘要 bump 专用池(代码写死 4,玩家域)
-  player-inbox    每副本 = P           # 核心 Redis 一个 go-redis 池,没有 Pub/Sub
-  match / mail    每副本 = P           # 只有玩家域句柄 PlayerRedis(服务 yaml 的 PoolSizePerNode),建了玩家域集群这一行就搬走;match 的 MatchRedis 在 redis-match-cluster 上
-  gate / scene / battle 每进程 = 1     # node.cpp 唯一的 tlsRedis.Connect:每进程一条,不是每线程
-  每 zone = Σ(zone 级客户端每副本 × 副本数) + gate 台数 + scene 台数
-  全局    = Σ(全局池客户端每副本 × 副本数) + battle 台数   # match / friend、trade、guild、player-inbox、mail 各 2 副本
-  steady  = Z·每 zone(含各 zone 的 gate / scene)+ 全局
-  surge   = R·(各客户端每副本之和 + 3)   # R = 2,同 MySQL 总账;C++ 按 gate / scene / battle 三个工作负载计
-  peak    = steady + surge + 运维余量 50   # 探针、运维 redis-cli、merge_zone / route_tool 等一次性工具(估计值)
+  控制域(每副本)
+  login           P + 1          # 排队放行流水线专用 1 条(mustNewQueueAdmitRedis,只在 Queue.Enabled 时建,按打开计)
+  data-service    2P + 1         # 名字读缓存、GM 回收的落地唤醒各一个客户端 + 唤醒订阅(集群上每副本 64 条)
+  player-locator  P
+  scene-manager   P
+  gateway(Java)  2              # Lettuce 共享连接 + 限流专用连接
+  friend          P
+  trade           P + 1          # 唤醒订阅(集群上 64 条)
+  guild           P + 1 + 4      # 唤醒订阅(集群上 64 条) + 申请配额专用池(代码写死 4)
+  player-inbox    P
+  玩家域(每副本,详见「玩家域 Redis Cluster」的连接总账)
+  login PP + LoginRedis 池(开了 -LoginPasswordAuth 再 + 4);scene-manager PP + 130(铸造通道);guild PP + 4(摘要池);其余 PP
+  C++             每个 scene 进程每个域 1 条;gate、battle 不连 Redis
+  每 zone = Σ(zone 级客户端每副本 × 副本数)
+  全局    = Σ(全局客户端每副本 × 副本数)            # friend、trade、guild、player-inbox(与玩家域的 match、mail)各 2 副本
+  steady  = Z·每 zone + scene 进程数 × 在核心上的域数 + 全局
+  surge   = R·(各客户端每副本之和 + 在核心上的域数)   # R = 2,同 MySQL 总账;C++ 只按 scene 一个工作负载计
+  peak    = steady + surge + 运维余量 50            # 探针、运维 redis-cli、merge_zone / route_tool 等一次性工具(估计值)
   ```
-  具体条数以 `Get-RedisConnectionLedgerInputs` 的代码表与部署时打印的总账一行为准,这里不再手算。
-  各服务的玩家域句柄 `PlayerRedis`(以及 login 自己的 `LoginRedis`)不建玩家域集群时也连这台 Redis,记在这一份;建了就搬到玩家域那一份(「玩家域 Redis Cluster」的连接总账)。
-  - player-inbox 2026-10-16 起计入:核心 Redis 一个 go-redis 池(`go/player_inbox/internal/svc/servicecontext.go` 的 `openCoreRedis`,
-    围栏上界、在线提醒读 location 与后台循环选主锁共用),池上限 `CoreRedis.PoolSize`,没有 Pub/Sub。
-  - 不计入(接上时在常数表加一行):client-rpc-router(不连 Redis)、
-    chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;go/chat 不建任何 Redis 句柄,ConfigMap 也不写 `Redis` / `ChatRedis` 段)、
+  核心那份只记在核心上的域:控制端点是核心(没开控制集群)时的控制域行,没开玩家域集群时的玩家域行,同一个服务两行。
+  具体条数以代码表与部署时打印的总账一行为准,这里不再手算。
+  - 不计入(接上时在常数表加一行):client-rpc-router、go/db、rank(不连 Redis);
+    chat(不连 Redis:聊天权威在 SQL,会话身份只认 gate 签名的原件;go/chat 不建任何 Redis 句柄,ConfigMap 也不写 `Redis` / `ChatRedis` 段);
     match 的 MatchRedis(在 redis-match-cluster 上,记在下面那套集群自己的总账)。
   - login 的 PasswordAuth 失败配额池只在开了 `-LoginPasswordAuth` 时计入:每个 login 副本 4 条(`go/login/internal/svc/auth_init.go` 的
-    `passwordQuotaRedisPoolSize`),连登录域,所以没建玩家域集群时记在这一份,建了集群记在玩家域那一份(每节点)。
+    `passwordQuotaRedisPoolSize`),连登录域,所以跟着玩家域走:没建玩家域集群时记在核心那份,建了记在玩家域那一份(每节点)。
   - **match 私有集群 redis-match-cluster(2026-11-11 起单独一份总账)**:
     - 只有 match 连它。go-zero 的集群客户端没有池参数,对每个节点各一个缺省池,所以每主节点 = match 副本数 × 10G,G 同上按 2 记。
     - `MAXCLIENTS=40000` 写在集群清单 Pod 模板的启动薄壳里,与核心同值,启动时打印同格式的 `redis fd limit:` 一行。
     - 写路径打一行 `Redis match connection ledger: per_master match_replicas=<n> steady=… peak=… maxclients=… warn_at=… headroom=…`,超过 80% 水位打 `[RedisMatchConnectionLedger]OverWarnRatio:`,只告警。
     - `-WaitReady` 等建群 Job `redis-match-cluster-init` 完成,再逐节点核对生效的 maxclients(同核心与玩家域集群)。
     - 改 `MAXCLIENTS` 会改 Pod 模板,六个节点会滚动重启。
-  - 契约测试钉住:显式池那几行等于服务 yaml 的值、ConfigMap 镜像同一个值、yaml 写 0 / 负数 / 非整数时部署侧 throw;
-    有缺省池的行「manifest 的 CPU limit ≤ G 核」(含 match 集群那份)—— 调大这些服务的 CPU limit 会悄悄放大缺省池,那时测试变红,逼着重算这一列;
-    guild 申请配额池等于源码常量 `logic.ApplicationQuotaRedisPoolSize`,而且装配处必须引用它;
+  - 契约测试钉住:控制域每一行的池上限等于服务 yaml 的值(`ControlRedis.PoolSizePerNode`,login 是 `Node.RedisClient.PoolSize`)、ConfigMap 镜像同一个值、
+    yaml 写 0 / 负数 / 非整数时部署侧 throw;有缺省池的行(现在只有 match 集群那份)「manifest 的 CPU limit ≤ G 核」—— 调大 CPU limit 会悄悄放大缺省池,
+    那时测试变红,逼着重算这一列;guild 申请配额池、login 放行流水线池、guild 摘要池、scene-manager 铸造通道等于源码常量,而且装配处必须引用它;
     match ConfigMap 恒写 `MatchRedis`(redis-match-cluster 每个 Pod、`Type: cluster`)。不写时 go/match 会静默回落到这台、多一个缺省池,match 行就不能再记 0;
     match 集群清单的 `MAXCLIENTS` 恰好一处、与核心同值(`redis_maxclients_contract` T8)。
 - **取值**:`MAXCLIENTS=40000` 时 80% 水位 32000,需要 40032 个 fd;规划档(Z=4,来自 MySQL 规划档)的峰值与余量看部署时打印的那一行。
@@ -1605,7 +1593,8 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   ```text
   Redis connection ledger: zones=<Z> steady=<稳态> peak=<峰值> maxclients=<上限> warn_at=<80% 水位> headroom=<余量>; plan zones=4 peak=<规划峰值> headroom=<规划余量>
   ```
-  zone 集合与 MySQL 那一行同一口径(契约测试比对两行的 `zones=` 相等);各 zone 的 gate / scene 台数按命令行或 zones 配置算(拆分池取两池之和,Agones 自动伸缩取 `-AgonesMaxReplicas`)。
+  zone 集合与 MySQL 那一行同一口径(契约测试比对两行的 `zones=` 相等);各 zone 的 scene 台数按命令行或 zones 配置算(拆分池取两池之和,Agones 自动伸缩取 `-AgonesMaxReplicas`;gate、battle 不连 Redis,不计)。
+  两个域都在集群上时这一行是 `Redis connection ledger: zones=<Z> no clients: the control and player domains are on their Redis Clusters ...`,不算数。
   任一份峰值超过 80% 水位时打一条英文 WARNING,以 `[RedisConnectionLedger]OverWarnRatio:` 开头,**只告警、不阻断**(与 MySQL 那份同一纪律,是否升级成门禁两份一起拍板)。
 - **部署后核对**:非 DryRun 且带 `-WaitReady` 的 `infra-up` / `all-up`,在 redis-0 就绪后 exec 进 Pod 读 `CONFIG GET maxclients`,与清单的 `MAXCLIENTS` 比较
   (口令取 Pod 自己的 `REDIS_PASSWORD`,经 `REDISCLI_AUTH` 交给 redis-cli,不经本机命令行、不进日志)。相等打 `Redis maxclients check OK`;
@@ -1675,12 +1664,12 @@ staging / prod 档缺省即此形态,见下一节)。两种形态共用本节这
   本节的总账两种形态共用一份;代理每副本 `PROXY_MAXCONN=13000`,生成期核对 `PROXY_MAXCONN ×(代理副本 2 + maxSurge 1)+ 预留 1000 ≤ MAXCLIENTS`(`Get-RedisHaLimits`,不成立拒绝部署);
   写路径在本节那一行之后再打 `Redis proxy ledger: ...`,规划档或本次峰值超过 80% × 单个代理的 `PROXY_MAXCONN` 时打 `[RedisConnectionLedger]OverProxyWarnRatio:`(只告警);
   部署后核对逐个读 redis-0..2。细节见下一节「连接上限」。以前这里写的「3 × 20000」不是现值。
-- **按用途拆分 / 分片时**:每个 redis-server 都要显式 `--maxclients` 并按用途重算总账。按用途拆分后每个进程对每个实例各开一个池,单实例连接数下降、进程总连接数上升;
-  按 player_id 分片后每片的连接数约等于今天单实例的总数。
+- **上了 Redis Cluster 之后**:玩家域与控制域各记一份每主节点的账(见下面两节);每个节点都显式 `--maxclients`(`redis-cluster.yaml` 只定义一次)。
+  加主节点不减少每主连接,它只取决于客户端进程数。
 - **第 3 批**:go-redis 直连客户端显式 `PoolSize`(见上「显式池上限」)与 C++ 断连日志带原因已于 2026-10-16 落码(未编译、未测试)。
   **未做**:告警(connected_clients ÷ maxclients、rejected_connections 增量、生效值 < 清单值;依赖 redis_exporter,待拍板,届时照 `mysql-connection-alerts.yaml` 写);
   *(2026-10-23 更正,上一条原文保留:前两项已做。redis.yaml、redis-ha.yaml、redis-match-cluster.yaml 的每个 Redis Pod 带 `redis-exporter` sidecar(镜像钉 `oliver006/redis_exporter:v1.62.0`,指标端口 9121,口令只走 `REDIS_PASSWORD` 环境变量),告警在 `deploy/k8s/redis-alerts.yaml`,手工 `kubectl apply -n observability`,另需一个指向 9121 的 PodMonitor。加 sidecar 改了核心 Pod 模板,下一次 infra-up 要 `-ConfirmRedisCoreRestart`。「生效值 < 清单值」仍靠 `-WaitReady` 的部署后核对。静态契约 `tools/scripts/tests/redis_exporter_contract.tests.ps1`。)*
-  go-zero 客户端的池上限(要换掉 go-zero 封装,不在本批)。player-inbox 的 `CoreRedis.PoolSize` 已于 2026-10-16 补上。在告警落地前只有部署后核对与输入钉子。
+  go-zero 客户端的池上限:2026-11-12 起 go-zero 的 Redis 句柄全部换成 `shared/clusterredis`(缺口第 34 条第 2b、5 批),池上限都显式了。
 - **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/redis_maxclients_contract.tests.ps1`(第 1 批静态契约);
   `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(第 2 批:规划档 ≤ 80%、输入钉子、公式自检、写路径打印、重启闸四种判定与拒绝文本、
   旧 Deployment 的拒绝、读线上那一步的 fail-closed、摘要语义、infra-up DryRun 的注解、两个包装入口透传;第 3 批:显式池上限等于服务 yaml、
@@ -1866,125 +1855,27 @@ pwsh -NoProfile -File tools/scripts/k8s_deploy.ps1 -Command infra-up -DryRun -Sk
 
 真实集群:在 staging 上按「切换」步骤做一次 1 → 3(含第 4 步),再按上表做一遍删主 Pod 与杀主进程,用 robot 登录压测看中断时长与丢写。
 
-## 共享 Redis 按用途拆实例(G4a 第 1a 批:queue;2026-10-23,未编译、未测试,待 Codex 验证)
+## Redis 运维命令:`redis-split-status` 与 `redis-wipe`(按用途拆实例 2026-11-19 退役;未运行,待 Codex 验证)
 
-设计:`docs/design/shared-redis-split-by-purpose.md` §25.3(2026-10-23 拍板记录,最后的「由此对第 1a 批的修订」)、§3.2.1;§4 的部署形态以 §25.3 为准。
-本批**只拆排队与限流一个用途**,不做迁移工具、迁移标记、墓碑与 purge(项目未上线,数据可清空,首次上线直接按新拓扑部署)。
+按用途、按 zone 组拆出的单主实例(G4a 第 1a 批的排队实例 `redis-queue-g<N>`、[控制面按 zone 化](../../docs/design/control-plane-zone-scoping-20261105.md)
+的控制域实例 `redis-ctl-g<N>`)、它们的模板 `redis-purpose.yaml` / `redis-purpose-ha.yaml`、zones 配置的 `redisQueueGroup`,以及
+`-RedisSplit` / `-ConfirmRedisSplitSwitch` / `-RedisQueueMaxMemory` / `-RedisCtlMaxMemory` / `-ConfirmRedisCtlSwitch` 五个参数,随缺口第 34 条第 6b-1 批退役
+([设计稿](../../docs/design/redis-cluster-all-domains-20261110.md) §10.7)。现在控制域全部在控制端点:staging / prod 是下面的控制 Redis Cluster
+`redis-control`,dev 是核心单实例 `redis`。排队、准入与放行锁(`{q:<zone>}`)、gate 排空标记(`gate:{gm:<zone>}:…`)、gateway 的限流桶都在控制域。
+三个入口脚本(`k8s_deploy.ps1`、`k8s_image.ps1`、`dev_tools.ps1`)给这五个参数即在参数绑定处失败。线上还留着的旧 `redis-queue-g<N>` / `redis-ctl-g<N>`
+StatefulSet 不会被部署脚本删除或清库,确认没有客户端指向它们之后人工删(连同 PVC)。
 
-### 拆走什么、留下什么
-
-| 实例 | 放什么 | 谁连 |
-|---|---|---|
-| `redis-queue-g<N>`(新,每个 zone 组一个) | 排队 `queue:*`、准入 `admit:*`、在线 `admitted:*`、放行锁;gateway 的限流令牌桶 `rl:zone` / `rl:ip`(Lua 脚本,2026-11-05 起不再用 Bucket4j) | login 的 `Node.QueueRedis`;gateway 的 `spring.data.redis` |
-| `redis`(核心,不变) | 其余一切:会话、锁、位置、gate 排空标记 `gate:<id>:draining` / `drained`…… | C++ `zoneredis`、login 的 `Node.RedisClient`、data-service、auth 与其余全部服务 |
-
-- 组 `<N>` = zones 配置里该 zone 的 `redisQueueGroup`(可选整数,≥ 0,不写 = 0;负数、非整数在任何写操作之前拒绝)。首发 1 组,所有 zone 都是 g0。
-  `zone-up` 按 `-ZoneId` 在 zones 配置里找组,找不到 = 0。
-- gate 排空标记**留在核心**:`k8s_gate_drain.ps1` 与 scene_manager 的跨 zone 重定向都不用改,也不需要跨组寻址(§25.3 的 2026-10-23 订正)。
-- `redis-queue-g<N>` 的形态与核心同一套 `-RedisReplicas` 档位规则(§25.3 第 18 条子项 1):dev 档(`-ReleaseProfile dev` 且 `-OpsProfile custom`)缺省单实例(`manifests/infra/redis-purpose.yaml`),
-  其余缺省高可用(`manifests/infra/redis-purpose-ha.yaml`,见下面「queue 实例的高可用形态」)。客户端入口都是同名 Service,地址只由组决定、不随形态变。
-  排队数据都带 TTL、可丢:实例重启期间只影响本组 zone 的新登录(排队打开时新登录失败;排队关着时 login 不碰它,gateway 限流 fail-open),
-  已在游戏里的玩家、断线重连与存盘不受影响。
-- queue 实例显式 `--maxmemory <值> --maxmemory-policy noeviction --appendonly yes --appendfsync everysec --maxclients 10000 --enable-debug-command no`,
-  容器内存 requests = limits = 2 × maxmemory,PVC 8Gi(常量:volumeClaimTemplates 不可变),带 redis-exporter sidecar(与 `redis.yaml` 同形),
-  标签一律 `app: redis-queue-g<N>`,高可用时代理是 `app: redis-queue-g<N>-proxy`(带 `app: redis` 或 `app: redis-proxy` 会被挂到核心 Service 后面)。
-
-### 参数(`k8s_deploy.ps1`;`dev_tools.ps1` / `k8s_image.ps1` 同名透传,非缺省才透传)
-
-| 参数 | 取值 | 说明 |
-|---|---|---|
-| `-RedisSplit` | `auto`(缺省)/ `none` / `queue` | `none` 不拆(渲染与引入前逐字节相同);`queue` 拆出排队实例。`auto` 在所有档位都解析为 `none`;例外是非 DryRun 的 zone 写路径(zone-up / all-up 部署 login 或 gateway)跟随线上:本 zone 线上 login ConfigMap 有 `Node.QueueRedis` 即 queue,没有或 ConfigMap 不存在即 none。DryRun 的 auto 按 none。infra-up 的 auto 按 none:**不 apply、也不删除**已有的 queue 实例 |
-| `-ConfirmRedisSplitSwitch` | switch | 本次要写的排队地址与本 zone 线上不同(none ↔ queue、换组)时必须给。是许可不是指令,不粘滞 |
-| `-RedisQueueMaxMemory` | `<正整数><kb\|mb\|gb>`,如 `1gb` | 每个 queue 实例的 maxmemory。dev 档(`-ReleaseProfile dev` 且 `-OpsProfile custom`)缺省 `128mb`;release 档要 apply queue 实例而没给即拒绝。每组 `1gb`(§25.3 第 19 条),已定(2026-11-12),L-14 压测出基线后可调。依据:G4a §6.2 的内存模型每个排队玩家约 0.5–1KB、每个 IP 桶约 0.2KB,1gb 约装 100 万排队玩家,是 10 万人排队推算值(约 100MB)的 10 倍;IP 桶在 trusted-proxies 配错时没有上界(G4a §6.3),所以留得比别的实例宽 |
-| `-ConfirmWipeAllRedis` | switch | 只给 `redis-wipe` 用,见下 |
-
-部署闸(写路径入口,任何写操作之前;只有两条,§25.3):
-
-1. 地址要变必须 `-ConfirmRedisSplitSwitch`:漏带 `-RedisSplit` 的例行部署等于想切回共享拓扑,会被拦下,报错写明线上现状与应带的参数;
-2. 本 zone 线上 login 的 `Queue.Enabled` 为 true 时拒绝切换,确认开关不豁免:滚动时新旧 login 副本各连一个实例、两套队列,准入最多翻倍(§3.2.1 约束 2)。先以 `-LoginQueue off` 部署本 zone 关掉排队再切。
-
-DryRun 不查集群,只打出每个 zone 将要写的地址(`Redis split: zone=… resolved=… queue_redis=…`)。zone 写路径同时打印 queue 实例的连接总账
-(`Redis queue connection ledger: instance=redis-queue-g<N> …`,MAXCLIENTS 从 `redis-purpose.yaml` 读;全部 zone 都拆时核心总账去掉 gateway 那一行)。
-高可用形态再按单个代理算一次水位(`Redis queue proxy ledger: instance=redis-queue-g<N> proxy_maxconn=3000 proxies=2+1 warn_at=2400 …`),超过只告警,以 `[RedisQueueConnectionLedger]OverProxyWarnRatio:` 开头。
-控制域实例 `redis-ctl-g<N>`(不受 `-RedisSplit` 控制,[控制面按 zone 化](../../docs/design/control-plane-zone-scoping-20261105.md) §4.6)每次走写路径都按组打一行
-`Redis ctl connection ledger: instance=redis-ctl-g<N> zones=<本组 zone 数> scene_processes=<本组 scene 进程数> …`:每个 scene-manager 副本一个 go-zero 缺省池、
-每个 scene 进程 1 条;规划档按全部 zone 落在同一组算。高可用形态另有 `Redis ctl proxy ledger:` 一行,超水位以 `[RedisCtlConnectionLedger]` 开头告警,不阻断。
-
-### 首次上线的部署命令
-
-上线前以拆出 queue 的拓扑直接首次部署(没有切换窗口,§25.3 第 19 条原 §13 第 10 条):先拆 queue,再打开排队。
-
-```powershell
-# 1) 基础设施:核心 Redis + 每个组的 redis-queue-g<N>(组取 zones 配置;release 档必须给容量)
-pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-infra-up -ReleaseProfile prod -RedisSplit queue -RedisQueueMaxMemory 1gb -WaitReady ...
-# 2) 各 zone:login 写 Node.QueueRedis、gateway 指向 redis-queue-g<N>(全新 namespace 没有线上现状,不需要确认开关)
-pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-up -SkipInfra -ReleaseProfile prod -RedisSplit queue -WaitReady ...
-# 3) 核对:每个 zone 的 login 与 gateway 指向同一实例且都已滚完
-pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-redis-split-status -ZonesConfigPath <同上>
-```
-
-之后的例行部署可以不带 `-RedisSplit`:zone 写路径跟随线上;infra-up 不带它就不碰 queue 实例(要改容量或模板时再带 `-RedisSplit queue`)。
-**灾难恢复**走 [PITR 手册](../../docs/ops/mysql-backup-pitr-runbook.md) §4.0:`k8s-zone-down` 会删掉 zone namespace,起服时读不到线上,以 queue 运行的 zone 起服**必须显式给 `-RedisSplit queue`**,
-否则恢复后的 login / gateway 静默连回核心(脚本不核对这一项)。
-
-已经以 none 跑起来的环境要切到 queue(例如 staging):确认各 zone 排队关着 → `infra-up -RedisSplit queue` → 逐 zone 或一次 all-up 带
-`-RedisSplit queue -ConfirmRedisSplitSwitch` → `k8s-redis-split-status` 退出码 0 之前,不执行 `k8s_gate_drain.ps1`、不滚动 gate(§3.2.1 约束 3)。
-排队与限流数据不迁移(都带 TTL);核心上的旧排队键随 TTL 自然过期。
-
-### queue 实例的高可用形态(2026-11-01 复核;未运行,待 Codex 验证)
-
-`-RedisReplicas 3`(非 dev 档缺省)时每组 apply 一份 `redis-purpose-ha.yaml`:1 主 2 从 + 每个 redis Pod 一个哨兵 + 2 个 haproxy 代理。结构、代理的路由规则、数据安全的边界、
-停机交接与崩溃后的启动顺序全部同上面「共享 Redis:高可用形态」,生效行与 `redis-ha.yaml` 逐行同源,只允许模板文件头列出的差别(契约测试比对)。
-
-| 对象(`<名>` = `redis-queue-g<N>`) | 用途 |
-|---|---|
-| Service `<名>` | 客户端入口。单实例选 `app=<名>`,高可用选 `app=<名>-proxy`,名字与 ClusterIP 不变 |
-| Service `<名>-headless` | 节点之间互相寻址(复制、哨兵、代理的健康检查);与单实例同名,StatefulSet 的 `serviceName` 不变 |
-| PDB `<名>-pdb`、`<名>-proxy-pdb` | 一次自愿驱逐最多带走一个 redis Pod;至少留一个代理 |
-| ConfigMap `<名>-ha-scripts` | 启动 / 探针 / 停机脚本。对象名、Pod 名前缀、headless 域名与哨兵 master 名(`<名>`,核心是 `mymaster`)都在渲染时写入 |
-| StatefulSet `<名>` | 3 个 Pod,容器 `redis` / `sentinel` / `redis-exporter`,`podManagementPolicy: Parallel`;卷模板与单实例相同,`redis-data-<名>-0` 接着用 |
-| Deployment `<名>-proxy` | 2 个 haproxy,模板带脚本摘要注解,脚本一改就滚动 |
-
-- **连接上限**:`MAXCLIENTS=10000` 与 `redis-purpose.yaml` 同值(连接总账只读那一份),`PROXY_MAXCONN=3000`,3000 × (2 + 1) + 预留 1000 = 10000。
-  `Get-RedisQueueHaLimitsFor` 在渲染与总账两处核对,不成立即在写操作之前拒绝;infra 写路径打 `Redis queue HA limits: instance=… maxclients=10000 proxy_maxconn=3000 proxies=2+1 reserved=1000 …`。
-- **形态跟核心走**:`-RedisReplicas` 同时决定核心与 queue,不能单独设。不带 `-RedisSplit queue` 的 infra-up 不碰 queue 实例,所以核心切到高可用之后,queue 实例要到下一次带 `-RedisSplit queue` 的 infra-up 才跟上。
-- **1 → 3**:`infra-up -RedisSplit queue -RedisReplicas 3 -WaitReady`(非 dev 档不用给 `-RedisReplicas`)。形态变更闸判 upgrade,打 `[RedisQueueTopology]Upgrade:` 告警后继续,**不要确认开关**(排队数据带 TTL,重启只影响本组新登录)。
-  脚本先 `kubectl delete statefulset <名> --cascade=orphan`(`podManagementPolicy` 创建后不可改),再 apply:新 StatefulSet 接管 `<名>-0`,另两个从它全量同步,Service 改指向代理。login / gateway 地址不变,不用重新部署。
-  中途失败原样重跑同一条命令:StatefulSet 不在时判全新,apply 出的 StatefulSet 照样按同名同标签接管孤儿 `<名>-0`。排队开着时 `<名>-0` 重启期间本组新登录失败,想避开就先以 `-LoginQueue off` 部署本组各 zone。
-- **3 → 1**:脚本拒绝,在任何写操作之前(`podManagementPolicy` 不可改,代理、哨兵与脚本对象也不会被 apply 删掉)。线上副本数是 0 / 2 这类脚本从不产生的值同样拒绝。确实要回单实例,按「删掉重建」做,数据不保留(都带 TTL):
-  1. 以 `-LoginQueue off` 部署本组各 zone,关掉排队;
-  2. `kubectl -n <infra> delete statefulset/<名> deployment/<名>-proxy pdb/<名>-proxy-pdb configmap/<名>-ha-scripts`,等 Pod 退完后删 PVC `redis-data-<名>-0`、`-1`、`-2`;
-  3. `infra-up -RedisSplit queue -RedisReplicas 1`,apply 把 Service 改回指向单实例,名字与 ClusterIP 不变。这条参数同时作用于核心:核心还是高可用时,先被核心的拓扑闸拒绝。
-- **没有重启闸**:StatefulSet 上不写模板摘要注解。改模板或换 `-RedisQueueMaxMemory` = 逐个滚动 redis Pod,每个先交接主,基本无损。
-- **部署后核对**:`-WaitReady` 逐个等 `statefulset/<名>`、`deployment/<名>-proxy`,再逐个节点读 `CONFIG GET maxclients`,不等只告警。
-- **运维**:命令同核心的「运维」一节,把 `redis-<n>` 换成 `<名>-<n>`、`mymaster` 换成 `<名>`、`deploy/redis-proxy` 换成 `deploy/<名>-proxy`。需要 `redis-cli` 时不要 `exec svc/<名>`:高可用时它指向代理,代理镜像里没有 `redis-cli`。
-  压测快照写 `-RedisTargets @{ queue = 'k8s:<infra>/<名>' }`:exec 进 StatefulSet 的 redis 容器,host 缺省是同名 Service,两种形态都落到当前的主。
-
-### `redis-split-status` 与 `redis-wipe`
-
-- `-Command redis-split-status`(`dev_tools.ps1 -Command k8s-redis-split-status`):只读。zone 列表取 zones 配置(`-ZonesConfigPath`,json / yaml),
-  对每个 zone 打印 login 的 `RedisClient` / `QueueRedis` Host、gateway 的 `spring.data.redis.host`、组号,以及 `statefulset/login`、`statefulset/gateway`
-  的 rollout 是否完成(`kubectl rollout status --timeout 10s`);再对它们线上指向的每个 queue 实例打印一行 `instance=<名> namespace=<ns> shape=single|ha ready=<就绪>/<副本> proxy=<就绪>/<副本> service_selector=<app 值>`(多个 zone 同组只查一次)。
-  同一 zone 的 login 与 gateway 指向不同实例、任一 rollout 没完成 / 读不到,或指向的实例不存在、没全部就绪、高可用时代理没就绪、Service 的 selector 与形态对不上,退出码 1。
-  zone 的 ConfigMap 或 Deployment 不存在只打印 `<absent>`,不算失败。
-  控制域每个 zone 另打一行 `ctl_expected=<本组 redis-ctl-g<N>> scene-manager.Redis=… node-config.scene_control_redis=… rollout scene-manager=…`,
-  再对本组实例打一行 `instance=redis-ctl-g<N> …`(同组只查一次)。scene-manager 的 `Redis.Host` 或 node-config 的 `scene_control_redis.host`
-  不是本组实例、`deployment/scene-manager` 没滚完,或实例不存在、没就绪,同样退出码 1;两份 ConfigMap 都不存在只打印 `<absent>`。
+- `-Command redis-split-status`(`dev_tools.ps1 -Command k8s-redis-split-status`):只读,命令名沿用。逐集群读 `statefulset/redis-player`、`statefulset/redis-control`
+  与 `<名>-0` 的 `CLUSTER INFO`,每套一行 `cluster=<名> namespace=<ns> ready=<就绪>/<副本> state=… slots_ok=… known_nodes=…`。没部署打 `<absent>`,不算失败;
+  没全部就绪、读不出 `CLUSTER INFO`、`cluster_state` 不是 ok、`cluster_slots_ok` ≠ 16384、`cluster_known_nodes` ≠ 副本数,退出码 1。
+  gate 排空标记写在控制域上,执行 `k8s_gate_drain.ps1` 或滚动 gate 之前可以先用它确认控制集群可用。
 - `-Command redis-wipe -ConfirmWipeAllRedis`(`dev_tools.ps1 -Command k8s-redis-wipe -ConfirmWipeAllRedis -InfraNamespace mmorpg-stress-…`):
   AGENTS.md §6.2 压测前清库的 K8s 做法。要求 infra namespace 匹配脚本里写死的 `^mmorpg-stress-`,且显式给 `-ConfirmWipeAllRedis`,缺一即拒绝(DryRun 同样先判)。
-  实例按 infra namespace 里**实际存在**的 StatefulSet 列(不按本次参数,漏写一个用途也不会漏清):核心 `redis`(单实例或高可用,清其中的主)、
-  每个 `redis-queue-g<N>`、每个控制域实例 `redis-ctl-g<N>`、`redis-match-cluster`、`redis-player`(后两个逐主节点)。每个 Pod `kubectl exec -c redis` 进去先问 `ROLE`,主节点 `FLUSHALL SYNC`,再读 `DBSIZE`;
+  实例按 infra namespace 里**实际存在**的 StatefulSet 列(不按本次参数):核心 `redis`(单实例或高可用,清其中的主)、`redis-match-cluster`、`redis-player`、
+  `redis-control`(后三个逐主节点;Cluster 里 FLUSHALL 只清本节点)。每个 Pod `kubectl exec -c redis` 进去先问 `ROLE`,主节点 `FLUSHALL SYNC`,再读 `DBSIZE`;
   口令用 Pod 自己的 `REDIS_PASSWORD` 经 `REDISCLI_AUTH` 交给 redis-cli,不上本机命令行。每个实例至少一个主、每个主 FLUSHALL 回 OK 且 DBSIZE=0
-  才算通过,否则退出码 1;从节点的 DBSIZE 只打印。只清 Redis:MySQL / etcd / Kafka 仍按 AGENTS.md §6.2 另行处理。
-
-### 已知限制
-
-- queue 实例没有重启闸:单实例下改 `redis-purpose.yaml` 的模板或换 `-RedisQueueMaxMemory` 会直接重启该组实例;高可用下逐个滚动、每个先交接主(见「queue 实例的高可用形态」)。
-- 高可用形态的故障转移、滚动、冷启动与 1 → 3 没有单独实测,结论来自与 `redis-ha.yaml` 逐行同源(核心 2026-10-08 在 kind 上实测过)。
-- 部署闸只核对 login / gateway 的 ConfigMap 地址,不核对目标 `redis-queue-g<N>` Service 是否存在:zone-up 先于 infra-up 带 queue 时,
-  新 login Pod 连不上即拒启(CrashLoop),旧 Pod 照常服务;顺序按上面的首次上线命令走。这种状态 `redis-split-status` 报失败。
-- 改 zones 配置里的组号 = 换实例,同样要 `-ConfirmRedisSplitSwitch`;旧组实例不会被删除,确认不再使用后人工删(连同 PVC)。
-- Java 版(`D:\luyuan\xuanming-server-mmo`)没有 K8s 生产形态,按用途拆实例待做(设计稿 §26)。
+  才算通过,否则退出码 1;从节点的 DBSIZE 只打印。名单外的 StatefulSet(含没清理的旧 queue / ctl 实例)不碰。只清 Redis:MySQL / etcd / Kafka 仍按 AGENTS.md §6.2 另行处理。
+- Java 版(`D:\luyuan\xuanming-server-mmo`)没有 K8s 生产形态,不涉及。
 
 ### 验证(交 Codex,未运行)
 
@@ -1999,7 +1890,7 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
 
 设计 [redis-player-store-cluster.md](../../docs/design/redis-player-store-cluster.md) §5.1、§5.6、§6、§7;运维手册(部署、扩缩容、节点故障、中断恢复、核对清单)[redis-player-cluster-runbook.md](../../docs/ops/redis-player-cluster-runbook.md)。
 
-玩家态协调键和登录域放进一个独立的 Redis Cluster,控制域(`redis`、`redis-queue-g<N>`)不变。登录域只有 login 连(chat、friend、guild、match、mail、trade 只认 gate 签名的会话身份原件,不读登录态),缺省和玩家域共用这个集群,Go 配置上能拆开,部署脚本目前只渲染共用形态,要拆时加参数。
+玩家态协调键和登录域放进一个独立的 Redis Cluster,控制域在控制端点(下面「控制 Redis Cluster」;dev 是核心单实例 `redis`)。登录域只有 login 连(chat、friend、guild、match、mail、trade 只认 gate 签名的会话身份原件,不读登录态),缺省和玩家域共用这个集群,Go 配置上能拆开,部署脚本目前只渲染共用形态,要拆时加参数。
 
 ### 参数
 
@@ -2016,14 +1907,14 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1
 ### 开了之后产物的变化
 
 - **`manifests/infra/redis-cluster.yaml`**(两套集群共用的模板,按集群名 `redis-player` 渲染;`infra-up`、带 infra 的 `all-up` 才 apply):`statefulset/redis-player`(`OnDelete`)、每个节点一个 ClusterIP Service `redis-player-<序号>`(节点用 `cluster-announce-ip` 宣告它的 IP,C++ 路由层只认 IP 字面量)、PDB、建群 Job `redis-player-cluster-init`。Job 只在全部节点空白时 `--cluster create`,否则只核对,重跑幂等。
-- **node ConfigMap** 多 `player_redis: {mode: cluster, seeds: [...]}`。scene 的 Pod 模板多环境变量 `PLAYER_REDIS_PASSWORD` 和注解 `mmorpg.io/player-redis-config-hash`(种子或口令变了就滚动)。gate、battle 不变。
+- **node ConfigMap** 多 `player_redis: {mode: cluster, seeds: [...]}`。scene 的 Pod 模板多环境变量 `PLAYER_REDIS_PASSWORD` 和注解 `mmorpg.io/player-redis-config-hash`(种子或口令变了就滚动)。gate、battle 不连 Redis。
 - **Go 服务**:login、player-locator、scene-manager、match、friend、guild、trade、player-inbox、mail 的 `PlayerRedis`,以及 login 自己的 `LoginRedis`,都写 `Addrs`(种子)、`Cluster: true`、`PasswordEnv: PLAYER_REDIS_PASSWORD`、`PoolSizePerNode`。这些服务的容器经 `Add-PlayerRedisSecretEnv` 拿口令;chat 不连 Redis,不拿。
 - **scene-manager** 的 `OwnerEpochMint.WaitAOFNumReplicas` 取 1(键在集群上,每主至少 1 副本)。
 - **`redis-wipe`** 的遍历多 `redis-player`,逐主节点;**`redis-split-status`** 末尾打这套集群的就绪数与 `CLUSTER INFO`。
 
 种子固定序号 0、1、2,不随主节点数变,扩容不用重发 zone。
 
-不开时(dev 缺省):node ConfigMap 不写 `player_redis`;`PlayerRedis` 与 login 的 `LoginRedis` 只写池上限,地址落到各服务现有的实例(login 落到它的 `Node.RedisClient`)。
+不开时(dev 缺省):node ConfigMap 不写 `player_redis`(scene 沿用 `control_redis`);`PlayerRedis` 与 login 的 `LoginRedis` 只写池上限,地址落到各服务的控制域实例(login 落到它的 `Node.RedisClient`),也就是核心单实例。开控制集群必须同时开玩家域集群,所以玩家域不会落到控制集群上。
 
 ### 变更闸
 
@@ -2052,7 +1943,7 @@ Redis player connection ledger: per_master zones=<Z> scene_processes=<N> steady=
 
 - 池上限读服务 yaml 的 `PlayerRedis.PoolSizePerNode` 和 login 的 `LoginRedis.PoolSizePerNode`(`Get-RedisPlayerPoolMirror`,不是正整数即 throw)。代码里写死的另算:scene-manager 铸造通道 130(`ownerEpochMintPoolSize`,2026-11-12 按 Little 定律由 32 调大,算式见 docs/design/zone-redis-regression-guard-20261022.md §4.3.3)、guild 摘要池 4。
 - `maxclients` 读 `redis-cluster.yaml` 的 `MAXCLIENTS`,只定义一次(两套集群同一个值)。超过 80% 水位告警 `[RedisPlayerConnectionLedger]OverWarnRatio:`,不阻断。
-- **加主节点不减少每主连接**:它只取决于客户端进程数。控制域那一份总账去掉这些池,只剩玩家域句柄的 mail 不再计入;chat 不连 Redis,两份账都没有它。不开集群时这些池都记在控制域那一份上。
+- **加主节点不减少每主连接**:它只取决于客户端进程数。开了集群,核心那一份总账就不再记这些池,只有玩家域句柄的 mail、match 也不再计入核心;chat 不连 Redis,哪份账都没有它。不开集群时这些池记在核心那一份上(核心那份 = 控制域行 + 玩家域行,同一个服务两行)。
 
 ### 告警
 
@@ -2072,11 +1963,20 @@ kubectl apply -n observability -f deploy/k8s/redis-control-alerts.yaml   # 控�
 | 参数 | `-ControlRedisMasters`(dev 缺省 0 不建;staging、prod 必须显式给、至少 3)、`-ControlRedisReplicasPerMaster`、`-ControlRedisMaxMemory`、`-ControlRedisStorage`;`dev_tools.ps1`、`k8s_image.ps1` 同名透传 |
 | 口令 | 环境变量 `MMORPG_CONTROL_REDIS_PASSWORD`(release 档开了集群必须有)→ Secret `redis-control-auth`,只经 `secretKeyRef` 注入 |
 | 对象 | `statefulset/redis-control`、Service `redis-control-<序号>` / `redis-control-headless`、`redis-control-cluster-config`、`redis-control-pdb`、建群 Job `redis-control-cluster-init`,全部在 infra namespace,与玩家域的对象不重名 |
-| 部署时打印 | `Redis control cluster: masters=... (manifests/infra/redis-cluster.yaml, name=redis-control)`;总账 `Redis control connection ledger: per_master ...`,接上服务之前是 `no clients wired yet` |
+| 部署时打印 | `Redis control cluster: masters=... (manifests/infra/redis-cluster.yaml, name=redis-control)`;总账 `Redis control connection ledger: per_master ...`(客户端行见下文) |
 | 清库、状态 | `redis-wipe` 的遍历多 `redis-control`;`redis-split-status` 末尾一行(没部署打 `<absent>`,不算失败) |
 | 告警 | `deploy/k8s/redis-control-alerts.yaml`(组 `redis.control-cluster`,与玩家域那份一条对一条) |
 
-第 6a 批只部署集群本身:还没有服务连它,zone namespace 里也还没有它的 Secret。各服务的 `ControlRedis` 段、C++ node-config 的 `control_redis` 与容器口令变量在第 6b 批接上。
+**谁连它**(第 6b-1 批,2026-11-19;设计稿 §10.7):控制域只有一个端点 `Get-ControlRedisEndpoint`,开了控制集群就是这三个种子,没开(只有 dev)是核心单实例。
+- Go 服务(login、data-service、player-locator、scene-manager、friend、trade、guild、player-inbox)的 `ControlRedis` 段写种子与 `Cluster: true`,口令写空串,
+  容器从 Secret `redis-control-auth` 拿 `SHARED_REDIS_PASSWORD`;gateway 的 `spring.data.redis` 写 `cluster.nodes`;scene 的 `control_redis` 写 `mode: cluster`
+  与种子,拿 `CONTROL_REDIS_PASSWORD`。zone namespace 里同步一份 `redis-control-auth`,先于引用它的工作负载。gate、battle 不连 Redis。
+- `k8s_gate_drain.ps1` 读 login ConfigMap 的 `ControlRedis.Cluster`,集群时 exec 进与种子 Service 同名的 Pod,`redis-cli -c` 跟随 MOVED。
+- **开它必须同时开玩家域集群**(`Assert-RedisClusterPairing`,任何写操作之前拒绝):scene-manager 对「ControlRedis 是集群而 PlayerRedis 没写地址」拒启,
+  scene 缺 `player_redis` 时会整体沿用控制集群。staging / prod 两套都必须给。
+- 两个域都在集群上时(staging / prod),核心那份总账只打一行 `Redis connection ledger: zones=<Z> no clients: …`。
+- **成员反亲和**:staging / prod 每套集群的成员两两不同节点(required;主从角色随故障转移互换,只能这样保证主和它的从不在同一台),dev 只是尽量分散。
+  所以 staging / prod 每套集群要有不少于节点总数(3 主每主 1 副本 = 6)的可调度节点,两套集群之间不互斥;节点不够时多出的成员 Pending,建群 Job 等不齐。
 
 同批:match 私有集群(`redis-match-cluster.yaml`)的镜像从 `redis:7.2` 升到同一个 `redis:8.10.2` 摘要;遗留的 `redis-rank.yaml` 删除(见本文件「排行」一节)。
 
@@ -2179,8 +2079,8 @@ Go 服务侧的同一对值由 `k8s_deploy.ps1` 的 `Add-GoSvcCommandTopicEnv` �
 - **消费端有门禁**:gate/scene 启动时向 broker 核对该 topic 的分区数,不等于契约就**起不来**
   (`KafkaConsumer::init` 的 `partition contract mismatch`)。所以 topic 被生产者抢先 auto-create 成
   1 分区时不会静默降级,而是节点起不来 + Job 失败,两处都能看见。
-- **改 node ConfigMap 不会自动滚 Pod**:C++ 节点的 Pod 模板只带 `mmorpg.io/cpp-log-sidecar-config-hash`(只哈希 sidecar 配置)与有口令时的 `mmorpg.io/zone-redis-auth-hash`
-  (只哈希 zone Redis 口令,见「C++ 节点的 zone Redis 口令」),不带整份 node-config 的哈希,`kubectl apply` 之后跑着的 gate / scene / battle 仍是旧配置,要手动 `kubectl rollout restart`
+- **改 node ConfigMap 不会自动滚 Pod**:C++ 节点的 Pod 模板只带 `mmorpg.io/cpp-log-sidecar-config-hash`(只哈希 sidecar 配置)、scene 的 Redis 配置指纹
+  (`mmorpg.io/control-redis-config-hash` / `player-redis-config-hash`,只哈希 Redis 的地址与口令,见「C++ 节点的 Redis 口令」)与工作负载密钥指纹,不带整份 node-config 的哈希,`kubectl apply` 之后跑着的 gate / scene / battle 仍是旧配置,要手动 `kubectl rollout restart`
   (Agones 编排的 scene / battle 不吃 rollout restart,要让 Fleet 换一批 GameServer)。重启 Deployment 形态的 battle 会作废正在打的局,挑没有对局的窗口;
   battle 是 infra namespace 里的全局池,`battle-node-config` 只由 `infra-up` / `all-up` 渲染,`zone-up` 不碰它。
 
@@ -2451,103 +2351,69 @@ C++ 节点(gate / scene / battle)发出的每次 unary gRPC 调用现在都带 d
   「C++ 不调用」登记表的守护(C++ 不直接调用、gate 不按消息号转发、没有过期项),
   以及把 DataService 改回 2500 的配置副本必须被拒并只点名这一项;login ConfigMap 的 `Timeout` == login.yaml 在「login ConfigMap 关键值」用例的键对表里逐键钉住。
 
-## C++ 节点的 zone Redis 口令(2026-10-15 P0-A 第二批;2026-11-05 改走 Secret,docs/handoff/handoff-global-singletons-p0-20261015.md §8)
+## C++ 节点的 Redis 口令(2026-10-15 P0-A 第二批;2026-11-05 改走 Secret;2026-11-19 只剩 scene,口令跟着控制端点与玩家域集群)
 
-C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)的口令,K8s 上取自 `MMORPG_REDIS_PASSWORD`,
-与 Go 服务、gateway、服务端 Secret `redis-auth` 是同一个变量、同一个值。scene 另连本 zone 组的控制域实例 `redis-ctl-g<N>`(`scene_control_redis`),
-同一个口令。
+依据:docs/handoff/handoff-global-singletons-p0-20261015.md §8;[全部 Redis 上 Cluster](../../docs/design/redis-cluster-all-domains-20261110.md) §10.5、§10.7。
 
-- **口令怎么到达 C++(K8s 标准做法:Secret + secretKeyRef)**:`node-config`(zone namespace)与 `battle-node-config`(infra namespace)的
-  `game_config.yaml` 里 `zoneredis.password`、`scene_control_redis.password` 一律写空串;C++ Pod 用 `secretKeyRef` 从**本 namespace** 的
-  Secret `redis-auth`(键 `password`)拿环境变量 `ZONE_REDIS_PASSWORD`,scene 另拿 `SCENE_CONTROL_REDIS_PASSWORD`,C++ 的 `config.cpp` 用它们覆盖 yaml
-  (值不进日志)。`secretKeyRef` 不写 `optional`:Secret 缺失时 Pod 停在 `CreateContainerConfigError`,不会带着空口令起来收一屏 NOAUTH。
-  - Secret 由 `Sync-RedisAuthSecret` 建:infra namespace 那份在 `Apply-Infra` 的 Redis 分支(Redis 服务端与 battle 共用,先于两者),每个 zone namespace
-    一份同名副本在 `Apply-Zone` 开头(先于 gate / scene;Secret 不能跨 namespace 引用)。值经 `Apply-InjectedSecret` 写入:`-DryRun` 只打一行
-    `# Secret redis-auth (key password; value hidden)`,不再把口令打进输出(以前 infra 那份用 here-string 直接 apply,DryRun 会打印口令)。
-  - dev 档没设该变量时口令是空串:两处 Secret 都删掉残留,C++ 工作负载不注入这两个环境变量、不写指纹注解,与引入口令之前逐字相同;C++ 不发 AUTH。
-  - 各 Go 服务与 gateway 2026-11-06 起同样经这份 Secret 拿口令(环境变量 `SHARED_REDIS_PASSWORD`),ConfigMap 里不再有明文,
-    见下一节「Go 服务与 gateway 的共享 Redis 口令」。
-- **C++ 的行为(第一批)**:口令非空时每条新连接(含断线重连)先 `AUTH`,回 `+OK` 才对业务可见;被拒、发不出去或超时一律 fail-closed ——
-  zone Redis 对业务保持不可用,每个重连周期重试一次并打带 `metric=zone_redis_auth_failed` 的 ERROR,进程不退出、Pod 仍 Ready
-  (「zone Redis 已认证」的就绪条件另起一项)。启动日志只打 `Zone Redis auth: on|off`,不打口令。
-- **生成期保护**:非 dev 档口令为空,或口令含 `"`、`\`、换行与其它控制字符(高可用哨兵会把它原样写进自己的配置文件),在任何 `kubectl`
-  写操作之前拒绝,报错只点变量名、不回显值。
-- **指纹注解**:C++ 工作负载在口令非空时,Pod 模板带 `mmorpg.io/zone-redis-auth-hash`(只哈希口令,不哈希整份 node-config —— 否则无关改动也会滚动
-  gate 与 battle)。环境变量只在容器启动时读,只改 Secret 时 Pod 模板逐字节没变、apply 是 no-op;指纹把「换口令」变成 Pod 模板变化,工作负载
-  收敛到新口令(即 Helm 的 checksum 注解做法)。各形态怎么换上新口令:
-  - gate / scene / battle 的 Deployment(缺省形态):apply 即滚动 —— gate 断开该 Pod 上的玩家,scene 迁走玩家,battle 作废在打的局;
-  - Agones Fleet(scene / battle):新建 GameServerSet,已 Allocated 的实例打完才退,期间一直用启动时拿到的旧口令;
-  - `-ClientEntryMode external` 的 gate StatefulSet 是 `OnDelete`:模板换了不自动重建,按 `tools/scripts/k8s_gate_drain.ps1` 逐个排空删 Pod。
-  旧 Pod 用旧口令能不能继续工作,取决于 Redis 是否同时认新旧两个口令 —— 所以换口令按下面的**双口令轮换**做,不要直接替换。
-- **首次部署(未上线前的全新集群)**:口令从第一天就在 Secret 里,Redis 带 `--requirepass` 起来,C++ Pod 第一次启动就拿到它 —— 没有滚动、
-  没有人被踢、没有作废的局。staging / prod 必须设 `MMORPG_REDIS_PASSWORD`(≥12 位);dev 档设了同样生效。
+只有 scene 连 Redis(缺口第 34 条第 3 批):控制域一条(`control_redis`),玩家域一条(`player_redis`)。gate、battle 不连 Redis:
+它们的 `node-config` / `battle-node-config` 不写任何 Redis 段,工作负载不注入 Redis 口令、不带 Redis 指纹。
+
+- **地址与口令从哪来**:
+  - `control_redis` 取控制端点(`Get-ControlRedisEndpoint`)。开了控制集群(staging / prod 必须开)是 `mode: cluster` 与 `redis-control-{0,1,2}.<InfraNamespace>:6379`
+    三个种子,口令出自 Secret `redis-control-auth`(部署输入 `MMORPG_CONTROL_REDIS_PASSWORD`);没开(只有 dev)是 `mode: standalone` 与核心
+    `redis.<InfraNamespace>:6379`,口令出自 `redis-auth`(`MMORPG_REDIS_PASSWORD`)。Go 服务与 gateway 的控制域取的是同一个端点、同一个口令。
+  - `player_redis` 只在开了玩家域集群时写(种子 `redis-player-{0,1,2}`,口令出自 `redis-player-auth`);不写时 scene 沿用 `control_redis` 的地址与口令,
+    仍是一个独立的客户端。开控制集群必须同时开玩家域集群(`Assert-RedisClusterPairing`),所以玩家域不会落到控制集群上。
+- **口令怎么到达 C++(Secret + secretKeyRef)**:`node-config` 里两段的 `password` 一律写空串;scene Pod 用 `secretKeyRef` 从**本 namespace** 的 Secret
+  拿 `CONTROL_REDIS_PASSWORD`(与 `PLAYER_REDIS_PASSWORD`),`config.cpp` 用它们覆盖 yaml(值不进日志)。`secretKeyRef` 不写 `optional`:Secret 缺失时
+  Pod 停在 `CreateContainerConfigError`,不会带着空口令起来。
+  - Secret 在 infra namespace 由 `Apply-Infra` 先于 Redis 服务端建好;每个 zone namespace 的同名副本在 `Apply-Zone` 开头建(先于 scene;Secret 不能跨 namespace 引用)。
+    值经 `Apply-InjectedSecret` 写入,`-DryRun` 只打一行 `# Secret <名> (key password; value hidden)`。
+  - dev 档没设口令时是空串:不注入口令变量,C++ 不发 AUTH。
+- **C++ 的行为**:口令非空时每条新连接(含断线重连;集群下是每个主节点一条)先 `AUTH`,回 `+OK` 才对业务可见。被拒、发不出去或超时一律 fail-closed:
+  每个重连周期重试一次,打带 `metric=zone_redis_auth_failed` 的 ERROR,进程不退出。成功时打 `Redis AUTH ok to <host:port>`,不打口令。
+- **生成期保护**:非 dev 档口令为空,或口令含 `"`、`\`、换行与其它控制字符,在任何 `kubectl` 写操作之前拒绝,报错只点变量名、不回显值。
+- **指纹注解**:scene 的 Pod 模板恒带 `mmorpg.io/control-redis-config-hash`(哈希控制端点的形态、种子与口令),开了玩家域集群另带
+  `mmorpg.io/player-redis-config-hash`。C++ 只在启动时读这两段与口令,指纹把「换地址或换口令」变成 Pod 模板变化,apply 即滚动:
+  Deployment 形态的 scene 迁走玩家;Agones Fleet 新建 GameServerSet,已 Allocated 的实例打完才退,期间一直用启动时拿到的旧口令。
+  旧 Pod 用旧口令能不能继续工作,取决于 Redis 是否同时认新旧两个口令,所以换口令按下面的**双口令轮换**做,不要直接替换。
+- **首次部署(未上线前的全新集群)**:口令从第一天就在 Secret 里,Redis 带口令起来,scene 第一次启动就拿到它。staging / prod 必须设
+  `MMORPG_CONTROL_REDIS_PASSWORD` 与 `MMORPG_PLAYER_REDIS_PASSWORD`,核心单实例还在部署时也要 `MMORPG_REDIS_PASSWORD`。
+  已在运行、Redis 还没开口令的旧环境(只剩本机 / dev 的存量)不做在线开口令:`infra-down` 后带口令重建。
 - **换口令:双口令轮换**(Redis 6+ 的 ACL 允许一个用户同时有多个口令,`requirepass` 就是 `default` 用户的口令;**未在本仓库实测**,步骤按 Redis 文档写):
-  1. 在每个用这个口令的 Redis 进程上**加**新口令,旧口令仍有效:核心 `redis-0`(高可用形态是 `redis-0..2`)、`redis-queue-g<N>`、`redis-ctl-g<N>`。
-     口令经 `REDISCLI_AUTH` 交给 redis-cli,不上命令行参数、不进 shell 历史(写法同 `k8s_gate_drain.ps1` 的 `Invoke-GateDrainRedis`):
-     `ACL SETUSER default >新口令`。高可用形态还要让主从复制与哨兵也认新口令:每个数据节点 `CONFIG SET masterauth 新口令`,
-     每个哨兵 `SENTINEL SET mymaster auth-pass 新口令`(哨兵会写回自己的配置文件);哨兵自己的访问口令同样 `ACL SETUSER default >新口令`,
-     哨兵之间互认的口令 `SENTINEL CONFIG SET sentinel-pass 新口令`。
-  2. 用新的 `MMORPG_REDIS_PASSWORD` 跑 `infra-up` 与各 zone 的 `zone-up`:Secret `redis-auth`(infra 与每个 zone)换成新口令,C++ 指纹变化,
-     工作负载按上一条各自的方式换上新口令;旧 Pod 在退场之前继续用旧口令,不会 NOAUTH。`redis.yaml` 的 Pod 模板不含口令(Secret 引用),
-     这一步**不重启 Redis**,重启闸判 unchanged。Go 服务、mail 与 gateway 的 ConfigMap 不变,Pod 模板上的 `mmorpg.io/shared-redis-auth-hash` 变化,
-     apply 即按各自 Deployment 的滚动策略换上新口令(见下一节)。
-  3. 等所有旧 Pod 都退场:Deployment 滚动完成;Agones 的旧一代 GameServerSet 里没有 Allocated 实例
-     (`kubectl -n <ns> get gs -L agones.dev/fleet,agones.dev/gameserverset`);external gate 都已排空换新。
-     高可用形态的代理(haproxy)在启动时从 Secret 读健康检查用的口令,要 `kubectl -n <infra> rollout restart deployment/redis-proxy`
-     (按用途拆出的实例同理:`redis-queue-g<N>-proxy`、`redis-ctl-g<N>-proxy`)并等它们就绪;不滚的话第 4 步之后代理把所有后端判下线 = 全服断 Redis。
+  1. 在每个用这个口令的 Redis 进程上**加**新口令,旧口令仍有效。口令经 `REDISCLI_AUTH` 交给 redis-cli,不上命令行参数:`ACL SETUSER default >新口令`。
+     - Redis Cluster(`redis-control`、`redis-player`):每个节点 `<集群名>-0..N`,主和从都要;从节点连主用 `masterauth`,每个节点再 `CONFIG SET masterauth 新口令`。
+     - 核心 `redis-0`(高可用形态是 `redis-0..2`):数据节点同上;哨兵 `SENTINEL SET mymaster auth-pass 新口令`,哨兵自己的访问口令 `ACL SETUSER default >新口令`,
+       哨兵之间互认的口令 `SENTINEL CONFIG SET sentinel-pass 新口令`。
+  2. 用新口令跑 `infra-up` 与各 zone 的 `zone-up`:对应的 Secret(infra 与每个 zone)换成新口令,scene 与 Go 服务、gateway 的指纹变化,按各自的方式换上新口令,
+     旧 Pod 在退场之前继续用旧口令。集群与核心的 Pod 模板不含口令(Secret 引用),这一步**不重启 Redis**。
+  3. 等所有旧 Pod 都退场:Deployment 滚动完成;Agones 的旧一代 GameServerSet 里没有 Allocated 实例(`kubectl -n <ns> get gs -L agones.dev/fleet,agones.dev/gameserverset`)。
+     核心高可用形态的代理在启动时读口令,要 `kubectl -n <infra> rollout restart deployment/redis-proxy` 并等它就绪,否则第 4 步之后代理把后端全判下线。
   4. 删旧口令,两种做法选一种:
-     - **计划内轮换(推荐)**:不手工删,留到下一次 Redis 的维护窗口重启 —— Redis 按 Secret 里的新口令起来,运行时加的旧口令不落盘、自然消失;
-       同 Pod 里的 `redis-exporter` sidecar 也是启动时读口令的,同一次重启一起换上新口令。
-     - **口令泄露,要立刻作废**:在第 1 步的每个进程上 `ACL SETUSER default <旧口令`(哨兵同理)。代价是 `redis-exporter` sidecar 还拿着旧口令,
-       在下一次 Redis 重启之前抓不到指标、`RedisDown` 会响(它只能随 Redis Pod 一起重启,要过重启闸)。
-  - 第 1~4 步之间 Redis 进程要是重启了,它只按 Secret 当时的值起来(运行时加的口令不落盘):第 2 步之前重启 = 只认旧口令(还没人用新口令,无害,重做第 1 步);
-    第 2 步之后重启 = 只认新口令,还没退场的旧 Pod 会 NOAUTH。所以轮换期间不跑会重启 Redis 的变更,万一重启了就对它重做第 1 步(加回旧口令)。
-  - 轮换前后核对:每个 C++ 节点日志 `Redis AUTH ok to <host:port>`,不再有 `metric=zone_redis_auth_failed`;Redis 的 `INFO errorstats` 里 NOAUTH 计数不再增长。
-- **给已在运行、Redis 还没开口令的旧环境开口令**(只剩本机 / dev 的存量集群会遇到;更简单的做法是 `infra-down` 后带口令重建),维护窗口内做:
-  1. 先发带 AUTH 的 C++ 镜像(第一批)。旧二进制不认口令,Redis 一开口令就全线 NOAUTH,所以镜像必须先行;
-     新镜像配空口令时行为与今天相同,可以提前滚。
-  2. 维护窗口内带 `MMORPG_REDIS_PASSWORD` 重跑 `infra-up`(建 infra 的 Secret `redis-auth`,battle 带上 `ZONE_REDIS_PASSWORD`)与各 zone 的
-     `zone-up`(建 zone 的 Secret 副本,gate / scene 带上口令环境变量)。staging / prod 必须设该变量(≥12 位);dev 档设了同样生效。
-  3. **前置(只针对 `-SceneOrchestrator agones` / `-BattleOrchestrator agones`)**:重启 Redis 之前,确认每个 Fleet 都只剩当前这一代
-     GameServerSet(旧的已删除,或 DESIRED 与 CURRENT 都是 0),而且旧一代里没有 Allocated 实例。**先等 Fleet 滚动结束再查**:
-     SceneManager 分配时只按 zone / role / build 标签选、不分代,第 2 步只改配置时 build 标签不变,滚动中旧一代的 Ready 实例在你查完之后、
-     Redis 重启之前仍可能被分配出去。Fleet 名:scene(拆分池时是 scene-world 与 scene-instance)在各 zone namespace,battle 在 InfraNamespace:
-     ```bash
-     kubectl -n <ns> get gameserverset -L agones.dev/fleet                               # 每个 Fleet 只应剩一行(或旧的 DESIRED/CURRENT 为 0)
-     kubectl -n <ns> get gs -L agones.dev/fleet,agones.dev/gameserverset                 # 不按 Fleet 名过滤,免得填错名字查出空结果
-     ```
-     旧一代里的 Allocated 实例启动时没有口令(或是第 1 步之前的旧二进制 —— 它们根本不认口令),Redis 带口令起来后
-     会一直 fail-closed 或 NOAUTH 到实例退出;battle 在空口令时还会把 NOAUTH 当成「已销账」删掉结算外发箱条目(`BattleRoomManager::ProbeAndRetryOne`,
-     交接 handoff-global-singletons-p0-20261015.md §3 第 7 条那张卡片)。高密度 scene 只要还有房间就一直 Allocated,等它自己退出可能永远等不到,
-     所以维护窗口里要**主动删除**这些旧实例(`kubectl -n <ns> delete gs <名字>`;代价:scene 迁走 / 断开实例上的玩家,battle 作废在打的局),
-     删干净再往下走。Deployment 形态没有这个问题。
-     然后手动重启 Redis(首次开口令必须做):`kubectl -n <InfraNamespace> rollout restart statefulset/redis`。`--requirepass` 只在容器启动时从
-     Secret 读,脚本只建 / 更新 Secret,不重启 Redis。重启 = 一次 Redis 停机(在线会话与锁清空)。
-  4. C++ Pod 因指纹注解变化自动滚动 —— 只对 Deployment 和 Fleet 里**未分配**的实例成立(Allocated 的旧实例按第 3 步前置处理,external gate
-     按上一条手动排空)。用新模板起来、但早于 Redis 带口令重启的 Pod,发出的 AUTH 会被还没设口令的 Redis 拒绝,按重连间隔重试,
-     Redis 带口令起来后自行恢复(这一段未实测)。
-  - **通过标准**:每个 C++ 节点日志都出现 `Zone Redis auth: on` 与 `Redis AUTH ok to <host:port>`,之后不再有 `metric=zone_redis_auth_failed`;
-    Redis 的 `INFO errorstats` 里 NOAUTH 计数不再增长。
-  - 开口令是「从无到有」,做不了双口令:Redis 在无口令时对两参数的 `AUTH <口令>` 直接报错,所以只能按上面在维护窗口里切。
-    换口令走上面的双口令轮换,不要再走这里。
-  - Service `redis` 不得重建:C++ 只在启动时解析一次地址。
-- **取值待实测 / 压测复核**:Secret 下发、指纹注解、双口令轮换与上面的步骤都没有在集群上跑过;部署脚本与契约测试未经 Codex 运行。
-- 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的 3a 节(`zone Redis 口令…`、`zone Redis 口令契约…`、`Sync-RedisAuthSecret…`)
-  与 battle 段(`battle:带口令的 infra-up…`),`tools/scripts/tests/k8s_client_entry_contract.tests.ps1` 的「库:-PodAnnotations 与 sidecar 配置指纹…」
-  与「库:-SecretEnv 渲染成 secretKeyRef…」。
+     - **计划内轮换(推荐)**:不手工删,留到下一次 Redis 维护重启。Redis 按 Secret 里的新口令起来,运行时加的旧口令不落盘、自然消失;
+       同 Pod 的 `redis-exporter` sidecar 也是启动时读口令的,同一次重启一起换上新口令。
+     - **口令泄露,要立刻作废**:在第 1 步的每个进程上 `ACL SETUSER default <旧口令`(哨兵同理)。代价是 `redis-exporter` 在下一次 Redis 重启之前抓不到指标。
+  - 第 1~4 步之间 Redis 进程重启了,它只按 Secret 当时的值起来:第 2 步之前重启 = 只认旧口令(无害,重做第 1 步);第 2 步之后重启 = 只认新口令,
+    还没退场的旧 Pod 会 NOAUTH,对它重做第 1 步(加回旧口令)。所以轮换期间不跑会重启 Redis 的变更。
+  - 核对:每个 scene 日志 `Redis AUTH ok to <host:port>`,不再有 `metric=zone_redis_auth_failed`;各节点 `INFO errorstats` 的 NOAUTH 计数不再增长。
+- **未验证**:Secret 下发、指纹注解与双口令轮换都没有在集群上跑过;部署脚本与契约测试未经 Codex 运行。
+- 契约测试:`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的 3a 节(C++ 节点的 Redis 口令)与 battle 段(battle 不连 Redis),
+  `tools/scripts/tests/redis_player_cluster_contract.tests.ps1` 的「两套都开的 zone-up」,`tools/scripts/tests/k8s_client_entry_contract.tests.ps1` 的
+  「库:-PodAnnotations 与 sidecar 配置指纹…」与「库:-SecretEnv 渲染成 secretKeyRef…」。
 
 ## Go 服务与 gateway 的共享 Redis 口令(2026-11-06,docs/handoff/handoff-global-singletons-p0-20261015.md §9)
 
-与上一节 C++ 用同一个口令(`MMORPG_REDIS_PASSWORD`)、同一份 Secret `redis-auth`(键 `password`),遵循同一条标准:口令不进 ConfigMap,也不进 DryRun 输出。
-「共享 Redis」指核心实例 `redis.<InfraNamespace>`,以及按用途拆出的 `redis-queue-g<N>`、`redis-ctl-g<N>`。玩家域 Redis Cluster
-(`MMORPG_PLAYER_REDIS_PASSWORD`,Secret `redis-player-auth`)和 match 独占集群不在本节。
+与上一节 C++ 遵循同一条标准:口令不进 ConfigMap,也不进 DryRun 输出。口令来源按服务分(`Get-SharedRedisClientSource`,缺口第 34 条第 6b-1 批):
+控制域客户端(`$script:ControlRedisClientServices`:login、data-service、player-locator、scene-manager、friend、trade、guild、player-inbox 与 gateway)取控制端点,
+开了控制集群(staging / prod)是 `MMORPG_CONTROL_REDIS_PASSWORD` → Secret `redis-control-auth`,没开(dev)是 `MMORPG_REDIS_PASSWORD` → `redis-auth`;
+match 的 `Redis` 段与 mail 的回落段指向核心单实例,取 `redis-auth`。玩家域集群的 `PlayerRedis.PasswordEnv`(`PLAYER_REDIS_PASSWORD`,Secret `redis-player-auth`)
+和 match 独占集群不在本节。
 
 - **Go 服务**(`k8s_deploy.ps1` 的 `$script:SharedRedisAuthGoServices`:login、data-service、player-locator、scene-manager、match、trade、friend、player-inbox、guild):
-  - ConfigMap 里共享 Redis 段的口令一律写空串。涉及的段:login 的 `Node.RedisClient` / `Node.QueueRedis`;data-service 的 `NameCacheRedis` / `SharedRedis`;
-    player-locator 的 `RedisClient`;scene-manager 的 `Redis` / `CoreRedis`;match 与 friend 的 `Redis`;trade 的 `SharedRedis`;player-inbox 的 `CoreRedis`;
-    guild 的 `RedisClient` / `PlayerLocatorRedis`。口令非空时,配置末尾多一行顶层 `SharedRedisPasswordEnv: SHARED_REDIS_PASSWORD`。
-  - 容器经 `secretKeyRef`(不写 `optional`)从本 namespace 的 Secret `redis-auth` 拿 `SHARED_REDIS_PASSWORD`。全局服务在 infra namespace,Secret 由 `Apply-Infra`
-    的 Redis 分支先建好;zone 级服务在 zone namespace,`Apply-Zone` 开头先建副本。
+  - ConfigMap 里各 Redis 段的口令一律写空串。涉及的段:各控制域客户端的 `ControlRedis`(`New-ControlRedisConfigYaml` 渲染,地址取控制端点);login 另有本机回落段
+    `Node.RedisClient`(写核心地址;dev 没开玩家域集群时玩家域与登录域落在它上面);match 的 `Redis`。口令非空时,配置末尾多一行顶层 `SharedRedisPasswordEnv: SHARED_REDIS_PASSWORD`。
+  - 容器经 `secretKeyRef`(不写 `optional`)从本 namespace 的那份 Secret 拿 `SHARED_REDIS_PASSWORD`。全局服务在 infra namespace,Secret 由 `Apply-Infra`
+    先建好;zone 级服务在 zone namespace,`Apply-Zone` 开头先建副本。
   - 进程启动时,`go/shared/redisauth` 把这个变量的值填进上面各段。时机是迁移分支之后、建任何 Redis 客户端之前;迁移 Job 不连 Redis,也不注入这个变量。
     配置指名了变量但变量没有值,或某段同时写了口令字面量,进程都拒绝启动,报错只点键名与变量名。本机 `etc/*.yaml` 不写这个键,照旧用字面量。
     guild 的运维工具 `cmd/assetopfix` 在 guild Pod 里跑时,同样从这个变量拿口令。
@@ -2556,7 +2422,8 @@ C++ 节点(gate / scene / battle)连共享 Redis(`redis.<InfraNamespace>:6379`)�
 - **gateway**:`spring.data.redis.password` 只写 `"${SHARED_REDIS_PASSWORD}"`,容器同样经 `secretKeyRef` 拿值。引用不带缺省值:变量缺失时 `@Value` 解析失败,
   gateway 拒启,而不是按空口令起来、让限流静默 fail-open。口令为空时不写这一行,与之前相同。
 - **mail**:ConfigMap 里早就没有口令(`SharedRedisPasswordEnv: MMORPG_MAIL_REDIS_PASSWORD`,manifest 里对 `redis-auth` 的引用是 `optional: true`)。本批只给它补上指纹注解。
-- **换口令自动滚动**:口令非空时,上面这些工作负载的 Pod 模板都带 `mmorpg.io/shared-redis-auth-hash`(只哈希口令,`Add-SharedRedisAuthToManifest`)。
+- **换口令自动滚动**:口令非空时,上面这些工作负载的 Pod 模板都带 `mmorpg.io/shared-redis-auth-hash`(只哈希口令,`Add-SharedRedisAuthToManifest`;
+  来源是控制集群与核心时用途串不同,所以换来源那一次也滚动)。
   只改 Secret 时 ConfigMap 和 Pod 模板都不变,apply 什么也不做;有了指纹,换口令就变成模板变化,apply 即滚动。
   轮换仍按上一节的双口令步骤做,旧 Pod 退场之前,Redis 两个口令都认。gateway 原有的削峰指纹仍把口令算在输入里(只在限流开着时有),与这条并存。
 - **dev 档没设口令**:各段写空串,不写 `SharedRedisPasswordEnv`,不注入变量,不写指纹,产物与改走 Secret 之前逐字相同。
@@ -2956,6 +2823,7 @@ login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:�
 
 - `deploy/k8s/login-alerts.yaml`(组 `login.gate-pick`),2 条:`LoginGatePickFallbackStale`(critical,reason 为 stale:本 zone 的 gate 全部停写,新登录多半连不上)、`LoginGatePickFallbackDegraded`(warning,reason 为 draining / full / mixed:没有完全合格的 gate,在连得上的里挑;draining 多半是整个 zone 被误标排空,full 是有人没经过区级准入:排队关着、重连豁免或人数上报滞后,2026-11-10 起排队开着时区容量已按 gate 承载封顶)。
 - 同文件组 `login.queue-capacity`(2026-11-10 起),1 条:`LoginQueueCapacityLimitedByGates`(warning,for 10m:排队实际用的区容量 `login_queue_capacity` 被本 zone 在接客的 gate 到水位的承载压到区服目录的 `zone_config.capacity`(`login_queue_configured_capacity`)以下,gate 副本不够目录里的容量;每台 20000 到水位 18000,区容量 45000 至少要 3 台)。排队关着时没有这两个 gauge,不响。
+- 同文件组 `login.role-list`(2026-11-19 起),1 条:`LoginRoleListHomeZoneFallbackSustained`(warning,for 10m:login 返回角色列表时补归属的 `BatchGetPlayerHomeZone` 持续整次失败,只能保留建角时的 zone,合服后的角色会显示旧区;data_service 整个连不上时只有这条看得见)。
 - `deploy/k8s/scene-manager-alerts.yaml` 加组 `scene-manager.gate-redirect`,1 条:`SceneManagerGateRedirectFallback`(warning,跨 zone 重定向时目标 zone 没有完全合格的 gate;目标 zone 的 gate 全卡住时由 login 那条 critical 呼人,这条不重复呼)。
   ```bash
   kubectl apply -n observability -f deploy/k8s/login-alerts.yaml
@@ -2992,7 +2860,7 @@ login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:�
 
 归属和落点只在目录 `player_route` 一份(按玩家分片),data_service 直接 SQL 读写,提交即完成;合服只写 `zone_merged_into` 一条映射,各服务定时重读。没有 Redis 副本、对账 leader、就绪标记,部署脚本也没有路由开关(设计见 `docs/design/player-route-mapping-durability-proposal.md` §15,合服见 `docs/ops/merge-zone-runbook.md`)。
 
-- **data-service ConfigMap**:`RouteStore` 段只有 `MaxOpenConn`、`MaxIdleConn`、`MergedZoneRefreshSec`,都镜像服务 yaml;`NameCacheRedis` 必填,只放可丢弃的名字读缓存。
+- **data-service ConfigMap**:`RouteStore` 段只有 `MaxOpenConn`、`MaxIdleConn`、`MergedZoneRefreshSec`,都镜像服务 yaml;`ControlRedis` 段必填(名字读缓存与 GM 回收的落地唤醒都在控制域,地址取控制端点),名字缓存只放可丢弃的数据。
 - **告警**:`deploy/k8s/data-service-route-alerts.yaml`,与 `owner-epoch-alerts.yaml` 同法安装,抓取前提写在文件头。`DataServiceRouteReadErrors`、`DataServiceRouteRegisterFailures` 是 critical;合服映射刷新失败四个服务各一条 warning:`DataServiceMergedZoneRefreshFailing`、`MatchMergedZoneRefreshFailing`、`GuildMergedZoneRefreshFailing`、`TradeMergedZoneRefreshFailing`。
   ```bash
   kubectl apply -n observability -f deploy/k8s/data-service-route-alerts.yaml

@@ -153,11 +153,6 @@
     # 语义见 k8s_deploy.ps1 参数注释(P0-E 重启闸);switch 只在被指定时透传,只在维护窗口里显式加。
     # 只对会 apply infra 的入口有意义:k8s-infra-up、k8s-all-up、k8s-release-all(均不带 -SkipInfra)。
     [switch]$ConfirmRedisCoreRestart,
-    # 共享 Redis 的形态(1 = 单实例 redis.yaml,3 = 高可用 redis-ha.yaml;0 = 不透传,由 k8s_deploy.ps1 按档位取),透传给
-    # k8s_deploy.ps1 / k8s_image.ps1 同名参数,语义见 k8s_deploy.ps1 参数注释。非 0 才透传。zone 入口(k8s-zone-up 等)通常不用传:
-    # 它决定 db / data-service 的 WAITAOF 副本份数,k8s_deploy.ps1 的 zone-up 没收到时跟随线上 sts/redis,收到而与线上不同即拒绝。
-    [ValidateRange(0, 3)]
-    [int]$RedisReplicas = 0,
     # k8s-redis-wipe 的显式确认(压测前清空部署拓扑里的每个 Redis 实例,AGENTS.md §6.2),透传给 k8s_deploy.ps1 -Command redis-wipe;
     # 那边还要求 -InfraNamespace 匹配 ^mmorpg-stress-。switch 只在被指定时透传。
     [switch]$ConfirmWipeAllRedis,
@@ -352,7 +347,11 @@
     [string]$LoginAppleClientId = "",
     [string]$LoginAppleEndpoint = "",
     [string]$LoginGoogleClientId = "",
-    [string]$LoginGoogleEndpoint = ""
+    [string]$LoginGoogleEndpoint = "",
+    # 注销账号时撤销 Apple 令牌的 Team ID / Key ID,透传给 k8s_deploy.ps1 同名参数,口径同上面四个;私钥 PEM 读环境变量
+    # MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY,不经参数,规则只在 k8s_deploy.ps1。追加在末尾,理由同上。
+    [string]$LoginAppleTeamId = "",
+    [string]$LoginAppleKeyId = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -861,13 +860,14 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleEndpoint)) { $args.LoginAppleEndpoint = $LoginAppleEndpoint }
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleClientId)) { $args.LoginGoogleClientId = $LoginGoogleClientId }
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $args.LoginGoogleEndpoint = $LoginGoogleEndpoint }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleTeamId)) { $args.LoginAppleTeamId = $LoginAppleTeamId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleKeyId)) { $args.LoginAppleKeyId = $LoginAppleKeyId }
     if ($ConfirmLoginAuthProviderChange) { $args.ConfirmLoginAuthProviderChange = $true }
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     # 共享 Redis 重启闸的确认(P0-E),同一口径:switch 只在被指定时传。
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 共享 Redis 的形态:非 0 才传(0 = k8s_deploy.ps1 按档位取)。
-    if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
     # k8s-redis-wipe 的确认,同一口径。准入(namespace 规则 + 确认)只在 k8s_deploy.ps1 的 Invoke-RedisWipe 判。
     if ($ConfirmWipeAllRedis) { $args.ConfirmWipeAllRedis = $true }
     # 玩家域与控制两套 Redis Cluster:非 0 / 非空才传。档位规则与变更闸只在 k8s_deploy.ps1(Assert-RedisClusterPreflight)。
@@ -1048,6 +1048,8 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleEndpoint)) { $notForwarded += '-LoginAppleEndpoint' }
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleClientId)) { $notForwarded += '-LoginGoogleClientId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $notForwarded += '-LoginGoogleEndpoint' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleTeamId)) { $notForwarded += '-LoginAppleTeamId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAppleKeyId)) { $notForwarded += '-LoginAppleKeyId' }
     if ($ConfirmLoginAuthProviderChange) { $notForwarded += '-ConfirmLoginAuthProviderChange' }
     if ($notForwarded.Count -gt 0) {
         throw "k8s-image-* / k8s-release-* 不支持 $($notForwarded -join ', '):k8s_image.ps1 不部署 Go / Java 服务,也不支持 Agones 高密度 / FleetAutoscaler。请改用 k8s-infra-up / k8s-zone-up / k8s-all-up(直接调 k8s_deploy.ps1)。"
@@ -1068,6 +1070,7 @@ function Invoke-K8sImage {
         ZoneName = $ZoneName
         ZoneId = $ZoneId
         NamespacePrefix = $NamespacePrefix
+        InfraNamespace = $InfraNamespace
         OpsProfile = $OpsProfile
         CentreReplicas = $CentreReplicas
         GateReplicas = $GateReplicas
@@ -1126,7 +1129,6 @@ function Invoke-K8sImage {
     # release-all(不带 -SkipInfra)会 infra-up,共享 Redis 重启闸的确认同一口径透传。
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 共享 Redis 的形态同一口径:非 0 才传。
-    if ($RedisReplicas -gt 0) { $args.RedisReplicas = $RedisReplicas }
     # 玩家域 Redis Cluster 同一口径:scene 的 player_redis 由它决定,staging / prod 发版必须给主节点数。控制集群同样必须给。
     if ($PlayerRedisMasters -gt 0) { $args.PlayerRedisMasters = $PlayerRedisMasters }
     if ($PlayerRedisReplicasPerMaster -gt 0) { $args.PlayerRedisReplicasPerMaster = $PlayerRedisReplicasPerMaster }

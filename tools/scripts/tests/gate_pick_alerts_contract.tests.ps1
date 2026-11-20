@@ -237,4 +237,26 @@ Test-Case 'login-alerts.yaml:login.gate-health 组两条持续型规则,引用�
     }
 }
 
+Test-Case 'login-alerts.yaml:login.role-list 组只有 LoginRoleListHomeZoneFallbackSustained,引用的计数由 homezone 注册' {
+    $group = Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.role-list'
+    Assert-Match -Text $group -Pattern '(?m)^      interval:[ ]*30s[ ]*$' -Because '评估间隔'
+    $rules = @(Get-AlertRules -GroupText $group)
+    Assert-Equal -Expected 'LoginRoleListHomeZoneFallbackSustained' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
+    $rule = $rules[0]
+    Assert-Match -Text $rule.Body -Pattern '(?m)^            severity:[ ]*warning[ ]*$' -Because '登录照常放行,只是归属可能显示旧区'
+    foreach ($field in @('summary', 'description', 'runbook_url')) {
+        Assert-Match -Text $rule.Body -Pattern ('(?m)^            {0}:' -f $field) -Because "要有 $field"
+    }
+    Assert-Match -Text $rule.Body -Pattern '(?m)^          for:[ ]*10m[ ]*$' -Because '单次超时不报,持续 10 分钟才报'
+    $expr = Get-RuleExpr -Body $rule.Body
+    Assert-Match -Text $expr -Pattern '\brate\(login_role_list_home_zone_fallback_total\[5m\]\)' -Because '按持续速率判'
+    $source = Read-RepoText -RelativePath 'go/login/internal/logic/pkg/homezone/homezone.go'
+    Assert-Match -Text $source -Pattern '(?m)^\s*Name:\s*"login_role_list_home_zone_fallback_total",' -Because '计数由 homezone 注册(改名后告警静默失效)'
+
+    $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
+            ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
+        } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
+    Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginRoleListHomeZoneFallbackSustained' })).Count -Because '告警名不重名'
+}
+
 exit (Complete-TestRun -SuiteName 'gate_pick_alerts_contract')

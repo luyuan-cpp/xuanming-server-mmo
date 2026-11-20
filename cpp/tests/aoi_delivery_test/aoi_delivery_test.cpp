@@ -36,6 +36,7 @@
 #include "spatial/system/actor_motion.h"
 #include "spatial/system/aoi_load.h"
 #include "spatial/system/facing.h"
+#include "spatial/system/movement.h"  // ActorMoveBatch
 #include "spatial/system/view.h"
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
@@ -689,19 +690,20 @@ TEST_F(AoiDeliveryTest, FollowRejectsSelfAndOtherSceneTargets) {
 // ---------------------------------------------------------------------------
 // 空间关注按距离重判(2026-11-10 冒烟回归):进视野 ≤ 视野半径、出视野 > 离开半径,
 // 任一方位置变化后重新评估,不再只在跨格那一刻判距离。口径见 spatial/constants/view.h。
-// 下面的坐标都取在 x = 0 的竖线上并避开格边(y = ±17.32、±51.96…),格子关系用前置断言写明。
+// 下面的坐标都取在 x = 0 的竖线上并避开格边(格子尺寸 50:y = ±43.30、±129.90…),格子关系用前置断言写明。
+// 视野半径(50)等于格子尺寸,从格心出发同格内够不到视野外,所以"同格却看不见"的两人分站格心两侧。
 // ---------------------------------------------------------------------------
 
-// 冒烟复现:两人同在一格、相距 14,之后走到 5 m。修复前同格内移动不再判距离,永远互相看不见。
+// 冒烟复现:两人同在一格、相距 60,之后走到 5 m。修复前同格内移动不再判距离,永远互相看不见。
 TEST_F(AoiDeliveryTest, ApproachWithinSameGridEntersViewWithoutCrossing) {
-    const auto stationary = Spawn(0, 0);
-    const auto walker = Spawn(0, 14);
+    const auto stationary = Spawn(0, -30);
+    const auto walker = Spawn(0, 30);
     AoiSystem::Update(0);
     ASSERT_EQ(0, hex_distance(HexOf(stationary), HexOf(walker))) << "前置条件:同一格";
-    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:相距 14,超出视野半径";
+    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:相距 60,超出视野半径";
     deliveries.clear();
 
-    MoveTo(walker, 0, 5);
+    MoveTo(walker, 0, -25);
     AoiSystem::Update(0);
 
     EXPECT_EQ(1, CreatesFor(stationary, walker)) << "静止的一方也收到走近者的创建";
@@ -718,21 +720,22 @@ TEST_F(AoiDeliveryTest, ApproachWithinSameGridEntersViewWithoutCrossing) {
 // 早已是邻格、不在「新进入的格子」里,不会再判,走到跟前也看不见。
 TEST_F(AoiDeliveryTest, CrossIntoGridsWithDistantNeighbourThenApproachEntersView) {
     const auto stationary = Spawn(0, 0);
-    const auto walker = Spawn(0, 120);
+    const auto walker = Spawn(0, 200);
     AoiSystem::Update(0);
     ASSERT_GT(hex_distance(HexOf(stationary), HexOf(walker)), 1) << "前置条件:起点不在邻格";
 
-    MoveTo(walker, 0, 30);
+    MoveTo(walker, 0, 100);
     AoiSystem::Update(0);
     ASSERT_EQ(1, hex_distance(HexOf(stationary), HexOf(walker))) << "前置条件:跨进了以对方所在格为邻格的格子";
-    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:相距 30,超出视野半径";
+    ASSERT_TRUE(VisibleWatchersOf(walker).empty()) << "前置条件:相距 100,超出视野半径";
     deliveries.clear();
 
-    MoveTo(walker, 0, 20);
+    MoveTo(walker, 0, 60);
     AoiSystem::Update(0);
-    EXPECT_TRUE(deliveries.empty()) << "相距 20 仍在视野外";
+    EXPECT_TRUE(deliveries.empty()) << "相距 60 仍在视野外";
 
-    MoveTo(walker, 0, 8);
+    MoveTo(walker, 0, 48);
+    ASSERT_EQ(1, hex_distance(HexOf(stationary), HexOf(walker))) << "前置条件:仍在同一个邻格里,没有再跨格";
     AoiSystem::Update(0);
     EXPECT_EQ(1, CreatesFor(stationary, walker));
     EXPECT_EQ(1, CreatesFor(walker, stationary));
@@ -817,7 +820,7 @@ TEST_F(AoiDeliveryTest, CapacityRejectedNeighbourIsAdmittedWhenSlotFreesWithoutM
     tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(observer, AoiClientCapacityComp{kAoiListCapacityMin});
     std::vector<entt::entity> farFollows;
     for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
-        farFollows.push_back(Spawn(500.0 + 50.0 * i, 500));
+        farFollows.push_back(Spawn(500.0 + 120.0 * i, 500));
     }
     AoiSystem::Update(0);
     for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
@@ -848,7 +851,7 @@ TEST_F(AoiDeliveryTest, RefillMarkWithoutFreeSlotDoesNotRescan) {
     tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(observer, AoiClientCapacityComp{kAoiListCapacityMin});
     std::vector<entt::entity> farFollows;
     for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
-        farFollows.push_back(Spawn(500.0 + 50.0 * i, 500));
+        farFollows.push_back(Spawn(500.0 + 120.0 * i, 500));
     }
     AoiSystem::Update(0);
     for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
@@ -885,7 +888,7 @@ TEST_F(AoiDeliveryTest, DistanceLeaveKeepsExplicitFollow) {
 // 重判不绕过隐身:走近的隐身目标不进普通观察者的视野。
 TEST_F(AoiDeliveryTest, ReevaluationDoesNotRevealStealthedTarget) {
     const auto observer = Spawn(0, 0);
-    const auto hidden = Spawn(0, 15);
+    const auto hidden = Spawn(0, kMaxViewRadius + 5); // 起点在视野外:隐身者"自己看见别人"要等走近才发生
     tlsEcs.actorRegistry.emplace<StealthedTagComp>(hidden);
     AoiSystem::Update(0);
     deliveries.clear();
@@ -927,31 +930,34 @@ TEST_F(AoiDeliveryTest, StealthThenRevealWithoutAnyMovementRebuildsNearbyObserve
 
 // 视野半径变了也要重判,不用等谁走动(以后的鹰眼、致盲之类会改 ViewRadius);只影响它自己看别人。
 TEST_F(AoiDeliveryTest, ViewRadiusChangeTriggersReevaluationWithoutMovement) {
+    // 默认视野已等于格子尺寸、不能再放大:两人先各给一个 20 m 的小视野,相距 30 互不可见。
     const auto observer = Spawn(0, 0);
-    const auto target = Spawn(0, 14);
+    const auto target = Spawn(0, 30);
+    tlsEcs.actorRegistry.emplace<ViewRadius>(observer).set_radius(20);
+    tlsEcs.actorRegistry.emplace<ViewRadius>(target).set_radius(20);
     AoiSystem::Update(0);
-    ASSERT_EQ(0, CreatesFor(observer, target)) << "前置条件:14 m 超出默认视野";
+    ASSERT_EQ(0, CreatesFor(observer, target)) << "前置条件:30 m 超出 20 m 视野";
 
-    tlsEcs.actorRegistry.emplace<ViewRadius>(observer).set_radius(15);
+    tlsEcs.actorRegistry.get<ViewRadius>(observer).set_radius(40);
     AoiSystem::Update(0);
-    EXPECT_EQ(1, CreatesFor(observer, target)) << "视野放大到 15 m,下一帧就看见";
+    EXPECT_EQ(1, CreatesFor(observer, target)) << "视野放大到 40 m,下一帧就看见";
     EXPECT_EQ(0, CreatesFor(target, observer)) << "对方的视野没变,关注是单向的";
 
-    tlsEcs.actorRegistry.get<ViewRadius>(observer).set_radius(5);
+    tlsEcs.actorRegistry.get<ViewRadius>(observer).set_radius(10);
     AoiSystem::Update(0);
-    EXPECT_EQ(1, DestroysFor(observer, target)) << "视野缩到 5 m,14 m 超出离开半径 10 m";
+    EXPECT_EQ(1, DestroysFor(observer, target)) << "视野缩到 10 m,30 m 超出离开半径 20 m";
 }
 
 // 同一帧里两个人先后走近同一个观察者:变化帧末合成一批,观察者只收一条列表消息,里面两个人都在。
 TEST_F(AoiDeliveryTest, SameFrameChangesForOneWatcherArriveAsOneListMessage) {
     const auto observer = Spawn(0, 0);
-    const auto north = Spawn(0, 14);
-    const auto south = Spawn(0, -14);
+    const auto north = Spawn(0, 60);
+    const auto south = Spawn(0, -60);
     AoiSystem::Update(0);
     deliveries.clear();
 
-    MoveTo(north, 0, 9);
-    MoveTo(south, 0, -9);
+    MoveTo(north, 0, 30);
+    MoveTo(south, 0, -30);
     AoiSystem::Update(0);
 
     int observerCreateMessages = 0;
@@ -963,7 +969,7 @@ TEST_F(AoiDeliveryTest, SameFrameChangesForOneWatcherArriveAsOneListMessage) {
     EXPECT_EQ(1, observerCreateMessages) << "同一帧的变化合成一条";
     EXPECT_EQ(1, CreatesFor(observer, north));
     EXPECT_EQ(1, CreatesFor(observer, south));
-    EXPECT_EQ(0, CreatesFor(north, south)) << "两人相距 18 m,彼此不在视野里";
+    EXPECT_EQ(0, CreatesFor(north, south)) << "两人相距 60 m,彼此不在视野里";
 }
 
 // ---------------------------------------------------------------------------
@@ -1058,7 +1064,7 @@ TEST_F(AoiDeliveryTest, CombatOutranksQuestNpcAndQuestNpcReturnsAfterDisengage) 
     tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(player, AoiClientCapacityComp{kAoiListCapacityMin});
     std::vector<entt::entity> questNpcs;
     for (uint32_t i = 0; i < kAoiListCapacityMin; ++i) {
-        questNpcs.push_back(Spawn(500.0 + 50.0 * i, 500));
+        questNpcs.push_back(Spawn(500.0 + 120.0 * i, 500));
     }
     const auto enemy = Spawn(0, -120);
     AoiSystem::Update(0);
@@ -1092,7 +1098,7 @@ TEST_F(AoiDeliveryTest, NearbyActorEvictedDuringCombatReturnsAfterDisengageWitho
     tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(player, AoiClientCapacityComp{kAoiListCapacityMin});
     std::vector<entt::entity> farFollows;
     for (uint32_t i = 1; i < kAoiListCapacityMin; ++i) {
-        farFollows.push_back(Spawn(500.0 + 50.0 * i, 500));
+        farFollows.push_back(Spawn(500.0 + 120.0 * i, 500));
     }
     const auto nearbyNpc = Spawn(0, 3);
     const auto enemy = Spawn(0, -120);
@@ -1243,7 +1249,7 @@ TEST_F(AoiDeliveryTest, RosterCapStopsAllyFanOutUntilASlotFrees) {
     const auto boss = SpawnNpc(0, 0);
     std::vector<entt::entity> fighters;
     for (std::size_t i = 0; i <= kMaxCombatAllyRoster; ++i) {
-        fighters.push_back(Spawn(300.0 + 50.0 * static_cast<double>(i), 300));
+        fighters.push_back(Spawn(300.0 + 120.0 * static_cast<double>(i), 300)); // 间隔大于离开半径:彼此没有空间关注
     }
     AoiSystem::Update(0);
     for (const auto fighter : fighters) {
@@ -1554,7 +1560,7 @@ TEST_F(AoiDeliveryTest, NewObserverGetsAWalkingActorsMoveRightAfterItsCreate) {
     const auto observer = Spawn(0, 0);
     GiveClient(observer);
     const auto clientless = Spawn(1, 0); // 没有客户端的观察者(NPC 之类):照常建关系,不发移动
-    const auto walker = Spawn(0, 14);
+    const auto walker = Spawn(0, kMaxViewRadius + 4);
     GiveClient(walker);
     Walk(walker, 0, -2);
     AoiSystem::Update(0);
@@ -1767,4 +1773,70 @@ TEST_F(AoiDeliveryTest, ResendVisibleTargetsAddsTheMoveOfWalkingTargetsAndSkipsE
     AoiSystem::ResendVisibleTargets(entt::null);
     EXPECT_TRUE(deliveries.empty()) << "没有显示中的目标就没有可发的";
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<AoiListComp>(loner)) << "读路径不补建关注表";
+}
+
+// ---------------------------------------------------------------------------
+// 同一 tick 的移动合批(ActorMoveBatch,team-follow-server-trail.md §4):每个接收者每批只收一条,
+// 要收同一组人的接收者共用一条消息(序列化一次、每个 gate 一个请求)。
+// ---------------------------------------------------------------------------
+
+TEST_F(AoiDeliveryTest, MoveBatchSendsOneMessagePerReceiverAndSharesItAcrossTheGroup) {
+    const auto drivenMember = Spawn(0, 0);  // 被驱动的队员:本人也收
+    const auto otherMember = Spawn(3, 0);   // 这次不带本人
+    const auto bystander = Spawn(0, 5);
+    for (const auto entity : {drivenMember, otherMember, bystander}) GiveClient(entity);
+    tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(drivenMember).set_gate_session_id(71);
+    AoiSystem::Update(0);
+    Walk(drivenMember, 9, 0);
+    Walk(otherMember, 9, 0);
+    deliveries.clear();
+    broadcasts.clear();
+
+    ActorMoveBatch batch;
+    batch.Add(drivenMember, /*includeSelf=*/true);
+    batch.Add(otherMember, /*includeSelf=*/false);
+    batch.Add(drivenMember, /*includeSelf=*/false);  // 重复登记:只发一条,带不带本人取或
+    batch.Flush();
+
+    EXPECT_TRUE(batch.Empty());
+    const std::vector<uint32_t> oneList{SceneMovementClientPlayerNotifyActorMoveListMessageId};
+    EXPECT_EQ(oneList, MessageIdsFor(bystander)) << "看得见两人:一条列表";
+    EXPECT_EQ(oneList, MessageIdsFor(drivenMember)) << "本人那条与对方那条在同一条列表里";
+    EXPECT_EQ((std::vector<uint32_t>{SceneMovementClientPlayerNotifyActorMoveMessageId}), MessageIdsFor(otherMember))
+        << "只收一个人的移动:仍是单条";
+    for (const auto receiver : {bystander, drivenMember}) {
+        EXPECT_EQ(1u, MovesFor(receiver, drivenMember).size());
+        EXPECT_EQ(1u, MovesFor(receiver, otherMember).size());
+    }
+    EXPECT_EQ(1u, MovesFor(otherMember, drivenMember).size());
+    EXPECT_TRUE(MovesFor(otherMember, otherMember).empty()) << "没带本人";
+    EXPECT_EQ(2u, broadcasts.size()) << "两组各发一次:收列表的两个接收者共用一条";
+
+    for (const auto& sent : broadcasts) {
+        if (sent.messageId != SceneMovementClientPlayerNotifyActorMoveListMessageId) continue;
+        ActorMoveListS2C list;
+        ASSERT_TRUE(list.ParseFromString(sent.body));
+        ASSERT_EQ(2, list.moves_size());
+        EXPECT_EQ(actor_net_id::Of(tlsEcs.actorRegistry, drivenMember), list.moves(0).entity()) << "按登记先后";
+        EXPECT_EQ(actor_net_id::Of(tlsEcs.actorRegistry, otherMember), list.moves(1).entity());
+        EXPECT_EQ(actor_motion::kMoveStateWalking, list.moves(0).move_state());
+    }
+}
+
+TEST_F(AoiDeliveryTest, MoveBatchOfOneIsAPlainMoveBroadcast) {
+    const auto walker = Spawn(0, 0);
+    const auto observer = Spawn(2, 0);
+    GiveClient(observer);
+    AoiSystem::Update(0);
+    Walk(walker, 0, 9);
+    deliveries.clear();
+    broadcasts.clear();
+
+    ActorMoveBatch batch;
+    batch.Add(walker, /*includeSelf=*/false);
+    batch.Flush();
+    batch.Flush();  // 空批什么都不发
+
+    EXPECT_EQ((std::vector<uint32_t>{SceneMovementClientPlayerNotifyActorMoveMessageId}), MessageIdsFor(observer));
+    EXPECT_EQ(1u, broadcasts.size());
 }

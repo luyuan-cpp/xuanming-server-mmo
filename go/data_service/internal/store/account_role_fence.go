@@ -29,6 +29,10 @@ type FenceCoordinator interface {
 	Prepare(ctx context.Context, state *rfpb.RoleFenceState) rolefence.PrepareOutcome
 	// Push 尽力推送 ApplyRoleFence,调用之后不再读写 state。丢了不要紧,副本下一次访问自愈。
 	Push(ctx context.Context, state *rfpb.RoleFenceState)
+	// DryRunBlockers 同 DryRun,另回参与者说的挂起原因(低基数枚举串)。账号注销的预检要把原因回给玩家(account_deletion.go)。
+	DryRunBlockers(ctx context.Context, state *rfpb.RoleFenceState) (rolefence.PrepareOutcome, []string)
+	// Purge 让全部参与者清这名已删除角色的个人数据(docs/design/account-deletion.md §6.1),state 必须是墓碑。全部成功才回 true。
+	Purge(ctx context.Context, state *rfpb.RoleFenceState) bool
 }
 
 // ConfigureFenceCoordinator 在装配完成、对外服务之前调用。不配的话 Begin、Transfer、Remove 一律拒绝,不能跳过参与者。

@@ -135,10 +135,18 @@ func buildBindSessionCommand(gateID string, gateInstanceID string,
 func buildKickPlayerCommand(gateID string, gateInstanceID string,
 	sessionID uint32, playerID uint64, loginGeneration uint64,
 ) (gateCommandMessage, error) {
+	return buildKickPlayerCommandWithReason(gateID, gateInstanceID, sessionID, playerID, loginGeneration, 0)
+}
+
+// buildKickPlayerCommandWithReason 同 buildKickPlayerCommand,另带给客户端看的踢线原因(reasonTip = 0 是「账号在别处登录」)。
+func buildKickPlayerCommandWithReason(gateID string, gateInstanceID string,
+	sessionID uint32, playerID uint64, loginGeneration uint64, reasonTip uint32,
+) (gateCommandMessage, error) {
 	eventPayload, err := proto.Marshal(&kafkapb.KickPlayerEvent{
 		SessionId:       sessionID,
 		PlayerId:        playerID,
 		LoginGeneration: loginGeneration,
+		ReasonTip:       reasonTip,
 	})
 	if err != nil {
 		return gateCommandMessage{}, fmt.Errorf("marshal KickPlayerEvent (session=%d): %w", sessionID, err)

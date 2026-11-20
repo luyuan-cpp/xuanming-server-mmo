@@ -57,7 +57,10 @@ func (l *RenewSessionLogic) RenewSession(in *login_proto.RenewSessionRequest) (*
 	if !kept {
 		return &login_proto.RenewSessionResponse{}, nil
 	}
-	return &login_proto.RenewSessionResponse{Renewed: true, RenewAfterSeconds: renewAfterSeconds(ttl)}, nil
+	resp := &login_proto.RenewSessionResponse{Renewed: true, RenewAfterSeconds: renewAfterSeconds(ttl)}
+	// 未成年人到点下线挂在续租上:间隔缩到截止时刻,到点踢线(docs/design/real-name-anti-addiction.md §5.4)。
+	enforceMinorDeadline(l.ctx, l.svcCtx, sessionRef, sessionDetails, resp, time.Now())
+	return resp, nil
 }
 
 // renewAfterSeconds 把续租间隔换成应答里的秒数,至少 1 秒(0 在协议里表示「没有间隔」)。

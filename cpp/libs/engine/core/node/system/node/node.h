@@ -309,11 +309,12 @@ protected:
     void InitKillSwitch();
     // 按 MMORPG_METRICS_PORT 开 Prometheus 出口(未设 = 不开;非法值拒启)。只在 Initialize 里调一次。
     void StartMetricsExporter();
-    // 起 span 导出线程并装上进程的 span 去处;没配地址(或被 OTEL_* 关掉)时什么都不起。要在 InitRpcServer 之后:
-    // 资源属性用节点类型、uuid 与 zone。
+    // 在本 loop 上起 span 导出器并装上进程的 span 去处;没配地址(或被 OTEL_* 关掉、主机名解析不了)时什么都不起。
+    // 要在 InitRpcServer 之后:资源属性用节点类型、uuid 与 zone。
     void StartSpanExporter();
-    // 摘掉进程的 span 去处,冲刷剩下的(有界),停导出线程。幂等。
-    void StopSpanExporter();
+    // 拆除时调用:第一次摘掉进程的 span 去处、开始有界冲刷;冲完(或没有导出器)返回 true 并释放导出器,否则返回 false,
+    // 调用方让一轮再来。不阻塞:冲刷要靠本 loop 推进。
+    bool FinishSpanExportInLoop();
 
     // gRPC server lifecycle (called automatically if services registered).
     void StartGrpcServer();

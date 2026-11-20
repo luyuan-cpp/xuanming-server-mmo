@@ -33,10 +33,15 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <!-- 链路追踪(docs/design/distributed-tracing.md §7):日志带 traceId / spanId,接住内网调用方的 traceparent;
-             版本由 Spring Boot BOM 管理,不加导出器 -->
+             版本由 Spring Boot BOM 管理 -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <!-- span 导出(阶段三,设计 §10.3):OTLP/HTTP 发本机 Alloy 的 4318(application.yml 的 management.otlp.tracing) -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
         </dependency>
 
         <!-- Protobuf runtime + JSON support -->

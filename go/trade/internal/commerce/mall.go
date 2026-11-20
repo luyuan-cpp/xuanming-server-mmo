@@ -13,17 +13,20 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	assetpb "proto/common/asset"
 	tradepb "proto/trade"
 	"regexp"
 	"shared/accountdirectory"
+	"shared/currencytype"
 	"shared/roleidentity"
 	"shared/tracing"
 	"strconv"
 	"strings"
 	"time"
+	"trade/internal/data"
 )
 
 // Mall只管官方库存/真实支付；本适配器保持HTTP契约隔离，不拥有第二份钱包。
@@ -34,6 +37,8 @@ type Mall struct {
 	Engine                        *Engine
 	// 仅由驱动 Tick 的单个 worker 持有；重启可从头扫描，订单唯一键继续守住原合同与 seq。
 	pollCursor string
+	// 扣回待办(付款被渠道修订的官方订单)的扫描游标,同样只归驱动 Tick 的那一个 worker。
+	reversalCursor string
 }
 type mallIntent struct {
 	OrderID            string `json:"orderId"`
@@ -47,10 +52,24 @@ type mallIntent struct {
 	Title              string `json:"title"`
 	Amount             uint64 `json:"amountMinor"`
 	Currency           string `json:"currency"`
+	// 发放物二选一:物品(Config × Count)或货币(CurrencyType × CurrencyAmount,如充值灵石包),另一种全为 0。
+	// 货币种类 0 是银两,有没有货币发放看 CurrencyAmount。
+	CurrencyType   uint32 `json:"currencyType"`
+	CurrencyAmount uint64 `json:"currencyAmount"`
 }
 type mallPollEntry struct {
 	Intent *mallIntent `json:"intent"`
 	Cursor *string     `json:"cursor"`
+	// 订单绑定付款的最新修订号(付款被渠道撤销或撤销又被撤回过),没有为 0;见 official_reversal.go。
+	PaymentRevision uint32 `json:"paymentRevision"`
+}
+
+// mallReversalEntry 是扣回待办的一项:商城要求把这张订单的发放收敛到 Revision(Entitled = 该不该持有,偶数为真)。
+type mallReversalEntry struct {
+	Intent   *mallIntent `json:"intent"`
+	Revision uint32      `json:"revision"`
+	Entitled bool        `json:"entitled"`
+	Cursor   *string     `json:"cursor"`
 }
 type mallPollPage struct {
 	Entries []mallPollEntry `json:"entries"`
@@ -302,7 +321,7 @@ func (m *Mall) Order(ctx context.Context, player uint64, id string, cancel bool)
 	return mallAnswer(out)
 }
 func mallAnswer(o MallOrder) (*tradepb.CommerceOrderResponse, error) {
-	states := map[string]tradepb.CommerceOrderState{"AWAITING_PAYMENT": 2, "DELIVERY_PENDING": 4, "DELIVERED": 5, "CANCELLED": 7, "REFUND_PENDING": 8, "REFUNDED": 9, "MANUAL": 10}
+	states := map[string]tradepb.CommerceOrderState{"AWAITING_PAYMENT": 2, "DELIVERY_PENDING": 4, "DELIVERED": 5, "CANCELLED": 7, "REFUND_PENDING": 8, "REFUNDED": 9, "MANUAL": 10, "REVERSING": 12, "REVERSED": 13}
 	state, known := states[o.State]
 	buyer, err := strconv.ParseUint(o.BuyerID, 10, 64)
 	if !known || err != nil || buyer == 0 || !mallOrderID.MatchString(o.OrderID) {
@@ -310,10 +329,29 @@ func mallAnswer(o MallOrder) (*tradepb.CommerceOrderResponse, error) {
 	}
 	return &tradepb.CommerceOrderResponse{Order: &tradepb.CommerceOrderView{OrderId: o.OrderID, Kind: 1, State: state, Version: uint64(state), BuyerPlayerId: buyer, Amount: o.Amount, Currency: o.Currency, RelatedId: strconv.FormatUint(o.SKU, 10)}, ServerNowMs: uint64(time.Now().UnixMilli())}, nil
 }
+
+// officialBundle 把意图里的发放物转成资产包:物品或货币二选一,两种都有、都没有或越界都拒绝。
+func officialBundle(in mallIntent) (*assetpb.AssetBundle, bool) {
+	switch {
+	case in.Config != 0 && in.Count != 0 && in.Count <= 4096 && in.CurrencyType == 0 && in.CurrencyAmount == 0:
+		return &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: in.Config, Count: in.Count}}}, true
+	case in.Config == 0 && in.Count == 0 && in.CurrencyAmount != 0 && in.CurrencyAmount <= math.MaxInt64 && currencytype.IsKnown(in.CurrencyType):
+		return &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: in.CurrencyType, Amount: in.CurrencyAmount}}}, true
+	}
+	return nil, false
+}
+
 func (m *Mall) accept(ctx context.Context, in mallIntent) (*tradepb.TradeCommerceRecord, error) {
+	return m.acceptRevised(ctx, in, 0)
+}
+
+// acceptRevised 找回或新建这张订单的交付合同。paymentRevision 是商城报来的付款修订号(没有为 0),只在新建时用:
+// 已有的合同原样返回,修订号由调用方另行记上(Engine.applyPaymentRevision)。
+func (m *Mall) acceptRevised(ctx context.Context, in mallIntent, paymentRevision uint32) (*tradepb.TradeCommerceRecord, error) {
 	player, err := strconv.ParseUint(in.BuyerID, 10, 64)
 	revision, revisionErr := canonicalID(in.BuyerOwnerRevision)
-	if err != nil || player == 0 || revisionErr != nil || !accountdirectory.ValidAccount(in.BuyerAccount) || !mallOrderID.MatchString(in.OrderID) || in.Config == 0 || in.Count == 0 || in.Count > 4096 || in.Quantity == 0 {
+	bundle, bundleOK := officialBundle(in)
+	if err != nil || player == 0 || revisionErr != nil || !accountdirectory.ValidAccount(in.BuyerAccount) || !mallOrderID.MatchString(in.OrderID) || !bundleOK || in.Quantity == 0 {
 		return nil, ErrInvalid
 	}
 	key := RequestKey("official", player, in.OrderID)
@@ -333,13 +371,10 @@ func (m *Mall) accept(ctx context.Context, in mallIntent) (*tradepb.TradeCommerc
 		return nil, noWrite(err)
 	}
 	now := m.Engine.now()
-	w := &tradepb.TradeCommerceWorkflow{Stage: "official_deliver", ExternalOrderSn: in.OrderID, SkuId: in.SKU, SkuQuantity: in.Quantity, ExternalAmount: in.Amount, ExternalCurrency: in.Currency, OfficialBundle: &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: in.Config, Count: in.Count}}}}
+	w := &tradepb.TradeCommerceWorkflow{ExternalOrderSn: in.OrderID, SkuId: in.SKU, SkuQuantity: in.Quantity, ExternalAmount: in.Amount, ExternalCurrency: in.Currency, OfficialBundle: bundle,
+		PaymentRevision: paymentRevision, PaymentRevoked: paymentRevision%2 == 1}
 	w.BuyerIdentity = &tradepb.TradeRoleIdentity{Account: in.BuyerAccount, OwnerRevision: revision}
-	payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(w)
-	if err != nil {
-		return nil, err
-	}
-	r := &tradepb.TradeCommerceRecord{CommerceId: id, RequestKey: key, RequestDigest: hash[:], Kind: 1, Status: Delivering, BuyerPlayerId: player, CreatedMs: now, UpdatedMs: now, Version: 1, WorkflowProto: payload}
+	r := &tradepb.TradeCommerceRecord{CommerceId: id, RequestKey: key, RequestDigest: hash[:], Kind: 1, BuyerPlayerId: player, CreatedMs: now, UpdatedMs: now, Version: 1}
 	if m.Engine.Roles == nil {
 		return nil, errors.New("官方交付角色提交互锁未配置")
 	}
@@ -350,24 +385,37 @@ func (m *Mall) accept(ctx context.Context, in mallIntent) (*tradepb.TradeCommerc
 		attempt++
 		healed := attempt > 1
 		return m.Engine.Repo.Tx(ctx, func(tx *sql.Tx) error {
-			owned, err := m.Engine.Roles.Ownership(ctx, tx, player)
-			if err != nil {
-				return err
-			}
-			if !healed && (owned.TradeListingId != 0 || owned.PrepareToken != 0 || owned.OwnerRevision < revision) {
-				return staleRole(player)
-			}
-			if owned.Account != in.BuyerAccount || owned.OwnerRevision != revision || owned.TradeListingId != 0 {
-				// 尚无任何资产op：先持久原意图的退款结局，再回报商城，另一副本不能改发给当前新主。
-				w.Stage = "official_refund"
-				r.Status = 8
-				r.WorkflowProto, err = proto.MarshalOptions{Deterministic: true}.Marshal(w)
+			// 事务体可能重跑:每次从头判定,不沿用上一次的结论。
+			w.Stage, w.Quarantine, r.Status = stageOfficialDeliver, nil, Delivering
+			if w.PaymentRevoked {
+				// 付款已被渠道撤销:不发放,也就不看角色归属,直接记下「不持有」的终局。
+				w.Stage, r.Status = stageOfficialReversed, Cancelled
+			} else {
+				owned, err := m.Engine.Roles.Ownership(ctx, tx, player)
 				if err != nil {
 					return err
 				}
-			} else if owned.PrepareToken != 0 {
-				return errRolePreparing
+				if !healed && (owned.TradeListingId != 0 || owned.PrepareToken != 0 || owned.OwnerRevision < revision) {
+					return staleRole(player)
+				}
+				switch {
+				case owned.Account == in.BuyerAccount && owned.OwnerRevision == revision && owned.TradeListingId == 0:
+					if owned.PrepareToken != 0 {
+						return errRolePreparing
+					}
+				case paymentRevision == 0:
+					// 尚无任何资产op：先持久原意图的退款结局，再回报商城，另一副本不能改发给当前新主。
+					w.Stage, r.Status = "official_refund", 8
+				default:
+					// 修订过的付款不走退款(订单状态已归扣回流程管):转人工。
+					markManual(r, w, manualReasonOwnerChanged, "官方订单的买家角色已换主,付款修订号 "+strconv.FormatUint(uint64(paymentRevision), 10), now)
+				}
 			}
+			payload, err := proto.MarshalOptions{Deterministic: true}.Marshal(w)
+			if err != nil {
+				return err
+			}
+			r.WorkflowProto = payload
 			return m.Engine.Repo.Insert(ctx, tx, r)
 		})
 	}))
@@ -387,6 +435,10 @@ func (m *Mall) accept(ctx context.Context, in mallIntent) (*tradepb.TradeCommerc
 //
 // 拉取本身只读,拉不到、页面非法、预算用完都是确定没写,不打排空 Hold,见 OutcomeKnown。
 func (m *Mall) Tick(ctx context.Context) error {
+	return errors.Join(m.tickDeliveries(ctx), m.tickReversals(ctx))
+}
+
+func (m *Mall) tickDeliveries(ctx context.Context) error {
 	var page mallPollPage
 	if err := m.call(ctx, "delivery", "trade", "POST", "/internal/deliveries/poll", map[string]any{"limit": 20, "cursor": m.pollCursor}, &page); err != nil {
 		return noWrite(err)
@@ -404,7 +456,7 @@ func (m *Mall) Tick(ctx context.Context) error {
 			errs = append(errs, noWrite(err))
 			break
 		}
-		if err := m.deliverIntent(ctx, *entry.Intent); err != nil {
+		if err := m.deliverIntent(ctx, *entry.Intent, entry.PaymentRevision); err != nil {
 			errs = append(errs, fmt.Errorf("商城交付意图 %q: %w", entry.Intent.OrderID, err))
 		}
 		// 这项无论成功或依赖失败都已尝试；待办仍在商城，下轮绕回按原订单重试，不用新 seq。
@@ -413,25 +465,91 @@ func (m *Mall) Tick(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// tickReversals 处理一页扣回待办:订单绑定的付款被渠道撤销或撤销又被撤回,把发放收敛到最新修订号并回执。
+// 翻页、单项隔离与交付待办相同;拉取只读,拉不到或页面非法都是确定没写。
+func (m *Mall) tickReversals(ctx context.Context) error {
+	var page struct {
+		Entries []mallReversalEntry `json:"entries"`
+	}
+	if err := m.call(ctx, "delivery", "trade", "POST", "/internal/reversals/poll", map[string]any{"limit": 20, "cursor": m.reversalCursor}, &page); err != nil {
+		return noWrite(err)
+	}
+	check := mallPollPage{Entries: make([]mallPollEntry, 0, len(page.Entries))}
+	for _, entry := range page.Entries {
+		if entry.Revision == 0 || entry.Entitled != (entry.Revision%2 == 0) {
+			return noWrite(errors.New("商城扣回页的修订号非法"))
+		}
+		check.Entries = append(check.Entries, mallPollEntry{Intent: entry.Intent, Cursor: entry.Cursor})
+	}
+	if err := validateMallPage(check, m.reversalCursor); err != nil {
+		return noWrite(err)
+	}
+	if len(page.Entries) == 0 {
+		m.reversalCursor = ""
+		return nil
+	}
+	var errs []error
+	for _, entry := range page.Entries {
+		if err := ctx.Err(); err != nil {
+			errs = append(errs, noWrite(err))
+			break
+		}
+		if err := m.reverseIntent(ctx, *entry.Intent, entry.Revision); err != nil {
+			errs = append(errs, fmt.Errorf("商城扣回意图 %q: %w", entry.Intent.OrderID, err))
+		}
+		m.reversalCursor = *entry.Cursor
+	}
+	return errors.Join(errs...)
+}
+
+// contract 找回或新建订单的交付合同,并把商城报来的付款修订号记上(只增不减)。
+func (m *Mall) contract(ctx context.Context, in mallIntent, paymentRevision uint32) (*tradepb.TradeCommerceRecord, *tradepb.TradeCommerceWorkflow, error) {
+	r, err := m.acceptRevised(ctx, in, paymentRevision)
+	if err != nil {
+		return nil, nil, err
+	}
+	if paymentRevision > 0 {
+		if r, err = m.Engine.applyPaymentRevision(ctx, r.CommerceId, paymentRevision); err != nil {
+			return nil, nil, err
+		}
+	}
+	w, err := data.Workflow(r)
+	return r, w, err
+}
+
+// receipt 把合同的结论回报商城;proof 是合同 workflow 的摘要。
+func (m *Mall) receipt(ctx context.Context, path string, r *tradepb.TradeCommerceRecord, body map[string]any) error {
+	sum := sha256.Sum256(r.WorkflowProto)
+	body["tradeOrderId"] = strconv.FormatUint(r.CommerceId, 10)
+	body["proof"] = hex.EncodeToString(sum[:])
+	return m.call(ctx, "delivery", "trade", "POST", path, body, nil)
+}
+
 // deliverIntent 为一条已付款意图建(或找回)交付合同;合同已有终局时回报商城。
-func (m *Mall) deliverIntent(ctx context.Context, in mallIntent) error {
-	r, err := m.accept(ctx, in)
+func (m *Mall) deliverIntent(ctx context.Context, in mallIntent, paymentRevision uint32) error {
+	r, w, err := m.contract(ctx, in, paymentRevision)
 	if err != nil {
 		return err
 	}
-	state := ""
-	switch r.Status {
-	case Settled:
-		state = "DELIVERED"
-	case 8:
-		state = "REFUND_PENDING"
-	case Manual:
-		state = "MANUAL"
-	}
+	state := officialDeliveryState(r, w)
 	if state == "" {
 		return nil
 	}
-	sum := sha256.Sum256(r.WorkflowProto)
-	receipt := map[string]string{"orderId": in.OrderID, "tradeOrderId": strconv.FormatUint(r.CommerceId, 10), "state": state, "proof": hex.EncodeToString(sum[:])}
-	return m.call(ctx, "delivery", "trade", "POST", "/internal/deliveries/receipt", receipt, nil)
+	return m.receipt(ctx, "/internal/deliveries/receipt", r, map[string]any{"orderId": in.OrderID, "state": state})
+}
+
+// reverseIntent 把一张订单的发放收敛到 revision;合同已按这个修订号收敛时回报商城。
+func (m *Mall) reverseIntent(ctx context.Context, in mallIntent, revision uint32) error {
+	r, w, err := m.contract(ctx, in, revision)
+	if err != nil {
+		return err
+	}
+	if w.PaymentRevision != revision {
+		return nil // 合同已记到更新的修订号:这条待办过时了,商城下一轮给新的
+	}
+	state := officialReversalState(r, w)
+	if state == "" {
+		return nil
+	}
+	return m.receipt(ctx, "/internal/reversals/receipt", r, map[string]any{"orderId": in.OrderID, "revision": revision, "state": state})
 }

@@ -135,3 +135,47 @@ func TestTiDBCreateResidualSettlesOrphanNameReservations(t *testing.T) {
 
 	require.Equal(t, []string{"11 orphan_name manual ref_active"}, residualOutline(residualRunAllNameShards(t, ctx, auditor, residualRepairAll)), "重放只剩要人看的那一项")
 }
+
+// 用例「有 ref、没有路由行的孤儿名字只报告」:玩家片恢复到登记路由之前(路由行、角色行都没了),账号片、名字片恢复得更晚,
+// 留着这名角色的 ref 和预留态的名字。目录建角先核路由行才写 ref,所以这不是 login 在登记路由之前的回滚(那种一条 ref 都没有)。
+//   - 12:某个账号上有 ACTIVE 的 ref,角色提交过(ref_active);
+//   - 13:只有 PENDING 的 ref,存档库找不到,证据核不全(no_route)。
+//
+// 两种 apply 都不证明、不删名字、不删缓存。修之前没有路由行就直接判成没有证据,两条名字都被删了。
+func TestTiDBCreateResidualKeepsOrphanNamesWithRefsButNoRoute(t *testing.T) {
+	f := newDirectoryShardFixture(t)
+	names := nameStoreForTest(t, f)
+	auditor, _, cache := residualAuditorWithCacheOnFixture(t, f)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	old := uint64(time.Now().Add(-2 * ResidualOrphanNameMinAge).UnixMilli())
+	var keys []residualName
+	for player, state := range map[uint64]uint32{12: refStateActive, 13: refStatePending} {
+		key, ok := residualNameKeyOf(map[uint64]string{12: "RefNoRouteA", 13: "RefNoRouteB"}[player])
+		require.True(t, ok)
+		outcome, _, err := names.Reserve(ctx, player, key.display, key.norm, old)
+		require.NoError(t, err)
+		require.Equal(t, ReserveInserted, outcome)
+		keys = append(keys, key)
+		_, err = f.Raw[dirshard.SlotOfAccount(shardSeller, shardFixtureK)].ExecContext(ctx,
+			"INSERT INTO account_role_ref(account,player_id,state,tx_id,listing_id,home_zone,nonce,created_ms) VALUES (?,?,?,0,0,1,?,1)",
+			[]byte(shardSeller), player, state, player)
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, []string{
+		"12 orphan_name manual ref_active",
+		"13 orphan_name manual no_route",
+	}, residualOutline(residualRunAllNameShards(t, ctx, auditor, residualRepairAll)))
+	for _, key := range keys {
+		_, _, found := nameRowForTest(t, ctx, f, key.norm)
+		require.True(t, found, "有 ref 的名字不释放:%s", key.norm)
+	}
+	for _, player := range []uint64{12, 13} {
+		var rows int
+		require.NoError(t, f.Raw[dirshard.SlotOfPlayer(player, shardFixtureK)].QueryRowContext(ctx, "SELECT COUNT(*) FROM account_role WHERE player_id=?", player).Scan(&rows))
+		require.Zero(t, rows, "player=%d:不证明、不写墓碑", player)
+	}
+	require.Empty(t, cache.deleted, "什么都没改,不删缓存")
+}

@@ -591,14 +591,17 @@ func settlingFor(req ManualRequest) legSettling {
 // settleLegOutcomes 把已经有终局、还没记进 workflow 的腿记上。转人工的合同不再走 advance,
 // 隔离时被截止的托管扣款之后才有结局,所以人工处置之前要补记一次,判定与 advance 相同(recordLegOutcome)。
 // 还在途的腿、查不到 outbox 行的腿拒绝:要等结局或取证。部分发放的腿只有 partial 点名的才记,
-// 其余拒绝(要给出缺口);还没发出的腿只有 redirect 接受。
+// 其余拒绝(要给出缺口);还没发出的腿只有 redirect 接受,卖家所得除外(见循环里的注释)。
 func settleLegOutcomes(ctx context.Context, w *tradepb.TradeCommerceWorkflow, read func(context.Context, uint64) (data.LegOutcome, error), opt legSettling) error {
 	for _, l := range w.Legs {
 		if l.SupersededBy != "" || l.Outcome != 0 {
 			continue
 		}
 		if l.OpId == 0 {
-			if opt.unissuedOK {
+			// 还没发出的卖家所得是先买家、后卖家压着的(delivery_order.go),没有结局可记,任何动作都照常放过:
+			// 回原阶段的由引擎照闸发出,整单退回的把它标被退回取代(applyRefund)。拒绝它的话,交付阶段转人工的合同
+			// 一个动作都做不了。按角色认,不看买家那条此刻到没到账:寄售、拍品的 buyer_receive 排在它前面,可能刚在这个循环里记成到账。
+			if opt.unissuedOK || isSellerProceeds(l) {
 				continue
 			}
 			return notAllowed("腿 %s 还没发出", l.Role)

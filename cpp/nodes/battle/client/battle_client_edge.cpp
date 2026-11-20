@@ -13,6 +13,8 @@
 #include "kill_switch/kill_switch.h"
 #include "logic/battle_room_manager.h"
 #include "message_limiter/illegal_packet_counter.h"
+#include "metrics/metrics_registry.h"
+#include "network/codec/websocket.h"
 #include "node/system/node/node.h"
 #include "node_config_manager.h"
 #include "time/system/time.h"
@@ -37,20 +39,37 @@ namespace
 
     // 拒绝日志限流:未验证连接的建立/拒绝次数完全由公网流量决定,不能逐条写盘。
     //
-    // 按 reason **分别**计数:prod 里 handshake_timeout / at_capacity 是常态噪声,若与
+    // 按 reason **分别**计数:prod 里 handshake_timeout / capacity 是常态噪声,若与
     // ticket_hmac_mismatch 共用一个计数器,一轮针对签名的伪造尝试可能一条日志都不留,
     // 而 §18.6 把 reason 枚举写成了观测契约。每种原因首次必打,之后每 1024 次打一行。
-    // reason 全部来自进程内常量(字面量 / TicketVerdictName),不含攻击者输入,
-    // 键集合有界(十几个),用 map 不会被打爆。
-    void LogRejectionSampled(const char *reason, const muduo::net::TcpConnectionPtr &conn)
+    // reason 全部来自进程内常量(字面量 / TicketVerdictName / RejectReasonName),不含攻击者输入,
+    // 键集合有界(十几个),用 map 不会被打爆。返回 true 表示本次该打;total 是这一原因含本次的累计次数。
+    bool SampleRejection(const char *reason, uint64_t &total)
     {
         static std::unordered_map<std::string, uint64_t> countsByReason;
-        uint64_t &count = countsByReason[reason];
-        if ((count++ & 0x3FF) == 0)
+        total = ++countsByReason[reason];
+        return (total & 0x3FF) == 1;
+    }
+
+    void LogRejectionSampled(const char *reason, const muduo::net::TcpConnectionPtr &conn)
+    {
+        uint64_t total = 0;
+        if (SampleRejection(reason, total))
         {
             LOG_WARN << "battle direct connection rejected(sampled): reason=" << reason
                      << " latest_peer=" << (conn ? conn->peerAddress().toIpPort() : std::string("<null>"))
-                     << " reason_total=" << count;
+                     << " reason_total=" << total;
+        }
+    }
+
+    // accept 处的拒绝(准入回调)还没有连接对象,只有对端地址;对端地址只进日志,不进指标标签。
+    void LogRejectionSampled(const char *reason, const muduo::net::InetAddress &peer)
+    {
+        uint64_t total = 0;
+        if (SampleRejection(reason, total))
+        {
+            LOG_WARN << "battle direct connection rejected at accept(sampled): reason=" << reason
+                     << " latest_peer=" << peer.toIpPort() << " reason_total=" << total;
         }
     }
 } // namespace
@@ -80,11 +99,64 @@ BattleClientEdge::BattleClientEdge()
 void BattleClientEdge::Install(muduo::net::TcpServer &server)
 {
     auto weak = weak_from_this();
+    // 准入回调:accept 之后、TcpConnection 建出来之前判关源、总量与新建速率,被拒的连接当场以 RST 关闭,不建任何每连接对象
+    // (battle_connection_admission.h)。只绑 weak 自己(AGENTS.md §11.7),直连面已经不在就一律不接。与下面两个回调同一时机:
+    // 本函数在 StartRpcServer 之后的 SetAfterStart 里执行,监听 fd 的第一个可读事件要等它返回之后才会被处理。
+    server.setAdmissionCallback([weak](const muduo::net::InetAddress &peer)
+                                {
+        const auto self = weak.lock();
+        return self != nullptr && self->AdmitConnection(peer, std::chrono::steady_clock::now()); });
     server.setConnectionCallback([weak](const muduo::net::TcpConnectionPtr &conn)
                                  { if(auto self=weak.lock()) self->OnConnection(conn); });
     server.setMessageCallback([weak](const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buf,
                                      muduo::Timestamp ts)
                               { if(auto self=weak.lock()) self->codec_.onMessage(conn, buf, ts); });
+    RegisterMetrics();
+}
+
+bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
+                                       const battle_connection_admission::SteadyTime now)
+{
+    const auto rejected = admission_.Admit(sessions_.size(), EffectiveMaxConnections(), now);
+    if (!rejected)
+    {
+        return true;
+    }
+    // 关源期间的拒绝是预期行为,只进指标。原因名都是字面量,data() 以 0 结尾。
+    if (*rejected != battle_connection_admission::RejectReason::kShuttingDown)
+    {
+        LogRejectionSampled(battle_connection_admission::RejectReasonName(*rejected).data(), peer);
+    }
+    return false;
+}
+
+size_t BattleClientEdge::UnauthenticatedConnectionCount() const
+{
+    // 探测连接从不握手(全服匹配按机房只探一台 battle,所有玩家的探测都落在那一台),但出示过 match 签发的授权,
+    // 不算未认证;否则那台的未认证连接数会随探测量涨,和「建连不认证」的流量分不开。
+    return static_cast<size_t>(std::count_if(sessions_.begin(), sessions_.end(), [](const auto &entry)
+                                             { return !entry.second.verified && !entry.second.probeGrant.has_value(); }));
+}
+
+void BattleClientEdge::RegisterMetrics()
+{
+    // 采集回调在节点 /metrics 出口所在的主 loop 上执行,与本对象同线程;只绑 weak 自己(AGENTS.md §11.7),
+    // 直连面不在了就什么都不写。
+    const auto weak = weak_from_this();
+    const bool registered = GlobalMetricsRegistry().Register(
+        "battle_connection_admission", [weak](prometheus_text::Writer &writer)
+        {
+            const auto self = weak.lock();
+            if (self == nullptr)
+            {
+                return;
+            }
+            self->admission_.CollectMetrics(writer, self->sessions_.size(), self->EffectiveMaxConnections(),
+                                            self->UnauthenticatedConnectionCount()); });
+    if (!registered)
+    {
+        LOG_ERROR << "[Metrics] collector battle_connection_admission is already registered";
+    }
 }
 
 void BattleClientEdge::Send(const muduo::net::TcpConnectionPtr &conn,
@@ -94,11 +166,8 @@ void BattleClientEdge::Send(const muduo::net::TcpConnectionPtr &conn,
     {
         return;
     }
-    // 与 ProtobufCodec::send 同一份分帧(它的本体就是这两行),但走 static 版本:
-    // 本方法是 const,codec_ 按值持有,非 const 的 codec_.send 在这里编不过。
-    muduo::net::Buffer buf;
-    ProtobufCodec::fillEmptyBuffer(&buf, message);
-    conn->send(&buf);
+    // static 的 ProtobufCodec::send:分帧与 gate 同一份,小游戏直连(WebSocket)时再包一层二进制消息帧头。
+    ProtobufCodec::send(conn, message);
 }
 
 BattleClientEdge::EncodedFrame BattleClientEdge::EncodeFrame(const ::google::protobuf::Message &message)
@@ -115,7 +184,21 @@ void BattleClientEdge::SendEncoded(const muduo::net::TcpConnectionPtr &conn, con
     {
         return;
     }
-    conn->send(muduo::StringPiece(frame.bytes_));
+    if (!websocket::IsUpgraded(conn))
+    {
+        conn->send(muduo::StringPiece(frame.bytes_));
+        return;
+    }
+    // 小游戏直连(WebSocket):同一份帧字节前面加一个帧头。服务端帧不加掩码,所有连接收到的字节相同,
+    // 第一次用到时拼一份,之后的连接复用,仍然只编码一次。
+    if (frame.webSocketBytes_.empty())
+    {
+        char header[10];
+        const std::size_t headerLen = websocket::EncodeBinaryHeader(frame.bytes_.size(), header);
+        frame.webSocketBytes_.reserve(headerLen + frame.bytes_.size());
+        frame.webSocketBytes_.assign(header, headerLen).append(frame.bytes_);
+    }
+    conn->send(muduo::StringPiece(frame.webSocketBytes_));
 }
 
 size_t BattleClientEdge::EffectiveMaxConnections() const
@@ -183,6 +266,8 @@ void BattleClientEdge::OnConnection(const muduo::net::TcpConnectionPtr &conn)
     }
     else
     {
+        // 小游戏直连(WebSocket)的拆帧状态在 codec 层的线程局部表里,随连接一起删;原始 TCP 连接是空操作。
+        websocket::Forget(conn);
         HandleClosed(conn);
     }
 }
@@ -191,11 +276,14 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
 {
     const auto &deploy = gNodeConfigManager.GetBaseDeployConfig();
 
-    // 闸 1:并发上限。必须是第一道:在分配会话之前拒掉,否则限流本身先付出它想省的内存。
+    // 闸 1 的第二道:并发上限。第一道在 accept 处(AdmitConnection,被拒的连接不建 TcpConnection、收到 RST);
+    // 这里留着,是为了准入回调没装上时(有人改了装配顺序,或单测直接调连接回调)上限仍然成立。第一道装上之后走不到:
+    // accept、准入、建连、插入会话在同一个 loop 回调里同步完成,两处读到的会话数相同,用的也是同一个 EffectiveMaxConnections。
     // 0 = 关闭运维阈值(仅 dev/test 合法,启动门禁已核过),但硬上限仍在。
     if (sessions_.size() >= EffectiveMaxConnections())
     {
-        LogRejectionSampled("at_capacity", conn);
+        admission_.NoteRejectedAfterAccept(battle_connection_admission::RejectReason::kCapacity);
+        LogRejectionSampled("capacity", conn);
         conn->forceClose();
         return;
     }
@@ -205,6 +293,7 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
                                                               battle_security::CurrentRunMode());
     if (verdict == battle_security::TokenSecretVerdict::kRefuse)
     {
+        admission_.NoteRejectedAfterAccept(battle_connection_admission::RejectReason::kNoTokenSecret);
         LogRejectionSampled("token_secret_not_configured", conn);
         conn->forceClose();
         return;
@@ -218,6 +307,8 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
     DirectSession &session = it->second;
     session.connId = connId;
     session.conn = conn;
+    session.openedAt = std::chrono::steady_clock::now();
+    admission_.NoteAccepted();
 
     // 闸 3:握手期限。回调只持 connId,到期时重查会话;已验证则什么都不做。
     std::weak_ptr<muduo::net::TcpConnection> weakConn = conn;
@@ -232,6 +323,7 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
         }
         if (const auto c = weakConn.lock(); c)
         {
+            self->admission_.NoteHandshakeTimeout();
             LogRejectionSampled("handshake_timeout", c);
             c->forceClose();
         } });
@@ -438,6 +530,8 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
     session->gateSessionId = gateSessionId;
     IllegalPacketCounter::Reset(session->illegalPacketCount);
     session->handshakeTimer.Cancel();
+    // 握手耗时(建连到第一次握手成功)进直方图;重复握手在上面已经提前返回,不会再记。
+    admission_.NoteHandshake(session->openedAt, std::chrono::steady_clock::now());
 
     SendVerifyReply(conn, true, "", payload.battle_id());
     // 应答里已通告心跳参数:从这一刻起这条直连按读空闲判死(闸 6)。

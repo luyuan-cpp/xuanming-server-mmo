@@ -25,9 +25,9 @@ import (
 // 编排(失败路径、重放、顺序)在 AccountDirectoryStore 和 AccountRoleTradeStore 里,这里只有 SQL。分开是为了能用内存替身把
 // 「每一步失败之后的结局和重放」跑一遍:那些组合要真库跑得一个个摆故障,而结局只取决于编排。
 type directorySteps interface {
-	// 账号分片。
-	readAccount(ctx context.Context, account string) (exists bool, refs []roleRef, err error)
-	ensureAccount(ctx context.Context, account string) error
+	// 账号分片。readAccount 顺带读注销状态;ensureAccount 建行,顺带回同一账号以前注销完成的时刻(没有回执是 0)。
+	readAccount(ctx context.Context, account string) (row accountRow, refs []roleRef, err error)
+	ensureAccount(ctx context.Context, account string) (previousDeletedMs uint64, err error)
 	readRef(ctx context.Context, account string, player uint64) (*roleRef, error)
 	reserveRef(ctx context.Context, account string, want roleRef, maxRoles int) ([]roleRef, error)
 	activateRef(ctx context.Context, account string, player, txID uint64) error
@@ -75,33 +75,53 @@ type sqlDirectorySteps struct {
 	heldCursor atomic.Uint64
 }
 
-// readAccount 读目录行和全部 ref,不取行锁。
-func (st *sqlDirectorySteps) readAccount(ctx context.Context, account string) (bool, []roleRef, error) {
-	var exists bool
+// accountRow 是读路径要的目录行几列。exists=false 时其余为零。
+type accountRow struct {
+	exists         bool
+	deletionState  uint32
+	executeAfterMs uint64
+	realNamePI     string // 空串 = 游戏方没给这个账号做过实名(account_real_name.go)
+}
+
+// readAccount 读目录行(含注销状态)和全部 ref,不取行锁。
+func (st *sqlDirectorySteps) readAccount(ctx context.Context, account string) (accountRow, []roleRef, error) {
+	var row accountRow
 	var refs []roleRef
 	err := shardTx(ctx, st.shards.forAccount(account), func(tx *sql.Tx) error {
 		var stored []byte
-		err := tx.QueryRowContext(ctx, "SELECT account FROM account_directory WHERE account=?", []byte(account)).Scan(&stored)
+		var pi []byte
+		err := tx.QueryRowContext(ctx, "SELECT account,deletion_state,deletion_execute_after_ms,real_name_pi FROM account_directory WHERE account=?", []byte(account)).
+			Scan(&stored, &row.deletionState, &row.executeAfterMs, &pi)
+		row.realNamePI = string(pi)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		exists = true
+		row.exists = true
 		refs, err = readRefs(ctx, tx, account)
 		return err
 	})
 	if err != nil {
-		return false, nil, err
+		return accountRow{}, nil, err
 	}
-	return exists, refs, nil
+	return row, refs, nil
 }
 
-func (st *sqlDirectorySteps) ensureAccount(ctx context.Context, account string) error {
-	return shardTx(ctx, st.shards.forAccount(account), func(tx *sql.Tx) error {
-		return lockDirectory(ctx, tx, account, true)
+func (st *sqlDirectorySteps) ensureAccount(ctx context.Context, account string) (uint64, error) {
+	var previous uint64
+	err := shardTx(ctx, st.shards.forAccount(account), func(tx *sql.Tx) error {
+		if err := lockDirectory(ctx, tx, account, true); err != nil {
+			return err
+		}
+		err := tx.QueryRowContext(ctx, "SELECT deleted_ms FROM "+AccountDeletionReceiptTableName+" WHERE account_digest=?", accountDigest(account)).Scan(&previous)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		return err
 	})
+	return previous, err
 }
 
 // 顺带读初始提交标记(initial_player_commit=1 是现行建角流程提交的:初始行先于角色行写进了存档库)。Lookup 经这里回给调用方,

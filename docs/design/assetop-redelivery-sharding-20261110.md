@@ -21,7 +21,8 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 - **`assetop.OwnedDueLister`**(Store 的可选能力):`ListDueOwned(ctx, nowMs, limit, owned workshard.Filter)`。契约与 `ListDue` 相同(两段读、只回主键、不加锁、按 op_id 去重、总条数 ≤ limit),只多一个条件:`owned` 用 AND 接进**两段** SQL 的 WHERE,放在 `ORDER BY … LIMIT` 之前。零值 `owned` 不过滤。guild 的 `GuildAssetStore`、trade 的 `AssetOpRepo` 实现它;两边的 `ListDue` 改为委托 `ListDueOwned(…, workshard.Filter{})`,SQL 只多一个恒真的 `1=1`,不另写一份。
 - **`Loop.BindWorkOwner(kind, owns)`**:`Run` 之前调用一次。Store 没实现 `OwnedDueLister`、`kind` 为空或 `owns` 为 nil 时回错误,装配方拒启:绑了分工却悄悄扫全部行,扩副本时看不出分工没生效。绑上之后 `Tick` 每轮用 `workshard.SQLFilter(owns, kind, "player_id")` 生成条件交给 `ListDueOwned`;没绑照旧调 `ListDue`。
-- **只影响 `Tick`**。同步投递(`ProcessOne`)、落地唤醒(`WakePlayer`)、日对账与自动放弃(`RunMaintenance`,本来就选主)、最老未决年龄 gauge 都不看归属。落地唤醒由抢到去重键的任一副本处理某个玩家的全部未决行,与分片无关,保持不变。
+- **只影响 `Tick`**。同步投递(`ProcessOne`)、落地唤醒(`WakePlayer`)、日对账与自动放弃(`RunMaintenance`,本来就选主)、最老未决年龄 gauge 都不看归属。落地唤醒由抢到去重键的副本处理某个玩家的全部未决行,`WakePlayer` 本身不看归属。
+  2026-11-19 起唤醒的**订阅**按分片:`assetopwake.Subscriber.BindShardOwner` 让每个副本只订自己负责的片,guild、trade 用本节这张分工表与同一个类别键,data_service 另开一张全服成员表(理由见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §4.6)。每条唤醒只投给每个服务的一个副本;片换主的几秒里照旧由去重键与 Claim CAS 互斥。
 - **为什么做成可选能力,而不是改 `Store.ListDue` 的签名**:`assetop.Store` 的生产实现除 guild、trade 外还有 mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`),另有 4 个测试替身(assetop 的 `fakeStore`、assetoptest 的 `singleRowStore`、guild 的 `countingAssetStore` 与 `stubAssetStore`)。改签名要同批改 8 处;第一批只分 guild、trade,第二批给 mail 与回收也实现了它(§10),测试替身仍不需要分工。本包已有同样做法的可选能力(`PlayerPendingLister`、`PendingAgeReader` 等)。代价是 Store 上有两个列到期行的入口,四个生产实现里 `ListDue` 都只是一行委托。
 - **新指标 `assetop_owned_shards`**(gauge,只带 `service` 常量 label):本副本本轮负责的片数(0..64)。只有绑了分工的循环才报,没绑 = 没有序列。各 stable 副本加起来应为 64;成员表变化的几秒里会多或少几片;长期少于 64 说明有登记着却不跑循环的副本(§3)。
 - assetop 包头「不引 etcd 客户端」的边界不变:本包只用 `workshard` 的纯函数拼条件,成员表由装配方经 `owns` 注入,本包不读 etcd。
@@ -98,7 +99,7 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 1. mail(`mail_asset_op`)与 data_service 的 GM 回收(`gm_recall_op`)的重投循环:第一批没做,第二批已分片,圈法与理由见 §10。
 2. `idx_0` 加 `op_id`、`player_id`:原定等压测证据,2026-11-11 负责人定不等,已改,见 §2.4。
 3. 不缓存「本副本没有片」,也不跳过 `1=0` 的查询:成员表随时会变,一次空查询的代价可以忽略。
-4. 落地唤醒、同步投递、日对账与自动放弃、最老未决年龄 gauge 都不改。
+4. 同步投递、日对账与自动放弃、最老未决年龄 gauge 都不改。落地唤醒的处理(`WakePlayer`)不看归属;它的订阅 2026-11-19 起按片分工,见 §2.1 末。
 5. 已建房票巡检(`ReadyAfter`)按 2026-11-06 的约定由数据覆盖审计会话接分片([全服匹配设计](global-match-hierarchical-pools.md) §5.2),本条不碰。
 6. trade `asset_op_repo.go` 的 `Finalize`、`Abandon`、`ResolveManually` 由另一项改,本条只动 `ListDue` 一段。
 7. 告警规则:第一批没加,第二批已加,见 §12。式子按 data_service 随 zone 部署改成 `sum by (namespace, service) (assetop_owned_shards) < 64`。

@@ -19,7 +19,7 @@
 //     队员依次走到折返点再掉头,顺序不乱(玩家之间没有碰撞,互相穿过)。
 //
 // 复杂度:每 tick O(队员数 + 回收搜索段数),回收只搜头部 kTrailRewindSearchLength 之内;
-// 轨迹长度受 kTeamFollowMaxLag 与 kTrailKeepBehindHead 约束,点数有界。
+// 轨迹长度受 kTeamFollowMaxLag 与"队尾槽位再往后一个间距"约束,点数有界。
 
 #include <cstddef>
 #include <cstdint>
@@ -29,10 +29,10 @@
 #include <span>
 #include <vector>
 
-// 槽位间距(米,沿轨迹量)。沿用客户端跟随一直用的 1.4(team-system.md V.4);2026-11-12 定案保留(V.7 第 5 条):
-// 紧凑纵队,整列 4 × 1.4 = 5.6 落在视野半径里、互相看得见不靠显式关注;贴图叠在一起由客户端按脚底排序。
-// 要按美术身宽拉开时,先过 player_team.cpp 顶部两条 static_assert(整列不超过归队阈值,归队阈值小于视野半径)。
-constexpr double kTeamFollowSpacing = 1.4;
+// 槽位间距(米,沿轨迹量)。2026-11-19 负责人嫌原来的 1.4 太挤,定为 3 米(team-system.md V.7 第 5 条):
+// 整列 4 × 3 = 12,落在视野半径(50)里、互相看得见不靠显式关注。
+// 再改间距时先过 player_team.cpp 顶部两条 static_assert(整列不超过归队阈值,归队阈值小于视野半径)。
+constexpr double kTeamFollowSpacing = 3.0;
 // 队形里最多的队员数:队伍上限 5 人,队长之外 4 人。
 constexpr std::size_t kTeamFollowMaxMembers = 4;
 // 队员追赶速度上限(米/秒):加入、补位、恢复后赶回槽位时用;跟上之后与队长同速。
@@ -52,8 +52,6 @@ constexpr double kTrailRewindRadius = 0.6;
 constexpr double kTrailRewindMinGain = 0.05;
 // 回收只在头部这么长(米)的一段轨迹里找:小范围来回都发生在队长脚下。
 constexpr double kTrailRewindSearchLength = 4.0;
-// 头部之后至少保留的历史(米):第一名队员加入时能落到"队长身后的路上",而不是队长旁边。
-constexpr double kTrailKeepBehindHead = static_cast<double>(kTeamFollowMaxMembers + 1) * kTeamFollowSpacing;
 
 // 服务器坐标(Z-up,x/y 为地面,z 为高度)。所有距离与里程只量水平面。
 struct FollowPoint
@@ -173,7 +171,7 @@ public:
 	[[nodiscard]] double SlotOdo(std::size_t rank) const;
 	// 回收下限:所有仍受保护的队员游标的最大值;没有这样的队员时为极小值。
 	[[nodiscard]] double ProtectOdo() const;
-	// 修剪下限:min(头部 - kTrailKeepBehindHead, 所有仍受保护的队员游标)。
+	// 修剪下限:min(头部 - (队员上限 + 1) × 间距, 所有仍受保护的队员游标)。
 	[[nodiscard]] double KeepOdo() const;
 
 	// 给即将以 rank 名次加入的新队员腾出路尾:把谁都不需要的旧历史剪到新队员的槽位处,

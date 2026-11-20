@@ -1001,3 +1001,10 @@ const deleteOldSnapshotsInShardSQL = `DELETE FROM player_snapshot WHERE shard = 
 func (s *SnapshotStore) claimRetentionShard(ctx context.Context, shard uint32) (retentionShard, bool, error) {
 	return claimSQLRetentionShard(ctx, s.db, s.dbName, "snap", deleteOldSnapshotsInShardSQL, shard)
 }
+
+const oldestSnapshotInShardSQL = `SELECT created_at FROM player_snapshot WHERE shard = ? ORDER BY created_at LIMIT 1`
+
+// oldestRetentionTimestamp 快照表现存最老一行的 created_at,由 RunAuditRetention 每轮报一次(audit_retention.go)。
+func (s *SnapshotStore) oldestRetentionTimestamp(ctx context.Context) (uint64, bool, error) {
+	return oldestSQLTimestamp(ctx, s.db, oldestSnapshotInShardSQL)
+}

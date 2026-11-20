@@ -3680,6 +3680,28 @@ Test-Case '负向:-KafkaBrokers 2 在任何清单生成之前被拒' {
 
 # etcd MVCC 压缩(P0-C 阶段 2,docs/ops/etcd-maintenance-runbook.md §4):压缩只靠 etcd.yaml 里 etcd 内置的自动压缩,阶段 1 的 CronJob etcd-compact
 # 2026-11-05 退役。infra-up 不能再下发它,还要删掉以前 apply 过的残留。清单自身的形态与取值在 etcd_maintenance_contract.tests.ps1(静态,不跑部署脚本)。
+Test-Case 'quorum 成员反亲和(Get-QuorumMemberAntiAffinityYaml):staging / prod 是 required,dev 是 preferred;infra-up 渲染 etcd 与 kafka 两处占位' {
+    $fnAst = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Get-QuorumMemberAntiAffinityYaml' }, $false)
+    Assert-True -Condition ($null -ne $fnAst) -Because 'k8s_deploy.ps1 里要有 Get-QuorumMemberAntiAffinityYaml'
+    Set-Item -Path "Function:script:$($fnAst.Name)" -Value $fnAst.Body.GetScriptBlock()
+    $indent = ' ' * 10
+    $dev = Get-QuorumMemberAntiAffinityYaml -App 'etcd' -ReleaseProfileName 'dev' -Indent $indent
+    $devExpected = "preferredDuringSchedulingIgnoredDuringExecution:`n            - weight: 100`n              podAffinityTerm:`n                topologyKey: kubernetes.io/hostname`n                labelSelector:`n                  matchLabels:`n                    app: etcd"
+    Assert-True -Condition ($dev -ceq $devExpected) -Because 'dev 档与改成占位之前的软约束逐字相同(Pod 模板不变,不触发滚动)'
+    foreach ($profileName in @('staging', 'prod')) {
+        $hard = Get-QuorumMemberAntiAffinityYaml -App 'kafka' -ReleaseProfileName $profileName -Indent $indent
+        $hardExpected = "requiredDuringSchedulingIgnoredDuringExecution:`n            - topologyKey: kubernetes.io/hostname`n              labelSelector:`n                matchLabels:`n                  app: kafka"
+        Assert-True -Condition ($hard -ceq $hardExpected) -Because "${profileName}:任意两个成员不在同一节点,一个节点挂了 quorum 还在"
+    }
+
+    Assert-Equal -Expected 0 -Actual $battleInfraRun.ExitCode -Because "infra-up DryRun 必须成功。输出: $($battleInfraRun.Output)"
+    Assert-NotMatch -Text $battleInfraRun.Output -Pattern '__(ETCD|KAFKA)_MEMBER_ANTI_AFFINITY__' -Because '两处占位必须替换'
+    foreach ($app in @('etcd', 'kafka')) {
+        $softPattern = '(?m)^        podAntiAffinity:\r?\n          preferredDuringSchedulingIgnoredDuringExecution:\r?\n            - weight: 100\r?\n              podAffinityTerm:\r?\n                topologyKey: kubernetes\.io/hostname\r?\n                labelSelector:\r?\n                  matchLabels:\r?\n                    app: ' + $app + '\r?$'
+        Assert-Match -Text $battleInfraRun.Output -Pattern $softPattern -Because "dev 档的 $app 是软约束,单节点 kind 也能起全部成员"
+    }
+}
+
 Test-Case 'infra-up 不再下发 etcd-compact,并在 apply etcd.yaml 之前删掉残留的 CronJob 与脚本 ConfigMap;etcd 用钉死的官方镜像' {
     Assert-Equal -Expected 0 -Actual $battleInfraRun.ExitCode -Because "infra-up DryRun 必须成功。输出: $($battleInfraRun.Output)"
     Assert-True -Condition ($null -eq (Select-ManifestByName -Output $battleInfraRun.Output -Name 'etcd-compact')) -Because '退役的 CronJob 不能再出现在 apply 的产物里'
@@ -4272,6 +4294,8 @@ Test-Case 'mysql-connection-alerts.yaml:PrometheusRule 形状,额外库数阈值
 $redisLedgerFunctionNames = @(
     'Get-RedisConnectionPlan', 'Get-RedisMaxClientsFromManifest', 'Get-RedisPoolMirror', 'Get-RedisConnectionLedgerInputs', 'Get-RedisConnectionLedger',
     'Get-RedisPlayerPoolMirror',
+    # 核心那份 = 控制域行(控制端点是核心时)+ 玩家域行(没开玩家域集群时),两张表各自的生成函数(缺口第 34 条第 6b 批)。
+    'Get-RedisPoolMirrorSource', 'Get-RedisControlClientRows', 'Get-RedisClusterConnectionLedgerInputs', 'Get-RedisCluster',
     # match 私有集群自己的一份总账(2026-11-11)。
     'Get-RedisMatchConnectionLedgerInputs',
     'Get-RedisPodTemplateDigest', 'Get-RedisCoreRestartVerdict', 'Assert-RedisCoreRestartConfirmed', 'Get-LiveRedisCoreTemplateDigest',
@@ -4298,13 +4322,14 @@ function Get-K8sDeployIntParamDefault {
     return [int]$found[0].DefaultValue.Extent.Text
 }
 
-# 用仓库权威文件的输入按规划档算一份 Redis 总账(Z、C++ 台数、滚动余量、运维余量、告警比例全部取 Get-RedisConnectionPlan)。
+# 用仓库权威文件的输入按规划档算一份 Redis 总账(Z、scene 台数、滚动余量、运维余量、告警比例全部取 Get-RedisConnectionPlan),
+# 口径同 Write-RedisConnectionLedger:只有 scene 连 Redis,battle 0,滚动余量按一个 C++ 工作负载。缺省输入是两个域都在核心上(dev 缺省),最重的一份。
 function Get-RepoRedisPlanLedger {
     # Get-RedisConnectionLedgerInputs 及其依赖按动态作用域读这个变量(在 k8s_deploy.ps1 里它是脚本级变量)。
     $RepoRoot = Get-RepoRoot
     $plan = Get-RedisConnectionPlan
     return Get-RedisConnectionLedger -Inputs (Get-RedisConnectionLedgerInputs) -ZoneCount $plan.ZoneCount `
-        -CppZoneProcesses ($plan.ZoneCount * ($plan.GatePerZone + $plan.ScenePerZone)) -BattleProcesses $plan.BattleProcesses `
+        -CppZoneProcesses ($plan.ZoneCount * $plan.ScenePerZone) -BattleProcesses 0 -CppSurgeWorkloads 1 `
         -RolloutExtraPodsPerDeployment $plan.RolloutExtraPodsPerDeployment -OpsReserve $plan.OpsReserve -WarnRatio $plan.WarnRatio
 }
 
@@ -4326,14 +4351,15 @@ function Format-RedisConnectionLedger {
     return (@($Ledger.Keys | ForEach-Object { "$_=$($Ledger[$_])" }) -join ' ')
 }
 
-Test-Case 'Redis 连接总账:规划档峰值 ≤ 80% × redis.yaml 的 MAXCLIENTS;规划 zone 数与滚动余量与 MySQL 总账同源,C++ 台数等于参数缺省值' {
+Test-Case 'Redis 连接总账:规划档峰值 ≤ 80% × redis.yaml 的 MAXCLIENTS;规划 zone 数与滚动余量与 MySQL 总账同源,scene 台数等于参数缺省值' {
     $plan = Get-RedisConnectionPlan
     $mysqlPlan = Get-MysqlConnectionPlan
     Assert-Equal -Expected $mysqlPlan.ZoneCount -Actual $plan.ZoneCount -Because '规划 zone 数只有一个来源(Get-MysqlConnectionPlan),不写第二个 4'
     Assert-Equal -Expected $mysqlPlan.RolloutExtraPodsPerDeployment -Actual $plan.RolloutExtraPodsPerDeployment -Because '滚动余量与 MySQL 总账同一来源'
-    Assert-Equal -Expected (Get-K8sDeployIntParamDefault -Name 'GateReplicas') -Actual $plan.GatePerZone -Because '规划档每 zone gate 台数取 -GateReplicas 的缺省值'
     Assert-Equal -Expected (Get-K8sDeployIntParamDefault -Name 'SceneReplicas') -Actual $plan.ScenePerZone -Because '规划档每 zone scene 台数取 -SceneReplicas 的缺省值'
-    Assert-Equal -Expected (Get-K8sDeployIntParamDefault -Name 'BattleReplicas') -Actual $plan.BattleProcesses -Because '规划档 battle 进程数取 -BattleReplicas 的缺省值'
+    foreach ($retired in @('GatePerZone', 'BattleProcesses')) {
+        Assert-True -Condition (-not $plan.Contains($retired)) -Because "gate、battle 不连 Redis(缺口第 34 条第 3 批),规划档不该再有 $retired"
+    }
     Assert-Equal -Expected 0.8 -Actual $plan.WarnRatio -Because '告警水位是 80%(与负责人定的口径一致;改它要同改 README 与告警文案)'
 
     $ledger = Get-RepoRedisPlanLedger
@@ -4342,58 +4368,69 @@ Test-Case 'Redis 连接总账:规划档峰值 ≤ 80% × redis.yaml 的 MAXCLIEN
     Assert-True -Condition ($ledger.Peak -le $line80) -Because ("规划档(zones={0})峰值 {1} 超过 80% × maxclients = {2}:要么收紧连接(显式 PoolSize、减副本),要么在维护窗口抬高 redis.yaml 的 MAXCLIENTS(先在线 CONFIG SET)。分项:{3}" -f $plan.ZoneCount, $ledger.Peak, $line80, (Format-RedisConnectionLedger -Ledger $ledger))
 }
 
-Test-Case 'Redis 总账输入:客户端表的副本数就是各 manifest 的 replicas;显式 PoolSize 的行等于服务 yaml 的值;有缺省池的 Go 服务 manifest 的 CPU limit ≤ 表里的 GOMAXPROCS(按 2 记的前提)' {
+Test-Case 'Redis 总账输入(两个域都在核心上,dev 缺省):客户端表 = 控制域行 + 玩家域行;副本数读 manifest;池上限读服务 yaml;核心上没有缺省大小的池;有缺省池的 manifest CPU limit ≤ GOMAXPROCS' {
     $RepoRoot = Get-RepoRoot
     $inputs = Get-RedisConnectionLedgerInputs
-    Assert-Equal -Expected 10 -Actual $inputs.GoPoolSizePerProc -Because 'go-redis v9 的 PoolSize 缺省 = 10 × GOMAXPROCS(只用于还没显式池上限的 DefaultPools)'
-    Assert-Equal -Expected 1 -Actual $inputs.CppConnectionsPerProcess -Because 'C++ 每进程 1 条(node.cpp 唯一的 tlsRedis.Connect)'
-    $names = @($inputs.Clients | ForEach-Object { $_.Name })
-    foreach ($expectedName in @('login', 'data-service', 'player-locator', 'scene-manager', 'gateway', 'match', 'friend', 'trade', 'guild', 'player-inbox')) {
-        Assert-True -Condition ($names -contains $expectedName) -Because "客户端表里必须有 $expectedName(它连着共享 Redis;不连了要先改代码再删这一行)"
-    }
-    Assert-True -Condition ($names -notcontains 'db') -Because 'go/db 不连 Redis,总账里不该有它'
-    Assert-True -Condition ($names -notcontains 'chat') -Because 'chat 不连 Redis(聊天权威在 SQL,会话身份只认 gate 签名的原件),总账里不该有它'
-    # player-inbox(go/player_inbox/internal/svc/servicecontext.go openCoreRedis):全局一份、核心 Redis 一个 go-redis 池(CoreRedis.PoolSize,
-    # 池上限的出处在下面 $explicitPools 里核)、没有 Pub/Sub;围栏上界、在线提醒与选主锁共用这一个客户端。改成多个池或加订阅时这里先变红,逼着同改总账那一行。
-    $inbox = @($inputs.Clients | Where-Object { $_.Name -eq 'player-inbox' })
-    Assert-Equal -Expected 1 -Actual $inbox.Count -Because '客户端表里 player-inbox 只能有一行'
-    Assert-Equal -Expected 'global/0/0/0' -Actual ('{0}/{1}/{2}/{3}' -f $inbox[0].Scope, $inbox[0].DefaultPools, $inbox[0].PubSub, $inbox[0].Fixed) `
-        -Because 'player-inbox 每副本 = 1 个显式 PoolSize 的 go-redis 池,没有缺省大小的池、Pub/Sub 与固定连接,按全局计'
+    Assert-Equal -Expected 10 -Actual $inputs.GoPoolSizePerProc -Because 'go-redis v9 的 PoolSize 缺省 = 10 × GOMAXPROCS(只用于缺省大小的池;核心上已经没有,match 私有集群那份还有)'
+    # scene 每进程:控制域 1 条(tlsControlRedis)+ 玩家域 1 条(tlsPlayerRedis,没开玩家域集群时沿用 control_redis 的地址,仍是独立客户端);gate、battle 不连 Redis。
+    Assert-Equal -Expected 2 -Actual $inputs.CppConnectionsPerProcess -Because '两个域都在核心上,scene 每进程 2 条'
+    Assert-Equal -Expected 1 -Actual (Get-RedisConnectionLedgerInputs -PlayerOnCore $false).CppConnectionsPerProcess -Because '玩家域搬到集群,核心上只剩控制域那 1 条'
+    Assert-Equal -Expected 1 -Actual (Get-RedisConnectionLedgerInputs -ControlOnCore $false).CppConnectionsPerProcess -Because '控制域搬到集群,核心上只剩玩家域那 1 条'
 
-    # 显式 PoolSize 的 go-redis 直连池(P0-E 第 3 批):ConfiguredPoolConns 必须等于服务 yaml 里那个键的值(这里独立读,不经被测函数),
-    # 且是正整数;这几个服务剩下的缺省大小池(go-zero 封装)按表里的 DefaultPools 核。换键名、拆成多个池、或删掉显式值时这里先变红。
-    # 没建玩家域集群时(本用例的缺省输入),PlayerRedis 与 login 自己的 LoginRedis 也连这台 Redis,一起算。
-    # 登录域只有 login 连:match / friend / guild / trade / mail 只认 gate 签名的会话身份原件,没有 LoginRedis;chat 不连 Redis,不在表里。
-    $explicitPools = @(
-        # GM 回收只借 Redis 做落地唤醒和位置读取；资产及回收账本仍由 SQL 持久化。
-        @{ Name = 'data-service'; Source = 'go/data_service/etc/data_service.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 1 }
-        @{ Name = 'login'; Source = 'go/login/etc/login.yaml'; KeyPath = @('Node.RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode', 'LoginRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'player-locator'; Source = 'go/player_locator/etc/player_locator.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'scene-manager'; Source = 'go/scene_manager/etc/scene_manager_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
-        @{ Name = 'trade'; Source = 'go/trade/etc/trade.yaml'; KeyPath = @('SharedRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'guild'; Source = 'go/guild/etc/guild.yaml'; KeyPath = @('RedisClient.PoolSize', 'PlayerLocatorRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'friend'; Source = 'go/friend/etc/friend.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 1 }
-        @{ Name = 'match'; Source = 'go/match/etc/match_service.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 0 }
-        @{ Name = 'player-inbox'; Source = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = @('CoreRedis.PoolSize', 'PlayerRedis.PoolSizePerNode'); DefaultPools = 0 }
-        @{ Name = 'mail'; Source = 'go/mail/etc/mail.yaml'; KeyPath = 'PlayerRedis.PoolSizePerNode'; DefaultPools = 0 }
-    )
-    $explicitNames = @($explicitPools | ForEach-Object { $_.Name })
-    foreach ($pool in $explicitPools) {
-        $row = @($inputs.Clients | Where-Object { $_.Name -eq $pool.Name })
-        Assert-Equal -Expected 1 -Actual $row.Count -Because "客户端表里 $($pool.Name) 只能有一行"
-        $expected = 0
-        foreach ($poolKey in @($pool.KeyPath)) {
-            $raw = Get-EtcValue -RelativePath $pool.Source -KeyPath $poolKey
-            $poolValue = 0
-            Assert-True -Condition ([int]::TryParse([string]$raw, [ref]$poolValue) -and $poolValue -gt 0) -Because "$($pool.Source) 的 $poolKey='$raw' 必须显式写正整数(0 / 不写 = go-redis 缺省 10 × GOMAXPROCS,随 CPU limit 漂)"
-            $expected += $poolValue
-        }
-        Assert-Equal -Expected $expected -Actual $row[0].ConfiguredPoolConns -Because "$($pool.Name) 的显式池上限必须读自 $($pool.Source) 的 $($pool.KeyPath)(ConfigMap 镜像同一个键)"
-        Assert-Equal -Expected $pool.DefaultPools -Actual $row[0].DefaultPools -Because "$($pool.Name) 剩下的缺省大小池个数"
+    $controlRows = @(Get-RedisControlClientRows -Cluster $false)
+    $playerRows = @((Get-RedisClusterConnectionLedgerInputs -Cluster (Get-RedisCluster -Kind 'player')).Clients)
+    Assert-Equal -Expected (@(@($controlRows) + @($playerRows) | ForEach-Object { $_.Name }) -join ',') -Actual (@($inputs.Clients | ForEach-Object { $_.Name }) -join ',') `
+        -Because '核心那份就是两张表直接拼:不合并、不丢行(同一个服务两行,总账按行求和)'
+    Assert-Equal -Expected (@($controlRows | ForEach-Object { $_.Name }) -join ',') -Actual (@((Get-RedisConnectionLedgerInputs -PlayerOnCore $false).Clients | ForEach-Object { $_.Name }) -join ',') `
+        -Because '玩家域搬走后核心上只剩控制域那张表'
+    $names = @($inputs.Clients | ForEach-Object { $_.Name })
+    foreach ($absent in @('db', 'chat', 'rank', 'client-rpc-router')) {
+        Assert-True -Condition ($names -notcontains $absent) -Because "$absent 不连 Redis,总账里不该有它"
     }
-    foreach ($client in $inputs.Clients) {
-        if ($explicitNames -contains $client.Name) { continue }
-        Assert-Equal -Expected 0 -Actual $client.ConfiguredPoolConns -Because "$($client.Name) 没有 PoolMirror,ConfiguredPoolConns 只能是 0(显式池上限必须有服务 yaml 出处)"
+
+    # 控制域每副本 = ControlPools × 池上限 + 唤醒订阅 + 固定连接。池上限在这里独立读服务 yaml(不经被测函数),写死的池上限从源码读。
+    # 换键名、多建一个句柄、或删掉显式值时这里先变红,逼着同改总账那一行。
+    $quotaSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/internal/logic/application_quota.go'))
+    $quotaPool = [int][regex]::Match($quotaSource, '(?m)^\s*(?:const\s+)?ApplicationQuotaRedisPoolSize\s*=\s*(\d+)\s*$').Groups[1].Value
+    $loginSvcSource = [IO.File]::ReadAllText((Join-Path $RepoRoot 'go/login/internal/svc/servicecontext.go'))
+    $admitPool = [regex]::Match($loginSvcSource, 'func mustNewQueueAdmitRedis\([^)]*\)[^{]*\{\s*c\.PoolSizePerNode\s*=\s*(\d+)')
+    Assert-True -Condition ($quotaPool -gt 0 -and $admitPool.Success) -Because '写死的池上限要从源码读到(guild 的 ApplicationQuotaRedisPoolSize、login 的 mustNewQueueAdmitRedis),写法变了同步本用例'
+    $controlPool = {
+        param([string]$Path, [string]$KeyPath = 'ControlRedis.PoolSizePerNode')
+        $raw = Get-EtcValue -RelativePath $Path -KeyPath $KeyPath
+        $value = 0
+        Assert-True -Condition ([int]::TryParse([string]$raw, [ref]$value) -and $value -gt 0) -Because "$Path 的 $KeyPath='$raw' 必须显式写正整数(0 / 不写 = 客户端缺省值,ConfigMap 镜像不出来)"
+        $value
+    }
+    $expectedControl = [ordered]@{
+        # login 本机回落 Node.RedisClient,K8s 上它的 ControlRedis 段原样写 Node.RedisClient.PoolSize;排队放行流水线另有专用的 1 条(按打开计)。
+        'login'          = @{ Scope = 'zone'; Pools = (& $controlPool 'go/login/etc/login.yaml' 'Node.RedisClient.PoolSize'); PubSub = 0; Fixed = [int]$admitPool.Groups[1].Value }
+        # 名字读缓存与 GM 回收的落地唤醒各一个同配置的客户端;唤醒订阅单实例每副本 1 条(都按打开计)。
+        'data-service'   = @{ Scope = 'zone'; Pools = 2 * (& $controlPool 'go/data_service/etc/data_service.yaml'); PubSub = 1; Fixed = 0 }
+        'player-locator' = @{ Scope = 'zone'; Pools = (& $controlPool 'go/player_locator/etc/player_locator.yaml'); PubSub = 0; Fixed = 0 }
+        'scene-manager'  = @{ Scope = 'zone'; Pools = (& $controlPool 'go/scene_manager/etc/scene_manager_service.yaml'); PubSub = 0; Fixed = 0 }
+        # Java 网关的 Lettuce:Spring 自动装配的共享连接 + 限流专用,按 2 记。
+        'gateway'        = @{ Scope = 'zone'; Pools = 0; PubSub = 0; Fixed = 2 }
+        'friend'         = @{ Scope = 'global'; Pools = (& $controlPool 'go/friend/etc/friend.yaml'); PubSub = 0; Fixed = 0 }
+        'trade'          = @{ Scope = 'global'; Pools = (& $controlPool 'go/trade/etc/trade.yaml'); PubSub = 1; Fixed = 0 }
+        'guild'          = @{ Scope = 'global'; Pools = (& $controlPool 'go/guild/etc/guild.yaml'); PubSub = 1; Fixed = $quotaPool }
+        'player-inbox'   = @{ Scope = 'global'; Pools = (& $controlPool 'go/player_inbox/etc/player_inbox.yaml'); PubSub = 0; Fixed = 0 }
+    }
+    Assert-Equal -Expected (@($expectedControl.Keys) -join ',') -Actual (@($controlRows | ForEach-Object { $_.Name }) -join ',') `
+        -Because '连控制域的服务名单(match 的私有 Redis 在 redis-match-cluster,mail 只有玩家域句柄);新增一个连控制域的服务 = 总账加一行'
+    foreach ($row in $controlRows) {
+        $want = $expectedControl[[string]$row.Name]
+        Assert-Equal -Expected ('{0}/{1}/0/{2}/{3}' -f $want.Scope, $want.Pools, $want.PubSub, $want.Fixed) `
+            -Actual ('{0}/{1}/{2}/{3}/{4}' -f $row.Scope, $row.ConfiguredPoolConns, $row.DefaultPools, $row.PubSub, $row.Fixed) `
+            -Because "$($row.Name) 的控制域行(Scope / 显式池 / 缺省池 / 订阅 / 固定)"
+    }
+    # 控制集群口径只有唤醒订阅不同:按 slot 分组每副本 64 条,按全落在一个主节点上记。
+    foreach ($row in @(Get-RedisControlClientRows -Cluster $true)) {
+        $wantPubSub = if ($expectedControl[[string]$row.Name].PubSub -gt 0) { 64 } else { 0 }
+        Assert-Equal -Expected $wantPubSub -Actual $row.PubSub -Because "$($row.Name) 在控制集群上的唤醒订阅条数"
+    }
+    foreach ($client in $playerRows) {
+        Assert-Equal -Expected 0 -Actual ([int]$client.DefaultPools + [int]$client.PubSub) -Because "$($client.Name) 在玩家域没有缺省池和 Pub/Sub(各行的池上限见 redis_player_cluster_contract)"
     }
 
     # match 私有集群那份总账(Get-RedisMatchConnectionLedgerInputs)同样按缺省池记 match 的 go-zero 集群句柄,一并核副本数与 CPU limit。
@@ -4494,41 +4531,38 @@ Test-Case '自检:Redis 总账公式逐项可复现,滚动余量只按「每副�
     Assert-Match -Text $message -Pattern 'WarnRatio=1\.5 必须在 \(0, 1\] 内' -Because '告警比例越界必须 throw'
 }
 
-Test-Case 'ConfigMap 镜像 go-redis 池上限 PoolSize == 服务 yaml(zone-up:login / player-locator;infra-up:trade / player-inbox),Redis 连接总账读同一个键' {
-    # P0-E 第 3 批:这几个 go-redis 直连客户端以前不设 PoolSize,池上限 = 10 × GOMAXPROCS,跟着 CPU limit 漂,总账只能按 G=2 估。
-    # 现在服务 yaml 写显式值,ConfigMap 镜像同一个键(Get-RedisPoolMirror),总账读同一个键。镜像漏写时 go-zero 按 0 加载 =
-    # 回到缺省池,集群跑的就不是账上的数,而且没有任何报错。
-    $zoneMirrors = @(
-        @{ ConfigMap = 'go-svc-login-config'; Prefix = 'data.login.yaml.'; Source = 'go/login/etc/login.yaml'; KeyPath = 'Node.RedisClient.PoolSize' }
-        @{ ConfigMap = 'go-svc-player-locator-config'; Prefix = 'data.player_locator.yaml.'; Source = 'go/player_locator/etc/player_locator.yaml'; KeyPath = 'RedisClient.PoolSize' }
-    )
-    foreach ($mirror in $zoneMirrors) {
-        $block = Select-ManifestByName -Output $devOut -Name $mirror.ConfigMap
-        Assert-True -Condition ($null -ne $block) -Because "DryRun 输出里应当有 $($mirror.ConfigMap)"
-        $flat = ConvertTo-FlatManifest -Block $block
-        $expected = Get-EtcValue -RelativePath $mirror.Source -KeyPath $mirror.KeyPath
-        $actual = Get-FlatValue -Flat $flat -KeyPath ($mirror.Prefix + $mirror.KeyPath)
-        Assert-Equal -Expected $expected -Actual $actual -Because "$($mirror.ConfigMap) 的 $($mirror.KeyPath) 必须与 $($mirror.Source) 一致(生成器不得自带常数;Redis 连接总账读的是同一个键)"
-    }
-
-    # trade 是全局服务,只在 infra-up / all-up 的基础设施阶段生成:做法同上面「连 MySQL 的 ConfigMap 只有总账认识的那些」那次 infra-up
+Test-Case 'ConfigMap 镜像控制域池上限 ControlRedis.PoolSizePerNode == 服务 yaml(zone-up:login / player-locator / scene-manager / data-service;infra-up:friend / trade / guild / player-inbox),Redis 连接总账读同一个键' {
+    # 控制域句柄都是 shared/clusterredis(缺口第 34 条第 2b、4、5 批)。ControlRedis 写了地址就不再继承别处的池与超时(clusterredis.Config.OrDefault),
+    # 镜像漏写时按 0 加载 = 回到客户端缺省池,集群跑的就不是账上的数,而且没有任何报错。login 本机没有 ControlRedis 段(回落 Node.RedisClient),
+    # K8s 上它的 ControlRedis 段写 Node.RedisClient.PoolSize。
+    # 全局服务只在 infra-up / all-up 的基础设施阶段生成:做法同上面「连 MySQL 的 ConfigMap 只有总账认识的那些」那次 infra-up
     # (去掉 -SkipGoSvc / -WaitReady、补 -GoSvcRegistry,仍是 DryRun)。
     $infraArgs = @($BattleInfraArgs | Where-Object { $_ -notin @('-SkipGoSvc', '-WaitReady') }) + @('-GoSvcRegistry', 'registry.invalid/test', '-KafkaBrokers', '3')
     Assert-True -Condition (($infraArgs -contains '-DryRun') -and -not ($infraArgs -contains '-SkipGoSvc')) -Because '夹具前提:这次 infra-up 必须仍是 DryRun(不碰任何集群),且不再跳过 Go 服务'
     $infraRun = Invoke-DeployDryRun -Arguments $infraArgs -Env $BattleTestEnv
     Assert-Equal -Expected 0 -Actual $infraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($infraRun.Output)"
-    $tradeBlock = Select-ManifestByName -Output $infraRun.Output -Name 'go-svc-trade-config'
-    Assert-True -Condition ($null -ne $tradeBlock) -Because 'infra-up DryRun 输出里应当有 go-svc-trade-config'
-    $tradeFlat = ConvertTo-FlatManifest -Block $tradeBlock
-    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/trade/etc/trade.yaml' -KeyPath 'SharedRedis.PoolSize') `
-        -Actual (Get-FlatValue -Flat $tradeFlat -KeyPath 'data.trade.yaml.SharedRedis.PoolSize') `
-        -Because 'go-svc-trade-config 的 SharedRedis.PoolSize 必须与 go/trade/etc/trade.yaml 一致(Redis 连接总账读的是同一个键)'
-    $inboxBlock = Select-ManifestByName -Output $infraRun.Output -Name 'go-svc-player-inbox-config'
-    Assert-True -Condition ($null -ne $inboxBlock) -Because 'infra-up DryRun 输出里应当有 go-svc-player-inbox-config'
-    $inboxFlat = ConvertTo-FlatManifest -Block $inboxBlock
-    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/player_inbox/etc/player_inbox.yaml' -KeyPath 'CoreRedis.PoolSize') `
-        -Actual (Get-FlatValue -Flat $inboxFlat -KeyPath 'data.player_inbox.yaml.CoreRedis.PoolSize') `
-        -Because 'go-svc-player-inbox-config 的 CoreRedis.PoolSize 必须与 go/player_inbox/etc/player_inbox.yaml 一致(Redis 连接总账读的是同一个键)'
+    foreach ($mirror in @(
+            @{ Output = $devOut; Svc = 'login'; File = 'login.yaml'; Source = 'go/login/etc/login.yaml'; SourceKey = 'Node.RedisClient.PoolSize' }
+            @{ Output = $devOut; Svc = 'player-locator'; File = 'player_locator.yaml'; Source = 'go/player_locator/etc/player_locator.yaml'; SourceKey = 'ControlRedis.PoolSizePerNode' }
+            @{ Output = $devOut; Svc = 'scene-manager'; File = 'scene_manager_service.yaml'; Source = 'go/scene_manager/etc/scene_manager_service.yaml'; SourceKey = 'ControlRedis.PoolSizePerNode' }
+            @{ Output = $devOut; Svc = 'data-service'; File = 'data_service.yaml'; Source = 'go/data_service/etc/data_service.yaml'; SourceKey = 'ControlRedis.PoolSizePerNode' }
+            @{ Output = $infraRun.Output; Svc = 'friend'; File = 'friend.yaml'; Source = 'go/friend/etc/friend.yaml'; SourceKey = 'ControlRedis.PoolSizePerNode' }
+            @{ Output = $infraRun.Output; Svc = 'trade'; File = 'trade.yaml'; Source = 'go/trade/etc/trade.yaml'; SourceKey = 'ControlRedis.PoolSizePerNode' }
+            @{ Output = $infraRun.Output; Svc = 'guild'; File = 'guild.yaml'; Source = 'go/guild/etc/guild.yaml'; SourceKey = 'ControlRedis.PoolSizePerNode' }
+            @{ Output = $infraRun.Output; Svc = 'player-inbox'; File = 'player_inbox.yaml'; Source = 'go/player_inbox/etc/player_inbox.yaml'; SourceKey = 'ControlRedis.PoolSizePerNode' }
+        )) {
+        $configMap = "go-svc-$($mirror.Svc)-config"
+        $block = Select-ManifestByName -Output $mirror.Output -Name $configMap
+        Assert-True -Condition ($null -ne $block) -Because "DryRun 输出里应当有 $configMap"
+        $flat = ConvertTo-FlatManifest -Block $block
+        $expected = Get-EtcValue -RelativePath $mirror.Source -KeyPath $mirror.SourceKey
+        Assert-Equal -Expected $expected -Actual (Get-FlatValue -Flat $flat -KeyPath "data.$($mirror.File).ControlRedis.PoolSizePerNode") `
+            -Because "$configMap 的 ControlRedis.PoolSizePerNode 必须与 $($mirror.Source) 的 $($mirror.SourceKey) 一致(生成器不得自带常数;Redis 连接总账读的是同一个键)"
+    }
+    # login 的 Node.RedisClient 段(本机回落;dev 没开玩家域集群时玩家域与登录域落在它上面)照样镜像池上限。
+    $loginFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name 'go-svc-login-config')
+    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.RedisClient.PoolSize') `
+        -Actual (Get-FlatValue -Flat $loginFlat -KeyPath 'data.login.yaml.Node.RedisClient.PoolSize') -Because 'go-svc-login-config 的 Node.RedisClient.PoolSize 必须与 go/login/etc/login.yaml 一致'
 }
 
 # go-redis 池上限镜像(Get-RedisPoolMirror)读的服务配置。夹具用例把它们拷到临时目录再逐项改坏,不碰仓库。
@@ -4546,8 +4580,8 @@ $redisPoolMirrorFixtureFiles = @(
     'go/mail/etc/mail.yaml'
 )
 
-Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-RedisPoolMirror throw 并点名文件与键路径,总账输入同样 throw(夹具是临时目录里的副本,不碰仓库)' {
-    # 0 在 Go 侧 = go-redis 缺省 10 × GOMAXPROCS(负数拒启):镜像一个 0 进 ConfigMap,集群里生效的就不是写出来的值,总账也不是集群的账。
+Test-Case '负向:服务 yaml 的控制域池上限不是正整数时 Get-RedisPoolMirror throw 并点名文件与键路径,总账输入同样 throw(夹具是临时目录里的副本,不碰仓库)' {
+    # 0 在 Go 侧 = 客户端缺省池(负数拒启):镜像一个 0 进 ConfigMap,集群里生效的就不是写出来的值,总账也不是集群的账。
     # 总账输入(Get-RedisConnectionLedgerInputs)由写路径入口的 Write-RedisConnectionLedger 先于任何集群写操作调用,它 throw 就不留半截部署。
     $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('redis-pool-mirror-' + [guid]::NewGuid().ToString('N'))
     $resetFixture = {
@@ -4566,26 +4600,25 @@ Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-Redis
         $RepoRoot = $tempRoot
         # 前提:副本不改就该放行,且每个目标恰好一个正整数池上限。否则下面几条负向断言分不清是谁造成的失败。
         & $resetFixture
-        # friend / match / chat 不再有 go-redis 直连池(登录态段已删,只认 gate 签名的会话身份原件),不是这里的目标。
-        foreach ($target in @('login', 'player-locator', 'trade', 'guild', 'player-inbox')) {
+        # 每个控制域客户端恰好一个池键:login 是 Node.RedisClient.PoolSize(K8s 上原样写进它的 ControlRedis 段),其余是 ControlRedis.PoolSizePerNode。
+        # match 的私有 Redis 在 redis-match-cluster、mail 只有玩家域句柄、chat 不连 Redis,都不是这里的目标。
+        foreach ($target in @('login', 'player-locator', 'scene-manager', 'data-service', 'friend', 'trade', 'guild', 'player-inbox')) {
             $values = Get-RedisPoolMirror -Target $target
-            $expectedPoolCount = if ($target -eq 'guild') { 2 } else { 1 }
-            Assert-Equal -Expected $expectedPoolCount -Actual $values.Count -Because "前提:$target 的显式池数量必须与真实客户端匹配"
-            if ($target -eq 'guild') {
-                Assert-Equal -Expected 'PlayerLocatorRedis.PoolSize,RedisClient.PoolSize' `
-                    -Actual (@($values.Keys | Sort-Object) -join ',') -Because 'Guild 的两个控制域池逐键绑定当前服务客户端，不能只把计数改大'
-            }
-            foreach ($poolSize in $values.Values) { Assert-True -Condition ($poolSize -gt 0) -Because "前提:仓库里 $target 的 PoolSize 是正整数" }
+            $expectedKey = if ($target -eq 'login') { 'Node.RedisClient.PoolSize' } else { 'ControlRedis.PoolSizePerNode' }
+            Assert-Equal -Expected $expectedKey -Actual (@($values.Keys) -join ',') -Because "前提:$target 的控制域池键"
+            foreach ($poolSize in $values.Values) { Assert-True -Condition ($poolSize -gt 0) -Because "前提:仓库里 $target 的池上限是正整数" }
         }
         [void](Get-RedisConnectionLedgerInputs)
 
         foreach ($bad in @(
-            @{ Why = 'login 写 0(= go-redis 缺省池)'; Target = 'login'; File = 'go/login/etc/login.yaml'; KeyPath = 'Node.RedisClient.PoolSize'; Value = '0' }
-            @{ Why = 'player-locator 写小数'; Target = 'player-locator'; File = 'go/player_locator/etc/player_locator.yaml'; KeyPath = 'RedisClient.PoolSize'; Value = '20.5' }
-            @{ Why = 'trade 写 0'; Target = 'trade'; File = 'go/trade/etc/trade.yaml'; KeyPath = 'SharedRedis.PoolSize'; Value = '0' }
-            @{ Why = 'guild 全局池写0'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'RedisClient.PoolSize'; Value = '0' }
-            @{ Why = 'guild 在线池写负数'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'PlayerLocatorRedis.PoolSize'; Value = '-1' }
-            @{ Why = 'player-inbox 写 0'; Target = 'player-inbox'; File = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = 'CoreRedis.PoolSize'; Value = '0' }
+            @{ Why = 'login 写 0(= 客户端缺省池)'; Target = 'login'; File = 'go/login/etc/login.yaml'; KeyPath = 'Node.RedisClient.PoolSize'; Value = '0' }
+            @{ Why = 'player-locator 写小数'; Target = 'player-locator'; File = 'go/player_locator/etc/player_locator.yaml'; KeyPath = 'ControlRedis.PoolSizePerNode'; Value = '20.5' }
+            @{ Why = 'scene-manager 写 0'; Target = 'scene-manager'; File = 'go/scene_manager/etc/scene_manager_service.yaml'; KeyPath = 'ControlRedis.PoolSizePerNode'; Value = '0' }
+            @{ Why = 'data-service 写负数'; Target = 'data-service'; File = 'go/data_service/etc/data_service.yaml'; KeyPath = 'ControlRedis.PoolSizePerNode'; Value = '-1' }
+            @{ Why = 'friend 写 0'; Target = 'friend'; File = 'go/friend/etc/friend.yaml'; KeyPath = 'ControlRedis.PoolSizePerNode'; Value = '0' }
+            @{ Why = 'trade 写 0'; Target = 'trade'; File = 'go/trade/etc/trade.yaml'; KeyPath = 'ControlRedis.PoolSizePerNode'; Value = '0' }
+            @{ Why = 'guild 写负数'; Target = 'guild'; File = 'go/guild/etc/guild.yaml'; KeyPath = 'ControlRedis.PoolSizePerNode'; Value = '-1' }
+            @{ Why = 'player-inbox 写 0'; Target = 'player-inbox'; File = 'go/player_inbox/etc/player_inbox.yaml'; KeyPath = 'ControlRedis.PoolSizePerNode'; Value = '0' }
         )) {
             & $resetFixture
             Set-FixtureYamlScalar -Path (Join-Path $tempRoot $bad.File) -KeyPath $bad.KeyPath -Value $bad.Value
@@ -4605,33 +4638,30 @@ Test-Case '负向:服务 yaml 的 go-redis PoolSize 不是正整数时 Get-Redis
 
 Test-Case '部署写路径打印 Redis connection ledger:zone-up 的数字可按同一组函数重算,zones= 与 MySQL 那一行相同,先于任何 kubectl 写操作;infra-up 同样打印一行' {
     $zones = @((Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/zones.json') -Raw | ConvertFrom-Json).zones)
-    $gateDefault = Get-K8sDeployIntParamDefault -Name 'GateReplicas'
     $sceneDefault = Get-K8sDeployIntParamDefault -Name 'SceneReplicas'
-    $battleDefault = Get-K8sDeployIntParamDefault -Name 'BattleReplicas'
     # 基线 DryRun($BaseArgs)是 zone-up -ZoneId 101、读 deploy/k8s/zones.json:Z = 其中全部 zone ∪ 101;101 按命令行(缺省)台数,
     # 其余 zone 按 zones.json 的 replicas(没写的键落回缺省)。zones.json 只用 legacy 单池,拆分池的键出现时本例要跟着改。
-    $cppByZone = @{}
+    # C++ 只有 scene 连 Redis(缺口第 34 条第 3 批),只数 scene;基线 DryRun 没开两套集群,两个域都在核心上(总账输入的缺省)。
+    $sceneByZone = @{}
     foreach ($zone in $zones) {
         $replicaKeys = if ($null -ne $zone.replicas) { @($zone.replicas.PSObject.Properties.Name) } else { @() }
         Assert-True -Condition (-not ($replicaKeys -contains 'scene_world' -or $replicaKeys -contains 'scene_instance')) -Because '夹具前提:deploy/k8s/zones.json 不用 scene 拆分池'
-        $gate = if ($replicaKeys -contains 'gate') { [int]$zone.replicas.gate } else { $gateDefault }
-        $scene = if ($replicaKeys -contains 'scene') { [int]$zone.replicas.scene } else { $sceneDefault }
-        $cppByZone[[int]$zone.zoneId] = $gate + $scene
+        $sceneByZone[[int]$zone.zoneId] = if ($replicaKeys -contains 'scene') { [int]$zone.replicas.scene } else { $sceneDefault }
     }
-    $cppByZone[101] = $gateDefault + $sceneDefault
-    $cppTotal = 0
-    foreach ($processes in $cppByZone.Values) { $cppTotal += $processes }
+    $sceneByZone[101] = $sceneDefault
+    $sceneTotal = 0
+    foreach ($processes in $sceneByZone.Values) { $sceneTotal += $processes }
 
     $RepoRoot = Get-RepoRoot
     $plan = Get-RedisConnectionPlan
-    $deployLedger = Get-RedisConnectionLedger -Inputs (Get-RedisConnectionLedgerInputs) -ZoneCount $cppByZone.Count -CppZoneProcesses $cppTotal `
-        -BattleProcesses $battleDefault -RolloutExtraPodsPerDeployment $plan.RolloutExtraPodsPerDeployment -OpsReserve $plan.OpsReserve -WarnRatio $plan.WarnRatio
+    $deployLedger = Get-RedisConnectionLedger -Inputs (Get-RedisConnectionLedgerInputs) -ZoneCount $sceneByZone.Count -CppZoneProcesses $sceneTotal `
+        -BattleProcesses 0 -CppSurgeWorkloads 1 -RolloutExtraPodsPerDeployment $plan.RolloutExtraPodsPerDeployment -OpsReserve $plan.OpsReserve -WarnRatio $plan.WarnRatio
     $planLedger = Get-RepoRedisPlanLedger
 
     $ledgerLines = @($devOut -split "`r?`n" | Where-Object { $_ -match '^\s*Redis connection ledger: zones=' })
     Assert-Equal -Expected 1 -Actual $ledgerLines.Count -Because 'zone-up 写路径入口必须恰好打印一行 Redis connection ledger(Write-RedisConnectionLedger)'
     $ledgerLine = [string]$ledgerLines[0]
-    $deployPart = 'Redis connection ledger: zones={0} steady={1} peak={2} maxclients={3} warn_at={4} headroom={5};' -f $cppByZone.Count, $deployLedger.Steady, $deployLedger.Peak, $deployLedger.MaxClients, $deployLedger.WarnAt, $deployLedger.Headroom
+    $deployPart = 'Redis connection ledger: zones={0} steady={1} peak={2} maxclients={3} warn_at={4} headroom={5};' -f $sceneByZone.Count, $deployLedger.Steady, $deployLedger.Peak, $deployLedger.MaxClients, $deployLedger.WarnAt, $deployLedger.Headroom
     Assert-Match -Text $ledgerLine -Pattern ('^\s*' + [regex]::Escape($deployPart)) -Because ("本次部署那一份必须与总账函数按同一组输入算出的值一致。分项:{0}" -f (Format-RedisConnectionLedger -Ledger $deployLedger))
     $planPart = '; plan zones={0} peak={1} headroom={2}' -f $plan.ZoneCount, $planLedger.Peak, $planLedger.Headroom
     Assert-Match -Text $ledgerLine -Pattern ([regex]::Escape($planPart) + '\s*$') -Because '规划档那一份必须与 Get-RedisConnectionPlan 算出的值一致,且 zones 配置在场时行尾没有 zones_config=missing'
@@ -5585,7 +5615,7 @@ Test-Case 'guild ConfigMap 镜像 go/guild/etc/guild.yaml;AssetOp / Activity 整
     Assert-True -Condition ($null -ne $cm) -Because 'infra-up 产物里应当有 go-svc-guild-config'
     $embedded = Get-ConfigMapEmbeddedText -Block $cm -FileName 'guild.yaml'
     $flat = ConvertTo-UnprefixedScalars -Scalars (ConvertTo-FlatManifest -Block $cm).Scalars -Prefix 'data.guild.yaml.'
-    foreach ($key in @('Name', 'Timeout', 'ApplicationQuotaPerMinute', 'RedisClient.DB', 'MySQL.MaxOpenConn', 'MySQL.MaxIdleConn', 'Node.LeaseTTL',
+    foreach ($key in @('Name', 'Timeout', 'ApplicationQuotaPerMinute', 'ControlRedis.PoolSizePerNode', 'MySQL.MaxOpenConn', 'MySQL.MaxIdleConn', 'Node.LeaseTTL',
             'Cache.DefaultTTL', 'Cache.MaxMembers', 'DataServiceRpc.Timeout', 'MatchRpc.Timeout', 'IdSegment.Step', 'IdSegment.MinStep', 'IdSegment.MaxStep')) {
         Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath $key) -Actual ([string]$flat[$key]).Trim('"') -Because "ConfigMap 的 $key 必须等于服务 yaml(单一真相)"
     }
@@ -5594,9 +5624,13 @@ Test-Case 'guild ConfigMap 镜像 go/guild/etc/guild.yaml;AssetOp / Activity 整
     Assert-Equal -Expected (Get-TopLevelYamlBlockText -Text $guildYamlText -Key 'Activity') -Actual (Get-TopLevelYamlBlockText -Text $embedded -Key 'Activity') -Because 'Activity 整块原样搬运'
     Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'ResultTopicPartitions') -Actual (Get-EtcValue -RelativePath 'go/guild/etc/guild.yaml' -KeyPath 'Activity.TrialResult.Partitions') -Because '历练结果分区数必须等于 match 的结果 topic 分区数,否则结算漏读分区'
     Assert-NotMatch -Text $embedded -Pattern '(?m)^Etcd\s*:' -Because 'guild 刻意不写 go-zero 的 Etcd 段(D-13),写了会被当成按 zone 切片的发现键'
-    Assert-Equal -Expected 'redis.contract-battle-infra:6379' -Actual ([string]$flat['PlayerLocatorRedis.Host']).Trim('"') -Because 'PlayerLocatorRedis必须连接scene/battle共享的协调Redis'
-    Assert-Equal -Expected '0' -Actual ([string]$flat['PlayerLocatorRedis.DB']) -Because '共享协调Redis必须使用同一DB 0'
-    Assert-True -Condition ($flat.Contains('PlayerLocatorRedis.Password')) -Because '共享协调Redis的密码配置不能遗漏'
+    # 控制域(缺口第 34 条第 6b 批):dev 没开控制集群,ControlRedis 指向核心 redis.<infra>,与 scene 发布唤醒的是同一套 Redis。
+    Assert-Equal -Expected 'redis.contract-battle-infra:6379' -Actual ([string]$flat['ControlRedis.Addrs[0]']).Trim('"') -Because 'ControlRedis 取控制端点(Get-ControlRedisEndpoint)'
+    Assert-True -Condition (-not $flat.Contains('ControlRedis.Addrs[1]') -and -not $flat.Contains('ControlRedis.Cluster')) -Because '核心是单实例:一个地址、不写 Cluster'
+    Assert-Equal -Expected '' -Actual ([string]$flat['ControlRedis.Password']).Trim('"') -Because '口令由 SharedRedisPasswordEnv 指名的变量填,ConfigMap 只写空串'
+    foreach ($retired in @('RedisClient', 'PlayerLocatorRedis')) {
+        Assert-NotMatch -Text $embedded -Pattern "(?m)^$retired\s*:" -Because "guild 的控制域句柄只剩 ControlRedis(第 5 批),$retired 不再渲染"
+    }
     Assert-NotMatch -Text $embedded -Pattern '(?m)^MergeMarkerRedis\s*:' -Because 'go/guild 已删合服标记段,ConfigMap 不该再写'
     Assert-Match -Text $embedded -Pattern '(?m)^  DataSource: ""\s*$' -Because '公开ConfigMap不携带常驻DSN，实例使用正规NORMAL启动配置'
     Assert-Match -Text $embedded -Pattern '(?m)^  DataSourceEnv: MMORPG_GUILD_SQL_DSN\s*$' -Because '本库DSN只从实例选中的独立授权环境读取'
@@ -5620,7 +5654,18 @@ Test-Case 'data-service ConfigMap 只写 config.go 认的键:Regions / DevRedis 
     $expectedTimeouts = & $methodTimeoutsOf (Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'go/data_service/etc/data_service.yaml') -Raw)
     Assert-Match -Text $expectedTimeouts -Pattern 'BatchRecallItems=' -Because '服务 yaml 要给冻结计划放宽预算'
     Assert-Equal -Expected $expectedTimeouts -Actual (& $methodTimeoutsOf $embedded) -Because 'ConfigMap 的 MethodTimeouts 要和服务 yaml 一样'
-    Assert-Match -Text $embedded -Pattern '(?m)^NameCacheRedis:\s*\n\s+Host: redis\.mmorpg-infra:6379\s*$' -Because 'NameCacheRedis 指向共享 Redis'
+}
+
+Test-Case 'scene-manager 的 go-zero 发现键按 zone 加后缀:服务端 Etcd.Key 与 login / player-locator 的 SceneManagerRpc.Etcd.Key 都是 scenemanagerservice.rpc.z<zone>' {
+    # docs/design/control-plane-zone-scoping-20261105.md §3.6:客户端只连本 zone 的 scene-manager。两边差一个字,本 zone 的 login 就发现不到服务端。
+    foreach ($case in @(
+            @{ ConfigMap = 'go-svc-scene-manager-config'; KeyPath = 'data.scene_manager_service.yaml.Etcd.Key' }
+            @{ ConfigMap = 'go-svc-login-config'; KeyPath = 'data.login.yaml.SceneManagerRpc.Etcd.Key' }
+            @{ ConfigMap = 'go-svc-player-locator-config'; KeyPath = 'data.player_locator.yaml.SceneManagerRpc.Etcd.Key' }
+        )) {
+        $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name $case.ConfigMap)
+        Assert-Equal -Expected 'scenemanagerservice.rpc.z101' -Actual (Get-FlatValue -Flat $flat -KeyPath $case.KeyPath) -Because "$($case.ConfigMap) 的 $($case.KeyPath)(基线 DryRun 是 zone 101)"
+    }
 }
 
 Test-Case 'go_svc_image.ps1 与 k8s_deploy.ps1 的 guild 镜像名一致(否则发布的镜像与部署拉的镜像对不上)' {
@@ -7214,7 +7259,9 @@ Test-Case 'Java 服务缺 manifest(目录里的 auth)时连 ConfigMap 也不 app
 # (参数同 $guildInfraArgs),覆盖全局服务 —— infra-up 的 DryRun 按「已有 zone」把它们的 Deployment 一并渲染。换口令后 gateway 的滚动在 3b 节
 # 「gateway 削峰指纹随 Redis 口令变化」里断言。注入与注解的函数按 AST 抽出来直接调(同 3a)。断言一律不回显口令值(比较用 -ceq / Contains)。
 $sharedRedisFunctionNames = @('Add-PodTemplateAnnotation', 'Add-PodTemplateAnnotationEntry', 'Get-SharedRedisClientPassword',
-    'Add-SharedRedisAuthToManifest', 'Add-GoSvcSecretEnv', 'Get-SqlRuntimeManifestRange')
+    'Add-SharedRedisAuthToManifest', 'Add-GoSvcSecretEnv', 'Get-SqlRuntimeManifestRange',
+    # 口令来源按服务分(缺口第 34 条第 6b 批):控制域客户端取控制端点,其余取核心。
+    'Get-SharedRedisClientSource', 'Get-ControlRedisPasswordSource', 'Get-ControlRedisEndpoint')
 foreach ($sharedRedisFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($sharedRedisFunctionNames -contains $sharedRedisFnAst.Name) {
         Set-Item -Path "Function:script:$($sharedRedisFnAst.Name)" -Value $sharedRedisFnAst.Body.GetScriptBlock()
@@ -7244,18 +7291,24 @@ function Get-SharedRedisScriptList {
 
 # 有共享 Redis 段的 Go 服务,与各段在 ConfigMap(data.<文件名>. 之下)里的口令键。这张表是契约:与 k8s_deploy.ps1 的 $script:SharedRedisAuthGoServices
 # 逐项一致(下面第一条用例核);新增连共享 Redis 的服务要两边同加,并在 go/<服务> 里接 shared/redisauth。Zone = $true 的在 zone-up($prodRun)里渲染,
-# 其余是全局服务,在 infra-up 里渲染。OptionalKeys 只在特定参数下出现(login 的 Node.QueueRedis 只在 -RedisSplit queue 时写),出现了同样核。
+# 其余是全局服务,在 infra-up 里渲染。Control = $true 的是控制域客户端(与 $script:ControlRedisClientServices 去掉 gateway 逐项一致):
+# 口令取控制端点,开了控制集群(staging / prod)是 Secret redis-control-auth;match 的 Redis 段仍指向核心,取 redis-auth。
+# login 的 Node.RedisClient 是本机回落段,同样写空口令(dev 没开玩家域集群时玩家域与登录域落在它上面)。
 $SharedRedisServices = [ordered]@{
-    'login'          = [pscustomobject]@{ Zone = $true;  File = 'login.yaml';                 PasswordKeys = @('Node.RedisClient.Password'); OptionalKeys = @('Node.QueueRedis.Password') }
-    'data-service'   = [pscustomobject]@{ Zone = $true;  File = 'data_service.yaml';          PasswordKeys = @('NameCacheRedis.Pass', 'SharedRedis.Password'); OptionalKeys = @() }
-    'player-locator' = [pscustomobject]@{ Zone = $true;  File = 'player_locator.yaml';        PasswordKeys = @('RedisClient.Password'); OptionalKeys = @() }
-    'scene-manager'  = [pscustomobject]@{ Zone = $true;  File = 'scene_manager_service.yaml'; PasswordKeys = @('Redis.Pass', 'CoreRedis.Pass'); OptionalKeys = @() }
-    'match'          = [pscustomobject]@{ Zone = $false; File = 'match_service.yaml';         PasswordKeys = @('Redis.Pass'); OptionalKeys = @() }
-    'trade'          = [pscustomobject]@{ Zone = $false; File = 'trade.yaml';                 PasswordKeys = @('SharedRedis.Password'); OptionalKeys = @() }
-    'friend'         = [pscustomobject]@{ Zone = $false; File = 'friend.yaml';                PasswordKeys = @('Redis.Pass'); OptionalKeys = @() }
-    'player-inbox'   = [pscustomobject]@{ Zone = $false; File = 'player_inbox.yaml';          PasswordKeys = @('CoreRedis.Password'); OptionalKeys = @() }
-    'guild'          = [pscustomobject]@{ Zone = $false; File = 'guild.yaml';                 PasswordKeys = @('RedisClient.Password', 'PlayerLocatorRedis.Password'); OptionalKeys = @() }
+    'login'          = [pscustomobject]@{ Zone = $true;  Control = $true;  File = 'login.yaml';                 PasswordKeys = @('Node.RedisClient.Password', 'ControlRedis.Password') }
+    'data-service'   = [pscustomobject]@{ Zone = $true;  Control = $true;  File = 'data_service.yaml';          PasswordKeys = @('ControlRedis.Password') }
+    'player-locator' = [pscustomobject]@{ Zone = $true;  Control = $true;  File = 'player_locator.yaml';        PasswordKeys = @('ControlRedis.Password') }
+    'scene-manager'  = [pscustomobject]@{ Zone = $true;  Control = $true;  File = 'scene_manager_service.yaml'; PasswordKeys = @('ControlRedis.Password') }
+    'match'          = [pscustomobject]@{ Zone = $false; Control = $false; File = 'match_service.yaml';         PasswordKeys = @('Redis.Pass') }
+    'trade'          = [pscustomobject]@{ Zone = $false; Control = $true;  File = 'trade.yaml';                 PasswordKeys = @('ControlRedis.Password') }
+    'friend'         = [pscustomobject]@{ Zone = $false; Control = $true;  File = 'friend.yaml';                PasswordKeys = @('ControlRedis.Password') }
+    'player-inbox'   = [pscustomobject]@{ Zone = $false; Control = $true;  File = 'player_inbox.yaml';          PasswordKeys = @('ControlRedis.Password') }
+    'guild'          = [pscustomobject]@{ Zone = $false; Control = $true;  File = 'guild.yaml';                 PasswordKeys = @('ControlRedis.Password') }
 }
+# 控制集群的口令 Secret(集群描述里的名字,只有一处定义)与 Go 服务 / gateway 指纹的用途串(Add-SharedRedisAuthToManifest:来源是控制集群时换用途串,
+# 换到控制集群那次指纹必变,Pod 滚动换上新口令)。
+$ControlRedisAuthSecretName = (Get-RedisCluster -Kind 'control').AuthSecretName
+$ControlRedisClientHashPurpose = 'control-redis/client'
 
 # 取某个服务的工作负载文档用文件开头的 Select-WorkloadSecretDoc,不另写一份只认 Deployment 的:连共享 Redis 的服务里 SQL 写者
 # (含 Java gateway)是 StatefulSet(k8s_deploy.ps1 的 Get-WorkloadKind),其余是 Deployment,两种都要能取到。
@@ -7277,18 +7330,19 @@ function Get-SharedRedisAuthHash {
     return $m.Groups['hash'].Value
 }
 
-# Deployment 里 SHARED_REDIS_PASSWORD 的注入:恰好一条,经 secretKeyRef 引用本 namespace 的 Secret redis-auth 的 password 键,
-# 不写 optional(缺 Secret 要卡在 CreateContainerConfigError,不能带着空口令起来),也不写明文 value。
+# Deployment 里 SHARED_REDIS_PASSWORD 的注入:恰好一条,经 secretKeyRef 引用本 namespace 的 Secret(缺省 redis-auth;控制域客户端在开了控制集群时
+# 是 redis-control-auth)的 password 键,不写 optional(缺 Secret 要卡在 CreateContainerConfigError,不能带着空口令起来),也不写明文 value。
 function Assert-SharedRedisEnvRef {
     param(
         [Parameter(Mandatory = $true)][string]$Doc,
-        [Parameter(Mandatory = $true)][string]$Label
+        [Parameter(Mandatory = $true)][string]$Label,
+        [string]$SecretName = $ZoneRedisSecretVars.RedisAuthSecretName
     )
     $text = $Doc -replace "`r`n", "`n"
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($text, '(?m)^[ ]*- name: ' + $SharedRedisEnvName + '[ ]*$').Count) -Because "${Label}:$SharedRedisEnvName 只能注入一份"
     $pattern = '(?m)^[ ]*- name: ' + $SharedRedisEnvName + '[ ]*\n[ ]+valueFrom:[ ]*\n[ ]+secretKeyRef:[ ]*\n[ ]+name: ' +
-        [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + '[ ]*\n[ ]+key: ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '[ ]*\n(?![ ]+optional:)'
-    Assert-True -Condition ($text -cmatch $pattern) -Because "${Label}:$SharedRedisEnvName 必须 secretKeyRef 到本 namespace 的 Secret $($ZoneRedisSecretVars.RedisAuthSecretName) 的 $($ZoneRedisSecretVars.RedisAuthSecretKey) 键,且不写 optional"
+        [regex]::Escape($SecretName) + '[ ]*\n[ ]+key: ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '[ ]*\n(?![ ]+optional:)'
+    Assert-True -Condition ($text -cmatch $pattern) -Because "${Label}:$SharedRedisEnvName 必须 secretKeyRef 到本 namespace 的 Secret $SecretName 的 $($ZoneRedisSecretVars.RedisAuthSecretKey) 键,且不写 optional"
 }
 
 # 一个服务 ConfigMap 里的共享 Redis 段:口令键全是空串;-EnvName 为空 = 不该有顶层 SharedRedisPasswordEnv,否则必须逐字等于它。
@@ -7302,8 +7356,7 @@ function Assert-SharedRedisConfigMap {
     $spec = $SharedRedisServices[$SvcName]
     $prefix = "data.$($spec.File)."
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $Output -Name "go-svc-$SvcName-config")
-    $keys = @($spec.PasswordKeys) + @($spec.OptionalKeys | Where-Object { $flat.Scalars.Contains($prefix + $_) })
-    foreach ($key in $keys) {
+    foreach ($key in @($spec.PasswordKeys)) {
         Assert-True -Condition ((Get-FlatValue -Flat $flat -KeyPath ($prefix + $key)) -ceq '') -Because "${Label}:$SvcName 的 $key 必须是空串,口令不进 ConfigMap"
     }
     $envKey = $prefix + 'SharedRedisPasswordEnv'
@@ -7366,6 +7419,9 @@ $sharedRedisInfraRun = Invoke-DeployDryRun -Arguments $guildInfraArgs -Env ($Bat
 Test-Case '共享 Redis 口令:契约表与 k8s_deploy.ps1 的两份服务名单一致(新增连共享 Redis 的服务要两边同加)' {
     Assert-Equal -Expected (@($SharedRedisServices.Keys | Sort-Object) -join ',') -Actual (@(Get-SharedRedisScriptList -Name 'SharedRedisAuthGoServices' | Sort-Object) -join ',') -Because '注入名单与本节的口令键契约表必须是同一批服务:漏一个,它的 ConfigMap 写了空口令却没人给它注入'
     Assert-Equal -Expected 'mail' -Actual (@(Get-SharedRedisScriptList -Name 'SharedRedisAuthHashOnlyGoServices') -join ',') -Because '只补指纹的只有 mail:它的 manifest 自带对 redis-auth 的可选引用'
+    $expectedControl = @(@($SharedRedisServices.Keys | Where-Object { $SharedRedisServices[$_].Control }) + @('gateway') | Sort-Object) -join ','
+    Assert-Equal -Expected $expectedControl -Actual (@(Get-SharedRedisScriptList -Name 'ControlRedisClientServices' | Sort-Object) -join ',') `
+        -Because '控制域客户端名单(口令取控制端点)= 契约表里 Control 的 Go 服务 + gateway;漏一个,它会拿核心的口令去连控制集群,全线 WRONGPASS'
 }
 
 Test-Case 'Add-PodTemplateAnnotationEntry:已有 annotations: 段就追加到段末,没有就新建;同名键、流式写法拒绝;CRLF 保持' {
@@ -7428,32 +7484,36 @@ Test-Case 'Add-SharedRedisAuthToManifest:口令为空原样返回;有口令注�
     }
 }
 
-Test-Case '共享 Redis 口令(prod zone-up):整份 DryRun 输出不含口令;zone 级 Go 服务 ConfigMap 口令为空串并指名变量,Deployment 经 Secret 注入、带只哈希口令的指纹;gateway 只写引用;db 不连' {
+Test-Case '共享 Redis 口令(prod zone-up):整份 DryRun 输出不含口令;zone 级 Go 服务 ConfigMap 口令为空串并指名变量,Deployment 经控制集群的 Secret 注入、带只哈希口令的指纹;gateway 只写引用;db 不连' {
     Assert-Equal -Expected 0 -Actual $prodRun.ExitCode -Because "prod DryRun 应当成功。输出: $($prodRun.Output)"
-    Assert-True -Condition (-not ([string]$prodRun.Output).Contains($ProdEnv.MMORPG_REDIS_PASSWORD)) -Because 'prod DryRun 整份输出(ConfigMap、Deployment、Secret 意图行、计划行)里不得出现共享 Redis 口令明文'
-    $expected = Get-SharedRedisAuthHash -Doc (Invoke-SharedRedisAuthRender -Password $ProdEnv.MMORPG_REDIS_PASSWORD -ReleaseProfileValue 'prod' -Manifest $SharedRedisSampleManifest) -Label '期望指纹(prod 口令)'
+    foreach ($value in @($ProdEnv.MMORPG_REDIS_PASSWORD, $ProdControlRedisPassword)) {
+        Assert-True -Condition (-not ([string]$prodRun.Output).Contains($value)) -Because 'prod DryRun 整份输出(ConfigMap、Deployment、Secret 意图行、计划行)里不得出现 Redis 口令明文'
+    }
+    # prod 开着控制集群(lib/deploy_capture.ps1 的 Add-PlayerRedisDeployFixture,口令 = $ProdControlRedisPassword):zone 级服务全是控制域客户端。
+    $expected = Get-InjectedSecretFingerprint -SecretName $ControlRedisClientHashPurpose -Value $ProdControlRedisPassword
     foreach ($svc in @($SharedRedisServices.Keys | Where-Object { $SharedRedisServices[$_].Zone })) {
+        Assert-True -Condition $SharedRedisServices[$svc].Control -Because "前提:zone 级的 $svc 是控制域客户端"
         Assert-SharedRedisConfigMap -Output $prodRun.Output -SvcName $svc -EnvName $SharedRedisEnvName -Label 'prod'
         $doc = Select-WorkloadSecretDoc -Output $prodRun.Output -Name $svc -Label "prod $svc"
-        Assert-SharedRedisEnvRef -Doc $doc -Label "prod $svc"
-        Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $doc -Label "prod $svc") -Because "prod ${svc}:Pod 模板的口令指纹只由口令决定,与最小 manifest 上算出的一致"
+        Assert-SharedRedisEnvRef -Doc $doc -Label "prod $svc" -SecretName $ControlRedisAuthSecretName
+        Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $doc -Label "prod $svc") -Because "prod ${svc}:Pod 模板的口令指纹只由控制集群的口令决定(用途串 $ControlRedisClientHashPurpose)"
     }
     # gateway:ConfigMap 只写对容器环境变量的引用(-ceq 区分大小写,钉的是生成器写出的字面量,与注入的 env 名逐字一致),Deployment 同样注入、带同一个指纹。
     $gatewayFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'java-svc-gateway-config')
     $gatewayRef = Get-FlatValue -Flat $gatewayFlat -KeyPath 'data.application.yaml.spring.data.redis.password'
     Assert-True -Condition ($gatewayRef -ceq ('${' + $SharedRedisEnvName + '}')) -Because "gateway 的 spring.data.redis.password 只能是对 $SharedRedisEnvName 的引用(不带缺省值:变量缺失时 @Value 解析失败,gateway 拒启)"
     $gatewayDoc = Select-WorkloadSecretDoc -Output $prodRun.Output -Name 'gateway' -Label 'prod gateway'
-    Assert-SharedRedisEnvRef -Doc $gatewayDoc -Label 'prod gateway'
-    Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $gatewayDoc -Label 'prod gateway') -Because 'gateway 与 Go 服务是同一个口令、同一个指纹'
+    Assert-SharedRedisEnvRef -Doc $gatewayDoc -Label 'prod gateway' -SecretName $ControlRedisAuthSecretName
+    Assert-Equal -Expected $expected -Actual (Get-SharedRedisAuthHash -Doc $gatewayDoc -Label 'prod gateway') -Because 'gateway 的限流在控制域:与 Go 服务是同一个口令、同一个指纹'
     # db 不连共享 Redis:ConfigMap 不指名变量,Deployment 不注入、不带指纹。
     $dbFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'go-svc-db-config')
     Assert-True -Condition (-not $dbFlat.Scalars.Contains('data.db.yaml.SharedRedisPasswordEnv')) -Because 'db 不连共享 Redis,不写 SharedRedisPasswordEnv'
     $dbDoc = Select-WorkloadSecretDoc -Output $prodRun.Output -Name 'db' -Label 'prod db'
     Assert-True -Condition (-not $dbDoc.Contains($SharedRedisEnvName) -and -not $dbDoc.Contains($SharedRedisHashKey)) -Because 'db 的工作负载不注入共享 Redis 口令、不带它的指纹'
-    # zone namespace 的 Secret redis-auth 副本(Apply-Zone 开头)先于第一个引用它的工作负载。
-    $secretLine = [regex]::Match($prodRun.Output, '(?m)^\[dry-run\] kubectl apply -n mmorpg-zone-contract-test -f -   # Secret ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretName) + ' \(key ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '; value hidden\)')
+    # zone namespace 的 Secret redis-control-auth 副本(Apply-Zone 开头)先于第一个引用它的工作负载。
+    $secretLine = [regex]::Match($prodRun.Output, '(?m)^\[dry-run\] kubectl apply -n mmorpg-zone-contract-test -f -   # Secret ' + [regex]::Escape($ControlRedisAuthSecretName) + ' \(key ' + [regex]::Escape($ZoneRedisSecretVars.RedisAuthSecretKey) + '; value hidden\)')
     $firstRef = ([string]$prodRun.Output).IndexOf("- name: $SharedRedisEnvName")
-    Assert-True -Condition ($secretLine.Success -and $firstRef -gt $secretLine.Index) -Because 'zone namespace 的 Secret redis-auth 必须先于引用它的 Go 服务 / gateway 落地(secretKeyRef 不是 optional)'
+    Assert-True -Condition ($secretLine.Success -and $firstRef -gt $secretLine.Index) -Because "zone namespace 的 Secret $ControlRedisAuthSecretName 必须先于引用它的 Go 服务 / gateway 落地(secretKeyRef 不是 optional)"
 }
 
 Test-Case '共享 Redis 口令(dev 基线,不注入):ConfigMap 各段口令为空串、不写 SharedRedisPasswordEnv,Deployment 不注入、不带指纹(产物与改动前逐字相同)' {
@@ -7540,7 +7600,8 @@ Test-Case '工作负载密钥:迁移 Job 与 route-tool Job 的清单都不引�
         $pattern = '(?m)^[ ]+- name: ' + $pair[0] + '\n[ ]+valueFrom:\n[ ]+secretKeyRef: \{name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: ' + $pair[1] + ', optional: false\}$'
         Assert-Match -Text $text -Pattern $pattern -Because "route-tool 的 $($pair[0]) 来自 schema 身份 Secret 的键 $($pair[1])(k8s_route_tool.ps1 按 SQL boot 目录替换占位)"
     }
-    Assert-True -Condition (-not $text.Contains('MMORPG_SQL_MAINTENANCE_DSN') -and -not $text.Contains('MMORPG_SQL_OPERATOR_PRINCIPAL')) -Because '维护身份不进集群:freeze / unfreeze 在运维机上跑'
+    # 只看 env 条目:模板文件头的注释为了说明跑法会提到这几个变量名。
+    Assert-NotMatch -Text $text -Pattern '(?m)^[ ]+- name: (MMORPG_SQL_MAINTENANCE_DSN|MMORPG_SQL_OPERATOR_PRINCIPAL|MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256)[ ]*$' -Because '维护身份不进集群:freeze / unfreeze 在运维机上跑'
 }
 
 Test-Case '工作负载密钥(prod zone-up):整份 DryRun 输出不含任何一把的值;ConfigMap 只写空串或变量名;每个消费者经 Secret 注入并带指纹,不读的不注入,写者不拿共享数据库口令;Secret 先于引用、每把只写一次' {
@@ -8863,7 +8924,7 @@ $S1FunctionNames = @(
     # 依赖(与 k8s_deploy.ps1 里同一份函数体)。
     'Get-AuthoritativeScalar', 'Get-ManifestDeploymentReplicas',
     'Get-RedisPoolMirror', 'Get-RedisMaxClientsFromManifest', 'Get-RedisConnectionLedgerInputs',
-    'Get-RedisPlayerPoolMirror'
+    'Get-RedisPlayerPoolMirror', 'Get-RedisPoolMirrorSource', 'Get-RedisControlClientRows', 'Get-RedisClusterConnectionLedgerInputs', 'Get-RedisCluster'
 )
 foreach ($s1FnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($S1FunctionNames -contains $s1FnAst.Name) {
@@ -8889,59 +8950,31 @@ Test-Case 'zone-up DryRun:db ConfigMap 只写 go/db/internal/config 认的段(Pl
     Assert-Equal -Expected $expected -Actual $actual -Because '存盘接口的服务端超时必须与服务 yaml 一致,否则被 go-zero 默认 2000ms 截断、结果未知'
 }
 
-Test-Case 'Redis 连接总账:没有 db 行,login 行没有 Pub/Sub,data-service 计 NameCacheRedis 及 GM 回收协调连接' {
-    $RepoRoot = Get-RepoRoot
-    $inputs = Get-RedisConnectionLedgerInputs
-    Assert-Equal -Expected 0 -Actual @($inputs.Clients | Where-Object { $_.Name -eq 'db' }).Count -Because 'go/db 不连 Redis'
-    $loginRow = @($inputs.Clients | Where-Object { $_.Name -eq 'login' })
-    Assert-Equal -Expected 0 -Actual $loginRow[0].PubSub -Because 'task:result 频道已删,login 不再订阅'
-    $dsRow = @($inputs.Clients | Where-Object { $_.Name -eq 'data-service' })
-    Assert-Equal -Expected 1 -Actual $dsRow.Count -Because '客户端表里 data-service 只能有一行'
-    $recallPools = [int](Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'SharedRedis.PoolSize') +
-        [int](Get-EtcValue -RelativePath 'go/data_service/etc/data_service.yaml' -KeyPath 'PlayerRedis.PoolSizePerNode')
-    Assert-Equal -Expected $recallPools -Actual $dsRow[0].ConfiguredPoolConns -Because 'GM 回收的唤醒池与位置读取池取自服务 yaml；不是玩家持久化池'
-    Assert-Equal -Expected '1/1/0' -Actual ('{0}/{1}/{2}' -f $dsRow[0].DefaultPools, $dsRow[0].PubSub, $dsRow[0].Fixed) -Because 'NameCacheRedis 一个缺省池，assetop:wake 一个订阅，已删的路由发布与对账池不恢复'
-}
-
-Test-Case 'G3b Redis 连接总账:scene-manager 行 Fixed == go/scene_manager/internal/svc/owner_epoch_mint.go 的 ownerEpochMintPoolSize(铸造专用客户端,不占 go-zero 缺省池)' {
-    # 源码改了池大小,这里先变红,逼着同改总账那一行(owner_epoch_mint.go 头注释的契约)。
-    $RepoRoot = Get-RepoRoot
-    $smRow = @((Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'scene-manager' })
-    Assert-Equal -Expected 1 -Actual $smRow.Count -Because 'Redis 连接总账里 scene-manager 只能有一行'
-    $source = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'go/scene_manager/internal/svc/owner_epoch_mint.go'))
-    $poolSize = [regex]::Matches($source, '(?m)^\s*(?:const\s+)?ownerEpochMintPoolSize\s*=\s*(\d+)\s*$')
-    Assert-Equal -Expected 1 -Actual $poolSize.Count -Because 'owner_epoch_mint.go 里 ownerEpochMintPoolSize 应恰好定义一次(字面量整数)'
-    Assert-Equal -Expected ([int]$poolSize[0].Groups[1].Value) -Actual $smRow[0].Fixed -Because 'scene-manager 行的 Fixed 就是铸造专用客户端的池上限'
-    Assert-Equal -Expected 'zone/1/0' -Actual ('{0}/{1}/{2}' -f $smRow[0].Scope, $smRow[0].DefaultPools, $smRow[0].PubSub) -Because 'scene-manager 行其余形状不变:按 zone 计、一个 go-zero 缺省池、没有 Pub/Sub'
-}
-
-Test-Case 'Redis 连接总账:guild 行 Fixed 含 go/guild/internal/logic/application_quota.go 的 ApplicationQuotaRedisPoolSize(申请配额专用客户端连核心 Redis,拆了玩家域也留下)' {
-    # 配额客户端在 guild.go 装配,池上限写在 logic 包的常量里。源码改了池大小、改回字面量或换了连接目标,这里先变红,逼着同改总账那一行。
+# 各服务的总账行(没有 db 行、login 没有订阅、data-service 两个控制域句柄与唤醒订阅、scene-manager 的铸造通道)由
+# 「Redis 总账输入(两个域都在核心上…)」与 redis_player_cluster_contract 的「玩家域总账输入」逐行核;这里只钉 guild 两个写死的专用池的装配。
+Test-Case 'Redis 连接总账:guild 控制域行 Fixed == application_quota.go 的 ApplicationQuotaRedisPoolSize(申请配额专用客户端连控制域);玩家域行 Fixed == 摘要 bump 池' {
+    # 两个池都在源码里装配、池上限写成常量。源码改了池大小、改回字面量或换了连接目标,这里先变红,逼着同改总账那一行。
     $RepoRoot = Get-RepoRoot
     $quotaSource = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/internal/logic/application_quota.go'))
     $quotaPool = [regex]::Matches($quotaSource, '(?m)^\s*(?:const\s+)?ApplicationQuotaRedisPoolSize\s*=\s*(\d+)\s*$')
     Assert-Equal -Expected 1 -Actual $quotaPool.Count -Because 'application_quota.go 里 ApplicationQuotaRedisPoolSize 应恰好定义一次(字面量整数)'
-    $quotaPoolSize = [int]$quotaPool[0].Groups[1].Value
     $mainSource = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/guild.go'))
-    $client = [regex]::Matches($mainSource, 'quotaRedis\s*:=\s*redis\.NewClient\(&redis\.Options\{(?<body>[^}]*)\}\)')
-    Assert-Equal -Expected 1 -Actual $client.Count -Because 'guild.go 里申请配额客户端 quotaRedis 应恰好装配一处(换了写法要同步本用例)'
-    $body = $client[0].Groups['body'].Value
-    Assert-Match -Text $body -Pattern 'Addr:\s*config\.AppConfig\.RedisClient\.Host\b' -Because '配额客户端连 RedisClient.Host,K8s 上就是核心 redis.<infra>,所以记在核心总账'
-    foreach ($field in @('PoolSize', 'MaxActiveConns')) {
-        Assert-Match -Text $body -Pattern "\b${field}:\s*logic\.ApplicationQuotaRedisPoolSize\b" -Because "$field 必须取 logic.ApplicationQuotaRedisPoolSize,不许写字面量(总账从这个常量读)"
-    }
+    Assert-Match -Text $mainSource -Pattern 'quotaRedisConf\s*:=\s*config\.AppConfig\.EffectiveControlRedis\(\)' -Because '配额客户端用控制域的配置(地址、口令同 ControlRedis),所以记在控制域那一行'
+    Assert-Match -Text $mainSource -Pattern 'quotaRedisConf\.PoolSizePerNode\s*=\s*logic\.ApplicationQuotaRedisPoolSize\b' -Because '池上限取 logic.ApplicationQuotaRedisPoolSize,不许写字面量(总账从这个常量读)'
+    Assert-Match -Text $mainSource -Pattern 'clusterredis\.New\(quotaRedisConf,\s*clusterredis\.ControlClusterKeys\)' -Because '配额客户端按控制域的键策略建'
     $syncSource = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'go/guild/internal/svc/servicecontext.go'))
     $syncPool = [regex]::Matches($syncSource, '(?m)^\s*(?:const\s+)?playerSyncRedisPoolSize\s*=\s*(\d+)\s*$')
     Assert-Equal -Expected 1 -Actual $syncPool.Count -Because 'servicecontext.go 里 playerSyncRedisPoolSize 应恰好定义一次(字面量整数)'
-    $unsplit = @((Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'guild' })
-    $split = @((Get-RedisConnectionLedgerInputs -PlayerDomainSplit $true).Clients | Where-Object { $_.Name -eq 'guild' })
-    Assert-Equal -Expected 1 -Actual $unsplit.Count -Because 'Redis 连接总账里 guild 只能有一行'
-    Assert-Equal -Expected ($quotaPoolSize + [int]$syncPool[0].Groups[1].Value) -Actual $unsplit[0].Fixed -Because '没建玩家域集群时 guild 行的 Fixed = 申请配额池 + 摘要 bump 池(后者回落到这台)'
-    Assert-Equal -Expected 1 -Actual $split.Count -Because '建了玩家域集群 guild 仍连这台(两个控制域池与申请配额池)'
-    Assert-Equal -Expected $quotaPoolSize -Actual $split[0].Fixed -Because '建了玩家域集群,摘要 bump 池搬走,申请配额池仍连核心 Redis'
+    Assert-Match -Text $syncSource -Pattern 'conf\.PoolSizePerNode\s*=\s*playerSyncRedisPoolSize\b[\s\S]*?return playerredis\.New\(conf\)' -Because '摘要 bump 专用客户端连玩家域(newPlayerSyncRedis),池上限取同一个常量'
+    $controlRow = @(Get-RedisControlClientRows -Cluster $false | Where-Object { $_.Name -eq 'guild' })
+    Assert-Equal -Expected 1 -Actual $controlRow.Count -Because '控制域表里 guild 只能有一行'
+    Assert-Equal -Expected ([int]$quotaPool[0].Groups[1].Value) -Actual $controlRow[0].Fixed -Because 'guild 控制域行的 Fixed 就是申请配额池'
+    $playerRow = @((Get-RedisClusterConnectionLedgerInputs -Cluster (Get-RedisCluster -Kind 'player')).Clients | Where-Object { $_.Name -eq 'guild' })
+    Assert-Equal -Expected 1 -Actual $playerRow.Count -Because '玩家域表里 guild 只能有一行'
+    Assert-Equal -Expected ([int]$syncPool[0].Groups[1].Value) -Actual $playerRow[0].Fixed -Because 'guild 玩家域行的 Fixed 就是摘要 bump 池,跟着玩家域走(没开玩家域集群时一起记在核心那份)'
 }
 
-Test-Case 'G3b zone-up DryRun:scene-manager ConfigMap 的 OwnerEpochMint.WaitAOFNumLocal / WaitAOFTimeoutMs == scene_manager_service.yaml,WaitAOFNumReplicas 按共享 Redis 形态(dev 单实例 0、prod 高可用 1)' {
+Test-Case 'G3b zone-up DryRun:scene-manager ConfigMap 的 OwnerEpochMint.WaitAOFNumLocal / WaitAOFTimeoutMs == scene_manager_service.yaml,WaitAOFNumReplicas 按玩家域所在 Redis 的形态(dev 单实例 0、prod 玩家域集群 1)' {
     # 铸造 owner_epoch 之后的落盘确认(docs/design/zone-redis-regression-guard-20261022.md §4.3.2)。高可用形态下 NumReplicas 若停在 0,
     # 主节点宕机切主时被提升的副本上可能没有这次铸造,持有者缓存着一个 Redis 里已经不存在的 epoch,下一次存盘被拒、按废黜销毁。
     $yamlPath = 'go/scene_manager/etc/scene_manager_service.yaml'
@@ -8954,7 +8987,7 @@ Test-Case 'G3b zone-up DryRun:scene-manager ConfigMap 的 OwnerEpochMint.WaitAOF
     Assert-Equal -Expected '0' -Actual (Get-EtcValue -RelativePath $yamlPath -KeyPath 'OwnerEpochMint.WaitAOFNumReplicas') -Because "$yamlPath 的 WaitAOFNumReplicas 给本机 compose 单实例用,保持 0(写 1 本机启动探针等不到副本而拒启)"
     Assert-Equal -Expected '0' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because 'dev 档缺省单实例(redis.yaml),铸造的 WAITAOF 不等副本'
     $prodFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $prodRun.Output -Name 'go-svc-scene-manager-config')
-    Assert-Equal -Expected '1' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because 'prod 档缺省高可用(redis-ha.yaml),铸造的 WAITAOF 等 1 个副本'
+    Assert-Equal -Expected '1' -Actual (Get-FlatValue -Flat $prodFlat -KeyPath 'data.scene_manager_service.yaml.OwnerEpochMint.WaitAOFNumReplicas') -Because 'prod 档开着玩家域集群(铸造的键在玩家域,每主至少 1 副本),铸造的 WAITAOF 等 1 个副本'
 }
 
 # ─────────────────────────────────────────────────────────────────

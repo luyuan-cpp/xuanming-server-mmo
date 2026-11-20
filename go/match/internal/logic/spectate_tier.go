@@ -16,6 +16,7 @@ import (
 
 	"shared/generated/pb/table"
 
+	redv9 "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 )
@@ -26,16 +27,12 @@ import (
 //	spectate:relay_gates:{id}   hash    gate_node_id → gate_instance_id:本场已在 battle 挂上的中继 gate,TTL 同上
 //	spectate:featured:{id}      string  运营标记的赛事局,TTL 同上
 //	spectate:promote_try:{id}   string  升 L2 尝试的短租约,见 spectatePromoteLeaseSeconds
-//	spectate:bcast:active       zset    全服 L2 配额:member=battle_id,score=战斗期限毫秒
-//	spectate:featured:active    zset    赛事局索引:member=battle_id,score=标记到期毫秒;只用来枚举,标记以上面的键为准
+//	spectate:bcast:active:{sbc:<k>}      zset × 16   全服 L2 配额:member=battle_id,score=战斗期限毫秒
+//	spectate:featured:active:{sft:<k>}   zset × 16   赛事局索引:member=battle_id,score=标记到期毫秒;只用来枚举,标记以上面的键为准
 //
-// 本场的键都带同一个 hash tag {id},落同一 slot,以后要合进一条 Lua 不用改键名。两个全服 ZSET 单独一个 slot,
-// 不与本场的键进同一条 Lua。档位一旦升起,这场的新观众就不再撞 L0(撞一次 L0 要走事务、锁 formation 行、
-// 发两次 gRPC,热门局不能让每个人都撞一次)。
-const (
-	spectateBroadcastActiveKey = "spectate:bcast:active"
-	spectateFeaturedActiveKey  = "spectate:featured:active"
-)
+// 本场的键都带同一个 hash tag {id},落同一 slot,以后要合进一条 Lua 不用改键名。两把全服 ZSET 按 battle_id % 16 拆桶
+// (spectate_index.go),桶有自己的 tag,不与本场的键进同一条 Lua。档位一旦升起,这场的新观众就不再撞 L0(撞一次 L0 要走事务、
+// 锁 formation 行、发两次 gRPC,热门局不能让每个人都撞一次)。
 
 // spectatePromoteTimeout 单次 PromoteSpectateBroadcast 的时间预算。比 addObserverTimeout 短:升档只是顺带的优化,
 // 后面还要提交 SQL,不能让它吃光请求预算。超时后租约到期时的下一名观众会重试(battle 侧幂等)。
@@ -260,28 +257,66 @@ const (
 	broadcastQuotaHeld    broadcastQuotaClaim = 2 // 本场已在集合里(另一名观众正在升档,或已经升上去了)
 )
 
-// claimBroadcastQuotaScript 先清过期项,本场已在集合里或 ZCARD < B 才占。清过期与判定必须在一条 Lua 里,否则配额数不准。
+// claimBroadcastQuotaScript 只动本场所在的那个配额桶:先清本桶过期项;本场已在桶里回 2;本桶项数加别的桶的项数(ARGV[5])
+// 已到 B 回 0;否则写入回 1。「已占」要先于「已满」判,与拆桶前同序。
 const claimBroadcastQuotaScript = `
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
 if redis.call('ZSCORE', KEYS[1], ARGV[3]) then
 	return 2
 end
-if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+if redis.call('ZCARD', KEYS[1]) + tonumber(ARGV[5]) >= tonumber(ARGV[2]) then
 	return 0
 end
 redis.call('ZADD', KEYS[1], ARGV[4], ARGV[3])
 return 1
 `
 
+// claimBroadcastQuota 抢全服 L2 配额(上限 B)。配额拆在 16 个桶里,一段 Lua 只能原子地动一个桶,「数全服、没满就占」做不成一步,
+// 所以分三步:
+//  1. liveBroadcastQuota 清掉各桶过期项并数出各桶剩下的项数;
+//  2. 本桶 Lua(claimBroadcastQuotaScript)带上别的桶的项数判定并写入;
+//  3. 新占到的再数一遍全服,超过 B 说明别的场同时在别的桶占了,按 releaseBroadcastQuotaUnlessPromoted 退回、回「满」。
+//
+// 第 3 步保证经抢占留下的场数不超过 B:最后一个留下的请求复数时,其余留下的都已写入,而留下的不会自己退。
+// 代价是并发时可能两边都退,各等下一个租约周期(3 秒)再试,宁少不多;复数失败同样退回。
 func claimBroadcastQuota(ctx context.Context, s *svc.ServiceContext, battleId, expiryMs, nowMs uint64) (broadcastQuotaClaim, error) {
-	res, err := s.MatchRedis.EvalCtx(ctx, claimBroadcastQuotaScript, []string{spectateBroadcastActiveKey},
-		strconv.FormatUint(nowMs, 10), s.Config.Spectate.BroadcastMaxConcurrent,
-		strconv.FormatUint(battleId, 10), strconv.FormatUint(expiryMs, 10))
+	limit := int64(s.Config.Spectate.BroadcastMaxConcurrent)
+	counts, err := liveBroadcastQuota(ctx, s, nowMs)
 	if err != nil {
-		return broadcastQuotaFull, fmt.Errorf("抢全服广播配额失败: %w", err)
+		return broadcastQuotaFull, fmt.Errorf("count the global broadcast quota: %w", err)
+	}
+	others := sumSpectateBuckets(counts) - counts[spectateIndexBucket(battleId)]
+	res, err := s.MatchRedis.EvalCtx(ctx, claimBroadcastQuotaScript, []string{spectateBroadcastIndex.keyFor(battleId)},
+		strconv.FormatUint(nowMs, 10), limit, strconv.FormatUint(battleId, 10), strconv.FormatUint(expiryMs, 10), others)
+	if err != nil {
+		return broadcastQuotaFull, fmt.Errorf("claim the global broadcast quota: %w", err)
 	}
 	n, _ := res.(int64)
-	return broadcastQuotaClaim(n), nil
+	if claim := broadcastQuotaClaim(n); claim != broadcastQuotaClaimed {
+		return claim, nil
+	}
+	counts, err = liveBroadcastQuota(ctx, s, nowMs)
+	if err == nil && sumSpectateBuckets(counts) <= limit {
+		return broadcastQuotaClaimed, nil
+	}
+	releaseBroadcastQuotaUnlessPromoted(ctx, s, battleId)
+	if err != nil {
+		return broadcastQuotaFull, fmt.Errorf("recount the global broadcast quota: %w", err)
+	}
+	return broadcastQuotaFull, nil
+}
+
+// liveBroadcastQuota 清掉各配额桶已到期的项(score ≤ nowMs),返回各桶剩下的项数。同一个桶的两条命令在同一个 pipeline 里按序执行。
+// 拆桶之后本桶 Lua 只清本桶,别的桶的过期项靠这里回收。
+func liveBroadcastQuota(ctx context.Context, s *svc.ServiceContext, nowMs uint64) ([]int64, error) {
+	cmds, err := eachSpectateBucket(ctx, s.MatchRedis, spectateBroadcastIndex, func(pipe redis.Pipeliner, key string) *redv9.IntCmd {
+		pipe.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatUint(nowMs, 10))
+		return pipe.ZCard(ctx, key)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return spectateBucketInts(cmds), nil
 }
 
 // spectateQuotaExpiryMs 是抢配额时的到期时刻。记录由成局现算,期限通常已有;缺失时按记录的创建时刻 + TTL 估算:
@@ -372,7 +407,7 @@ func promoteSpectateBroadcast(ctx context.Context, s *svc.ServiceContext, record
 // recordBroadcastQuota 把正在广播的一场记到全服配额上,score = 战斗期限。不看 B:battle 已经在广播了,账上必须有它,超额也记,
 // 后面的抢占才会被挡住,实际 L2 场数不再继续突破 B。
 func recordBroadcastQuota(ctx context.Context, s *svc.ServiceContext, battleId, deadlineMs uint64) {
-	if _, err := s.MatchRedis.ZaddCtx(ctx, spectateBroadcastActiveKey, int64(deadlineMs), strconv.FormatUint(battleId, 10)); err != nil {
+	if _, err := s.MatchRedis.ZaddCtx(ctx, spectateBroadcastIndex.keyFor(battleId), int64(deadlineMs), strconv.FormatUint(battleId, 10)); err != nil {
 		logx.Errorf("[spectate] Failed to record broadcast quota battle=%d: %v", battleId, err)
 	}
 }
@@ -391,7 +426,7 @@ func releaseBroadcastQuotaUnlessPromoted(ctx context.Context, s *svc.ServiceCont
 	if tier == battlepb.ESpectateTier_SPECTATE_TIER_BROADCAST {
 		return
 	}
-	if _, err := s.MatchRedis.ZremCtx(writeCtx, spectateBroadcastActiveKey, strconv.FormatUint(battleId, 10)); err != nil {
+	if _, err := s.MatchRedis.ZremCtx(writeCtx, spectateBroadcastIndex.keyFor(battleId), strconv.FormatUint(battleId, 10)); err != nil {
 		logx.Errorf("[spectate] Failed to release broadcast quota (expires with the battle deadline) battle=%d: %v", battleId, err)
 	}
 }
@@ -504,7 +539,7 @@ func markSpectateFeatured(ctx context.Context, s *svc.ServiceContext, battleId u
 		return fmt.Errorf("写赛事局标记失败: %w", err)
 	}
 	expiryMs := int64(nowMs()) + int64(spectateTTLSeconds)*1000
-	if _, err := s.MatchRedis.ZaddCtx(ctx, spectateFeaturedActiveKey, expiryMs, strconv.FormatUint(battleId, 10)); err != nil {
+	if _, err := s.MatchRedis.ZaddCtx(ctx, spectateFeaturedIndex.keyFor(battleId), expiryMs, strconv.FormatUint(battleId, 10)); err != nil {
 		return fmt.Errorf("写赛事局索引失败: %w", err)
 	}
 	return nil
@@ -512,7 +547,7 @@ func markSpectateFeatured(ctx context.Context, s *svc.ServiceContext, battleId u
 
 // unmarkSpectateFeatured 取消赛事局标记,只删标记与索引,不降档(§15.6:一场只升不降)。
 func unmarkSpectateFeatured(ctx context.Context, s *svc.ServiceContext, battleId uint64) error {
-	if _, err := s.MatchRedis.ZremCtx(ctx, spectateFeaturedActiveKey, strconv.FormatUint(battleId, 10)); err != nil {
+	if _, err := s.MatchRedis.ZremCtx(ctx, spectateFeaturedIndex.keyFor(battleId), strconv.FormatUint(battleId, 10)); err != nil {
 		return fmt.Errorf("删赛事局索引失败: %w", err)
 	}
 	if _, err := s.MatchRedis.DelCtx(ctx, spectateFeaturedKey(battleId)); err != nil {

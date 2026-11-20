@@ -227,3 +227,13 @@ func (s *TransactionLogStore) ClaimRetentionShardForTest(ctx context.Context, sh
 func (s *SnapshotStore) ClaimRetentionShardForTest(ctx context.Context, shard uint32) (RetentionShardForTest, bool, error) {
 	return wrapRetentionShardForTest(s.claimRetentionShard(ctx, shard))
 }
+
+// OldestRetentionTimestampForTest 读快照表现存最老一行的 created_at(生产由 RunAuditRetention 每轮读)。
+func (s *SnapshotStore) OldestRetentionTimestampForTest(ctx context.Context) (uint64, bool, error) {
+	return s.oldestRetentionTimestamp(ctx)
+}
+
+// OldestRetentionTimestampForTest 读流水表现存最老一行的 timestamp_sec(生产由 RunAuditRetention 每轮读)。
+func (s *TransactionLogStore) OldestRetentionTimestampForTest(ctx context.Context) (uint64, bool, error) {
+	return s.oldestRetentionTimestamp(ctx)
+}

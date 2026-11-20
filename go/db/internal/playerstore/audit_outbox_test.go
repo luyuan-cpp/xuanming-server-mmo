@@ -311,7 +311,7 @@ func TestNew_RejectsARowBudgetWithNoRoomForAuditRecords(t *testing.T) {
 	}
 }
 
-// 两边的上限要同一个值:C++ 一笔存盘最多带 kMaxBytesPerSave 字节的审计记录,go/db 按同一个数核行预算还装不装得下审计;
+// 两边的上限要同一个值:C++ 一笔存盘带上一名玩家排着的全部审计记录(至多 kMaxBytesPerPlayer 字节),go/db 按同一个数核行预算还装不装得下审计;
 // 单条上限两边一致,scene 收下的流水 go/db 才不会再丢。
 func TestAuditLimits_MatchCpp(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "cpp", "libs", "modules", "audit", "audit_outbox.h"))
@@ -319,7 +319,7 @@ func TestAuditLimits_MatchCpp(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		fmt.Sprintf("kMaxBytesPerSave = %d * 1024", MaxAuditBytesPerSave>>10),
+		fmt.Sprintf("kMaxBytesPerPlayer = %d * 1024 * 1024", MaxAuditBytesPerSave>>20),
 		fmt.Sprintf("kMaxRecordBytes = %d * 1024", MaxAuditTransactionLogBytes>>10),
 	} {
 		if !strings.Contains(string(raw), want) {

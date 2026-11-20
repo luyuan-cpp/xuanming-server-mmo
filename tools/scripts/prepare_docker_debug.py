@@ -37,7 +37,7 @@ SERVICE_IP_OFFSETS = {
     "rank": 18,
     "gate": 30, "scene": 31, "battle": 32,
 }
-# 观战两把密钥、存盘接口密钥、匹配链路四把密钥、账号目录四把调用方密钥和角色护栏九把密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
+# 观战两把密钥、存盘接口密钥、排行榜两把密钥、匹配链路四把密钥、账号目录四把调用方密钥和角色护栏九把密钥晚于已准备好的 .env 引入，也不写进任何数据卷，补生成不算轮换。
 ADDITIVE_SECRET_NAMES = ("SPECTATE_TOKEN_SECRET", "MATCH_OPS_CALLER_SECRET", "PLAYER_STORE_SCENE_SECRET",
                          "RANK_PRODUCER_SECRET_ADMIN", "MAIL_PRODUCER_SECRET_RANK",
                          "MATCH_PROBE_SECRET", "RANK_PRODUCER_SECRET_MATCH", "MMORPG_MATCH_OUTCOME_SECRET_BATTLE", "MMORPG_PLAYER_INBOX_SECRET_MATCH",

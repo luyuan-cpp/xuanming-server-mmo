@@ -9,11 +9,16 @@ management:
     web:
       exposure:
         include: health,info
-  # 链路追踪(docs/design/distributed-tracing.md §7):每个请求都采样,只进日志,不导出 span。
+  # 链路追踪(docs/design/distributed-tracing.md §7):每个请求都采样。
   # 配置节点只在内网,照常接收调用方的 traceparent(公网入口的网关才藏掉)。
   tracing:
     sampling:
       probability: 1.0
+  # span 导出(阶段三,设计 §10.3):OTLP/HTTP 发本机 Alloy;Alloy 没起时丢批并打 WARN,不影响业务。
+  # 不想导出就设 management.otlp.tracing.export.enabled=false。
+  otlp:
+    tracing:
+      endpoint: http://127.0.0.1:4318/v1/traces
 
 # 日志:控制台一行一条 JSON(logstash 风格),与 gateway_node 一致,便于 Alloy 采进 Loki。
 logging:

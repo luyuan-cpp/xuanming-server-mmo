@@ -57,6 +57,7 @@ const (
 	MaxRegion = uint8(1)<<regionBits - 1
 
 	// DefaultBlockSize 是一块的大小:2^32 个号,约等于 256 秒的序号预算。发号器崩溃时最多作废一块。
+	// 计数器比时钟超前一天以上时改用 shrunkBlockSize(nextBlock)。
 	DefaultBlockSize = uint64(1) << 32
 
 	// MaxStep 是单次领段长度上限。拦住把 step 传成 hi 一类的调用错误。
@@ -68,10 +69,18 @@ const (
 	// epochUnix 是时间字段的纪元:2026-01-01 00:00:00 UTC。
 	epochUnix = int64(1767225600)
 
-	// maxAheadSeconds:计数器比时钟超前这么多就告警(ahead_of_clock):时钟曾经跳到过未来,或者预留快过了时钟(崩溃循环)。
-	// 这不影响唯一性。正常超前量是最近几次预留的块长(每块约 256 秒)。它同时是登记处丢码时重新登记的时间余量
-	// (reRegisterHighWater):没告警过,发过的号就都在「当时的时间下限 + 它 + 一块」之下。
+	// maxAheadSeconds:计数器比时钟超前这么多就告警(ahead_of_clock):时钟曾经跳到过未来,或者预留快过了时钟(崩溃循环,
+	// 有了下面的小块之后很难再推到这里)。这不影响唯一性。正常超前量是最近几次预留的块长(每块约 256 秒)。它同时是登记处丢码时
+	// 重新登记的时间余量(reRegisterHighWater):没告警过,发过的号就都在「当时的时间下限 + 它 + 一块」之下。
 	maxAheadSeconds = uint64(7 * 24 * 3600)
+
+	// shrinkAheadSeconds、shrunkBlockSize:计数器比时钟超前一天以上时,新块改成 2^28 个号(16 秒的序号预算),见 nextBlock。
+	// 计数器跑到时钟前面,是因为每次重启都作废手里的块、下一块接着往上取:崩溃循环时每重启一次推前一整块(约 256 秒),比时钟快,
+	// 一直推到 maxAheadSeconds 以上,登记处丢码时的时间上界就不再可靠。改成小块之后每次重启只推前 16 秒,要持续每 16 秒重启一次
+	// 才追得过时钟。一天远高于正常发布(一次发布每个副本作废一两块,超前几个小时),正常运行走不到这里,离告警还差六天。
+	// 代价:超前期间每块只够峰值用几分钟,登记处不可达时手里的号更快用完。
+	shrinkAheadSeconds = uint64(24 * 3600)
+	shrunkBlockSize    = uint64(1) << 28
 
 	// reserveAttempts 是一次预留(或一次运维操作)遇到 CAS 冲突时的重试上限。冲突只发生在多个副本同时写时。
 	reserveAttempts = 8
@@ -287,6 +296,10 @@ type Options struct {
 	Tags []string
 	// Now 为 nil 用 time.Now,单测拨表用。
 	Now func() time.Time
+	// ReferenceNow 是本机时钟之外的第二个时钟,生产由 svc 接到 internal/clusteridentity(K8s API server 回应里的 Date)。
+	// 只在登记处丢码、凭本地记录重新登记时用:时间上界按两个时钟里较晚的那个算,本机时钟慢了也盖得住(reRegisterHighWater)。
+	// 读不到就拒绝重新登记,什么都不写。nil 只看本机时钟(dev、test)。
+	ReferenceNow func(ctx context.Context) (time.Time, error)
 	// OnReserve 为 nil 不记。result 见 ReserveXxx 常量。
 	OnReserve func(result string)
 	// NewAuthority 生成发号世系,为 nil 用 crypto/rand。单测注入固定值。
@@ -702,12 +715,12 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 				continue
 			}
 		}
-		start := i.nextStart(v)
-		if start+i.opt.BlockSize >= i.limit {
+		start, size := i.nextBlock(v)
+		if start+size >= i.limit {
 			i.observe(ReserveRefused)
 			return block{}, ErrExhausted
 		}
-		end := start + i.opt.BlockSize
+		end := start + size
 
 		// 三份都是严格的仲裁点:任何一份冲突,这块都作废,从头再来。不能因为「重读到的值已经
 		// 不小于我的 end」就认领:etcd 回退的那一刻,两个副本可能算出同一块。
@@ -741,7 +754,7 @@ func (i *Issuer) reserve(ctx context.Context) (block, error) {
 		i.witness(end, authority)
 		i.observe(ReserveOK)
 		logx.Infof("[id-issuer] reserved block [%d, %d) region=%d", start, end, i.opt.Region)
-		return block{pos: start, end: end, halfway: start + i.opt.BlockSize/2}, nil
+		return block{pos: start, end: end, halfway: start + size/2}, nil
 	}
 	return block{}, ErrContended
 }
@@ -877,8 +890,9 @@ func localAuthority(p, s Record) (string, error) {
 	return "", nil
 }
 
-// nextStart 算下一块的起点:三份记录、本进程确认过的水位与时间下限的最大值。
-func (i *Issuer) nextStart(v view) uint64 {
+// nextBlock 算下一块的起点和大小。起点是三份记录、本进程确认过的水位与时间下限的最大值;大小是 BlockSize,
+// 计数器已经比时钟超前 shrinkAheadSeconds 以上时是 shrunkBlockSize。
+func (i *Issuer) nextBlock(v view) (start, size uint64) {
 	local := max(v.p.Value, v.s.Value)
 	if v.p.Exists != v.s.Exists {
 		i.observe(ReserveOneRecord)
@@ -919,30 +933,37 @@ func (i *Issuer) nextStart(v view) uint64 {
 			v.p.Value, v.s.Value, v.g.HighWater, own)
 	}
 
-	start := max(local, v.g.HighWater, i.base, own)
+	start = max(local, v.g.HighWater, i.base, own)
+	size = i.opt.BlockSize
 	// 时间下限永远生效,不因为跳得远就放弃:它只会把起点往上抬,不可能造成重号。记录落后时钟很多也是正常的:
 	// 用量小的时候,一块号能用几个月。
-	floor := i.timeFloor()
+	floor := i.floorAt(i.opt.Now())
 	if floor > start {
 		start = floor
-	} else if floor != 0 && (start-floor)>>seqBits > maxAheadSeconds {
-		i.observe(ReserveAheadOfClock)
-		logx.Errorf("[id-issuer] counter %d is far ahead of the clock (floor %d): the clock jumped forward at some point, blocks were "+
-			"reserved faster than the clock moves (a crash loop), or the code was just re-registered after the id registry lost it; "+
-			"ids stay unique, only the time floor is not adding anything until the clock catches up", start, floor)
+	} else if floor != 0 {
+		ahead := (start - floor) >> seqBits
+		if ahead >= shrinkAheadSeconds {
+			size = min(size, shrunkBlockSize)
+		}
+		if ahead > maxAheadSeconds {
+			i.observe(ReserveAheadOfClock)
+			logx.Errorf("[id-issuer] counter %d is far ahead of the clock (floor %d): the clock jumped forward at some point, blocks were "+
+				"reserved faster than the clock moves (a crash loop), or the code was just re-registered after the id registry lost it; "+
+				"ids stay unique, only the time floor is not adding anything until the clock catches up", start, floor)
+		}
 	}
 	if start == 0 {
 		start = 1 // 0 是非法 id
 	}
-	return start
+	return start, size
 }
 
-// timeFloor 是当前时间对应的计数器值。时钟不在可表示的范围内时返回 0,即这次不采用时间下限:
+// floorAt 是时刻 t 对应的计数器值。t 不在可表示的范围内时返回 0,即这次不采用时间下限:
 // 坏时钟不能挡住发号,三份记录仍然保证唯一性。
-func (i *Issuer) timeFloor() uint64 {
-	sec := i.opt.Now().Unix() - epochUnix
+func (i *Issuer) floorAt(t time.Time) uint64 {
+	sec := t.Unix() - epochUnix
 	if sec <= 0 || uint64(sec) >= uint64(1)<<timeBits {
-		logx.Errorf("[id-issuer] clock %v is outside the representable range, time floor not applied", i.opt.Now())
+		logx.Errorf("[id-issuer] clock %v is outside the representable range, time floor not applied", t)
 		return 0
 	}
 	return i.base | uint64(sec)<<seqBits
@@ -1108,7 +1129,7 @@ func (i *Issuer) Recover(ctx context.Context, rebind bool) (string, error) {
 					ErrForeignRecords, v.p.Deployment, v.s.Deployment, deployment)
 			}
 			local := max(v.p.Value, v.s.Value)
-			high, err := i.reRegisterHighWater(local)
+			high, err := i.reRegisterHighWater(ctx, local)
 			if err != nil {
 				return "", err
 			}
@@ -1186,20 +1207,32 @@ func (i *Issuer) Recover(ctx context.Context, rebind bool) (string, error) {
 // 丢了这个码(三处同时出事),本地记录就比发过的号旧。所以水位还要盖住时钟推得出的上界:每块的起点比当时的时间下限超前
 // 超过 maxAheadSeconds 就会告警(ahead_of_clock);没告警过,发过的号就都在「当时的时间下限 + maxAheadSeconds + 一块」之下,
 // 而当时的时间下限不超过现在的。代价是计数器一次跳到时钟前面 7 天,值域浪费可以忽略(每个地域码约 2^57 个号)。
+// 「现在」取本机时钟和参考时钟(Options.ReferenceNow,生产是 K8s API server 的)里较晚的那个:本机时钟慢了,上界还盖得住。
 // 活着的发号进程还会先把本地记录抬到它们确认过的水位(checkRecords),所以多数情况下本地记录本身就够高。
 //
-// 拒绝的两种情形,都什么也不写:
+// 拒绝的三种情形,都什么也不写:
 //   - 本地记录比这个上界还高:计数器曾经超前时钟超过 maxAheadSeconds,上面的推理不成立;它要是也被回档过,没有任何东西
 //     盖得住,返回 ErrNoTrustedBound(换码,运维手册 §4.4)。
+//   - 参考时钟读不到:重跑。
 //   - 时钟不在可表示的范围内:修好时钟再跑。
 //
-// 查不出来的残余:时钟比当初预留时还慢,或者计数器曾经超前时钟 7 天以上、之后又回落到上界以下,而这期间三份记录一起回档、
-// 没有活着的进程作证。见设计 §6.3「还会不会重号」。
-func (i *Issuer) reRegisterHighWater(local uint64) (uint64, error) {
-	floor := i.timeFloor()
+// 查不出来的残余:两个时钟都比当初预留时慢,或者计数器曾经超前时钟 7 天以上(小块之后只剩时钟跳到未来这一种来源)、
+// 之后又回落到上界以下,而这期间三份记录一起回档、没有活着的进程作证。见设计 §6.3「还会不会重号」。
+func (i *Issuer) reRegisterHighWater(ctx context.Context, local uint64) (uint64, error) {
+	now := i.opt.Now()
+	if i.opt.ReferenceNow != nil {
+		reference, err := i.opt.ReferenceNow(ctx)
+		if err != nil {
+			return 0, fmt.Errorf("read the reference clock (the re-registration bound needs it): %w", err)
+		}
+		if reference.After(now) {
+			now = reference
+		}
+	}
+	floor := i.floorAt(now)
 	if floor == 0 {
 		return 0, fmt.Errorf("id issuer: the clock %v is outside the representable range; re-registering needs it to bound the ids "+
-			"issued after the local records were written, fix the clock and rerun -id-issuer-recover", i.opt.Now())
+			"issued after the local records were written, fix the clock and rerun -id-issuer-recover", now)
 	}
 	bound := floor + (maxAheadSeconds+1)<<seqBits + i.opt.BlockSize
 	if bound >= i.limit {
@@ -1223,7 +1256,7 @@ func (i *Issuer) reRegisterHighWater(local uint64) (uint64, error) {
 //   - 码已退役、绑定转到了别处(rebind)、世系对不上:不归本进程管,什么也不做,交给预留和 Recover 去拒绝。
 //
 // 只抬高、不预留新块,和并发的预留冲突了也无害:这一轮到此为止,下一轮重读再看。本进程正在预留时跳过这一轮:
-// 预留本身就从 W 之上开始(nextStart)。W 每轮都跟上读到的登记处水位,所以至多落后一个检查间隔:别的副本恰好在这段
+// 预留本身就从 W 之上开始(nextBlock)。W 每轮都跟上读到的登记处水位,所以至多落后一个检查间隔:别的副本恰好在这段
 // 时间里预留、随即连同三份记录一起丢掉的块,这里盖不住。
 func (i *Issuer) checkRecords(ctx context.Context) error {
 	high, authority := i.witnessed()

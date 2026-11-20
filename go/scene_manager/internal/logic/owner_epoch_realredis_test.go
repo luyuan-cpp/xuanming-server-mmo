@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"proto/scene_manager"
 	"scene_manager/internal/config"
 	"scene_manager/internal/svc"
+	"shared/handofffence"
 	"shared/ownerepoch"
 	"shared/playerredis"
 )
@@ -308,4 +310,105 @@ func TestRealRedisRollbackVoidsMintThatHasNotApplied(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "observed-bytes", raw, "location 不动")
 	})
+}
+
+// realRedisPlayerState 读这名玩家名下(键带 {playerID} tag)的全部键:有没有过期时间与 DUMP 原文。
+// 剩余 TTL 每毫秒都在变,只记有没有。
+func realRedisPlayerState(t *testing.T, ctx context.Context, c *goredis.Client, playerID uint64) map[string]string {
+	t.Helper()
+	keys, err := c.Keys(ctx, fmt.Sprintf("*{%d}*", playerID)).Result()
+	require.NoError(t, err)
+	state := make(map[string]string, len(keys))
+	for _, key := range keys {
+		ttl, err := c.PTTL(ctx, key).Result()
+		require.NoError(t, err)
+		dump, err := c.Dump(ctx, key).Result()
+		require.NoError(t, err)
+		state[key] = fmt.Sprintf("expires=%t dump=%x", ttl > 0, dump)
+	}
+	return state
+}
+
+// 不凭标记的回滚先看交接资格原件(luaRollbackPlayerPlacement),在真实 Redis 上跑 miniredis 那张表
+// (TestRollbackPlayerPlacementJudgesUnmarkedMintByHandoffFence):原件缺失或代次更早 → 回滚;铸出值下持有 / 已撤销 → 不动;
+// 更新或写坏 → 不当证据,不动。「登记先到」用 C++ 入场登记脚本的逐字副本(cppLuaRegisterFence)写原件;回滚先到时,
+// 迟到的登记拿着铸出值被拒。不动的分支核对玩家名下每个键的 DUMP 与键集合;回滚的分支只许 owner_epoch、location 与修订侧车变。
+func TestRealRedisUnmarkedRollbackJudgesByHandoffFence(t *testing.T) {
+	addr := realRedisAddr(t)
+	ctx := realRedisContext(t)
+	inspect := newRealRedisInspector(t, ctx, addr)
+	sc := newRealRedisServiceContext(t, addr, newRealRedisMinter(t, addr, 1, 0, 1500))
+	register := func(t *testing.T, playerID, epoch uint64) string {
+		t.Helper()
+		got, err := playerRedisEval(sc, cppLuaRegisterFence,
+			[]string{ownerepoch.OwnerEpochKey(playerID), handofffence.Key(playerID), ownerepoch.HandoffKey(playerID)},
+			strconv.FormatUint(epoch, 10), holderFenceForTest(epoch, replacedNewInstance, handofffence.HandoffFenceHeld), "")
+		require.NoError(t, err)
+		return fmt.Sprint(got)
+	}
+	writeFence := func(raw func(minted uint64) string) func(*testing.T, uint64, uint64) {
+		return func(t *testing.T, playerID, minted uint64) {
+			require.NoError(t, inspect.HSet(ctx, handofffence.Key(playerID), handofffence.HandoffFenceField, raw(minted)).Err())
+		}
+	}
+	cases := []struct {
+		name       string
+		seed       func(t *testing.T, playerID, minted uint64) // nil = 不写原件
+		rolledBack bool
+	}{
+		{"no_fence_rolls_back", nil, true},
+		{"older_fence_rolls_back", writeFence(func(m uint64) string {
+			return holderFenceForTest(m-1, replacedOldInstance, handofffence.HandoffFenceFrozen)
+		}), true},
+		{"registered_first_keeps_placement", func(t *testing.T, playerID, minted uint64) {
+			require.Equal(t, "1", register(t, playerID, minted), "前提:目标节点在铸出值下登记成功")
+		}, false},
+		{"revoked_at_minted_epoch_keeps_placement", writeFence(func(m uint64) string {
+			return holderFenceForTest(m, replacedNewInstance, handofffence.HandoffFenceRevoked)
+		}), false},
+		{"fence_ahead_is_not_proof", writeFence(func(m uint64) string {
+			return holderFenceForTest(m+5, replacedNewInstance, handofffence.HandoffFenceHeld)
+		}), false},
+		{"malformed_fence_is_not_proof", writeFence(func(uint64) string { return "not-a-fence" }), false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			playerID := realRedisPlayerID(t, ctx, inspect)
+			require.NoError(t, inspect.Set(ctx, ownerepoch.OwnerEpochKey(playerID), "4", 0).Err())
+			placed, err := placePlayerLocationCtx(ctx, sc, playerID, 7340, "10", testZoneId, placementGuard{observedEpoch: 4, mint: true})
+			require.NoError(t, err, "单实例 1 0:铸造确认落盘")
+			require.Greater(t, placed.epoch, uint64(4))
+			if c.seed != nil {
+				c.seed(t, playerID, placed.epoch)
+			}
+			plan, err := planRouteRollback(nil, "", testZoneId, placed, "", false)
+			require.NoError(t, err)
+			before := realRedisPlayerState(t, ctx, inspect, playerID)
+
+			restored, echo := rollbackPlayerPlacement(sc, logx.WithContext(ctx), playerID, placed, plan)
+			after := realRedisPlayerState(t, ctx, inspect, playerID)
+			if !c.rolledBack {
+				assert.False(t, restored)
+				assert.Zero(t, echo, "没回滚就不回显")
+				assert.Equal(t, before, after, "不回滚:玩家名下的键一个字节都不动,也不多不少")
+				return
+			}
+			assert.True(t, restored)
+			assert.Equal(t, placed.epoch+1, echo)
+			epochKey := ownerepoch.OwnerEpochKey(playerID)
+			epoch, err := inspect.Get(ctx, epochKey).Result()
+			require.NoError(t, err)
+			assert.Equal(t, strconv.FormatUint(placed.epoch+1, 10), epoch, "单调回滚:铸出值再 +1")
+			want, got := maps.Clone(before), maps.Clone(after)
+			for _, key := range []string{epochKey, getPlayerLocationKey(playerID), locationRevisionKey(playerID)} {
+				delete(want, key)
+			}
+			delete(got, epochKey)
+			assert.Equal(t, want, got, "本次之前没有 location:回滚只改 owner_epoch、删 location 与修订侧车,别的键原样")
+
+			// 回滚先到:迟到的入场登记拿着铸出值被拒,一个字节都不写。
+			assert.Equal(t, "-1", register(t, playerID, placed.epoch))
+			assert.Equal(t, after, realRedisPlayerState(t, ctx, inspect, playerID))
+		})
+	}
 }

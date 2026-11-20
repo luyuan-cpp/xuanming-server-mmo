@@ -209,11 +209,16 @@ management:
         readiness:
           include: readinessState
   # 链路追踪(2026-11-11,docs/design/distributed-tracing.md §3.4、§7):头部采样一律采,Spring Boot 默认只采 0.1。
-  # 没有导出器,span 不出进程,采样标记只随 traceparent 传给 login,没有额外成本。
   # 公网 HTTP 入口不接受客户端带来的 trace 头,由 UntrustedTraceHeaderFilter 在观测过滤器之前藏掉,每个请求都开新根。
   tracing:
     sampling:
       probability: 1.0
+  # span 导出(阶段三,设计 §10.3):Spring Boot 自带的 OTLP/HTTP 导出器发本机 Alloy(deploy/docker-compose.observability.yml),
+  # Alloy 尾部采样后存进 Tempo。Alloy 没起时导出器丢批并打 WARN,不影响业务;不想导出就设
+  # management.otlp.tracing.export.enabled=false。K8s 上由 gateway ConfigMap 重写成本节点 Alloy 的地址(k8s_deploy.ps1)。
+  otlp:
+    tracing:
+      endpoint: http://127.0.0.1:4318/v1/traces
 
 # 日志:控制台按 logstash 风格输出一行一条 JSON(@timestamp / level / logger_name /
 # thread_name / message / stack_trace),与 Go 侧 go-zero 的 JSON 一致,由

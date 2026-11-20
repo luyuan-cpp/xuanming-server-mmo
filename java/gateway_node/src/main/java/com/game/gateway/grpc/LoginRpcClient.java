@@ -1,6 +1,7 @@
 package com.game.gateway.grpc;
 
 import com.game.gateway.config.LoginGrpcProperties;
+import com.game.gateway.dto.AccountDeletionResponse;
 import com.game.gateway.dto.LoginResponse;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
@@ -82,6 +83,9 @@ public class LoginRpcClient {
     private static final String METHOD_QUEUE_STATUS  = PREGATE_SERVICE + "/QueryQueueStatus";
     /** 本区角色总数(2026-11-12,角色上限守卫用)。 */
     private static final String METHOD_ZONE_ROLE_COUNT = PREGATE_SERVICE + "/GetZoneRoleCount";
+    /** 账号注销的申请与撤销(2026-11-19,docs/design/account-deletion.md §4.2、§4.4)。 */
+    private static final String METHOD_REQUEST_ACCOUNT_DELETION = PREGATE_SERVICE + "/RequestAccountDeletion";
+    private static final String METHOD_CANCEL_ACCOUNT_DELETION  = PREGATE_SERVICE + "/CancelAccountDeletion";
 
     private final LoginGrpcProperties props;
     /** 每个通道都挂的出站追踪拦截器(见类注释);注册表是 NOOP 时它原样放行,不做任何事。 */
@@ -124,6 +128,8 @@ public class LoginRpcClient {
     private final MethodDescriptor<AssignGateRequestProto, AssignGateResponseProto> assignGateMethod;
     private final MethodDescriptor<QueryQueueStatusRequestProto, QueryQueueStatusResponseProto> queueStatusMethod;
     private final MethodDescriptor<ZoneRoleCountRequestProto, ZoneRoleCountResponseProto> zoneRoleCountMethod;
+    private final MethodDescriptor<AccountDeletionRequestProto, AccountDeletionResponseProto> requestAccountDeletionMethod;
+    private final MethodDescriptor<CancelAccountDeletionRequestProto, AccountDeletionResponseProto> cancelAccountDeletionMethod;
 
     public LoginRpcClient(LoginGrpcProperties props, ObservationRegistry observationRegistry) {
         this.props = props;
@@ -157,6 +163,18 @@ public class LoginRpcClient {
                 .setFullMethodName(METHOD_ZONE_ROLE_COUNT)
                 .setRequestMarshaller(new ZoneRoleCountRequestMarshaller())
                 .setResponseMarshaller(new ZoneRoleCountResponseMarshaller())
+                .build();
+        this.requestAccountDeletionMethod = MethodDescriptor.<AccountDeletionRequestProto, AccountDeletionResponseProto>newBuilder()
+                .setType(MethodDescriptor.MethodType.UNARY)
+                .setFullMethodName(METHOD_REQUEST_ACCOUNT_DELETION)
+                .setRequestMarshaller(new AccountDeletionRequestMarshaller())
+                .setResponseMarshaller(new AccountDeletionResponseMarshaller())
+                .build();
+        this.cancelAccountDeletionMethod = MethodDescriptor.<CancelAccountDeletionRequestProto, AccountDeletionResponseProto>newBuilder()
+                .setType(MethodDescriptor.MethodType.UNARY)
+                .setFullMethodName(METHOD_CANCEL_ACCOUNT_DELETION)
+                .setRequestMarshaller(new CancelAccountDeletionRequestMarshaller())
+                .setResponseMarshaller(new AccountDeletionResponseMarshaller())
                 .build();
     }
 
@@ -368,6 +386,23 @@ public class LoginRpcClient {
         return unaryCall(zoneRoleCountMethod, new ZoneRoleCountRequestProto(zoneId), zoneId, true, true).roles;
     }
 
+    /**
+     * 申请注销({@code LoginPreGate.RequestAccountDeletion}):与 Login 同一个按区选路器,没有该区的通道直接失败,不跨区兜底。
+     * 与 Login 一样不自动重试:请求里的第三方凭据与 Apple 授权码是一次性的,结局未知时重放会被渠道当成已用过,
+     * 把可能已经受理的申请回成「需要重新授权」。失败原样上抛,重试留给客户端(重新认证后重发)。
+     */
+    public AccountDeletionResponseProto requestAccountDeletion(AccountDeletionRequestProto req, int zoneId) {
+        return unaryCall(requestAccountDeletionMethod, req, zoneId, true, false);
+    }
+
+    /**
+     * 撤销注销({@code LoginPreGate.CancelAccountDeletion}):选路同上。服务端幂等,但沿用 Login 的口径不自动重试,
+     * 失败原样上抛,客户端拿同一个 access token 重发是安全的。
+     */
+    public AccountDeletionResponseProto cancelAccountDeletion(CancelAccountDeletionRequestProto req, int zoneId) {
+        return unaryCall(cancelAccountDeletionMethod, req, zoneId, true, false);
+    }
+
     private <Q, R> R unaryCall(
             MethodDescriptor<Q, R> method,
             Q req,
@@ -485,6 +520,9 @@ public class LoginRpcClient {
      *   string refresh_token = 4;
      *   int64  access_token_expire = 5;
      *   int64  refresh_token_expire = 6;
+     *   uint32 account_deletion_state = 7;          (账号注销,docs/design/account-deletion.md §4.3、§4.5)
+     *   int64  account_deletion_execute_after = 8;
+     *   int64  previous_account_deleted_at = 9;
      */
     public static final class LoginResponseProto {
         public Integer errorCode;       // populated if error_message present and we can crack it
@@ -494,6 +532,9 @@ public class LoginRpcClient {
         public String  refreshToken;
         public long    accessTokenExpire;
         public long    refreshTokenExpire;
+        public int     accountDeletionState;
+        public long    accountDeletionExecuteAfter;
+        public long    previousAccountDeletedAt;
 
         public boolean hasError() {
             return (errorCode != null && errorCode != 0)
@@ -697,6 +738,9 @@ public class LoginRpcClient {
                 case 4 -> resp.refreshToken = in.readString();
                 case 5 -> resp.accessTokenExpire = in.readInt64();
                 case 6 -> resp.refreshTokenExpire = in.readInt64();
+                case 7 -> resp.accountDeletionState = in.readUInt32();
+                case 8 -> resp.accountDeletionExecuteAfter = in.readInt64();
+                case 9 -> resp.previousAccountDeletedAt = in.readInt64();
                 default -> in.skipField(tag);
             }
         }
@@ -1001,6 +1045,186 @@ public class LoginRpcClient {
                 resp.roles = in.readUInt64();
             } else {
                 in.skipField(tag);
+            }
+        }
+        return resp;
+    }
+
+    // ── 账号注销 wire codecs(docs/design/account-deletion.md §5)──────
+
+    /**
+     * proto/login/login.proto AccountDeletionRequest(凭据字段与 LoginRequest 同义):
+     *   string account = 1;
+     *   string password = 2;
+     *   string auth_type = 3;
+     *   string auth_token = 4;
+     *   string authorization_code = 5;
+     */
+    public static final class AccountDeletionRequestProto {
+        // 公开只为让跨包测试用 ArgumentCaptor 断言,同 LoginRequestProto。
+        public final String account;
+        public final String password;
+        public final String authType;
+        public final String authToken;
+        public final String authorizationCode;
+
+        public AccountDeletionRequestProto(String account, String password, String authType, String authToken,
+                                           String authorizationCode) {
+            this.account           = nullToEmpty(account);
+            this.password          = nullToEmpty(password);
+            this.authType          = nullToEmpty(authType);
+            this.authToken         = nullToEmpty(authToken);
+            this.authorizationCode = nullToEmpty(authorizationCode);
+        }
+
+        byte[] toBytes() throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(64);
+            CodedOutputStream out = CodedOutputStream.newInstance(baos);
+            if (!account.isEmpty())           out.writeString(1, account);
+            if (!password.isEmpty())          out.writeString(2, password);
+            if (!authType.isEmpty())          out.writeString(3, authType);
+            if (!authToken.isEmpty())         out.writeString(4, authToken);
+            if (!authorizationCode.isEmpty()) out.writeString(5, authorizationCode);
+            out.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    /**
+     * proto/login/login.proto CancelAccountDeletionRequest:
+     *   string access_token = 1;
+     */
+    public static final class CancelAccountDeletionRequestProto {
+        public final String accessToken;
+
+        public CancelAccountDeletionRequestProto(String accessToken) {
+            this.accessToken = nullToEmpty(accessToken);
+        }
+
+        byte[] toBytes() throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(64);
+            CodedOutputStream out = CodedOutputStream.newInstance(baos);
+            if (!accessToken.isEmpty()) out.writeString(1, accessToken);
+            out.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    /**
+     * proto/login/login.proto AccountDeletionResponse(申请与撤销共用):
+     *   TipInfoMessage error_message = 1;               (id = 1、parameters = 2)
+     *   uint32 state = 2;
+     *   int64  execute_after = 3;
+     *   repeated AccountDeletionBlocker blockers = 4;   (player_id = 1 uint64、reason = 2 string)
+     */
+    public static final class AccountDeletionResponseProto {
+        public Integer errorCode;
+        public String  errorMessage;
+        public int     state;
+        public long    executeAfter;
+        public List<AccountDeletionResponse.Blocker> blockers = new ArrayList<>();
+
+        public boolean hasError() {
+            return (errorCode != null && errorCode != 0)
+                    || (errorMessage != null && !errorMessage.isEmpty() && (errorCode == null || errorCode != 0));
+        }
+    }
+
+    private static final class AccountDeletionRequestMarshaller implements MethodDescriptor.Marshaller<AccountDeletionRequestProto> {
+        @Override
+        public InputStream stream(AccountDeletionRequestProto value) {
+            try {
+                return new java.io.ByteArrayInputStream(value.toBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public AccountDeletionRequestProto parse(InputStream stream) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static final class CancelAccountDeletionRequestMarshaller implements MethodDescriptor.Marshaller<CancelAccountDeletionRequestProto> {
+        @Override
+        public InputStream stream(CancelAccountDeletionRequestProto value) {
+            try {
+                return new java.io.ByteArrayInputStream(value.toBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public CancelAccountDeletionRequestProto parse(InputStream stream) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static final class AccountDeletionResponseMarshaller implements MethodDescriptor.Marshaller<AccountDeletionResponseProto> {
+        @Override
+        public InputStream stream(AccountDeletionResponseProto value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public AccountDeletionResponseProto parse(InputStream stream) {
+            try {
+                return parseAccountDeletionResponse(stream.readAllBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    /** 包级可见只为让测试直接喂手编字节,同 {@link #parseLoginResponse}。未知字段一律跳过。 */
+    static AccountDeletionResponseProto parseAccountDeletionResponse(byte[] bytes) throws IOException {
+        AccountDeletionResponseProto resp = new AccountDeletionResponseProto();
+        CodedInputStream in = CodedInputStream.newInstance(bytes);
+        while (!in.isAtEnd()) {
+            int tag = in.readTag();
+            int field = tag >>> 3;
+            switch (field) {
+                case 1 -> {
+                    int len = in.readRawVarint32();
+                    int oldLimit = in.pushLimit(len);
+                    while (!in.isAtEnd()) {
+                        int subTag = in.readTag();
+                        int subField = subTag >>> 3;
+                        int wire = subTag & 0x7;
+                        if (subField == 1 && wire == 0) {
+                            resp.errorCode = (int) in.readInt64();
+                        } else if (subField == 2 && wire == 2) {
+                            resp.errorMessage = in.readString();
+                        } else {
+                            in.skipField(subTag);
+                        }
+                    }
+                    in.popLimit(oldLimit);
+                }
+                case 2 -> resp.state = in.readUInt32();
+                case 3 -> resp.executeAfter = in.readInt64();
+                case 4 -> {
+                    int len = in.readRawVarint32();
+                    int oldLimit = in.pushLimit(len);
+                    AccountDeletionResponse.Blocker blocker = new AccountDeletionResponse.Blocker();
+                    while (!in.isAtEnd()) {
+                        int subTag = in.readTag();
+                        int subField = subTag >>> 3;
+                        int wire = subTag & 0x7;
+                        if (subField == 1 && wire == 0) {
+                            blocker.setPlayerId(in.readUInt64());
+                        } else if (subField == 2 && wire == 2) {
+                            blocker.setReason(in.readString());
+                        } else {
+                            in.skipField(subTag);
+                        }
+                    }
+                    in.popLimit(oldLimit);
+                    resp.blockers.add(blocker);
+                }
+                default -> in.skipField(tag);
             }
         }
         return resp;

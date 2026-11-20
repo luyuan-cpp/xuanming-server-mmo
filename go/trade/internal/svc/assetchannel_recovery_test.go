@@ -24,6 +24,8 @@ import (
 	"shared/drainproof"
 	"shared/scenenode"
 	"shared/workshard"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // TestAssetOpCleanupOwner:终态清理的按片分工(缺口清单第 25 条第二批)复用重投与合同推进那份成员表。
@@ -349,6 +351,43 @@ func TestSourcedCleanupRound(t *testing.T) {
 // Pipeline.Run 若不阻塞(自己另起 goroutine 立刻返回),wg 会等了个空,那一条由 reconcile 的 TestRunBlocksUntilCancel 守住。
 // etcd 客户端为 nil 时镜像打 ERROR 后直接返回;重投循环第一轮要等满 Interval(2s),本用例在那之前就关,不会碰没有连接池的仓库。
 func TestAssetChannelStartThenCloseReturns(t *testing.T) {
+	ch := newStartableAssetChannel(t, nil)
+	ch.Start(context.Background(), nil, true)
+	if ch.stopLoops == nil {
+		t.Fatal("Start 应当起了后台 goroutine")
+	}
+	requireCloseReturns(t, ch)
+	ch.Close() // 幂等
+}
+
+// TestAssetChannelCanaryStartsOnlySceneWatcher:发布轨道 canary(globalBackground=false,release-track-gray-canary.md §2.5)
+// 只起节点镜像;重投循环这类全局后台归 stable 副本,canary 也起就成了两份循环抢同一批行。重投循环一进 Run 就写
+// assetop_loop_last_run_unixtime,用私有注册表上的这条序列判它起没起:stable 起、canary 不起,两种都要按时 Close。
+func TestAssetChannelCanaryStartsOnlySceneWatcher(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		global bool
+	}{{"stable", true}, {"canary", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := prometheus.NewRegistry()
+			ch := newStartableAssetChannel(t, assetop.NewMetrics(reg, "trade"))
+			ch.Start(context.Background(), nil, tc.global)
+			// stable 的循环几毫秒内就写活性;canary 等满这一秒也不该出现。都早于循环第一轮(Interval 2s),不碰没有连接池的仓库。
+			deadline := time.Now().Add(time.Second)
+			for !redeliveryLoopLive(t, reg) && time.Now().Before(deadline) {
+				time.Sleep(5 * time.Millisecond)
+			}
+			if got := redeliveryLoopLive(t, reg); got != tc.global {
+				t.Errorf("globalBackground=%t:重投循环在跑 = %t", tc.global, got)
+			}
+			requireCloseReturns(t, ch)
+		})
+	}
+}
+
+// newStartableAssetChannel 装一个只有节点镜像与重投循环的通道,不连 etcd / MySQL;metrics 为 nil 时循环不写指标。
+func newStartableAssetChannel(t *testing.T, metrics *assetop.Metrics) *AssetChannel {
+	t.Helper()
 	repo, err := data.NewAssetOpRepo(nil, time.Second)
 	if err != nil {
 		t.Fatalf("NewAssetOpRepo: %v", err)
@@ -358,19 +397,20 @@ func TestAssetChannelStartThenCloseReturns(t *testing.T) {
 		t.Fatalf("NewSigner: %v", err)
 	}
 	p, err := reconcile.New(reconcile.Deps{Ops: repo, Caller: &assetop.Caller{Signer: signer}, OpIDs: fakeOpIDs{},
-		Ledger: persistedLedger(dspb.NewDataServiceClient(nil))})
+		Ledger: persistedLedger(dspb.NewDataServiceClient(nil)), Metrics: metrics})
 	if err != nil {
 		t.Fatalf("reconcile.New: %v", err)
 	}
-	ch := &AssetChannel{
+	return &AssetChannel{
 		Conns:    scenenode.NewConnCache(),
 		Watcher:  scenenode.NewWatcher(sceneWatcherName, scenenode.SceneNodeRpcPrefix, nil, nil),
 		Pipeline: p,
 	}
-	ch.Start(context.Background(), nil, true)
-	if ch.stopLoops == nil {
-		t.Fatal("Start 应当起了后台 goroutine")
-	}
+}
+
+// requireCloseReturns:Close 要在限时内返回 —— 漏配的 wg.Done 或不响应取消的后台 goroutine 都会让它永远等下去。
+func requireCloseReturns(t *testing.T, ch *AssetChannel) {
+	t.Helper()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -381,7 +421,21 @@ func TestAssetChannelStartThenCloseReturns(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("Close 没有返回:Start 里有 wg.Add 没配上 Done,或某个后台 goroutine 不响应取消")
 	}
-	ch.Close() // 幂等
+}
+
+// redeliveryLoopLive 报私有注册表里重投循环的活性序列此刻在不在(Loop.Run 进来时写、退出时删)。
+func redeliveryLoopLive(t *testing.T, reg *prometheus.Registry) bool {
+	t.Helper()
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatalf("Gather: %v", err)
+	}
+	for _, mf := range families {
+		if mf.GetName() == "assetop_loop_last_run_unixtime" && len(mf.GetMetric()) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // TestAssetChannelStartAfterCloseIsNoop:Close 之后的 Start 是空操作 —— 否则会在 wg.Wait 之后再 wg.Add,

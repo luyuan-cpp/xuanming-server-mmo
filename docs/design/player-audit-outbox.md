@@ -1,8 +1,9 @@
 # 玩家审计发件箱:审计流水与快照随存盘提交(断线重连 R13)
 
-> 状态:2026-11-11 定稿并落码,2026-11-12 补完(分笔存盘、删掉 C++ 直发 Kafka、scene 侧丢弃计数、资产变动通知挪到记流水的判定之后、
-> 转发的分工互斥与轮次预算、TiDB 预切、K8s 渲染与暂停开关、告警、清库清单)。代码全部写完,**未生成协议、未编译、未测试**;
-> 验证步骤见 `docs/PROGRESS.md` 2026-11-11、2026-11-12 标题带「审计发件箱」的各条。改动清单见 §11。
+> 状态:2026-11-11 定稿并落码,2026-11-12 补完(删掉 C++ 直发 Kafka、scene 侧丢弃计数、资产变动通知挪到记流水的判定之后、
+> 转发的分工互斥与轮次预算、TiDB 预切、K8s 渲染与暂停开关、告警、清库清单),2026-11-19 把「一笔带不完就分笔」改成一笔带完(§5.1、§5.2)。
+> 11-13~18 Codex 已编过 go/db 与 scene 的生产代码、跑通告警契约;**单测与冒烟没跑,11-19 的改动未编译**。
+> 验证步骤见 `docs/PROGRESS.md` 标题带「审计发件箱」的各条。改动清单见 §11。
 > 上游:[断线重连核对](infra-reconnect-overview.md) §4.1 R13(方案 2026-11-10 定);[存盘直接提交](player-save-direct-commit.md)(提交点、写权、save_seq 幂等);
 > [逻辑库自治](horizontal-scale-logical-db.md)(每库一份闸门、不跨库);[审计链路水平扩展](audit-pipeline-horizontal-scale-20261106.md)(消费端去重)。
 
@@ -111,37 +112,36 @@ message SavePlayerResponse {
 - **开关**:scene 装配存盘状态机时 `Enable(true)`。没开(battle、单测、工具)时流水与快照请求一律拒收,打 ERROR 并按 `outbox_disabled` 计数(§5.6):
   这个进程没有存盘,审计记录没有提交的地方。C++ 不直接发审计 topic,没有第二条出路(§5.4)。
 - **入队**:`EnqueueTransactionLog`、`EnqueueSnapshot`。单条超过 64 KiB(`kMaxRecordBytes`)拒收,打 ERROR 并按 `too_large` 计数(调用方的 bug)。
-- **一笔的预算与分笔(2026-11-12)**:一笔存盘最多带 512 KiB 审计记录(`kMaxBytesPerSave`,按序列化大小加每条 4 字节的字段头计,
-  与 go/db 的 `MaxAuditBytesPerSave` 同值)。行预算 3 MiB(go/db `MaxRequestBytes`)+ 审计 512 KiB + 余量 64 KiB 小于传输上限 4 MiB − 64 KiB,
-  所以审计永远不会让一笔存盘超限被拒,go/db 启动时核这条不等式(§6.4)。到期记录超过一笔的预算时不丢:`AttachDue` 只带到预算为止并报 `more`,
-  存盘状态机在这一笔提交之后紧接着发续笔,把剩下的带走(§5.2)。单条上限不超过一笔的预算(`static_assert`),所以每一笔至少带走一条,分笔一定交得完。
-  11-11 的做法是每人只排 512 KiB、超了丢最旧的,一笔总能带完;代价是存盘中断稍久、记录稍多就开始丢已提交改动的流水,所以改成分笔。
-- **内存上限**:每名玩家最多 65536 条、8 MiB(`kMaxRecordsPerPlayer` / `kMaxBytesPerPlayer`),只为封住内存。正常情况下流水一入队就请求约 1 秒内存盘(§5.4),
-  队列里只有一两秒的量;到了上限说明这名玩家的存盘中断了很久(go/db 或 TiDB 长时间不可用)而他还在不停地产生记录,这时丢最旧的一条,
-  打 ERROR(`metric=audit_outbox_overflow`,第一条和此后每 1000 条打一次)并按 `overflow` 计数。
-- **交出**:`HasDue(玩家, M)`、`AttachDue(玩家, M, 两个输出)` —— 水位 ≤ M 的记录按记录顺序拷进请求,合计不超过一笔的预算,
-  返回带到哪一条(`through`)、还有没有(`more`);队列里不删。
-- **放行**:`AckThrough(玩家, M)` 删掉水位 ≤ M 的记录。只在这一笔 COMMITTED / EQUAL 且 `audit_outbox_written` 为真时调用:带完时 M 是那份快照的水位,
-  没带完时是 `through`。或者快照与已确认内容一样、没有到期记录而不用写的时候调用(这时删不掉任何东西)。
+- **内存上限**:每名玩家最多 65536 条、8 MiB(`kMaxRecordsPerPlayer` / `kMaxBytesPerPlayer`,字节按序列化大小加每条 4 字节的字段头计)。
+  正常情况下流水一入队就请求约 1 秒内存盘(§5.4),队列里只有一两秒的量;到了上限说明这名玩家的存盘中断了很久(go/db 或 TiDB 长时间不可用)
+  而他还在不停地产生记录,这时丢最旧的一条,打 ERROR(`metric=audit_outbox_overflow`,第一条和此后每 1000 条打一次)并按 `overflow` 计数。
+- **一笔带完(2026-11-19)**:到期的记录一笔全部带上,所以队列上限 8 MiB 也就是一笔存盘里审计记录的上限(go/db 的 `MaxAuditBytesPerSave` 与它同值)。
+  行预算 3 MiB(go/db `MaxRequestBytes`)+ 审计 8 MiB + 余量 64 KiB 小于存盘请求的传输上限 16 MiB − 64 KiB
+  (`player_store_path::kMaxSaveRequestBytes` 与 go/db 的 `playerstore.MaxSaveRequestBytes` 同值:scene 连 go/db 的通道放大发送上限,go/db 放大 gRPC 接收上限),
+  所以审计永远不会让一笔存盘超限被拒,go/db 启动时核这条不等式(§6.4)。改动和描述它的记录因此总在同一个事务里提交。
+  - 11-12 的做法是一笔最多带 512 KiB、带不完由紧接着的续笔带(当时传输上限 4 MiB)。它的漏洞在两笔之间:前一笔的改动已经提交、剩下的记录还在内存里,
+    这一两拍里 scene 崩溃,已提交改动的流水就丢了,而且进程没了、没处计数。11-11 的做法是每人只排 512 KiB、超了丢最旧的,存盘中断稍久就开始丢。
+  - 代价只在积压很久之后的那一笔:它可以到十几 MiB。TiDB 一个事务至多 3 MiB 行 + 8 MiB 流水 + 进退场两份快照(每份 ≤ 4 MiB,快照请求只在进场、离场发),
+    远低于事务上限;一条 INSERT 至多 1000 行、合计不超过 8 MiB,低于驱动与 TiDB 64 MiB 的单包上限;
+    写 8 MiB 流水在健康的 TiDB 上是秒级,在存盘的 12 秒方法超时之内。正常情况下一笔只带一两秒的量,几 KB。
+- **交出**:`HasDue(玩家, M)`、`AttachDue(玩家, M, 两个输出)` —— 水位 ≤ M 的记录按记录顺序全部拷进请求;队列里不删。
+- **放行**:`AckThrough(玩家, M)` 删掉水位 ≤ M 的记录。只在这一笔 COMMITTED / EQUAL 且 `audit_outbox_written` 为真时调用,M 是那份快照的水位;
+  或者快照与已确认内容一样、没有到期记录而不用写的时候调用(这时删不掉任何东西)。
 - **丢弃**:`Discard(玩家, 原因)`,三个时机照旧:实体销毁且存盘落定、实体已没而存盘落定(被废黜)、本节点重新认领之前。
   丢的是没落库的改动的记录,`metric=audit_outbox_discarded_uncommitted`。
 
 ### 5.2 存盘状态机(`player_store_client.{h,cpp}`)
 
-`Options` 新增两个可选钩子:`auditDue(玩家, M)`、`attachAudit(玩家, M, 请求)`(返回 `AuditAttachment{through, more}`)。
+`Options` 新增两个可选钩子:`auditDue(玩家, M)`、`attachAudit(玩家, M, 请求)`。
 
-- `Start` 组请求时调 `attachAudit`。重试发的是同一份请求,审计记录和行一样同内容、同序号。
+- `Start` 组请求时调 `attachAudit`,到期的记录一笔全部带上(§5.1)。重试发的是同一份请求,审计记录和行一样同内容、同序号。
 - 有到期记录就算没有脏行也写一笔(和 `force` 同一档):净变化为零的改动(先 +100 后 −100)同样有两条流水要交。
 - `DeferPeriodicSave` 有到期记录时不推迟。
-- **分笔**:`attachAudit` 报 `more` 时,这一笔不带 release(release 之后别的节点可以认领,剩下的记录就没有机会由本节点提交了),
-  放行水位记成 `through`,并记下一份续笔(调用方原来的 release 与回调,`force` 清掉:行已经随这一笔写了)。
-  这一笔 COMMITTED / EQUAL 之后续笔才排进待发:行就是刚确认的内容,带着原来的 release 与回调紧接着发,`attachAudit` 从 `through` 之后接着带;
-  续笔再报 `more` 就再续,直到带完。对调用方来说这次存盘到最后一笔提交才算完成,最后一笔被拒,调用方看到的就是被拒。
-  这一笔被拒或结果未知时不排续笔,回调照常报这一笔的结局,记录留在队列随下一笔再交(续笔只在提交之后排,确定性拒绝因此一定回到调用方)。
-  排队位置上已经有更新的快照时不另排续笔:那一份的水位更大,会带走剩下的记录,release 也以它为准(release 本来就是「最后一份说了算」),这一笔照常回调。
-- **go/db 不写发件箱时不空转**:这一笔带了审计、回 COMMITTED / EQUAL 而 `audit_outbox_written` 为假(旧 go/db)时,不调 `onCommittedThrough`,
-  记录留在队列,打 ERROR(`metric=audit_outbox_store_too_old`,第一次和此后每 1000 次)并计数(§5.6);行照常确认。同时置 `auditStalled`:
-  之后的笔即使报 `more` 也不分笔,免得对着一个永远不写发件箱的 go/db 一笔接一笔地续;哪一笔写了发件箱就清掉。
+- **不分笔**:调用方要的 release 与回调就在这一笔上,COMMITTED / EQUAL 且写了发件箱就按这份快照的水位放行。
+  release 不会先于记录提交:没有「行已提交、记录还在等下一笔」的中间态,release 之后别的节点认领也拿不走未交的记录。
+- **go/db 不写发件箱时**:这一笔带了审计、回 COMMITTED / EQUAL 而 `audit_outbox_written` 为假(旧 go/db)时,不调 `onCommittedThrough`,
+  记录留在队列,打 ERROR(`metric=audit_outbox_store_too_old`,第一次和此后每 1000 次)并计数(§5.6);行照常确认。
+  记录随之后的存盘再交,不会自己一笔接一笔地空转(只有调用方提交快照才会再写)。
 - 被拒、结果未知、被更新的快照取代都不放行,记录留在队列,随下一笔再交。
 
 ### 5.3 每种结局下审计记录的去向
@@ -240,9 +240,10 @@ COMMIT
 
 ### 6.4 预算核对
 
-`playerstore.New` 拒绝 `MaxRequestBytes + MaxAuditBytesPerSave(512 KiB) + 64 KiB > 4 MiB − 64 KiB` 的配置:行预算调大到装不下审计时,
-scene 会在本地按 TOO_LARGE 拒掉整笔存盘。`MaxAuditBytesPerSave` 与 C++ `AuditOutbox::kMaxBytesPerSave` 同值、`MaxAuditTransactionLogBytes` 与
-`AuditOutbox::kMaxRecordBytes` 同值,Go 单测读头文件核对。
+`playerstore.New` 拒绝 `MaxRequestBytes + MaxAuditBytesPerSave(8 MiB) + 64 KiB > MaxSaveRequestBytes(16 MiB) − 64 KiB` 的配置:行预算调大到装不下审计时,
+scene 会在本地按 TOO_LARGE 拒掉整笔存盘。`MaxAuditBytesPerSave` 与 C++ `AuditOutbox::kMaxBytesPerPlayer` 同值、`MaxAuditTransactionLogBytes` 与
+`AuditOutbox::kMaxRecordBytes` 同值、`MaxSaveRequestBytes` 与 `player_store_path::kMaxSaveRequestBytes` 同值,Go 单测读头文件核对;
+C++ 单测 `DefaultRequestLimitHoldsAFullAuditQueue` 核 scene 缺省的请求上限装得下排满的队列。go/db 的 gRPC 接收上限就是 `MaxSaveRequestBytes`(`db.go`)。
 
 ## 7. 转发循环(`go/db/internal/auditoutbox`)
 
@@ -398,12 +399,12 @@ scene 侧两个进程级计数,由 scene 的 Prometheus 出口导出(口径见 �
 | 部分 | 文件 |
 |---|---|
 | 协议 | `proto/player_store/player_store.proto`(字段 10、11、响应 4、`PlayerAuditKind`);`proto/common/database/mysql_database_table.proto`(`player_audit_outbox`);`proto/common/base/config.proto`(字段 20 `audit_topic_generation` 改 `reserved`) |
-| scene | 新 `cpp/libs/modules/audit/audit_outbox.{h,cpp}`、`audit_outbox_stats.h`(登记 `modules.vcxproj`);删 `audit_topic.h`;`transaction_log_system.{h,cpp}`(只有一条出路、拒收计数、`SetAssetChangedHook`,删 `LogItemTransfer` 与 Kafka 发送);`snapshot_system.{h,cpp}`;`player_store_client.{h,cpp}`(分笔、`auditStalled`、计数);`player_save_metrics.cpp`(导出两个计数);`player_lifecycle.cpp`(装配、两处快照、丢弃;钩子接线由「玩家数据存储策略优化」会话改);`cpp/libs/engine/config/config.cpp`(不再读 `AuditTopicGeneration`) |
-| go/db | `internal/playerstore/{store.go,audit_outbox.go}`;新 `internal/auditoutbox/`;`internal/metrics/audit_outbox.go`;`internal/config/{config.go,audit_outbox.go}`;`player_store_wiring.go`(返回注册 uuid);新 `audit_outbox_wiring.go`;`db.go`;`etc/db.yaml`;`go.mod`(kafka-go 改直接依赖);`cmd/migrate/presplit.go`(TiDB 预切) |
+| scene | 新 `cpp/libs/modules/audit/audit_outbox.{h,cpp}`、`audit_outbox_stats.h`(登记 `modules.vcxproj`);删 `audit_topic.h`;`transaction_log_system.{h,cpp}`(只有一条出路、拒收计数、`SetAssetChangedHook`,删 `LogItemTransfer` 与 Kafka 发送);`snapshot_system.{h,cpp}`;`player_store_client.{h,cpp}`(随存盘交出与放行、计数;11-19 删掉分笔与 `auditStalled`,缺省请求上限随 `kMaxSaveRequestBytes`);`player_save_metrics.cpp`(导出两个计数);`player_lifecycle.cpp`(装配、两处快照、丢弃;钩子接线由「玩家数据存储策略优化」会话改);`cpp/libs/engine/config/config.cpp`(不再读 `AuditTopicGeneration`);11-19:`cpp/libs/engine/config/player_store_path.h`(`kMaxSaveRequestBytes`)、`node_connector.cpp`(连 go/db 的通道放大发送上限) |
+| go/db | `internal/playerstore/{store.go,audit_outbox.go}`(11-19:`MaxSaveRequestBytes`、`MaxAuditBytesPerSave` 改为 8 MiB);新 `internal/auditoutbox/`;`internal/metrics/audit_outbox.go`;`internal/config/{config.go,audit_outbox.go}`;`player_store_wiring.go`(返回注册 uuid);新 `audit_outbox_wiring.go`;`db.go`;`etc/db.yaml`;`go.mod`(kafka-go 改直接依赖);`cmd/migrate/presplit.go`(TiDB 预切) |
 | 共用 | 新 `go/shared/kafkautil/audit_topic.go`;`go/data_service/internal/config/config.go`(`topicForGeneration` 改调它) |
 | 部署与脚本 | `tools/scripts/k8s_deploy.ps1`(db ConfigMap 的 `AuditOutbox` 段从 data_service 渲染、`-AuditOutboxRelay paused`,node ConfigMap 不再写 `AuditTopicGeneration`);`bin/etc/base_deploy_config.yaml`(删键);`tools/scripts/start_game.ps1`、`prepare_docker_debug.py`(核本机两份 yaml 相等);`deploy/docker-compose.yml`(注释);`stress_round19.ps1`、`currency_crash_window.ps1`(清 `player_audit_outbox`) |
 | 告警 | 新 `deploy/k8s/audit-outbox-alerts.yaml`(§9、§5.6);`.github/workflows/deploy-config-tests.yml`(触发路径) |
-| 测试 | `cpp/tests/currency_test/transaction_log_commit_gate_test.cpp`(`AuditOutbox`、分笔预算、内存上限、拒收计数、资产变动通知);`cpp/tests/bag_test/player_store_client_test.cpp` 末尾(随存盘交出与放行、分笔与续笔、`auditStalled`、store_too_old 计数);`bag_test.cpp`、`player_feature_snapshot_test.cpp` 的快照用例;`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(同源、暂停开关);新 `tools/scripts/tests/audit_outbox_alerts_contract.tests.ps1`;Go 单测见 PROGRESS |
+| 测试 | `cpp/tests/currency_test/transaction_log_commit_gate_test.cpp`(`AuditOutbox`、一笔带完、内存上限、拒收计数、资产变动通知);`cpp/tests/bag_test/player_store_client_test.cpp` 末尾(随存盘交出与放行、一笔带完连同 release、缺省请求上限、store_too_old 计数);`bag_test.cpp`、`player_feature_snapshot_test.cpp` 的快照用例;`tools/scripts/tests/k8s_deploy_contract.tests.ps1`(同源、暂停开关);新 `tools/scripts/tests/audit_outbox_alerts_contract.tests.ps1`;Go 单测见 PROGRESS |
 | 文档 | 本文;`docs/ops/audit-topic-generation-bump-runbook.md`(生产者改为 go/db、换代不停服);`deploy/k8s/README.md`;`infra-reconnect-overview.md` R13 行;`data_service_role_and_scope.md` 等几处旧说法 |
 
 ## 12. 残余
@@ -411,8 +412,7 @@ scene 侧两个进程级计数,由 scene 的 Prometheus 出口导出(口径见 �
 - **新旧混跑**:EQUAL 时 go/db 判断不了之前那次提交是不是旧 go/db 做的,按已写入回复;要「旧 go/db 提交、回包丢失、重试落到新 go/db」三件事
   同时发生才会少一批记录。发布顺序见 §10。
 - **scene 崩溃**:队列在内存里,没随存盘提交的记录随进程一起丢 —— 它们描述的改动也没提交,两边仍一致。
-  例外是分笔的窗口(§5.2):前一笔的改动已经提交、剩下的记录还在等续笔,这一两拍里 scene 崩溃,这些已提交改动的记录就丢了。
-  只在一名玩家一次积了超过 512 KiB 记录时出现(存盘中断很久之后),不分笔的话这一笔要么超限被拒、要么只能丢记录,所以取分笔。
+  到期的记录一笔带完(§5.1),没有「改动已提交、记录还在等下一笔」的窗口(11-12 分笔时有,11-19 删掉)。
 - **记录本身可能丢的情形都计数并告警**(§5.6 与 §6.3):scene 内存上限、单条超限、没有单一玩家、进程没开发件箱、号段没号,go/db 跳过的坏记录。
   每一种对应的改动照常提交,健康时全部恒 0。
 - **快照内容是提交时刻的状态**,不是请求时刻的内存;进场快照约晚 1 秒,包含这 1 秒里的改动。

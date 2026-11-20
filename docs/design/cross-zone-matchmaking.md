@@ -515,7 +515,10 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
 ### 13.2 原请求与提交点
 
 - 排队与一人档：客户端发包前将完整 Join 请求原子写入本机单槽，再使用完整规范 UUID 的两段 uint64 作为 SQL 意图主键。重复请求回原票，不能因为旧票已结束而生成新票。未知 Join 的 `NOT_QUEUED` 不能证明没有迟到写入；Cancel 携带原 UUID，在与 Join 相同玩家行锁事务内写永久撤销墓碑。客户端必须查询到 `request_cancelled=true` 且不在队列后才放弃原请求。
-- 整队：`StartTeamMatch.request_id` 为发起端落盘的稳定 UUID。源队伍开战 CAS 后，在成功回包前，将原始请求、全员 SQL 占用和固定 formation 一次事务提交；GetMyTeam 携原 UUID 补拉 `TeamMatchIntent`。空/非法 UUID 明确拒绝，不能按旧客户端空请求号假成功。后台布尔 gather 结果不构成未知成局失败的证据：SQL 终态 4/5 才清源开战锁并推送最终结果，1～3 或查询失败保留原意图。
+- 整队：`StartTeamMatch.request_id` 为发起端落盘的稳定 UUID。源队伍开战 CAS 后，在成功回包前，将原始请求与全员 SQL 占用作为持久原件 `team_launch` 一次事务提交（补位与 PVP 在同一事务进队列，满员 PVE 随后沿原件成局）；GetMyTeam 携原 UUID 补拉 `TeamMatchIntent`，StartTeamMatch 回包也带它。空/非法 UUID 明确拒绝，不能按旧客户端空请求号假成功。后台布尔 gather 结果不构成未知成局失败的证据。
+  - 回执口径（`proto/team/team.proto` 的 `TeamMatchIntent.state`）：带 battle_id 时取原 formation 的状态，4/5 才清源开战锁并推送最终结果，1～3 保留原意图；不带 battle_id 时取整队原件的状态，2 已入队、5 未成局即关闭（含 CancelQueue 在首次提交前立下的原 UUID 墓碑）都是确定结论，1 待提交保留原意图。
+  - 6 表示原件属于角色此前的归属：会话已按护栏核对为角色现主人，原件却记着过户前的主人。现主人不能恢复它，StartTeamMatch 沿它重发按业务拒绝（`kInvalidParameter`）并带同一回执，客户端据此释放本机原意图。会话本身已不归角色现主人时不给这个结论，仍按原会话失效处理。
+  - 查不到原件时不带回执，查询失败回故障，两种情况客户端都保留原意图。客户端只在恢复查询或重发原请求时显示「原……」确认用语，首发请求的回包沿用开战提示。2026-11-19 起按此口径（未编译、未测试，待 Codex 验证；Java 待做）。
 - 活动：原持久 guild lobby_id 作为 `StartActivityBattle.request_id`，同 guild/同 lobby 重试返回原 formation；不能在后台才发号建票。
 - 切磋：原 challenge_id 与应战者组成稳定业务键，同一 SQL 决策锁中争抢接受/拒绝。接受包含全员占用和成局，拒绝写永久决策墓碑；迟到另一决定不能反转。邀请 Redis 投影在 SQL 决定之后清理，投影故障不能改写 SQL 结局。
 

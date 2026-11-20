@@ -114,6 +114,18 @@ var (
 		Name:      "audit_retention_failures_total",
 		Help:      "Failed DELETE statements of the audit table retention loop.",
 	}, []string{"table"})
+	// auditRetentionOldestAgeSeconds、auditRetentionMaxAgeSeconds:每轮清理之后这张表现存最老一行的年龄与配置的保留期。
+	// 告警 DataServiceAuditRetentionBehind 比两者:清理跟不上时最老一行越来越老。table 只有两个值。
+	auditRetentionOldestAgeSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "audit_retention_oldest_age_seconds",
+		Help:      "Age of the oldest row still in the audit table after the latest retention round (0 when the table is empty).",
+	}, []string{"table"})
+	auditRetentionMaxAgeSeconds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "audit_retention_max_age_seconds",
+		Help:      "Configured retention of the audit table.",
+	}, []string{"table"})
 
 	kafkaConsumerLagProbeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
@@ -306,7 +318,7 @@ func register() {
 			kafkaConsumerUp, kafkaConsumerMessagesTotal,
 			kafkaConsumerFlushSeconds, kafkaConsumerBatchRows, kafkaConsumerMessageBytes,
 			kafkaConsumerLagMessages, kafkaConsumerLagMaxPartitionMessages, kafkaConsumerRetentionGapMessages, kafkaConsumerCommitStallSeconds,
-			auditRetentionDeletedRowsTotal, auditRetentionFailuresTotal,
+			auditRetentionDeletedRowsTotal, auditRetentionFailuresTotal, auditRetentionOldestAgeSeconds, auditRetentionMaxAgeSeconds,
 			kafkaConsumerLagProbeTotal, kafkaConsumerIsolationTotal,
 			idSegmentAllocateTotal,
 			idIssuerReserveTotal,
@@ -633,6 +645,11 @@ const (
 	AccountDirectoryRPCLookup = "lookup" // LookupAccountRole
 	AccountDirectoryRPCRepair = "repair" // RepairAccountRole
 	AccountDirectoryRPCRemove = "remove" // RemoveAccountRoles
+	// 账号注销的四个 RPC(internal/server/account_deletion.go)。结论带内回,所以这里的 ok 只表示 RPC 本身成功。
+	AccountDirectoryRPCDeletionRequest = "deletion_request" // RequestAccountDeletion
+	AccountDirectoryRPCDeletionCancel  = "deletion_cancel"  // CancelAccountDeletion
+	AccountDirectoryRPCDeletionClaim   = "deletion_claim"   // ClaimAccountDeletions
+	AccountDirectoryRPCDeletionFinish  = "deletion_finish"  // FinishAccountDeletion
 
 	// 按返回的 gRPC code 归类(server.directoryRPCResult,与 directoryError / admitDirectory 的映射一一对应):
 	//   ok        = OK
@@ -653,6 +670,8 @@ var (
 	accountDirectoryRPCs = []string{
 		AccountDirectoryRPCRead, AccountDirectoryRPCCreate, AccountDirectoryRPCLookup,
 		AccountDirectoryRPCRepair, AccountDirectoryRPCRemove,
+		AccountDirectoryRPCDeletionRequest, AccountDirectoryRPCDeletionCancel,
+		AccountDirectoryRPCDeletionClaim, AccountDirectoryRPCDeletionFinish,
 	}
 	accountDirectoryResults = []string{
 		AccountDirectoryResultOK, AccountDirectoryResultNotFound, AccountDirectoryResultRejected, AccountDirectoryResultError,
@@ -733,4 +752,11 @@ func ObserveAuditRetention(table string, deleted int64, failed bool) {
 		return
 	}
 	auditRetentionDeletedRowsTotal.WithLabelValues(table).Add(float64(deleted))
+}
+
+// SetAuditRetentionOldest 记一轮清理之后这张表现存最老一行的年龄与保留期(store.AuditRetentionOptions.ObserveOldest)。
+func SetAuditRetentionOldest(table string, maxAge, oldestAge time.Duration) {
+	register()
+	auditRetentionMaxAgeSeconds.WithLabelValues(table).Set(maxAge.Seconds())
+	auditRetentionOldestAgeSeconds.WithLabelValues(table).Set(oldestAge.Seconds())
 }

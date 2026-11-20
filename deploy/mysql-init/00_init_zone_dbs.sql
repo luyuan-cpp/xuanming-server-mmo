@@ -10,6 +10,8 @@ CREATE DATABASE IF NOT EXISTS mmorpg_friend DEFAULT CHARACTER SET utf8mb4 COLLAT
 CREATE DATABASE IF NOT EXISTS mmorpg_player_inbox DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mmorpg_mail DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mmorpg_rank DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- 支付服务(go/payment)的支付意图与渠道交易事实;表由 payment -migrate 建。
+CREATE DATABASE IF NOT EXISTS mmorpg_payment DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mmorpg_chat DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 -- 匹配与组队的 SQL 权威；表由 match -migrate 建，只建自己的库。
 CREATE DATABASE IF NOT EXISTS mmorpg_match DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

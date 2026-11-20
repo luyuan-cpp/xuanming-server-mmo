@@ -40,9 +40,9 @@ namespace
 {
 	// 加入时离队长走过的路不超过这个水平距离(米),就地接上,不挪人。
 	constexpr double kTeamFollowSnapToTrailRadius = 0.75;
-	// 加入时走到队尾的路超过这么长(米)就不走了,直接放进槽位。取归队阈值 kTeamRegroupDistance(8)的两倍:
-	// 能走的前提本来就是两人相距不超过 8,绕开障碍的路长到两倍以上,说明中间隔着墙,走过去不如直接放。
-	constexpr double kTeamFollowMaxApproachPath = 16.0;
+	// 加入时走到队尾的路超过这么长(米)就不走了,直接放进槽位。取归队阈值 kTeamRegroupDistance(24)的两倍:
+	// 能走的前提本来就是两人相距不超过 24,绕开障碍的路长到两倍以上,说明中间隔着墙,走过去不如直接放。
+	constexpr double kTeamFollowMaxApproachPath = 48.0;
 	// 寻路终点离队尾超过这个距离(米),说明终点不可达、Detour 给的是半截路:不能拿直线把它连到队尾。
 	constexpr double kTeamFollowApproachEndTolerance = 0.5;
 	// 队长一 tick 挪了这么远(米)就不是走过去的(被瞬移、被裁决拉回到远处):轨迹从新位置重来。
@@ -819,26 +819,36 @@ void TeamFollowSystem::Detach(entt::entity follower, const TeamFollowStopReason 
 	ReleaseFollower(follower, reason);
 }
 
-void TeamFollowSystem::ResendStateAfterEntry(entt::entity player)
+std::optional<uint32_t> TeamFollowSystem::DrivenSlot(entt::entity player)
 {
 	auto& registry = tlsEcs.actorRegistry;
 	if (!registry.valid(player))
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto* driven = registry.try_get<TeamFollowerComp>(player);
 	if (driven == nullptr || !registry.valid(driven->leader))
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto* comp = registry.try_get<TeamFollowFormationComp>(driven->leader);
 	if (comp == nullptr || comp->scene != SceneOf(player))
 	{
-		return;
+		return std::nullopt;
 	}
-	if (const auto rank = comp->formation.RankOf(GuidOf(player)))
+	const auto rank = comp->formation.RankOf(GuidOf(player));
+	if (!rank)
 	{
-		SendFollowState(player, true, driven->leader, static_cast<uint32_t>(*rank + 1),
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(*rank + 1);
+}
+
+void TeamFollowSystem::ResendStateAfterEntry(entt::entity player)
+{
+	if (const auto slot = DrivenSlot(player))
+	{
+		SendFollowState(player, true, tlsEcs.actorRegistry.get<TeamFollowerComp>(player).leader, *slot,
 			TEAM_FOLLOW_STOP_REASON_UNSPECIFIED);
 	}
 }

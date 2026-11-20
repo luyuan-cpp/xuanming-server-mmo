@@ -60,6 +60,7 @@
 	                                    [-WeChatMiniGameAppId ''] [-WeChatMiniGameEndpoint ''] [-WeChatMiniGameAllowOpenId $false]
 	                                    [-DouyinMiniGameAppId ''] [-DouyinMiniGameEndpoint ''] [-DouyinMiniGameAllowOpenId $false]
 	                                    [-AppleClientId ''] [-AppleEndpoint ''] [-GoogleClientId ''] [-GoogleEndpoint '']
+	                                    [-AppleTeamId ''] [-AppleKeyId '']
 	                                    → { Drifts = string[]; KeepArgs }(login 第三方登录防误关闸,见第 9 节)
 	    ConvertFrom-LoginPasswordAuthYaml -LoginYaml                                      → { Present; Enabled; Errors }
 	    Get-LoginPasswordAuthDrift      -Live -Enabled                                    → { Drifts = string[]; KeepArgs }
@@ -660,10 +661,11 @@ function Resolve-BattleFleetHealth {
 	        -SidecarConfigHash (Get-CppLogSidecarConfigHash)
 	关闭 sidecar(-NoCppLogSidecar)时三个 Sidecar* 参数都留空。三者必须同时给或同时不给。
 	业务日志卷名固定 node-logs:与 New-NodeDeploymentYaml 以及 sidecar 片段里的 $script:CppLogVolumeName 同名。
-	-PodAnnotations 是其余的 Pod 模板注解(k8s_deploy.ps1 经它传 zone Redis 口令指纹,见该脚本 Get-CppZoneRedisAuthAnnotations),
+	-PodAnnotations 是其余的 Pod 模板注解(k8s_deploy.ps1 经它传工作负载密钥指纹与 Prometheus 抓取注解,见该脚本 New-CppNodePodCommon),
 	与 sidecar 配置指纹写进同一个 annotations: 段(Get-ClientEntryPodAnnotationBlock)。
-	-SecretEnv 是经 Secret 注入的附加 env(k8s_deploy.ps1 经它传 zone Redis 口令 ZONE_REDIS_PASSWORD,见该脚本
-	Get-CppZoneRedisSecretEnvEntries),三个生成器都经 Get-ClientEntryNodeBaseEnv 接在公共 env 之后、一律 optional: false。
+	-SecretEnv 是经 Secret 注入的附加 env(k8s_deploy.ps1 经它传 gate / battle 的工作负载密钥,如 MMORPG_GATE_TOKEN_SECRET,见该脚本
+	Get-CppNodeWorkloadSecretEnvEntries),三个生成器都经 Get-ClientEntryNodeBaseEnv 接在公共 env 之后、一律 optional: false。
+	这三个模板都不是 scene,不连 Redis(缺口第 34 条第 3 批),没有 Redis 口令与指纹。
 #>
 function New-ClientEntryPodCommon {
 	param(
@@ -2429,7 +2431,8 @@ function Remove-StaleGateOrdinalServices {
 # 被删掉;漏传 Endpoint 把沙箱改连生产地址,漏传 AllowOpenId 把 RequireUnionId 翻回 true。apply 不报错,玩家却登不上。
 # 小游戏两段(-LoginWeChatMiniGame* / -LoginDouyinMiniGame* 各三个参数,AuthProviders.WeChatMiniGame / DouyinMiniGame,2026-11-12)同理。
 # Apple / Google 两段(-LoginApple* / -LoginGoogle* 各两个参数,AuthProviders.Apple / Google,2026-11-13)也一样,只是标识键是 ClientId,
-# 没有 RequireUnionId。
+# 没有 RequireUnionId。Apple 段另有注销时撤销令牌的 TeamId / KeyId(-LoginAppleTeamId / -LoginAppleKeyId,2026-11-19):漏传就关掉撤销、
+# 删掉它的私钥 Secret,同样要拦。
 # 本节的判据由 k8s_deploy.ps1 Assert-LoginAuthProviderClusterState 在写操作之前调用。
 
 # 内部辅助:login.yaml 里一个块映射值的标量 → 字符串;认不出返回 $null。只认生成器会写的形状:双引号(内部不含 \ 与 ")、
@@ -2457,10 +2460,11 @@ function ConvertFrom-ClientEntryYamlScalar {
 	返回 { Present; Providers; Errors }:
 	  - Present:有没有顶格 AuthProviders 键(任何大小写 / 引号写法)。
 	  - Providers:ordered,provider 名按原样保存、按不区分大小写比较(与 go-zero 一致;只差大小写的两个名字算重复)
-	    → { AppId; ClientId; Endpoint; RequireUnionId; HasRequireUnionId; OtherKeys }。
+	    → { AppId; ClientId; Endpoint; RequireUnionId; HasRequireUnionId; TeamId; KeyId; OtherKeys }。
 	    AppId 与 ClientId 是两种标识键(App / 小游戏写 AppId,Apple / Google 写 ClientId),哪种该出现由比对方按 provider 判定;
 	    同一个 provider 两个都写记进 Errors。RequireUnionId 缺省 $true(与 login 的缺省一致),HasRequireUnionId 说明它写没写;
-	    AppSecretEnv 是生成器常量,读到也不参与比对;其余键名进 OtherKeys(手工改过 ConfigMap 才会有,本次部署会丢掉它们)。
+	    TeamId / KeyId 是 Apple 注销时撤销令牌的两项,照样按 provider 记下,哪段该有由比对方判定;
+	    AppSecretEnv、PrivateKeyEnv 是生成器常量,读到也不参与比对;其余键名进 OtherKeys(手工改过 ConfigMap 才会有,本次部署会丢掉它们)。
 	  - Errors:认不出的形状(同一行带值 / flow 写法、制表符缩进、重复的 AuthProviders / provider / 键、不在 provider 下的键、
 	    值认不出、RequireUnionId 不是裸 true / false)。非空时调用方必须当作「判不出」(fail-closed),不能当作没开第三方登录。
 	Errors 只写行号与键名,不回显值。
@@ -2506,7 +2510,7 @@ function ConvertFrom-LoginAuthProvidersYaml {
 				$current = $null
 				continue
 			}
-			$current = [pscustomobject]@{ AppId = ''; ClientId = ''; Endpoint = ''; RequireUnionId = $true; HasRequireUnionId = $false; OtherKeys = [System.Collections.Generic.List[string]]::new() }
+			$current = [pscustomobject]@{ AppId = ''; ClientId = ''; Endpoint = ''; RequireUnionId = $true; HasRequireUnionId = $false; TeamId = ''; KeyId = ''; OtherKeys = [System.Collections.Generic.List[string]]::new() }
 			$providers[$currentName] = $current
 			$seenKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 			continue
@@ -2537,7 +2541,10 @@ function ConvertFrom-LoginAuthProvidersYaml {
 					if ($seenKeys.Contains('AppId')) { $errors.Add("第 $lineNo 行:AuthProviders.$currentName 同时写了 AppId 与 ClientId") }
 				}
 				'Endpoint' { $current.Endpoint = $value }
+				'TeamId' { $current.TeamId = $value }
+				'KeyId' { $current.KeyId = $value }
 				'AppSecretEnv' { }
+				'PrivateKeyEnv' { }
 				'RequireUnionId' {
 					$current.HasRequireUnionId = $true
 					# 只认裸 true / false(YAML 1.2 core 的三种大小写写法);带引号就是字符串,login 解析 bool 时拒启,这里判不出。
@@ -2563,19 +2570,23 @@ function ConvertFrom-LoginAuthProvidersYaml {
 
 .DESCRIPTION
 	-Live 是 ConvertFrom-LoginAuthProvidersYaml 的结果,-OAuthSecretPresent 是 Secret login-oauth 在不在;其余参数是本次的
-	-Login* 取值(微信、QQ、微信小游戏、抖音小游戏各三个,Apple、Google 各两个;形状已由 k8s_deploy.ps1 Get-LoginAuthProviderParamErrors
-	校验过,这里不再校验)。每个 provider 有自己的标识键:App / 小游戏是 AppId,Apple / Google 是 ClientId(下文的「标识」)。判据:
+	-Login* 取值(微信、QQ、微信小游戏、抖音小游戏各三个,Apple、Google 各两个,Apple 另有撤销令牌的两个;形状已由 k8s_deploy.ps1
+	Get-LoginAuthProviderParamErrors 校验过,这里不再校验)。每个 provider 有自己的标识键:App / 小游戏是 AppId,Apple / Google 是 ClientId
+	(下文的「标识」)。判据:
 	  - 线上没有、本次新开的 provider:不算差异(开启是显式的)。
-	  - 线上有、本次没给标识:关闭(WeChat 还会删掉 Secret login-oauth,小游戏两段各删自己的 AppSecret Secret)。
+	  - 线上有、本次没给标识:关闭(WeChat 还会删掉 Secret login-oauth,小游戏两段各删自己的 AppSecret Secret,开着撤销的 Apple 删它的私钥 Secret)。
 	  - 两边都有:标识 / Endpoint / RequireUnionId(Apple / Google 没有这一项)任一不同;线上有生成器不写的键(OtherKeys,
-	    写错了种类的标识键,Apple / Google 段里的 RequireUnionId),本次会丢。
+	    写错了种类的标识键,Apple / Google 段里的 RequireUnionId,Apple 之外的段里的 TeamId / KeyId),本次会丢。
+	  - Apple 注销时撤销令牌的 TeamId / KeyId:线上有、本次两个都没给 = 关闭撤销(还会删掉它的私钥 Secret);本次给了而任一与线上不同 = 换了。
+	    线上没有、本次新开不算差异。
 	  - 线上有生成器不生成的 provider(WeChat / QQ / WeChatMiniGame / DouyinMiniGame / Apple / Google 之外的):本次会丢。
 	  - Secret 在、ConfigMap 里却没有 AuthProviders.WeChat、本次也不开微信:会删掉 Secret。像是上次部署中途失败的残留,
 	    也算一项差异,让人核对后再决定。
 	  - Live.Errors 非空:判不出,整体算一项差异(fail-closed),其余比对照常做。
 	小游戏两段的 AppSecret Secret 不探测残留(-OAuthSecretPresent 只管微信 App 那一个):线上与本次都没有这个渠道时,删掉一个没人引用的 Secret 不影响登录。
 	KeepArgs:按线上现状「要保持就照传」的参数串(只含生成器生成的四个 provider;线上一个都没有时为空串)。值只在落进安全字符集时回显
-	(AppId 为 [A-Za-z0-9_.-];Endpoint 为 http(s)://主机[:端口][/路径],与 k8s_deploy.ps1 参数门禁同一形状),否则写 <见 ConfigMap>,
+	(AppId 为 [A-Za-z0-9_.-];Endpoint 为 http(s)://主机[:端口][/路径],与 k8s_deploy.ps1 参数门禁同一形状;Apple 段的 TeamId / KeyId
+	为 10 位 [A-Z0-9],照传串里是 -LoginAppleTeamId / -LoginAppleKeyId),否则写 <见 ConfigMap>,
 	不把手改进去的任意文本打进日志,也不让人照抄形状不对的值。只比字符集与形状:端口范围(1–65535)与「非 dev 档不收 http://」
 	这两项不在这里复查,照抄后由下一次部署的参数门禁(Get-LoginAuthProviderParamErrors)在写操作之前报出。
 	文本里不会有密钥:本函数拿不到 Secret 的值。「确认要改」的开关名由调用方拼在结尾。
@@ -2599,7 +2610,9 @@ function Get-LoginAuthProviderDrift {
 		[AllowEmptyString()][string]$AppleClientId = '',
 		[AllowEmptyString()][string]$AppleEndpoint = '',
 		[AllowEmptyString()][string]$GoogleClientId = '',
-		[AllowEmptyString()][string]$GoogleEndpoint = ''
+		[AllowEmptyString()][string]$GoogleEndpoint = '',
+		[AllowEmptyString()][string]$AppleTeamId = '',
+		[AllowEmptyString()][string]$AppleKeyId = ''
 	)
 
 	$contract = Get-ClientEntryContract
@@ -2646,6 +2659,16 @@ function Get-LoginAuthProviderDrift {
 			$hasRequireUnionId = [bool](Get-ClientEntryMember -Object $live -Path 'HasRequireUnionId')
 			if ($hasRequireUnionId -or -not $liveRequireUnionId) { $liveOtherKeys += 'RequireUnionId' }
 		}
+		# Apple 注销时撤销令牌的两项:只有 Apple 段该有,别的段写了就是生成器不写的键。经 JSON 往返的旧对象没有这两个成员,按没写算。
+		$liveRevoke = [ordered]@{
+			TeamId = [string](Get-ClientEntryMember -Object $live -Path 'TeamId')
+			KeyId  = [string](Get-ClientEntryMember -Object $live -Path 'KeyId')
+		}
+		$isApple = $w.Name -ceq 'Apple'
+		$liveHasRevoke = $isApple -and ($liveRevoke.TeamId -ne '' -or $liveRevoke.KeyId -ne '')
+		if (-not $isApple) {
+			foreach ($key in @($liveRevoke.Keys)) { if ($liveRevoke[$key] -ne '') { $liveOtherKeys += $key } }
+		}
 
 		$shownAppId = if ($liveAppId -cmatch '^[A-Za-z0-9_.-]+\z') { $liveAppId } else { '<见 ConfigMap>' }
 		$keepArgs.Add("$($w.Param) $shownAppId")
@@ -2656,9 +2679,17 @@ function Get-LoginAuthProviderDrift {
 			$keepArgs.Add("$($w.EndpointParam) $shownEndpoint")
 		}
 		if ($w.AllowParam -ne '' -and -not $liveRequireUnionId) { $keepArgs.Add($w.AllowParam) }
+		if ($liveHasRevoke) {
+			foreach ($key in @($liveRevoke.Keys)) {
+				if ($liveRevoke[$key] -eq '') { continue }
+				$shownRevoke = if ($liveRevoke[$key] -cmatch '^[A-Z0-9]{10}\z') { $liveRevoke[$key] } else { '<见 ConfigMap>' }
+				$keepArgs.Add("-LoginApple$key $shownRevoke")
+			}
+		}
 
 		if ([string]::IsNullOrEmpty($w.AppId)) {
-			$drifts.Add("线上已开 AuthProviders.$($w.Name),本次没给 $($w.Param):部署后 $($w.Name) 登录随新 Pod 关闭$($w.CloseTail)")
+			$closeTail = if ($liveHasRevoke) { ',并删除它的私钥 Secret' } else { $w.CloseTail }
+			$drifts.Add("线上已开 AuthProviders.$($w.Name),本次没给 $($w.Param):部署后 $($w.Name) 登录随新 Pod 关闭$closeTail")
 			continue
 		}
 		if ($liveAppId -cne $w.AppId) {
@@ -2676,6 +2707,19 @@ function Get-LoginAuthProviderDrift {
 			$change = if ($wantRequireUnionId) { "线上 RequireUnionId: false(按 openid 建账号),本次没给 $($w.AllowParam) 会翻回 true,拿不到 unionid 的玩家登录失败" }
 			else { "线上 RequireUnionId 为 true,本次 $($w.AllowParam) 会改成 false(以后接入 unionid 会把同一玩家分裂成两个账号)" }
 			$drifts.Add("AuthProviders.$($w.Name).RequireUnionId:$change")
+		}
+		if ($liveHasRevoke) {
+			$wantRevoke = @{ TeamId = $AppleTeamId; KeyId = $AppleKeyId }
+			if ([string]::IsNullOrEmpty($AppleTeamId) -and [string]::IsNullOrEmpty($AppleKeyId)) {
+				$drifts.Add("线上 AuthProviders.Apple 开着注销时的令牌撤销,本次没给 -LoginAppleTeamId / -LoginAppleKeyId:部署后注销的 Apple 账号不再撤销令牌(只提示手动撤销),并删除它的私钥 Secret")
+			}
+			else {
+				foreach ($key in @($liveRevoke.Keys)) {
+					if ($liveRevoke[$key] -cne [string]$wantRevoke[$key]) {
+						$drifts.Add("AuthProviders.Apple.$key 与线上不同(本次 -LoginApple$key 换了值;Team ID、Key ID 与私钥对不上时,注销时撤销 Apple 令牌全部失败)")
+					}
+				}
+			}
 		}
 		if (@($liveOtherKeys).Count -gt 0) {
 			$drifts.Add("线上 AuthProviders.$($w.Name) 有生成器不写的键($(@($liveOtherKeys) -join ', ')),本次部署会丢掉")

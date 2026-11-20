@@ -42,7 +42,8 @@ $DeployFunctionNames = @(
     'Assert-LoginPasswordAuthClusterState', 'Get-ZoneNamespace',
     'Get-MysqlConnectionPlan', 'Get-MysqlMaxConnectionsFromManifest', 'Get-ManifestDeploymentReplicas', 'Get-AccountDirectoryPoolMaxOpen',
     'Get-MysqlConnectionLedgerInputs', 'Get-MysqlConnectionLedger',
-    'Get-RedisMaxClientsFromManifest', 'Get-RedisPoolMirror', 'Get-RedisPlayerPoolMirror', 'Get-RedisConnectionLedgerInputs', 'Get-RedisPlayerConnectionLedgerInputs'
+    'Get-RedisMaxClientsFromManifest', 'Get-RedisPoolMirror', 'Get-RedisPoolMirrorSource', 'Get-RedisPlayerPoolMirror',
+    'Get-RedisConnectionLedgerInputs', 'Get-RedisControlClientRows', 'Get-RedisClusterConnectionLedgerInputs', 'Get-RedisCluster'
 )
 $DeployFunctionText = @{}
 foreach ($node in $DeployAst.FindAll({ param($a) $a -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
@@ -527,19 +528,21 @@ Test-Case 'SQL 连接总账:开了口令登录,每 zone 多「login 副本数 ×
 }
 
 Test-Case 'Redis 连接总账:开了口令登录,每个 login 副本多一个失败配额池(与 Go 的 passwordQuotaRedisPoolSize 相同),跟着登录域走' {
-    $rowOf = { param($Inputs, $Name) @($Inputs.Clients | Where-Object { $_.Name -eq $Name })[0] }
-    $coreOff = & $rowOf (Get-RedisConnectionLedgerInputs) 'login'
-    $coreOn = & $rowOf (Get-RedisConnectionLedgerInputs -LoginPasswordAuth $true) 'login'
-    Assert-Equal -Expected ([int]$coreOff.Fixed + $GoQuotaRedisPool) -Actual ([int]$coreOn.Fixed) -Because '没建玩家域集群:登录域就是这台 Redis,配额池记在 login 行'
-    Assert-Equal -Expected ([int]$coreOff.ConfiguredPoolConns) -Actual ([int]$coreOn.ConfiguredPoolConns) -Because '其余池不变'
-    $splitOff = & $rowOf (Get-RedisConnectionLedgerInputs -PlayerDomainSplit $true) 'login'
-    $splitOn = & $rowOf (Get-RedisConnectionLedgerInputs -PlayerDomainSplit $true -LoginPasswordAuth $true) 'login'
-    Assert-Equal -Expected ([int]$splitOff.Fixed) -Actual ([int]$splitOn.Fixed) -Because '建了玩家域集群:配额池跟登录域搬到玩家域那一份,这里不记'
-    $playerOff = & $rowOf (Get-RedisPlayerConnectionLedgerInputs) 'login'
-    $playerOn = & $rowOf (Get-RedisPlayerConnectionLedgerInputs -LoginPasswordAuth $true) 'login'
-    Assert-Equal -Expected ([int]$playerOff.Fixed + $GoQuotaRedisPool) -Actual ([int]$playerOn.Fixed) -Because '玩家域那一份每节点多一池'
+    # 核心那份 = 控制域表 + 玩家域表直接拼,login 在两张表里各一行:按服务名把行加起来比。
+    $sumOf = { param($Inputs, $Name, $Field) $sum = 0; foreach ($row in @($Inputs.Clients)) { if ($row.Name -eq $Name) { $sum += [int]$row[$Field] } }; $sum }
+    $coreOff = Get-RedisConnectionLedgerInputs
+    $coreOn = Get-RedisConnectionLedgerInputs -LoginPasswordAuth $true
+    Assert-Equal -Expected ((& $sumOf $coreOff 'login' 'Fixed') + $GoQuotaRedisPool) -Actual (& $sumOf $coreOn 'login' 'Fixed') -Because '没建玩家域集群:登录域就在核心上,配额池记在核心那份'
+    Assert-Equal -Expected (& $sumOf $coreOff 'login' 'ConfiguredPoolConns') -Actual (& $sumOf $coreOn 'login' 'ConfiguredPoolConns') -Because '其余池不变'
+    $splitOff = Get-RedisConnectionLedgerInputs -PlayerOnCore $false
+    $splitOn = Get-RedisConnectionLedgerInputs -PlayerOnCore $false -LoginPasswordAuth $true
+    Assert-Equal -Expected (& $sumOf $splitOff 'login' 'Fixed') -Actual (& $sumOf $splitOn 'login' 'Fixed') -Because '建了玩家域集群:配额池跟登录域搬到集群那一份,核心这份不记'
+    $playerCluster = Get-RedisCluster -Kind 'player'
+    $clusterOff = Get-RedisClusterConnectionLedgerInputs -Cluster $playerCluster
+    $clusterOn = Get-RedisClusterConnectionLedgerInputs -Cluster $playerCluster -LoginPasswordAuth $true
+    Assert-Equal -Expected ((& $sumOf $clusterOff 'login' 'Fixed') + $GoQuotaRedisPool) -Actual (& $sumOf $clusterOn 'login' 'Fixed') -Because '玩家域集群那一份每节点多一池'
     foreach ($name in @('data-service', 'scene-manager', 'guild')) {
-        Assert-Equal -Expected ([int](& $rowOf (Get-RedisConnectionLedgerInputs) $name).Fixed) -Actual ([int](& $rowOf (Get-RedisConnectionLedgerInputs -LoginPasswordAuth $true) $name).Fixed) -Because "$name 的行不受影响"
+        Assert-Equal -Expected (& $sumOf $coreOff $name 'Fixed') -Actual (& $sumOf $coreOn $name 'Fixed') -Because "$name 的行不受影响"
     }
 }
 

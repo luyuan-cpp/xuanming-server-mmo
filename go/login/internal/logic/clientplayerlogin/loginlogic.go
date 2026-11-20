@@ -87,7 +87,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	}
 
 	// Resolve account via auth provider
-	account, err := l.resolveAccount(in)
+	account, channel, err := l.resolveAccount(in)
 	if err != nil {
 		tip := authFailureTip(err)
 		logx.Errorf("Auth failed: type=%s tip=%d err=%v", in.AuthType, tip, err)
@@ -117,7 +117,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	// login_session:* write happen when the client then runs Login with
 	// auth_type="access_token" on the gate (loginPathGateBind, below).
 	if path == loginPathHTTP {
-		userAccount, err := readAccountDirectory(l.ctx, l.svcCtx, account, true)
+		userAccount, realNamePI, err := readAccountDirectoryWithRealName(l.ctx, l.svcCtx, account, true)
 		if err != nil {
 			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: accountDirectoryFailureTip(err)}
 			return resp, nil
@@ -143,11 +143,34 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 			resp.RefreshTokenExpire = tokenPair.RefreshTokenExpire
 		}
 
+		resp.AntiAddiction = httpLoginAntiAddiction(l.ctx, l.svcCtx, account, channel, realNamePI)
 		resp.Players = l.roleListWithCurrentHomeZone(userAccount)
 		return resp, nil
 	}
 
 	logx.Infof("Login start: account=%s sessionId=%d", account, sessionDetails.SessionId)
+
+	// 先读账号目录:防沉迷的判定要早于写登录态,拒绝时什么都不写(docs/design/real-name-anti-addiction.md §5.3)。
+	// 读失败也在写登录态之前回失败,不留下一条能拿去 CreatePlayer / EnterGame 的登录态。
+	userAccount, realNamePI, err := readAccountDirectoryWithRealName(l.ctx, l.svcCtx, account, true)
+	if err != nil {
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: accountDirectoryFailureTip(err)}
+		return resp, nil
+	}
+	now := time.Now()
+	verdict := l.svcCtx.AntiAddiction.Evaluate(channel, realNamePI, now)
+	resp.AntiAddiction = verdict.Status
+	if verdict.RejectTip != 0 {
+		logx.Infof("Login rejected by anti-addiction: account=%s channel=%s tip=%d sessionId=%d",
+			account, channel, verdict.RejectTip, sessionDetails.SessionId)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: verdict.RejectTip}
+		return resp, nil
+	}
+	if err := holdMinorDeadline(l.ctx, l.svcCtx, sessionRef, verdict, now); err != nil {
+		logx.Errorf("Login minor play deadline write failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
+		return resp, nil
+	}
 
 	deviceSetKey := redisslot.AccountDeviceSetKey(account)
 
@@ -192,12 +215,8 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		return resp, nil
 	}
 
-	// 5. Load account data
-	userAccount, err := readAccountDirectory(l.ctx, l.svcCtx, account, true)
-	if err != nil {
-		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: accountDirectoryFailureTip(err)}
-		return resp, nil
-	}
+	// 5. 绑定成功:我们自己实名的会话写上报记录、排一条上线(账号目录已在写登录态之前读过)。
+	startAntiAddictionReport(l.ctx, l.svcCtx, sessionRef, verdict, now)
 
 	// 6. Issue access/refresh tokens (skip for access_token re-auth to avoid token churn)
 	authType := in.AuthType
@@ -353,25 +372,30 @@ func authFailureTip(err error) uint32 {
 // resolveAccount determines the account identifier based on the auth type.
 // Empty auth_type is the legacy spelling of "password" and therefore follows
 // the same fail-closed path. Third-party auth_token values use the registry.
-func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (string, error) {
+// channel 是凭证最初来自的渠道:access_token 取签发令牌时的 auth_type,其余就是请求的 auth_type(防沉迷按它判,§4)。
+func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (string, string, error) {
 	authType := in.AuthType
 	if authType == "" {
 		authType = "password"
 	}
 	if authType == "password" {
-		return resolvePasswordAccount(l.ctx, in, auth.GetPassword())
+		resolved, err := resolvePasswordAccount(l.ctx, in, auth.GetPassword())
+		return resolved, authType, err
 	}
 
 	provider := auth.Get(authType)
 	if provider == nil {
-		return "", fmt.Errorf("unknown auth type: %s", authType)
+		return "", "", fmt.Errorf("unknown auth type: %s", authType)
 	}
 
 	result, err := provider.Validate(l.ctx, in.AuthToken)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return result.Account, nil
+	if result.Channel != "" {
+		return result.Account, result.Channel, nil
+	}
+	return result.Account, authType, nil
 }
 
 func resolvePasswordAccount(ctx context.Context, in *login_proto.LoginRequest, provider auth.PasswordAuthenticator) (string, error) {

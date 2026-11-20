@@ -37,6 +37,9 @@ func TestLegTxType(t *testing.T) {
 		{"seller_receive#2", 4, buy},
 		{"rmb_buyer_credit", 4, buy},
 		{"official_credit", 4, buy},
+		{"official_regrant_2", 4, buy},
+		{"official_reverse_1", 3, uint32(rollbackpb.TransactionType_TX_PAYMENT_REVERSAL)},
+		{"official_reverse_3#1", 3, uint32(rollbackpb.TransactionType_TX_PAYMENT_REVERSAL)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.role, func(t *testing.T) {

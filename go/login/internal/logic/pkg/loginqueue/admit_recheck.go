@@ -140,7 +140,7 @@ func findCandidate(candidates []GateCandidate, nodeID uint32) (GateCandidate, bo
 	return GateCandidate{}, false
 }
 
-// slotGate 把放行槽里记的 gate 还原成签票要的候选(只有签票用得到的四项)。
+// slotGate 把放行槽里记的 gate 还原成签票要的候选(只有签票与下发地址用得到的几项)。
 func slotGate(slot *AdmitSlot) *GateCandidate {
-	return &GateCandidate{NodeID: slot.NodeID, IP: slot.IP, Port: slot.Port, ZoneID: slot.ZoneID}
+	return &GateCandidate{NodeID: slot.NodeID, IP: slot.IP, Port: slot.Port, ZoneID: slot.ZoneID, WsURL: slot.WsURL}
 }

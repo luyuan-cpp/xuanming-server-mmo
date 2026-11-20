@@ -86,7 +86,14 @@ func TestPasswordSchemaFileMatchesTheShapeGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ddl := strings.Join(strings.Fields(string(raw)), " ")
+	// 只看语句,不看整行注释:文件头注释里也写着 CREATE TABLE IF NOT EXISTS(-ddl-file 的加载器同样跳过 -- 行)。
+	var statements []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "--") {
+			statements = append(statements, line)
+		}
+	}
+	ddl := strings.Join(strings.Fields(strings.Join(statements, "\n")), " ")
 	for _, want := range []string{
 		"CREATE TABLE IF NOT EXISTS " + passwordTable + " (",
 		"account VARCHAR(191) NOT NULL",

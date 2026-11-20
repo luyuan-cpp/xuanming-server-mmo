@@ -30,9 +30,10 @@ const (
 	// 转发循环按 (存档库, 片) 分工、按片扫描。片号写在主键里,改它要清表(项目未上线可以直接改)。
 	AuditOutboxShards = 16
 
-	// MaxAuditBytesPerSave:scene 一笔存盘最多带这么多审计记录(C++ AuditOutbox::kMaxBytesPerSave,单测读头文件核对),
-	// 带不完的由紧接着的下一笔带(设计 §5.1)。New 用它核行预算还装不装得下审计:装不下时 scene 会在本地按 TOO_LARGE 拒掉整笔存盘。
-	MaxAuditBytesPerSave = 512 << 10
+	// MaxAuditBytesPerSave:scene 一笔存盘最多带这么多审计记录。scene 把一名玩家排着的记录一笔全部带上,所以它等于每名玩家
+	// 队列的字节上限(C++ AuditOutbox::kMaxBytesPerPlayer,单测读头文件核对);不分笔,改动和描述它的记录总在同一个事务里(设计 §5.1)。
+	// New 用它核行预算还装不装得下审计:装不下时 scene 会在本地按 TOO_LARGE 拒掉整笔存盘。
+	MaxAuditBytesPerSave = 8 << 20
 	// MaxAuditSnapshotBytes 是一份快照(序列化后的 PlayerSnapshotEntry)的上限:低于 TiDB 单 KV 6 MiB、
 	// 快照 topic 的 max.message.bytes 16 MiB。超了只跳过这份快照,存盘照常提交(设计 §6.3)。
 	MaxAuditSnapshotBytes = 4 << 20
@@ -41,9 +42,9 @@ const (
 	// 缺省的约 1 MiB 上限,装不进一次请求的行会永远卡在发件箱里(设计 §6.3)。
 	MaxAuditTransactionLogBytes = 64 << 10
 
-	// maxSaveRequestBytes 与 C++ PlayerStoreClient::Options::maxRequestBytes 的缺省值相同:gRPC 单消息 4 MiB 减签名余量。
+	// maxSaveRequestBytes 与 C++ PlayerStoreClient::Options::maxRequestBytes 的缺省值相同:传输上限 MaxSaveRequestBytes 减签名余量。
 	// scene 发送前按它预检,超了就在本地按 TOO_LARGE 拒掉整笔存盘。
-	maxSaveRequestBytes = 4<<20 - 64<<10
+	maxSaveRequestBytes = MaxSaveRequestBytes - 64<<10
 	// saveRequestOverheadBytes 给请求里 payload 与审计记录之外的内容(身份、行头、签名)留的余量。
 	saveRequestOverheadBytes = 64 << 10
 

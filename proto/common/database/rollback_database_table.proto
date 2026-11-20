@@ -490,6 +490,26 @@ message account_directory {
   option(OptionPrimaryKey) = "account";
   string account = 1;
   uint64 created_ms = 2;
+  // 账号注销(docs/design/account-deletion.md §4.1)。状态只在这一行上变,和建角、过户买入的 reserveRef 同一把行锁。
+  uint32 deletion_state = 3;             // 0 正常、1 冷静期、2 执行中(不可撤销),取值同 data_service.AccountDeletionState
+  uint64 deletion_requested_ms = 4;      // 申请时刻(库时钟);状态 0 时为 0
+  uint64 deletion_execute_after_ms = 5;  // 冷静期满的时刻
+  uint64 deletion_lease_until_ms = 6;    // 执行者租约,免得多个 login 副本同时处理同一账号
+  uint32 deletion_source = 7;            // 1 本人申请、2 运维代办(LoginAdmin.ScheduleAccountDeletion)
+  // 国家防沉迷实名认证系统给的用户唯一标识 pi(38 位,前 6 位是出生日期);空串 = 游戏方没给这个账号做过实名。
+  // 只写一次,不存姓名和身份证号(docs/design/real-name-anti-addiction.md §5.1)。
+  string real_name_pi = 8;
+}
+
+// 账号注销完成的回执(docs/design/account-deletion.md §4.5),在账号所在分片,和删账号行同一个事务写。
+// 只存账号原字节的 SHA-256,不存原账号:合规留档;同一身份以后再登录建新行时,据此提示一次「之前的账号已注销完成」。
+message account_deletion_receipt {
+  option(OptionTableName) = "account_deletion_receipt";
+  option(OptionPrimaryKey) = "account_digest";
+  bytes account_digest = 1;   // 32 字节
+  uint64 requested_ms = 2;
+  uint64 deleted_ms = 3;
+  uint32 source = 4;          // 同 account_directory.deletion_source
 }
 
 // 账号到角色的索引,放账号所在分片。不变量:ref 集合包含全部归属真相;真相永远是 account_role.account。

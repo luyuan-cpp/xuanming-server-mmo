@@ -190,12 +190,13 @@ func (s *ServiceContext) signGateMigration(ctx context.Context, details *login_p
 		return unspecified, "failed"
 	}
 	return &loginpb.GateMigrationResponse{
-		Result:         loginpb.GateMigrationResult_GATE_MIGRATION_RESULT_OK,
-		TargetGateIp:   admit.IP,
-		TargetGatePort: admit.Port,
-		TokenPayload:   admit.TokenPayload,
-		TokenSignature: admit.TokenSignature,
-		TokenDeadline:  admit.TokenDeadline,
+		Result:          loginpb.GateMigrationResult_GATE_MIGRATION_RESULT_OK,
+		TargetGateIp:    admit.IP,
+		TargetGatePort:  admit.Port,
+		TargetGateWsUrl: admit.WsURL,
+		TokenPayload:    admit.TokenPayload,
+		TokenSignature:  admit.TokenSignature,
+		TokenDeadline:   admit.TokenDeadline,
 	}, "ok"
 }
 

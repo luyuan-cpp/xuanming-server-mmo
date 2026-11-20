@@ -296,7 +296,7 @@ TRUNCATE TABLE role_fence;
 | 残留 | 哪个库早了 / 怎么来的 | 后果 | 判据 | 处理 |
 |---|---|---|---|---|
 | 删角的名字还登记着(`removed_role_name`) | 名字片早于删角释放 | 名字留在已删的角色名下,小表 `account_role_removal` 那一行已删,后台不会再放它,谁都登记不了 | 墓碑(`account='')里留着原名,按它查到名字行在这名角色名下,或者名字副本还在 | 先复核墓碑,再按 `(player_id, name_norm)` 条件删名字行和名字副本(和删角收尾同一步)。名字副本指着别的名字只报告 |
-| 孤儿名字(`orphan_name`) | 建角回滚的释放没做成:玩家片冻结或不可达时证明写不了墓碑;login 判不出结局、来不及补偿 | 名字被一个永远建不成的 id 占着 | 名字行是预留态、登记超过 30 分钟,这个 player_id 没有活角色(没有角色行,或者是不带这个名字的墓碑) | 没有提交证据时同带 token 的 `ReleasePlayerName`:先在玩家片证明永远不会提交(有路由行、没有角色行时写墓碑),再只删预留态。有证据(存档库进过场或存过盘、某个账号上有 ACTIVE 的 ref、落点不在名单里)只报告 |
+| 孤儿名字(`orphan_name`) | 建角回滚的释放没做成:玩家片冻结或不可达时证明写不了墓碑;login 判不出结局、来不及补偿 | 名字被一个永远建不成的 id 占着 | 名字行是预留态、登记超过 30 分钟,这个 player_id 没有活角色(没有角色行,或者是不带这个名字的墓碑) | 没有提交证据时同带 token 的 `ReleasePlayerName`:先在玩家片证明永远不会提交(有路由行、没有角色行时写墓碑),再只删预留态。有证据(存档库进过场或存过盘、某个账号上有 ACTIVE 的 ref、落点不在名单里、有 ref 却没有路由行)只报告 |
 
 反方向(`account_role` 不在,名字、路由、ref、初始行在)不在上面的表里;它的名字一项由 `orphan_name` 按证据判。多集群恢复时它有两种来历,**先分清再动**(2026-11-06 评审补):
 
@@ -327,7 +327,7 @@ TRUNCATE TABLE role_fence;
 
 4. 再跑一遍 plan,退出码 0 才算干净。apply 那一遍退出码 1 时先看带 `attention=true` 的项:`over_role_cap`(补回 ref 之后这个账号的角色数超过上限:角色是真的,补回比藏着对,超出的名额只挡以后建角,要不要处理由负责人定,记工单)和 `name_cache_not_invalidated`(库里修好了,名字缓存没删掉:`redis-cli -h <NameCacheRedis> DEL player:name:<player>`,或者等负缓存 60 秒、正缓存 24 小时过期)修好了也算要人看,重跑 plan 不会再报它们。剩下的按 `reason` 处理:
    - `name_held_by_other`:`holder_live=false` 是占用者没有活角色。它的登记是预留态的孤儿时,名字行扫描会把它报成 `orphan_name`,apply 收掉之后重跑。占用者是已删的角色、登记已绑定时:看占用者那一片的 `account_role_removal` 里还有没有它那一行,有就等后台删角收尾(data_service 的 `ResumeRemovals`,每分钟一轮,接着做开始超过 5 分钟的那几行)放掉;没有(名字片恢复点早于删角释放)角色行扫描会把占用者报成 `removed_role_name`,apply 放掉之后重跑。`holder_live=true` 是一名两角,`keeper` 是该留名的一方(0 是判不出),两边都不动,记工单交负责人定。
-   - `orphan_name` 带 `store_saved`、`ref_active`:那名角色像是建成了、只是玩家片恢复点早于提交(反方向残留,见上),不要释放名字,先看玩家片所在集群能不能恢复到更靠近 T 的点,不能就记工单。带 `live_role_holds_other_name`、`corrupt_role_row`:ID 复用或库被人动过,人工核对。`role_committed`:扫完之后角色建成了,重跑 plan 按 `name_unbound` 处理。
+   - `orphan_name` 带 `store_saved`、`ref_active`、`no_route`(有 ref 却没有路由行:玩家片恢复点早于登记路由,找不到存档库):那名角色像是建成了、只是玩家片恢复点早于提交(反方向残留,见上),不要释放名字,先看玩家片所在集群能不能恢复到更靠近 T 的点,不能就记工单。带 `live_role_holds_other_name`、`corrupt_role_row`:ID 复用或库被人动过,人工核对。`role_committed`:扫完之后角色建成了,重跑 plan 按 `name_unbound` 处理。
    - `transferred_role`:建角之后过过户,存档库丢的不只是初始行。先看存档库所在集群能不能恢复到更靠近 T 的点,再按过户收据和商城订单处理,不要直接重写初始行。
    - `legacy_role`、`partial_store_rows`、`no_route_or_placement`、`corrupt_role_row`、`name_rules_changed`、`player_holds_other_name`、`ref_hard_cap`、`name_bound`:人工核对。`role_busy`(交易或删角令牌挡住初始行)、`role_removing`(删角进行中,名字三项只报告:补回去的名字可能赶在删角收尾放名字之后,绑在墓碑上没人放)等交易或删角走完再跑。
    - 同一个存档库报出大量 `initial_rows_missing`,说明这个集群的恢复点明显早于别的集群,先考虑把它重新恢复得更靠近 T,再跑 apply。

@@ -17,7 +17,7 @@ cpp/
 │   │   ├── config/         读 base_deploy_config.yaml 与 game_config.yaml
 │   │   ├── infra/          Kafka、Redis 客户端,Agones 生命周期
 │   │   ├── session/        从 gRPC 上下文取会话信息
-│   │   ├── thread_context/ 线程局部的 ECS registry、Redis、雪花 ID 等
+│   │   ├── thread_context/ 线程局部的 ECS registry、Redis、Lua 状态、trace 上下文等
 │   │   └── muduo_windows/  muduo 网络库的 Windows 移植
 │   ├── modules/            多个节点可复用的玩法模块:背包、货币、任务、奖励、条件……
 │   └── services/           各节点的领域逻辑

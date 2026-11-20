@@ -69,12 +69,11 @@ comments as English to dodge a hazard the build already handled.
 - **Safe to use uint32**: `session_id`, `session_version`, `attack_power`, `defense_power`, `max_health`, `skill_table_id` (table lookup key), `current_frame` (tick counter).
 - **Safe to use float**: `ViewRadius.radius` (AOI range).
 
-## SnowFlake Node ID Isolation Constraint
-- SnowFlake uses a 17-bit node field (`kNodeBits=17`, max 131071). The node ID comes from etcd-allocated `node_id`.
-- Node IDs are allocated **per (zone, node_type)**: different node types in the same zone can have the same `node_id` value.
-- **Invariant**: Each SnowFlake-generated ID type must be produced by only ONE node type. If Scene nodes generate item GUIDs and Gate nodes generate session IDs, those are separate ID spaces and safe.
-- **NEVER** introduce a SnowFlake-generated ID that is produced by multiple node types — the 17-bit worker field will collide since different node types share the same `node_id` range.
-- If a globally-unique cross-node-type ID is ever needed, either encode `node_type` into the worker field (e.g. 5-bit type + 12-bit node) or switch node ID allocation to a single global namespace.
+## 永久 ID 与 SnowFlake 约束（同 AGENTS.md §7 第 1 条，冲突时以它为准）
+- 永久 ID（player_id、guild_id、物品 guid、tx_id、snapshot_id、battle_id、challenge_id、team_id 等）只由发号器 `data_service.AllocateIdSegment` 发：打散过的计数器值，没有位布局，不能用 `ParseSnowflakeGuid` 解析，也不能靠大小判先后。要一种新的全局唯一 ID，就在发号器加一个 biz_tag，不要再造 SnowFlake。
+- SnowFlake（17 位 worker、15 位 step、秒级 epoch）只剩 scene_manager 的 `scene_id`。worker id 来自 `shared/snowflakealloc` 按 kind 申领的槽位（`[cluster5][slot12]`），与路由 `node_id` 无关。
+- 路由 `node_id` 按 node_type 分配（同一类型跨 zone 也不重复，不同类型可以同值），只用于服务发现与命令分区，不喂给任何发号器，也不能当任何 ID 的唯一性来源。
+- **不变量**：每种 SnowFlake ID 只能由一个 kind（一种服务）生产。不同 kind 各有一套槽池，worker id 会重叠，两种服务共用一种 SnowFlake ID 必然撞号。
 
 ## Kafka Zombie Message Protection
 - 节点命令现用共享分区 topic：`gate-cmd_g<N>`、`scene-cmd_g<N>`，按目标 node_id 定分区。`{type}-{node_id}` 仅是迁移期兼容路径，是否继续消费由 `disable_legacy_per_node_topic` 控制；Centre 已退役。

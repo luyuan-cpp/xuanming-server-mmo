@@ -465,3 +465,16 @@ func TestMaxClaimResponseBytes_MatchesCpp(t *testing.T) {
 		t.Fatalf("player_store_path.h must declare %q", want)
 	}
 }
+
+// 存盘请求的传输上限两边同一个值:scene 的发送上限比这里的接收上限大,带满审计记录的一笔会被 go/db 拒收,
+// 按结果未知永远重试,这名玩家再也存不进去。
+func TestMaxSaveRequestBytes_MatchesCpp(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "cpp", "libs", "engine", "config", "player_store_path.h"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("kMaxSaveRequestBytes = %d * 1024 * 1024", MaxSaveRequestBytes>>20)
+	if !strings.Contains(string(raw), want) {
+		t.Fatalf("player_store_path.h must declare %q", want)
+	}
+}

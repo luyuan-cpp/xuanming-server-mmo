@@ -286,6 +286,8 @@ type ResolvedSecrets struct {
 	QueueToken *SecretSet
 	// AuthProviders 是第三方登录(微信 / QQ,以及微信、抖音小游戏)的凭据,由 svc.InitAuthProviders 消费(auth_providers.go)。
 	AuthProviders AuthProviderSecrets
+	// NppaSecretKey 是国家防沉迷实名认证系统的 secretKey;防沉迷关着时为空(anti_addiction.go)。
+	NppaSecretKey string
 }
 
 // ActiveSecrets 是进程启动期解析好的密钥集合,由 main 在 conf.MustLoad
@@ -360,6 +362,10 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 	if err != nil {
 		return nil, warnings, err
 	}
+	nppaSecretKey, err := resolveAntiAddiction(cfg.AntiAddiction, lookup)
+	if err != nil {
+		return nil, warnings, err
+	}
 
 	// 不同用途不许复用同一把主密钥。生产直接拒绝启动;开发只打 WARN
 	// (本地经常图省事两把填一样)。
@@ -384,5 +390,5 @@ func ResolveSecrets(cfg *Config, lookup func(string) (string, bool)) (*ResolvedS
 		return nil, warnings, fmt.Errorf("%s", msg)
 	}
 
-	return &ResolvedSecrets{GateToken: gate, QueueToken: queue, AuthProviders: authProviders}, warnings, nil
+	return &ResolvedSecrets{GateToken: gate, QueueToken: queue, AuthProviders: authProviders, NppaSecretKey: nppaSecretKey}, warnings, nil
 }

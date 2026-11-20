@@ -88,7 +88,7 @@ python tools/scripts/rebuild_docker_debug.py go --services rank,match
 - `db-migrate`、`data-migrate`、`match-migrate`、`rank-migrate`、`player-inbox-migrate` 用 root 建表。`data-migrate` 建目录 `testdb` 和流水库 `testdb_ledger`。
 - `db`、`data-service`、`login`、`match`、`rank`、`player-inbox`、`gateway` 前各有一个一次性的 `<服务>-sql-boot`（`service_completed_successfully`）：用 `lib/sql_boot_catalog_local.ps1` 的授权清单和 `deploy/sql` 的角色模板建这一 boot 的账号 `lw_<boot>_<服务>`，调 `writer_authority -command register`，把单次授权、运行配置和 SQL 变量写进命名卷 `<服务>-sql-writer`。常驻容器只读挂载它，由 `sql-writer-entry.sh` 取出摘要和变量再启动业务进程；消费标记写在 `<服务>-sql-consume`。
 - 上一轮的账号没有连接就删，还有连接（服务还在跑）就留到下一轮。`writer_registry` 里的旧行不删，只是停用账号的历史记录。
-- login 进程不连 SQL、不消费授权，这一步只为和 `go_services.ps1`、K8s 的写者清单同形状。chat、friend、guild、mail、rank、trade 不在这个栈里，其中 guild、trade、mail、friend 是角色护栏的参与者，协调者连不上它们，这个栈里过户和删角一律拒绝；要加时照 `match-sql-boot` 写一段，并在 `prepare_docker_debug.py` 的 `GO_CONFIGS` 加配置。
+- login 进程不连 SQL、不消费授权，这一步只为和 `go_services.ps1`、K8s 的写者清单同形状。chat、friend、guild、mail、trade 不在这个栈里，其中 guild、trade、mail、friend 是角色护栏的参与者，协调者连不上它们，这个栈里过户和删角一律拒绝。rank 在栈里但连不上 mail：实时积分榜照常写，封榜奖励留在 rank 的持久队列里重试。要加服务时照 `match-sql-boot` 写一段，并在 `prepare_docker_debug.py` 的 `GO_CONFIGS` 加配置。
 - `player-inbox` 收全球匹配成局的个人结算：match 用 `MMORPG_PLAYER_INBOX_SECRET_MATCH` 签名入箱，scene 用 `MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE` 签名拉取。这个栈的 `game_config.yaml` 由 `prepare_docker_debug.py` 打开 `player_inbox.consumer_enabled`（显式写，不跟着源配置变），否则结算只进箱、到不了玩家。调试端口 `127.0.0.1:2352`。
 
 单次授权启动即消费，**`docker compose restart <写者>` 会被拒启**（`SQL writer启动grant缺失、漂移或已消费`）。要重启就连注册步骤一起重建，`rebuild_docker_debug.py` 更新写者时也是这样做：

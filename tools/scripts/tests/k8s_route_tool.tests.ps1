@@ -196,7 +196,8 @@ Test-Case 'New-RouteToolJobManifest:Job 名 / 运行号 / 镜像 / 拉取策略 
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($manifest, '(?m)^[ ]+- name: ' + $pair[0] + '[ ]*$').Count) -Because "$($pair[0]) 只注入一次"
     }
     Assert-NotMatch -Text $manifest -Pattern 'MMORPG_MYSQL_PASSWORD|mysql-auth' -Because '不再注入共享数据库口令:账号、口令、地址都来自 schema 身份的连接串'
-    Assert-NotMatch -Text $manifest -Pattern 'MMORPG_SQL_MAINTENANCE_DSN|MMORPG_SQL_OPERATOR_PRINCIPAL|MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256' -Because '维护身份不进集群(freeze / unfreeze 在运维机上跑)'
+    # 只看 env 条目:模板文件头的注释为了说明跑法会提到这几个变量名。
+    Assert-NotMatch -Text $manifest -Pattern '(?m)^[ ]+- name: (MMORPG_SQL_MAINTENANCE_DSN|MMORPG_SQL_OPERATOR_PRINCIPAL|MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256)[ ]*$' -Because '维护身份不进集群(freeze / unfreeze 在运维机上跑)'
 }
 
 Test-Case 'args 逐项 JSON 转义:引号、反斜杠、中文、逗号、等号原样往返;镜像里的说明文字(含空格与括号)也是合法 YAML 字符串' {

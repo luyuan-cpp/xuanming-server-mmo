@@ -31,6 +31,7 @@ import (
 	"shared/dbplacement"
 	"shared/domainhost"
 	tables "shared/generated/table"
+	"shared/grpckeepalive"
 	"shared/releasetrack"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
@@ -224,7 +225,9 @@ func run(c config, migrate bool) (runErr error) {
 		return err
 	}
 	handler := server.New(repo, auth, ids.Data)
-	mailRPC, err := zrpc.NewClient(c.MailRpc)
+	// K8s 上 MailRpc 是 mail 的 Service 地址,整条连接落在一个 Pod 上:keepalive 让对端整机消失后的半开连接
+	// 在一次调用后 20 秒内断开重连(shared/grpckeepalive)。
+	mailRPC, err := zrpc.NewClient(c.MailRpc, zrpc.WithDialOption(grpckeepalive.DialOption()))
 	if err != nil {
 		return err
 	}

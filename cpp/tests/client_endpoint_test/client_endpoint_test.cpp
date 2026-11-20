@@ -735,3 +735,70 @@ TEST(ClientEndpointClientFacing, UnusableEndpointFallbackIsRejected)
     const auto node = MakeNode(MakeEndpoint("10.244.0.5", 0), std::nullopt);
     EXPECT_FALSE(client_endpoint::ClientFacing(node, false).has_value());
 }
+
+// ── 小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url,docs/design/minigame-websocket-gate.md W7)──
+// 非法的基地址同样让 Node 致命退出,所以断言的也是「判为非法 + error 点名 env」。
+
+TEST(ClientEndpointWsUrl, UnsetMeansNoWebSocketAddress)
+{
+    const FakeEnv env;
+    std::string base = "stale";
+    std::string error;
+    ASSERT_TRUE(client_endpoint::ParseWsBaseUrl(env.Lookup(), base, error)) << error;
+    EXPECT_TRUE(base.empty());
+    EXPECT_TRUE(client_endpoint::BuildWsUrl(base, MakeEndpoint("10.244.0.5", 18000)).empty());
+}
+
+TEST(ClientEndpointWsUrl, UrlIsBaseThenEndpointIpAndPort)
+{
+    FakeEnv env;
+    env.Set(client_endpoint::kEnvWsBaseUrl, "wss://ws.example.com/ws/"); // 末尾的 '/' 去掉
+    std::string base;
+    std::string error;
+    ASSERT_TRUE(client_endpoint::ParseWsBaseUrl(env.Lookup(), base, error)) << error;
+    EXPECT_EQ(base, "wss://ws.example.com/ws");
+    EXPECT_EQ(client_endpoint::BuildWsUrl(base, MakeEndpoint("10.244.0.5", 18000)),
+              "wss://ws.example.com/ws/10.244.0.5/18000");
+}
+
+TEST(ClientEndpointWsUrl, PlainSchemeWithPortIsAcceptedForLocalRuns)
+{
+    FakeEnv env;
+    env.Set(client_endpoint::kEnvWsBaseUrl, "ws://127.0.0.1:8443");
+    std::string base;
+    std::string error;
+    ASSERT_TRUE(client_endpoint::ParseWsBaseUrl(env.Lookup(), base, error)) << error;
+    EXPECT_EQ(client_endpoint::BuildWsUrl(base, MakeEndpoint("127.0.0.1", 20000)), "ws://127.0.0.1:8443/127.0.0.1/20000");
+}
+
+TEST(ClientEndpointWsUrl, InvalidBaseUrlIsRejectedAndNamesTheEnv)
+{
+    // 最后两条是 kubelet 没展开的变量与残留的模板占位符:原样下发的话客户端只会连不上。
+    for (const char *raw : {"https://ws.example.com", "ws.example.com", "wss://", "wss:///ws", "wss://ws.example.com/ws?zone=1",
+                            "wss://ws.example.com/#frag", "wss://ws example.com", "wss://$(WS_EDGE_HOST)/ws", "wss://{host}/ws"})
+    {
+        FakeEnv env;
+        env.Set(client_endpoint::kEnvWsBaseUrl, raw);
+        std::string base = "untouched";
+        std::string error;
+        EXPECT_FALSE(client_endpoint::ParseWsBaseUrl(env.Lookup(), base, error)) << raw;
+        EXPECT_NE(error.find(client_endpoint::kEnvWsBaseUrl), std::string::npos) << raw;
+        EXPECT_EQ(base, "untouched") << raw;
+    }
+}
+
+TEST(ClientEndpointWsUrl, OnlyIpv4EndpointsWithAPortAreAdvertised)
+{
+    EXPECT_TRUE(client_endpoint::IsIpv4Literal("10.244.0.5"));
+    EXPECT_TRUE(client_endpoint::IsIpv4Literal("0.0.0.0"));
+    for (const char *notIpv4 : {"", "10.244.0", "10.244.0.5.6", "10.244.0.256", "10.244..5", "10.244.0.+5", " 10.244.0.5",
+                                "gate-0.gate-headless", "fd00::1"})
+    {
+        EXPECT_FALSE(client_endpoint::IsIpv4Literal(notIpv4)) << "'" << notIpv4 << "'";
+    }
+
+    // 边缘只按 IPv4 地址转发:主机名、没定下来的端口都不自报。
+    const std::string base = "wss://ws.example.com/ws";
+    EXPECT_TRUE(client_endpoint::BuildWsUrl(base, MakeEndpoint("gate-0.gate-headless", 18000)).empty());
+    EXPECT_TRUE(client_endpoint::BuildWsUrl(base, MakeEndpoint("10.244.0.5", 0)).empty());
+}

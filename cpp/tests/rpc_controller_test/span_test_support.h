@@ -7,8 +7,11 @@
 // 只有头文件,不依赖 gtest。
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
+#include <functional>
 #include <mutex>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -51,18 +54,21 @@ private:
 class ScopedSinkInstall {
 public:
     explicit ScopedSinkInstall(tracing::SpanSink* sink)
-        : previous_(tracing::InstalledSpanSink())
     {
+        if (tracing::SpanSink* previous = tracing::InstalledSpanSink(); previous != nullptr) {
+            previous_ = std::ref(*previous);
+        }
         tracing::InstallSpanSink(sink);
     }
 
-    ~ScopedSinkInstall() { tracing::InstallSpanSink(previous_); }
+    ~ScopedSinkInstall() { tracing::InstallSpanSink(previous_ ? &previous_->get() : nullptr); }
 
     ScopedSinkInstall(const ScopedSinkInstall&) = delete;
     ScopedSinkInstall& operator=(const ScopedSinkInstall&) = delete;
 
 private:
-    tracing::SpanSink* previous_;
+    // 借用进入前装着的去处(空 = 原来没装);不存裸指针成员(Directory.Build.targets 的门禁)。
+    std::optional<std::reference_wrapper<tracing::SpanSink>> previous_;
 };
 
 // 一条可辨认的 span:trace_id 的首字节、span_id 的末字节都是 tag(tag 非零时 id 合法),名字是 "span-<tag>"。

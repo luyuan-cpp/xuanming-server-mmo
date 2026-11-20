@@ -15,7 +15,9 @@
 // 线程模型:全部回调在 muduo 主 loop 线程(与 BattleRoomManager 同线程),无锁。
 //
 // 安全闸(D27,逐条镜像 gate 的 HandleConnectionEstablished / DispatchTokenVerify):
-//   1. 并发连接上限 BaseDeployConfig.battle_max_connections(0 仅 dev/test 允许);
+//   1. 连接准入,与 gate 同一套做法(battle_connection_admission.h):accept 之后、TcpConnection 建出来之前判
+//      关源 → 并发上限 BaseDeployConfig.battle_max_connections(0 仅 dev/test 允许)→ 新建连接速率,被拒的连接当场以
+//      RST 关闭、不建任何每连接对象;连接回调里的上限判定留作第二道。连接类指标经节点的 /metrics 导出;
 //   2. 空 battle_token_secret 的处置由 BATTLE_RUN_MODE 决定(prod 拒连);
 //   3. 未验证连接 kHandshakeTimeoutSec 内没完成握手即关闭(防占槽);
 //   4. 验证通过前丢弃并关闭一切非握手消息;
@@ -42,6 +44,7 @@
 #include "muduo/net/TcpConnection.h"
 #include "muduo/net/TcpServer.h"
 
+#include "battle_connection_admission.h"
 #include "message_limiter/message_limiter.h"
 #include "network/client_liveness.h"
 #include "network/codec/codec.h"
@@ -66,14 +69,21 @@ public:
 
     BattleClientEdge();
 
-    // 装到节点 TCP server 上(替换框架默认的 RpcCodec 回调)。必须在 StartRpcServer
+    // 启动时调一次(main.cpp ConfigureClientAdmissionOrDie,Install 之前):换上正式的新建连接速率闸参数。
+    // 没调过时按硬上限推导(只有不 Install 的单测会这样)。
+    void ConfigureAdmission(battle_connection_admission::RateLimit rateLimit) { admission_.Configure(rateLimit); }
+
+    // 装到节点 TCP server 上(替换框架默认的 RpcCodec 回调,装上准入回调,登记连接类指标)。必须在 StartRpcServer
     // 之后调用(Node::SetAfterStart 回调里),与 gate main.cpp 同一时机。
     void Install(muduo::net::TcpServer &server);
 
+    // 关源(停机 / 维护关源时调,不可撤销):之后的新直连在 accept 处以 RST 拒绝(reason = shutting_down)。
+    // 已建立的直连不受影响,由 DisconnectAll 收尾。
+    void CloseSource() { admission_.CloseSource(); }
+
     // 下行:按 ProtobufCodec 帧写出(长度头 + 类型名 + 校验和)。
     // 绝不能裸 conn->send 序列化字节 —— 会毁掉整条连接的分帧(gate 同款教训)。
-    // 走 static ProtobufCodec::fillEmptyBuffer 而不是 codec_.send:后者是非 const 成员,
-    // 在 const 方法里对按值成员调用编不过(gate 能那样写是因为它持的是引用成员)。
+    // 走 static 的 ProtobufCodec::send:小游戏直连(WebSocket)时它再包一层二进制消息帧头。
     void Send(const muduo::net::TcpConnectionPtr &conn, const ::google::protobuf::Message &message) const;
 
     // 一份完整的下行帧(与 Send 写出的字节逐字节相同)。只能由 EncodeFrame 产出,SendEncoded 只收这个类型:
@@ -83,6 +93,8 @@ public:
         friend class BattleClientEdge;
         explicit EncodedFrame(std::string bytes) : bytes_(std::move(bytes)) {}
         std::string bytes_;
+        // 同一份帧加上 WebSocket 帧头后的字节,给小游戏直连用;SendEncoded 第一次遇到这类连接时才拼。
+        mutable std::string webSocketBytes_;
     };
 
     // 编码一次、多条连接复用(观众帧,battle-spectate-tiered-fanout.md §10 第 3 条):同一帧发给多条直连时
@@ -120,6 +132,8 @@ private:
         // 每消息号限速,与 gate SessionInfo 同款(表驱动,MessageLimiter.xlsx)
         MessageLimiter messageLimiter;
         TimerTaskComp handshakeTimer;
+        // 建连时刻(单调时钟):握手耗时直方图从这里算。
+        std::chrono::steady_clock::time_point openedAt;
         // 应用层心跳的存活状态(闸 6)。握手成功的应答发出时开始跟踪,只在跟踪中刷新「上一帧」时刻。
         client_liveness::ClientLiveness liveness;
         // 空闲检查:每条跟踪中的连接恰好一个定时器。到期时距上一帧不足阈值就按「上一帧 + 阈值」重新武装,
@@ -132,6 +146,15 @@ private:
         uint32_t probeRttMs = 0;
         std::chrono::steady_clock::time_point probeSent;
     };
+
+    // 准入回调的函数体(Install 经 TcpServer::setAdmissionCallback 装上):放行返回 true;拒绝返回 false,
+    // 已按原因计数并采样打日志(被拒的量就是攻击流量的量级,不能逐条写盘)。
+    bool AdmitConnection(const muduo::net::InetAddress &peer, battle_connection_admission::SteadyTime now);
+    // 未认证的直连数(指标用):既没完成票据握手、也没出示有效的网络探测授权(授权由 match 签发,OnProbeStart 验过签)。
+    // 抓取时数一遍会话表:直连数以 battle_max_connections 为界,数一遍比在每个出口手写加减可靠。
+    size_t UnauthenticatedConnectionCount() const;
+    // 把连接类指标的采集回调登记进进程的指标注册表(Install 时一次)。
+    void RegisterMetrics();
 
     void OnConnection(const muduo::net::TcpConnectionPtr &conn);
     void HandleEstablished(const muduo::net::TcpConnectionPtr &conn);
@@ -185,4 +208,7 @@ private:
     ProtobufCodec codec_;
     std::unordered_map<uint64_t, DirectSession> sessions_;
     uint64_t nextConnId_ = 1;
+    // 连接准入的状态与计数(battle_connection_admission.h)。起步按硬上限推导,main.cpp 启动时换成正式参数。
+    battle_connection_admission::Admission admission_{
+        accept_admission::DefaultRateLimit(static_cast<uint32_t>(kHardMaxConnections))};
 };

@@ -178,7 +178,7 @@ type AssetPipeline struct {
 	watcher *scenenode.Watcher
 	conns   *scenenode.ConnCache
 
-	// wake 订阅 scene 发布的落地唤醒(控制集群上的分片频道 assetop:wake:{aw:<player_id % 64>},SSUBSCRIBE 订全部 64 个);AssetOp.Wake 关闭时为 nil。构造后只读。
+	// wake 订阅 scene 发布的落地唤醒(控制集群上的分片频道 assetop:wake:{aw:<player_id % 64>},AttachWorkShards 之后只订本副本负责的片);AssetOp.Wake 关闭时为 nil。构造后只读。
 	wake *assetopwake.Subscriber
 	// maintenanceOn:本副本的配置是否开了日对账或自动放弃(两项都关时不竞选,省一把锁)。构造后只读。
 	maintenanceOn bool
@@ -381,6 +381,11 @@ func (p *AssetPipeline) AttachWorkShards(zoneID uint32, self string) error {
 	members.SetSelf(self)
 	if err := p.Loop.BindWorkOwner(assetOpWorkKind, members.Owns); err != nil {
 		return fmt.Errorf("guild: shard asset redelivery: %w", err)
+	}
+	// 落地唤醒只订本副本负责的片,与重投同一张分工表、同一个类别键(redis-cluster-all-domains-20261110.md §4.6)。
+	// 唤醒关着(wake 为 nil)时是空操作。
+	if err := p.wake.BindShardOwner(func(shard int) bool { return members.Owns(workshard.ShardKey(assetOpWorkKind, shard)) }); err != nil {
+		return fmt.Errorf("guild: shard landing wake: %w", err)
 	}
 	p.members = members
 	logx.Infof("[guild] Asset redelivery due scan sharded by player_id: kind=%s members_prefix=%s", assetOpWorkKind, prefix)

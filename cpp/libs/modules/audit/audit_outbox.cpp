@@ -62,7 +62,7 @@ namespace
     }
 
     // 记录已经核过非空、未超单条上限。单条上限小于每人字节上限,所以丢到队空一定放得下。
-    // 上限只为封住内存(头文件 kMaxRecordsPerPlayer):排着的记录超过一笔的预算并不丢,AttachDue 分笔交出。
+    // 上限封住内存,也保证排着的全部记录装得进一笔存盘(头文件 kMaxBytesPerPlayer),AttachDue 因此一笔带完。
     void Push(uint64_t playerId, std::size_t bytes, Record record)
     {
         auto &state = Outbox();
@@ -150,28 +150,20 @@ bool AuditOutbox::HasDue(uint64_t playerId, uint64_t mark)
     return it != players.end() && !it->second.records.empty() && it->second.records.front().mark <= mark;
 }
 
-AuditOutbox::Attached AuditOutbox::AttachDue(uint64_t playerId, uint64_t mark,
-                                             google::protobuf::RepeatedPtrField<TransactionLogEntry> &transactionLogs,
-                                             google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> &snapshots)
+void AuditOutbox::AttachDue(uint64_t playerId, uint64_t mark,
+                            google::protobuf::RepeatedPtrField<TransactionLogEntry> &transactionLogs,
+                            google::protobuf::RepeatedPtrField<PlayerSnapshotEntry> &snapshots)
 {
-    Attached attached;
     const auto &players = Outbox().players;
     const auto it = players.find(playerId);
     if (it == players.end())
     {
-        return attached;
+        return;
     }
-    std::size_t attachedBytes = 0;
     for (const auto &queued : it->second.records)
     {
         if (queued.mark > mark)
         {
-            break;
-        }
-        // 一笔的预算用完:剩下的留给下一笔。第一条总是带上(单条上限小于一笔的预算,见头文件的 static_assert)。
-        if (attached.through != 0 && attachedBytes + queued.bytes > kMaxBytesPerSave)
-        {
-            attached.more = true;
             break;
         }
         if (const auto *entry = std::get_if<TransactionLogEntry>(&queued.record))
@@ -182,10 +174,7 @@ AuditOutbox::Attached AuditOutbox::AttachDue(uint64_t playerId, uint64_t mark,
         {
             *snapshots.Add() = std::get<PlayerSnapshotEntry>(queued.record);
         }
-        attachedBytes += queued.bytes;
-        attached.through = queued.mark;
     }
-    return attached;
 }
 
 void AuditOutbox::AckThrough(uint64_t playerId, uint64_t mark)

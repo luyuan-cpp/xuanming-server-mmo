@@ -83,14 +83,11 @@ class ProtobufCodec : muduo::noncopyable
                  muduo::net::Buffer* buf,
                  muduo::Timestamp receiveTime);
 
-  void send(const muduo::net::TcpConnectionPtr& conn,
-            const google::protobuf::Message& message)
-  {
-    // FIXME: serialize to TcpConnection::outputBuffer()
-    muduo::net::Buffer buf;
-    fillEmptyBuffer(&buf, message);
-    conn->send(&buf);
-  }
+  // 发一个客户端帧。连接已升级成 WebSocket(小游戏)时包成一条二进制消息,原始 TCP 照旧
+  // (network/codec/websocket.h)。只能在连接所属的 loop 线程调用。
+  // static:不用 codec 实例的任何状态,const 上下文(battle 的发送函数)可以直接调。
+  static void send(const muduo::net::TcpConnectionPtr& conn,
+                   const google::protobuf::Message& message);
 
   static const muduo::string& errorCodeToString(ErrorCode errorCode);
   static void fillEmptyBuffer(muduo::net::Buffer* buf, const google::protobuf::Message& message);

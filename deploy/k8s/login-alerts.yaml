@@ -42,6 +42,8 @@
 #   - LoginQueueCapacityLimitedByGates 是 warning、for 10m:gate 台数装不下配置的区容量,排队会比配置的早开始拦人。
 #     不会断线、不会多放,只是容量规划与实际不符;按 namespace、zone 取各副本的最小值比较。
 #   - login 自己的视图出问题不会造成「全部停写」:镜像跟不上 etcd 时读路径回落直读,直读不判停写(node_cache.go 的 cacheStaleAfter)。
+#   - LoginRoleListHomeZoneFallbackSustained 是 warning、for 10m:角色列表补归属整次失败时 login 照常放行(映射提案 §15.5 第 3 条),
+#     玩家看到的是建角时的 zone。这个计数是普通 Counter,进程启动就有 0 值序列,所以不带「新序列」分支;单次超时不报。
 #   - 阈值已定(2026-11-12),压测出基线后可调:规则按「持续出现即报」与容量比值定,for 盖住滚动发布与 etcd 选主窗口(约 1~2 分钟),不依赖压测基线。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
@@ -168,3 +170,22 @@ spec:
               查 login 到 etcd 的连通性(login_gate_directory_reads_total 的 etcd_stale 是否在涨)与本 zone 的 gate 是否都已下线;
               login 日志搜 "consume-time gate recheck skipped"。
             runbook_url: docs/design/gate-load-balancing-design.md
+
+    # 角色列表补归属回落(2026-11-19 起):失败放行的路径必须看得见(AGENTS §11.3)。
+    - name: login.role-list
+      interval: 30s
+      rules:
+        - alert: LoginRoleListHomeZoneFallbackSustained
+          expr: |
+            sum by (namespace) (rate(login_role_list_home_zone_fallback_total[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 login 持续读不到角色归属,角色列表退回建角时的 zone"
+            description: >-
+              连续 10 分钟,login 返回角色列表时整次调用 data_service BatchGetPlayerHomeZone 都在失败,只能照常返回、
+              保留账号里建角时的 zone_id。登录不受影响,但合服后的角色会显示旧区,玩家可能选到错的区。data_service 整个
+              连不上时它自己的读失败指标不会涨,这条是唯一能看到的信号。查 login 到 data_service 的连通性、data_service
+              是否就绪、全局 TiDB 是否可用;login 日志搜 "role list keeps creation-time zone_id"。没人登录时这条不会响。
+            runbook_url: docs/design/player-route-mapping-durability-proposal.md

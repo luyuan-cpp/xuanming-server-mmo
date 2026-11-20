@@ -256,12 +256,14 @@
     - 集群客户端按 slot 分组,一组一个 `SSubscribe`:SSUBSCRIBE 一次订的多个频道必须同槽,go-redis 一个 PubSub 只连一个节点。64 片落在 64 个 slot,每个副本 64 条订阅连接;单机客户端一组、一条连接订全部 64 个频道(部署脚本的连接总账按每副本 1 条记)。
     - **不用** `Channel` / `ChannelWithSubscriptions`,订阅确认、收包、空闲 PING(3 秒)与重订都自己做:收到 `sunsubscribe`(迁槽)、`-MOVED`、断线或健康检查无回音,就关掉整条订阅、重读拓扑,按退避(1 秒起翻倍、封顶 30 秒、取 [d/2, d))重新 SSubscribe。原因:go-redis v9.17.3 在集群上自己重订分片频道时选节点只看普通频道,频道表为空就连随机节点,那里回 `-MOVED`,收包循环把错误吞掉,订阅就此静默失聪(PROGRESS 2026-11-12「第 3 批 Go 部分」有源码位置)。
   - 跨语言常量:C++ `player_landing.h` 的 `kAssetWakeChannelPrefix`、`kAssetWakeShardCount` 与 `AssetWakeChannel(pid)`(用 `redis_slot::ControlFamily::kAssetWake` 拼 tag),Go `wake.go` 的 `ChannelPrefix`、`ShardCount`、`ShardChannel`;`TestChannelMatchesCpp` 逐字解析 C++ 的两个声明,两侧金样同为 130 → `{aw:2}`、64 → `{aw:0}`、uint64 上限 → `{aw:63}`。
-- **扇出是另一个问题,改了频道也解决不了。**
-  - 在缺口第 25 条(资产重投按分片分工)落地之前,每个副本都得订全部 64 个分片,每条消息仍然投给 4 + 2Z 个副本,只是摊到了多个主节点上。
-  - Z 取 200~445 时,每秒投递 1000 万~7000 万条 [I],摊开也扛不住。
-  - 第 25 条落地后,每个副本只订自己负责的分片,每条消息只投给各服务的那一个负责副本(3 个服务),与 zone 数无关。
-  - data_service 的召回不按 zone 过滤(`go/data_service/internal/svc/recall_channel.go`)[C]:每个 zone 的副本都在重投、都在订阅。第 25 条要按全体 data_service 副本分片,不能按 zone 内分片。
-  - 这条依赖记在缺口清单第 34 条。今天 K8s 上 trade 缺省关、guild 在非 dev 档强制关、data_service 跟随 `-AssetOps`,所以开服时不一定全开。
+- **扇出:只订本副本负责的片**(2026-11-19 落码,未编译)。
+  - 原先每个副本都订全部 64 片,每条唤醒投给 4 + 2Z 个副本,每个副本还各写一次去重键;Z 取 200~445 时每秒投递 1000 万~7000 万条 [I],摊到多个主节点上也扛不住。
+  - 现在 `assetopwake.Subscriber.BindShardOwner` 让订阅只订本副本负责的片:管理循环每秒按分工表重算一次,新负责的片起订阅、不再负责的片退订(集群上一片一组;单机上全部负责的片一组,集合变了整组换一条订阅)。
+  - guild、trade 用重投循环那张分工表、同一个类别键(缺口第 25 条),负责某个玩家重投的副本也是唯一收他唤醒的副本。
+  - data_service 的重投与派发按 zone 圈片(每片每个 zone 一个副本,[重投分片](assetop-redelivery-sharding-20261110.md) §10.2),唤醒照它分仍有 Z 份;所以唤醒另开一张全服的成员表(全部 zone 的 stable data_service,类别键 `gm-recall-wake`)。按全服圈只会「圈多」:落在关了回收或晚升级的副本名下的片收不到唤醒,退回本 zone 重投的退避,不丢行;哪个 zone 的副本都能处理任何玩家的唤醒(回收行在全服共用的流水库里,scene 发现也是全服前缀)。
+  - 结果:每条唤醒只投给 3 个副本(每个服务一个),与副本数、zone 数无关。片换主的几秒里某一片可能两个副本都订(去重键与 Claim CAS 挡住),也可能暂时没人订(那几秒的唤醒退回原退避)。
+  - 监控:`assetop_wake_subscribed_shards{service}` 是本副本已确认订上的片数,各 stable 副本之和应为 64;少于 64 的告警在 `asset-channel-alerts.yaml`。
+  - 今天 K8s 上 trade 缺省关、guild 在非 dev 档强制关、data_service 跟随 `-AssetOps`,所以开服时不一定全开。
 
 ### 4.7 选主锁与 shared/leader
 
@@ -389,11 +391,13 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
   - 每个 Pod 一个 ClusterIP Service,用 `cluster-announce-ip` 宣告(C++ 只认 IP 字面量);
   - `updateStrategy: OnDelete` 加建群 Job;
   - `cluster-require-full-coverage no`;
-  - noeviction + 显式 maxmemory,AOF everysec,PVC。
+  - noeviction + 显式 maxmemory,AOF everysec,PVC;
+  - 成员反亲和按档位渲染(2026-11-19,§10.7):staging / prod 全部成员两两不同节点(required),dev 尽量分散(preferred)。
+- **两套的搭配**:开控制集群必须同时开玩家域集群(`Assert-RedisClusterPairing`,§10.7),staging / prod 两套都必须开。
 - **`k8s_deploy.ps1`**:
   - 参数 `-ControlRedisMasters`:dev 缺省 0,保留单实例 `redis.yaml` 只给 dev 用;staging、prod 必须显式、至少 3。
   - 另有 `-ControlRedisReplicasPerMaster`、`-ControlRedisMaxMemory`、`-ControlRedisStorage`,口令 Secret `redis-control-auth` / `MMORPG_CONTROL_REDIS_PASSWORD`。
-  - 渲染:各服务的 `ControlRedis` 段,C++ node-config 的 `control_redis`,Java 网关的集群节点。
+  - 渲染:各服务的 `ControlRedis` 段,C++ node-config 的 `control_redis`,Java 网关的集群节点(2026-11-19 第 6b-1 批落码,地址与口令统一取 `Get-ControlRedisEndpoint`,§10.7)。
   - 运维命令:连接总账按每主节点记;`redis-wipe` 把新 StatefulSet 加进清单;`redis-split-status` 改成列出集群状态。
 - **压测**:`stress_snap.ps1` 的 target 用 `k8s-cluster:<ns>/redis-control`(已支持集群 target)。
 - **告警**:另起一组 PrometheusRule(slot 覆盖、内存、maxclients),照 `redis-player-alerts.yaml` 写。
@@ -445,11 +449,12 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 | 1 | `shared/clusterredis`(从 playerredis 迁出,`New(c, KeyPolicy)` 两种键策略),`shared/playerredis` 只剩别名;控制集群族前缀表 `shared/redisslot/control_keys.go` 与 C++ `redis_slot.h` 镜像;C++ `KeyDomain` 与 `SPUBLISH` 登记,玩家域句柄设 `kPlayer`;金样与守卫测试 | 约 25(含 9 个挪走的旧文件) | — | 已落码,未编译(2026-11-11;「服务器代码缺口补完」写了 Go 拷贝与族表,本会话补完别名层、控制策略用例与 C++ 一侧,见 PROGRESS 2026-11-11) |
 | 2a | scene_manager 控制域键全部改 `{ctl:<z>}`(§4.1):以 zone 为键的族只改构造函数体,以场景号为键的族加 zone 参数并改全部调用点;四个跨语言键同批改 C++(`SceneNodeKey`、`NodeHolderKey`、`PlayerSceneSystem::WorldChannelDirectoryKey`、`PlayerMysteryMerchantSystem::RecordKey`,句柄不换);删 `scene:<id>:zone` 与 `foreign` 分支;只给场景号的入口收敛(§3.3);CreateScene 的 zone 0;契约测试改写,公用夹具加「每段脚本的 KEYS 同 tag」守卫;运维手册、告警注释与几份设计稿里的键名 | 约 100(生产 Go 34、Go 测试 43、C++ 8、文档与清单 17) | 1;与「场景销毁认领」「Returning scene node」「服务器代码缺口补完」(R15)「owner_epoch 铸造持久化独立审核」「控制面按 zone 化」「分布式锁安全性与一致性」会话对过段落(§10.1) | 已落码,未编译(2026-11-12,PROGRESS 同日「全部 Redis 上 Cluster 第 2a 批」)。超过每批 30 个文件:场景键改签名必须全部调用点同批改,拆不成可编译的小批;负责人 11-12 同意一批做完(原话「同意一批做完」,在「Turn battle gap closure handoff」会话里答「同意第 2a 批一次改约 60 个文件吗?」;实际约 100 个,多出来的是测试里的调用点与文档里的键名),当作一批机械改动做,评审按「签名加 zone、调用点照改」看,§3.3 的语义改动单列 |
 | 2b | scene_manager 换控制集群句柄:新包 `internal/controlredis`(`clusterredis.New(…, ControlClusterKeys)` 上的形状适配层,方法与返回形状沿用 go-zero,调用点不改写);配置 `ControlRedis` 取代嵌入的 go-zero `Redis` 段与 `CoreRedis` 段(配置里写着 `Redis.Host` 拒启,控制集群是 Cluster 时 `PlayerRedis.Addrs` 必填);gate 标记改从控制集群句柄读;选主换 `leader.NewUniversalStore`,删 `shared/leader/store_gozero.go`;`load_refresh` 带围栏的 ZADD 单发、删熔断分支、加「一批只在一个 zone tag 上」断言;测试夹具走生产构造器,测试里经控制句柄读写玩家域键与跑玩家域脚本的 190 处改走玩家域句柄;守卫用例:模块里不许再导入 go-zero 的 Redis | 52(生产 Go 16、shared 2、测试 31、文档 3) | 2a;「分布式锁安全性与一致性」(R7 已落)、第 4 批(`gate_redirect.go`)、第 3 批(`createSceneOnNode`)对过段落(§10.4) | 已落码,未编译(2026-11-12,PROGRESS 同日「全部 Redis 上 Cluster 第 2b 批」)。超过每批 30 个文件:句柄类型一换,logic 包的全部测试必须同批改才能编译;负责人 11-12 在做 2a、2b 的会话里同意一批做完(问的时候估约 45 个,实际 52 个:多出 4 个经控制句柄读写玩家键的测试文件、5 个只改注释的生产文件与 1 条守卫用例) |
-| 3 | C++ `tlsControlRedis`;三处读与归属对账;SPUBLISH 与 Go `assetopwake` 的 64 路 SSUBSCRIBE、`ChannelWithSubscriptions`(跨语言同批);CreateScene 校验 zone(内部协议加字段,先跑协议生成);gate、battle 去掉 Redis 连接 | 20–25 | 1、2a;「Hiredis 生命周期收尾审核」会话 | 已落码,未编译(2026-11-12,PROGRESS 同日「全部 Redis 上 Cluster 第 3 批」与「第 3 批 Go 部分」两条)。拆 3a(C++ 句柄、配置、唤醒发布、gate / battle 不连 Redis,加 Go 订阅端的真 Redis 用例,26 个文件)与 3b(CreateScene 校验 zone,8 个文件),Go 订阅由同题会话 [0cc556] 做(4 个文件),文档 4 份共用,每份都在 30 个以内。与原计划的偏差:订阅不用 `ChannelWithSubscriptions`(§4.6);集群客户端新加 `commandArgv`;K8s 渲染留给第 6b 批(§10.5) |
+| 3 | C++ `tlsControlRedis`;三处读与归属对账;SPUBLISH 与 Go `assetopwake` 的 64 路 SSUBSCRIBE、`ChannelWithSubscriptions`(跨语言同批);CreateScene 校验 zone(内部协议加字段,先跑协议生成);gate、battle 去掉 Redis 连接 | 20–25 | 1、2a;「Hiredis 生命周期收尾审核」会话 | 已落码,未编译(2026-11-12,PROGRESS 同日「全部 Redis 上 Cluster 第 3 批」与「第 3 批 Go 部分」两条;11-19 补唤醒只订本副本负责的片,PROGRESS 同日「第 3 批收尾」)。拆 3a(C++ 句柄、配置、唤醒发布、gate / battle 不连 Redis,加 Go 订阅端的真 Redis 用例,26 个文件)与 3b(CreateScene 校验 zone,8 个文件),Go 订阅由同题会话 [0cc556] 做(4 个文件),文档 4 份共用,每份都在 30 个以内。与原计划的偏差:订阅不用 `ChannelWithSubscriptions`(§4.6);集群客户端新加 `commandArgv`;K8s 渲染留给第 6b 批(§10.5) |
 | 4 | login 排队与 gate 标记(键改形、UniversalClient、放行改节点客户端 pipeline、删 `QueueShardCount`;按名次拉长轮询间隔已由第 14 条 11-11 提前落码);scene_manager 读 gate 标记;`k8s_gate_drain.ps1`;`gatepick`;Java 网关限流两段单键脚本与 Lettuce 集群 | 25–30 | 1;gate 排空迁移相关会话、「Zone 人数满的处理」会话 | 已落码,未编译(2026-11-12,「服务器代码缺口补完」会话,PROGRESS 同日「全部 Redis 上 Cluster 第 4 批」)。拆 4a gate 标记、4b 排队、4c 网关限流;协调与偏差见 §10.3 |
 | 5 | guild(缓存 tag、榜按 zone、去 SCAN、锁按 zone、assetopfix);friend 换句柄;player_locator 控制键 tag;data_service(唤醒、名字缓存单键 GET 管道,11-13 补做);trade、player_inbox 换句柄;chat 删无用句柄(11-11 已做,见 §4.8);R8 收口;`tools/data_consistency_check`(逐主节点扫描与 `{gr:<z>}` 键形解析 11-12 已改,未编译,见 §4.8) | 25–30 | 1;唤醒只订本副本分片依赖第 25 条 | 11-12 由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领。5a guild 已落码;5b friend、player_locator 已落码;5c data_service 唤醒句柄与 trade 已落码,名字缓存 `MGetBySlot` 与 player_inbox 因别的会话在改同一批文件未做;5d 渲染未做(同因)。全部未编译,见 §4.8 末条与 PROGRESS 同日三条;`tools/data_consistency_check` 由另一会话做 |
 | 6a | 控制集群本身的部署(§7),不依赖各服务的配置结构:集群清单通用化成一份模板,渲染 `redis-player`(产物不变)与 `redis-control`;`k8s_deploy.ps1` 的 `-ControlRedisMasters` 与副本、内存、存储参数,口令 Secret `redis-control-auth`(只经 `secretKeyRef`),apply、建群、就绪等待;`redis-wipe`、`redis-split-status`、连接总账补控制集群;告警与手册通用化;match 集群升 8.10.2;删 `redis-rank.yaml`;部署契约测试。match 集群的显式 maxclients、单独一份总账与 `-WaitReady` 逐节点核对 11-11 已由「Redis 登录总账审核」会话补上,通用化时并入 | 15–25 | 1;「Redis 登录总账审核」会话 | 代码写完,未运行(2026-11-12,「控制面按 zone 化」会话;「Redis 分布式水平扩展」会话分派,负责人 11-12 对剩余批次原话「Start them」)。28 个文件;落码与偏差见 §10.6,验证命令见 PROGRESS 2026-11-13「全部 Redis 上 Cluster 第 6a 批」 |
-| 6b | 各服务接控制集群:ConfigMap 渲染 `ControlRedis`、C++ node-config 的 `control_redis`、gate / battle 去掉 Redis 口令环境变量、Java 网关集群节点;退役核心、queue、ctl 实例与 `-RedisSplit` 等参数;compose | 25–30 | 2b~5 批定下各服务的配置段;6a | 未开工(「控制面按 zone 化」会话认领) |
+| 6b-1 | 各服务接控制集群:ConfigMap 渲染 `ControlRedis`、C++ node-config 的 `control_redis`、gate / battle 去掉 Redis 口令环境变量、Java 网关集群节点、gate 排空脚本认集群;口令按服务取控制端点的 Secret;开控制集群必须同时开玩家域集群;总账按域拆;退役 queue、ctl 实例与 `-RedisSplit` 等五个参数;集群成员反亲和按档位渲染;部署契约测试 | 22 | 2b~5 批定下各服务的配置段;6a;第 3 批(C++ 契约) | 代码写完,未运行(2026-11-13~19,「控制面按 zone 化」会话)。落码与偏差见 §10.7,验证命令见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 6b-1 批」 |
+| 6b-2 | 退役 staging / prod 的核心单实例:match 的 `Redis` 段与 mail 的回落段换走、`-RedisReplicas` 与 `redis-ha.yaml`、不用核心时不再要求 `MMORPG_REDIS_PASSWORD`;告警头注释与其余手册里的 queue / ctl 说明;compose 加控制集群 | 15–25 | 6b-1 | 未开工 |
 | 7 | 文档改写:控制面设计稿 §4 / §5,玩家域设计 §5.1 域表,TiDB 总体方案 §2.1 / §8.4,G4a 设计稿(标历史),AGENTS.md §6 压测口径,`deploy/k8s/README.md`,`tools/scripts/README.md` | ~10 | 6 | 未开工 |
 
 合计约 170~200 个文件。
@@ -623,7 +628,30 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 - **手册**:`docs/ops/redis-player-cluster-runbook.md` 改成两套共用(命令里的集群名是 `$CLUSTER`,文件名不变)。
 - **顺带**:match 私有集群镜像从 `redis:7.2` 升到同一个 8.10.2 摘要;遗留 `redis-rank.yaml` 删除;`redis_cluster_capacity.ps1` 的口令 Secret 缺省改成 `<statefulset>-auth`,反亲和标签取目标 StatefulSet 名,两套集群都能压。
 - **偏差**:设计 §7 写的「Java 网关的集群节点」「各服务的 `ControlRedis` 段」「C++ node-config 的 `control_redis`」都在第 6b 批;compose 本机开发集群仍只有玩家域一套(开发时控制域用单实例 `redis`),要加第二套时另起。
-- **给第 6b 批的已知事项**:第 3 批(C++)已不读 `zoneredis` / `scene_control_redis`,第 2b、5 批(Go)已删掉旧配置段,所以现在的 K8s 渲染在 6b 落地前起不来(scene 连不上、scene-manager 等服务拒启),相关部署契约测试在 6b 落地前是红的。
+- **给第 6b 批的已知事项**:第 3 批(C++)已不读 `zoneredis` / `scene_control_redis`,第 2b、5 批(Go)已删掉旧配置段,所以 K8s 渲染在 6b 落地前起不来(scene 连不上、scene-manager 等服务拒启)。第 6b-1 批(§10.7)已按新配置段渲染。
+
+### 10.7 第 6b-1 批的落码与偏差(2026-11-13~19,「控制面按 zone 化」会话)
+
+- **一个控制端点**:`Get-ControlRedisEndpoint` 是全部控制域客户端的唯一来源。开了控制集群(staging / prod 必须开)是 `redis-control-{0,1,2}.<infra>:6379` 三个种子、Secret `redis-control-auth`;没开(只有 dev)是核心 `redis.<infra>:6379`、Secret `redis-auth`。消费方:
+  - Go 服务的 `ControlRedis` 段(login、data-service、player-locator、scene-manager、friend、trade、guild、player-inbox):`New-ControlRedisConfigYaml` 渲染,池上限与超时镜像服务 yaml,口令恒写空串,由顶层 `SharedRedisPasswordEnv` 指名的 `SHARED_REDIS_PASSWORD` 填;
+  - gateway 的 `spring.data.redis`:集群写 `cluster.nodes`,单实例写 host / port;
+  - C++ scene 的 `control_redis` 与 `CONTROL_REDIS_PASSWORD`、配置指纹 `mmorpg.io/control-redis-config-hash`。只有 scene 连 Redis:gate、battle 的 node-config 不写 Redis 段,工作负载不注入口令、不带 Redis 指纹;
+  - `k8s_gate_drain.ps1`:排空标记地址读 login ConfigMap 的 `ControlRedis.Addrs[0]` 与 `ControlRedis.Cluster`,集群时 exec 进与种子 Service 同名的 Pod(StatefulSet 叫 `redis-control`),`redis-cli -c` 跟随 MOVED;
+  - 连接总账。
+- **口令来源按服务分**(`Get-SharedRedisClientSource`):名单 `$script:ControlRedisClientServices` 里的服务(上面八个 Go 服务加 gateway)取控制端点的 Secret,match、mail(只剩指向核心的段)取核心 `redis-auth`。指纹用途串也按来源分(`control-redis/client` / `shared-redis/client`),换到控制集群那次 Pod 必然滚动。zone namespace 里同步一份 `redis-control-auth`,先于引用它的工作负载。
+- **配对规则**:开控制集群必须同时开玩家域集群(`Assert-RedisClusterPairing`,写路径入口在两套各自的预检之后、任何写操作之前)。原因有三:scene-manager 对「ControlRedis 是集群而 PlayerRedis 没写 Addrs」拒启;C++ scene 缺 `player_redis` 段时整体沿用 `control_redis`;其余服务的 PlayerRedis 没写地址时也回落到控制域。staging / prod 两套都必须显式给(各自的预检已拒),这条拦的是 dev 只给 `-ControlRedisMasters`。只开玩家域集群合法(dev)。
+- **连接总账**:
+  - 核心那份 = 控制域行(控制端点是核心时)+ 玩家域行(没开玩家域集群时),两张表直接拼,同一个服务两行;C++ 只数 scene 进程,每进程按在核心上的域数记,滚动余量按一个 C++ 工作负载;两个域都不在核心上(staging / prod)时只打一行 `no clients`;
+  - 控制集群那份 = `Get-RedisControlClientRows -Cluster $true`,唤醒订阅(data-service、trade、guild)每副本 64 条,按全落在一个主节点上记;
+  - 核对源码时补上两处原来漏记的连接:data-service 有两个同配置的控制域客户端(名字读缓存、GM 回收的落地唤醒),按 2 个池记;login 的排队放行流水线另有 1 条专用连接(`mustNewQueueAdmitRedis`,只在 `Queue.Enabled` 时建,按打开计);
+  - 规划档删掉不再参与计算的 gate、battle 台数。
+- **退役**:`redis-purpose.yaml`、`redis-purpose-ha.yaml`,按 zone 组分的 queue / ctl 实例及其总账、切换闸、状态检查,zones 配置的 `redisQueueGroup`,五个参数 `-RedisSplit` / `-ConfirmRedisSplitSwitch` / `-RedisQueueMaxMemory` / `-RedisCtlMaxMemory` / `-ConfirmRedisCtlSwitch`(`k8s_deploy.ps1`、`k8s_image.ps1`、`dev_tools.ps1` 同删)。`redis-split-status` 只剩两套集群那一段;`redis-wipe` 的名单是核心、match 集群与两套 Redis Cluster,还留在 namespace 里的旧 queue / ctl StatefulSet 不清,按手册人工删。`k8s_redis_ctl_contract.tests.ps1` 删除,其中仍成立的一条(scene-manager 的发现键 `scenemanagerservice.rpc.z<zone>`)挪进 `k8s_deploy_contract`;`k8s_redis_split_contract.tests.ps1` 改成只钉运维命令与退役(文件名沿用,README 与交接单引用它)。
+- **成员反亲和(顺带修)**:`redis-cluster.yaml` 的成员反亲和原来各档都是 preferred,主和它的从可能落在同一节点,一个节点故障就丢掉那几个槽的全部副本。改为按档位渲染,与 etcd、Kafka 用同一个 `Get-QuorumMemberAntiAffinityYaml`(「全局单例扩容交接」会话 11-19 新加):staging / prod required,dev preferred。主从角色随故障转移互换,只能要求全部成员两两不同节点,所以 staging / prod 每套集群要有不少于节点总数(3 主每主 1 副本就是 6 个)的可调度节点,两套集群之间不互斥。
+- **偏差**:
+  - Go login 的 `Node.QueueRedis` 读取代码还在(本机想单独拆排队实例时用),K8s 不再渲染它;要不要删由 login 的会话定。
+  - 核心单实例在 staging / prod 仍会部署:match 的 `Redis` 段与 mail 的回落段还指向它,`-RedisReplicas` 与高可用形态 `redis-ha.yaml` 也还在。退役它们归第 6b-2 批。
+  - compose 本机开发仍只有玩家域一套集群(控制域用单实例 `redis`),同 §10.6。
+- **验证**:未运行,命令见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 6b-1 批」。
 
 ## 11. Java 版(AGENTS.md §12)
 
@@ -662,3 +690,5 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 - 2026-11-12:第 4 批落码(未编译)。§10 表第 4 行改状态,新增 §10.3(协调、键形、句柄、网关限流、偏差);§4.3 与 §4.4 的做法照原稿,偏差只在 §10.3 记。
 - 2026-11-12:第 3 批落码(未编译)。§3.4 补 CreateScene 校验 zone 的实际做法;§4.2 补实际做法(`commandArgv`、配置段、停等的容量说明);§4.6 的订阅改成实际做法(不用 `ChannelWithSubscriptions`)与跨语言常量;§10 表第 3 行改状态,新增 §10.5(分工、协调、给第 6b 批的渲染要求、偏差)。
 - 2026-11-13:第 6a 批落码(未运行)。§7「集群清单」按实际做法改正文;§10 表第 6a 行改状态,新增 §10.6。
+- 2026-11-19:第 3 批收尾(未编译)。§4.6「扇出」改成实际做法:唤醒订阅按分工表只订本副本负责的片(guild、trade 用重投那张表,data_service 另开全服成员表),新增 `assetop_wake_subscribed_shards` 与告警。
+- 2026-11-19:第 6b-1 批落码(未运行)。§7 补成员反亲和与两套的搭配;§10 表第 6b 行拆成 6b-1(本批)与 6b-2(退役 staging / prod 的核心单实例),新增 §10.7。

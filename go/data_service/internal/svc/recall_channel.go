@@ -55,6 +55,7 @@ const (
 	recallWatcherName        = "scene"
 	recallWatcherPoint       = "data_service.recall.watcher"
 	recallMembersPoint       = "data_service.recall.members"
+	recallWakeMembersPoint   = "data_service.recall.wake_members"
 	recallLoopPoint          = "data_service.recall.loop"
 	recallDispatchPoint      = "data_service.recall.dispatch"
 	recallDispatchInterval   = time.Second
@@ -69,6 +70,9 @@ const (
 	// recallDispatchWorkKind 是派发(PLANNED → PENDING)按片分工的归属键前缀,片号同样是 player_id % 64(第四批,设计 §14.2)。
 	// 不复用重投的类别键:派发只把行改成 PENDING,投递由重投那一片的负责者做,两件事不必落在同一个副本上。
 	recallDispatchWorkKind = "gm-recall-dispatch"
+	// recallWakeWorkKind 是落地唤醒订阅按片分工的归属键前缀(docs/design/redis-cluster-all-domains-20261110.md §4.6),
+	// 成员表是全服的 stable data_service(recallWakeMembersPrefix),与重投、派发的按 zone 圈法不同,类别键也另起。
+	recallWakeWorkKind = "gm-recall-wake"
 )
 
 // recallDispatchStore 是派发一轮用到的存储能力。*store.RecallStore 满足它;单测注入假实现,不连库。
@@ -89,6 +93,15 @@ type recallDispatchStore interface {
 // 每一片由每个 zone 各一个副本扫(Z 个 zone 就是 Z 份),比分片前的「全部副本 × 全部行」少,且不会漏片。
 func recallShardMembersPrefix(zoneID uint32) string {
 	return noderegistry.RpcZonePrefix(base.ENodeType_name[int32(base.ENodeType_DataServiceNodeService)]+".rpc", zoneID)
+}
+
+// recallWakeMembersPrefix 是落地唤醒订阅的成员表:全部 zone 注册的 stable data_service(前缀下的 /allocated/ 占位键由
+// workshard.StableMembers 跳过)。唤醒按全服圈,每片全服只有一个副本订,扇出不随 zone 数增长(设计 §4.6);
+// 重投与派发仍按 zone 圈(docs/design/assetop-redelivery-sharding-20261110.md §10.2)。
+// 按全服圈可以「圈多」:唤醒只是提示,落在没订阅的副本(某个 zone 关了回收、晚升级)名下的片,那几片的唤醒退回本 zone 重投的退避,
+// 不丢行。哪个 zone 的副本都能处理任何玩家的唤醒:回收行在全服共用的流水库里,scene 节点发现也是全服前缀。
+func recallWakeMembersPrefix() string {
+	return base.ENodeType_name[int32(base.ENodeType_DataServiceNodeService)] + ".rpc/"
 }
 
 // RecallStore 是 logic 依赖的回收存储能力。*store.RecallStore 满足它,单测注入假实现。
@@ -234,6 +247,9 @@ type RecallChannel struct {
 	// owns 判本副本是否负责派发的某个归属键(第四批,设计 §14.2)。生产是 members.Owns,与重投共用同一份成员表;
 	// nil 表示不分工、派全部片(只有单测会这样造)。单测换成可控的判定,模拟成员表变化。
 	owns func(key string) bool
+	// wakeMembers 是落地唤醒订阅按片分工的成员表(全服的 stable data_service,recallWakeMembersPrefix)。
+	// 构造时绑到 wake 上;本副本的身份与 members 一起由 bindWorkMember 补上。
+	wakeMembers *workshard.Membership
 
 	mu        sync.Mutex
 	started   bool
@@ -347,6 +363,13 @@ func newRecallChannel(c config.Config, recall *store.RecallStore, assets PlayerS
 	if err != nil {
 		return nil, err
 	}
+	// 落地唤醒只订本副本负责的片,按全服圈(recallWakeMembersPrefix 的注释说明了为什么与重投的圈法不同)。
+	ch.wakeMembers = workshard.NewMembership(recallWakeMembersPrefix())
+	if err = ch.wake.BindShardOwner(func(shard int) bool {
+		return ch.wakeMembers.Owns(workshard.ShardKey(recallWakeWorkKind, shard))
+	}); err != nil {
+		return nil, fmt.Errorf("shard recall landing wake: %w", err)
+	}
 	return ch, nil
 }
 
@@ -363,6 +386,8 @@ func (r *RecallChannel) Start() {
 	r.goWithHold(recallWatcherPoint, func() { r.watcher.Run(ctx, r.etcd) })
 	// 成员表先于重投循环起:第一拍读到之前成员表为空,本副本做全部片(保活优先)。
 	r.goWithHold(recallMembersPoint, func() { r.members.Run(ctx, r.etcd) })
+	// 唤醒的成员表同样先于订阅起:读到之前为空,本副本订全部片。
+	r.goWithHold(recallWakeMembersPoint, func() { r.wakeMembers.Run(ctx, r.etcd) })
 	r.goWithHold(recallLoopPoint, func() { r.loop.Run(ctx) })
 	r.goWithHold(recallDispatchPoint, func() { r.runDispatch(ctx) })
 	r.wake.Start(ctx)
@@ -370,9 +395,11 @@ func (r *RecallChannel) Start() {
 		recallAssetOpWorkKind, recallDispatchWorkKind)
 }
 
-// bindWorkMember 记下本副本注册 etcd 用的 node_uuid,重投循环从此按片分工。注册之前成员表若已有别的副本,本副本一片都不做。
+// bindWorkMember 记下本副本注册 etcd 用的 node_uuid,重投、派发与落地唤醒从此按片分工。注册之前成员表若已有别的副本,
+// 本副本一片都不做(唤醒一片都不订)。
 func (r *RecallChannel) bindWorkMember(nodeUUID string) {
 	r.members.SetSelf(nodeUUID)
+	r.wakeMembers.SetSelf(nodeUUID)
 }
 
 func (r *RecallChannel) goWithHold(point string, run func()) {

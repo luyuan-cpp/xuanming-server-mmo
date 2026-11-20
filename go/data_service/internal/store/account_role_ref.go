@@ -397,7 +397,8 @@ var errRefsFull = errors.New("账号角色索引已到上限")
 func (st *sqlDirectorySteps) reserveRef(ctx context.Context, account string, want roleRef, maxRoles int) ([]roleRef, error) {
 	var full []roleRef
 	err := shardTx(ctx, st.shards.forAccount(account), func(tx *sql.Tx) error {
-		if err := lockDirectory(ctx, tx, account, true); err != nil {
+		deletion, err := lockDirectoryState(ctx, tx, account, true)
+		if err != nil {
 			return err
 		}
 		refs, err := readRefs(ctx, tx, account)
@@ -408,7 +409,9 @@ func (st *sqlDirectorySteps) reserveRef(ctx context.Context, account string, wan
 		if existing && want.TxID == 0 {
 			return nil
 		}
-		if !existing && len(refs) >= maxRoles {
+		// 注销中(冷静期或执行中)的账号名额按 0 算(docs/design/account-deletion.md §4.3):与注销提交同一把账号行锁,注销开始之后不会再有新 ref。
+		// 建角因此回「满」(login 事先按注销状态给了专门的提示,这里只兜住两者之间的竞态);过户买入回满,trade 走现有的先取消再退款出口。
+		if !existing && (len(refs) >= maxRoles || deletion != deletionNone) {
 			full = refs
 			if full == nil {
 				full = []roleRef{}

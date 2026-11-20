@@ -72,6 +72,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 
 #### 接入层:网关、gate 与登录
 
+- [account-deletion.md](design/account-deletion.md) — 账号注销(冷静期、删角收尾清数据、Apple 令牌撤销)与 Apple / Google 客户端登录接入(2026-11-19 设计稿,待拍板)
 - [auth-provider-framework.md](design/auth-provider-framework.md) — Auth Provider Framework
 - [client-access-band-routing.md](design/client-access-band-routing.md) — 客户端接入的标准形态，与 gate 按号段整体转发给路由服（client-rpc-router 续篇，D51–D64）
 - [client-request-ordering.md](design/client-request-ordering.md) — 客户端请求按会话保序:路由服水平扩展下的乱序修复(gate 路由 lane)
@@ -91,11 +92,13 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [k8s_gate_exposure_guidance.md](design/k8s_gate_exposure_guidance.md) — K8s Gate Exposure Guidance / K8s gate 暴露方式指南 · [EN](design/k8s_gate_exposure_guidance_en.md) · [中文](design/k8s_gate_exposure_guidance_zh.md)
 - [login-node-stateless-no-affinity.md](design/login-node-stateless-no-affinity.md) — Login Node: Stateless, No Session Affinity
 - [login-queue-2026-05.md](design/login-queue-2026-05.md) — Login Queue (AssignGate Real Queue) — 2026-05
+- [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W10,设计稿,待负责人同意文件清单)
 - [open-server-rate-limit-design.md](design/open-server-rate-limit-design.md) — 开服登录削峰与排队入口
 - [player-locator-gate-session-index.md](design/player-locator-gate-session-index.md) — player_locator 会话对账:按 gate 实例建会话索引(2026-10-18)
 - [player_login_flow.md](design/player_login_flow.md) — 玩家登录/断线/重连/替换登录/超时清理 — 最终态事件流 · [EN](design/player_login_flow_en.md) · [中文](design/player_login_flow_zh.md)
 - [serverlist-static-publish-2026-05.md](design/serverlist-static-publish-2026-05.md) — 区服列表：现行 Gateway 接口与静态发布提案
 - [third-party-login-end-to-end-design.md](design/third-party-login-end-to-end-design.md) — QQ / 微信第三方登录端到端联调设计
+- [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷：国家系统接口、小游戏平台分工、App 形态的服务端方案（设计稿，未落码）
 
 #### 场景、AOI 与分线
 
@@ -341,6 +344,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 运维手册
 
 - [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 加分区与离线换代 Runbook(player_snapshot / transaction_log)
+- [claude-code-plugins-setup.md](ops/claude-code-plugins-setup.md) — Claude Code 插件安装（ponytail 等，新电脑照做）
 - [cross-zone-failure-test-runbook.md](ops/cross-zone-failure-test-runbook.md) — 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
 - [db-move-runbook.md](ops/db-move-runbook.md) — 不停服搬逻辑库操作手册
 - [etcd-maintenance-runbook.md](ops/etcd-maintenance-runbook.md) — etcd MVCC 压缩与空间维护 Runbook

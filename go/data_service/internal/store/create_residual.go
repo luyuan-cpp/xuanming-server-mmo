@@ -43,7 +43,7 @@ import (
 //     login 判不出结局、来不及补偿时也会留下。按名字片分页扫(Target = ResidualTargetNames)。修复同运维带 token 的
 //     ReleasePlayerName:先在玩家片证明这名角色永远不会提交(有路由行、没有角色行时写墓碑),再只删预留态的名字行。
 //     证明之前先找提交过的证据,有就只报告(committed_evidence):存档库进过场或存过盘、这名角色在某个账号上有 ACTIVE 的 ref
-//     (多集群恢复点错开时角色行可能丢了,墓碑不可逆);落点不在本次的存档库名单里也只报告。
+//     (多集群恢复点错开时角色行可能丢了,墓碑不可逆);落点不在本次的存档库名单里、有 ref 却没有路由行也只报告(核不全)。
 //
 // 反过来「有名字、有路由、有 ref,没有角色行」是没建成的建角(或者玩家片恢复点早于提交):PENDING ref 由后台判陈旧,
 // 名字由上面的孤儿名字一项收,初始行没人读得到。
@@ -911,8 +911,9 @@ type residualSteps interface {
 	scanRoles(ctx context.Context, slot int, after uint64, limit int) ([]residualRole, error)
 	// scanNames 按判重键升序读一片名字行里 after 之后的,最多 limit 行(不筛状态,筛选在编排里)。
 	scanNames(ctx context.Context, slot int, after string, limit int) ([]residualNameEntry, error)
-	// orphanEvidence 找一个没有角色行的 player_id 提交过的证据:存档库进过场或存过盘(store_saved)、某个账号上有 ACTIVE 的 ref
-	// (ref_active)、落点不在本次的存档库名单里(storage_not_listed,核不全)。没有路由行或没有落点回空:提交要求路由行和落点,提交不了。
+	// orphanEvidence 找一个没有角色行的 player_id 提交过的证据:某个账号上有 ACTIVE 的 ref(ref_active,不管有没有路由行)、
+	// 存档库进过场或存过盘(store_saved)、落点不在本次的存档库名单里(storage_not_listed,核不全)、有 ref 却没有路由行或落点
+	// (no_route,核不全:ref 只在核过路由行之后写)。没有 ref、也没有路由行或落点回空:login 在登记路由之前就回滚了,提交不了。
 	orphanEvidence(ctx context.Context, player uint64) (string, error)
 	// loadRole 重读一名角色,墓碑也读出来;没有角色行回 nil。
 	loadRole(ctx context.Context, player uint64) (*residualRole, error)

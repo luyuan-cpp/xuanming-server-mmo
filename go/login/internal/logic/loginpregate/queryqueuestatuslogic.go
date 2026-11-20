@@ -91,6 +91,7 @@ func (l *QueryQueueStatusLogic) QueryQueueStatus(in *loginpb.QueryQueueStatusReq
 	case loginqueue.StatusAdmitted:
 		resp.Ip = state.Admit.IP
 		resp.Port = state.Admit.Port
+		resp.WsUrl = state.Admit.WsURL
 		resp.TokenPayload = state.Admit.TokenPayload
 		resp.TokenSignature = state.Admit.TokenSignature
 		resp.TokenDeadline = state.Admit.TokenDeadline

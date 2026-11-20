@@ -180,6 +180,7 @@
     <ClCompile Include="process_fd_metrics_test.cpp" />
     <ClCompile Include="acceptor_failure_policy_test.cpp" />
     <ClCompile Include="acceptor_admission_test.cpp" />
+    <ClCompile Include="accept_admission_test.cpp" />
     <ClCompile Include="inflight_index_test.cpp" />
     <ClCompile Include="rpc_channel_loopback_test.cpp" />
     <ClCompile Include="rpc_chain_test.cpp" />
@@ -190,6 +191,11 @@
     <ClCompile Include="error_reporter_test.cpp" />
     <ClCompile Include="rpc_trace_envelope_test.cpp" />
     <ClCompile Include="kill_switch_test.cpp" />
+    <ClCompile Include="span_recording_test.cpp" />
+    <ClCompile Include="span_export_queue_test.cpp" />
+    <ClCompile Include="otlp_trace_encoder_test.cpp" />
+    <ClCompile Include="otlp_http_test.cpp" />
+    <ClCompile Include="otlp_span_exporter_test.cpp" />
     <ClCompile Include="../../nodes/battle/tests/battle_admission_gate_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
@@ -215,6 +221,12 @@
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <ClCompile Include="../../nodes/battle/client/battle_client_edge.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="../../nodes/battle/client/battle_connection_admission.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="../../nodes/battle/tests/battle_connection_admission_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemGroup>

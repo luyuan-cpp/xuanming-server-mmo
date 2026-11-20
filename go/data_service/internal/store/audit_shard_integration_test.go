@@ -179,6 +179,38 @@ func TestAuditShard_SnapshotRowsCarryShardAndZoneQueriesSeeAllShards(t *testing.
 // TestAuditRetention_ShardLockIsExclusiveAndDeletesOnlyItsShard:清理按桶取会话级命名锁(audit_retention.go)。
 // 同一个桶同一时刻只有一个持有者(另一条连接拿不到,别的桶拿得到);删除只删本桶里早于截止的行,
 // 别的桶即使更老也不动;放锁之后别人就能拿到。
+// 每轮清理之后读的「现存最老一行」(告警 DataServiceAuditRetentionBehind 的输入):按桶各定位一次,取全部桶里最早的时间;
+// 空表回 found=false。
+func TestAuditRetention_OldestRowAcrossShards(t *testing.T) {
+	db := storetest.NewMigratedDB(t)
+	ctx := context.Background()
+
+	ts := newTxLogStore(t, db)
+	_, found, err := ts.OldestRetentionTimestampForTest(ctx)
+	require.NoError(t, err)
+	assert.False(t, found, "空表")
+	var batch []*store.TransactionLogRow
+	for id := uint64(5); id <= 40; id++ { // timestamp_sec = 1700000000 + tx_id,tx_id % 16 分散在各个桶
+		batch = append(batch, txRow(id))
+	}
+	_, err = ts.InsertBatchIgnore(ctx, batch)
+	require.NoError(t, err)
+	oldest, found, err := ts.OldestRetentionTimestampForTest(ctx)
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.EqualValues(t, 1700000005, oldest, "最老的是 tx 5,不管它落在哪个桶")
+
+	ss := newSnapshotStore(t, db)
+	for _, at := range []uint64{1700000300, 1700000100, 1700000200} {
+		_, err := ss.InsertSnapshot(ctx, &store.SnapshotRow{PlayerID: 77, ZoneID: 1, CreatedAt: at, Data: []byte("{}")})
+		require.NoError(t, err)
+	}
+	oldest, found, err = ss.OldestRetentionTimestampForTest(ctx)
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.EqualValues(t, 1700000100, oldest)
+}
+
 func TestAuditRetention_ShardLockIsExclusiveAndDeletesOnlyItsShard(t *testing.T) {
 	db := storetest.NewMigratedDB(t)
 	ts := newTxLogStore(t, db)

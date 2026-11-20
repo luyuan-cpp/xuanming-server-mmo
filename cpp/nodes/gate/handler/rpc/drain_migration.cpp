@@ -149,6 +149,7 @@ void OnReply(SessionId sessionId, uint64_t incarnation, Guid expectedPlayer, Can
 	RedirectToGateNotify notify;
 	notify.set_target_ip(reply.response.target_gate_ip());
 	notify.set_target_port(reply.response.target_gate_port());
+	notify.set_target_ws_url(reply.response.target_gate_ws_url()); // 小游戏客户端用;原生客户端不读
 	notify.set_token_payload(reply.response.token_payload());
 	notify.set_token_signature(reply.response.token_signature());
 	notify.set_token_deadline(reply.response.token_deadline());

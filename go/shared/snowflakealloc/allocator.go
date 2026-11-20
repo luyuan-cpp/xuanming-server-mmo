@@ -24,7 +24,8 @@
 //	/snowflake/<kind>/c<cluster>/watermark/<slot>    = <epochSec>      **不挂 lease**,guard + 墓碑
 //
 // 毫秒水位 watermark_ms/<slot> 只有 login 的 PlayerId 发号器写过,2026-11-12 随 login 的槽位申领一起删掉:
-// 现在每个持有者只有上面这一把水位,闸也只在它写成功时 Ack。etcd 里残留的旧键没有读者,清 etcd 时一并清掉。
+// 现在每个持有者只有上面这一把水位,闸也只在它的 Txn 成功(写入新值,或 etcd 里的存值不低于目标值、吃下存值当地板)
+// 时 Ack(advanceGuard)。etcd 里残留的旧键没有读者,清 etcd 时一并清掉。
 //
 // worker id = (cluster << SlotBits) | slot(layout.go);发号器只认合成后的 worker id,
 // 对 cluster / slot 的切分一无所知。

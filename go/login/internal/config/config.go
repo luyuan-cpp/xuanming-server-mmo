@@ -65,6 +65,8 @@ type Config struct {
 	KillSwitch    KillSwitchConf `json:"KillSwitch,optional"`
 	TableDir      string         `json:",default=../../generated/tables"`
 	AuthProviders AuthConfig     `json:"AuthProviders,optional"` // Third-party auth provider config
+	// AntiAddiction 是实名与未成年人防沉迷(anti_addiction.go)。整块缺省 = 关闭。
+	AntiAddiction AntiAddictionConf `json:"AntiAddiction,optional"`
 	// DevSkipAuth 是已废弃的不安全开关。保留字段只为让旧配置在启动时
 	// 明确失败,不能因为结构体删字段而静默忽略、让开发者误以为仍生效。
 	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
@@ -634,8 +636,14 @@ type IdTokenAuthConf struct {
 	// 填错的后果是所有令牌都按 aud 不符拒绝,不会放进别家应用的令牌。
 	ClientId string `json:"ClientId"`
 	// Endpoint 覆盖取公钥(JWKS)的域名,指向本地沙箱 mock;生产留空。签发方(iss)不随它变。
-	// 生产模式只接受 https://,http:// 只在 Mode=dev/test 下放行。
+	// 生产模式只接受 https://,http:// 只在 Mode=dev/test 下放行。Apple 的换票与撤销接口(/auth/token、/auth/revoke)也走这个域名。
 	Endpoint string `json:"Endpoint,optional"`
+	// 以下三项只有 Apple 段用:注销账号时撤销 Sign in with Apple 令牌(docs/design/account-deletion.md §8),要么都写、要么都不写。
+	// 都不写时 Apple 登录照常,注销的 Apple 账号只提示玩家到 Apple 设置里手动撤销。
+	TeamId string `json:"TeamId,optional"` // 开发者账号的 Team ID,10 位
+	KeyId  string `json:"KeyId,optional"`  // Sign in with Apple 私钥(.p8)的 Key ID,10 位
+	// PrivateKeyEnv 是 .p8 私钥 PEM 原文所在的环境变量名(K8s 上来自 Secret login-apple-signin);没有内联写法。
+	PrivateKeyEnv string `json:"PrivateKeyEnv,optional"`
 }
 
 // TokenConf holds access/refresh token settings.

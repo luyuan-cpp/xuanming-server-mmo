@@ -29,6 +29,7 @@
 #include <unistd.h>
 #endif
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -52,6 +53,7 @@
 #include "muduo_grpc/method_table.h"
 #include "muduo_grpc/server.h"
 #include "muduo_grpc/server_call.h"
+#include "span_test_support.h"
 #include "thread_context/trace_context_tls.h"
 
 using namespace std::chrono_literals;
@@ -600,6 +602,69 @@ TEST_F(GrpcTraceLoopbackTest, ExistingTraceparentIsNotDuplicated)
     }
     EXPECT_EQ(headers, 1u);
     EXPECT_EQ(service_.dispatchTrace.trace_id.bytes, forwarded.trace_id.bytes);
+}
+
+// 阶段三(§10.3):两端各记一个 span 并连成一棵树。client span 的父是发起方的 span,它的上下文就是线上的 traceparent,
+// 记 rpc.grpc.status_code;服务端 server span 的父是 client span;两边名字都是 "pkg.Svc/Method"。完成回调原样回到发起方的 span。
+TEST_F(GrpcTraceLoopbackTest, ClientAndServerSpansAreRecordedAndLinked)
+{
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 42, kLiveness, {}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
+    const auto *header = FindGrpcMetadata(service_.receivedMetadata, "traceparent");
+    ASSERT_NE(header, nullptr);
+    tracing::TraceContext onWire;
+    ASSERT_TRUE(tracing::ParseTraceparent(*header, onWire)) << *header;
+    EXPECT_EQ(observed->doneTrace.span_id.bytes, observed->sentTrace.span_id.bytes) << "完成回调原样回到发起方的 span";
+
+    const auto spans = sink.Spans();
+    const auto client = std::find_if(spans.begin(), spans.end(),
+                                     [](const tracing::SpanRecord &span) { return span.kind == tracing::SpanKind::kClient; });
+    const auto server = std::find_if(spans.begin(), spans.end(),
+                                     [](const tracing::SpanRecord &span) { return span.kind == tracing::SpanKind::kServer; });
+    ASSERT_NE(client, spans.end());
+    ASSERT_NE(server, spans.end());
+    EXPECT_EQ(client->system, tracing::SpanSystem::kGrpc);
+    EXPECT_EQ(client->span_id.bytes, onWire.span_id.bytes);
+    EXPECT_EQ(client->parent_span_id.bytes, observed->sentTrace.span_id.bytes);
+    ASSERT_TRUE(client->has_grpc_status);
+    EXPECT_EQ(client->grpc_status_code, kGrpcStatusOk);
+    EXPECT_EQ(client->status, tracing::SpanStatus::kUnset);
+    EXPECT_EQ(server->trace_id.bytes, onWire.trace_id.bytes);
+    EXPECT_EQ(server->parent_span_id.bytes, client->span_id.bytes);
+    EXPECT_TRUE(server->parent_is_remote);
+    EXPECT_EQ(client->Name(), server->Name());
+    ASSERT_FALSE(client->Name().empty());
+    EXPECT_NE(client->Name().front(), '/') << "span 名去掉 :path 开头的 /";
+}
+
+// 调用失败(这里是截止到期):client span 标成错误,说明是 gRPC 状态码名,rpc.grpc.status_code 记真实的码。
+TEST_F(GrpcTraceLoopbackTest, FailedCallMarksTheClientSpanWithTheGrpcStatus)
+{
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    service_.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 7, 500ms, {}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    EXPECT_EQ(observed->code, kGrpcStatusDeadlineExceeded) << observed->message;
+    ASSERT_EQ(service_.heldBeforeBusiness.size(), 1u);
+    const auto held = service_.heldBeforeBusiness.front();
+    ASSERT_TRUE(RunLoopUntil([&] { return !held->IsActive(); }, kLiveness));
+    held->Proceed();
+    RunLoopFor(100ms);
+
+    const auto spans = sink.Spans();
+    const auto client = std::find_if(spans.begin(), spans.end(),
+                                     [](const tracing::SpanRecord &span) { return span.kind == tracing::SpanKind::kClient; });
+    ASSERT_NE(client, spans.end());
+    EXPECT_EQ(client->status, tracing::SpanStatus::kError);
+    EXPECT_EQ(client->StatusMessage(), "DEADLINE_EXCEEDED");
+    ASSERT_TRUE(client->has_grpc_status);
+    EXPECT_EQ(client->grpc_status_code, kGrpcStatusDeadlineExceeded);
 }
 
 // 实体上没有通道,生成的客户端在本地以失败完成:回调同样回到发起方的 trace(QueueGrpcLocalCompletion 的包装)。

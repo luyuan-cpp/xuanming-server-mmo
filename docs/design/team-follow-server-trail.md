@@ -11,7 +11,7 @@
 - **不寻路,不用 dtCrowd。** 队员不是独立的寻路代理,而是"站在队长走过的路上、离队长固定路程的点"。
   服务器每 tick 把队长的位置追加成一条折线(轨迹),第 k 名队员的位置 = 轨迹上离队长 (k+1) × 间距 的那一点。
 - **同动作、同间隔**:队长走多少,每个槽位就前进多少。全队同速、同一 tick 起步和停步、在队长拐弯的同一个拐角拐弯,
-  沿路间距恒为 1.4。观察者收到的是同一个服务器、同一批 tick 发出的移动广播,所有人屏幕上的队形一致。
+  沿路间距恒为 3 米(2026-11-19 由 1.4 改定)。观察者收到的是同一个服务器、同一批 tick 发出的移动广播,所有人屏幕上的队形一致。
 - **原地小范围来回走**:轨迹"回收"(队长回到自己刚走过、还没有队员走到的那段路附近,就把那段回路剪掉)
   加队员"只进不退"。队长在第一名队员前面怎么晃,队员都原地不动;晃完往外走,队员走的是剪干净的路。
 - **离线也跟**:走位由服务器驱动,不需要客户端在场;队员下线后照样跟着队长走(§3.6)。开通了挂机的(离线托管),队长换地图、
@@ -50,7 +50,7 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
 ### 3.2 槽位与推进(`TeamFollowFormation`)
 
 - 名次按入队序号 `join_seq` 升序(与组队界面一致),同号按玩家号;队长之外最多 4 人。
-- 第 k 名的目标里程 = `max(轨迹尾, 队长里程 - (k+1) × 1.4)`。
+- 第 k 名的目标里程 = `max(轨迹尾, 队长里程 - (k+1) × 间距)`,间距 3 米。
 - 每 tick 队员游标向目标前进,单步上限 `max(队长本 tick 前进的路程, 10.8 米/秒 × dt)`:跟上之后与队长逐 tick 同步(间距不被拉开),
   落后时(刚加入、前面有人离队)以 10.8 米/秒(基础移速 9 的 1.2 倍)追上。
 - **只进不退**:目标在游标后面时原地站着,绝不倒着走。
@@ -69,7 +69,7 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
 | 横着往旁边走 1 米、再往另一边走 1 米,反复 | 第一次往旁边走时沿路跟上 1 米(那一下和真拐弯分不出来),之后不再被带动 |
 | 绕一个比间距小的圈 | 第一圈时沿路往前挪不超过一圈的长度;圈在第一名队员走到之前合上、被整圈剪掉,之后再绕不再带动 |
 | 绕一个比间距大的圈 | 队员已经走进圈里,圈不能剪,队员跟着绕 —— 这是真实行走,不算"原地" |
-| 真掉头,沿原路往回走穿过整支队伍 | 轨迹在第一名队员脚下折成发夹:第一名原地转身,等队长走出 1.4 后跟上;后面的人依次走到折返点再掉头。顺序不乱,沿路间距恒定。玩家之间没有碰撞,掉头时会互相穿过 |
+| 真掉头,沿原路往回走穿过整支队伍 | 轨迹在第一名队员脚下折成发夹:第一名原地转身,等队长走出一个间距(3 米)后跟上;后面的人依次走到折返点再掉头。顺序不乱,沿路间距恒定。玩家之间没有碰撞,掉头时会互相穿过 |
 
 为什么不用"起步阈值 / 死区"(队长离开某个半径才让队员动):那会让每次起步都慢半拍、队伍先拉长再收拢,
 违背"队长一移动，队员马上跟着"。只进不退 + 回收已经让来回走不传到队员身上,不需要死区。
@@ -80,12 +80,12 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
 `TeamFollowSystem::TryAttach`;同场景接上不看会话,离线的队员也能接上(§3.6)。落位按顺序取第一个成立的:
 
 1. **已站在队长走过的路上**(离轨迹 ≤ 0.75 米,例如整队打完一场战斗):就地接上,槽位靠前就沿路赶过去,靠后就等。
-2. **能走过去**(互相可见且相距 ≤ 8,即原来的"不需要归队瞬移"):先把谁都不需要的旧历史剪到新队员的槽位处,
-   再 `FindPath` 寻到轨迹尾部,把这段路接在轨迹前面,队员站在新的尾部,沿路走到自己的槽位。路长超过 16 米,
+2. **能走过去**(互相可见且相距 ≤ 归队阈值 24,即原来的"不需要归队瞬移"):先把谁都不需要的旧历史剪到新队员的槽位处,
+   再 `FindPath` 寻到轨迹尾部,把这段路接在轨迹前面,队员站在新的尾部,沿路走到自己的槽位。路长超过 48 米,
    或寻路终点到不了尾部(Detour 的半截路),不走。
 3. **否则瞬移进槽位**(`TeleportWithinScene`,`TeleportS2C.reason = 5`,朝向取队长的朝向)。
 
-新入队的人名次最大,走到队尾、停在最后一名身后 1.4 处。名次在中间的人(暂离后归队)从队尾沿路走过其他人回到自己的位置,
+新入队的人名次最大,走到队尾、停在最后一名身后一个间距(3 米)处。名次在中间的人(暂离后归队)从队尾沿路走过其他人回到自己的位置,
 被他让出位置的人原地等队长走开再补上。
 
 ### 3.5 停止、暂停与队长变化
@@ -99,7 +99,7 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
 | 自己或队长正在离开本节点(归属交接、退出) | 停止驱动 / 解散。因队长离开而解散的,原随从记下"在等队长的去留",队长实体离开本节点或交接作废之后再跟一次(§3.7) |
 | 队长在战斗中 | 整队原地不动,不解散(整队开战时队员也都在战斗里;战后接着走,不用重新排队) |
 | 队员在战斗中 | 暂停:原地不动,名次照留;落后超过 24 米后不再为他保留轨迹,恢复后直接瞬移进槽位 |
-| 队员离线(断线保留中;以后的离线托管) | **照常被驱动**,跟着队长走,见 §3.6 |
+| 队员离线(断线保留中;开通挂机的离线托管中) | **照常被驱动**,跟着队长走,见 §3.6 |
 | 队长实体没了 | 每 tick 末尾扫一遍,队形已不在的随从摘掉 |
 | 严格导航地图(节庆图)拒绝这一步走位或放进槽位的瞬移 | 停止驱动,原因记 `LEFT_FOLLOW`(11-09「节庆地图严格导航」提交 `6cc189611` 加入);跟随意图不摘,之后的声明或跟随检查会再试 |
 
@@ -213,7 +213,7 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
   `MovementSystem::Update` 按 `TeamFollowerComp` 排除他,不会再积分一遍。
 - 移动广播 `ActorMoveS2C` 发给正在显示他的观察者**和他本人**。节流:起步 / 停步、拐弯超过约 20°、速度变化超过 15%
   时立刻发,行走中每 5 帧(250ms)补一条校正,站着不发。量级与改动前队员客户端自己每 0.25 秒一条 MoveSync 相同。
-- 同一队形同一 tick 要发的移动合成一批(2026-11-12,`spatial/system/movement.h` 的 `ActorMoveBatch`):按"每个接收者要收哪几名队员"
+- 同一队形同一 tick 要发的移动合成一批(2026-11-12,`spatial/system/movement.h` 的 `ActorMoveBatch`,实现在 `actor_move_broadcast.cpp`):按"每个接收者要收哪几名队员"
   分组,一组一条 —— 只收一个人时仍是 `ActorMoveS2C`,收几个人时是 `ActorMoveListS2C`(客户端逐条按 `ActorMoveS2C` 处理,
   自己的那条照样只在被驱动期间生效,过滤在 `ActorWorld.ApplyMove`,两种消息走同一处)。每组序列化一次、每个 gate 一个请求,
   与单条广播同一个形状。队员多半同一 tick 起步、停步,起步对齐时行走中的校正也对齐,所以观察者通常每 tick 每队只收一条;
@@ -290,13 +290,13 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 
 | 常量 | 值 | 含义 |
 |---|---|---|
-| `kTeamFollowSpacing` | 1.4 米 | 槽位间距(沿路)。沿用客户端跟随的值,2026-11-12 定案保留(team-system.md V.7 第 5 条):紧凑纵队,整列 4 × 1.4 = 5.6 在视野半径 10 以内,队员之间不靠显式关注就互相看得见;贴图重叠由客户端按脚底先后排序。`player_team.cpp` 顶部两条 static_assert 守着"整列不超过归队阈值 8、归队阈值小于视野半径 10";按美术身宽拉开时这两条会先报错,要同时给队员之间加 AOI 显式关注(`AoiFollowKind::kTeam` 已预留)并核对 `kTeamFollowMaxLag` |
+| `kTeamFollowSpacing` | 3 米 | 槽位间距(沿路)。2026-11-19 负责人嫌 1.4 太挤,改定 3 米(team-system.md V.7 第 5 条);同时视野半径由 10 放大到 50。整列 4 × 3 = 12 在视野半径 50 以内,队员之间不靠显式关注就互相看得见。`player_team.cpp` 顶部两条 static_assert 守着"整列不超过归队阈值 24、归队阈值小于视野半径 50";再改间距时这两条会先报错 |
 | `kTeamFollowCatchUpSpeed` | 10.8 米/秒 | 追赶速度上限 |
 | `kTeamFollowMaxLag` | 24 米 | 暂停中的队员最多为他保留的轨迹;超过就恢复后直接瞬移进槽位 |
 | `kTrailRewindRadius` / `kTrailRewindMinGain` / `kTrailRewindSearchLength` | 0.6 / 0.05 / 4 米 | 回收判定 |
-| `kTrailKeepBehindHead` | 7 米 | 队长身后至少保留的历史 |
+| (队员上限 + 1) × 间距 | 15 米 | 队长身后至少保留的历史(按队形构造时的间距算,`TeamFollowFormation::KeepOdo`);原来的全局常量 `kTrailKeepBehindHead` 已删,免得与构造参数不一致 |
 | `kTeamFollowSnapToTrailRadius` | 0.75 米 | 加入时就地接上的距离 |
-| `kTeamFollowMaxApproachPath` | 16 米 | 加入时最长走多远,再远就瞬移 |
+| `kTeamFollowMaxApproachPath` | 48 米 | 加入时最长走多远,再远就瞬移;取归队阈值(24)的两倍 |
 | `kTeamFollowMaxLeaderJump` | 4 米 | 队长一 tick 挪这么远视为不连续 |
 
 ## 8. 验证(未编译、未测试,待 Codex)
@@ -311,7 +311,9 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
   `PlayerTeamFollowTest.OfflineMemberWhoDeclaredFollowIsAttachedInTheSameScene`、`OfflineMemberDoesNotAskSceneManagerToChangeScene`;
   原有的 `DisconnectedWhileLocationPendingPreventsFollow`(没声明跟随的离线队员不被瞬移)行为不变。
   2026-11-10 补 `TeamFollowDriveTest.ResendAfterEntryLeavesTheFormationUntouched`(补推不改动队形与驱动);
-  补推本身发没发出去要截获发给客户端的消息,这个测试工程没有假网关,留给联机验收。
+  2026-11-19 把补推的判据抽成只读查询 `TeamFollowSystem::DrivenSlot`(补推只在它有值时发,名次就是它),
+  `TeamFollowDriveTest.DrivenSlotIsWhatTheResendAfterEntryReports` 验名次、队长不被驱动、换了场景实例不补推。
+  发送那一行与其他跟随状态推送共用 `SendFollowState`,不单独截获。
 - 协议、客户端联动没有自动化测试;需要新客户端后联机验收。联机验收要覆盖:开通挂机的队员杀掉客户端后照样跟着队长走,
   再登录接回时客户端立刻显示"正在跟随"、自己的点击只出提示。
 - 2026-11-10 跨场景跟随(§3.7),未编译、未测试:
@@ -332,9 +334,11 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
     `AoiDeliveryTest.LookAtPositionTurnsTheYawInDegreesAndMarksTheTransformDirty`、`AoiDeliveryTest.LookAtPositionStraightAboveKeepsTheFacing`;
   - `cpp/tests/aoi_test/aoi_system_test.cpp`:`MoveReceiverGroupingTest.*` 4 条(视野相同的一组一条、视野不同分组、重复接收者与无人接收、满批 64 位);
   - `player_team_follow_test.cpp`:`TeamFollowDriveTest.DrivenFollowerFacesItsWalkingDirectionInDegrees`(拐弯后偏航 90 度,不是 π/2)。
-  - 合并批的发送胶水(按组选 133 / 135、每组一次广播)没有单测:能截获客户端消息的只有 `aoi_delivery_test`,它不编 `movement.cpp`,
-    编进去会连带拉进大半个 scene 库、可能与假发送函数重复定义,不编译没法排除。留给联机验收:3 人以上的队伍同时起步,
-    旁观者与队员各收到一条 135、列表里是全部在动的队员(本人那条也在),2 人队伍仍是 133。
+  - 合并批的发送层(按组选 133 / 135、每组一次广播)2026-11-19 补上单测:`BroadcastMove` 与 `ActorMoveBatch` 从 `movement.cpp`
+    拆到 `spatial/system/actor_move_broadcast.cpp`(只依赖兴趣索引、网络号、消息内容与发送函数,不碰导航),
+    `aoi_delivery_test` 连同假发送函数直接编它:`AoiDeliveryTest.MoveBatchSendsOneMessagePerReceiverAndSharesItAcrossTheGroup`
+    (看得见两人的旁观者与带本人的队员共用一条 135、按登记先后;只看得见一人的收 133;重复登记只发一条;两组各广播一次)、
+    `AoiDeliveryTest.MoveBatchOfOneIsAPlainMoveBroadcast`。联机验收照旧:3 人以上的队伍同时起步,旁观者每次各收到一条 135。
 
 - 2026-11-12 排空 / 疏散改派托管队员与托管落点的看护(§3.7 末条),未编译、未测试:用例列在 player-connection-lost-hold.md §10 第 7 条
   (`RelocateConfirmEcs.Hosted*`、`RelocateConfirmHosted.*`、`HostedPlacementRetry*`,Go 的 `TestEnterScene_HostedPlacementEvacuationLandsOnTheResolvedTarget`);

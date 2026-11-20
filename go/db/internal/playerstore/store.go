@@ -40,13 +40,16 @@ const (
 	MaxClaimResponseBytes = 8 << 20
 	// claimResponseOverheadBytes 给响应里 payload 之外的内容留的余量。
 	claimResponseOverheadBytes = 64 << 10
+	// MaxSaveRequestBytes 是存盘请求的传输上限(gRPC 接收上限),与 C++ 的 player_store_path::kMaxSaveRequestBytes 相同。
+	// 一笔存盘带着这名玩家排着的全部审计记录(MaxAuditBytesPerSave)和脏行,和存档同一个事务提交,所以要超过缺省的 4 MiB。
+	MaxSaveRequestBytes = 16 << 20
 )
 
 // Limits 是存盘的大小预算。
 type Limits struct {
 	// MaxRowBytes 是单行 payload 的上限。
 	MaxRowBytes int
-	// MaxRequestBytes 是一次存盘所有 payload 之和的上限,要小于 gRPC 单消息上限(4 MiB)。
+	// MaxRequestBytes 是一次存盘所有 payload 之和的上限;加上审计记录要装得进一笔存盘请求(checkAuditBudget)。
 	MaxRequestBytes int
 }
 

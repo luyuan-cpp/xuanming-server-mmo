@@ -1,4 +1,6 @@
-# 本地日志观测台:Loki(存日志)+ Alloy(采集本机日志文件)+ Grafana(看)。
+# 本地日志观测台:Loki(存日志)+ Tempo(存 span)+ Alloy(采集本机日志文件、收三种语言的 OTLP span)+ Grafana(看)。
+# span 的链路见 docs/design/distributed-tracing.md §10.3:C++ / Java 发 Alloy 的 4318(OTLP/HTTP),Go 发 4317(OTLP/gRPC),
+# Alloy 尾部采样后写 Tempo;Grafana 里 Loki 的 trace_id 跳 Tempo,Tempo 的 trace 跳回 Loki。
 #
 #   启动:dev.bat obs        (等价 docker compose -f deploy\docker-compose.observability.yml up -d)
 #   停止:dev.bat obs-down
@@ -32,6 +34,22 @@ services:
         max-size: "20m"
         max-file: "3"
 
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: xm-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    # 镜像里的运行用户是 10001;命名卷第一次创建时属主是 root,用 root 跑才写得进去(只在本机观测台用)。
+    user: "0"
+    volumes:
+      - ./observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
   alloy:
     image: grafana/alloy:v1.10.0   # 故意不用最新版,原因见文件头
     container_name: xm-alloy
@@ -42,6 +60,9 @@ services:
       - /etc/alloy/config.alloy
     ports:
       - "12345:12345"   # Alloy 自带的调试页面:http://localhost:12345
+      # OTLP 收 span:4317 是 gRPC(Go 的 go-zero),4318 是 HTTP(C++ 节点与 Java)。只绑回环,不对局域网开放。
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
     volumes:
       - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - ../run/logs:/host/run/logs:ro
@@ -49,6 +70,7 @@ services:
       - alloy-data:/var/lib/alloy/data
     depends_on:
       - loki
+      - tempo
     restart: unless-stopped
     logging:
       driver: json-file
@@ -79,6 +101,7 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       - loki
+      - tempo
     restart: unless-stopped
     logging:
       driver: json-file
@@ -88,5 +111,6 @@ services:
 
 volumes:
   loki-data:
+  tempo-data:
   alloy-data:
   grafana-data:
