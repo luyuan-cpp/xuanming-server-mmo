@@ -194,7 +194,7 @@ ServiceUnavailable        服务不可用      1
 
 ### 2.10 Java 网关也按 fault 列定性（2026-10-18）
 
-**状态**：已落码并随 `e611b5d8d` 入库；正式服务端导表与导表器 147 项测试已有通过证据，Go 本轮验收和主仓 Java 网关测试通过。主仓示例 starter 在 Surefire 加载前失败，尚未执行该测试，后续验收已停止；不代表全部完成。补丁版本、输入 SHA 条件、两版 Java 结果与未验证项见 [交接文档](../handoff/handoff-tip-fault-gateway-500-20261018.md)。
+**状态**：已落码并随 `e611b5d8d` 入库；正式服务端导表与导表器 147 项测试已有通过证据，Go 本轮验收和主仓 Java 网关测试通过。主仓示例 starter 在 Surefire 加载前失败，尚未执行该测试，后续验收已停止；不代表全部完成。补丁版本、输入 SHA 条件、两版 Java 结果与未验证项见 交接文档（原 `docs/handoff/handoff-tip-fault-gateway-500-20261018.md`，已清理，见 `ccf2840b2`）。
 
 **问题**：2026-10-18 的第三方登录缺口修复（[third-party-login-end-to-end-design.md](./third-party-login-end-to-end-design.md) §三）让 login 对渠道故障、令牌签发失败、账号目录读 Redis 失败都回 in-band 故障码（`LoginAuthProviderUnavailable` / `LoginTokenIssueFailed` / `LoginRedisError` 等，fault=1）。login 侧的 `serverbase` 已经按 fault 列告警，但 Java 网关不认识码表，把所有 in-band 错误都回 `CODE_AUTH_REJECTED`(401) + `upstream_err=<tip>`：客户端拿到的是「凭证被拒、请重新认证」，而真实情况是「服务端出错、稍后重试」——微信挂了时让玩家反复重走 OAuth 毫无意义。
 

@@ -31,7 +31,7 @@ SQL 事务内不访问 Redis、Kafka 或 scene。RPC 和事务共享可取消截
 
 登录列表、建角上限、EnterGame 归属、身份补齐和孤儿清理接缝均走 SQL 目录；既有无生产调用者的 LoginAdmin 删除 RPC 继续明确 Unimplemented，不借迁移扩大破坏性权限。旧账号 self-heal 不再根据 Redis 反向键制造角色。AssignGate 的“已有会话”优化也查询同一目录。P0-b 原始批次只覆盖这些目录入口；随后获授权的 P4 增加下节的交易锁与过户收据，但不改变玩家种子、父快照及 scene owner_epoch 的事实源。
 
-在线身份（2026-11-05）：login 认证凭据，并在 EnterGame 时捕获原账号和 owner_revision，经内部 BindSessionEvent 连同 gate 连接 incarnation 交给 gate；gate 从自己的会话状态构造 authenticated_account，随每次内部调用的 SessionDetails 整体签名。在线域（match / chat / friend / guild / trade / mail）验签后只认这份原件（`shared/roleidentity.SessionAccount`），**不读登录域 Redis，也没有回退路径**；原账号不来自客户端正文，也不反查当前 owner。`login_session` 只服务登录/选角阶段与设备集，EnterGame 成功后保留到 `LeaveGame` / `Disconnect` 或 TTL。业务提交的本库 role_fence 与事务外自愈保持。完整链路、生命周期与已知边界见 [gate 在线身份](gate-online-identity.md)，运行证据见 [审核交接](../handoff/gate-auth-role-fence-review-20261104.md)。
+在线身份（2026-11-05）：login 认证凭据，并在 EnterGame 时捕获原账号和 owner_revision，经内部 BindSessionEvent 连同 gate 连接 incarnation 交给 gate；gate 从自己的会话状态构造 authenticated_account，随每次内部调用的 SessionDetails 整体签名。在线域（match / chat / friend / guild / trade / mail）验签后只认这份原件（`shared/roleidentity.SessionAccount`），**不读登录域 Redis，也没有回退路径**；原账号不来自客户端正文，也不反查当前 owner。`login_session` 只服务登录/选角阶段与设备集，EnterGame 成功后保留到 `LeaveGame` / `Disconnect` 或 TTL。业务提交的本库 role_fence 与事务外自愈保持。完整链路、生命周期与已知边界见 [gate 在线身份](gate-online-identity.md)，运行证据见 审核交接（原 `docs/handoff/gate-auth-role-fence-review-20261104.md`，已清理，见 `ccf2840b2`）。
 
 新 gate 进程不会继承旧连接的认证标记。客户端重连须重新取得 gate 票据、在新 TCP 连接以有效 access token 完成 Login，再对原角色发 EnterGame 并等 NotifyEnterScene；令牌失效时停止恢复，不能仅凭角色号恢复身份。旧客户端仍可手动重新登录，自动恢复是独立客户端增量。退出/踢线以后 gate 停止接收新业务；撤销前已经受理的调用按原业务合同完成或拒绝，角色冻结/过户仍由提交护栏决定，不能靠异步踢线消息代替提交互斥。
 

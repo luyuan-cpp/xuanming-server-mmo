@@ -3,10 +3,12 @@
 - 日期:2026-10-16
 - 状态:设计 v0.2;**2026-10-16 已按 §7 三组落码(未编译、未测试),落码记录与出入见 §13**。*2026-10-20 回填(只读核对 PROGRESS 回执,10-22 订正):§8 第二轮(绿跑)的 C++ 部分已有证据。`routing_identity_test` 113/113 含 `KickFence` 10 个;`cross_zone_test` 313/313 含 `ReleaseFence` 8 个、`ReleaseFenceEcs` 22 个。出处是 PROGRESS「2026-10-19 Codex：会话释放夹具修复核验完成，跨区随机全量313项通过」,跑的是合并前源码。Go 侧 scene_manager / player_locator / login 的全量单测另有 10-19 回执。2026-10-22 又有一轮:29 个 C++ 测试 EXE 共 2624 PASS,其中 cross_zone_test 339/339、routing_identity_test 140/140。第一轮(红跑)的证据没有记录;§8 第 5 步的可选联机(robot 同频道重进、travel_smoke / channel_smoke)没有实跑。*已按「正确性」「发布与可实施性」两路对抗复核修订(逐条处置见 §12);
   下一步:Codex 按 §8 两轮验证(命令汇总见 §13 开头的链接)。
+- 2026-11-20(v0.3):§10 第 1 条「e 方案 C」落码 —— scene 按 (gate 实例, session_id) 认会话,gate 实例取自 RPC0 入站连接的
+  握手身份;login 的跨实例同号随之改回踢线(§12.3 第 1 点)。设计、两处措辞的定论与验证见 §14,**未编译、未测试,待 Codex 验证**。
 - 范围:login → gate 踢线(a)、player_locator → scene_manager 离场清理(b)、scene_manager → scene 的 `ReleasePlayer`(c)、
   scene_manager 落点(d)、login → player_locator 断线 / 登出上报(e)。scene 入场栅栏本身、存盘链、MySQL 行内围栏都不改。
 - 上游:[scene-enter-session-fence.md](scene-enter-session-fence.md)(下称 fence)§7 三条待办、§9 残余 2 与「ExitGame / 断线」可选加固;
-  接手记录 [landing-fencing-takeover-20261016/README.md](../handoff/landing-fencing-takeover-20261016/README.md) §3.3 的选定做法。
+  接手记录 `docs/handoff/landing-fencing-takeover-20261016/README.md`（已清理，见 `ccf2840b2`） §3.3 的选定做法。
   四份调研在同一目录:`a-login-kick.md`、`bd-leave-and-landing-lua.md`、`c-release-player.md`、`e-exitgame-disconnect.md`
   (只读代理产出,未经运行验证)。
 - 方案选择:负责人要求「按最标准的做」,各项待选点一律取调研的推荐项。本文对关键事实做过抽查(2026-10-16 工作区),
@@ -22,9 +24,9 @@
 | b | MarkOffline 删会话后同步调 LeaveScene,期间无屏障;迟到的 LeaveScene 会删掉新登录的 location 并扣人数 | 方案 A:location 记会话身份(由 d 写),LeaveScene 带被删会话的身份,按代次决定删不删;Reconnect 重放分支补比代次(keep 分支不漏删的前提,§3.2) | proto `storage`、`scene_manager_service`;go/scene_manager;go/player_locator `leasemonitor.go`、`reconnectlogic.go` |
 | c | `ReleasePlayer` 只带 player_id,且在落点提交之前派发;交接失败或回滚之后迟到的释放会退掉仍持有归属的实体 | 方案 B:派发挪到本请求提交之后;请求带 `expected_owner_epoch`;scene 纯判定 `release_fence::Decide` | proto `scene_node_service`;go/scene_manager;scene 新纯头 + 库函数 + 守护段委托 + 汇总行 |
 | d | 落点 Lua 只做 owner_epoch CAS,陈旧登录或旧会话的换图在同节点不铸造时照样改写 location 与人数 | 方案 A(与 b 共用身份):入口纯判定 `decidePlacementIdentity` + 落点 Lua 加 location 原文期望;scene 自发请求填实体代次;新私有码 25 | 同 b;scene 三处发送点与码表 |
-| e | 断线 / 登出上报只比 session_id;同号跨 gate 实例时,旧实例迟到的上报让活玩家 30s 后被踢,或立即删会话 | 方案 A:`SetDisconnecting` / `MarkOffline` 带 gate 实例号,两边都非空且不等即忽略;只改 Go | proto `player_locator`;go/login;go/player_locator 两个 logic |
+| e | 断线 / 登出上报只比 session_id;同号跨 gate 实例时,旧实例迟到的上报让活玩家 30s 后被踢,或立即删会话 | 方案 A:`SetDisconnecting` / `MarkOffline` 带 gate 实例号,两边都非空且不等即忽略;只改 Go。scene 链的三个面 2026-11-20 起由方案 C 收口:scene 按 (gate 实例, session_id) 认会话(§14) | proto `player_locator`;go/login;go/player_locator 两个 logic;方案 C:RPC0 握手身份、scene 栅栏与客户端消息入口(§14.3) |
 
-不做(登记为残余、另立项,见 §10):e 的方案 B / C、fence §9 残余 7、6b「同 scene_id 换节点多算一人」、a 的 T5。
+不做(登记为残余、另立项,见 §10):e 的方案 B、fence §9 残余 7、6b「同 scene_id 换节点多算一人」、a 的 T5。e 的方案 C 原也在此列,2026-11-20 落码(§14)。
 
 **发布与回滚总顺序(v0.2 起为硬约束)**:
 
@@ -33,6 +35,8 @@
     且 Reconnect 重放分支已比代次(§3.2、§3.5)。
   - player_locator 先于 login:a 的跨实例同号踢线(§2.2 ⑤ 第 4 行)依赖 e 在 locator 侧已生效,否则踢线引出的旧实例断线上报
     会给新会话挂租约(§2.5、§6.5)。
+  - scene 先于 login:同一行还依赖 scene 的方案 C(§14),否则旧实例关闭旧连接时代发的 ExitGame 会让新会话进入断线保留。
+    总顺序里 scene 本来就排第一,不改顺序。
   - gate 先于 login:a 的玩家与代次核对由 gate 执行。
 - 回滚:按发布的反序。两条硬约束:
   - 要把 player_locator 回滚到 fence 之前的版本,先回滚 scene_manager(§3.5);
@@ -46,7 +50,7 @@
 | 维度 | 值 | 回答的问题 | 用在 |
 |---|---|---|---|
 | 会话身份 | `(session_id uint32, login_generation uint64)` | 哪一次登录 | a 踢线、b 离场、d 落点 |
-| 连接化身 | `(gate_instance_id string, session_id)` | 哪个 gate 进程上的哪条连接 | e 断线 / 登出上报;a 的「同一连接」判断 |
+| 连接化身 | `(gate_instance_id string, session_id)` | 哪个 gate 进程上的哪条连接 | e 断线 / 登出上报;a 的「同一连接」判断;scene 认会话(方案 C,§14) |
 | 归属代际 | `owner_epoch uint64` | 哪个节点持有数据 | c 释放 |
 
 登录代次的不变量 G1–G5 见 fence §3.1,本文全部沿用,不新增状态,不新增 Redis 键。
@@ -74,13 +78,15 @@
 - `""` 表示未知(旧版 login、早期会话记录),一律不比较,不当成「不等」。
 - 只有请求与记录两边都非空且不等,才判为旧实例的迟到上报。与 `LeaseExpired` 的 `target_instance_id`、
   `session_reconciler.go` 按实例存活对账是同一口径。
+- scene 侧 2026-11-20 起「同一会话」= (gate 实例, session_id)(方案 C,§14):gate 实例取自请求所走 RPC0 入站连接的握手身份,
+  老进程迟到的入场、它关闭旧连接时代发的 ExitGame、旧客户端照发的消息,scene 都认得出不是当前会话。
 - 实例号不并进 location 身份。后果要如实写:同号跨实例时(gate 以同一 node_id 重启,旧实例 I1 上的 `3:k`(gA)与新实例 I2 上的
   `3:k`(gB > gA)会话号相同),
   - b 的判定表以代次为主,迟到的 LeaveScene{3:k, gA} 遇到 gB 判 `keep_newer`,不受影响;
   - d 的判定表「会话号优先」:A 迟到的 EnterScene{3:k, gA} 被判 `admit_same_session`,d1 在这种情形下仍成立。
-    这就是已登记的 R13(§5.8),与 scene 栅栏「同号即同会话」同一口径。
-  - 根治要把「同一会话」定义为 (gate 实例, session_id),location 也要记实例号(需与 GO-3 协调字段号),
-    与 e 方案 C 同一件事,一并另立项(§10)。
+    这就是已登记的 R13(§5.8)。scene_manager 推出的路由按 `target_instance_id` 只投给老实例 I1,老进程转来的入场到 scene
+    被栅栏按实例与代次拒掉(§14.2),所以 scene 上的实体不受影响;剩下的只是 location 身份的口径。
+  - location 也记实例号(需与 GO-3 协调字段号)仍另立项(§14.6)。
 
 ## 2. 余项 a:login 踢线
 
@@ -182,7 +188,7 @@ fence 批次的登录代次对这个问题没有缓解。铸代次在踢线之�
 | 1 | `existing.GateID` 或 `existing.GateInstanceID` 为空 | 不踢:`buildGateCommandMessage` 守卫一本来就拒空实例号 | `skip_no_target` |
 | 2 | 本链实例号为空 | 不踢(无论会话号) | `skip_no_target` |
 | 3 | 会话号相同,实例号相同 | 同一连接,不踢 | `skip_same_session` |
-| 4 | 会话号相同,两边实例号都非空且不同 | 跨实例同号,踢;`target_instance_id` 限定旧实例,新实例按防僵尸过滤丢弃。**前提:e 已在 player_locator 生效**(§2.5) | 按发送结果 |
+| 4 | 会话号相同,两边实例号都非空且不同 | 跨实例同号,踢;`target_instance_id` 限定旧实例,新实例按防僵尸过滤丢弃。**前提:e 已在 player_locator 生效(§2.5),scene 的方案 C 已生效(§14)** | 按发送结果 |
 | 5 | 会话号不同 | 踢 | 按发送结果 |
 
 第 2 行的理由(v0.2 改):本链实例号为空时,`SendBindSessionToGate` 必在 `buildGateCommandMessage` 守卫一失败,3023 也推不出去,
@@ -190,12 +196,13 @@ fence 批次的登录代次对这个问题没有缓解。铸代次在踢线之�
 仍绑着上一次的更小代次,`ClassifyKick` 会判 `kKick`);会话号不同时仍会先踢掉旧设备,再在 Bind 失败。现在一律不踢。
 这条链仍会先提交一条实例号为空、之后无法寻址的会话记录,这是既有行为;改为提交前拒绝另立项(§10),原因见 §12 C-F8。
 
-第 4 行的已知代价:旧实例 I1 收到踢线后关闭旧连接,会立刻向 scene 发 `ExitGame(3:k, P)`、向 login 发 `Disconnect(3:k, I1)`。
+第 4 行的连带后果:旧实例 I1 收到踢线后关闭旧连接,会立刻向 scene 发 `ExitGame(3:k, P)`、向 login 发 `Disconnect(3:k, I1)`。
 - login 侧:e 生效后被 player_locator 按实例号忽略;e 未生效时会给新会话挂租约、30s 后踢掉活玩家(所以有上面的前提)。
-- scene 侧:同号、同玩家的 ExitGame 能通过三道守卫,晚于新会话的 `PlayerEnterGameNode` 到达时会让新实体退出。这是 §6.8 方案 A
-  不覆盖的面。踢线并没有新造这个面:I1 上的旧连接无论因何关闭(客户端自己断开、I1 冲突收尾、进程退出)都会发出同一条 ExitGame;
-  踢线只是把它从「旧连接关闭的那一刻」提前到「新登录提交之后」。不踢的话,旧设备会继续以同号、同玩家的身份向 scene 发消息
-  (§6.8「旧客户端消息」面)。两者取舍待负责人确认(§12 待拍板 1)。
+- scene 侧:方案 C(§14)之前,同号、同玩家的 ExitGame 能通过三道守卫,晚于新会话的 `PlayerEnterGameNode` 到达时会让新实体进入
+  断线保留、25s 后退出;所以 2026-10-16 的定论是方案 C 落地前只计数不踢(§12.3)。方案 C 落地后 scene 按入站连接认出它出自 I1,
+  不派发;早于新会话入场到达的那一条退掉的是 I1 上那条会话本身,新入场随后取消退出、接管实体,与同实例顶号的时序相同。
+  不踢的话,旧设备会继续以同号、同玩家的身份向 scene 发消息,方案 C 下这些消息同样不派发,但旧连接要等它自己关闭才释放。
+  所以 2026-11-20 起第 4 行照踢(§12.3 第 1 点)。
 
 **⑥ 计数** `login_kick_total{result}`,`result ∈ sent | send_failed | skip_same_session | skip_no_target | skip_uncommitted`。
 只有一个低基数 label,不放 player_id / session_id。
@@ -295,7 +302,8 @@ message KickPlayerEvent {
   - 2026-10-30 起空 payload 一律拒绝:Kick / Bind 等入口事件都有信封装不下的字段,生成路由(`gate_kafka_command_router.go` `eventRequiresPayload`)不再走信封路径。项目未上线,不做新旧混跑,上面两条信封路径的说法只作历史记录。
 - **回滚**:按发布的反序。要回滚 player_locator 的 e,先回滚 login(否则又回到上面的时序);gate 单独回滚只是退回按 session_id 踢。
   proto 只加字段,回滚不删字段;字段一经上线不再复用(AGENTS §4.3)。
-- 第 4 行还会把 scene 侧同号 ExitGame 的反例从「旧连接自然关闭时」提前到「新登录提交后」,见 §2.2 ⑤ 的已知代价与 §6.8。
+- 第 4 行会主动引出旧实例的同号 ExitGame:方案 C 之前它是 scene 侧的反例(§2.2 ⑤ 的连带后果),方案 C 之后在 scene 上不派发(§14)。
+  所以 scene 与 player_locator 都要先于 login 升级(§0);回滚 scene 的方案 C 之前先回滚 login。
 - **行为变化**:改动前,SetSession 失败或结果未知时旧会话也已被踢;改动后,只有确认提交才踢。
   复读也没确认的「结果未知」(locator 已写入,但应答丢失且复读失败)不再踢:旧设备继续在线,记录却指向 sA,
   推送会投到 sA,直到下一次登录收敛。
@@ -1146,7 +1154,7 @@ message MarkOfflineRequest {
 | 不变量 | 结论 |
 |---|---|
 | 1 入口栅栏第一步且零副作用 | 不改 scene |
-| 2 同一会话一律放行 | 不涉及入场;scene 侧「同号即同会话」的口径不变(这也是不做方案 B 的原因,§10) |
+| 2 同一会话一律放行 | 方案 A 不涉及入场。scene 侧原先「同号即同会话」(这也是不做方案 B 的原因,§10);2026-11-20 起改为 (gate 实例, session_id),见 §14.1 |
 | 3 SessionMap 只擦本玩家的映射 | 不涉及 |
 | 4 gate `loginGeneration` 写入规则 | 不改 gate |
 
@@ -1176,19 +1184,21 @@ go/login:
 
 ### 6.8 残余
 
-- scene 链(同号跨实例的 ExitGame 销毁活实体)、迟到的 PlayerEnterGameNode、旧客户端消息三个面仍开着(只伤活性)。
-  - 方案 B(ExitGame 带代次)只堵其中一面,而且与入场栅栏「同号即同会话」的口径不一致,不做。
-  - 方案 C(scene 按入站连接核对 gate 实例,把「同一会话」改为 (gate 实例, session_id))需要负责人拍板不变量 2 的措辞,另立项。
-  - **a 的跨实例同号踢线会主动触发 ExitGame 这一面**(v0.2 补):I1 收到踢线、关闭旧连接时立刻向 scene 发 `ExitGame(3:k, P)`,
-    晚于新会话的 `PlayerEnterGameNode` 到达就会让新实体退出。现状里这条反例要等旧连接自己关闭才触发;第 4 行把它提前到
-    「新登录提交之后」、且每次跨实例同号顶号都会触发。取舍(保留踢线 / 方案 C 落地前只计数不踢)见 §2.2 ⑤ 与 §12 待拍板 1。
+- scene 链的三个面(同号跨实例的 ExitGame 让新会话进入断线保留、迟到的 PlayerEnterGameNode、旧客户端消息)方案 A 不覆盖,
+  2026-11-20 起由方案 C 收口(§14):scene 按 (gate 实例, session_id) 认会话,gate 实例取自 RPC0 入站连接的握手身份。
+  - 方案 B(ExitGame 带代次)只堵其中一面,而且与入场栅栏的会话口径不一致,仍不做。
+  - a 的跨实例同号踢线会主动触发 ExitGame 这一面(v0.2 补):I1 收到踢线、关闭旧连接时立刻向 scene 发 `ExitGame(3:k, P)`。
+    方案 C 之前它晚于新会话的入场到达就会让新实体退出,所以那时只计数不踢;方案 C 之后这条 ExitGame 在 scene 上不派发,
+    踢线随之打开(§2.2 ⑤、§12.3 第 1 点)。
 - **gate 崩溃后同号重连失败的残留记录**(v0.2 补):清理改由 `session_reconciler` 兜底,时延从约 30s 变成约 2.5–3.5 分钟,
   对账被禁用时不清理(§6.2)。
 - 同一 gate 进程内 17 位序号回绕(R14):断线这一面 2026-11-19 起不再成立「迟到窗口是秒级」—— gate 持有断线通知、确认之前一直重发,
   可以迟到任意久;同日 `SetDisconnecting` 改为再按会话代次认会话(请求与记录都非 0 且不等即忽略),这一面收口,规则见
   [gate-online-identity.md](gate-online-identity.md) §10.4「断线通知」。其余面(LeaveGame 的 MarkOffline 等)迟到窗口仍是秒级,
   而回绕要攒满 13 万次连接,实际不可达。
-- 【未核实】scene 在 gate 节点从 etcd 摘除时是否关闭来自它的入站连接(决定 scene 链反例的窗口)。
+- scene 在 gate 节点从 etcd 摘除时**不关**来自它的入站连接(2026-11-20 核实):`Node::ExecuteNodeRemoval` 只销毁 gate 节点实体,
+  `RpcSession` 随之摘掉,入站 TCP 连接还开着,老进程照样能发消息。新进程要等老进程的租约过期才拿到 node_id,所以新进程存在时
+  老进程的节点实体多半已被销毁 —— 这也是实例号必须记在连接上、不能从节点实体反查的原因(§14.2)。
 - 【未核实】路由模式下 gate → 路由服 → login 的 Disconnect 截止时间(决定 login 侧迟到窗口的上界)。
 
 ## 7. 实施分工
@@ -1354,7 +1364,7 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 本批不做、登记备查:
 
 1. **e 方案 C**:scene 按入站连接核对 gate 实例(把「同一会话」改为 (gate 实例, session_id)),覆盖 ExitGame、迟到入场、旧客户端消息三面。
-   需负责人拍板不变量 2 的措辞,并解决「入口前多一道连接级判定」与「栅栏是第一步」的字面冲突。另立项。
+   2026-11-20 落码(未编译),两处措辞的定论、设计与验证见 §14;本条关闭。location 记实例号仍开着(§14.6)。
 2. **e 方案 B**(ExitGame 带登录代次):不做,理由见 §6.8。
 3. **fence §9 残余 7**:外来角色的迟到路由经 `ApplyRouteIdentity` 无条件覆盖会话的 homeZoneId / ownerEpoch,`OnRouteDecision` 还会替换并
    随后丢掉本角色在途的欠账。两种修法待拍板:7-A 提前丢弃外来路由,7-B 让 homeZoneId / ownerEpoch 随路由目标走。
@@ -1384,7 +1394,7 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 - b:实际发生频率(现在没有任何指标)。
 - c:A1′ 写标记后退出能否被取消;ReleasePlayer 重试的实际频率。
 - d:B 的入场是否中止 A 在途的同 zone 交接冻结。
-- e:scene 摘除 gate 节点时是否关闭入站连接;路由模式下 Disconnect 的截止时间;客户端跨区「先连新后关旧」的具体时序;
+- e:路由模式下 Disconnect 的截止时间;客户端跨区「先连新后关旧」的具体时序(scene 摘除 gate 节点时不关入站连接,2026-11-20 已核实,§6.8);
   GameNodeExitGameRequest 1 号字段的全历史使用情况(只在做方案 B 时才需要)。
 - Java:a 的让出先于夺权提交是否有同类活性问题;b / d 的墓碑与迟到写顺序;e 的对应形态(§9)。
 
@@ -1393,6 +1403,7 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v0.1 | 2026-10-16 | 初稿:按接手记录 §3.3 的选定做法汇总四份调研,抽查关键事实。补正了一处调研写「未核实」的点:非 0 码在交接应答里一律走 `ResolveTravelOutcome(kFailed)`。补充了 a 的「实例号不明按同一连接处理」(防自踢)、落点 Lua 的 ARGV[4] 缺省按 `any`(保住现有直接 EVAL 的用例)、疏散票据带代次的落点位置。未改代码 |
+| v0.3 | 2026-11-20 | §10 第 1 条「e 方案 C」落码:定下不变量 2 的措辞(同一会话 = 同一 (gate 实例, session_id))与「连接身份是请求身份的一部分、不是栅栏前的另一道判定」;RPC0 入站侧握手时把对端 node_uuid 记在连接的 channel 上;scene 入场栅栏、客户端消息入口(含 ExitGame)、入场被拒提示、改派条目按实例认会话;login 跨实例同号改回踢线(删 `skip_cross_instance`)。正文 §0、§1.1、§1.4、§2.2 ⑤、§2.5、§6.6、§6.8、§10、§12.3 同步改写,详见 §14。未编译、未测试 |
 | v0.2 | 2026-10-16 | 按「正确性」(C-F1–F8)与「发布与可实施性」(R-F1–F14)两路对抗复核修订,逐条处置见 §12。主要变化:①发布 / 回滚总顺序改为硬约束(§0),player_locator 先于 scene_manager 与 login;②b 写明 `keep_newer` 不漏删的前提,Reconnect 重放分支补比代次,`keep_conflict` 改用「会话有效」口径;③d 的 legacy 行不降级已有身份,samePlacement 推路由失败不回滚身份,`expectLoc` 零值语义写明并由行为用例守住三处生产构造点;④a 复读确认已提交时补挂断线租约,本链实例号为空一律不踢,T4 反向顺序登记为残余,§1.4 如实写明 R13 下 d1 仍成立;⑤e 的风险核对改为如实描述对账器兜底;⑥§7 按工作区重新核对在途改动,生成器用例改放新文件,player_locator 包内测试约定唯一假实现与前缀,W3 加「全域到账续批」写入方停手的前置条件;⑦§8 改为生成基线比对 + 两轮 Codex 运行(先复现后修复);⑧§9 Java 结论按 PARITY.md 改写并补 ContractSync 同步要求。未改代码,未编译、未测试 |
 
 ## 12. 复核意见处置表
@@ -1439,6 +1450,9 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 > - 第 2 点另立项,本批不做。
 > - 第 3 点另立项,本批不做(§10 第 11 条)。
 > - 第 4 点的协调由主线向负责人报告;W3 动 `player_lifecycle.cpp/.h` 时只做区段化最小 Edit,与写入方的在途区段不重叠。
+>
+> **2026-11-20 更新**:第 2 点已立项并落码(方案 C,§14);第 1 点随之改为「保留踢线」(⑤ 第 4 行照踢,`skip_cross_instance` 删除)。
+> 两点都按负责人「按最标准的做」的授权定,负责人可推翻。
 
 1. **a 的跨实例同号踢线(§2.2 ⑤ 第 4 行)留不留**。
    - 保留踢线:旧设备不再以同号、同玩家的身份向 scene 串话;代价是 I1 关闭旧连接时立刻发出 `ExitGame(3:k, P)`,若晚于新会话的
@@ -1457,14 +1471,14 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 
 ## 13. 落码记录(2026-10-16,全部未编译、未测试)
 
-按 §7 三组并行落码,每组「实现 → 只读复核 → 修复」各一轮。三组复核都没有发现正确性或数据一致性问题;下表只列与设计正文的出入和留给后续的项。给 Codex 的命令汇总在 [codex-verification.md](../handoff/landing-fencing-takeover-20261016/codex-verification.md)。
+按 §7 三组并行落码,每组「实现 → 只读复核 → 修复」各一轮。三组复核都没有发现正确性或数据一致性问题;下表只列与设计正文的出入和留给后续的项。给 Codex 的命令汇总在 `docs/handoff/landing-fencing-takeover-20261016/codex-verification.md`（已清理，见 `ccf2840b2`）。
 
 ### 13.1 W1(a + e)
 
 - 落地:`gate_event.proto` 2/3、`player_locator.proto` 两个 4 号字段;login 提交后踢线、复读消歧(独立 2s ctx)、复读确认已提交时经 `compensateFenceBind(placeLease=true)` 补挂租约(10s 预算,不与复读共用 ctx)、`login_kick_total{result}`(`sent / send_failed / skip_same_session / skip_cross_instance / skip_no_target / skip_uncommitted`);gate `ClassifyKick`(守护段内);player_locator `player_locator_stale_gate_instance_total{op}`。
 - 与正文的出入(以代码为准,正文 §2 / §6 相应条目按此理解):
   - **§6.2 / §6.4**:login 侧**不做**实例号本地预检(复核 W1-R1)。`DeleteSession` 只保留会话号预检,`ExpectedGateInstanceId` 原样随 `MarkOffline` 发出,由 player_locator 在同一份字节上判定、打 Info、计 `op=mark_offline`——同一判定只留一处权威,代价是罕见的跨实例同号多一次 RPC。§6.7 的 login 用例相应改为 `TestDeleteSession_LeavesGateInstanceCheckToLocator`、`TestLeaveGame_CrossInstanceReportLeftToLocator`。
-  - **§2.7**:`TestEnterGame_SameSessionDifferentInstanceKicks` 按 §12.3 定论改名 `…SkipsCrossInstance`(踢 0 次、`skip_cross_instance` +1);`TestEnterGame_SameSessionSameInstanceDoesNotKick` 加了 `skip_same_session` 计数断言,在旧代码上是「只差计数的红」。
+  - **§2.7**:`TestEnterGame_SameSessionDifferentInstanceKicks` 按 §12.3 定论改名 `…SkipsCrossInstance`(踢 0 次、`skip_cross_instance` +1;2026-11-20 方案 C 落地后改回 `…Kicks`、删掉这个 result,§14.3);`TestEnterGame_SameSessionSameInstanceDoesNotKick` 加了 `skip_same_session` 计数断言,在旧代码上是「只差计数的红」。
   - 踢线的 `player_id` 取本链 `state.playerID`(与会话记录恒等;避免旧记录缺字段时 gate 退化成不核对玩家的旧式踢线)。
   - player_locator 原先没有业务指标文件,计数器与纯函数 `isStaleGateInstanceReport` 放在 `setdisconnectinglogic.go`,`markofflinelogic.go` 共用。
 - §8 第一轮红跑:修复与接缝已一起落在工作区,第一轮用 W1 交付的 `w1_redrun.py` 机械切换 3 个文件、跑完按 sha256 逐字节恢复(见命令汇总)。
@@ -1492,3 +1506,205 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 ### 13.4 Java 版(AGENTS §12)
 
 本批只改服务端内部契约(Kafka 命令、player_locator / scene_manager / scene_node 的 gRPC、location 存储格式),不改客户端可见契约。Java 仓需同批运行 `ContractSync` 同步 `game-proto` 副本(否则 `--check` 报漂移);功能结论按 §9:a 不适用(留 1 个待核点)、b / c / d 不适用(结构不同,b/d 留 1 个待核点)、e 待核实。已在 Java 仓 `PARITY.md` 登记。
+
+## 14. e 方案 C:scene 按 (gate 实例, session_id) 认会话(2026-11-20 落码,未编译、未测试)
+
+来源:§10 第 1 条;[断线重连总纲](infra-reconnect-overview.md) §4 末尾「原待确认的五条」第 2 条在 2026-11-19 核实为残余。
+后果只伤活性(新会话进入断线保留、25s 后退出存盘、玩家要重登),不丢数据。
+
+### 14.1 两处措辞的定论
+
+按负责人「按最标准的做」的授权定(负责人可推翻)。
+
+**① 不变量 2「同一会话一律放行」里的「同一会话」**
+
+- 原文:同一会话号只经同一条 gate→scene 连接到达,FIFO 之下到达序就是 gate 的决策序(fence §5.2)。
+- 定论:**同一会话 = 同一 (gate 实例, session_id)**。会话号相同,且两边的 gate 实例都已知时实例也相同
+  (`enter_fence::SameGateInstance`)。gate 实例取自请求所走 RPC0 入站连接的握手身份(gate 进程启动时生成的 node_uuid),
+  不取消息体自报的值。任一边未知(空)时按会话号认:托管落点等不经 gate 连接的入场、实例记下之前建出的实体,
+  与改动前同一口径,也与 player_locator 按实例号忽略断线上报的规则(§1.4)一致。
+- 理由:会话号由 gate 的 node_id 派生(`node_id<<17 | 序号`),同一 node_id 短暂有两个 gate 进程时同号可以出自两个进程,
+  会话号本身标识不了一条会话。按 (实例, 会话号) 定义之后,原文的前提由定义保证:一个 gate 进程到一个 scene 只有一条当前连接
+  (出站 client 按 uuid 复用),会话号由这个进程独占发号(同进程内序号回绕是 R14,见 §6.8)。fence §5.2 原有一句「旧进程的迟到帧
+  在新进程的入场之后到达,实际不会发生」不成立:被踢、冲突收尾、进程退出都会让老进程在新进程服务期间发出同号消息(§6.1),
+  fence 正文已改写。
+- 判定表不加行:会话号相同而实例不同,落进按代次裁决的各行。老进程迟到的入场代次更小 → `kRejectStale`;相等 → `kRejectConflict`
+  (G2 冲突);新进程上更新的登录 → `kAdmitNewer`。
+
+**② 「入口前多一道连接级判定」与「栅栏是第一步」的字面冲突**
+
+- 定论:**不加连接级判定**。连接身份是请求身份的一部分:入口组请求上下文时读出它(`SceneHandler::PlayerEnterGameNode` 填
+  `PlayerEnterContext::gateInstanceId`),与读请求字段同类,只读、零副作用。入场的身份判定仍然只有栅栏这一步,请求身份由
+  (会话号, 登录代次) 扩成 (gate 实例, 会话号, 登录代次)。角色登记 `RoleAdmissionSystem::RequestEnter` 在 SQL 登记之前的预检与
+  `HandleEnterGameNode` 第 0 步用同一个 `JudgeEnter`,两处都带实例。
+- 客户端消息(含 gate 代发的 ExitGame)不是入场、不过栅栏。实例核对并进它原有的会话身份守卫:排在 `CheckRoutedPlayerIdentity`
+  之后、陈旧会话守卫与两处 `erase` 之前,同样只读。
+- 不变量 1「入口栅栏第一步且零副作用」因此字面成立,不需要改写。
+
+### 14.2 设计
+
+**连接身份。** RPC0 入站侧握手成功时,`NodeHandshakeManager::OnNodeHandshake` 经 `RpcChannel::RecordHandshakePeer` 把对端
+node_uuid 记在这条连接的 `RpcChannel` 上,先于回成功。发起方收到成功才 Ready、才发业务(`Readiness::kAfterHandshake`),
+所以这条连接上的业务调用一律读得到它。派发时 `RpcController` 按引用带上它,handler 用 `RpcController::HandshakePeerUuid()` 读。
+
+- 为什么记在连接上、不从 gate 节点实体反查:gate 从 etcd 摘除时 scene 销毁它的节点实体(连同 `RpcSession`),入站 TCP 连接却还开着
+  (§6.8 已核实)。新进程要等老进程的租约过期才拿到 node_id,所以新进程存在时老进程的实体多半已被销毁,反查恰好查不到。
+- 出站 channel 上恒为空;没有握手成功的连接上为空(未知、不比较)。握手身份不是鉴权(muduo-rpc-channel.md §8.3)。
+
+**会话身份记在哪。** `SessionMap` 不改(仍是 session_id → player_id)。实例跟着会话的三处当前身份走:
+
+- 实体:`PlayerLoginIdentityComp::gateInstanceId`,由 `RecordLoginIdentity` 写。换了会话照写(未知也照写);同一会话只在带来了
+  已知实例时改,托管落点不带实例时不把已知实例抹成未知。
+- 待入场上下文:`PlayerEnterContext::gateInstanceId`。
+- 改派待确认条目:票据的 `gateInstanceId` 改取会话绑定时记下的实例(`BoundGateInstanceId`;没记下才按 node_id 查)。
+- 同号的两条会话不会同时在 `SessionMap` 里(与改动前一样,后放行的覆盖)。老进程上另一名玩家的同号旧映射本来就被
+  `CheckRoutedPlayerIdentity` 按玩家挡下,不变。
+
+**三个面。**
+
+1. 迟到的入场:栅栏按实例判(§14.1)。会话号相同、实例不同的新登录按代次接管;老进程迟到的入场按代次拒。几处「是不是同一会话」
+   的判断同口径:覆盖待入场上下文时的合并(会话号相同、实例不同时不擦映射,它刚被这次预登记覆盖)、`EnterScene` 的
+   「换没换客户端」、`ReconcileRelocateOnReentry` 的「就是票据那条会话」。
+2. ExitGame:`ProcessClientPlayerMessage` 问 `PlayerLifecycleSystem::IsStaleGateInstance`:玩家当前会话(实体的身份组件;
+   载入在途时为待入场上下文)与消息的会话号相同、两边实例都已知且不同。是就不派发、不擦映射、不取消载入。
+3. 旧客户端消息:同一道核对。答复与「会话不在」一致:换节点执行含义不变的请求答稍后重投,其余空应答(gate 回 1003)。
+   新进程上同号会话的消息若赶在它自己的入场(角色登记途中)前面到,登记完重投就能受理;老进程的重投一直对不上,
+   gate 的有界等待到期后回 1003。
+
+**被拒入场的提示只推给请求出自的进程。** 栅栏现在会拒「会话号相同、实例不同」的请求,按会话号推 3023 会落到新进程上同号的
+活玩家身上,Unity 客户端收到即断线。`SendTipToPendingSession` 带上请求的实例,走 `PushToSessionViaGate` 既有的实例核对,
+对不上就不推。角色登记的各条拒绝路径同改;`RoleAdmissionSystem` 的测试接缝 `dependencies.reject` 签名不变。
+
+**可观测性。** 入场拒绝照旧计在 `[EnterFence]` 的 `reject_*`,WARN 行加 `gate_instance=`,当前身份格式为 `会话/代次@实例`。
+客户端消息新增 `stale_gate_instance_rejected`(计入拒绝类,有增长时整行升 WARN),另采样一行 WARN(每 1024 条一行)。平时恒为 0。
+
+**login。** §2.2 ⑤ 第 4 行改回踢线,`login_kick_total` 删掉 `skip_cross_instance`,改计入 `sent` / `send_failed`;
+踢线成功的日志加 `new_instance`。
+
+**不改。** proto、gate、player_locator、scene_manager、location 存储格式、`SessionMap` 的键。没有新的 proto 字段,不需要协议生成。
+
+### 14.3 逐文件改动
+
+| 文件 | 改动 |
+|---|---|
+| `cpp/libs/engine/core/network/rpc_channel.h/.cpp` | `HandshakePeerUuid()`、`RecordHandshakePeer`;`CallServiceMethod` 把握手身份交给 ctx |
+| `cpp/libs/engine/core/network/rpc_controller.h` | 两参构造、`HandshakePeerUuid()` |
+| `cpp/libs/engine/core/node/system/registration/registration_manager.cpp` | 登记成功后、回成功之前记下对端 uuid |
+| `cpp/libs/services/scene/player/system/enter_fence.h` | 身份组件与 `Identity` 带实例;`SameGateInstance`;`Decide` / `DecideAll` 带请求实例(缺省空,只给纯函数单测);计数 `staleGateInstanceRejected`;头注释的不变量措辞 |
+| `cpp/libs/services/scene/player/system/player_lifecycle.h/.cpp` | `PlayerEnterContext::gateInstanceId`;`JudgeEnter` / `RecordLoginIdentity` / `RejectRoleAdmission` / `ReconcileRelocateOnReentry` 带实例;新 `IsStaleGateInstance`;栅栏三处身份与日志格式;`SendTipToPendingSession` 按实例推;待入场合并;`sessionChanged`;票据取 `BoundGateInstanceId` |
+| `cpp/libs/services/scene/player/system/role_admission_system.cpp` | 预检带实例;拒绝提示带实例 |
+| `cpp/libs/services/scene/core/system/redis.cpp` | `[EnterFence]` 行加 `stale_gate_instance_rejected` |
+| `cpp/nodes/scene/handler/rpc/scene_handler.cpp`(守护段) | `PlayerEnterGameNode` 读连接身份;`ProcessClientPlayerMessage` 跨实例不派发;`UpdateSessionDetail` 带实例 |
+| `go/login/internal/logic/clientplayerlogin/entergamelogic.go`、`metrics.go` | ⑤ 第 4 行照踢;删 `skip_cross_instance` |
+| 测试 | §14.4 |
+
+不新增 `.cpp`,不动 vcxproj / CMakeLists;C++ 不新起线程。
+
+### 14.4 测试与变异核对
+
+| 用例 | 面 | 断言 |
+|---|---|---|
+| `GateInstanceFence.SameGateInstanceComparesOnlyWhenBothAreKnown` | — | 实例只在两边都已知时比较 |
+| `GateInstanceFence.ReusedSessionIdOnAnotherGateProcessIsNotTheSameSession` | 迟到入场 | 判定表:同号异实例按代次裁决;同实例、或一边未知仍是同一会话;改派条目那一处同样按实例 |
+| `GateInstanceFenceEcs.LateEnterFromOldGateProcessIsRejected` | 迟到入场(复现) | 新进程同号新登录按 `admit_newer` 接管;老进程迟到的入场 `kRejected`、`reject_stale` +1、绑定不变;新进程同一会话的重复路由照旧放行 |
+| `GateInstanceFenceEcs.LateEnterFromOldGateProcessDuringLoadKeepsThePendingLoad` | 迟到入场(载入中) | 新进程覆盖待入场上下文后映射还在;老进程补发被拒,待入场与载入不变 |
+| `GateInstanceFenceEcs.ExitGameFromOldGateProcessIsStale` | ExitGame(复现) | 新进程接管后,老进程的同号消息判为跨实例;当前会话、未知连接、别的会话号、本节点没有的玩家都不是;判定只读、不计数 |
+| `GateInstanceFenceEcs.OldClientMessagesDuringLoadAreStaleAndCannotCancelTheLoad` | 旧客户端消息 | 载入在途时按待入场上下文认实例,预登记映射还在 |
+| `GateInstanceFenceEcs.EnterWithoutGateInstanceKeepsTheKnownInstanceOfTheSameSession` | 迟到入场 | 不带实例的同一会话不抹掉已知实例;换了会话照写;没有会话的绑定什么都不改 |
+| `GateInstanceFenceEcs.RelocateEntryRemembersTheGateProcessOfTheSession` | 迟到入场(改派条目) | 条目记的是会话绑定时的实例;老进程同号的迟到入场被拒,条目不被误结清 |
+| `RpcChannelLoopback.HandshakePeerRecordedOnTheInboundChannelReachesEveryLaterDispatch` | 连接身份 | 记下之前 ctx 上为空,之后每次派发都读得到;空连接不记;出站 channel 恒为空 |
+| `TestEnterGame_SameSessionDifferentInstanceKicks`(go/login) | login | 跨实例同号踢 1 次、目标实例是旧实例、`sent` +1;事件序列 GetSession → SetSession → Kick |
+| `TestEnterGame_SameSessionSameInstanceDoesNotKick`(go/login,改) | login | 同一连接不踢,`skip_same_session` +1、`sent` 不变 |
+
+C++ 用例在 `cpp/tests/cross_zone_test/cross_zone_test.cpp` 末尾与 `cpp/tests/rpc_controller_test/rpc_channel_loopback_test.cpp`。
+同步改的既有用例:`cross_zone_test.cpp` 与 `role_admission_test.cpp` 的 `JudgeEnter` 调用补实例参数;
+`ActingLoginGeneration.MatchingSessionYieldsGeneration` 去掉对 constexpr 身份变量取地址的那条 `static_assert`(身份组件带 `std::string`
+之后不再能做 constexpr 变量;编译期可求值仍由 `NoIdentityComponentYieldsZero` 的 `static_assert` 守着,取值仍由同一用例的运行期断言守着)。
+
+**先复现、再修复。** 新用例引用新字段与新函数,在旧代码上编不过,拿不到旧行为上的红跑记录;按仓里的变异口径给证据。
+每个变异单独做、跑完恢复,期望如下:
+
+| 变异 | 期望变红 |
+|---|---|
+| M1 `enter_fence::SameGateInstance` 改成恒 `return true;`(= 旧口径「同号即同会话」) | 上表 C++ 部分除 `RpcChannelLoopback` 那条外,所有注明「变异红」的断言(复现残余的是 `LateEnterFromOldGateProcessIsRejected` 与 `ExitGameFromOldGateProcessIsStale`) |
+| M2 `RecordLoginIdentity` 里实例改成会话有效就无条件照写 | `EnterWithoutGateInstanceKeepsTheKnownInstanceOfTheSameSession` |
+| M3 `BoundGateInstanceId`(§14.7 起在 `network_utils.cpp`)删掉取身份组件实例那一支(= 票据实例改回按 node_id 查) | `RelocateEntryRemembersTheGateProcessOfTheSession`;§14.7 的用例另见那一节 |
+| M4 覆盖待入场上下文时的擦除条件去掉 `previousSessionId != sessionId` | `LateEnterFromOldGateProcessDuringLoadKeepsThePendingLoad` |
+| M5 `RpcChannel::CallServiceMethod` 改回 `RpcController controller(connection);` | `HandshakePeerRecordedOnTheInboundChannelReachesEveryLaterDispatch` |
+| M6 `kickReplacedSession` 恢复「会话号相同、实例不同 → 不踢」 | `TestEnterGame_SameSessionDifferentInstanceKicks` |
+
+没有行为测试的接线(宿主不跑节点层、没有 gate):`scene_handler.cpp` 里读连接身份与跨实例不派发的那几行、
+`OnNodeHandshake` 调 `RecordHandshakePeer` 的那一行、被拒提示按实例核对(`PushToSessionViaGate` 的既有分支)、
+`ReconcileRelocateOnReentry` 的票据作废条件。它们只把已测的判定接到入口,靠静态阅读;双 gate 同号的端到端冒烟没有现成场景,未做。
+
+### 14.5 发布与回滚
+
+- 发布:scene 与 player_locator(e)都先于 login(§0)。项目未上线,同批发布即可;scene 与 gate 本来同批升级(握手身份核对对空值
+  fail-closed,[muduo-rpc-channel.md](muduo-rpc-channel.md) §8.3 约定不保留旧版混跑)。
+- 新 scene + 旧 login:login 仍只计数不踢,行为与改动前相同,scene 多挡下老进程的迟到入场与消息。
+- 旧 scene + 新 login:旧 scene 不认实例,老进程关闭旧连接时的 ExitGame 会让新会话进入断线保留(§2.2 ⑤ 的连带后果),必须避免。
+  所以回滚 scene 之前先回滚 login。
+- 不涉及持久数据:新增的都是运行时内存(连接上的握手身份、身份组件与上下文里的实例号),不进 PlayerAllData、不进 Redis。
+
+### 14.6 残余
+
+- **location 不记实例号**:scene_manager 的 d 判定表仍「会话号优先」,A 迟到的 EnterScene{3:k, gA} 在 SM 被判 `admit_same_session`
+  (R13,§1.4、§5.8)。路由按 `target_instance_id` 只投给老实例,老进程转来的入场在 scene 被拒,实体不受影响;剩下的只是 location
+  身份的口径。location 记实例号要与 GO-3 一起定字段号,另立项。
+- **scene → gate 的回推按 node_id 找 gate**:已落码(2026-11-20,未编译、未测试),见 §14.7。回推与 scene 自发的请求按身份组件
+  记下的实例找 gate,找不到不退回按 node_id;实例未知(旧实体、托管落点建出的实体)时仍按 node_id,与改动前相同。
+- **托管落点不带实例**:托管落点经 scene_manager 的 Kafka 事件到达,不经 gate 连接。在别的节点上建出的托管实体,身份组件的实例未知,
+  老进程同号的迟到入场在那个节点上按会话号认(与改动前同一口径)。要补得让 location 与托管落点事件带上实例,随第一条(location
+  记实例号)一起做。
+- **双方都没有登录代次**:会话号相同、实例不同、代次都为 0 时按判定表走 `kAdmitLegacy`(后到者胜)。只有旧版 login 不铸代次时才会出现,
+  login 全量铸造后不可达。
+- **Java 版**:Java 网关不走 RPC0 握手,会话与归属模型不同(§9);是否有同类窗口待核实,已在 Java 仓 `PARITY.md` 登记待做。
+
+### 14.7 回推与自发请求按会话所在的 gate 进程找 gate(2026-11-20 落码,未编译、未测试)
+
+收口 §14.6 第二条。后果只伤活性:绑在新进程上的会话的回推投到老进程(那里的同号会话是同一名玩家的旧连接或已关闭,新客户端
+收不到;是别的玩家时由 gate 的身份栅栏 R13 拦下),自发的 EnterScene 带成老进程的实例(下游按它做 Kafka 目标校验,结果通知投错进程)。
+
+**规则。** 会话所在 gate 的实例已知(身份组件记的会话就是这一条、实例非空)时只按实例找 gate 实体,找不到就当 gate 不在,不退回按
+node_id 投给同一 node_id 上的另一个进程;实例未知时按会话号里的 node_id 找,与改动前相同。三个入口都在引擎层 `network_utils.h`:
+
+| 入口 | 用途 | 调用点 |
+|---|---|---|
+| `ResolveSessionGateEntity(sessionId, gateInstanceId)` | 按带来的实例找;空串按 node_id(`ResolveLocalZoneGateEntity`,原样保留) | `PushToSessionViaGate`(载入在途的提示、改派票据的踢线)、`UpdateSessionDetail` 的 gate 预检(实例取入站连接的握手身份,与它的栅栏同一个) |
+| `ResolvePlayerGateEntity(player, sessionId)` | 按玩家实体身份组件记下的实例找 | `SendToPlayerClient`、`BroadcastToPlayerClients`、`BroadcastToSceneClients` |
+| `BoundGateInstanceId(player, sessionId)` | 自发请求的 `gate_instance_id`:记下的实例(那个进程此刻不在本节点上也照带,由下游按实例裁决)→ 否则按 node_id 找到的 gate 的 uuid → 空串 | EnterSceneC2S、建镜像后的跟进、组队跟随、跨 zone 传送、改派票据、战斗路由快照 |
+
+- `BoundGateInstanceId` 原是 `player_lifecycle.cpp` 匿名命名空间里给改派票据用的函数(§14.2),语义不变,挪到 `network_utils` 给各调用点共用;
+  同文件只按 node_id 取 uuid 的 `ResolveGateInstanceId` 删除。
+- `PlayerLoginIdentityComp` 的定义挪到 `engine/core/type_define/player_login_identity_comp.h`(先例 `PlayerGuidComp`),`enter_fence.h` 包含它。
+  推送在引擎层,不能包含 scene 服务层的头;组件只是数据,栅栏判定仍全在 `enter_fence.h`。
+- `PushToSessionViaGate` 按实例找到的就是那个进程,原来「按 node_id 找到再比 uuid」的比对删去。找不到时同一 node_id 上还有别的 gate 计
+  `kGateReplaced`,否则 `kGateGone`。与原来的一处差异:原来按 node_id 找到的另一个进程若没有 `RpcSession` 或连接已断计 `kGateGone`,
+  现在计 `kGateReplaced`。只影响 `[RelocateConfirm]` 汇总行 `push_*` 的分类,不影响推不推。
+- 开销:按实例找是对本 zone gate 表的线性扫描、比字符串,与原来按 (zone, node_id) 扫描同阶(uuid 随机,多数比较在首字符结束);
+  广播仍是每名玩家找一次。
+
+**测试与变异核对**(`cpp/tests/cross_zone_test`,宿主里两个同 (zone, node_id) 的 gate 实体):
+
+| 用例 | 断言 |
+|---|---|
+| `GateInstanceRouteEcs.PushGoesOnlyToTheGateProcessThatHoldsTheSession`(复现) | 绑哪个进程就找到哪个(两种绑定各一次,不论实体遍历顺序,旧代码必红一条);那个进程的实体销毁后找不到、不退回另一个进程;`BoundGateInstanceId` 照带记下的实例 |
+| `GateInstanceRouteEcs.UnknownInstanceFallsBackToTheNodeIdOfTheSession` | 没有身份组件、实例未知、身份记的是另一条会话:按 node_id;按会话直推不带实例:按 node_id;本 zone 没有这个 node_id 的 gate:找不到、实例为空 |
+| `PlayerTeamFollowTest.DifferentSceneRequestNamesTheGateProcessThatHoldsTheSession`(复现,在 `player_team_follow_test.cpp`) | 组队跟随发出的 EnterScene 带会话所在进程的实例(绑在按 node_id 先找到的那个以外的进程上) |
+
+| 变异 | 期望变红 |
+|---|---|
+| M3(同 §14.4)`BoundGateInstanceId` 删掉取身份组件实例那一支 | `PushGoesOnlyToTheGateProcessThatHoldsTheSession` 的 `BoundGateInstanceId` 断言、`DifferentSceneRequestNamesTheGateProcessThatHoldsTheSession`,以及 §14.4 的 `RelocateEntryRemembersTheGateProcessOfTheSession` |
+| M7 `ResolveSessionGateEntity` 改成恒 `return ResolveLocalZoneGateEntity(sessionId);`(= 旧口径) | `PushGoesOnlyToTheGateProcessThatHoldsTheSession` 注明「变异红」的断言 |
+
+没有行为测试的接线(宿主里 gate 实体没有连接,推不出可观察的结果):`client_message_sender.cpp` 三处改调 `ResolvePlayerGateEntity`、
+`PushToSessionViaGate` 的按实例找与 `kGateReplaced` 分类、`UpdateSessionDetail` 的预检、组队跟随与改派票据以外 4 处 `BoundGateInstanceId`
+调用点(EnterSceneC2S、建镜像后的跟进、跨 zone 传送、战斗路由)。
+它们只把已测的函数接到原调用点,靠静态阅读。
+
+**文件。** `cpp/libs/engine/core/network/{network_utils.h,network_utils.cpp,client_message_sender.h,client_message_sender.cpp}`、
+新 `cpp/libs/engine/core/type_define/player_login_identity_comp.h`(登记进 `core.vcxproj` / `.filters`;不新增 `.cpp`,CMakeLists 不动)、
+`cpp/libs/services/scene/player/system/{enter_fence.h,player_lifecycle.cpp,player_scene.cpp,player_team.cpp}`、
+`cpp/libs/services/scene/battle/system/player_battle.cpp`、`cpp/nodes/scene/handler/rpc/player/player_scene_handler.cpp`(守护段)、
+`cpp/nodes/scene/handler/rpc/scene_handler.cpp`(守护段)、`cpp/tests/cross_zone_test/{cross_zone_test.cpp,player_team_follow_test.cpp}`。
+不改 proto、gate、scene_manager;不新起线程。发布与回滚同 §14.5:只改 scene 一侧的运行时查找,不涉及持久数据。

@@ -296,7 +296,7 @@
 **④ 重试只交给分区属主**
 - 属主表:claim 的 ctx 还活着就是属主;新增 `kafka:retry:queue:{topic}:p{N}`,分拣用单条 Lua;`RetryRouting` 开关(shared/owner);"认领之后、执行之前"的每个出口都要原子搬走收据。
 - p* 搬回工具与三条告警;merge_zone 预检用 SCAN 查 p*,SCAN 失败就拒绝;`replicas ≤ PartitionCnt` 门禁。
-- 前置:按 [placement-reverify-checklist](../handoff/placement-reverify-checklist-20261012.md) 跑通双 db 实例那几项(be6b4ab1d 从未编译运行)。
+- 前置:按 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） 跑通双 db 实例那几项(be6b4ab1d 从未编译运行)。
 - 上线:kind 上确定性注入演练 → 发布批 1(shared)→ 单 zone `DB_RETRY_ROUTING=owner` 被动观察(owned 分区求和 = 10、executed_nonowner = 0)→ db.yaml 改 owner 逐 zone restart。回滚到旧镜像前必须先让 p* 归零或执行搬回工具。
 
 **⑤ guild 多实例上 K8s**

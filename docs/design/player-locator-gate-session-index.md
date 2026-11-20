@@ -1,6 +1,6 @@
 # player_locator 会话对账:按 gate 实例建会话索引(2026-10-18)
 
-> **状态**:已落码,**未编译、未测试,待 Codex 验证**(AGENTS §10.1)。规格与核实意见:[spec_B0-1_reconcile_by_gate.md](../handoff/launch-readiness-20261013/spec_B0-1_reconcile_by_gate.md);负责人 2026-10-17 拍板「索引在既有三段会话 Lua 里与会话写入原子维护」。核实意见的 3 条 must(单 leader 无法让位、etcd 一抖就作废补建、标记与代次只在进程内)已按 §4 的做法改设计后落码。
+> **状态**:已落码,**未编译、未测试,待 Codex 验证**(AGENTS §10.1)。规格与核实意见:`docs/handoff/launch-readiness-20261013/spec_B0-1_reconcile_by_gate.md`（已清理，见 `ccf2840b2`）;负责人 2026-10-17 拍板「索引在既有三段会话 Lua 里与会话写入原子维护」。核实意见的 3 条 must(单 leader 无法让位、etcd 一抖就作废补建、标记与代次只在进程内)已按 §4 的做法改设计后落码。
 >
 > 代码:`go/player_locator/internal/logic/{keys.go, session_cas.go, gate_session_index.go, gate_sweep.go, slot_shard.go, leasemonitor.go, session_reconciler.go, reconcile_view.go, reconcile_metrics.go}`、`internal/node/node.go`(能力键)、`player_locator.go`(装配);告警 `deploy/k8s/player-locator-alerts.yaml`。
 >

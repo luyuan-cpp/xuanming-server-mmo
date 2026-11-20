@@ -2,7 +2,7 @@
 
 > **2026-11-06 现状(先读)**:新号的落点规则已改为「每地域固定 K 个地域存档库,按 `player_id % K` 选库」,和区无关,决定与拆批见[总体方案 §7.2](./player-data-tidb-scaling-plan.md)。本文的落点编号、库名规则(§4.2)、目录只记 `storage_id`、go/db 只按目录选库这几条仍然成立;「新号钉全局库 `player_store_1000000_db`、存量按 zone 冻结式搬库」(Phase 2)和 `NewPlayerStorageId` 已被取代:按玩家搬库不做(10-31 定),扩容靠整库搬集群;本机与 docker 调试栈的新号落 `player_store_1000000_db`(地域 0 的唯一地域库,A17a);K8s 按 `-Region`、`-PlayerStoreShards` 落本地域的 K 个存档库,login 没配 `StorageShards` 拒绝启动,`NewPlayerStorageId` 已删(A17b,2026-11-10 落码未编译)。下面各节保留当时的推导,正文按 §7.2 重写列在 A17c。
 > **状态**: v2.4 — 2026-10-12(v2.4 只做现状校准,设计不变:运行状态、启用状态、§8.2 / §10.4 / §11.4 与事实对齐,见 §16)。v1 经 5 视角对抗评审(42 条成立,含 2 条 blocker)后重写,见 §16;v2.1 按同批落码的实现汇报修订了与实现不符之处(各节标「实现口径」);v2.2 同步复核修复的行为变化(标「v2.2」);v2.3 只改 §4.3 / §9 / §10.1 的能力标记参数口径。汇总见 §16。
-> **运行状态(2026-10-12)**:代码随 `4493b3c9f`(2026-09-29)进 main;同日跑过一轮验证(Go 各模块 build / vet / test 全过、merge_zone 集成测试 83 条 PASS(67 个顶层 + 16 个子用例)、data_service Redis 集成 31 个 PASS、C++ `cross_zone_test` 105/105),由 Claude 按用户指示执行、不是 Codex(PROGRESS.md「2026-09-28 玩家存储落点」条目的「运行验证」)。`-race`、压测、真实集群演练从未做;C++ 整方案编译被与本方案无关的既有问题挡住。**之后 `be6b4ab1d`(10-08)改了 go/db 的重试队列认领与 `tools/merge_zone` 的预检 / 审计,均未编译,当前 HEAD 待按 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md) 复验。**
+> **运行状态(2026-10-12)**:代码随 `4493b3c9f`(2026-09-29)进 main;同日跑过一轮验证(Go 各模块 build / vet / test 全过、merge_zone 集成测试 83 条 PASS(67 个顶层 + 16 个子用例)、data_service Redis 集成 31 个 PASS、C++ `cross_zone_test` 105/105),由 Claude 按用户指示执行、不是 Codex(PROGRESS.md「2026-09-28 玩家存储落点」条目的「运行验证」)。`-race`、压测、真实集群演练从未做;C++ 整方案编译被与本方案无关的既有问题挡住。**之后 `be6b4ab1d`(10-08)改了 go/db 的重试队列认领与 `tools/merge_zone` 的预检 / 审计,均未编译,当前 HEAD 待按 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） 复验。**
 > **启用状态(2026-10-12)**:所有环境 `PinOnCreate=false`、`Required=false`,K8s ConfigMap 不写 `Placement` 段;没有执行过 pin 合服 / pin-placement / relocate 的记录;`player_store_1000000_db` 没有在任何部署里建过;玩家主库全部在 MySQL(dev `127.0.0.1:3306`,K8s `mysql:8.0`),TiDB 只有 dev 的 `deploy/docker-compose.tidb.yml`。所以现网的有效落点 = home_zone 对应的 `zone_{home}_db`,逻辑归属与物理库仍一一对应。
 > **范围**: 把「玩家属于哪个区」(home_zone,逻辑归属)与「玩家主数据存在哪个库」(placement,物理落点)拆开;
 > 合服只改归属、不再搬玩家行;新增冻结式单玩家 / 批量搬库;TiDB Phase 2 全局库落成「多一种落点库」,可逐玩家迁移、逐玩家回退。
@@ -10,7 +10,7 @@
 > **关联**: [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md)(Phase 2 路线,本文修订其落地方式)、
 > [cross-zone-scene-travel.md](./cross-zone-scene-travel.md)(CZ-2 共享 Redis、owner_epoch)、
 > [server-merge-gap-fixes.md](./server-merge-gap-fixes.md)、[../ops/merge-zone-runbook.md](../ops/merge-zone-runbook.md)、
-> [zone-home-and-physical-storage-conversation-20260924.md](../handoff/zone-home-and-physical-storage-conversation-20260924.md)(概念讨论原文)。
+> `docs/handoff/zone-home-and-physical-storage-conversation-20260924.md`（已清理，见 `ccf2840b2`）(概念讨论原文)。
 
 ---
 
@@ -382,7 +382,7 @@ TiDB 决策 D1 的「映射持久化兜底表」仍是遗留项(§11.4)。
 
 ### 11.3 本批落码
 
-见 PROGRESS.md 条目「2026-09-28 玩家存储落点(placement)+ 合服工具缺口修复 落码」(以实际提交为准)。该条目列出了各组件改动的文件、未验证项、交给 Codex 的验证清单(按依赖排序)与剩余风险。落码时未编译、未测试;2026-09-29 按用户指示跑过一轮,结果见该条目「运行验证」。当前 HEAD 的复验清单(覆盖 09-29 之后 `be6b4ab1d` 等提交对 go/db、`tools/merge_zone` 的改动)见 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md)。
+见 PROGRESS.md 条目「2026-09-28 玩家存储落点(placement)+ 合服工具缺口修复 落码」(以实际提交为准)。该条目列出了各组件改动的文件、未验证项、交给 Codex 的验证清单(按依赖排序)与剩余风险。落码时未编译、未测试;2026-09-29 按用户指示跑过一轮,结果见该条目「运行验证」。当前 HEAD 的复验清单(覆盖 09-29 之后 `be6b4ab1d` 等提交对 go/db、`tools/merge_zone` 的改动)见 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`）。
 
 ### 11.4 仍卡住生产切换的前置(本批不做)
 
@@ -532,7 +532,7 @@ TiDB 决策 D1 的「映射持久化兜底表」仍是遗留项(§11.4)。
   - 文档同步时新发现:能力标记改成 TTL 之后,与 runbook T-0 先 zone-down 两区的流程冲突,pin 合服的默认 `-db-capability-zones src,dst` 在 T-0 必被拒(§4.3,runbook §5.1),工具默认值与检查口径待负责人决定。
 - v2.3(2026-09-28):负责人对 v2.2 遗留项的决定落码(未编译、未测试)。`-db-capability-zones` 去掉缺省值与 `src` / `dst` 记号,接受字面量 `none`(合服 / 撤销;搬库与 capability-check 不接受);新增只读 `-mode capability-check`(exit 0 / 1 / 2),runbook §8 Step 6 开服前必须 exit 0(§4.3、§9、§10.1)。
 - v2.4(2026-10-12):现状校准,设计与代码都不变。
-  - 文首补运行状态(09-29 跑过一轮,执行者是 Claude 而非 Codex;`be6b4ab1d` 之后 HEAD 待复验,清单见 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md))与启用状态(开关全关、全局库没建、玩家主库在 MySQL)。
+  - 文首补运行状态(09-29 跑过一轮,执行者是 Claude 而非 Codex;`be6b4ab1d` 之后 HEAD 待复验,清单见 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`）)与启用状态(开关全关、全局库没建、玩家主库在 MySQL)。
   - §0 加第 7 条:落点记录只选库名、不选机器,「换到 TiDB」是集群级动作。
   - §8.2 C++ `EnterSceneRequest` 构造点 4 处 → 5 处。
   - §10.4 与 §11.4 的 blob 处置由「待拍板」改为「已定,保留拒绝」(负责人 09-28 的决定此前只记在 PROGRESS)。

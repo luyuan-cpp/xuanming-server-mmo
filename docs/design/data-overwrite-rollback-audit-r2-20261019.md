@@ -676,7 +676,7 @@
 
 - **换视角查找**：下面原表 (d) 的 5 轮视角（脚本 `D_ROUNDS`），每次运行一轮，连续两轮无新发现才停。
 - **对抗复核**（每条两个视角：代码路径与时序；可达性、上游守卫与严重度裁决）：r2-lc#1、r2-lc#2、r2-login#1、r2-guild#1、r2-match#1、r2-rr#5，以及 r2-ps#1 的严重度裁决（medium 还是 low），再加换视角查找新出的 high / medium。r2-battle#1、r2-mz#1 已由修复会话按成立处理并落码（未编译），不再对原发现做对抗复核，修复本身留给冻结后增量审计。
-- 续跑脚本：[handoff 目录的 audit-workflow-wave34.js](../handoff/data-overwrite-audit-r2-20261019/audit-workflow-wave34.js)，按 `args` 选路（`wave3Keys` / `lowReview` / `dRound` + `seenTitles` / `verify`），单次最多 6 个代理。
+- 续跑脚本：`docs/handoff/data-overwrite-audit-r2-20261019/audit-workflow-wave34.js`（已清理，见 `ccf2840b2`），按 `args` 选路（`wave3Keys` / `lowReview` / `dRound` + `seenTitles` / `verify`），单次最多 6 个代理。
 
 **节奏**：第二波结束时周额度 93%，要到 **2026-10-24 22:00 UTC** 才重置。按会话组约定，周额度超过 80% 时只跑风险高的一波，第三、四波等重置后再跑；每波不超过 6 个代理，开跑前和每个代理返回后都查用量。
 
@@ -687,7 +687,7 @@
 
 - **从第四波撤下**：原计划对 r2-gate#1、r2-db#1、r2-sm#3 三条修复缺陷的复核。这三条与 r2-sm#1、r2-sm#2、r2-db#3 已由两个修复会话各自复核并落码（见 §5，未编译），改为在代码冻结后的增量审计（第一轮 §8 第 5 步）里查。
 - **避开在途文件**：上述两个修复会话正在改 scene_manager、gate、go/db saveoutbox；第三、四波在它们交付前不审这些文件。
-- **续跑方法**：见交接文档 [handoff/data-overwrite-audit-r2-20261019](../handoff/data-overwrite-audit-r2-20261019/README.md)。工作流脚本副本在同一目录（`audit-workflow.js`）。换账号或换会话后不能用 `resumeFromRunId`，要全新运行，`args` 的填法见交接文档 §5。
+- **续跑方法**：见交接文档 handoff/data-overwrite-audit-r2-20261019（原 `docs/handoff/data-overwrite-audit-r2-20261019/README.md`，已清理，见 `ccf2840b2`）。工作流脚本副本在同一目录（`audit-workflow.js`）。换账号或换会话后不能用 `resumeFromRunId`，要全新运行，`args` 的填法见交接文档 §5。
 - **待办（不在本会话范围）**：Java 版（`D:\luyuan\xuanming-server-mmo`）同类审计，按该仓库 `AGENTS.md` 执行。
 
 ## 7. 证据与额度

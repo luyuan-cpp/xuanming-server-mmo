@@ -37,7 +37,7 @@
 | 何时清空 | 铸造键 7 天无登录自动过期;过期 / 丢失后重建的值不回退(有毫秒时间下限),所以不必进清库、回档、合服清单 |
 | 贯穿 | `EnterSceneRequest(12)` → `RoutePlayerEvent(7)` → gate 会话 → `PlayerEnterGameNodeRequest(8)` → scene 的 pending / 实体;`BindSessionEvent(5)` 另带一份给 gate |
 | gate | 只透传、只抬高:转发时用本会话、本角色见过的最高代次盖章;不据此丢弃任何路由 |
-| scene 栅栏 | 入口第一步零副作用纯判定;同一会话一律放行,只裁决跨会话;绑定时与载入回调再复核 |
+| scene 栅栏 | 入口第一步零副作用纯判定;同一会话(同一 gate 实例上的同一会话号)一律放行,只裁决跨会话;绑定时与载入回调再复核 |
 | 版本 0 | 当前有代次、请求无代次、会话不同 → 拒;双方都没有代次 → 沿用旧行为并计数 |
 | 被拒时 | 计数 + 一条 WARN,给**被拒请求自己的会话**推 `kEnterSceneFailed`;不碰当前会话、pending、票据、待确认条目 |
 | 存盘 | 不带登录代次;存盘的版本号仍是 `owner_epoch`(§8) |
@@ -175,7 +175,7 @@ struct Identity { bool exists{false}; SessionId sessionId{kInvalidSessionId}; ui
 | 当前身份 | 请求 | 结论 |
 |---|---|---|
 | 不存在 | 任意 | `kAdmitFresh` |
-| 存在,会话号相同(且有效) | 任意代次 | `kAdmitSameSession`,代次取 max |
+| 存在,同一会话(会话号相同且有效;gate 实例相同,或有一边未知) | 任意代次 | `kAdmitSameSession`,代次取 max |
 | 当前代次 0 | 代次 0 | `kAdmitLegacy`(旧行为:后到者胜),计数 |
 | 当前代次 0 | 代次非 0 | `kAdmitNewer` |
 | 当前代次非 0 | 代次 0 | `kRejectUnversioned` |
@@ -183,10 +183,17 @@ struct Identity { bool exists{false}; SessionId sessionId{kInvalidSessionId}; ui
 | 当前代次非 0 | 更小 | `kRejectStale` |
 | 当前代次非 0 | 相等 | 当前有会话 → `kRejectConflict`;当前没有会话可比 → `kAdmitSameSession` |
 
-**同一会话一律放行**:同一会话号只经同一条 gate→scene 连接到达,FIFO 之下到达序就是 gate 的决策序,
-不存在"旧会话抢新会话"。若按代次拒同会话请求,gate 已在 kSent 时提交了场景与节点指向,
-scene 却没执行,三方分叉且之后的同图换图被 gate 判重复吞掉。gate 重启后会话号复用的情形:
-新登录拿到同号时代次更大,照样是接管;旧进程的迟到帧在新进程的入场之后到达,实际不会发生。
+**同一会话一律放行**。同一会话 = 同一 (gate 实例, 会话号):会话号相同,且两边的 gate 实例都已知时实例也相同。
+gate 实例取自请求所走 RPC0 入站连接的握手身份(gate 进程的 node_uuid),不取消息体自报的值;任一边未知(托管落点等不经
+gate 连接的入场、实例记下之前建出的实体)时按会话号认。这样定义之后,同一会话只经同一条 gate→scene 连接到达,FIFO 之下
+到达序就是 gate 的决策序,不存在"旧会话抢新会话"。若按代次拒同会话请求,gate 已在 kSent 时提交了场景与节点指向,
+scene 却没执行,三方分叉且之后的同图换图被 gate 判重复吞掉。
+
+会话号由 gate 的 node_id 派生,同一 node_id 短暂有两个 gate 进程(老进程还没关停、新进程已接走号)时,同号可以出自两个进程,
+会话号本身标识不了一条会话:两边实例不同就不是同一会话,按代次裁决 —— 新登录代次更大,接管;老进程迟到的入场代次更小,拒。
+2026-11-20 之前这里按会话号认,写的是「旧进程的迟到帧在新进程的入场之后到达,实际不会发生」,不成立:被踢、冲突收尾、
+进程退出都会让老进程在新进程服务期间发出同号消息。定论与设计见
+[scene-enter-chain-residuals.md](scene-enter-chain-residuals.md) §14。
 
 多处身份的合并是 `enter_fence::DecideAll`(纯函数):逐个判,遇到拒即返回;全放行时返回第一处**存在的**身份的结论,
 三处都不存在时返回 `kAdmitFresh`(不存在的那几处恒为 `kAdmitFresh`,不参与合并,以免盖掉真正比过的结论;只影响计数口径,
@@ -199,7 +206,9 @@ scene 却没执行,三方分叉且之后的同图换图被 gate 判重复吞掉�
 (下沉到 scene.lib,测试宿主可直接调,用例不碰 Redis)。`HandleEnterGameNode` 的顺序:
 
 0. **栅栏**(只读):`DecideAll(实体, pending, 条目)`。拒 → 计数、WARN、给请求会话推 `kEnterSceneFailed`、
-   返回 `kRejected`。
+   返回 `kRejected`。请求身份是 (gate 实例, 会话号, 登录代次);gate 实例在组上下文时从入站连接的握手身份读出
+   (`PlayerEnterContext::gateInstanceId`),是请求身份的一部分,不是栅栏之前的另一道判定,栅栏仍是第一步。
+   角色登记(`RoleAdmissionSystem::RequestEnter`)在 SQL 登记之前用同一个 `JudgeEnter` 预检一次。
 1. `ReconcileRelocateOnReentry`(从入口最前挪到这里:放行之后,擦会话、废黜销毁、登记 pending 之前,
    它靠"此刻 pending 里有没有他"区分补发与第二次进场)。
 2. `RemovePlayerSessionSilently`。
@@ -212,7 +221,10 @@ scene 却没执行,三方分叉且之后的同图换图被 gate 判重复吞掉�
 
 - **绑定时**:`EnterScene` 第 0 步(取消退出)之前用同一个 `DecideAll` 对实体再判一次,拒则直接返回。
   入口已判过,这里对入口路径是纵深防御,真正的价值在于 `EnterScene` 的其它调用方。放行后在第 1 步
-  绑定会话的同时写身份组件:会话有效则记会话号,代次取 max。
+  绑定会话的同时写身份组件:会话有效则记会话号与 gate 实例(同一会话不带实例时不抹掉已知实例),代次取 max。
+- **客户端消息**(含 gate 断线代发的 ExitGame):不是入场、不过栅栏。`ProcessClientPlayerMessage` 在派发与一切擦除之前核对
+  会话号相同时 gate 实例也对得上(`PlayerLifecycleSystem::IsStaleGateInstance`),对不上的是另一个进程上的同号会话,不派发
+  (scene-enter-chain-residuals.md §14.2)。
 - **载入回调**:`HandlePlayerAsyncLoaded` 现有的"pending 会话仍在 SessionMap"收紧为"且映射到本玩家"。
   pending 只会被栅栏放行的请求覆盖,所以回调取到的永远是已放行的最高代次上下文;载入建出的新实体
   随后经 `EnterScene` 再走一遍复核。
@@ -222,8 +234,9 @@ scene 却没执行,三方分叉且之后的同图换图被 gate 判重复吞掉�
 ### 5.5 覆盖 pending
 
 - 放行才覆盖。`inheritClear` 照旧原样沿用(§12.6.3 第三步、M2 不变)。
-- 不同会话:旧 pending 的预登记会话只在仍映射到本玩家时擦掉。
-- **同一会话**:合并而不是整体替换 —— `enter_gs_type` 新值为 0 时保留旧的非 0 值,代次取 max,
+- 不同会话:旧 pending 的预登记会话只在仍映射到本玩家时擦掉。会话号相同、gate 实例不同(另一个进程上的同号会话)时不擦:
+  映射刚被这一次的预登记覆盖。
+- **同一会话**(同一 gate 实例上的同一会话号):合并而不是整体替换 —— `enter_gs_type` 新值为 0 时保留旧的非 0 值,代次取 max,
   其余(scene_id、home_zone、owner_epoch)取新值。否则"先登录类型、后 0 型换图路由"在载入完成前
   到达时会丢掉登录类型,不置登录态也不触发 `PlayerLoginEvent`。
 
@@ -244,8 +257,9 @@ P 随后经新会话重登通过栅栏时,按 P 快照里的旧号无条件擦,�
 - 逐条一行 WARN:玩家、请求会话与代次、当前身份来源与值、结论名。
 - 只对**请求自己的会话**推 `kEnterSceneFailed`(`SendTipToPendingSession`)。陈旧会话多半已被踢,
   会话不在时 gate 侧是 no-op;仍连着的(踢线丢失、混版本被拒的合法会话)客户端按既有 3023 契约断线重登,
-  不会干等 60s。gate 写 socket 前有 player_id 身份栅栏,推不到别人身上;被拒请求的会话号一定不等于
-  当前身份的会话号(同会话一律放行),推不到当前会话上。
+  不会干等 60s。gate 写 socket 前有 player_id 身份栅栏,推不到别人身上。被拒请求与当前身份一定不是同一会话(同会话一律放行):
+  会话号不同时推不到当前会话上;会话号相同而出自另一个 gate 进程时,提示带着请求的 gate 实例,只推给那个进程
+  (`PushToSessionViaGate` 的实例核对,对不上不推),推不到新进程上同号的活玩家身上。
 
 ### 5.8 UpdateSessionDetail
 
@@ -302,7 +316,7 @@ P 随后经新会话重登通过栅栏时,按 P 快照里的旧号无条件擦,�
   会话绑定权,不是数据;被旧会话的 ExitGame 销毁之前会先存盘收敛。存盘自己另有一个独立的"旧盖新"窗口:
   go/db 两个实例在同一 epoch 内的僵尸写会把 MySQL 整行覆盖回旧版。修法是 `(owner_epoch, save_seq)`
   条件写,已在 [db-task-pipeline-bottlenecks.md](db-task-pipeline-bottlenecks.md) 与
-  [godb-pipeline-handoff-20261013.md](../handoff/godb-pipeline-handoff-20261013.md) 立项,待负责人授权,不在本次。
+  `docs/handoff/godb-pipeline-handoff-20261013.md`（已清理，见 `ccf2840b2`） 立项,待负责人授权,不在本次。
 - 登录代次**不应**进存盘 CAS(G5)。
 
 ## 9. 残余与不在范围

@@ -12,7 +12,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 - 多个 registry 用自定义实体类型区分（现例 `SceneEntity`）。
 - 派生索引只有一个维护入口（`ActorNetIdIndex` 只由 `actor_net_id` 的 Assign 与 on_destroy 维护）。
 - dispatcher 判据见下文：没有消费者不发事件，dispatcher 只做可有可无的一对多通知，必需步骤直接调用。
-- 现存例外：节点 registry 上的 `RpcClientPtr`、`MuduoGrpcChannelPtr` 属存量，迁出见 [审查报告](../handoff/ecs-refactor/review-report-20261015.md) §4.2。
+- 现存例外：节点 registry 上的 `RpcClientPtr`、`MuduoGrpcChannelPtr` 属存量，迁出见 审查报告（原 `docs/handoff/ecs-refactor/review-report-20261015.md`，已清理，见 `ccf2840b2`） §4.2。
 
 ## Three Access Patterns
 
@@ -52,7 +52,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 | `SkillContextCompMap` | `SkillSystem::AddSkillContext`,登记合法施法的施法者上下文时 | `HandleSkillFinish` 删除本次上下文;目标不保存镜像 |
 | `ActorStateComp` | `ActorActionStateSystem::AddState`,首次激活合法状态时 | 状态移除;无表表示无激活状态 |
 | `BuffListComp` | `BuffSystem::AddOrUpdateBuff`,完成驱散 / 免疫等判断后首次真正插入时;施加与存档恢复(`RestoreSavedBuffs`)共用 `buff.cpp` 的 `StartBuffEntry` 这一处创建 | 帧末摘除空列表。Buff 表 `keep_on_logout = 1` 的条目随玩家存档保留,其余实体重建即清(2026-11-19,[冷却与 Buff 跨重登](realtime-cooldown-buff-persistence.md)) |
-| `SavedBuffsPendingComp`(`buff_comp.h`) | `PlayerDatabaseMessageFieldsUnmarshal`,存档里有下线保留的 Buff 时(2026-11-19,同上 §6) | `InitPlayerFromAllData` 在派生投影初始化之后经 `BuffSystem::RestoreSavedBuffs` 消费并摘掉;存盘时还挂着就把条目原样写回。缺失 = 没有待恢复的 Buff |
+| `SavedBuffsPendingComp`(`buff_comp.h`) | `PlayerDatabaseMessageFieldsUnmarshal`,存档里有下线保留的 Buff 时(2026-11-19,同上 §6) | `InitPlayerFromAllData` 在派生投影初始化之后经 `BuffSystem::RestoreSavedBuffs` 消费;只剩本节点表里查不到行的条目时留着,否则摘掉;存盘时还挂着就把条目原样写回。缺失 = 没有待恢复、待带回的 Buff |
 | `AoiListComp` | `InterestSystem::AddAoiEntity`(空间来源被接纳)或 `InterestSystem::Follow`(显式关注登记),完成实体 / 容量 / 同场景校验后首次建立关系时 | 移除观察关系;无表表示无观察对象 |
 | `AoiWatchersComp` | `InterestSystem` 第一次登记以该实体为目标的关系时;与观察者的 `AoiListComp` 条目一一对应 | 关系删除时同步摘除;无表表示没有观察者 |
 | `SceneGridListComp` | `AoiSystem::UpdateGridMembership`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |
@@ -81,7 +81,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 
 默认技能、任务 scope、派生投影由加载链直接完成，不发初始化通知。后续重算缺少必需派生组件时跳过,不能临时补一个零值组件。面板 / 列表若缺少实际使用的持久输入,返回域内既有故障码;空的已加载组件才代表“没有数据”。
 
-缺组件拒存不是已落盘证据：退出、异步比较和交接不得据此宣称收敛，不得写 A1′、交接标记或发改派。拒存原因都是永久的，保留的实体永远存不了盘，所以退出流程遇到拒存时用 `DestroyDeposedPlayer` 不存盘丢弃，玩家重登时从最后一次完好落盘重载。具体实施与未验证项见 [第 1 批 Codex 回执](../handoff/ecs-refactor/batch1-codex-receipt.md)。
+缺组件拒存不是已落盘证据：退出、异步比较和交接不得据此宣称收敛，不得写 A1′、交接标记或发改派。拒存原因都是永久的，保留的实体永远存不了盘，所以退出流程遇到拒存时用 `DestroyDeposedPlayer` 不存盘丢弃，玩家重登时从最后一次完好落盘重载。具体实施与未验证项见 第 1 批 Codex 回执（原 `docs/handoff/ecs-refactor/batch1-codex-receipt.md`，已清理，见 `ccf2840b2`）。
 
 每处组件的现状与修复进度见 [ecs-entt-misuse-audit-20261015.md](ecs-entt-misuse-audit-20261015.md)。
 
@@ -143,7 +143,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
   第一次要寄、或要记下请求存盘的时刻时由寄送逻辑创建(`SendOne` / `RequestSaveIfDue`),寄到之后待寄队列空了即摘。「没有」的含义是没有在途、没有退避;进程重启或换节点后从零数起,
   重寄靠邮件按请求号判重,不靠这份状态。
 
-上述规则包含第 6 批审查修复；生成产物与运行验证状态以 [任务总索引](../handoff/ecs-refactor/README.md) 及本批回执为准，不能用静态阅读代替构建或测试证据。
+上述规则包含第 6 批审查修复；生成产物与运行验证状态以 任务总索引（原 `docs/handoff/ecs-refactor/README.md`，已清理，见 `ccf2840b2`） 及本批回执为准，不能用静态阅读代替构建或测试证据。
 
 ## `std::optional` Return Pattern
 

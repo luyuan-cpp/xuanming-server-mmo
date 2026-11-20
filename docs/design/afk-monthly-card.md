@@ -20,7 +20,7 @@
 - **读方**:scene 改为读自己内存里的那份(它就是这份数据的持有者),不再 GET Redis;
   player_locator 读不到存档,继续读投影,代码不改。
 
-## 1. 现状(2026-11-19 核实)
+## 1. 改之前(2026-11-19 核实)
 
 | 事实 | 位置 |
 |---|---|
@@ -170,9 +170,10 @@ K8s 的 Redis 7.2 与本地 8.x 都支持);到期为 0 或已过:`DEL key`。只
 | player_locator 租约续期与托管归位 | 不改 | 它读不到存档(逻辑库自治,不许跨库),投影正是给它用的。语义不变:没有键 = 无月卡;读失败 = 推迟 10 秒再判。 |
 
 时序([断线保留](player-connection-lost-hold.md) §4.1「时序为什么成立」)依赖两边看到同一个到期值:scene 在到期前 5 秒退出,
-player_locator 在看到月卡失效之后才让租约到期。改读法之后两边只在「内存已改、提交还没回来」的那一两秒里不同,而且只会是
-scene 的值更新(更晚到期)。离线期间能改到期值的只有 GM,所以这个窗口只在「GM 恰好在旧到期前 5 秒内续期」时出现,
-后果是走「保留拖过租约」的慢路径(ReleasePlayer 收尾,多等一个 claim 超时),不丢数据。
+player_locator 在看到月卡失效之后才让租约到期。改读法之后两边只在「内存已改、提交还没回来」的那一两秒里不同。能改到期值的
+入口(开通、GM)都要本人在线,而在线时没有断线保留、也没有断线租约;断线之后到重连之前没有任何入口能改它。断线那一刻之前的改动
+在 1 秒节流的关键进度存盘里提交、随之写出投影,早于 player_locator 第一次看投影(断线租约 30 秒)。所以托管期间两边看到的是同一个值。
+投影丢了的情形见 §5.4。
 
 ### 5.4 故障表
 
@@ -263,20 +264,20 @@ Java 版要同批对齐(§11)。
 4. 投影只写已提交的值,不领先于库。
 5. 托管判定用 scene 内存里的值;player_locator 用投影。
 
-## 10. 改动清单(2026-11-19 落码,共 53 个文件;生成产物与 xlsx 另算)
+## 10. 改动清单(2026-11-19 落码、11-20 复核补齐,共 58 个文件;生成产物与 xlsx 另算)
 
 | 部分 | 文件 |
 |---|---|
 | 协议与配置(5) | `proto/common/component/player_comp.proto`(字段 2)、`proto/scene/player_afk_pass.proto`(新)、`proto/common/rollback/transaction_log.proto`(`TX_AFK_PASS_BUY = 32`)、`data/schema/afkpassrule_table.proto`(新)、`tools/scripts/afk_pass_xlsx_patch.py`(新,产出 `data/AfkPassRule.xlsx` 与 `data/tip/Tip.xlsx` 的 5 行) |
 | scene 逻辑(9) | `player/system/afk_pass_rules.h`(新,纯规则)、`afk_pass.{h,cpp}`(新,含派生组件 `AfkPassCommittedComp`)、`client_request_ledger.h`(种类 6)、`afk_hosting.{h,cpp}`(改读内存)、`connection_lost_hold.h`(注释)、`player_lifecycle.cpp`(加载、提交回调、托管心跳三处挂钩)、`player/comp/player_ownership_comp.h`(`AfkPassRedisKey`) |
-| scene 节点(2) | `handler/rpc/player/player_afk_pass_handler.{h,cpp}`(新;`.h` 与服务注册表由 proto-gen 重生成) |
+| scene 节点(3) | `handler/rpc/player/player_afk_pass_handler.{h,cpp}`(新;`.h` 与服务注册表由 proto-gen 重生成)、`handler/rpc/player/player_handoff_gate.h`(月卡服务进「换节点含义不变」白名单:交接窗口里的请求由 gate 留住重投,不再回 1003) |
 | 工程登记(10) | `cpp/libs/services/scene/scene.vcxproj{,.filters}`、`cpp/nodes/scene/scene.vcxproj{,.filters}`、`cpp/generated/table/table.vcxproj{,.filters}`(新表与新 Tip 段)、`cpp/generated/proto/proto.vcxproj{,.filters}`、`cpp/tests/bag_test/bag_test.vcxproj{,.filters}`。CMakeLists 由 vcxproj 生成,不手改 |
 | gate(1) | `cpp/nodes/gate/gate_gm_client_messages.h`(`GmSetAfkPass` 进 GM 清单) |
-| 单测(5) | `cpp/tests/bag_test/afk_pass_test.cpp`(新,规则 5 条 + 系统 9 条)、`client_request_ledger_test.cpp`(种类值)、`currency_test/currency_test.cpp`(键形金样)、`currency_test/client_gm_gate_test.cpp`(GM 闸)、`cross_zone_test/cross_zone_test.cpp`(托管读存档 2 条) |
+| 单测(6) | `cpp/tests/bag_test/afk_pass_test.cpp`(新,规则 5 条 + 系统 9 条)、`client_request_ledger_test.cpp`(种类值)、`currency_test/currency_test.cpp`(键形金样)、`currency_test/client_gm_gate_test.cpp`(GM 闸)、`cross_zone_test/cross_zone_test.cpp`(托管读存档 2 条)、`cross_zone_test/player_handoff_gate_test.cpp`(白名单 3 个方法) |
 | Go(1) | `go/player_locator/internal/logic/leasemonitor.go`(只改注释:键是 scene 写的投影) |
 | robot(4) | `robot/afk_pass_follow_smoke_scenario.go`(新)、`robot/main.go`、`robot/config/config.go`、`robot/etc/afk_pass_follow_smoke.yaml`(新) |
 | 客户端(10) | `Assets/Scripts/Game/AfkPass/AfkPassClient.cs`(新)、`Assets/Scripts/UI/Ugui/Gameplay/AfkPassUiRoot.cs`(新)、`Assets/Tests/EditMode/Tianyong/AfkPassClientTests.cs`(新)及三者与目录的 `.meta`、`Assets/Scripts/UI/Ugui/WorldHudNavigation.cs`(入口枚举)、`tools/gen_messageids.ps1`(白名单)、`tools/gen_proto.ps1`(协议清单) |
-| 文档(6) | 本文、`player-connection-lost-hold.md` §4.1、`client-request-idempotency.md` §4、`docs/README.md`、`docs/PROGRESS.md`、Java 仓 `PARITY.md` |
+| 文档(9) | 本文、`player-connection-lost-hold.md` §4.1、`client-request-idempotency.md` §4、`client-scene-request-handoff-hold.md`(白名单)、`redis-player-store-cluster.md`(键表的写者)、`team-follow-server-trail.md`(事实源)、`docs/README.md`、`docs/PROGRESS.md`、Java 仓 `PARITY.md` |
 
 go/db、商城、trade、支付都不改;player_locator 只改注释。
 
@@ -291,7 +292,7 @@ go/db、商城、trade、支付都不改;player_locator 只改注释。
 | 真钱直购月卡商品 | §4.2;要做时新增「权益」发放物并定义撤销扣回 |
 | 月卡道具 / 兑换券、邮件发月卡 | §3.2;要做时加一个消耗兑换券调开通函数的入口 |
 | 自动续费 / 订阅、月卡每日奖励 | 不在离线托管的需求里 |
-| GM 后台网页加「设月卡」 | 后台写通道整体还没启用(`jeecg-gm-administration.md`);启用时给 `GmExecutePlayerCommand` 的 oneof 加第 8 项 |
+| GM 后台网页加「设月卡」 | 定案不做(2026-11-20):后台的玩家指令同样只在 dev / test 对在线玩家放行(`jeecg-gm-administration.md`),与客户端 GM 指令 `GmSetAfkPass` 能力相同,加进去不多一种能力;生产补偿走个人邮件发灵石,玩家自己开通 |
 | 开通退款 | 灵石消费不可退,与其它灵石消费一致 |
 
 ## 13. 待负责人确认

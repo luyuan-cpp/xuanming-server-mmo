@@ -52,36 +52,50 @@
   1. 部署机设环境变量 `MMORPG_LOGIN_NPPA_SECRET_KEY`(企业端给的 32 位十六进制 secretKey,不进命令行与仓库);部署带上 `-LoginNppaAppId` 与 `-LoginNppaBizId`(两个要么都给要么都不给),每年按国务院放假通知给 `-LoginAntiAddictionExtraPlayDays`(逗号分隔的北京日期,如 `2026-10-01,2026-10-08`),只在企业端接口测试阶段给 `-LoginNppaCheckUrl` / `-LoginNppaQueryUrl` / `-LoginNppaLoginoutUrl`。包装入口 `dev_tools.ps1 -Command k8s-zone-up` / `k8s-all-up` 同样给。secretKey 由部署脚本写成 zone namespace 的单键 Secret `login-nppa`,不要手工建。
   2. 用 `-DryRun` 渲染一次,把 `go-svc-login-config` 里整段 `AntiAddiction` 原样抄进 login 每个槽位的运行配置(`runtimeConfigSecret`;`SecretKeyEnv` 是变量名,照抄),**不要单独滚动 login**,紧接着真跑部署,由部署滚动 login。部署把这次的 AppId / BizId 明文注入 login 主容器(`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`),login 启动时与运行配置比:漏抄、开关是 false、AppId 或 BizId 抄错,都拒绝启动(滚动停在第一个 Pod,旧 Pod 照常服务),不会带着关掉的防沉迷起来。
   3. 以后每次部署都要照传:漏传或换了 AppId / BizId,会在写操作之前被拒绝。换应用与关掉都是「先改运行配置、不单独滚动 login,紧接着部署并加 `-ConfirmLoginAuthProviderChange`」:换应用时运行配置改成新的 `AntiAddiction` 段,带新参数与新 secretKey 部署;关掉时从运行配置删掉这一段,不带参数部署。两步之间不能有 login 重启:这时 Pod 模板还注入着旧的期望值与 secretKey,与改过的运行配置对不上,重启的 Pod 会拒绝启动。
-- **预置 Secret `domain-service-secrets` 的角色护栏密钥**。值由运维生成,不进仓库、不进日志;每把至少 32 字节,互不相同(data_service 拒绝跨用途复用),同名 key 在各 namespace 同值。manifest 都是 `optional: false`,缺一个 key 对应的 Pod 卡在 `CreateContainerConfigError`:
+- **官方商城与支付**(2026-11-19~20,未运行;设计见 [payment-recharge.md](../design/payment-recharge.md) §22,细节见[部署目录说明](../../deploy/k8s/README.md)的「支付 payment」「商城 mall」两节)。payment 随全局 Go 服务部署:带 `-GoSvcRegistry` 的 `infra-up` 每次都部署它,所以下面 payment 的库、目录条目、运行配置和三把调用密钥(gateway、payment、delivery)在 staging / prod 是必需的。商城只在同时给了 `-JavaSvcRegistry` 时部署;不部署商城时 payment 与 trade 照常起,只是官方商城下单、付款不通。要准备:
+  1. 库:`mmorpg_payment`、`mmorpg_mall`。TiDB 档由运维预建空库。商城的生产模式只认 TiDB,staging / prod 用 MySQL 时部署脚本在写操作之前拒绝。
+  2. SQL boot 目录加两个条目 `<infra>/payment`、`<infra>/mall`,形状同其它全局写者:名册、每个槽位一个专用账号、`runtimeConfigSecret`、`schemaPermissionSecret`。`mall` 条目还要 `registrarImage`(建表 Job 用它跑 `writer_authority`)。
+  3. 每个槽位的运行配置:payment 照抄 ConfigMap `go-svc-payment-config`,整段 `Payment` 与 `DataServiceRpc` 都要带上;mall 照抄 `java-svc-mall-config`,把数据源的账号、口令换成这个槽位的。
+  4. 调用密钥:部署机设四个环境变量 `MMORPG_COMMERCE_GATEWAY_SECRET`、`MMORPG_COMMERCE_PAYMENT_SECRET`、`MMORPG_COMMERCE_DELIVERY_SECRET`、`MMORPG_COMMERCE_ADMIN_SECRET`。值不进命令行与仓库,每把至少 32 字节,互不相同。另外 `domain-service-secrets` 里要有键 `account-directory-payment`(payment 读账号实名用,缺了 Pod 起不来)。
+  5. 渠道:写一份只含顶层 `Payment:` 的配置文件,部署时给 `-PaymentConfigPath`。不给时 staging / prod 一个渠道都不开。开着的渠道要的密钥预置在 infra namespace 的 Secret `payment-channel-secrets`,键名就是配置里各 `*Env` 指的变量名;部署脚本只核键在不在,不读值。换了这份 Secret 要手工 `kubectl -n <infra> rollout restart statefulset/payment`。
+  6. 回调入口:Service `payment-notify`(云上 LoadBalancer、裸机 NodePort)前面放负载均衡终结 HTTPS,证书与域名自备。把 `https://<支付域名>/notify/<渠道名>` 登记到各渠道后台,并写进配置文件的 `NotifyBaseURL`。
+  7. 表:payment 的表由 `payment-migrate` Job 建,商城的闸门表与业务表由 `mall-schema` Job 建,都不用手工装。结构变了要清库重装(项目未上线)。
+  8. 告警:`kubectl apply -n observability -f deploy/k8s/payment-alerts.yaml`。
+- **Secret `domain-service-secrets` 里的内部调用密钥由部署维护,运维不用预置**(2026-11-20 起)。zone 的工作负载以 `optional: false` 引用的 16 把 HMAC 密钥都在 `k8s_deploy.ps1` 的托管键表 `$script:ManagedDomainServiceSecrets` 里,部署替运维补齐,并保证全集群每把一个值。它们只用于集群内服务之间互相签名,集群外没有人需要知道值,也不要手工改。环境变量名按键名推:`role-fence-<x>` → `MMORPG_ROLE_FENCE_SECRET_<X>`,`account-directory-<x>` → `MMORPG_ACCOUNT_DIRECTORY_SECRET_<X>`,`player-store-scene` → `MMORPG_PLAYER_STORE_SECRET_SCENE`,`mail-producer-battle` → `MAIL_PRODUCER_SECRET_BATTLE`。
+
+  | key | zone 里读它的 | infra 里读它的 | 用途 |
+  |---|---|---|---|
+  | `role-fence-coordinator` | data-service | friend、guild、mail、match、player-inbox、trade | data-service 调角色护栏的参与者,参与者验 |
+  | `role-fence-guild` / `-trade` / `-mail` / `-match` / `-player-inbox` / `-friend` | data-service | 同名服务 | 参与者读权威状态,data-service 验 |
+  | `role-fence-chat` | data-service | chat | chat 读权威状态(只读,不是参与者) |
+  | `role-fence-db` | db、data-service | — | go/db 调 `GetPlayerRoute`,data-service 验 |
+  | `account-directory-scene` | scene、data-service | match、player-inbox | 读账号目录,data-service 验 |
+  | `account-directory-trade` | scene、data-service | trade | 同上 |
+  | `account-directory-login` | login、data-service | — | 同上 |
+  | `account-directory-scene-manager` | scene-manager、data-service | — | 同上 |
+  | `account-directory-payment` | data-service | payment | payment 按玩家查实名(`GetAccountRealName`,未成年人充值限额用,[real-name-anti-addiction.md](../design/real-name-anti-addiction.md) §5.6),不开防沉迷的部署也要有 |
+  | `player-store-scene` | scene、db | — | scene 调 go/db 存盘,go/db 验 |
+  | `mail-producer-battle` | scene | mail | scene 寄两包都放不下的战斗掉落([battle-overflow-mail.md](../design/battle-overflow-mail.md)),mail 验 |
+
+  为什么要全集群同值,不只是签名方与验签方两侧:每个 zone namespace 各有一份副本,而 data-service 与 go/db 是全局池(发现键不分 zone),login、scene、scene-manager 的调用会落到别的 zone 的实例上;值不同时只有一部分调用被拒,时好时坏。部署怎么维护:
+
+  1. 写路径入口的只读门禁(`Initialize-ManagedDomainServiceSecrets`)一次列出集群里的 `domain-service-secrets`,比 infra namespace 与每个 `<-NamespacePrefix>-*` namespace。本次没部署的 zone、zones.json 没列的 zone 也比;别的前缀(另一套环境)不比、不碰。
+  2. 规范值存在 infra 那一份;只在 zone 用的四把(`account-directory-login`、`account-directory-scene-manager`、`role-fence-db`、`player-store-scene`)也在 infra 存一份,没有工作负载读它。已有的合格值一律沿用;缺的从 infra 原样复制,infra 没有就沿用各 zone 一致的那个值,都没有(全新集群、新地域)就生成 32 字节随机数(64 位十六进制)。只补 infra 与本次部署的 zone。
+  3. 判不了的情形在任何写操作之前拒绝,一个都不写,报错只点键名与 namespace、不带值:任何 namespace 的值与规范值不同、去掉首尾空白后不足 32 字节、两把同值、infra 没有而各 zone 不一致。以前没人核过的环境第一次部署时可能撞上这一条。确认要统一时带 `-ResyncDomainServiceSecrets` 重跑:可用的规范值照用,不可用的重新生成;持有不同值的 namespace 一律改写,并删掉读这些键的 Pod 由控制器重建(scene 含 scene-world、scene-instance,infra 的服务连带金丝雀)。重建期间这些调用会失败一小段时间,选低峰做。
+  4. 写在全部只读门禁之后、任何工作负载之前(`Sync-ManagedDomainServiceSecrets`):已有这个 Secret 的 namespace 用 merge patch 只增改这几把,不动运维放的其它键;没有的先建 namespace 再建 Secret。只补缺不重启:缺键的 Pod 本来就卡在 `CreateContainerConfigError`,键到了 kubelet 自己重试。值只在部署进程的内存里,经临时文件交给 kubectl、用完即删,不打印、不进日志。部署机的 kubectl 要支持 `kubectl patch --patch-file`(太旧的版本报未知参数,先升级 kubectl)。
+  5. 维护哪些键:`zone-up` / `all-up` 部署 zone 的 Go 服务时全表;只发 C++ 节点(`-SkipGoSvc`)时只有 scene 读的四把;`infra-up` / `all-up` 部署全局 Go 服务时是 infra 里有人读的 12 把。`-DryRun` 不连集群,只打一行将要维护哪些键。发布预检 `release_preflight.ps1` 只查配置与制品、不连集群,不查这一项。
+  6. 换值:先改 infra 那一份(用 `kubectl patch --patch-file`,值不进命令行与 shell 历史),再带 `-ResyncDomainServiceSecrets` 部署,zone 里的跟着改并重启读它的 Pod;infra 里读这把的服务要手工 `kubectl -n <infra> rollout restart` 一次(部署只重启它改写过的 namespace)。
+  7. 核对 key 名(只列名字,不打印值):`kubectl -n <namespace> get secret domain-service-secrets -o go-template='{{range $k, $_ := .data}}{{$k}}{{"\n"}}{{end}}'`。托管键表与各清单的 `secretKeyRef` 一致由契约测试(`k8s_migrate_gate.tests.ps1`)按 Go 服务目录反查。
+
+  值都对上之后,`mail-producer-battle` 两边时钟相差超过 5 分钟时 mail 仍会拒绝验签:scene 侧是 ERROR `metric=mail_outbox_stuck reason=signature_rejected`(值班查询见 `deploy/k8s/asset-channel-alerts.yaml` 头注释),物品留在玩家存档的待寄队列里,不丢,修好时钟之后按退避自动寄出。
+
+- **Secret `domain-service-secrets` 里运维仍要预置的键**。值由运维生成,不进仓库、不进日志;部署不生成、不读值。下面这几把与本节别处(数据库连接串、迁移账号、生产者密钥等)写到的键都属于这一类:
 
   | key | 环境变量 | 放在哪 | 谁用 |
   |---|---|---|---|
-  | `role-fence-coordinator` | `MMORPG_ROLE_FENCE_SECRET_COORDINATOR` | 每个 zone namespace、infra namespace | data-service 调参与者,六个参与者验 |
   | `asset-data-service` | `MMORPG_ASSET_OP_SECRET_DATA_SERVICE` | 每个 zone namespace | GM 批量回收的资产指令签名,data-service 签、scene 验,两边同值。`optional: true`:`-AssetOps off` 时用不到;`-AssetOps on` 时 data-service 缺它拒启 |
   | `login-admin-token` | `MMORPG_LOGIN_ADMIN_TOKEN` | 每个 zone namespace | `LoginAdmin` 的运维口令(`x-admin-token`),至少 16 字节。`optional: true`:没有这个 key 时运维面整体停用 |
-  | `role-fence-guild` | `MMORPG_ROLE_FENCE_SECRET_GUILD` | 每个 zone namespace、infra namespace | guild 读权威状态,data-service 验 |
-  | `role-fence-trade` | `MMORPG_ROLE_FENCE_SECRET_TRADE` | 同上 | trade |
-  | `role-fence-mail` | `MMORPG_ROLE_FENCE_SECRET_MAIL` | 同上 | mail |
-  | `role-fence-match` | `MMORPG_ROLE_FENCE_SECRET_MATCH` | 同上 | match |
-  | `role-fence-player-inbox` | `MMORPG_ROLE_FENCE_SECRET_PLAYER_INBOX` | 同上 | player-inbox |
-  | `role-fence-friend` | `MMORPG_ROLE_FENCE_SECRET_FRIEND` | 同上 | friend |
-  | `role-fence-chat` | `MMORPG_ROLE_FENCE_SECRET_CHAT` | 同上 | chat 读权威状态(只读,不是参与者) |
-  | `role-fence-db` | `MMORPG_ROLE_FENCE_SECRET_DB` | 每个 zone namespace | go/db 调 `GetPlayerRoute`,data-service 验 |
   | `match-internal-guild` | `MMORPG_MATCH_INTERNAL_SECRET_GUILD` | infra namespace | guild 和 match 同值:开局、占用、读终局都验它 |
-  | `mail-producer-battle` | `MAIL_PRODUCER_SECRET_BATTLE` | infra namespace(mail)、每个 zone namespace(scene) | scene 签、mail 验,两边同值:两包都放不下的战斗掉落改投邮件([battle-overflow-mail.md](../design/battle-overflow-mail.md))。缺它 mail 与 scene 都起不来 |
-  | `account-directory-payment` | `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT` | 每个 zone namespace(data-service)、infra namespace(payment) | payment 签、data-service 验,各处同值:go/payment 按玩家查实名(`GetAccountRealName`,未成年人充值限额用,[real-name-anti-addiction.md](../design/real-name-anti-addiction.md) §5.6)。2026-11-19 新增,不开防沉迷的部署也要有;缺它 data-service 与 payment 都起不来。与别的 key 同值时 data_service 拒启 |
-
-  **2026-11-12 增补：首次发布之前必须补上 `mail-producer-battle`。** 它是两包都放不下的战斗掉落改投邮件（[battle-overflow-mail.md](../design/battle-overflow-mail.md)）的发件签名密钥，scene 签、mail 验。顺序如下：
-
-  1. 在 infra namespace 与**每一个** zone namespace 的 `domain-service-secrets` 里各加一个 `mail-producer-battle`。各处值相同，至少 32 字节，由运维生成，不进仓库、不进日志。
-  2. 再 apply mail（infra）与各 zone 的 scene。两边 manifest 都是 `optional: false`：key 缺失时对应 Pod 卡在 `CreateContainerConfigError`，起不来，不会带着空密钥跑。
-  3. 核对 key 名（只列名字，不打印值）：`kubectl -n <namespace> get secret domain-service-secrets -o go-template='{{range $k, $_ := .data}}{{$k}}{{"\n"}}{{end}}'`。
-
-  值不同，或两边时钟相差超过 5 分钟时，Pod 都能起来，但 mail 会拒绝验签：scene 侧是 ERROR `metric=mail_outbox_stuck reason=signature_rejected`（值班查询见 `deploy/k8s/asset-channel-alerts.yaml` 头注释），物品留在玩家存档的待寄队列里，不丢，但寄不出去。改成同一个值（或修好时钟）之后，按退避自动寄出。
-
-  部署脚本（`k8s_deploy.ps1`）在任何写操作之前核对这一项：键缺失、不足 32 字节、或与 infra 不同，都会拒绝部署，一个都不写。`-DryRun` 只打一行说明。发布预检（`release_preflight.ps1`）只查配置与制品、不连集群，不查这一项。
-
-  **2026-11-19 起这道核对覆盖表里全部跨 namespace 的键**(`k8s_deploy.ps1` 的共享键表 `$script:SharedDomainServiceSecrets` 与门禁 `Assert-SharedDomainServiceSecretsForRun`):`mail-producer-battle`、`account-directory-trade`、`account-directory-scene`、`account-directory-payment` 与八把 `role-fence-*`(`role-fence-db` 只在 zone,不在内)。`infra-up` / `all-up` 部署全局 Go 服务时核 infra 的全表;`zone-up` / `all-up` 核每个 zone 的键并与 infra 逐键比(只发 C++ 节点、不带 Go 服务时只核 scene 读的前三把)。每个 namespace 只读一次 `domain-service-secrets`;缺键、去掉首尾空白后不足 32 字节、两把同值、与 infra 不同都拒绝,报错只点键名、不带值。表与各清单的 `secretKeyRef` 一致由契约测试(`k8s_migrate_gate.tests.ps1`)反查。
 
 - 参与者经 infra namespace 的 K8s Service 直连(`guild.<infra>:50300`、`trade.<infra>:50800`、`mail.<infra>:50900`、`match.<infra>:50500`、`player-inbox.<infra>:50950`、`friend.<infra>:50400`),`k8s_deploy.ps1` 按 `-InfraNamespace` 渲染。`-NetworkPolicies on` 时 guild、match 的放行名单已含 data-service。任何一个参与者不可达,过户和删角一律拒绝,其余功能不受影响。
 - 告警装 `deploy/k8s/logical-db-alerts.yaml`,安装方式和抓取前提写在文件头。闸门冻结时长没有指标,要查库。

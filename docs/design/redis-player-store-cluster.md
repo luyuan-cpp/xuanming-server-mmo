@@ -4,7 +4,7 @@
 
 > 状态：**设计 v2（2026-10-23）**。v1 经四视角对抗评审（一致性、扩展与运维、可实现性、替代方案），评审结论逐条核对源码后吸收进本版，变更见文末「修订记录」。第 1 批已落码（未编译），其余批次见 §13。所有容量数字除注明 [M] 者外都是推算 [I]，未经本仓实测；结论以 §14 的实测为准。
 >
-> 需求来源：[Redis 物理水平扩展交接](../handoff/redis-horizontal-scaling-requirements-20261022.md)（用户原话「我就想 redis 可以物理水平无限扩展」，方案由本稿自定）。源码事实来自 2026-10-22 全链只读盘点（10 路，按子系统 + 按模式两种方式扫描），行号以当时工作区为准，落码时按函数名复核。
+> 需求来源：Redis 物理水平扩展交接（原 `docs/handoff/redis-horizontal-scaling-requirements-20261022.md`，已清理，见 `ccf2840b2`）（用户原话「我就想 redis 可以物理水平无限扩展」，方案由本稿自定）。源码事实来自 2026-10-22 全链只读盘点（10 路，按子系统 + 按模式两种方式扫描），行号以当时工作区为准，落码时按函数名复核。
 >
 > 本稿是本次方案的**唯一权威**。[共享 Redis 按用途拆分 §20–§25](shared-redis-split-by-purpose.md) 的「单元化 + 单元内 Cluster」路线作为输入材料，不再作为实施路线（G4a 会话 2026-10-23 已在该稿 §25.3 把相关条目指向本稿）。
 >
@@ -122,7 +122,7 @@
 | 会话租约（4 键） | `player:leases`、`:processing`、`:claim_tokens`、`:claim_payloads` | `player:leases:{<slottag>}` 及同 tag 的三个兄弟键 | player_locator |
 | gate 索引 | `player:gate_index:sessions:<uuid>`、`:gates` | `player:gate_index:{<slottag>}:sessions:<uuid>`、`player:gate_index:{<slottag>}:gates` | player_locator（B0-1 §11 的既定形状） |
 | 分片登记 / 段租约 | — | `player:locator_shard:<role>:members:{afps}`、`player:locator_shard:<role>:segment:{<SlotTag(64c)>}`，role 是 `lease_monitor` 或 `gate_sweep` | player_locator（§5.4 同一套办法，§5.9） |
-| AFK 通行 | `player:afk_pass:<pid>` | `player:afk_pass:{<pid>}` | player_locator |
+| AFK 通行 | `player:afk_pass:<pid>` | `player:afk_pass:{<pid>}` | scene 写(存档提交之后的读投影,事实源在存档,afk-monthly-card.md §5);player_locator 读 |
 | 玩家锁 | `player_locker:<pid>` | `player_locker:{<pid>}` | login |
 | 合服提示 | `player_merge_notice:<pid>`、`player_force_rename:<pid>` | **删除**（生产无读写） | — |
 | 登录幂等 | `login_idempotent:<pid>:<req>` | `login_idempotent:{<pid>}:<req>` | login |

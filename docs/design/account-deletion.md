@@ -163,11 +163,12 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 | mail | `mail_box`、收件人是他的 `mail_message`、`mail_state`、`mail_player_op_seq`、已封存活动(state=2)里的 `mail_campaign_recipient`;清理之后再寄给他的个人邮件在发件事务里锁他的副本复核,拒收(`kMailRecipientDeleted`,发件方按终态处理) | 终态的 `mail_asset_op`:资产审计;**还在导入的活动名单里他那一行**:封存要核收件人行数等于导入人数,删了整份名单封不上,别人的奖励也发不出去 |
 | player_inbox | `player_inbox_item`、`player_inbox_stream` | `player_inbox_audit` |
 | trade | `trade_favorite` | 终态的 `trade_listing`、`trade_commerce`、`trade_asset_op`:与交易对手共有的成交记录,防欺诈与对账;合同里原身份的账号串一并保留,隐私政策写明;**`trade_player_op_seq`**:模块以「seq 行永不删除」做锁分析,`TestSeqTableRowsAreNeverDeleted` 守着,只是按玩家的计数 |
-| match(含组队) | `match_rating`、`match_network_profile`、`match_player_battle_report`(随之用 `releaseBattleReportsTx` 给共享战报减引用)、已到期的 `match_role_occupancy`、终态的观战与意图行(`match_spectator_head` 只在他已没有观战意图时删)、终态的 `match_join_intent`、`team_action_receipt`、他写的战斗剧本 `match_battle_script` 与选用 `match_battle_script_loadout`(选用只指向本人剧本或官方剧本,没有别人的引用) | 对局报告、结算、匹配票原件:多名玩家共有;**`match_rating_applied`**:按对局记「这一局评分只入账一次」,不是按玩家,删了重放会给同局其他人再算一次分;`team_membership` 离队墓碑(组队 epoch 不能回退);`match_battle_script_review` 剧本审核流水:审核留痕(谁审了哪一版正文),按审计保留 |
-| payment | — | 订单与支付流水:法定保留(税务、退款争议) |
+| match(含组队) | `match_rating`、`match_network_profile`、`match_player_battle_report`(随之用 `releaseBattleReportsTx` 给共享战报减引用)、已到期的 `match_role_occupancy`、终态的观战与意图行(`match_spectator_head` 只在他已没有观战意图时删)、终态的 `match_join_intent`、`team_action_receipt`、他写的战斗剧本 `match_battle_script` 与选用 `match_battle_script_loadout`(选用只指向本人剧本或官方剧本,没有别人的引用) | 对局报告、结算、匹配票原件:多名玩家共有;**`match_rating_applied`**:按对局记「这一局评分只入账一次」,不是按玩家,删了重放会给同局其他人再算一次分;`team_membership` 离队墓碑(组队 epoch 不能回退);`match_battle_script_review` 剧本审核流水:审核留痕(谁审了哪一版正文),按审计保留 180 天后删(按审核时刻算,配置 `BattleScript.ReviewRetentionDays`,`docs/design/battle-script.md` §6.4);隐私政策写明保留期 |
+| payment | — | 订单与支付流水:法定保留(税务、退款争议);未成年人额度行 `payment_spend` 只有身份摘要,随订单的合规保留 |
 | chat | — | 世界频道与私聊原件按现有 TTL 30 天过期;滥用举证要用,隐私政策写明 |
 | rank | 评级榜(match 是唯一的玩家榜生产者)上他的条目:match 的清理在删评分行的同一事务里,按他有评分的计分模式各写一行 `match_rank_removal`(事务发件箱);投榜循环调 `RemoveRankEntry`(rank 同一事务删分并立墓碑,迟到的旧批次带不回他),确认后删行;榜已封、已隐藏或不存在按摘完处理。发给他的榜单奖励邮件被拒收(`kMailRecipientDeleted`)时直接转放弃,不重投、不报人工 | 已封榜的快照:是当期结算的凭证 |
-| Redis 缓存(名字、展示) | 删角收尾已有的缓存失效,其余随 TTL | — |
+| 玩家域 Redis | 会话键(`MarkOffline`)、位置与位置修订(`LeaveScene`);名字、展示缓存由删角收尾失效;挂机月卡投影到期自动消失(`EXAT`),同步摘要 30 天、已确认位点 7 天、交接标记 5 分钟、持有者租约 15 秒按 TTL 消失 | 永久的单调计数:`login_generation`、`location_revision_floor`、`owner_epoch`、`handoff_fence`。它们只有 player_id 和一个计数,保证同一 id 的代次永不倒退,与目录里永久保留的角色墓碑、`player_route` 同类 |
+| Kafka、日志 | — | 按 topic 保留期与日志保留期滚动删除;日志里账号只记掩码(`MaskAccount`) |
 
 表名取自 `proto/*/` 下的现有表声明,落码时逐表核对过主键与按玩家的列(2026-11-19,各服务的 `role_fence_purge.go`)。friend 删关系时同一事务给对端的 `friend_count` 减数;guild 的人数是锁内 COUNT,没有计数列;guild、mail 里「状态行 / seq 行建出后永不删除」的前提只对在役角色成立也够用:用到它们的事务都先锁这名玩家的护栏副本,墓碑之后一律被拒,`player_id` 又不复用。
 
@@ -208,6 +209,8 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 ### 7.3 删行与重新注册
 
 账号行以前只增不删,读路径(行和 ref 分两条语句读)靠这一点。改成只在「状态 2 且 ref 为空」时删,之后不会再有 ref 指向这个账号串:新 ref 要先拿账号行锁,行不在时 `lockDirectory(create=true)` 建出来的是状态 0 的新行。读路径看到的只有「旧行 + 0 条 ref」和「没有行」两种,都是空列表。
+
+整库恢复(灾备 PITR)按恢复到的时间点算:恢复点之前完成的注销都在(账号行已删、回执在);恢复点之后才申请或才完成的,回到恢复点当时的状态。还在 1、2 状态的,执行者照常认领重做;恢复点时还是 0 的,要按运维记录(工单、执行者日志的时间)通知玩家重新申请。备份本身随轮换过期,恢复出来的旧数据同样按本节处理,不另做外部删除日志。
 
 删行之后同一个人再登录,建出的是新账号,角色列表为空。旧令牌:执行时已经 `RevokeAll`;另外 `auth_type=access_token` 的登录(HTTP 与 gate 两条路径)改为 `Read(create=false)`:令牌只会发给已有账号行的账号,行不在就是已注销,按凭证无效拒绝,不会凭旧令牌把账号建回来。这样不依赖登录域 Redis 的部署形态。
 
@@ -310,7 +313,6 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 - Apple 服务器到服务器通知、客户端凭据状态检查(`getCredentialState` / `credentialRevokedNotification`)。
 - 删口令凭据(§6.2)。
 - 删号前导出个人数据。
-- 剧本审核流水 `match_battle_script_review` 的保留期清理:它对全体玩家都没有到期删除(只增不改),要补索引与一条后台清理循环,保留期是留存策略的决定,与注销的正确性无关,另立任务。
 
 ## 12. 验证计划(落码后由 Codex 执行,命令写进 PROGRESS)
 

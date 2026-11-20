@@ -237,6 +237,15 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
 
 - 启动日志有一行 `Client connection admission ENFORCED at accept, max_connections=... accept_rate_per_second=... accept_burst=... preauth_early_drop_start=... preauth_budget=... preauth_evictable_age_ms=... source_rate_per_second=... source_burst=...`,以它为准(按来源限速关闭时后两项是 0,括号里打着推荐值)。
 - 判定顺序是关源 → 总量 → 按来源限速 → 未验签预算 → 新建速率(上表按这个顺序排)。
+- **怎么设上表的环境变量**(2026-11-20 起,未运行):部署时带 `k8s_deploy.ps1 -ConnectionAdmissionEnv`,逗号分隔的「名字=值」,例如
+  `-ConnectionAdmissionEnv GATE_ACCEPT_RATE_PER_SECOND=2000,GATE_ACCEPT_BURST=20000`。`dev_tools.ps1` 的 `k8s-zone-up` / `k8s-all-up` 与
+  `k8s_image.ps1` 的发布命令同名透传。
+  - 名字只收上表的七个 `GATE_*` 与 §3.3 的七个 `BATTLE_*`,区分大小写;值只收规范十进制正整数。拼错在部署入口就拒,范围与相互关系由 gate 启动时校验,写错拒启。
+  - `GATE_*` 只写进 zone-up 的 gate(Deployment / external StatefulSet)。external gate 是 OnDelete,模板改了还要按 `k8s_gate_drain.ps1` 逐台换 Pod。
+  - **不粘滞**:脚本不从集群读回旧值,下一次部署不带就回到缺省推导。压测或应急调过的,之后每次部署都要照带;要长期改,改代码里的推导(设计稿 §9.7)。
+  - 每次部署打一行 `[connection-admission] gate overrides: ...`,部署输出里看得出这次带了什么。
+  - 等不及部署时仍可 `kubectl -n <ns> set env statefulset/gate <名字>=<值>`(deployment 形态换成 `deployment/gate`)。set env 加的变量不在 last-applied 里,
+    之后的部署不会清掉,用完要显式撤销(`<名字>-`)。
 - **未验签预算怎么工作**:
   - 还没验签的连接数(`gate_unauthenticated_connections`)过了早拒起点就算承压。
   - 承压时,建连满 3 秒还没验签的最老一条连接给新连接让位(被关掉,`gate_preauth_evicted_total` 加一)。
@@ -244,19 +253,22 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
   - gate 自己的 loop 刚卡过(存活扫描的 1 秒节拍迟到)时不淘汰,只按概率拒或到预算拒。
   - 正常客户端毫秒级验签,正常洪峰碰不到起点;登录压测也碰不到,不用为它调参数。
 - **要调预算时**(`GatePreauthBudgetRejecting` 响、握手 P99 也在变慢,而卡顿已经处理过):
-  `kubectl -n <ns> set env statefulset/gate GATE_PREAUTH_BUDGET=<n> GATE_PREAUTH_EARLY_DROP_START=<n>`。
+  部署时带 `-ConnectionAdmissionEnv GATE_PREAUTH_BUDGET=<n>,GATE_PREAUTH_EARLY_DROP_START=<n>`(上面「怎么设」)。
   - 只设预算时起点按新预算取一半;起点不能大于预算;可淘汰年龄 1~9999 毫秒,不能到 10 秒握手期限。写错拒绝启动。
-  - 撤销写 `GATE_PREAUTH_BUDGET- GATE_PREAUTH_EARLY_DROP_START- GATE_PREAUTH_EVICTABLE_AGE_MS-`。
+  - 撤销 = 下一次部署不带它们;用 set env 设的写 `GATE_PREAUTH_BUDGET- GATE_PREAUTH_EARLY_DROP_START- GATE_PREAUTH_EVICTABLE_AGE_MS-`。
 - **按来源前缀限速**(IPv4 /24、IPv6 /64):
-  - 只在 gate 看得到玩家真实源地址的形态里开:external 入口、`externalTrafficPolicy: Local`(设计稿 §4.2.1)。
-    podip 形态与代理型 LB 后面看到的是节点 / LB 的地址,开了会把所有人当成一个来源。
-  - 开启:`kubectl -n <ns> set env statefulset/gate GATE_SOURCE_RATE_PER_SECOND=<n>`。推荐值启动日志里有(`suggested ...`)。
+  - 只在 gate 看得到玩家真实源地址的形态里有用:external 入口、`externalTrafficPolicy: Local`(设计稿 §4.2.1)。
+  - 只对公网源地址生效(2026-11-20 起):私网、回环、链路本地、100.64/10、IPv6 唯一本地 / 链路本地的来源一律不按来源限速。
+    这类地址是代理、LB 或集群内调用方的,认不出后面的真实玩家。podip 形态、代理型 LB 后面开了也不会误伤,只是不起作用。
+  - **经 ws-edge 进来的小游戏连接不受 gate 这一道管**:gate 看到的是边缘 Pod 的内网地址。要按来源限它们,就在 infra-up 时带
+    `-WsEdgeSourceRatePerSecond`,由边缘 nginx 按 /24 做 `limit_req`。
+  - 开启:部署时带 `-ConnectionAdmissionEnv GATE_SOURCE_RATE_PER_SECOND=<n>`。推荐值启动日志里有(`suggested ...`)。
     `GATE_SOURCE_BURST` 不设时取速率 × 10 秒。
   - 开了也只在承压时生效:未验签池过了早拒起点,或全局速率闸最近 10 秒内拒过连接。平时一条都不拦。
-  - 撤销写 `GATE_SOURCE_RATE_PER_SECOND- GATE_SOURCE_BURST-`。
-  - set env 加的变量不在 last-applied 里,之后的部署不会清掉,用完要显式撤销(与速率闸那两个变量相同)。
+  - 撤销 = 下一次部署不带它们;用 set env 设的写 `GATE_SOURCE_RATE_PER_SECOND- GATE_SOURCE_BURST-`,之后的部署不会替你清掉。
 - 两个环境变量只接受规范十进制正整数(1..1000000),写错拒绝启动;不设就是缺省推导。没有「0 = 关闭」,要放开就写一个大数。
-- **压测要打超过缺省速率的建连时**(例如反复登录登出的登录压测,持续新建速率超过上限的 1%/秒),先给 gate 设 `GATE_ACCEPT_RATE_PER_SECOND`,否则桶用完之后压测机会看到连接被重置,结果失真。`k8s_deploy.ps1` 目前没有对应参数,K8s 上要调时用 `kubectl -n <ns> set env statefulset/gate GATE_ACCEPT_RATE_PER_SECOND=<n>`(deployment 形态换成 `deployment/gate`)。set env 加的变量不在 last-applied 里,之后的部署不会把它清掉;压测完要显式撤销:`kubectl -n <ns> set env statefulset/gate GATE_ACCEPT_RATE_PER_SECOND- GATE_ACCEPT_BURST-`。
+- **压测要打超过缺省速率的建连时**(例如反复登录登出的登录压测,持续新建速率超过上限的 1%/秒),先给 gate 设 `GATE_ACCEPT_RATE_PER_SECOND`,否则桶用完之后压测机会看到连接被重置,结果失真。部署压测环境时带 `-ConnectionAdmissionEnv GATE_ACCEPT_RATE_PER_SECOND=<n>`;压测完下一次部署不带它就回到缺省。
+- **校准这些阈值**:现在的缺省值都是推导的,还没有压测数据。步骤、要看的列与改动判据见设计稿 §9.7;未验签连接用 `tools/scripts/preauth_flood.py` 造,复盘读 `stress_summarize.ps1` 的 N2 表。
 
 **指标**(gate 的 Prometheus 出口,`-CppMetricsPort`,缺省 9400):
 
@@ -297,7 +309,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
 
 **客户端看到的现象**:被拒的连接在客户端是「连接被重置」(RST),不是「对端正常关闭」。被淘汰的未验签连接是已经建出来的连接被关,客户端看到的是对端正常关闭。两种都按普通断线处理、退避后重连即可;排查玩家「连不上」时,先在对应时段的 `gate_rejected_total` 与 `gate_preauth_evicted_total` 里找原因。
 
-### 3.3 battle 直连准入:指标、告警与速率闸的调整(2026-11-19,已落码、未编译)
+### 3.3 battle 直连准入:指标、告警与速率闸的调整(2026-11-19,已落码、未编译;2026-11-20 补按来源前缀限速与 O(1) 的未认证池,未编译)
 
 battle 的客户端直连与 gate 同一套做法(设计见 [gate-connection-admission-control.md](../design/gate-connection-admission-control.md)「P1-1 ~ P1-4 · battle 直连面」与 [turn-based-battle-server.md](../design/turn-based-battle-server.md) D27),速率闸与缺省推导是同一份代码。这里只写与 gate 不同的地方,其余读法照 §3.2。
 
@@ -305,23 +317,38 @@ battle 的客户端直连与 gate 同一套做法(设计见 [gate-connection-adm
 | --- | --- | --- | --- |
 | 关源(停机 / 维护;计划排空不关源) | 无 | — | `shutting_down` |
 | 总量(参战者与观众共用) | `BattleMaxConnections`(`base_deploy_config.yaml`) | 4096 | `capacity` |
+| 按来源前缀限速(缺省关闭,2026-11-20 补) | 环境变量 `BATTLE_SOURCE_RATE_PER_SECOND`(设了才开)、`BATTLE_SOURCE_BURST` | 关闭;开了只在承压时、只对公网来源生效,推荐值 4096 时每个前缀 10 条/秒、桶深 100 | `source_rate` |
 | 未验签预算(2026-11-19 补) | 环境变量 `BATTLE_PREAUTH_BUDGET`、`BATTLE_PREAUTH_EARLY_DROP_START`、`BATTLE_PREAUTH_EVICTABLE_AGE_MS` | 4096 时早拒起点 500、预算 1000,可淘汰年龄 3000 毫秒 | `preauth_early_drop` / `preauth_budget` |
 | 新建速率(令牌桶) | 环境变量 `BATTLE_ACCEPT_RATE_PER_SECOND`、`BATTLE_ACCEPT_BURST` | 速率 = 上限的 1%/秒(下限 100),桶深 = 上限;4096 时是 100 条/秒、桶深 4096 | `accept_rate` |
 
 - 启动日志有一行 `Battle client connection admission ENFORCED at accept, max_connections=... accept_rate_per_second=... accept_burst=...`,以它为准。两个变量的取值规则与 gate 相同,写错拒绝启动。
 - **全服匹配的网络探测**:探测也连这个端口,探测有效期 120 秒、到期前重探。match 在每个机房的可探测 battle(自报 CLOSED 的不探)里按玩家分散目标,同一玩家总落同一台(2026-11-19 起,未编译;之前每个机房只探 NodeId 最小的一台;推导见 [global-match-hierarchical-pools.md](../design/global-match-hierarchical-pools.md) §5.1「探测目标」)。所以每台的探测建连速率约等于「全服有探测计划的玩家数 ÷(本机房可探测 battle 数 × 重探周期)」,与它的连接上限无关;机房里只有一台时,1 万人排队就到了缺省的 100 条/秒。**上线和 `match-stress` 压测前按这个式子估算**,接近缺省时给 battle 设 `BATTLE_ACCEPT_RATE_PER_SECOND`,取值按「排队人数峰值 ÷(可探测台数 × 重探周期)」再留一倍;台数按机房里可探测得最少的时候算(滚动升级、排空期间 CLOSED 的节点不分担探测);重探周期按 robot 的口径约 80 秒(有效期 120 秒减去提前量 40 秒,`robot/network_probe.go`),Unity 客户端的提前量以客户端为准。被拒的探测在客户端是这个机房探测失败。探测连接出示了 match 签发的授权,不计入 `battle_unauthenticated_connections`。
-- 怎么设:hostPort Deployment 形态与 gate 相同,`kubectl -n <ns> set env deployment/battle BATTLE_ACCEPT_RATE_PER_SECOND=<n>`,撤销写 `BATTLE_ACCEPT_RATE_PER_SECOND-`。Agones Fleet 形态(缺省)不能 set env:`kubectl -n <ns> edit fleet battle`,在 battle 容器的 env 里加,Agones 按 Fleet 的滚动策略替换 GameServer(已分配的打完才回收);Fleet 是 CRD,下一次部署重新渲染时 env 以生成物为准,手加的变量会丢。`k8s_deploy.ps1` 目前没有对应参数。
+- 怎么设(2026-11-20 起,未运行):与 gate 相同,infra-up 时带 `-ConnectionAdmissionEnv BATTLE_ACCEPT_RATE_PER_SECOND=<n>`(§3.2「怎么设」)。
+  - Deployment、hostPort、Agones Fleet 三种形态都写,含金丝雀池;同一个参数里的 `GATE_*` 只在 zone-up 生效。
+  - Fleet 改了 env 是换代:已分配的房间打完才回收,新房间用新值。不粘滞,同 gate。
+  - 等不及部署时,Deployment / hostPort 形态可以 `kubectl -n <ns> set env deployment/battle <名字>=<值>`,撤销写 `<名字>-`。
+  - Fleet 是 CRD,`kubectl edit fleet battle` 手加的 env 在下一次部署时被生成物覆盖,所以 Fleet 一律走部署参数。
 
-**指标**(battle 的 Prometheus 出口,`-CppMetricsPort`,缺省 9400;名字与 gate 一一对应,把前缀换成 `battle_`):`battle_connections_current` / `battle_connections_max`、`battle_unauthenticated_connections`、`battle_accepted_total`、`battle_rejected_total{reason}`(`no_token_secret` 只在启动配置有问题时出现)、`battle_accept_rate_limit_per_second` / `battle_accept_burst`、`battle_handshake_duration_ms`(建连到票据握手成功)、`battle_preauth_reaped_total`、`battle_preauth_evicted_total`、`battle_preauth_budget` / `battle_preauth_early_drop_start` / `battle_preauth_evictable_age_ms`。
+**指标**(battle 的 Prometheus 出口,`-CppMetricsPort`,缺省 9400;名字与 gate 一一对应,把前缀换成 `battle_`):`battle_connections_current` / `battle_connections_max`、`battle_unauthenticated_connections`、`battle_accepted_total`、`battle_rejected_total{reason}`(`no_token_secret` 只在启动配置有问题时出现)、`battle_accept_rate_limit_per_second` / `battle_accept_burst`、`battle_handshake_duration_ms`(建连到票据握手成功)、`battle_preauth_reaped_total`、`battle_preauth_evicted_total`、`battle_preauth_budget` / `battle_preauth_early_drop_start` / `battle_preauth_evictable_age_ms`、`battle_source_*`(按来源限速,见下)。
 
 **未验签预算**(2026-11-19 补,未编译;规则与 gate 相同,见 §3.2):
 - 池是没完成票据握手、也没出示探测授权的直连,探测量再大也不占它。
 - 缺省(`BattleMaxConnections` 4096 时)早拒起点 500、预算 1000,可淘汰年龄 3 秒。
 - 覆盖变量 `BATTLE_PREAUTH_BUDGET` / `BATTLE_PREAUTH_EARLY_DROP_START` / `BATTLE_PREAUTH_EVICTABLE_AGE_MS`,写错拒启。
-  怎么设同上面的速率闸变量:hostPort 形态用 set env,Fleet 形态改 Fleet 的 env。
+  怎么设同上面的速率闸变量(`-ConnectionAdmissionEnv`)。
 - 被拒的直连记在 `battle_rejected_total{reason="preauth_budget|preauth_early_drop"}`。
 - battle 的 loop 刚卡过时不淘汰。
 - 启动日志 `Battle client connection admission ENFORCED at accept, ...` 带 `preauth_early_drop_start=` / `preauth_budget=` / `preauth_evictable_age_ms=`。
+- 池按 connId 有序存着,每次 accept 只读池大小,最老一条只在承压时才找。被拒的洪水不会再按直连数消耗 battle 的 loop(2026-11-20 前是每次扫一遍会话表)。
+
+**按来源前缀限速**(2026-11-20 补,未编译;规则与 gate 相同,见 §3.2):
+- 缺省关闭。开启:infra-up 时带 `-ConnectionAdmissionEnv BATTLE_SOURCE_RATE_PER_SECOND=<n>`。
+  推荐值在启动日志里(`suggested per-source ...`);`BATTLE_SOURCE_BURST` 不设时取速率 × 10 秒。
+- battle 的 hostPort / Agones 端口映射保源地址,直连看得到玩家的公网地址;经 ws-edge 进来的小游戏直连只看得到边缘的内网地址,
+  不受这一道管(要限就在 infra-up 带 `-WsEdgeSourceRatePerSecond`)。
+- 开了也只在承压时生效:未认证池过了早拒起点,或全局速率闸最近 10 秒内拒过直连。
+- 指标 `battle_source_rate_limit_per_second` / `battle_source_burst` / `battle_source_rate_active` / `battle_source_tracked` /
+  `battle_source_untracked_total`,被拒记在 `battle_rejected_total{reason="source_rate"}`。
 
 **告警**:`deploy/k8s/battle-connection-alerts.yaml`,手工 apply:`kubectl apply -n observability -f deploy/k8s/battle-connection-alerts.yaml`。
 
@@ -332,6 +359,8 @@ battle 的客户端直连与 gate 同一套做法(设计见 [gate-connection-adm
 | `BattleAcceptRateLimited` | 新建直连超过速率上限 | 先看同机房的 battle 是不是一起在拒:探测均摊在机房里每台可探测的 battle 上,一起拒多半是探测量,按上面估算调高速率;只有这一台在拒,再按 §3.2 区分洪峰与攻击 |
 | `BattleUnauthenticatedConnectionsHigh` | 未认证直连到早拒起点的八成以上,持续 2 分钟(2026-11-19 前是「超过上限的 5%」) | `battle_preauth_evicted_total` 是否在涨;采样日志 `reason=handshake_timeout` 与 `battle evicting the oldest unauthenticated direct connection` 行里的 `latest_peer` |
 | `BattlePreauthBudgetRejecting` | 未验签预算拒绝了新直连(池里全是刚建的直连) | 握手 P99:正常 = 只建连不握手的突发,去上游处置;也在变慢 = battle 卡顿,先处理卡顿,反复出现再调 `BATTLE_PREAUTH_BUDGET` / `BATTLE_PREAUTH_EARLY_DROP_START` |
+| `BattleSourceRateLimited` | 按来源限速开着、承压期间有公网前缀超了它那一份 | 采样日志 `reason=source_rate` 行的 `latest_peer`;是已知运营商出口、握手耗时又正常时调高 `BATTLE_SOURCE_RATE_PER_SECOND` / `BATTLE_SOURCE_BURST` |
+| `BattleSourceTableFull` | 前缀表(65536)满了,新前缀没按来源限速就放行 | 分布式洪水,去上游处置;battle 这一侧不用调 |
 | `BattlePreauthConnectionsReaped` | 每秒超过 1 条未握手直连被关,持续 5 分钟 | 握手 P99 是否也在变慢 |
 | `BattleHandshakeSlow` | 握手 P99 超过 3 秒持续 10 分钟 | 这台 battle 的 CPU、loop 延迟与房间数;多台同时变慢看客户端入口 |
 

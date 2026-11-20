@@ -74,7 +74,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeSourceZon
 
 以下原文用于核对既有工具行为、门禁和历史证据。Claude Code 定稿新方案时，应逐项处理与不停服目标不兼容的内容；旧命令不能直接当作不停服步骤执行。
 
-> **状态**: v3.2 — 2026-09-28(v3.2:`-MergeDbCapabilityZones` 去缺省 + `merge-zone-capability-check`,见修订历史)。按 [`player-storage-placement.md`](../design/player-storage-placement.md)(v2.2)同批落码的 `tools/merge_zone/` 与 `tools/scripts/dev_tools.ps1` 重写了步骤顺序、清单、验证与回滚,并新增落点运维(§14)。**这批代码落码时未编译、未测试**(AGENTS.md §10.1);2026-09-29 按用户指示跑过一轮(merge_zone 集成测试 83 条 PASS(67 个顶层 + 16 个子用例)、dev_tools 契约 16/16,PROGRESS.md「2026-09-28 玩家存储落点」条目的「运行验证」),但 `be6b4ab1d`(10-08)之后 `tools/merge_zone` 的 P4 预检与 Kafka 队列审计又改过、未编译。**首次按本版执行前,先确认 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md) 已由 Codex 在当前 HEAD 上跑绿**。截至 2026-10-12,真实集群上 pin 合服、copy 合服、搬库都没有演练过(§12)。
+> **状态**: v3.2 — 2026-09-28(v3.2:`-MergeDbCapabilityZones` 去缺省 + `merge-zone-capability-check`,见修订历史)。按 [`player-storage-placement.md`](../design/player-storage-placement.md)(v2.2)同批落码的 `tools/merge_zone/` 与 `tools/scripts/dev_tools.ps1` 重写了步骤顺序、清单、验证与回滚,并新增落点运维(§14)。**这批代码落码时未编译、未测试**(AGENTS.md §10.1);2026-09-29 按用户指示跑过一轮(merge_zone 集成测试 83 条 PASS(67 个顶层 + 16 个子用例)、dev_tools 契约 16/16,PROGRESS.md「2026-09-28 玩家存储落点」条目的「运行验证」),但 `be6b4ab1d`(10-08)之后 `tools/merge_zone` 的 P4 预检与 Kafka 队列审计又改过、未编译。**首次按本版执行前,先确认 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） 已由 Codex 在当前 HEAD 上跑绿**。截至 2026-10-12,真实集群上 pin 合服、copy 合服、搬库都没有演练过(§12)。
 > **范围**: K8s 部署形态下,把 source zone 合并进 target zone 的端到端 ops SOP,以及玩家存储落点的钉落点 / 搬库 / 退役审计。**逐字可执行**。
 > **关联**:
 > - 设计:[`player-storage-placement.md`](../design/player-storage-placement.md)(落点、pin / copy 模式、搬库;§12 为本批修的工具缺口)/ [`server_merge_design.md`](../design/server_merge_design.md)(历史设计,§5.5 回滚已作废)/ [`server-merge-gap-fixes.md`](../design/server-merge-gap-fixes.md)(还开着哪些口子)
@@ -1055,7 +1055,7 @@ K8s 下全局库与 zone 库在同一个 mysql 实例,zone 回档(`docs/design/z
 
 **在线清库与 db_first**:`stress_round19.ps1` / `currency_crash_window.ps1` 在服务运行中先 FLUSHALL 再清路由表、复位 `route_meta` / `route_reconcile`。第 1b-2 批的 leader 落地之后,db_first 下这样清库会与 leader 互相干扰(把将被清掉的行推回刚清空的 Redis,或把水位复位误判成回档)。脚本防护属于第 1b-3 批;在那之前,db_first 下清库前先停 data_service,或保持 redis 模式。
 
-> 2026-10-19 补(映射持久化第 1b-2 批收尾,代码未编译、未测试):**`rewarm` 与 `unfreeze` 的水位键出口**。设计见 [spec_D1_batch1b2_2_3.md](../handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md) §2 M2 / M3 / M5、§13.1 第 4 / 6 条、§13.5 第 1 条(并入提案 §13 之前以它为准)。
+> 2026-10-19 补(映射持久化第 1b-2 批收尾,代码未编译、未测试):**`rewarm` 与 `unfreeze` 的水位键出口**。设计见 `docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md`（已清理，见 `ccf2840b2`） §2 M2 / M3 / M5、§13.1 第 4 / 6 条、§13.5 第 1 条(并入提案 §13 之前以它为准)。
 
 **`rewarm [-wait=0] [-poll=5s] [-timeout=30m]`**(撤掉三把映射控制键,让对账 leader 从头全量预热、重挂就绪标记)
 
@@ -1511,7 +1511,7 @@ go run ./cmd/migrate -f <db.yaml 副本> -storage-id 1000000 -command up -create
 
 ## 15. 第 2 批之后的合服 / 搬库(全局库为映射真源)
 
-> **状态**:D1 第 2 批(规格 [spec_D1_batch1b2_2_3.md](../handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md) §6、§13.3),**代码已落码,未编译、未测试**(AGENTS.md §10.1,待 Codex 验证)。适用于 data_service 已切 `RouteStore.Mode=db_first` 的环境,即提案 §13.4 的 **P4 之后**。P4 之前(全部 data_service 仍是 `Mode=redis`)照旧走 redis 源,本节只有 15.1 的必填参数与 15.5 的禁令适用。
+> **状态**:D1 第 2 批(规格 `docs/handoff/launch-readiness-20261013/spec_D1_batch1b2_2_3.md`（已清理，见 `ccf2840b2`） §6、§13.3),**代码已落码,未编译、未测试**(AGENTS.md §10.1,待 Codex 验证)。适用于 data_service 已切 `RouteStore.Mode=db_first` 的环境,即提案 §13.4 的 **P4 之后**。P4 之前(全部 data_service 仍是 `Mode=redis`)照旧走 redis 源,本节只有 15.1 的必填参数与 15.5 的禁令适用。
 
 ### 15.1 映射来源 `<ROUTE_ARGS>`:必填、没有缺省值、不从 yaml 推断
 

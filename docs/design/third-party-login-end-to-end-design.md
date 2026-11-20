@@ -204,12 +204,12 @@ Unity 客户端里这几种第三方登录都用 `LoginCredential.ForThirdParty(
 | loginlogic 自动注册分支对 wechat / qq 走通 | 已完成（全局 SQL 账号目录，首次登录自动建目录行；2026-10-21 前是 login Redis 的 `account:<account>`） |
 | 微信 / 抖音小游戏登录（`wechat_minigame` / `douyin_minigame`） | 2026-11-12 服务端落码，未编译、未测试，待 Codex 验证（§十一） |
 | 小游戏登录的 K8s 渲染（部署参数、Secret、防误关） | 2026-11-12 已落码，未运行，待 Codex 跑契约测试（§11.3） |
-| 单元测试：mock 渠道 HTTP、错误传播 | 已落码；2026-10-19 Go 定向 7 项通过，全量 519 个顶层与 375 个子测试通过、4 个顶层环境条件跳过，旧行为两例精确断言红灯成立；证据与范围见 [交接文档](../handoff/handoff-tip-fault-gateway-500-20261018.md) |
+| 单元测试：mock 渠道 HTTP、错误传播 | 已落码；2026-10-19 Go 定向 7 项通过，全量 519 个顶层与 375 个子测试通过、4 个顶层环境条件跳过，旧行为两例精确断言红灯成立；证据与范围见 交接文档（原 `docs/handoff/handoff-tip-fault-gateway-500-20261018.md`，已清理，见 `ccf2840b2`） |
 | 本地沙箱端到端（sandbox_mock） | 工具已有；linux 登录栈 QQ AppId 与 mock 不一致的问题已修（2026-10-18） |
 | 真实微信 / QQ 沙箱联调 → /api/login → /api/assign-gate → gate | **未做**，需要有真凭证的人按 runbook §C.2 执行 |
 | 单 zone 灰度 24 小时、全量开放 | 未做 |
 | `Auth.EnabledTypes` 灰度配置 | 不存在这个配置；按 zone 开关第三方登录仍是后续设计 |
-| 网关按 tip 故障列回 500（§三） | 已落码（两版同批），导表与 147 项导表器测试已有证据；本轮主仓 gateway 204 项通过、5 项条件跳过，config_node 367 份源码编译通过且无测试；示例 starter 在 Surefire 加载前失败，后续验收停止。独立 Java 历史定向 42 项仅按输入 SHA 条件复用，不表示全 reactor 通过。详见 [交接文档](../handoff/handoff-tip-fault-gateway-500-20261018.md)；客户端可选文案补丁未打 |
+| 网关按 tip 故障列回 500（§三） | 已落码（两版同批），导表与 147 项导表器测试已有证据；本轮主仓 gateway 204 项通过、5 项条件跳过，config_node 367 份源码编译通过且无测试；示例 starter 在 Surefire 加载前失败，后续验收停止。独立 Java 历史定向 42 项仅按输入 SHA 条件复用，不表示全 reactor 通过。详见 交接文档（原 `docs/handoff/handoff-tip-fault-gateway-500-20261018.md`，已清理，见 `ccf2840b2`）；客户端可选文案补丁未打 |
 | Apple / Google 登录（`apple` / `google`） | 2026-11-13 服务端、沙箱 mock 与 K8s 渲染落码，未编译、未测试，待 Codex 验证（§十二） |
 | UserBindings 账号合并表 | 后续 |
 

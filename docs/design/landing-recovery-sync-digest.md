@@ -1,7 +1,7 @@
 # 落地恢复：按域版本摘要、场景侧待办唤醒与超窗处置（2026-10-14）
 
 > **状态**：v1.1（2026-10-16）。代码已按本文落码并随用户快照入库，**未编译、未测试**（AGENTS.md §10.1）。
-> 剩余工作与验证顺序见交接 [handoff-landing-recovery-and-fencing-20261016.md](../handoff/handoff-landing-recovery-and-fencing-20261016.md)，主要是三件事：客户端复核与 UI 绑定、robot 冒烟复核、进场链余项 a–e。
+> 剩余工作与验证顺序见交接 `docs/handoff/handoff-landing-recovery-and-fencing-20261016.md`（已清理，见 `ccf2840b2`），主要是三件事：客户端复核与 UI 绑定、robot 冒烟复核、进场链余项 a–e。
 > **上游**：[reliable-player-inbox-20261014.md](reliable-player-inbox-20261014.md) §5.2 的第 1 项「落地恢复」与第 4 项「超窗处置与对账」；[cross-zone-scene-travel.md](cross-zone-scene-travel.md) §7（传送窗口内全局推送丢失、客户端落地主动拉）；[guild-phase2/04-asset-channel.md](guild-phase2/04-asset-channel.md)（资产通道不变量 I1–I10）。
 > **用户决定（2026-10-14）**：范围含落地恢复、超窗处置与对账；授权改客户端 `../mmorpg-client`；**Java 版只登记待做**（偏离 AGENTS §12「客户端契约两版同批改」，由用户明确决定，见 §11）；资产长期离线采用「停放 + 落地唤醒 + 日对账 + 180 天自动放弃并退回帮会侧限购与帮贡」；战斗结算待办「去掉到期删除」。
 > **分工**：进场门禁（登录代次）归「旧入场请求覆盖新会话问题」会话（[scene-enter-session-fence.md](scene-enter-session-fence.md)）；统一玩家收件箱服务归「玩家收件箱服务设计」会话，v1 不接入本摘要（用户拍板 D4），将来接入届时另行拍板（§3.3）；MySQL 行内围栏另见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md)。

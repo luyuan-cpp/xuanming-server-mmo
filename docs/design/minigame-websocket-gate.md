@@ -1,7 +1,7 @@
 # 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
 
 - **日期**:2026-11-19。
-- **状态**:代码已全部写完(服务端、部署脚本、客户端、robot),**未生成协议、未编译、未测试、未上集群,待 Codex 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。
+- **状态**:代码已全部写完(服务端、部署脚本、客户端、robot),**未生成协议、未编译、未测试、未上集群,待 Codex 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。2026-11-20 的收尾(边缘按来源限速、battle 的 WebSocket 计数、小游戏账号注销的重新认证、robot 去掉回环桥)在 `docs/PROGRESS.md` 2026-11-20「小游戏 WebSocket 收尾」条目。
 - **授权**:改动约 60 个文件,超过 AGENTS.md §10.2 的 30 个文件门槛。负责人 2026-11-19 逐项同意 W1(共用端口)、W7(新增地址字段)、W10(客户端改法),说明 TLS 放在哪按最标准的做法定、Unity 有官方 WebSocket 就用官方的(前提是能上小游戏),确认原生 App 仍然直连之后回复「开始改」。
 - **范围**:让微信、抖音小游戏客户端连上 gate(大厅长连接)和 battle(每局直连、观战直连)。登录侧的小游戏登录已落码(`auth_type` 为 `wechat_minigame` / `douyin_minigame`,见 [第三方登录端到端设计](third-party-login-end-to-end-design.md) §十一),本文只管登录之后的长连接。
 - **决策编号**:本文 W1–W11。地址模型沿用 [集群外客户端入口](k8s-client-entry.md) D76(进程自报客户端可达地址)。
@@ -97,7 +97,11 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 ### W6 准入与限流
 
 - 同端口、同 Acceptor:总量上限、新建速率闸、关源天然覆盖 WebSocket 连接([连接准入](gate-connection-admission-control.md) P1-1 ~ P1-3)。ws-edge 给每条客户端连接各开一条上游 TCP,不复用,所以连接数口径不变。
-- 经过边缘的连接,`peerAddress()` 是 ws-edge 的 Pod IP。按源 IP 的限制目前本来就没做(同文 P2-2,默认关闭);以后要做时,WebSocket 连接从可信代理的 `X-Forwarded-For` 取源地址,本批不解析这个头。
+- 经过边缘的连接,gate / battle 在 accept 时看到的来源是 ws-edge 的 Pod 地址(内网)。它们自己的按来源限速只管公网源地址(core `accept_admission.h` 的 `IsPublicSourcePrefix`,[连接准入](gate-connection-admission-control.md) P2-2;「battle 直连准入」会话 2026-11-20 落码),所以全体小游戏玩家不会被当成同一个来源一起限。
+- 这部分连接的按来源限速在边缘做,只有边缘看得到玩家的真实地址:`infra-up -WsEdgeSourceRatePerSecond <n>`(缺省 0 = 不限)让 nginx 按来源 /24 做 `limit_req`,桶深 = 速率 × 握手期限(10 秒),超出的升级请求回 429。口径与 gate 的那一道相同:按 /24 聚合(CGNAT、校园网出口后面是成片的真玩家)、限新建速率不限总量、不封来源。
+- 与 gate 那一道不同的一点:nginx 不知道后端是否承压,开了就一直生效;gate 是开了也只在承压时生效。所以边缘这个参数缺省不开,被打的时候再带上它跑 infra-up。同一个出口后面几百人同时重连时,先放行一个桶深,之后按速率进,其余的收到 429 后由客户端的断线恢复重试。
+- 为什么不在 gate 里按 `X-Forwarded-For` 限:请求头要到升级握手才读得到,那时这条上游连接已经过了 accept、占掉了全局速率闸的名额,攻击流量照样和真玩家抢同一个桶。在边缘拒绝,攻击连接到不了 gate。限速排在目标校验之后,目标不合法(403)的请求不消耗名额。
+- 前提同 gate 那一道:边缘要看得到真实源地址。ws-edge 的 Service 是 `externalTrafficPolicy: Local`;前面是代理型负载均衡时看到的是负载均衡的地址,这时不要开。
 
 ### W7 地址模型:节点自报 `client_ws_url`
 
@@ -127,6 +131,7 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 
 - 形态:infra namespace 里一个 Deployment(官方 nginx 镜像,钉版本,缺省 2 个副本,逐个替换),Service 端口 443、`externalTrafficPolicy: Local`;证书放预置的 TLS Secret(`tls.crt` 带完整证书链,部署脚本不经手内容,缺了在写操作之前拒绝);`nginx.conf` 放 ConfigMap,指纹写进 Pod 模板注解,配置变了才滚动。四份清单由 `tools/scripts/lib/k8s_client_entry.ps1` 的 `New-WsEdgeYaml` 生成,`infra-up` apply。
 - 部署参数(`k8s_deploy.ps1`,`dev_tools.ps1` 与 `k8s_image.ps1` 照样透传):`-WsEdgeHost`(域名,给了才启用,要求 `-ClientEntryMode external`)、`-WsEdgeTlsSecret`、`-WsEdgePodCidrs`(这三项缺一不可)、`-WsEdgeReplicas`、`-WsEdgeServiceType LoadBalancer|NodePort`(托管云用前者,自建集群用后者接在外部四层负载均衡后面)、`-WsEdgeNodePort`、`-WsEdgeImage`。
+- 按来源限速(W6):`-WsEdgeSourceRatePerSecond <n>`,缺省 0 = 不限,三条包装链同样透传;只有 infra-up 生成 ws-edge,所以改它要跑 infra-up。关闭时生成的 `nginx.conf` 与没有这个参数时逐字相同(指纹不变,不触发滚动);没给 `-WsEdgeHost` 却给了它,infra-up 在写操作之前拒绝。
 - 给了 `-WsEdgeHost`,gate 的 StatefulSet 与 battle 的 Fleet / hostPort Deployment 就带上 `CLIENT_WS_BASE_URL=wss://<域名>/ws`(经 PodCommon,三个生成器同一处)。
 - 参数不粘滞:线上的 gate / battle 已经在自报 WebSocket 地址,而本次漏传或换了域名时,`Get-GateAddressDrift` / `Get-BattleEntryDrift` 在任何写操作之前拒绝,确认要改加 `-AllowDisruptiveSwitch`。否则之后重建的节点不再自报,落到它上面的小游戏玩家拿不到入口,且不报任何错。留空不会删已有的 ws-edge。
 - 路由:`/ws/<IPv4>/<端口>` 转发到 `http://<IPv4>:<端口>`。IPv4 用 `geo` 限定在 Pod 网段(部署参数),端口用正则限定为 gate 与 battle 的 RpcPort(部署参数,现为 18000 与 20000),不符合的回 403,其余路径 404。`proxy_read_timeout` / `proxy_send_timeout` 120s(大于 gate / battle 自己的空闲超时,谁该断由 gate / battle 说了算),关代理缓冲,带 `X-Forwarded-For`。nginx 收全请求头才连上游,慢速发头的连接停在边缘,到不了 gate。
@@ -134,7 +139,7 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 - 为什么按 Pod IP 定向:gate 票据绑节点(`token_gate_node_mismatch`),连接必须到达指定实例;battle 由 Agones 管,实例随时生灭,没有稳定的 Service。Pod IP 对两者都适用,不用为每台建 Service 或路由规则,也不动 Agones 端口。
 - 为什么是独立的 nginx 而不是 Ingress:按路径里的变量转发到任意 Pod 需要 snippet 注解,ingress-nginx 新版默认禁用;独立 nginx 的配置就是一个静态文件,审阅即可。
 - 安全:边缘只能转到 Pod 网段里 gate / battle 的客户端端口,而这两个端口本来就对玩家开放,所以它不是开放代理。路径里的 Pod IP 会暴露集群内地址,本批接受。
-- 平台后台:socket 合法域名登记 `wss://<ws-edge 域名>` 一个;request 合法域名登记 gateway 的 https 域名(D91 的 Ingress)。两个域名都要 ICP 备案,证书由受信 CA 签发。对外只用 443,不受两家平台对端口的不同规则影响。
+- 平台后台:socket 合法域名登记 `wss://<ws-edge 域名>` 一个;request 合法域名登记 gateway 的 https 域名(D91 的 Ingress)。两个域名都要 ICP 备案,证书由受信 CA 签发。对外只用 443,不受两家平台对端口的不同规则影响。备案、账号、合法域名这几项要排队几周,汇总在 [发布清单](../ops/release-checklist.md) §7。
 
 ### W9 战斗服
 
@@ -155,9 +160,11 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 - 重定向(msg 124)换连接前的 TCP 探测(`GameClient.ProbeGate`)在 WebSocket 模式下不做,改为等新连接真正打开,期限相同;打开之前不关旧连接,保留「不通就在还连着老 gate 时失败出去」的性质。
 - 战斗直连与地域测速原来把会阻塞的 `Connect` 放进线程池;WebSocket 的 `Connect` 不阻塞,而 WebGL 没有线程池,所以改为就地执行(`ClientTransport.ConnectRunner`)。
 - 登录:`MiniGameLogin`(同一个 jslib)向宿主要一次性的登录 code(`tt.login` / `wx.login`),运行时看在哪个宿主里决定 `auth_type`。登录界面点「进入」时,在小游戏里直接走它,用 `LoginCredential.ForThirdParty(LoginAuthTypes.WeChatMiniGame / DouyinMiniGame, code)` 走 `/api/login`,与 Apple / Google 登录共用 `BeginChannelSignIn`。`GatewayHttpClient` 的 `AssignGateResult` 加 `gate_ws_url`。
+- 账号注销的重新认证(2026-11-20 补):小游戏账号没有口令,注销确认之后与 Apple / Google 一样重新拉起渠道——向宿主重新要一次登录 code(`MiniGameLogin.Request`),连同 `auth_type` 交给注销接口;服务端的重新认证本来就走与登录相同的认证器,不用改。之前会落到口令面板,小游戏账号永远注销不了。
 - 不在本批:
-  - 把客户端真正转成微信 / 抖音小游戏包(装两家的转换工具、构建配置、资源适配)。客户端现在是 Unity 6000.6,两家转换工具支不支持这个版本没有核实。
-  - 账号注销的重新认证没有接小游戏登录:注销面板上只有 Apple / Google 的按钮,小游戏账号暂时走不了那条路。
+  - 把客户端真正转成微信 / 抖音小游戏包(装两家的转换工具、构建配置、资源适配),以及真机联调。负责人 2026-11-20 定:上线前再转;之后打算升到 Unity 7,所以走「Unity 7 + 两家的转换工具」,不换团结引擎(团结是 Unity 中国自己的分支,手册以 2022.3 为基线)。2026-11-20 查过两家转换工具对 Unity 6000.6 的支持,没有结论(微信官方的 GitHub 仓库被 GitHub 停用、文档站 404);转包前先核实它们对 Unity 7 的支持,新引擎大版本出来后转换工具通常要过一段时间才跟上。
+  - 转包时要复查与引擎 WebGL 构建绑定的两处:`Assets/Plugins/WebGL/MmorpgMiniGame.jslib`(Emscripten 的 jslib 写法),以及 `WebSocketDrivers.cs`、`MiniGameLogin.cs` 里 `UNITY_WEBGL && !UNITY_EDITOR` 的分支(`[MonoPInvokeCallback]` 回调)。它们至今没编译过:本机只装了 Windows 构建支持,客户端编译检查只编编辑器脚本。其余传输代码是普通 C#,在编辑器里有单测,与引擎版本无关。
+  - 推迟的前提:客户端开发期间就按小游戏(WebGL)的限制写,否则转包时是大返工。完整清单(单线程、会卡死的调用、网络、文件、图形、字体、内存与包体)在客户端仓 `AGENTS.md`「小游戏(WebGL)兼容约束」,依据 Unity 6.6 手册的 Web 平台限制;2026-11-20 核对过小游戏会走到的路径上没有违例。
 
 ### W11 robot(冒烟 / 压测客户端)的 WebSocket 模式
 
@@ -167,13 +174,14 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 - 地址:服务端下发了就用下发的;没下发时直连 `ws://<ip>:<端口>/`,本机栈没有边缘、节点也不自报地址,靠这条回落就能跑。`require_advertised` 打开后没下发就失败,经边缘验证时用,否则服务端漏下发会被直连掩盖。`dial_addr`(实际拨的地址,握手的 Host 与 SNI 不变)和 `insecure_skip_verify` 给边缘域名在本机解析不到、证书自签的测试环境(kind)。后三项写了却没选 websocket 时拒绝启动。
 - 地址怎么传到建连处:robot 里几十个函数按 `(host, port)` 传 gate 地址,逐层加参数改动面太大。改用地址簿:解出服务端下发地址的五处(两个 assign-gate 解码点、msg 124、战斗分配、测速目标)登记 `host:port → WebSocket 地址`,建连时查。同一台节点的两种地址总是一起下发,连接又总在下发之后,查到的就是这一次的;空的下发清掉旧记录。
 - 协议实现用 `golang.org/x/net/websocket`。robot 本来就依赖 `golang.org/x/net`(之前是间接依赖),没有新增模块;它把一条 WebSocket 呈现成字节流连接,写出的每段字节是一条二进制消息,正好对上 W3。全仓的 Go 代码此前没有用过任何 WebSocket 库。
-- `muduoclient` 接不进去:它是外部库(`github.com/luyuancpp/muduoclient`),自己 `net.Dial("tcp", …)`,没有注入拨号函数的口子,而 `GameClient` 到处拿着 `*muduo.Client`。所以 WebSocket 模式下在进程内开一个回环监听(桥),让 muduo 拨它;桥对每条连进来的连接各拨一条 WebSocket,两边原样转发字节。muduo「断线重拨同一个地址、拨不通每秒重试」的节奏不变,拨通之前写出的字节留在回环缓冲里,拨通后原样送出。
-- 代价:每条连接多一个回环监听和一跳回环 TCP,只适合冒烟与小规模。要用 WebSocket 打高并发压测,先给 muduoclient 加注入拨号函数的口子,再删掉桥(代码里记了 `shortcut:`)。
-- 桥把字节切成不超过 16KB 的消息,切在哪里与客户端帧的边界无关,顺带一直在走服务端「按字节流拼接」那条路(W3)。关闭时直接关 TCP、不发 Close 帧,与原生客户端断线一致;服务端回显 Close 的路径由 C++ 单测覆盖。
+- 连接:`GameClient` 原来拿着 vendored `muduoclient` 的 `*muduo.Client`,它自己 `net.Dial("tcp", …)`,没有注入拨号函数的口子,接不了 WebSocket。把它的连接管理搬进仓内(`robot/pkg/wire_conn.go` 的 `wireConn`),只换掉一处:怎么拨号由调用方给;帧的编解码仍用原库的 `TcpCodec`。对 `GameClient` 可见的行为逐条不变(后台拨号、拨不通每秒重试、发送队列满了就丢、断线后下一次发送失败才重拨、`Close` 不唤醒 `Recv`),robot 里关于「vendored muduo 的连接」的注释说的就是它。
+- WebSocket 模式下 `wireConn` 直接在 WebSocket 上收发:每个客户端帧写成一条二进制消息,与 Unity 客户端相同;没有额外的回环跳转,冒烟与高并发压测都可以用。2026-11-19 的第一版是进程内回环桥(每条连接多一个回环监听和一跳回环 TCP,只适合小规模),2026-11-20 换成现在的做法,桥已删除。
+- 两处与原库不同、不影响上述行为:读不设 30 秒期限(原库只用它定期醒来看 ctx,`Close` 本来就会关连接把读唤醒;WebSocket 下读到一半帧头超时会丢掉已读的字节);接收缓冲每条连接各用一个新的。
+- 关闭时直接关 TCP、不发 Close 帧,与原生客户端断线一致(x/net 的 Close 要先拿写锁发 Close 帧,对端不读时会和阻塞中的写互相卡住)。服务端回显 Close 的路径由 C++ 单测覆盖。
 
 ## 4. 可观测性
 
-- core 计数(`websocket::GetCounters()`,进程累计,线程局部,不带玩家或连接维度):握手成功、握手被拒、协议错误关闭。gate 在连接准入的采集函数里一并导出:`gate_websocket_handshakes_total{result="accepted|rejected"}`、`gate_websocket_protocol_closed_total`。WebSocket 连接数已经算在 `gate_connections_current` 里。battle 没有导出这三项。
+- core 计数(`websocket::GetCounters()`,进程累计,线程局部,不带玩家或连接维度):握手成功、握手被拒、协议错误关闭。gate 在连接准入的采集函数里一并导出:`gate_websocket_handshakes_total{result="accepted|rejected"}`、`gate_websocket_protocol_closed_total`。WebSocket 连接数已经算在 `gate_connections_current` 里。battle 同样导出(2026-11-20 补):`battle_websocket_handshakes_total{result}`、`battle_websocket_protocol_closed_total`,写法与 gate 的两族同义,在 battle 连接准入的采集函数末尾。
 - 握手被拒与协议错误打采样 WARN(第一条必打,之后每 1024 条一行),带关闭码与对端地址。
 
 ## 5. 安全
@@ -200,23 +208,23 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 4. Java gateway:`mvn test`(`AssignGateServiceAuthTest` 加了一条透传用例)。
 5. 部署契约测试:`k8s_client_entry_contract.tests.ps1` 覆盖预检的六种组合、三个生成器的 env 注入、ws-edge 四份清单的内容与参数拒绝、zone-up / infra-up 的 DryRun、三条包装链的透传。
 6. 客户端:EditMode 用例 `WebSocketFramedConnectionTests`(假驱动、可拨时钟);编辑器加 `MMORPG_FORCE_WS` 连本机 gate 联调。微信、抖音开发者工具与真机联调需要开发者账号和转换工具,不在本批。
-7. robot(W11):先 `go mod vendor`(把 `golang.org/x/net/websocket` 与新生成的协议带进 `robot/vendor`),再跑 `robot/pkg` 的传输层用例(假的回显 WebSocket 服务端:地址选择、二进制消息、经 `dial_addr` 的 TLS、桥的重拨与关闭、TCP 缺省不变)。之后拿现有冒烟配置加 `transport.kind: websocket` 各跑一遍,这是本文唯一一条端到端的自动化路径;kind 上再加 `require_advertised` 走边缘。
+7. robot(W11):先 `go mod vendor`(把 `golang.org/x/net/websocket` 与新生成的协议带进 `robot/vendor`),再跑 `robot/pkg` 的用例:传输层(假的回显 WebSocket 服务端:地址选择、一帧一条二进制消息、经 `dial_addr` 的 TLS、必须下发时本地失败、TCP 缺省不变),以及原有的 Call / 心跳 / 重定向用例(它们现在跑在仓内的 `wireConn` 上)。之后拿现有冒烟配置加 `transport.kind: websocket` 各跑一遍,这是本文唯一一条端到端的自动化路径;kind 上再加 `require_advertised` 走边缘。
+8. 边缘配置的静态检查:把 `-DryRun` 渲染出来的 `nginx.conf`(不带与带 `-WsEdgeSourceRatePerSecond` 各一份)放进钉住的 nginx 镜像里跑 `nginx -t`,证书用临时自签的。`geo` 以路径里捕获的地址为键、`map` 取 /24 这两处写法没有实测过,这一步十秒钟就能定下来,不用等 kind。
 
 ## 8. 明确不做
 
 - 微信 `wx.createTCPSocket` 直连(§1)。
-- gate / battle 进程内 TLS、`permessage-deflate` 压缩、`Origin` 校验、按源 IP 限流、IPv6 Pod 网络。
-- 用 robot 的 WebSocket 模式打高并发压测:每条连接多一个回环监听和一跳回环 TCP(W11),要做先给 muduoclient 加注入拨号函数的口子。
+- gate / battle 进程内 TLS、`permessage-deflate` 压缩、`Origin` 校验、IPv6 Pod 网络;gate / battle 按 `X-Forwarded-For` 做按来源限速(W6:在边缘做)。
 - QQ 小游戏。
 
 ## 9. 改动的文件
 
 协议(7):`proto/common/base/common.proto`、`proto/login/login.proto`、`proto/contracts/kafka/gate_event.proto`、`proto/scene_manager/scene_manager_service.proto`、`proto/scene/client_player_common.proto`、`proto/battle/player_battle.proto`、`proto/match/match_network.proto`。
 
-C++(20):
+C++(22):
 - core:`network/codec/websocket.{h,cpp}`(新)、`network/codec/codec.{h,cpp}`、`core.vcxproj`、`core.vcxproj.filters`、`node/system/node/client_endpoint.{h,cpp}`(基地址解析与地址拼接)、`node/system/node/node.cpp`(启动校验)、`node/system/node/node_allocator.cpp`(端口定下后写 `client_ws_url`)。
 - gate:`main.cpp`(断开清理)、`handler/gate_push_delivery.h`(`EncodedFrame` 的 WebSocket 字节)、`handler/rpc/connection_admission.cpp`(指标)、`handler/event/gate_event_handler.cpp`、`handler/rpc/drain_migration.cpp`(124 带 ws 地址)。
-- battle:`client/battle_client_edge.{h,cpp}`、`logic/battle_room_manager.cpp`。
+- battle:`client/battle_client_edge.{h,cpp}`、`logic/battle_room_manager.cpp`、`client/battle_connection_admission.{h,cpp}`(battle 的 WebSocket 两族计数)。
 - 测试:`cpp/nodes/gate/tests/websocket_entry_test.cpp`(新)、`cpp/tests/routing_identity_test/routing_identity_test.vcxproj`、`cpp/tests/client_endpoint_test/client_endpoint_test.cpp`。
 
 Go(15):
@@ -226,16 +234,16 @@ Go(15):
 
 本仓 Java gateway(4):`grpc/LoginRpcClient.java`(手工解码两条应答的新字段)、`dto/AssignGateResponse.java`、`service/AssignGateService.java`、测试 `service/AssignGateServiceAuthTest.java`。
 
-部署(5):`tools/scripts/lib/k8s_client_entry.ps1`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/dev_tools.ps1`、`tools/scripts/k8s_image.ps1`、`tools/scripts/tests/k8s_client_entry_contract.tests.ps1`。gate 指标的告警契约测试 `gate_connection_alerts_contract.tests.ps1` 由「gate 准入 P0-2」会话在同一天一并补上这两个指标族。
+部署(6):`tools/scripts/lib/k8s_client_entry.ps1`、`tools/scripts/k8s_deploy.ps1`、`tools/scripts/dev_tools.ps1`、`tools/scripts/k8s_image.ps1`、`tools/scripts/tests/k8s_client_entry_contract.tests.ps1`。gate 指标的告警契约测试 `gate_connection_alerts_contract.tests.ps1` 由「gate 准入 P0-2」会话在同一天一并补上这两个指标族。battle 的 `battle_connection_alerts_contract.tests.ps1` 2026-11-20 由本会话加上 battle 的两族与 `result` 标签。
 
-Unity 客户端(13,不含生成的 C# 协议):
+Unity 客户端(14,不含生成的 C# 协议):
 - 新增:`Assets/Scripts/Net/{ClientTransport,WebSocketFramedConnection,WebSocketDrivers,MiniGameLogin}.cs`、`Assets/Plugins/WebGL/MmorpgMiniGame.jslib`、`Assets/Tests/EditMode/Net/WebSocketFramedConnectionTests.cs`。
-- 修改:`Assets/Scripts/Net/{IFramedConnection,BattleDirectLink,RegionProbeClient,GatewayHttpClient}.cs`、`Assets/Scripts/Game/{GameClient,GameClient.Reconnect}.cs`、`Assets/Scripts/UI/Ugui/QdaoServerSelectView.cs`。
+- 修改:`Assets/Scripts/Net/{IFramedConnection,BattleDirectLink,RegionProbeClient,GatewayHttpClient}.cs`、`Assets/Scripts/Game/{GameClient,GameClient.Reconnect}.cs`、`Assets/Scripts/UI/Ugui/QdaoServerSelectView.cs`、`Assets/Scripts/UI/Ugui/QdaoServerSelectView.LoginUtilities.cs`(注销的重新认证)。
 - 新文件的 `.meta` 由 Unity 打开工程时生成。
 
-robot(16,W11):
-- 新增:`robot/pkg/transport.go`、`robot/pkg/transport_test.go`、`robot/http_assign_gate_ws_url_test.go`。
-- 修改:`robot/pkg/{client,redirect}.go`、`robot/{gate,http_assign_gate,battle_direct_conn,network_probe,heartbeat_idle_smoke_scenario,main}.go`、`robot/logic/handler/scene_client_player_common_redirect_to_gate.go`、`robot/config/config.go`、`robot/go.mod`(`golang.org/x/net` 改为直接依赖,版本不变)、`robot/README.md`、`robot/etc/robot.yaml`(注释掉的示例)。
+robot(20,W11):
+- 新增:`robot/pkg/transport.go`、`robot/pkg/wire_conn.go`、`robot/pkg/transport_test.go`、`robot/http_assign_gate_ws_url_test.go`。
+- 修改:`robot/pkg/{client,redirect,heartbeat}.go`、测试 `robot/pkg/{client_test,heartbeat_test}.go`、`robot/{gate,http_assign_gate,battle_direct_conn,network_probe,heartbeat_idle_smoke_scenario,main}.go`、`robot/logic/handler/scene_client_player_common_redirect_to_gate.go`、`robot/config/config.go`、`robot/go.mod`(`golang.org/x/net` 改为直接依赖,版本不变)、`robot/README.md`、`robot/etc/robot.yaml`(注释掉的示例)。
 - `robot/vendor` 由 Codex 跑 `go mod vendor` 更新,不手改。
 
 文档:本文、`docs/README.md`、`docs/PROGRESS.md`、`docs/design/k8s-client-entry.md`(互链)、`docs/design/third-party-login-end-to-end-design.md` §11.3、Java 仓 `PARITY.md`。

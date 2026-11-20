@@ -20,7 +20,7 @@
 
 > **2026-10-18 修订注(先读;上面状态块原文保留)**:
 > - **目标改为 DAU 1 亿、峰值同时在线 PCU 2000 万**(负责人 2026-10-15 确认,[capacity-model-hok-scale.md](capacity-model-hok-scale.md) §7.2)。按在线人数增长的项不能把旧 S3(1000 万)的数字乘二,口径与重算见 §16。本稿原文的容量判断是按全服 10 万~S1 写的,只作历史参考。
-> - **本稿合并全局单点交接**([handoff-global-singletons-10m-ccu-20261013.md](../handoff/handoff-global-singletons-10m-ccu-20261013.md))§5.1 与 §8 第 1、3、5 条(D12 / CZ-2 改写、冷玩家卸载阈值、账号权威落库),不另起文档。合并要求的出处是开服线交接 §4 第 5 项([handoff-launch-readiness-and-d1-20261013.md](../handoff/handoff-launch-readiness-and-d1-20261013.md)),不是全局单点交接 10-16 的订正。
+> - **本稿合并全局单点交接**(`docs/handoff/handoff-global-singletons-10m-ccu-20261013.md`（已清理，见 `ccf2840b2`）)§5.1 与 §8 第 1、3、5 条(D12 / CZ-2 改写、冷玩家卸载阈值、账号权威落库),不另起文档。合并要求的出处是开服线交接 §4 第 5 项(`docs/handoff/handoff-launch-readiness-and-d1-20261013.md`（已清理，见 `ccf2840b2`）),不是全局单点交接 10-16 的订正。
 > - **范围扩大**:从「只按用途拆实例、不上 Redis Cluster」扩为「按用途拆 + 单元化 + 单元内 Redis Cluster 按 `{player_id}` 分片」。路线已由负责人 2026-10-17 拍板(PROGRESS「2026-10-17 开服线:负责人拍板四项」第 1 条):单元化与分片是叠加,不是二选一。但分片、改名、按组分实例本身仍是**设计,第 1~4 批都未落码**(`tools/scripts/k8s_deploy.ps1` 里没有 `-RedisSplit`),落码前按 §24 的门禁逐批立项、逐批授权。
 > - **第 0 批五项已落码**,全部未编译、未测试、未验证,见 §17。
 > - §1~§15 里被取代的结论已逐处加了带日期的更正注,**冲突时以 §16~§26 为准**。最要紧的三处:控制面不再并入 redis-mapping,改为按 zone 组分实例(§18);redis-cache 改为必做(§19);核心不再以全服单主为终态(§20)。另有一条围栏硬依赖必须在第 2、3 批之前解决:令牌发布脚本把排序锁、子表缓存、资产证据与 `save_barrier` 绑在同一段 Lua 里(§18.7)。

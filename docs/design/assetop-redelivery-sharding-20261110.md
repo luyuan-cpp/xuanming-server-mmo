@@ -534,12 +534,12 @@ K 个副本每轮共发 K × 100 次领取,真正领到的仍是那 100 行,其�
 
 第五批之后,这些循环「卡在某一轮里不返回」「goroutine 意外退出」仍然看不出来:撮合与投榜按片分给各副本,停住的副本名下的撮合段排队不成局、投榜片排名不更新,别的副本照常推进,`match_pool_owned` 之和、成局计数这些合计指标都正常。
 
-- 一共 14 个点位,都经三个入口起:`ServiceContext.StartSourceLoop`(`match.global`、`match.global.pool`)、`ServiceContext.StartRelayLoop`(`match.global.ready.scan`、`match.global.outcome.recover`、`match.global.expired.audit`、`match.global.spectate.cleanup`、`match.global.spectator_intent.purge`、`match.battle_instance_loss`、`match.team.sql.prepared` / `queued` / `forming` / `completed` / `idle`)、`authority.RunRankPublisher`(`match.rank_publish`)。
+- 一共 15 个点位,都经三个入口起:`ServiceContext.StartSourceLoop`(`match.global`、`match.global.pool`)、`ServiceContext.StartRelayLoop`(`match.global.ready.scan`、`match.global.outcome.recover`、`match.global.expired.audit`、`match.global.spectate.cleanup`、`match.global.spectator_intent.purge`、`match.battle_script_review.purge`(剧本审核流水保留期清理,2026-11-20 加,`docs/design/battle-script.md` §6.4)、`match.battle_instance_loss`、`match.team.sql.prepared` / `queued` / `forming` / `completed` / `idle`)、`authority.RunRankPublisher`(`match.rank_publish`)。
 - 所以活性接在这三个入口里,不改十几个调用点:一族 gauge `match_loop_last_run_unixtime{point}`(`metrics.LoopLive`,`looplive.NewFamily`),每个循环 `LoopLive.For(point)` 取自己那一条,口径与 §14.3 相同(起来 `Mark`、每轮经 `Round`、ctx 结束 `Stop`)。以后经这两个包装函数起的循环自动有活性。
 - `point` 是 label,但值只是代码里写死的点位名(与 `safego_panic_total{point}` 同一组值),不放实体 id。
 - 两处入口特有的写法:
   - `StartSourceLoop` 的排空入口已关(停机排空中)时这一拍不开新一轮,但循环还活着,照写时刻;入口报出别的错误时循环 `return`、序列留着(意料之外的退出,告警报出来)。
   - `RunRankPublisher` 一进来就 `Mark`:它后面有几处意料之外的 `return`(参数不对、建不了 gRPC 连接),原来只打一行日志、投榜从此不跑;现在序列停在那一刻,告警报出来。只有 ctx 结束的两处 `return` 之前 `Stop`。投榜每一轮改由 `live.Round` 兜住,不再另包 `safego.Run`。
 - 告警 `MatchBackgroundLoopStalled`(`deploy/k8s/match-alerts.yaml` 的 `match.loop-liveness` 组):`time() - match_loop_last_run_unixtime > 300`,for 5m,warning,按副本、按点位逐条判。一条规则一个阈值,取法见 §14.3 的阈值一节:现有最长间隔 1 分钟、最长一轮预算 30 秒,300 ≥ 3 × 90。契约测试从调用点读出每个循环的间隔写法,写法要登记、来源逐项核对,点位名单钉死,新加循环时会先在这里判红。
-- canary 只起提前作废取证循环(`match.battle_instance_loss`),撮合、恢复、巡检、观战维护、整队维护与投榜都只在 stable 起(发布轨道设计 §2.5),canary 上的序列只有那一条。
+- canary 只起提前作废取证循环(`match.battle_instance_loss`),撮合、恢复、巡检、观战维护、剧本审核流水清理、整队维护与投榜都只在 stable 起(发布轨道设计 §2.5),canary 上的序列只有那一条。
 - 终局发件箱仍用自己的 `match_outcome_outbox_last_run_unixtime` 与告警(第五批),不并进这一族:它不经这两个包装函数,阈值也按它自己的 40 秒预算定。

@@ -128,9 +128,9 @@ ECS 接线在 `team_follow_system.{h,cpp}`,运行时组件在 `player/comp/team_
 **用户要求(2026-11-06)**:开通了挂机的队员,客户端离线后照样跟。
 
 没开通挂机的,断线保留只有 25 秒(`connection_lost_hold::kHoldWindow`),到期就存盘退出,队形随之摘掉他。
-"开通挂机"在代码里就是挂机月卡:玩家域 Redis 键 `player:afk_pass:{<player_id>}`,值为到期的 Unix 秒
-(由购买 / 开通流程写入);player_locator 的租约监视在月卡有效期间每 5 分钟给断线中的会话续一次租约
-(`go/player_locator/internal/logic/leasemonitor.go` `afkPassState`)。要做到"开通挂机离线照样跟",分三块:
+"开通挂机"在代码里就是挂机月卡:存档里的到期时刻 `PlayerUint64Comp.afk_pass_expires_at`,玩家花灵石开通
+([挂机月卡](afk-monthly-card.md));玩家域 Redis 键 `player:afk_pass:{<player_id>}` 是 scene 按已提交的值写的读投影,
+player_locator 读它,在月卡有效期间每 5 分钟给断线中的会话续一次租约(`go/player_locator/internal/logic/leasemonitor.go` `afkPassState`)。要做到"开通挂机离线照样跟",分三块:
 
 1. **离线托管本身(已写,`player-connection-lost-hold.md` §4.1)**:断线保留时查月卡,有效就不按 25 秒退出,
    保留到重连、月卡到期或被别的退出取代;第一次确认月卡有效时调下面第 3 条的入口。跟随代码不用为此改 —— 它只看实体在不在、

@@ -191,7 +191,7 @@
 
 ## 6. 客户端（Unity）
 
-2026-11-06 负责人授权出细则交 Codex 实施，细则见 [交接文档](../handoff/client-request-idempotency-unity-20261106.md)，那份文档写明了改哪些文件、哪几行、用例和验证命令。规则摘要：
+2026-11-06 负责人授权出细则交 Codex 实施，细则见 交接文档（原 `docs/handoff/client-request-idempotency-unity-20261106.md`，已清理，见 `ccf2840b2`），那份文档写明了改哪些文件、哪几行、用例和验证命令。规则摘要：
 
 - 三个调用点原本就有单飞：回包没到时再点不发第二个包。这一条保留；不为第二次点击生成新键。
 - 每次点击（本地检查都过了之后）生成一个新键，写进请求。生成方法与帮会经济共用一个实现（`ClientRequestKeys.TryCreate`，照 `GuildClient.EconomyRequestId`）。
@@ -218,7 +218,7 @@
    - `bag_test.exe --gtest_filter=ClientRequestLedgerTest.*:ClientRequestDedupTest.*:ClientRequestAttributeSchemeTest.*:PlayerMysteryMerchantTest.*:PlayerEquipTest.Enhance*:PersistRoundTripTest.*:PlayerFeaturePersistenceTest.MarshalRefusesWhenAnyPersistedComponentIsMissing`。
    - 强化的 4 条新用例：`EnhanceResendWithTheSameClientKey*`（2 条）、`EnhanceWithAClientKeyReusedForAnotherOperationIsRefused`、`EnhanceRefusedForGoldDoesNotRememberTheClientKey`。
 5. 回归：`bag_test.exe` 全量；`cross_zone_test.exe` 全量（它的手搭玩家补了新组件）。
-6. 冒烟：三个冒烟场景（强化、神秘商人、新建方案）2026-11-13 已按[交接文档](../handoff/client-request-idempotency-unity-20261106.md) §8 改完：每个都加了「同一个键原样重发一次」，神秘商人另加了「重登后带原键重发」。2026-11-13 Codex 合并 main 之后 robot 全包测试通过，本批新加的 6 个纯函数用例在这个包里；当时的日志放在系统临时目录，仓库里没有留原件。三条冒烟还没在 dev 环境里跑，命令见 `docs/PROGRESS.md` 2026-11-13 条目。项目未上线，跑之前清空玩家数据：新建方案那一步要求账号还没开满方案。强化冒烟里镜像的表值 2026-11-19 对过：11-17 装备改版对物品表和强化表只追加了行，1101、强化石、三种宝石、前 12 级强化和孔位表都没变。
+6. 冒烟：三个冒烟场景（强化、神秘商人、新建方案）2026-11-13 已按交接文档（原 `docs/handoff/client-request-idempotency-unity-20261106.md`，已清理，见 `ccf2840b2`） §8 改完：每个都加了「同一个键原样重发一次」，神秘商人另加了「重登后带原键重发」。2026-11-13 Codex 合并 main 之后 robot 全包测试通过，本批新加的 6 个纯函数用例在这个包里；当时的日志放在系统临时目录，仓库里没有留原件。三条冒烟还没在 dev 环境里跑，命令见 `docs/PROGRESS.md` 2026-11-13 条目。项目未上线，跑之前清空玩家数据：新建方案那一步要求账号还没开满方案。强化冒烟里镜像的表值 2026-11-19 对过：11-17 装备改版对物品表和强化表只追加了行，1101、强化石、三种宝石、前 12 级强化和孔位表都没变。
 7. 通过标准：全绿；三个冒烟的退出码都是 0。失败时保留第一个失败用例名和断言原文，不改断言、不连续重试。
 
 ## 9. 变更记录

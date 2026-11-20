@@ -1,6 +1,6 @@
 # data_service 定位与边界
 
-> **2026-11-05 状态订正**：下文关于 Redis 字段 KV、数据双锁及旧 Load/Save/Field/回档 RPC 的描述属于历史实现。`fc504300b`（2026-10-30）已删除这条路径及其测试；当前玩家存档走 `player_store`，目录路由直读 SQL。当前实施与验证入口见 [玩家存盘交接](../handoff/player-save-direct-commit-20261030/progress.md)。字段 Lua 历史验收的订正见 [原交接 §11](../handoff/handoff-data-service-field-lua-real-redis-20261019.md#11-2026-11-05-核对后续运行证据与旧路径退役)，不能再按旧测试名验收当前主线。
+> **2026-11-05 状态订正**：下文关于 Redis 字段 KV、数据双锁及旧 Load/Save/Field/回档 RPC 的描述属于历史实现。`fc504300b`（2026-10-30）已删除这条路径及其测试；当前玩家存档走 `player_store`，目录路由直读 SQL。当前实施与验证入口见 玩家存盘交接（原 `docs/handoff/player-save-direct-commit-20261030/progress.md`，已清理，见 `ccf2840b2`）。字段 Lua 历史验收的订正见 原交接 §11（原 `docs/handoff/handoff-data-service-field-lua-real-redis-20261019.md`，已清理，见 `ccf2840b2`），不能再按旧测试名验收当前主线。
 
 > 2026-10-15 按当前代码修订服务职责与 Login 依赖；本文区分目录/发号 RPC 与玩家存档的 Redis/Kafka 加载链。
 
@@ -235,7 +235,7 @@ Kafka:
 - **部署**:merge_zone 的拷贝前查锁只有在所有 data_service 副本都含写门禁时才成立;Regions 下合服(含 unmerge)之前必须确认副本已全部升级。
 
 ### 历史遗留（旧字段路径已退役）
-- **键族去向已由 B8 落地，不再待二选一**：`fc504300b` 删除 Redis 字段 KV、旧 GM 创建快照/diff/回档 RPC、路由数据 Redis 和旧调试工具；保留审计快照查询。后续 `debug_fetch` / `debug_import` 已按 `player_store` 重写，见 [玩家存盘交接](../handoff/player-save-direct-commit-20261030/progress.md) 的 B8-3 与「线上拉数工具」。下列旧工具问题及后文 Regions 前提仅作历史记录，不应恢复旧代码或 SCAN 回退来完成它们。
+- **键族去向已由 B8 落地，不再待二选一**：`fc504300b` 删除 Redis 字段 KV、旧 GM 创建快照/diff/回档 RPC、路由数据 Redis 和旧调试工具；保留审计快照查询。后续 `debug_fetch` / `debug_import` 已按 `player_store` 重写，见 玩家存盘交接（原 `docs/handoff/player-save-direct-commit-20261030/progress.md`，已清理，见 `ccf2840b2`） 的 B8-3 与「线上拉数工具」。下列旧工具问题及后文 Regions 前提仅作历史记录，不应恢复旧代码或 SCAN 回退来完成它们。
 - `cmd/debug_import` 的 player 模式仍然不持玩家锁、先写数据后登记映射、把版本重置为 `"1"`(调试工具,只写本地目标;字段索引问题已由 `writeLegacyPlayerFields` 解决)。与正在运行的 data_service 写入并发时可能互相覆盖,不要对线上进程正在写的玩家导入。
 
 ### 启用 Regions(去掉 DevRedis)之前必须先处理

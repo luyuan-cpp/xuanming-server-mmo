@@ -1,8 +1,8 @@
 # 在线身份简化第 1 批：Codex 执行清单（2026-11-06）
 
-本批由 Claude 改代码，**未编译、未运行任何测试**（只对改动文件跑过 `gofmt -l`，无输出）。设计见 [gate 在线身份](../../design/gate-online-identity.md) §9.2，计划见同目录 [PLAN.md](PLAN.md)。
+本批由 Claude 改代码，**未编译、未运行任何测试**（只对改动文件跑过 `gofmt -l`，无输出）。设计见 [gate 在线身份](../../design/gate-online-identity.md) §9.2，计划见同目录 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`（已清理，见 `ccf2840b2`）。
 
-**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 [上一批执行清单](../gate-online-identity-single-source-20261105/CODEX.md) 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。第 4 批（删 guild 请求体里被忽略的字段、删全服帮会榜，设计 §9.6 第 2、3 条，2026-11-10）见第 8 节，最后执行；它改了 `guild.proto` 的字段，工作区里只有这一份协议，所以第 1 节的生成就已经带上第 4 批的字段删除。设计 §7 的已知边界另有两节：第 9 节是批 1（gate 改 Ed25519 签名），第 10 节是批 2～4 与读路径归属预检（2026-11-12）；第 10 节给 `login.proto` 加了一个方法，同样会被第 1 节的生成带上，但它还要求生成之后跑一次 `go/build.ps1`（见第 10 节第 1 步）。
+**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 上一批执行清单（原 `docs/handoff/gate-online-identity-single-source-20261105/CODEX.md`，已清理，见 `ccf2840b2`） 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。第 4 批（删 guild 请求体里被忽略的字段、删全服帮会榜，设计 §9.6 第 2、3 条，2026-11-10）见第 8 节，最后执行；它改了 `guild.proto` 的字段，工作区里只有这一份协议，所以第 1 节的生成就已经带上第 4 批的字段删除。设计 §7 的已知边界另有两节：第 9 节是批 1（gate 改 Ed25519 签名），第 10 节是批 2～4 与读路径归属预检（2026-11-12）；第 10 节给 `login.proto` 加了一个方法，同样会被第 1 节的生成带上，但它还要求生成之后跑一次 `go/build.ps1`（见第 10 节第 1 步）。
 
 ## 改了什么
 
@@ -113,7 +113,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
 ## 7. 第 3 批：guild 三个读方法删无会话分支（2026-11-06 落码，2026-11-10 单测已过）
 
-设计 §9.6 第 1 条，计划见 [PLAN.md](PLAN.md) 第 6 节。在第 1、2 批之后执行：第 1 批也改过 `go/guild/internal/logic/guild_logic.go` 与 `client_zone_test.go`，失败按本节末尾的文件清单判归属。落码时只对改动文件跑过 `gofmt -l`（无输出）。
+设计 §9.6 第 1 条，计划见 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`（已清理，见 `ccf2840b2`） 第 6 节。在第 1、2 批之后执行：第 1 批也改过 `go/guild/internal/logic/guild_logic.go` 与 `client_zone_test.go`，失败按本节末尾的文件清单判归属。落码时只对改动文件跑过 `gofmt -l`（无输出）。
 
 **验证状态（2026-11-11 核对）**：Codex 2026-11-10 23:56–23:58 的发布轨道第二轮后台校验在 `go/guild` 跑了 `go build ./...`、`go vet ./...`、`go test ./...`，三个退出码都是 0（`build/verification/release-track-20261110/round2/go-background-validation/guild.{build,vet,test}.exit.txt`）。下面第 2 步列的新用例 `TestLegacyReadsWithoutSessionAreRefused`（3 个子用例）、改过的 6 个取名用例、`TestGetGuildRank_ClientSeesOnlyHomeZone` 以及「要保持绿」的各条，在同目录 `guild.test.jsonl` 里全部 pass。本节文件清单里的 7 个文件在那次运行之后都没再改；之后 `go/guild` 里再改的是 data 层与 `proto/guild/guild_db.proto`，归第 8 节和 PROGRESS 11-11「帮会积分写入不再抢全服锁」验证。第 1 步的静态检查 2026-11-11 由 Claude 复核，仍无输出。**还没跑**：第 2 步末条的 `-tags integration`（要 guild 集成环境），以及第 3 步可选的红证据。合并验证时第 2 步照常随 `go/guild` 全量重跑即可。
 
@@ -172,7 +172,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
 ## 8. 第 4 批：删 guild 请求体里被忽略的字段与全服帮会榜（2026-11-10 落码，未编译）
 
-设计 §9.6 第 2、3 条，计划见 [PLAN.md](PLAN.md) 第 6 节。负责人 2026-11-10：项目未上线、数据可以清空，两条都按标准做法直接删；全服榜运维和 GM 也不要（这条答复由「删除只写不读的全服帮会榜 guild_rank」会话记进设计文档）。在第 1～3 批之后执行；第 1、3 批也改过 `guild_logic.go` 与 `client_zone_test.go`，失败按本节末尾的文件清单判归属。本批只对改动的 Go 文件跑过 `gofmt -l`（无输出），没有生成协议、没有编译、没有运行任何测试。
+设计 §9.6 第 2、3 条，计划见 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`（已清理，见 `ccf2840b2`） 第 6 节。负责人 2026-11-10：项目未上线、数据可以清空，两条都按标准做法直接删；全服榜运维和 GM 也不要（这条答复由「删除只写不读的全服帮会榜 guild_rank」会话记进设计文档）。在第 1～3 批之后执行；第 1、3 批也改过 `guild_logic.go` 与 `client_zone_test.go`，失败按本节末尾的文件清单判归属。本批只对改动的 Go 文件跑过 `gofmt -l`（无输出），没有生成协议、没有编译、没有运行任何测试。
 
 改了什么：
 

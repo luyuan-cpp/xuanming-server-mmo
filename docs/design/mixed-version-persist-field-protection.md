@@ -175,7 +175,6 @@ TiDB player_store（主键 (player_id, kind)；kind 0 是写权行，其余每�
 | `BagAllData`、`BagAllData.DynamicBagData`、`ItemEntry` | 冻结 | 布局层由 `bag_marshal` 重建。`ItemEntry.instance`（ItemComp）是载体，**不冻结** |
 | `ItemEntry.equip` | 未携带（投影） | 由 `ItemComp.equip` 重新算出；`EquipInstanceData` 经 `ItemComp.equip` 可达，保持可携带 |
 | `QuestAllData`、`QuestScopeData` | 冻结 | 由 `mission_marshal` 重建。`QuestScopeData.mission_list`（MissionListComp）是载体，不冻结 |
-| `QuestAllData.active` | 未携带 | 只读旧格式，加载时转换、存盘不写出；`QuestEntry` 因此只经未携带字段可达，不再单独冻结 |
 | `player_database.stress_test_probe`、`player_database.merge_state`、`player_database_1.stress_test_probe` | 未携带 | 探针每次写盘重新生成；合服标记 scene 不处理、整行写会清空（是否有意见 §12）。改为标注引用字段，而不是冻结 `PlayerStressTestProbe` / `PlayerMergeStateComp` 类型：这两个类型定义在组件 proto 里 |
 | map 的 entry 类型 | 不纳入注入，也不纳入覆盖率统计 | 由生成器自动识别（`map_entry` 选项） |
 
@@ -487,7 +486,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
   - 对象内携带：欠款 `CurrencyDebt.unknownFields`（`SaveToProto` 改为返回 bool，解析失败整份拒存）、`MissionListComp` 本层未知字段（重复 scope 只取首份）、`SanitizeSkillList` 替换前并回组件本层未知字段；
   - 守卫：`ResetAssetOpStreamForEpoch` 改为 `Clear()` 后重设流号与纪元（清掉的字段与旧写法一致，包括回执）；`ItemStore::IsIndependentInstance` 统一 `CanStack`、reserve 侧空余估算、整理合并三处判定；`AttachDebt` 遇到带未知字段的既有欠款返回 `kFeatureUnavailable`，不合并；
   - 测试：新增 `cpp/tests/bag_test/persist_round_trip_test.cpp`（注入、两跳往返、覆盖率断言、复用输出不翻倍、盖戳三种组合、缺载体拒存）；`bag_instance_data_test.cpp` 补带未知字段实例的合堆用例，`asset_op_ledger_test.cpp` 补纪元重置清未知字段用例，`currency_test.cpp` 补欠款携带与合并守卫用例；手搭实体的测试补齐两个 Carry 组件或改走统一入口（`bag_test`、`player_feature_persistence_test`、`player_equip_attribute_test`、`cross_zone_test`、`db_task_dispatch_test`、`save_seq_test`）。
-  - **已知缺陷（交接前只读核对发现，均经对抗复核）**，列为第 3a′ 批，详见 [交接 §3.1](../handoff/mixed-version-persist-handoff-20261019.md)：
+  - **已知缺陷（交接前只读核对发现，均经对抗复核）**，列为第 3a′ 批，详见 交接 §3.1（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）：
     - 收件箱执行器把 `AttachDebt` 的版本错位拒绝记成终态 REJECTED（应按版本错位处理：最初定为 `kDefer`，对抗复核 A-1 后改为 `kVersionSkew`，见下一条）；
     - `Bag::AddItems` 规划仍只按 `has_equip()` 分流，与提交侧判定不一致；
     - 宝石拆卸预检 `HasStackWithRoom` 判据未跟上。
@@ -511,7 +510,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
   - 按数量扣除守卫（§4.4）：`IsCountableByConfig`、三态 `CheckQuantities`（`HasAll` 已删）、`DrainStacks` 过滤；资产通道、强化、镶嵌、战斗快照四处按三态分支。10-30 补：资产扣出把版本错位排到按 guid / 宝宝的确定性校验之后；聚宝斋卖家在托管阶段也可撤单（材料订单的托管腿没有截止，否则 RETRY 没有出口）；
   - 新币种（§12）：取值表唯一来源 `proto/common/base/currency_type.proto`，C++ `currency.h` 与 Go `shared/currencytype` 都从它派生，`IsKnownCurrencyType` 收成一份；Go 各入口（收件箱入箱、邮件附件、帮会捐献配置、交易配置与托管包、神秘商人表）按同源取值表校验；scene 收件箱执行器遇到不认识的币种回 `kVersionSkew`（与版本无关的解码、金额校验先判），资产通道新增第 8b 步回 RETRY + 1006、不记账（排在中止与确定性包校验之后）；战斗节点奖励档的两处币种判据改调同一谓词。
 
-  文件、用例与 Codex 命令见[交接 §14](../handoff/mixed-version-persist-handoff-20261019.md)。
+  文件、用例与 Codex 命令见交接 §14（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
   - **运行证据（10-30 部分）**：Codex 11-02 的全量 C++ 回归（`build/player-store-verify-20261102-r3-prep/06-cpp-tests/`）里，这批 16 条 C++ 用例都实际运行且通过，其中包括 10-30 新增的 `AssetOpSystemTest.QuantityDebitDeterministicRejectionsComeBeforeVersionSkewRetry`；currency_test 299 条、turn_battle_engine_test 300 条全绿。同一轮 bag_test 的 16 条失败与这批无关：13 条装备属性测试的数值超过了配置表上限，1 条宝宝加点用例属另一会话；`PersistRoundTripTest.UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave` 报的是新持久类型 `AssetRecallLine` 不在往返夹具里，已由别人在 `ccbb4af69` 补上夹具，尚未重跑。Go 侧（`currencytype`、收件箱入箱、交易托管撤单）没有运行记录。
 - **第 7 批：已落码，未编译、未测试（Claude，2026-11-05）**。四件事：
   - 台账封存门禁（§3.1「封存」）：生成器 `persistschema` 的封存行解析、写回与核对（`ledger.go`、`apply.go`、`generate.go`），生成器命令行开关 `--persist-schema-seal`（`cmd/root.go`），`dev_tools.ps1 -Command persist-schema-seal`，发布预检 `release.persist_schema.sealed`，以及 `release-checklist.md` §2.1 ① / ⑦、§6.2。用例在 `persistschema_test.go`、`dev_tools_proto_gen_exit.tests.ps1`、`release_common_version.tests.ps1`。
@@ -520,7 +519,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
   - 评审修正：生成器加只核不写的 `--persist-schema-verify`（`dev_tools.ps1 -Command persist-schema-verify`），发布预检用它核摘要；封存违反按两种成因分别给处置，同一根因只报一次；`TestRepositoryLedgerIsCanonical` 同时核仓库台账的封存。
   - 收件箱域停用的周期补打：停用之后每 5 分钟补打一条 `metric=inbox_halted ... relog=1`（`kHaltedDomainRelogIntervalMs`），告警在实体存活期间一直亮着；`player-inbox-alerts.yaml` 的毒消息告警描述先排除版本错位。用例 `PlayerInboxSystemTest.HaltedDomainRelogsOnTheIntervalWhileTheEntityLives`。
 
-  文件与 Codex 命令见[交接 §17、§19](../handoff/mixed-version-persist-handoff-20261019.md)。
+  文件与 Codex 命令见交接 §17、§19（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
 - **第 8 批：已落码，未编译、未测试（Claude，2026-11-11）**。§12 载荷行剩下的两项，以及 §13 第 10 条的三项待拍板：
   - **载荷新字段**（§12）：收件箱载荷与资产通道请求一律整棵判未知字段（`unknown_field_carry::TreeCarriesNewerVersionFields`）。退役判据是该层消息的 reserved 段或台账退役行；bytes 字段（原样携带的实例）不往里解。
     - 收件箱：`player_inbox_registry::PayloadCarriesNewerVersionFields`，带新字段的条目按 `kVersionSkew` 停用本域，不调执行器。
@@ -533,7 +532,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
     - 战斗结算对查不到表的掉落 / 消耗当时仍按 C-2 剔除该项、记 ERROR 交人工；已在下面的「第 8 批收尾」改成整笔 DEFER。
   - **§13 第 10 条第 2、3 项**：照推荐定案，不改代码（见 §13）。
 
-  文件与 Codex 命令见[交接 §24](../handoff/mixed-version-persist-handoff-20261019.md)。
+  文件与 Codex 命令见交接 §24（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
 - **第 8 批收尾：已落码，未编译、未测试（Claude，代码 2026-11-11、用例与文档 11-12）**。scene 收件箱战斗结算执行器遇到「本节点 Item / Pet 表查不到」改为整笔 DEFER、零副作用（§13 第 10 条）：
   - **物品**：`ApplySettlementToEntity` 在剔除封禁项、算实际可扣量之前判。消耗或掉落里有查不到的配置号，整笔返回 false，日志 `metric=persist_version_skew where=battle_item`（带 `side`、`config_id`）。`DropItemsWithoutConfigRow` 与 `metric=battle_inbox_item_effect_skipped` 已删。
   - **宝宝**：玩家带进这一局的宝宝，种类在本节点 Pet 表查不到时，`CollectApplicableInboxPets` 不再跳过这一只，整笔返回 false，日志 `where=battle_pet`（带 `pet_id`、`pet_table_id`）。宝宝已不在身上、宝宝属性池缺配不属于这条规则，仍只跳过这一只。
@@ -545,7 +544,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
     - `PlayerBattleSettlementTest.InboxPetConfigUnknownToThisNodeDefersWholeSettlement`；
     - `PlayerBattleSettlementTest.InboxSettlementAppliesOnRetryOnceThePetRowIsHotUpdated`。
 
-  文件与 Codex 命令见[交接 §25](../handoff/mixed-version-persist-handoff-20261019.md)。
+  文件与 Codex 命令见交接 §25（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
 
 | 批 | 内容 | 主要改动 | Codex 验证 |
 |---|---|---|---|
@@ -717,7 +716,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 ### 12.2 持久值域落码（2026-10-23～24，Claude；Codex 10-24 有构建与运行旁证）
 
 > **来由**：2026-10-23 用户（负责人）确认项目未上线、存量玩家数据可以清空，要求按最标准的方式做完：数据强一致、代码可读、可水平扩展。据此把 §12.1 的 D1–D6 与等级上限一行改掉，不写存量迁移；W1–W3 按 §12.1 的建议不改代码；D7 起初保留为发布约束，2026-10-31 随战斗结算账本移出玩家存档作废。代码已随整仓快照提交入库（`5de132e2`、`a3c9b9b7` 等）。
-> **运行证据（旁证）**：Codex 2026-10-24 在含这批改动的共享工作区实际构建 `game.sln`（0 错误），并全量运行 bag_test（708 条）、skill_test（76 条）、turn_battle_engine_test（287 条），均 0 失败，这批新增用例全部在列且通过（PROGRESS「2026-10-24 07:38 UTC」「07:43 UTC 后继实际结果」两条；原始 gtest XML 在 Codex 证据目录 `cpp-current1884-post-full-gtests-evidence-r1/run-20261024T071358902Z-25be95de/`，本会话 10-30 按用例名逐条核对）。这不是本主题专门的验证：构建前没有封存源快照，也没有做真实回滚演练；10-29 之后别的会话又改过 `player_battle.cpp`、`class_skill_test.cpp`，并新增了一条任务等级用例。最新状态的复跑清单见 [交接 §13.2](../handoff/mixed-version-persist-handoff-20261019.md)。
+> **运行证据（旁证）**：Codex 2026-10-24 在含这批改动的共享工作区实际构建 `game.sln`（0 错误），并全量运行 bag_test（708 条）、skill_test（76 条）、turn_battle_engine_test（287 条），均 0 失败，这批新增用例全部在列且通过（PROGRESS「2026-10-24 07:38 UTC」「07:43 UTC 后继实际结果」两条；原始 gtest XML 在 Codex 证据目录 `cpp-current1884-post-full-gtests-evidence-r1/run-20261024T071358902Z-25be95de/`，本会话 10-30 按用例名逐条核对）。这不是本主题专门的验证：构建前没有封存源快照，也没有做真实回滚演练；10-29 之后别的会话又改过 `player_battle.cpp`、`class_skill_test.cpp`，并新增了一条任务等级用例。最新状态的复跑清单见 交接 §13.2（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`）。
 > **11-02 r3 回归**（玩家存盘重构那条线的 Codex 运行，`build/player-store-verify-20261102-r3-prep/06-cpp-tests/bag_test.stdout.log`）：本主题在 bag_test 里的用例，含 10-30 新增的宝宝生效等级两条与"只剩未知键时洗点"两条，都通过；只有角色与宝宝的 `AutoAllocateSuggestsOnlyThePointsLeftAfterUnknownKeys` 两条失败，原因是夹具没加载自动加点方案表，`AutoAllocate` 回了"无自动加点方案"。11-02 的 `ccbb4af69` 已给两个夹具补 `AttributeAutoPlanTableManager::Instance().Load()`，补完后还没有复跑。
 
 **统一规则**：
@@ -879,7 +878,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 
 ### v0.6（C3 改为写方令牌；第 3b / 4 批落码，2026-10-19）
 
-交接核对（[交接 §3.2](../handoff/mixed-version-persist-handoff-20261019.md)）与接手会话的只读取证（owner_epoch 的铸造与复用、OnSaved 的全部顶替路径，带行号）共同推翻了 v0.3 的"只比第一次写入"。逐个方案的结论：
+交接核对（交接 §3.2（原 `docs/handoff/mixed-version-persist-handoff-20261019.md`，已清理，见 `ccf2840b2`））与接手会话的只读取证（owner_epoch 的铸造与复用、OnSaved 的全部顶替路径，带行号）共同推翻了 v0.3 的"只比第一次写入"。逐个方案的结论：
 
 | 方案 | 做法 | 结论 |
 |---|---|---|

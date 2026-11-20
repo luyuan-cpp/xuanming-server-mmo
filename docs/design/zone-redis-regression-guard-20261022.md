@@ -54,7 +54,7 @@ P1 + P2 做完之后，回退**不再造成覆盖或永久拒登**，残余只�
 | `FLUSHALL` / 手工删键 | 整键消失 | **不会**：键没了会走现有缺键路径，见 §4.1.4 V6/V7 |
 | `DEBUG RELOAD` 原地换数据 | 任意 | 不会。两份清单都已用 `--enable-debug-command no` 堵住（`redis-ha.yaml:282`、`redis.yaml:137-139`），沿用路由就绪标记的同一前提 |
 
-「zone Redis」指核心 `redis` StatefulSet：dev 是单实例，其他档位是 1 主 2 从加哨兵（`redis-ha.yaml:1-5`）。玩家父键、owner、屏障、location、handoff 都在这一个实例上。这是 `redis_client.h:66` 与 `parent_commit_barrier.go` 头注释写明的部署前提。另一份 [Redis 水平扩展需求交接](../handoff/redis-horizontal-scaling-requirements-20261022.md)正在评估分片；本稿**不新增**跨键原子约束（§4.1.5）。
+「zone Redis」指核心 `redis` StatefulSet：dev 是单实例，其他档位是 1 主 2 从加哨兵（`redis-ha.yaml:1-5`）。玩家父键、owner、屏障、location、handoff 都在这一个实例上。这是 `redis_client.h:66` 与 `parent_commit_barrier.go` 头注释写明的部署前提。另一份 Redis 水平扩展需求交接（原 `docs/handoff/redis-horizontal-scaling-requirements-20261022.md`，已清理，见 `ccf2840b2`）正在评估分片；本稿**不新增**跨键原子约束（§4.1.5）。
 
 ### 1.2 不在范围
 
@@ -347,7 +347,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 
 #### 4.3.4 两段回执（2026-11-10 落码，未编译、未测试，待 Codex 验证）
 
-来源：2026-11-10 Claude Code 独立审核第 1 条（[交接](../handoff/owner-epoch-claude-review-20261106.md)「Claude Code 审核结论」），负责人选方案 A；同日又定推路由失败的回滚同样两段，不留一段式的例外。
+来源：2026-11-10 Claude Code 独立审核第 1 条（交接（原 `docs/handoff/owner-epoch-claude-review-20261106.md`，已清理，见 `ccf2840b2`）「Claude Code 审核结论」），负责人选方案 A；同日又定推路由失败的回滚同样两段，不留一段式的例外。
 
 **问题**：§4.3.3 的 not_durable / error 分支用这次落点单调回滚，回滚写下的 epoch（铸出值 + 1）同样只在内存里。确认不足多半正是刷盘或副本落后；随后主节点宕机、落后的副本被提升，铸造与回滚一起丢。原做法里源端取证读到回执就采纳回滚值（判定表 B5），并随强制存盘把 TiDB 写权行抬上去。Redis 回到旧值之后，源端就成了 Redis 不认识的持有者，后果见 §3 表 player-save#2 一行。这正是 G3b 要防的状态，只是受害者从目标节点换成了源端；而且它与「确认不足」正相关，不是独立的偶发残余。
 

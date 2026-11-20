@@ -558,8 +558,8 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
   结果未知 1 秒起、封顶 60 秒;邮箱满 30 秒起、封顶 5 分钟。邮箱满的让玩家删信;其余查 mail 是否可用、scene 能否发现
   `MailNodeService.rpc` 下的节点。只寄此刻登记在本节点、可改的玩家:离线、交接中的玩家等下次落地再寄,属预期。
 - **不会自己好的失败**:ERROR `metric=mail_outbox_stuck`(值班查询在 `deploy/k8s/asset-channel-alerts.yaml` 头注释),行里带 `reason=`:
-  - 没配密钥或本地签名失败（`reason=no_secret` / `reason=sign_failed`）→ 核对这个 zone namespace 的 `domain-service-secrets` 里 `mail-producer-battle` 与 infra namespace 的同值、至少 32 字节;
-  - 验签被拒（`reason=signature_rejected`）→ 两边 `MAIL_PRODUCER_SECRET_BATTLE` 不同，或两边时钟相差超过 5 分钟。核对两边同值（见 [K8s 开服手册](k8s-open-server-runbook.md) §1），时钟按 NTP 修；改好后按退避自动寄出。被拒的请求邮件没有写，不会重复。
+  - 没配密钥或本地签名失败（`reason=no_secret` / `reason=sign_failed`）→ `mail-producer-battle` 由部署维护（[K8s 开服手册](k8s-open-server-runbook.md) §1）：重跑一次这个 zone 的部署，缺的会补上；值过短或与 infra 不同时部署拒绝并点名，确认后带 `-ResyncDomainServiceSecrets` 统一，并重启 scene 与 mail;
+  - 验签被拒（`reason=signature_rejected`）→ 两边 `MAIL_PRODUCER_SECRET_BATTLE` 不同（有人手工改过 Secret，或 Pod 还带着改之前的值），或两边时钟相差超过 5 分钟。值不同按上一条处理，时钟按 NTP 修；改好后按退避自动寄出。被拒的请求邮件没有写，不会重复。
   - 条目形状不合法(加载时另有 `metric=mail_outbox_invalid`)→ 按事故上报,走存档修复流程;
   - `reason=mail_rejected` 时看 `tip=`(号以导表产物为准):
     - `kMailAttachmentInvalid`:条目里的配置号在邮件服务的 Item 表里查不到。把配置表发到 mail(表行只增不删),补上之后下一次重试寄出;

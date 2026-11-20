@@ -207,7 +207,8 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 
 ### 9.2 实时场景持续状态缺少基线，CD/Buff 生命周期也未明确
 
-> 2026-11-19 「规则需确定」一段已定案并落码(未生成、未导表、未编译、未测试,待 Codex 验证),规则与验证步骤见 [实时技能冷却与 Buff 跨重登保留](realtime-cooldown-buff-persistence.md):冷却全部随玩家存档保留,按 UTC 毫秒的绝对时刻存;Buff 表 `keep_on_logout = 1` 的 Buff 按到期时刻保留,其余是战斗类短效状态,实体重建即清;离线期间时间照常走。实体复用与重建两条路径对冷却完全等价。本节第一段的实时场景基线 / 消费链问题不在其中,仍按原判定。Java 版待做,`PARITY.md` 已记。
+> 2026-11-19 「规则需确定」一段已定案并落码(未生成、未导表、未编译、未测试,待 Codex 验证),规则与验证步骤见 [实时技能冷却与 Buff 跨重登保留](realtime-cooldown-buff-persistence.md):冷却全部随玩家存档保留,按 UTC 毫秒的绝对时刻存;Buff 表 `keep_on_logout = 1` 的 Buff 按到期时刻保留,其余是战斗类短效状态,实体重建即清;离线期间时间照常走。实体复用与重建两条路径对冷却完全等价。Java 版待做,`PARITY.md` 已记。
+> 本节第一段(新观察者缺基线)2026-11-20 核对现状:正在走的目标进视野时补发此刻的移动,已由 PROGRESS 2026-11-12「进视野补发移动」做掉;战斗状态标志只走属性增量(消息 66),Unity 不消费 66(Java 仓契约文档已记),没有消费者,服务端不补发。
 
 **已确认**：ActorCreate 只有 §3.2 所列内容；`ActorBaseAttributesS2C` 的 transform/velocity/combat flags 由实体全局 dirty mask 驱动，广播前即移除该 mask，没有为新观察者保留确认或生成完整初始状态。目标的沉默等 flags 已向旧观察者发过且之后不变时，新观察者缺当前 flags。共享客户端目前也未找到生产代码对 `SyncBaseAttribute` 及 2/5/10/30/60 属性档位的消费，actor 世界主要消费创建、移动和技能表现通知。[脏位消费](../../cpp/libs/services/scene/generated/attribute/actorbaseattributess2c_attribute_sync.cpp#L24)、[协议内容](../../proto/scene/player_state_attribute_sync.proto#L14)、[客户端生产注册](../../../mmorpg-client/Assets/Scripts/Game/GameClient.cs#L1744)
 

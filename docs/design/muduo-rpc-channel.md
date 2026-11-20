@@ -1,7 +1,7 @@
 # 节点间 muduo RPC:每次调用的回调、延后回包与完整的完成语义(RpcChannel 改造)
 
 > 状态:**批 1–5 已实施,未编译,待 Codex 验证**(2026-10-15,Claude)。用户授权实施到第 5 批,升级口径选「同 zone 停服一次切换」;
-> 实施与本文的偏离、未做项与验证步骤见 §18。批 6(玩家回包死链)与 gRPC 每次调用回调见 §19(2026-10-15 续,未编译)。**批 7 与剩余调用点迁移已实施,见 §20**(2026-10-16;两步都已 regen,`message_id.txt` 共 8 条墓碑;生成器测试随 Codex 后续验证通过;C++ 第一步随 Codex 整组串行构建编过,第二步之后的整解构建被无关的 `world.cpp` 缺 include 阻断;C++ 专项测试都未跑,见 §20.7);任务来源是交接 [`docs/handoff/rpc-channel-batch7-handoff-20261015.md`](../handoff/rpc-channel-batch7-handoff-20261015.md)。
+> 实施与本文的偏离、未做项与验证步骤见 §18。批 6(玩家回包死链)与 gRPC 每次调用回调见 §19(2026-10-15 续,未编译)。**批 7 与剩余调用点迁移已实施,见 §20**(2026-10-16;两步都已 regen,`message_id.txt` 共 8 条墓碑;生成器测试随 Codex 后续验证通过;C++ 第一步随 Codex 整组串行构建编过,第二步之后的整解构建被无关的 `world.cpp` 缺 include 阻断;C++ 专项测试都未跑,见 §20.7);任务来源是交接 `docs/handoff/rpc-channel-batch7-handoff-20261015.md`（已清理，见 `ccf2840b2`）。
 > 本文不引用此前任何会话的方案为既定结论;`build/rpc-lambda-tools/`(被 .gitignore 忽略的早先尝试)不是本设计的一部分。
 > 事实核对基线:`54c9d775d`(2026-10-15 03:08)。行号以该提交为准,并发会话仍在改 gate 相关文件,动手前须重新核对。
 
@@ -400,6 +400,7 @@ lambda 捕获 `{sessionId, incarnation, clientRequestId, innerMessageId}`:
 - `NodeHandshakeManager::BeginHandshake(client, selfNode, expectedPeer, conn)` 直接接受依赖，每条连接立即发一次现有 typed `NodeHandshake`，超时 3s。请求经当前 channel 发出，不经过业务 Ready 门禁。**身份双向核对**：
   - 请求带 `expected_peer_uuid`(要连的对端实例,取自发现记录)。入站侧 `OnNodeHandshake` 在类型白名单之后、碰任何注册表之前用 `IsAddressedTo` 核对它等于本进程 uuid；为空或不等一律以 `kFailedToRegisterTheNode` 拒绝，不登记、不换 `RpcSession`。
   - 回包带入站侧自己的 `NodeInfo`，出站侧逐项比对 type / uuid / node_id / zone 与发现记录一致，且回包所走的仍是该 client 的当前连接，才 `MarkReady`；关机后和旧连接回包不能改变 Ready。
+  - 入站侧登记成功后、回成功之前，把对端的 node_uuid 记在这条连接的 `RpcChannel` 上（`RpcChannel::RecordHandshakePeer`）；之后本连接上派发的每次调用经 `RpcController::HandshakePeerUuid()` 读到它，出站 channel 上恒为空。它与节点实体分开记：对端从 etcd 摘除时节点实体与 `RpcSession` 随之销毁，TCP 连接却可能还开着（老进程还没关停），按连接认来源进程的 handler 仍有据可查。scene 据此按 (gate 实例, session_id) 认会话，不信消息体自报的实例号（2026-11-20，[scene-enter-chain-residuals.md](scene-enter-chain-residuals.md) §14）。
 - 失败(超时、被拒、身份不符)时不留在同一连接无限握手，也不挂 ECS `TimerTaskComp`：按连续失败次数退避后关闭失败的当前连接，后续建连由既有 muduo `enableRetry` 负责。
   - 退避：首次 0.5s，每多失败一次翻倍，8s 封顶(`FailedHandshakeCloseDelaySeconds`)；计数在 `RpcClient`(`RecordHandshakeFailure`)，跨重连累计，握手成功即清零。
   - 退避只能放在关闭之前：已建立的连接关闭后，muduo `TcpClient::removeConnection → Connector::restart` 会当场重连并把它自己的建连退避重置为 500ms。
@@ -732,7 +733,7 @@ C++ 节点没有 Prometheus 出口(`dirty_save_stats.h:25-30`),沿用"relaxed �
 
 ## 20. 实施记录(批 7 与剩余调用点迁移,2026-10-15 ~ 16,Claude)
 
-任务来源:[交接](../handoff/rpc-channel-batch7-handoff-20261015.md)。用户拍板:批 7「一次落完」(生成器、proto 删除、守护段处理同批);交接 §1.2 九条默认照用;
+任务来源:交接（原 `docs/handoff/rpc-channel-batch7-handoff-20261015.md`，已清理，见 `ccf2840b2`）。用户拍板:批 7「一次落完」(生成器、proto 删除、守护段处理同批);交接 §1.2 九条默认照用;
 §3(e) 退役范围在 Gate 42 / 56 之外**加上 Scene 1 / 40**;`BroadcastMessageToScene` / `BroadcastMessageToAll` 保留;玩家级延后完成暂不实施(§14)。
 
 ### 20.1 message_id 墓碑(生成器)

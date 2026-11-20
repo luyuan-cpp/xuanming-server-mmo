@@ -1,6 +1,6 @@
 # 服务端发布清单
 
-**Updated:** 2026-09-16(重组:新增 §1–§5 发布流水线;原 2026-05-09 版"HTTP /api/login 上线 Checklist"全文移入文末附录,内容未删);2026-10-16 增补 §6「发版后一次性项」,§2.1 ⑦ 加指针
+**Updated:** 2026-11-20 增补 §7「首次上线前要提前办的长周期手续」;2026-09-16(重组:新增 §1–§5 发布流水线;原 2026-05-09 版"HTTP /api/login 上线 Checklist"全文移入文末附录,内容未删);2026-10-16 增补 §6「发版后一次性项」,§2.1 ⑦ 加指针
 **适用范围:** 服务端运行镜像(C++ 节点 `mmorpg-node`、Go 服务、Java 网关)的出包、发版、版本追溯、回滚与离线交付
 **设计依据:** [release-packaging-standard-20260914.md](../design/release-packaging-standard-20260914.md)(P1–P4)、[CHANGELOG.md](../../CHANGELOG.md)
 **脚本入口:** `tools/scripts/publish_images.ps1` → `make_release.ps1` → `release_preflight.ps1`;离线交付 `fetch_images.ps1` → `import_images.ps1`;快照清理 `artifacts_retention.ps1`;公共库 `tools/scripts/lib/release_common.ps1`、`tools/scripts/lib/artifacts_lib.ps1`;GitHub 干净出包 `.github/workflows/release.yml`
@@ -111,8 +111,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   `-ReleaseVersion` 追加的 H 节检查项:`release.version`、`release.changelog`、`release.artifact.dir`、`release.artifact.sha256sums`、`release.buildinfo.version`、`release.buildinfo.clean`、`release.manifest`、`release.imagetag.commit`(给了 `-ImageTag` 时),以及只告警的 `release.buildinfo.commit`——当前工作树不在制品 commit 上时,A–G 节读到的配置不代表该版本,切到发布提交重跑。
   注意:`k8s_image.ps1` / `k8s_deploy.ps1` 在 staging/prod 自动调用的预检**不带** `-ReleaseVersion`,只查配置与 tag;制品检查只靠这一步手动跑。
 - [ ] **⑦(人工)打 tag、部署、核对**:
-  **先于下面的部署命令做（2026-11-12 增补）**：首次上线含改投邮件的 scene 与 mail 之前，要先在 infra namespace 与每个 zone namespace 的 `domain-service-secrets` 里补上 `mail-producer-battle`（各处同值，至少 32 字节）。缺了 mail 与 scene 的 Pod 都起不来（manifest 是 `optional: false`）。顺序与核对命令见 [k8s-open-server-runbook.md](k8s-open-server-runbook.md) §1。`k8s_deploy.ps1` 在 `zone-up` / `all-up` / `infra-up` 的任何写操作之前核对这个键（存在、不少于 32 字节；zone 与 infra 同值），缺了或不一致就拒绝，一个都不写；`-DryRun` 只打一行说明。发布预检 `release_preflight.ps1` 只查配置与制品、不连集群，所以不查这一项。
-  **2026-11-19 增补**：同样先于部署命令，在每个 zone namespace 与 infra namespace 的 `domain-service-secrets` 里补上 `account-directory-payment`（payment 查实名的调用密钥，各处同值、至少 32 字节、与别的 key 不同；不开防沉迷的部署也要有，缺了 data-service 与 payment 都起不来）。部署脚本的这道写前核对从 2026-11-19 起按共享键表覆盖全部跨 namespace 的键（账号目录、查实名、角色护栏与 `mail-producer-battle`），细节见 [k8s-open-server-runbook.md](k8s-open-server-runbook.md) §1。
+  **内部调用密钥不用先手工补（2026-11-20 起）**：`domain-service-secrets` 里 zone 工作负载引用的 16 把 HMAC 密钥（角色护栏、账号目录与查实名、存盘、`mail-producer-battle`）由 `k8s_deploy.ps1` 维护：写工作负载之前补齐缺的（从 infra 复制，全新集群生成），全集群每把一个值。现有环境里值不同、不足 32 字节或两把同值时，在任何写操作之前拒绝、一个都不写，报错点名键与 namespace；确认后带 `-ResyncDomainServiceSecrets` 重跑，统一成一个值并重启读这些键的 Pod（选低峰）。`-DryRun` 只打一行说明。发布预检 `release_preflight.ps1` 只查配置与制品、不连集群，不查这一项。细节与换值步骤见 [k8s-open-server-runbook.md](k8s-open-server-runbook.md) §1。
   ```powershell
   git tag vX.Y.Z <12位commit>
   git push origin vX.Y.Z
@@ -271,6 +270,17 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
 - [ ] **① 主干上把台账切到 `active`**:由负责人在主干提交里把 `proto/persist_schema_gen.txt` 的 `state=bootstrap` 改为 `state=active`(只改这一行),再按 AGENTS.md §4 跑一次 proto 生成(Codex 执行),确认生成通过、台账其余行不变。此后每次出现新增字段的生成运行都会追加一个新世代。
 - [ ] **② 记录**:在 `docs/PROGRESS.md` 记一条:`state=active` 的提交号。
 - **门禁**:① 完成之前,不得发布任何新增持久字段的版本。2026-11-05 起有机器门禁:首次上线的版本在 §2.1 ① 封存过台账之后,引导期内再加持久字段,proto 生成会失败并提示先做本节;发布预检 `release.persist_schema.sealed` 要求每个版本都封存到最大世代。
+
+## 7. 首次上线前要提前办的长周期手续(非代码,2026-11-20 增补)
+
+这几项要排队几周,写代码加快不了;定下上线时间之后先办。只有要上对应形态时才需要。
+
+### 7.1 微信 / 抖音小游戏
+
+- **域名 ICP 备案**:ws-edge 的 wss 域名(`-WsEdgeHost`)与 gateway 的 https 域名都要备案,通常要几周。证书由受信 CA 签发,`tls.crt` 带完整证书链,建成 infra namespace 里的 TLS Secret(`-WsEdgeTlsSecret`)。
+- **平台账号**:微信小游戏、抖音小游戏的开发者账号与主体认证。
+- **合法域名登记**:在两家后台把 ws-edge 域名登记成 socket 合法域名、gateway 域名登记成 request 合法域名。小游戏只能连登记过的域名,不能连 IP。
+- **转包**:负责人 2026-11-20 定上线前再转,届时打算用 Unity 7。先核实两家转换工具支持当时的 Unity 版本,再按 [小游戏 WebSocket 设计](../design/minigame-websocket-gate.md) W10 复查只在 Web 构建里编译的代码。客户端平时要守的限制在客户端仓 `AGENTS.md`「小游戏(WebGL)兼容约束」。
 
 ---
 

@@ -267,7 +267,7 @@ message ActivityRewardTierTable {
 
 ### 5.3 进度存储（硬约束）
 
-- **不要嵌进 `MissionListComp`**。[C] `mission_marshal.cpp` 的 `Unmarshal` 只逐项恢复 missions、mission_begin_time、completed、claimable——往 `MissionListComp` 加字段而不同步改 marshal，**同一版本内**每次加载都会丢它（这与混版本无关）。再配上"缺周期键就当新周期清零"，玩家每次重登都能在同一游戏日里重做、重领——**这是资产复制漏洞**。活动的"计数器 + 档位"与任务的"多目标进度 + 完成位 / 待领位"也不是同一个模型，所以单独成结构。
+- **不要嵌进 `MissionListComp`**。[C] `mission_marshal.cpp` 的 `Unmarshal` 只逐项恢复 missions、完成位图 complete_missions、claimable、activity_ledger 与本层未知字段——往 `MissionListComp` 加字段而不同步改 marshal，**同一版本内**每次加载都会丢它（这与混版本无关）。再配上"缺周期键就当新周期清零"，玩家每次重登都能在同一游戏日里重做、重领——**这是资产复制漏洞**。活动的"计数器 + 档位"与任务的"多目标进度 + 完成位 / 待领位"也不是同一个模型，所以单独成结构。
 - 推荐：新持久结构做成 `player_database` 的**顶层新字段** `PlayerActivityComp`：
 
   ```proto

@@ -397,7 +397,7 @@ C++ 有三个 Redis 句柄：
   - 交接资格带持有进程的实例号，并铸新 owner_epoch；
   - 节点号持有者记录让老 scene 排空。
 
-  永久 ID 与 save_seq 不由 node_id 派生。剩一条早已登记的残余：同一名玩家在两个进程上恰好拿到同一个会话号时，老进程迟到的 ExitGame 会让新会话进入断线保留，25s 后退出、存盘、要重新登录，不丢数据。根治是 [scene 进场链残余](scene-enter-chain-residuals.md) §10 第 1 条的「e 方案 C」：scene 按（gate 实例，会话号）认会话。它要改不变量措辞，单独立项。
+  永久 ID 与 save_seq 不由 node_id 派生。原有一条早已登记的残余：同一名玩家在两个进程上恰好拿到同一个会话号时，老进程迟到的 ExitGame 会让新会话进入断线保留，25s 后退出、存盘、要重新登录，不丢数据。2026-11-20 已按 [scene 进场链残余](scene-enter-chain-residuals.md) §10 第 1 条的「e 方案 C」落码（未编译）：scene 按（gate 实例，会话号）认会话，gate 实例取自 RPC0 入站连接的握手身份，老进程迟到的入场、ExitGame 与旧客户端消息都不再当成新会话的；login 的跨实例同号随之改回踢线。不变量措辞的定论与验证见该文 §14 和 `docs/PROGRESS.md` 2026-11-20「scene 按 gate 实例认会话」。scene_manager 的 location 仍不记实例号（该文 §14.6）。
 - **`shared/leader` 降级的瞬间：已兜住。** 见 R7 的核对：动资产与归属的提交点都有按对象的条件写，负载分刷新改成了锁值围栏。
 - **match 失联实例与接管实例同时撮合同一个池：不会重复开局。** 提交点先按 player_id 升序锁 `role_fence`，再锁票行复核状态，成局行与票状态在同一笔悲观事务里写；后到的一方读到提交后的值，整笔回滚（单排回 `ErrClaimStale`，整队回 `ErrMatchEntryOccupied`）。派 battle 要持工作租约，battle 按 battle_id 去重。
   - 顺带修了一个缺陷：撮合侧原来按白名单判「正常撞车」，`ErrMatchEntryOccupied` 不在白名单里，组队池每撞一次整队就记一次要人工处理的永久排空 HOLD。现在改成只在守卫判结局未知时才 HOLD（`logic.claimOutcomeUnknown`），这一类误报整类消失（[全服匹配分层](global-match-hierarchical-pools.md) §5.2.1 第 7 条）。

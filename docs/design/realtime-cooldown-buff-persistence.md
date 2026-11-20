@@ -3,6 +3,8 @@
 > 2026-11-19,Claude 定案并落码。**协议未生成、未导表、未编译、未测试**,验证步骤见 §8,交 Codex。
 > Java 版只在 Java 仓 `PARITY.md` 末尾登记待做(§9)。
 > 收掉 [断线重连审计](disconnect-reconnect-audit-20261020.md) §9.2 的「规则需确定」与 [断线保留](player-connection-lost-hold.md) §8 第 5 条。
+> 2026-11-20 复核补(同样未编译):一起修掉再施加不刷新时长、回合快照按全量时长换算两处(§2.6);离线暂停(§2.3)与客户端下发(§7)改为定案不做,写明理由。
+> 同日独立评审后再补(未编译):本节点表里查不到行的 Buff 条目原样带回存档、不丢(§2.5 第 4 条);空冷却列表也保留更新版本的列表级字段(§5);恢复出来的到期时刻与存档一字不差(§3);新建条目生效回调之后按号重查再挂定时器。
 
 ## 0. 一句话
 
@@ -42,10 +44,12 @@
 
 ### 2.3 Buff 为什么按绝对到期时刻、离线照常走
 
-- 存剩余时长(离线暂停)就得在每次存盘写「此刻还剩多少」。剩余时长随时间一直在变,有这种 Buff 的玩家,每次周期存盘都会把整行判脏重写。绝对到期时刻在线期间不变,只在施加和到期时变。
+- **存档内容必须只由实体状态决定,不随时钟变。** 退出收尾时 `player_exit::IsPersistedPayloadCurrent` 拿刚落地的存档与当前内存按行投影、逐行比字节,相同才销毁实体;周期存盘判脏也是逐行比字节。绝对到期时刻在线期间不变,只在施加、刷新和到期时变,满足这一条。
 - 和冷却用同一条时钟规则,好讲,也好查。
 - 下线不会给玩家带来好处(增益照常过期),也就无从利用。
-- 「离线不计时」的 Buff(例如要求只在在线时消耗的经验丹):以后在同一列加取值 2,存剩余时长。现在表里没有这种 Buff,本批不做。
+- **定案:不做「离线不计时」**,所有保留的 Buff 离线照常计时。离线暂停只有两种做法,代价都大于收益:
+  - 每次存盘写当时的剩余时长:存档随时钟变,退出收敛永远比不上,一直重存到轮数上限;有这种 Buff 的玩家每次周期存盘都重写整行。
+  - 在退出、交接冻结、交接中止三处加暂停 / 恢复的状态转换:多出一套跨流程的状态机,只为一种表里没有的 Buff。
 
 ### 2.4 标记放在 Buff 表
 
@@ -53,6 +57,7 @@
 - 取值:0 = 不保留(缺省),1 = 保留。
 - 现有 98 行全部是 0:实时侧的现有 Buff 都是战斗效果或演示行,回合战斗的 Buff 由战斗引擎自己管理,不走这条链。
 - 哪些行该配 1:持续时间远大于一次重登(分钟级以上)、不是战斗效果、效果和施法者无关的增益或惩罚,例如经验加成、料理、称号类增益、死亡惩罚。控制、伤害、护盾、隐身、子 Buff 都不配。
+- 配 1 的行不要做成周期性重复施加的来源(例如光环每秒重挂一次):每次刷新都会改存档里的到期时刻,玩家下线收尾时会一直判成没收敛、重存到轮数上限。
 
 ### 2.5 保留的 Buff 的附带规则
 
@@ -61,11 +66,17 @@
 2. **子 Buff 不单独存。** 挂在别的 Buff 子项表(`sub_buff_list_id`)里的条目由父项负责:父项恢复后按自己的逻辑重新挂。单独恢复会留下没人撤销的孤儿,脱战加成就是这种情况。
 3. **恢复不重跑准入判断。** 免疫、驱散、叠层判断在当初施加时已经判过,恢复是把存档时活着的条目原样放回,结果与恢复顺序无关。冻结和回合战斗两道闸在加载时还没挂上,也挡不到恢复。
 4. **恢复按加载时的表。**
-   - 表里没有这一行,或者改成了 0:丢弃并打日志;
+   - 表里查不到这一行(更新版本加的行,或本节点还没热更到):不生效,留在暂存组件上原样带回存档(连未知字段),过了它自己的到期时刻才丢。丢掉的话,玩家回到新版本节点时这个 Buff 就永远没了(混版本保护 P1)。表没有标「行号只增不删」,所以删掉的永久行会一直被带着,条数以删过的行数为上界;
+   - 表里改成了 0:丢弃并打日志。把已有的行从 0 改成 1 的那次热更窗口里,还在用旧表的节点会按 0 丢弃,只影响窗口里重建的那几个人;
    - 层数夹到 `[1, max_layer]`;
    - 剩余时长不超过表里的时长,写盘节点时钟超前时最多也只多一个整时长;
    - 原来是永久 Buff、表改成了有时限:从加载时起算一个整时长;
    - 已到期:丢弃。
+
+### 2.6 一起修掉的两处(都靠 `BuffEntry::expireAtMs`)
+
+1. **再施加同一条 Buff 刷新时长。** 原来 `BuffSystem::OnBuffRefresh` 是空的 TODO:同一施法者再施加只加层,到期时刻不动,第二瓶经验丹的时长白白浪费。现在剩余时长回到表里的整时长(重挂满时,取消旧定时器),与回合引擎刷新持续回合的口径一致;永久与瞬时的不动,不重跑 `OnBuffStart`。
+2. **回合战斗快照按剩余时长换算回合。** 原来 `PlayerBattleSystem::BuildBattleSnapshot` 拿不到剩余时长,按表里的全量时长换算(注释写着「另开任务」):增益带进战斗偏宽、减益偏严。现在按这条自己的到期时刻换算,已到点、到期回调还没跑的不带;没有到期时刻的有限行记 0,由引擎入场时夹到表里的全量时长。控制类照旧不带(PVP 应战前挂控制的问题与时长无关)。
 
 ## 3. 时钟口径
 
@@ -74,7 +85,8 @@
   - 冷却开始时刻晚于加载节点的当前时刻时,压到当前时刻。剩余时长最多一个整冷却,不会锁到那个未来时刻之后。
   - Buff 的剩余时长夹到表里的时长。
 - 时钟回拨:冷却显得更长(上限一个整冷却),Buff 晚到期(上限一个整时长)。不另做处理。
-- 运行时到期仍由 muduo 定时器驱动(`TimerTaskComp`)。`BuffEntry::expireAtMs` 只用于存档,与定时器在同一处设置。
+- 运行时到期仍由 muduo 定时器驱动(`TimerTaskComp`)。`BuffEntry::expireAtMs` 供存档和回合快照算剩余,与定时器在同一处(`buff.cpp` 的 `ArmBuffExpiry`)设置、刷新时一起重设。
+- 恢复时剩余时长与到期时刻按同一次读到的时刻算,恢复出来的到期时刻与存档里的一字不差:重建多少次都不漂移,加载后的第一次存盘也不会因为它被判脏。
 
 ## 4. 覆盖的路径
 
@@ -96,8 +108,8 @@
   - 冷却组件原样拷进存档,没有组件就写空;
   - 保留的 Buff 按 buff_id 排序后写出,同样的状态产出同样的字节,不会因为 `unordered_map` 的遍历顺序被判脏。
 - 混版本:两个字段的未知字段都随对象携带。
-  - 冷却组件本身就是存档消息;
-  - Buff 条目的未知字段在恢复时存进 `BuffEntry::persistUnknown`,存盘时并回;
+  - 冷却组件本身就是存档消息;列表里没有记录、只带着更新版本的列表级字段时也照样挂上,不丢那些字段;
+  - Buff 条目的未知字段在恢复时存进 `BuffEntry::persistUnknown`,存盘时并回;本节点表里查不到行的条目整条原样带回(§2.5 第 4 条);
   - 往返一致性测试(`persist_round_trip_test`)的夹具覆盖了这两个字段的全部新类型。
 
 ## 6. 组件访问
@@ -110,14 +122,13 @@
 | `BuffListComp` | 按需状态 | 唯一创建处仍是新建 Buff 条目处,施加与恢复共用 | 身上没有 Buff |
 | `SavedBuffsPendingComp`(新增) | 按需状态 | 加载时存档里有保留的 Buff 才挂 | 没有待恢复的 Buff |
 
-- `SavedBuffsPendingComp` 由 `InitPlayerFromAllData` 消费:派生投影初始化之后、进场景之前,`BuffSystem::RestoreSavedBuffs` 恢复后摘掉。生效回调(战斗状态、隐身标签)要用到派生投影组件,所以不在反序列化里直接恢复。
-- 存盘时 `SavedBuffsPendingComp` 还挂着(恢复没跑到),就把其中的条目原样写回,保证不丢。
+- `SavedBuffsPendingComp` 由 `InitPlayerFromAllData` 消费:派生投影初始化之后、进场景之前,`BuffSystem::RestoreSavedBuffs` 恢复。生效回调(战斗状态、隐身标签)要用到派生投影组件,所以不在反序列化里直接恢复。恢复后只剩本节点表里查不到行的条目时留着,否则摘掉。
+- 存盘时 `SavedBuffsPendingComp` 还挂着(恢复没跑到,或有查不到行的条目),就把其中的条目原样写回,保证不丢。
 
 ## 7. 客户端
 
 - 客户端目前不显示实时冷却和实时 Buff:技能面板只显示回合战斗的「冷却回合」(`ListSkillsResponse.cooldown_rounds`,表里的静态值),`GameClient.ReleaseSkill` 没有界面调用方。服务端也没有下发实时冷却剩余的协议。
-- 所以本批不改客户端,也不加协议。
-- 以后客户端要显示实时冷却或 Buff 时,另加下发,例如技能列表回包带各冷却组的就绪时刻。那是客户端可见契约,两版服务端同批改。
+- **定案:不改客户端,不加下发协议。** 没有界面消费的状态不往客户端推(与组件访问规则「没有消费者不发事件」同一判据)。回合战斗里的 Buff 剩余回合照旧随战斗快照与回合广播下发,按剩余时长换算之后客户端拿到的就是准确值(§2.6 第 2 条)。
 
 ## 8. 验证(交 Codex)
 
@@ -136,12 +147,12 @@
    - 再编 `cpp/nodes/scene`;
    - 测试工程链接预编好的 lib,改了库要先编库,再编测试。
 4. **C++ 测试**:
-   - 执行 `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter buff`、`-Filter skill`、`-Filter bag`,日志放 `build/verification/<本次运行>/cpp-tests/`;
+   - 执行 `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter buff`、`-Filter skill`、`-Filter bag`、`-Filter turn_battle`,日志放 `build/verification/<本次运行>/cpp-tests/`;
    - 新增用例必须全部通过:
-     - `buff_test` 的 `BuffKeepOnLogoutTest.*`;
+     - `buff_test` 的 `BuffKeepOnLogoutTest.*` 与 `BuffDurationTest.ReapplyingRefreshesTheExpiryToTheFullDuration`;
      - `skill_test` 的 `SkillUtilTest.RestoreCooldowns_*`;
-     - `bag_test` 的 `PersistRoundTripTest.*`(夹具新增冷却与保留的 Buff 两类节点);
-   - 原有用例不得变红。重点看 `BuffStackingTest.*`、`BuffDurationTest.*`、`player_feature_persistence_test` 的 `ExpectLazyActorStateAbsent` 类断言。
+     - `bag_test` 的 `PersistRoundTripTest.*`(夹具新增冷却与保留的 Buff 两类节点)与 `PlayerBattleSettlementTest.SnapshotBuffRoundsFollowTheRemainingTime`;
+   - 原有用例不得变红。重点看 `BuffStackingTest.*`、`BuffDurationTest.*`、`player_feature_persistence_test` 的 `ExpectLazyActorStateAbsent` 类断言,以及 `turn_battle_engine_test` 里参战 Buff 的回合用例(引擎没改逻辑,只改注释)。
 5. **整解与 Linux**:
    - 整解按现有口径构建一次;
    - `cross_zone_test` 全量跑一次,它经 `MarshalAsSaved` 走存盘入口;
@@ -159,7 +170,8 @@
 
 - 冷却全部按绝对时刻跨重登、换节点保留;
 - Buff 表 `keep_on_logout = 1` 的 Buff 按到期时刻保留,其余重建即清;
-- 恢复按加载时的表裁剪(见 §2.5 第 4 条)。
+- 恢复按加载时的表裁剪(见 §2.5 第 4 条);
+- 再施加同一条 Buff 重挂满时;带进回合战斗的 Buff 按剩余时长换算回合(§2.6)。
 
 客户端不可见,不涉及协议。配置表的这一列两版共用。
 
@@ -172,9 +184,11 @@
   - `proto/player_store/player_store.proto`:只改 CHARACTER 行的注释。
 - 服务端:
   - `combat/buff/comp/buff_comp.h`:`BuffEntry::expireAtMs` / `persistUnknown`、`SavedBuffsPendingComp`;
-  - `combat/buff/system/buff.{h,cpp}`:新建条目抽成 `StartBuffEntry`,施加与恢复共用;`IgnoresCaster`;`SaveKeptBuffs` / `RestoreSavedBuffs`;
+  - `combat/buff/system/buff.{h,cpp}`:新建条目抽成 `StartBuffEntry`,施加与恢复共用;到期计时收成 `ArmBuffExpiry`;`OnBuffRefresh` 重挂满时;`IgnoresCaster`;`SaveKeptBuffs` / `RestoreSavedBuffs`;
   - `combat/skill/system/skill.{h,cpp}`:`RestoreCooldowns`;
   - `player/system/player_database_loader.cpp`:加载与存盘;
-  - `player/system/player_lifecycle.cpp`:`InitPlayerFromAllData` 调恢复。
-- 测试:`cpp/tests/buff_test/buff_test.cpp`、`cpp/tests/skill_test/skill_test.cpp`、`cpp/tests/bag_test/persist_round_trip_test.cpp`。
+  - `player/system/player_lifecycle.cpp`:`InitPlayerFromAllData` 调恢复;
+  - `battle/system/player_battle.cpp`:战斗快照按剩余时长换算回合;
+  - `cpp/libs/services/battle/system/turn_battle_engine.cpp`:只改刷新口径那一行注释。
+- 测试:`cpp/tests/buff_test/buff_test.cpp`、`cpp/tests/skill_test/skill_test.cpp`、`cpp/tests/bag_test/persist_round_trip_test.cpp`、`cpp/tests/bag_test/player_battle_settlement_test.cpp`。
 - 文档:本文;[组件访问规则](ecs-component-access-rules.md);[断线重连审计](disconnect-reconnect-audit-20261020.md) §9.2;[断线保留](player-connection-lost-hold.md) §8 第 5 条;`docs/README.md`;`docs/PROGRESS.md`。

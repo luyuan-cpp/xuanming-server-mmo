@@ -5,14 +5,21 @@
 > **状态(2026-11-19,Claude,负责人口径「按最标准的方式定、现在修」):§3.4 的运行期库级冷却整套删除,§3.2 的错误分类包 `storeerr` 随之删除;打开失败的冷却(`openOnce`,10 秒)保留。代码未编译、未测试,待 Codex 验证。** 原因:
 >
 > 1. **没有调用方。** 唯一的调用方是 Kafka 任务消费者(`key_ordered_consumer.go`),已随存档直接提交删除。之后 `cooling` 表恒空,`Store()` 的冷却分支走不到,`db_store_cooldown_stores` 恒为 0(断线重连 R19 核对时发现)。
-> 2. **它要解决的问题已经不存在。** 冷却是给消费者做的:同一子分片的任务串行执行,一个坏库会拖住落在别的库的玩家,连接类失败还会耗光重试预算、进死信(§1、§3.4)。现在每次存盘 / 认领都是一次独立的 RPC,没有共享的 worker,也没有重试预算;重试和退避都在调用方:scene 存盘按原序号 0.5~5 秒带抖动重试,直到拿到明确结论(gRPC 错误即结果未知,见 `go/db/internal/playerstore/server.go`);认领在 30 秒预算内重试;审计转发一轮里遇错就跳过这个库(一条语句至多 5 秒),下一轮按 `IntervalMs` 再来。对一个坏库的并发拨号由每库连接池的上限(`Placement.StoreMaxOpenConn`,缺省 8)封顶,不会被请求量放大。
+> 2. **它要解决的问题已经不存在。** 冷却是给消费者做的:同一子分片的任务串行执行,一个坏库会拖住落在别的库的玩家,连接类失败还会耗光重试预算、进死信(§1、§3.4)。现在每次存盘 / 认领都是一次独立的 RPC,没有共享的 worker,也没有重试预算;重试和退避都在调用方(2026-11-20 按 scene 源码核对过,`cpp/libs/services/scene/player/system/player_store_client.cpp`):传输层把任何非 OK 的 gRPC 结局都报成结果未知(`SendPlayerStoreSaveOverGrpc` / `SendPlayerStoreClaimOverGrpc`);存盘用原请求(同内容、同序号、同代次)重发,退避基数 0.5 秒起翻倍、5 秒封顶,每次再乘 0.5~1 的抖动,没有次数上限,直到拿到明确结论(`RunSaveAttempt` / `ScheduleRetry`);认领同样退避,从第一次发送起 30 秒没有结论就放弃这次进场(`ScheduleClaimRetry`);审计转发一轮里遇错就跳过这个库(一条语句至多 5 秒),下一轮按 `IntervalMs` 再来。对一个坏库的并发拨号由每库连接池的上限(`Placement.StoreMaxOpenConn`,缺省 8)封顶,不会被请求量放大。
 > 3. **接回去在现在的连接上做不出判别。** 存档库连接全部经过 authoritysql 守卫(`PinCurrentSession` / `PinPlacedSession`),守卫有意不保留底层错误(防止 SQL、参数、连接串进日志):建连失败一律是同一条不带原因的错误,连接数满(1040)和网络不通分不开;语句发出之后的失败是不能 Unwrap 的「结局未知」;事务中途断开回 `ErrTxAbortedBeforeCommit`,调用方取消也回它。`storeerr.Classify` 对这些全判 `KindNone`:SQL 调用点报不出 `KindConnLost`;探活走的也是守卫连接器,失败一律被当成「服务端在应答」,冷却永远进不去。要做成,就得在所有 Go 服务共用的守卫里保留「1040 / 网络不通」的区别(§3.4 评审 F1 的前提)。为一个没有压测数据支撑的「失败得更快」去改共享的安全守卫,不划算(AGENTS.md §11.3:性能优化要有数据)。
-> 4. **删掉之后的行为。** 存档库在运行中整库失联时,每次调用自己等到拨号超时(`DialTimeoutSeconds`,缺省 5 秒)、读写超时或调用方的截止时间后失败,存盘接口回 `codes.Unavailable`,scene 按原规则退避重试。和冷却期内立即失败相比,只是每次失败晚几秒,结论和数据都不变。打开失败的冷却保留:它挡的是每次调用都重跑一遍整套打开核对(Ping、库名断言、只读 schema 闸,预算 10 秒),和运行期失联无关。
+> 4. **删掉之后的行为。** 存档库在运行中整库失联时,每次调用自己等到拨号超时(`DialTimeoutSeconds`,缺省 5 秒)或 go/db 的方法超时(`go/db/etc/db.yaml` 的 `MethodTimeouts`,12 秒,短于 30 秒的读写超时;scene 一侧的调用截止是 14 秒,`bin/etc/base_deploy_config.yaml` 的 `PlayerStoreNodeService`)后失败,存盘接口回 `codes.Unavailable`,scene 按原规则退避重试,结论和数据都不变。快速失败不靠冷却,由按存档库的熔断提供(见下面「2026-11-20 补」;这一点原来写成「只是每次失败晚几秒」,漏看了框架自带的熔断)。打开失败的冷却保留:它挡的是每次调用都重跑一遍整套打开核对(Ping、库名断言、只读 schema 闸,预算 10 秒),和运行期失联无关。
 >
 > 删除范围:`proto_sql/store_health.go` 及其用例、`StoreRegistryOptions` 里探活与冷却的四项、只给探活用的 `GameDB.Connector` 与 `pingStore` 的用例、`go/db/internal/storeerr`、指标 `db_store_cooldown_stores` 与 `db.go` 里的登记、压测汇总 P4 表的 cooldown 列与夹具、`deploy/k8s/README.md` 里的那一句。下文 §3.2、§3.4、§3.7、§3.8 里相关的内容只作历史保留。验证命令见 `docs/PROGRESS.md` 2026-11-19「go/db 删除存档库运行期冷却」。
+>
+> **2026-11-20 补:熔断从按方法改成按存档库(已落码,未编译、未测试)。** 按 go-zero v1.10.0 源码核对后,发现上面的分析漏了一层:
+>
+> - zrpc 的服务端自带熔断(`Middlewares.Breaker` 缺省开,`serverinterceptors.UnaryBreakerInterceptor`),键是 gRPC 方法名,回 `Unavailable`、`DeadlineExceeded` 的调用计成失败(`zrpc/internal/codes.Acceptable`)。go/db 对存储侧的失败一律回 `Unavailable`,所以整库不可达时这一层本来就在把调用快速挡回。
+> - 它不分库。算法是 Google SRE 的自适应限流(`core/breaker/googlebreaker.go`:10 秒窗口,成功数 × 1.5 小于总数就按比例丢,被丢的也计入总数)。这个算法假定后端越被限流、成功率越高;而这里的失败占比是流量结构决定的常数——失联的那个库的玩家一定失败。于是一个库失联且流量占比超过三分之一时(存档库不超过 3 个时,任何一个库都是),放行比例每个窗口按「1.5 ×(1 − 失败占比)」衰减,指向健康库的存盘与认领也几乎全被挡掉,只剩每秒强制放行的一次:单库故障被放大成整个地域存不了盘、进不了场。原稿评审 F1 要避免的正是这种放大。
+> - 处置:`go/db/db.go` 关掉 zrpc 按方法的那一层(代码里写死,yaml 写开也不认);`go/db/internal/playerstore/server.go` 的 `enterStore` 给每个存档库一个 go-zero 的同款熔断(具名 `player_store/<编号>`),包住打开与事务。不算库故障的两种失败:闸门冻结(搬库窗口,库没坏)、调用方自己取消。被挡回的调用回 `Unavailable`(scene 照旧按结果未知重试),记 `db_player_store_requests_total{result="unavailable"}`;原来被框架挡掉的调用进不了这个指标。目录路由(data_service)不可达由 zrpc 客户端自带的熔断管,不受这次改动影响。
+> - 这不是把删掉的冷却接回来:不需要判别错误类型(没拿到结论的失败都算),不自己探活,没有自己的状态机;用的是框架现成的熔断,只把键从方法换成库。验证命令见 `docs/PROGRESS.md` 2026-11-20「go/db 熔断改成按存档库」。
 
 > **状态**：v0.3.1（2026-10-14，Claude）。第 1 批已获负责人授权（2026-10-13，「L-04 第 1 批 + 读写超时」），**代码已按本稿落码，未编译、未测试**（AGENTS.md §10.1）。负责人同时要求「先实现代码，先不管测试，测试记录到上线待做里面」，未执行的验证列在 [godb-pipeline-launch-todo.md](../ops/godb-pipeline-launch-todo.md)。
-> **来源**：`tidb-phase1-and-launch-readiness.md` 的 L-04（「go/db 遇到 1040 或拿不到连接时改为延后，不消耗重试预算；死信加消费者和告警」）；[交接](../handoff/godb-pipeline-handoff-20261013.md) §4.1 第 1 项；[瓶颈文档](db-task-pipeline-bottlenecks.md) §4.4 的缺口 G2；全局单点交接的同名 P0。附录 A「mysql-connection-budget」批 A 是起点，按 HEAD 重新核对后改写。
+> **来源**：`tidb-phase1-and-launch-readiness.md` 的 L-04（「go/db 遇到 1040 或拿不到连接时改为延后，不消耗重试预算；死信加消费者和告警」）；交接（原 `docs/handoff/godb-pipeline-handoff-20261013.md`，已清理，见 `ccf2840b2`） §4.1 第 1 项；[瓶颈文档](db-task-pipeline-bottlenecks.md) §4.4 的缺口 G2；全局单点交接的同名 P0。附录 A「mysql-connection-budget」批 A 是起点，按 HEAD 重新核对后改写。
 > **归属**：负责人 2026-10-13 定为本交接做（交接 §5 第 4 项）。
 > **证据口径**：[C] 读代码确认；[D] 文档记载；[I] 推断。全部是静态阅读，没有实测。
 > **缩写**：KOC = `go/db/internal/kafka/key_ordered_consumer.go`；PR = `go/db/internal/kafka/placement_route.go`；SR = `go/db/internal/logic/pkg/proto_sql/store_registry.go`。行号按改动前的 HEAD `0aa1027bc`。

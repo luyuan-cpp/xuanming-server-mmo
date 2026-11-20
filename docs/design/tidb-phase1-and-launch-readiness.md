@@ -3,7 +3,7 @@
 > **文档状态**：v0.2 提案。2026-10-12 起草，同日吸收了两份对抗评审（一份从运维看，一份从正确性看），处理记录在文末。等负责人按 §9.3 拍板。
 > **依据**：只读核对。读了代码、配置、文档和 git，也查了 docs.pingcap.com 的官方文档（TiDB v8.5 / TiDB Operator v1.6，2026-10-12 抓取，页面清单在文末）。**本文不含代码。没有编译、测试、压测，也没有改部署**。按 AGENTS.md §10.1，所有验证交给 Codex。文中的容量数字都由「公式 + 参数出处」推出，不是运行结果。
 > **范围**：TiDB Phase 1，即把数据层从 K8s 上的单副本 `mysql:8.0` 换成 TiDB 集群。包括目标形态、部署脚本改造、迁移与回退、兼容阻塞、写热点、备份恢复和验收。另附开服首日的准备清单（§7）和全球同服的地理形态建议（§8）。
-> **拍板背景**：负责人 2026-10-12 定了「两条都做，D1 先行」。D1 指 [player-route-mapping-durability-proposal.md](./player-route-mapping-durability-proposal.md)，正在落码。这等于对 [handoff-backlog-2026-09-05.md](../handoff/handoff-backlog-2026-09-05.md) 的 D-02（:87）和 P1-D2（:789-826）选了 **B，即继续 Phase 1**。决策落档有两处：决策文档 §6 首段，以及 PROGRESS.md 一条（P1-D2 验收标准 :810）。
+> **拍板背景**：负责人 2026-10-12 定了「两条都做，D1 先行」。D1 指 [player-route-mapping-durability-proposal.md](./player-route-mapping-durability-proposal.md)，正在落码。这等于对 `docs/handoff/handoff-backlog-2026-09-05.md`（已清理，见 `ccf2840b2`） 的 D-02（:87）和 P1-D2（:789-826）选了 **B，即继续 Phase 1**。决策落档有两处：决策文档 §6 首段，以及 PROGRESS.md 一条（P1-D2 验收标准 :810）。
 > **关联文档**：[global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md)（本文细化它的 Phase 1，它 §D3 的 10-12 更正已链接到本文）、[player-storage-placement.md](./player-storage-placement.md)、[no-single-node-horizontal-scaling-20261001.md](./no-single-node-horizontal-scaling-20261001.md)、[zone_data_rollback.md](./zone_data_rollback.md)、[mysql-backup-pitr-runbook.md](../ops/mysql-backup-pitr-runbook.md)、[merge-zone-runbook.md](../ops/merge-zone-runbook.md)、[player-route-mapping-durability-proposal.md](./player-route-mapping-durability-proposal.md)。
 > **行号基准**：HEAD `73b852f32`。
 > - 下列文件在工作区有未提交改动，按**工作区**行号引用：`tools/scripts/k8s_zone_rollback.ps1`（例如 Step 3 在工作区 :903-915，在 HEAD 上约 :786-798）、`docs/design/zone_data_rollback.md`、`global-data-layer-tidb-decision.md`、`no-single-node-horizontal-scaling-20261001.md`、`player-storage-placement.md`、`docs/ops/merge-zone-runbook.md`、`docs/PROGRESS.md`、`go/data_service/internal/routing/router.go`。
@@ -261,7 +261,7 @@
 > - 上面两条硬约束只约束 OLTP 侧：go/db 与 merge_zone 要能在同一集群里访问所有 zone 库、落点库、账号表和三个服务库。审计表（`player_snapshot`、`transaction_log`）不在其中，可以另起集群（推断）。
 > - 但拆出审计之前，要先给 data_service 加独立的审计 DSN（推断）。原因：data_service 目前只有一个 `SnapshotMySQL` DSN（`go/data_service/internal/config/config.go` 的 SnapshotMySQLConfig），同时承载 id_segment、player_name、transaction_log、player_snapshot 和 D1 路由表。
 > - merge_zone、回档、data_consistency_check 是否读审计表，未核实。
-> - 两份文档的结论冲突，尚未拍板，列为 §9.3 第 12 条；开服线拍板清单 [decisions_launch_line_20261020.md](../handoff/launch-readiness-20261013/decisions_launch_line_20261020.md) 记为 T-12。§9.2 的分批与文件数估算可能要随之上调（推断）。
+> - 两份文档的结论冲突，尚未拍板，列为 §9.3 第 12 条；开服线拍板清单 `docs/handoff/launch-readiness-20261013/decisions_launch_line_20261020.md`（已清理，见 `ccf2840b2`） 记为 T-12。§9.2 的分批与文件数估算可能要随之上调（推断）。
 
 | 服务 | 连的库 | 本地配置 | K8s 生成段（`tools/scripts/k8s_deploy.ps1`） | 切法 |
 |---|---|---|---|---|

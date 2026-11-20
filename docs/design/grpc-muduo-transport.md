@@ -328,12 +328,12 @@ Go 侧没有任何服务配置 `KeepaliveEnforcementPolicy`,即 grpc-go 默认:�
 | F012 / F022 | `tlsNodeContextManager` 从不 Clear;RunNodeMain 兜底路径与 CQ / stub 未处理 | 关机在两跳排空前清掉所有传输组件;兜底路径同样处理 | 1(部分)/ 2 / 3 | `FinalizeShutdownInLoop` 已清 `MuduoGrpcChannelPtr`;兜底路径与 CQ / stub 待第 2、3 批 |
 | C008 | 流式客户端把 registry 里可移动的 protobuf 响应组件地址交给异步 Read(swap-and-pop 后悬空) | 流的响应缓冲放进不可移动的通道 / 调用对象,不作为 entt 组件 | 2(etcd 双向流) | 不涉及(第 1 批只有 unary;调用状态存在 Channel 内部的节点式容器里,地址稳定) |
 
-2026-10-15 ECS 源码收尾补充：上表的“第 1 批状态”为迁移当时记录。文件释放后，Codex 已在官方 CQ 源模板补齐缺传输的异步拒绝、稳定调用缓冲、取消与非阻塞排空，并在节点最终清池前等待在途标签及本地业务回调（包括重入）。同时前置握手类型与发现前缀一致性校验；真实入口回归已加入现有 rpc_controller_test。按负责人“先别编译”要求，尚未重生成、编译或运行，因此不能将这些源码当作本迁移已验收，更不能据此关闭下节 etcd 重连/revision/compact 条目。最新执行范围见 [ECS 总索引 §8](../handoff/ecs-refactor/README.md#8-全部源码收尾补充2026-10-15仍暂缓构建)。
+2026-10-15 ECS 源码收尾补充：上表的“第 1 批状态”为迁移当时记录。文件释放后，Codex 已在官方 CQ 源模板补齐缺传输的异步拒绝、稳定调用缓冲、取消与非阻塞排空，并在节点最终清池前等待在途标签及本地业务回调（包括重入）。同时前置握手类型与发现前缀一致性校验；真实入口回归已加入现有 rpc_controller_test。按负责人“先别编译”要求，尚未重生成、编译或运行，因此不能将这些源码当作本迁移已验收，更不能据此关闭下节 etcd 重连/revision/compact 条目。最新执行范围见 ECS 总索引 §8（原 `docs/handoff/ecs-refactor/README.md`，已清理，见 `ccf2840b2`）。
 
 ### 10.2 第 2 批(etcd)的验收条件:P0-D「etcd 双向流断开后不重建」
 
 2026-10-15 并行会话「全局单例扩容交接」移交,不在旧 CQ 模板上修。证据与测试设计见
-[global-singletons-p0-findings-20261014.md](../handoff/global-singletons-p0-findings-20261014.md)「## P0-D」及其「原报告:修复设计」。
+`docs/handoff/global-singletons-p0-findings-20261014.md`（已清理，见 `ccf2840b2`）「## P0-D」及其「原报告:修复设计」。
 以下结论均为静态分析(基线 `2f897bd07`),**未实测**:
 
 - 生成的 `HandleCompletedQueueMessage` 遇 `ok=false` 只打 `RPC failed` 就 return:tag 不分发不回收、跳过本轮其余事件。
@@ -516,7 +516,7 @@ EtcdHelper(唯一出口,EtcdManager 的 keepalive 也收进来)
 
 负责人 10-15「不用管验证,全部做完」:第 3–5 批不再等上一批验证,连续落地;全部**未编译、未重生成**,交负责人统一构建。
 **当前状态**:第 3 批做到一半后按负责人要求转交其他会话,进度、剩余清单与五份现状调查见
-[handoff/grpc-muduo-batch3-5/README.md](../handoff/grpc-muduo-batch3-5/README.md)。
+`docs/handoff/grpc-muduo-batch3-5/README.md`（已清理，见 `ccf2840b2`）。
 2026-10-16 接手会话已补完第 3 批代码(仍未编译),落地记录见 §14.3。负责人同日澄清目标:**不是删 gRPC 库,而是运行期
 不起任何 gRPC 线程、线程数可控**;第 5 批据此改为「无 gRPC 线程守卫 + 清理」,不换依赖、不删 grpc 子模块(见交接 README)。
 

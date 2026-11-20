@@ -58,7 +58,7 @@
 
 **非目标(v1)**:
 
-- 首充双倍、月卡、订阅、礼包。
+- 首充双倍、月卡、订阅、礼包。(挂机月卡 2026-11-19 落码,用灵石开通、不是充值商品,见 [afk-monthly-card.md](afk-monthly-card.md) §4.2。)
 - 平台游戏币(微信 `wx.requestMidasPayment` / `mode="coins"`、抖音游戏币)。
 - 聚宝斋寄售收款:见 §21 接缝,由寄售计划第 13 步实现。
 - 提现、卖家结算。
@@ -865,7 +865,7 @@ Payment:
 4. 退款扣回之外的处罚,以及已托管钻石的处理。
 5. Java 排期,以及客户端契约同批的做法。
 6. 审核区与白名单:上限、审核区资产隔离能否在 R2 完成、"审核员新注册账号买不了"的风险。
-7. 未成年人单日上限。
+7. ~~未成年人单日上限~~:2026-11-20 定为单次上限(8–16 周岁每日 50 元、16–18 周岁每日 100 元),只写在 `shared/antiaddiction.SpendLimitAt`,见[实名与防沉迷](./real-name-anti-addiction.md) §5.6。
 8. 限速阈值,以及孤儿 / 暂扣的终审天数(§14 的默认值)。
 
 ## 19. 双版本(AGENTS §12)
@@ -936,7 +936,7 @@ Payment:
 | 商城 | `java/mall_game`:货币发放、付款修订、扣回待办、退款转人工 | 已写完,未编译 |
 | 交易服务 | `go/trade`:货币发放、扣回收敛 | 已写完,未编译 |
 | scene | `asset_op_system.cpp`:交易扣出流允许 `TX_PAYMENT_REVERSAL` | 已写完,未编译 |
-| 客户端 | `mmorpg-client`:`PaymentClient`、订单界面入口、安卓与小游戏的桥 | 已写完,未在 Unity 编译,未上真机 |
+| 客户端 | `mmorpg-client`:`PaymentClient`、订单界面入口、安卓与小游戏的桥、苹果与谷歌的商店桥 | 已写完,未在 Unity 编译,未上真机 |
 | 部署 | 本机脚本已登记。K8s(2026-11-19):payment 与商城的清单、迁移 Job、回调入口 Service、密钥 Secret、契约测试,见 `deploy/k8s/README.md`「支付 payment」「商城 mall」 | 已写完,未运行。商城的业务表没有接进部署脚本,要运维手工装一次 |
 | Java 版 | 独立仓 `PARITY.md` | 只登记待做 |
 
@@ -983,6 +983,8 @@ tip 码在 `data/tip/Tip.xlsx` 的 `//payment_error base=31000` 段(8 个码,都
 按商品定价的渠道(apple / google / wechat_minigame)报给商城的金额取商城冻结的订单金额,商店实收价另存在事实行里对账用。
 记账前核对:渠道商品号与 SKU 的登记一致、同币种时商店价等于订单价、账号标记与买家一致、测试交易在白名单内。核对不过的记为孤儿
 (`mall_state = ORPHAN`),不推商城、不 consume(谷歌 3 天后自动退款)。
+
+不算订单付款的钱有三种:孤儿付款、被本服务退掉的付款、金额或币种与意图冻结值对不上的付款。它们不把意图记成已付(`settleIntent`,2026-11-20,会话「充值按年龄段限额闸」)。在我们定价的渠道(微信支付、支付宝、小游戏)上,意图随之关掉,不再后台查单:商户单号只能成功付一次,这张意图再也付不成。商店渠道不动意图。
 
 ### 22.5 付款修订:一个只增的修订号
 
@@ -1076,8 +1078,10 @@ trade 收货时用 `currencytype.IsKnown` 核对种类。管理接口 `CatalogAd
 | 支付宝(安卓) | `AlipayAppPayBridge`,反射调 `PayTask.payV2` | 打包带上支付宝 SDK |
 | 微信小游戏 | `WechatMinigamePayBridge` + `Assets/Plugins/WebGL/MinigamePay.jslib` | 小游戏转换工程里验证 |
 | 抖音小游戏 | `DouyinMinigamePayBridge` + 同一个 jslib | 同上 |
-| App Store | **没写** | 工程接入 StoreKit 2 插件后写一个 `PayBridge` 子类:购买时把 `app_account_token` 设为 appAccountToken,回 transaction id |
-| Google Play | **没写** | 工程接入 Play Billing 插件后写:`obfuscated_account_id` / `obfuscated_profile_id` 原样填入,回 purchase token |
+| App Store | `StorePayBridge`(Unity IAP 5,StoreKit 2) | 没上过真机;App Store Connect 里要建好商品,iOS 15 起 |
+| Google Play | 同一个 `StorePayBridge`(Unity IAP 5,Play Billing) | 没上过真机;Play 后台要建好商品 |
+
+商店桥的做法:购买前把服务端给的订单标记交给商店(苹果 `appAccountToken`、谷歌混淆账号),买到之后只交交易号(苹果)或购买凭证(谷歌),服务端向商店核验并回 `finish_transaction` 之后才结束交易。进程被杀时没结束的交易由商店在下次连接时补交,客户端空闲时不带订单号提交,服务端按商店里的绑定认订单。
 
 iOS 上的微信支付与支付宝不做:苹果审核规则 3.1.1 要求虚拟商品只走 IAP,服务端的平台白名单也不给 iOS 开这两个渠道。
 
@@ -1086,7 +1090,7 @@ iOS 上的微信支付与支付宝不做:苹果审核规则 3.1.1 要求虚拟�
 1. K8s 部署 2026-11-19 已写(清单、迁移 Job、回调入口 Service、Secret、契约测试),没跑过契约测试,没上过集群。
    商城的业务表由 Job `mall-schema` 的 `-ddl-file` 装(`schema.sql` 末尾的戳改成 `INSERT IGNORE`,可重跑);重跑不升级旧库,结构对不上时商城拒启,要清库重装。
    回调入口的证书、域名与云厂商的负载均衡注解要运维自己配,脚本不生成。
-2. 苹果、谷歌的客户端桥没写;安卓与小游戏的桥没上过真机。
+2. 客户端的平台桥都没上过真机。苹果、谷歌的桥(2026-11-20)依赖 `com.unity.purchasing` 5.0.4,接口只对照官方文档写,没在 Unity 里编译过。
 3. 没有任何渠道的真实商户号,所有渠道代码只对照官方文档与官方 SDK 源码写成,没有打过真实接口。抖音的文档当时打不开,按附录 A 的事实写。
 4. 四个 App 渠道在生产要把合规闸设成 `realname`(或海外部署的 `overseas`)才能开(§22.8)。限额闸已落码未编译,每日限额的数字还没定(缺省 0 = 不设)。
 5. 扣回扣不到时转人工,目前没有专门的处置工具,走 trade 现有的人工合同入口。

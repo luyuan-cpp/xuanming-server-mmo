@@ -24,8 +24,8 @@
 > - **数据存在哪**:逻辑归属 `player:zone:{id}` 与落点记录 `player:placement:{id}` 都在 data_service 的 mapping Redis(DB 0),没有 MySQL / TiDB 兜底表(D1 未做)。落点记录只选库名(`zone_{N}_db` / `player_store_{N}_db`),库所在的机器由各 go/db 的 `Database.Hosts` 决定,所以「上 TiDB」是集群级切换,不能按玩家切(详见 [player-storage-placement.md](./player-storage-placement.md) §0 第 7 条)。
 > - **Phase 1**:TiDB 只有 dev 的 `deploy/docker-compose.tidb.yml`;K8s 是单个 `mysql:8.0`,§6 第 4 条的 K8s prod 清单与 §7 的 TiDB 版 PITR runbook 都没做;「Phase 1 是否继续」仍待拍板(handoff-backlog D-02)。
 > - **Phase 2**:落点代码在 main(`4493b3c9f`),但开关全关(`PinOnCreate=false`、`Required=false`),`player_store_1000000_db` 没有在任何部署里建过,存量没搬。仍卡在 D8(`RollbackFence` 生产为 nil)与 D1(映射兜底表);真实集群演练、压测、落点告警规则也都没做。
-> - **TiDB 兼容遗留**(迁库前必须处理):`player_snapshot` 的 `snapshot_guid_nz` 唯一键在 TiDB 上建不出(`go/data_service/internal/store/schema.go`,当前 fail-closed);friend 推荐查询的 `INL_JOIN` 提示已实测可用但未加([friend-handoff-20260920.md](../handoff/friend-handoff-20260920.md) §9.5 第 12 条);data_service 迁移互斥的 `GET_LOCK` 与 `player_name` 改主键都没在 TiDB 上实测。
-> - **验证**:落点代码 2026-09-29 跑过一轮(Claude 按用户指示执行);之后 `be6b4ab1d` 改了 go/db 重试队列与 `tools/merge_zone`,当前 HEAD 的复验清单见 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md)。
+> - **TiDB 兼容遗留**(迁库前必须处理):`player_snapshot` 的 `snapshot_guid_nz` 唯一键在 TiDB 上建不出(`go/data_service/internal/store/schema.go`,当前 fail-closed);friend 推荐查询的 `INL_JOIN` 提示已实测可用但未加(`docs/handoff/friend-handoff-20260920.md`（已清理，见 `ccf2840b2`） §9.5 第 12 条);data_service 迁移互斥的 `GET_LOCK` 与 `player_name` 改主键都没在 TiDB 上实测。
+> - **验证**:落点代码 2026-09-29 跑过一轮(Claude 按用户指示执行);之后 `be6b4ab1d` 改了 go/db 重试队列与 `tools/merge_zone`,当前 HEAD 的复验清单见 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`）。
 
 > **⚠️ 状态说明(2026-10-24):玩家数据不再用 Redis 存储,Redis 的其他用途照旧保留**,见本文 §9。
 > - 只定了方向,存盘与加载的新路径没有设计、没有落码;现行代码仍按 D5 先写 Redis、再经 Kafka 由 go/db 写 TiDB。
@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS `player_database` (
 - Redis 权威读缓存 + applied cursor + retry/dead 队列、SubShard 并行、写合并: 全不动。
 - `sql_mode=STRICT_TRANS_TABLES` 连接参数: TiDB 完全支持且本就在其默认 sql_mode 里,保留现有代码不变(防 blob 静默截断的语义在 TiDB 下同样成立)。
 
-> **2026-10-15 修订(负责人 2026-10-13 拍板「④ 先做并修订 D5」;第 1 条措辞按 [S1 修订稿](../handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-addendum.md) §8 定稿,2026-10-17 写入本文)**
+> **2026-10-15 修订(负责人 2026-10-13 拍板「④ 先做并修订 D5」;第 1 条措辞按 S1 修订稿（原 `docs/handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-addendum.md`，已清理，见 `ccf2840b2`） §8 定稿,2026-10-17 写入本文)**
 > 状态:④ 与 WAITAOF 已落码,未编译、未测试,待 Codex 验证。验证与上线项见 [上线待做](../ops/godb-pipeline-launch-todo.md) §9。
 > 1. 「retry/dead 队列全不动」改为允许两项改动:④ 重试只交给分区属主(新增键族 `kafka:retry:queue:{topic}:p{N}`,开关 `ServerConfig.Kafka.RetryRouting`,见 [db-retry-owner-routing.md](./db-retry-owner-routing.md))与重试 / 死信 / 毒消息入队补 WAITAOF(`ServerConfig.RedisClient.WaitAOF*`)。两项随同一个 S1 镜像发布,S1 整体作为一个**独立发布单元**,不得与 TiDB Phase 1 任何迁移批次同窗口,也不得在同一次滚动里发布;两项的开关与指标各自独立,出问题时按 `db_retry_route_total` / `db_durable_enqueue_*` 归因。
 >    - 开关:④ 是 `RetryRouting`(`shared` | `owner`,缺省 `shared`;环境变量 `DB_RETRY_ROUTING` 优先,只用于单 zone 金丝雀);WAITAOF 是 `WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`(代码缺省 1 / 0 / 1500,两个份数都写 0 才关闭)。取值只在启动时读:K8s 上只改 ConfigMap 不会滚动 go/db,改值后必须 `rollout restart statefulset/db`。

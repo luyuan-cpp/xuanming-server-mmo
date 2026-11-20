@@ -1,11 +1,11 @@
 # 玩家持久收件箱服务（player_inbox）设计
 
 > **状态**：设计 v1.0（2026-10-15 定稿），2026-10-17 按落码订正。D1–D14 均已由用户拍板（见 §13）。
-> - **已落码**：第 1–4 批已入库（随 `de4960bee` 起的快照提交，见 [交接](../handoff/player-inbox-handoff-20261015.md) §2）。
+> - **已落码**：第 1–4 批已入库（随 `de4960bee` 起的快照提交，见 交接（原 `docs/handoff/player-inbox-handoff-20261015.md`，已清理，见 `ccf2840b2`） §2）。
 > - **评审修复**：2026-10-16 ~ 17 按实现评审（交接 §6：H1、M1–M7、L1–L14）分三批修：第 A 批 Go 服务、第 B 批 C++ scene、第 C 批部署 / 运维 / 文档。本稿已按修复后的代码订正，改动见附录 F。
 > - **验证（2026-10-18）**：Go 服务单测与真库集成已有通过证据；data_service / merge_zone 检查、14 个 Go 服务历史构建、C++ 全解 Debug|x64 编译及 promtool 18 条规则通过。九项部署脚本均通过，8 个计数套件合计 539/539，另有 lobby 渲染通过（交接 §3 第 2 条）。
 > - **后续验收**：用户已通知 360 加好信任；`-race`、C++ 运行测试、迁移与七场景冒烟交续验聊天串行执行，本线尚无最终回执。Java 收件箱仍待实现（§12）。Go 构建之后共享模块锁被其他会话调整，旧构建只代表执行时输入，复用由续验线核验。
-> - **2026-11-05 单玩家物品获取封禁**（[交接](../handoff/aoi-and-player-safeguards-20261104.md) §2）：GM 域新增 `GM_BLOCK_ITEM_GAIN` / `GM_UNBLOCK_ITEM_GAIN`，效果落 `player_database.item_gain_block`（字段 24），各物品获得入口共用 `GainBlockService::IsItemGainBlocked`（§2.2「单玩家物品获取封禁」）。源码已改，**未生成协议、未编译、未测试**，待 Codex 验证。
+> - **2026-11-05 单玩家物品获取封禁**（交接（原 `docs/handoff/aoi-and-player-safeguards-20261104.md`，已清理，见 `ccf2840b2`） §2）：GM 域新增 `GM_BLOCK_ITEM_GAIN` / `GM_UNBLOCK_ITEM_GAIN`，效果落 `player_database.item_gain_block`（字段 24），各物品获得入口共用 `GainBlockService::IsItemGainBlocked`（§2.2「单玩家物品获取封禁」）。源码已改，**未生成协议、未编译、未测试**，待 Codex 验证。
 > **版本历史**：v0.1 综合稿；v0.2 对抗评审修订（consistency / repo-fit / ops 三份评审的逐条处置见文末「评审记录」）；v1.0 用户拍板定稿（相对 v0.2 的改动见附录 D）；2026-10-17 按落码与评审修复订正（附录 F）。
 >
 > **与 [reliable-player-inbox-20261014.md](reliable-player-inbox-20261014.md) 的关系**
@@ -301,7 +301,7 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
 - 做法：类型、载荷与执行器都保留；`EnqueueTypes` 只放封锁 / 解封，列进挂欠款即拒启（§3.3）。
 - 合并语义、同域撤销类型（走 AdjustDebt 按金额减）、单笔上限和只读欠款查询，后续一起做；做完之后解禁。
 
-**单玩家物品获取封禁**（2026-11-05，[交接](../handoff/aoi-and-player-safeguards-20261104.md) §2；源码已改，未编译、未测试）：
+**单玩家物品获取封禁**（2026-11-05，交接（原 `docs/handoff/aoi-and-player-safeguards-20261104.md`，已清理，见 `ccf2840b2`） §2；源码已改，未编译、未测试）：
 
 - **语义**：按 `player_id + item_config_id` 封禁、解禁、判断。只挡这名玩家今后对这个配置的**新增获得**；不扣已有库存，不影响其他玩家。全服封禁（`GainBlockService` 的全服集合）继续独立生效，两者互不覆盖：解除一边不会解开另一边。旧 `PlayerItemBlockList` 与 `blockList` 参数（2026-10-15 C004 删除）没有恢复，这里是新的形状。
 - **契约**：`GmSanctionPlayerRequest.oneof action` 加 `block_item_gain = 9` / `unblock_item_gain = 10`，载荷 `GmItemGainPayload{ item_config_id = 1 }`，对应 `PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN = 5` / `GM_UNBLOCK_ITEM_GAIN = 6`：同属 `SCENE_GM_SANCTION`、DURABLE、载荷上限 64B。鉴权（`x-admin-token`）、幂等键 `(producer_kind, request_id)` 与内容摘要判重、同事务审计（`action = SANCTION`）、按 seq 有序投递与 owner_epoch 围栏全部沿用货币封锁的路径，没有新的入口或表。
@@ -2057,7 +2057,7 @@ P2 的积压缺口（都在 HEAD 上核过）：
 
 ## 附录 F：落码与评审修复后的订正（2026-10-17）
 
-依据：实现评审与用户拍板见 [交接](../handoff/player-inbox-handoff-20261015.md) §6（H1、M1–M7、L1–L14），修复状态见交接 §6.4；以修复后的代码为准。全部未编译、未测试。
+依据：实现评审与用户拍板见 交接（原 `docs/handoff/player-inbox-handoff-20261015.md`，已清理，见 `ccf2840b2`） §6（H1、M1–M7、L1–L14），修复状态见交接 §6.4；以修复后的代码为准。全部未编译、未测试。
 
 | 位置 | 订正 | 依据 |
 |---|---|---|

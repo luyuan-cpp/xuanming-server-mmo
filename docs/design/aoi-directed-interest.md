@@ -236,4 +236,4 @@
 2. 测试：`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter aoi_test`、`-Filter aoi_delivery_test`、`-Filter cross_zone_test`、`-Filter buff_test`、`-Filter skill_test`。通过标准为全部用例通过，新增用例见 `aoi_delivery_test.cpp` 与 `aoi_system_test.cpp` 中「显式关注」「正反索引一致性」相关用例；2026-11-10 位移重判的用例在 `aoi_delivery_test.cpp`「空间关注按距离重判」一节（同格走近、跨格后走近、滞后区间、每步与停步重判、名额空出后补回、名额满时不重扫、显式关注不随距离移除、隐身）；战斗关注的用例在「战斗关注」一节（远处交手互相可见、脱战与续期、附近交手脱战不移除、死亡、交手挤掉任务 NPC 并在脱战后补回、打完架站着不动也补回附近的人、离场、无效交手）；`aoi_system_test.cpp` 的权重表用例按 `kCombat` 改写。2026-11-11 的用例在「仇恨名单」一节（一起打怪互相算友方、治疗仇恨、玩家混战不推友方、怪死后友方按脱战结束、名单上限与补位）与「服务器压力」一节（压力升降、每秒决定一次与防抖、按权重和距离裁表并在回落后补回、新建场景拿到当前压力）；`aoi_delivery_test.vcxproj` 加编了 `combat_engagement.cpp` 与 `aoi_load.cpp`。同日对照另一份分析补的用例：双方都不动的隐身再显形、视野半径变化触发重判、同一帧的变化合成一条消息。
 3. 编 Scene 节点，确认 `actor_state_attribute_sync.cpp`、`buff.cpp`、`movement.cpp` 链接无误。
 
-旧 `Pin/Unpin` 的删除见[第六批修复记录](../handoff/ecs-refactor/batch6-review-fixes.md) T3.4，那次删掉的是只在离场时全节点扫描的远端清理；现在由反向索引承担同一职责。
+旧 `Pin/Unpin` 的删除见第六批修复记录（原 `docs/handoff/ecs-refactor/batch6-review-fixes.md`，已清理，见 `ccf2840b2`） T3.4，那次删掉的是只在离场时全节点扫描的远端清理；现在由反向索引承担同一职责。

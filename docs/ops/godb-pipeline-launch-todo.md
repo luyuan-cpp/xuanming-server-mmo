@@ -5,7 +5,7 @@
 > **用途**：存盘管线已经落码、但还没有验证或还没有做完的上线前事项。负责人 2026-10-13 的要求是「先实现代码，先不管测试，测试记录到上线待做里面」，所以代码先落，验证全部记在这里。
 > **执行者**：编译、测试、故障注入由 Codex 执行（AGENTS.md §10.1）；部署与集群操作由负责人执行（AGENTS.md §9）。
 > **维护**：每做完一项，在该项后面写日期、执行者和结果（通过 / 失败 + 证据位置），不要删行。新增事项追加在对应小节末尾。
-> **相关**：[交接](../handoff/godb-pipeline-handoff-20261013.md)、[Codex 任务单](../handoff/godb-pipeline-codex-tasksheet-20261013.md)、[L-04 设计](../design/db-task-store-unavailable-deferral.md)、[条件写设计](../design/db-write-fencing-mysql.md)、[瓶颈文档](../design/db-task-pipeline-bottlenecks.md)。
+> **相关**：交接（原 `docs/handoff/godb-pipeline-handoff-20261013.md`，已清理，见 `ccf2840b2`）、Codex 任务单（原 `docs/handoff/godb-pipeline-codex-tasksheet-20261013.md`，已清理，见 `ccf2840b2`）、[L-04 设计](../design/db-task-store-unavailable-deferral.md)、[条件写设计](../design/db-write-fencing-mysql.md)、[瓶颈文档](../design/db-task-pipeline-bottlenecks.md)。
 
 ---
 
@@ -13,7 +13,7 @@
 
 | # | 事项 | 怎么做 | 状态 |
 |---|---|---|---|
-| 1.1 | 第 0 批（子 shard 打散、login 自锁、位点重置判定、汇总脚本 DB 段）的编译与单测 | [Codex 任务单](../handoff/godb-pipeline-codex-tasksheet-20261013.md) 任务 A | 待 Codex。负责人已自行安装 Go 1.27.2；2026-10-15 同意 Codex 跑测试时联网下载 Go 模块（任务单第 2.1 版 §0.1「同意 2」）|
+| 1.1 | 第 0 批（子 shard 打散、login 自锁、位点重置判定、汇总脚本 DB 段）的编译与单测 | Codex 任务单（原 `docs/handoff/godb-pipeline-codex-tasksheet-20261013.md`，已清理，见 `ccf2840b2`） 任务 A | 待 Codex。负责人已自行安装 Go 1.27.2；2026-10-15 同意 Codex 跑测试时联网下载 Go 模块（任务单第 2.1 版 §0.1「同意 2」）|
 | 1.2 | proto2mysql `SaveConditional` 的离线、真库（MySQL 8.4 / TiDB 8.5）、竞态测试 | 同上，任务 B | 待 Codex。负责人已同意拉取两个镜像 |
 | 1.3 | 1.2 全绿后合入 proto2mysql main，不打 tag；go/db 用伪版本钉 main 上那个提交 | 负责人 2026-10-13 的决定 | 等 1.2 |
 
@@ -23,7 +23,7 @@
 
 代码已落：第 1 批随 2026-10-14 的提交 `ebccaf04d`（已推送）入库；之后的复核修订随 2026-10-15 的工作区快照 `54c9d775d`（已推送）入库。`2f897bd07..54c9d775d` 之间 go/db 的 15 个文件改动全部属于本批，文件清单见 [L-04 设计](../design/db-task-store-unavailable-deferral.md) §7；同一区间别的会话改了 go/shared（go/db 经 `replace shared => ../shared` 依赖它）。
 
-**怎么跑**：不在主工作区跑（别的会话在写）。用两个临时 worktree：被测 `$env:TEMP\l04_head` 建在 `54c9d775d`，基线 `$env:TEMP\l04_base` 建在 `2f897bd07`（`ebccaf04d` 的父提交）；做法与收尾照 [Codex 任务单](../handoff/godb-pipeline-codex-tasksheet-20261013.md) §2.1 / §2.6，环境变量照任务单 §1（`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=https://goproxy.cn,direct`，「同意 2」2026-10-15 已获）。下面命令的工作目录都是 worktree 里的 `go\db`。
+**怎么跑**：不在主工作区跑（别的会话在写）。用两个临时 worktree：被测 `$env:TEMP\l04_head` 建在 `54c9d775d`，基线 `$env:TEMP\l04_base` 建在 `2f897bd07`（`ebccaf04d` 的父提交）；做法与收尾照 Codex 任务单（原 `docs/handoff/godb-pipeline-codex-tasksheet-20261013.md`，已清理，见 `ccf2840b2`） §2.1 / §2.6，环境变量照任务单 §1（`GOTOOLCHAIN=local`、`GOFLAGS=-mod=readonly`、`GOPROXY=https://goproxy.cn,direct`，「同意 2」2026-10-15 已获）。下面命令的工作目录都是 worktree 里的 `go\db`。
 
 ### 2.1 编译与静态检查
 
@@ -143,7 +143,7 @@ go test ./internal/storeerr/... ./internal/logic/pkg/proto_sql/... ./internal/ka
 ## 4. G1 治标、停机顺序与测量打点（S4）
 
 代码已落：go/db 部分随 `de4960bee` 入库（之后 R1 语义复核的补修与 R2 对同批文件的改动随 `e76f6f747` 入库）；脚本随 `a7c510d65` / `0f6690604` 入库；`deploy/k8s/manifests/go-svc/db.yaml` 的 `minReadySeconds: 20` 与 `deploy/k8s/db-task-retry-alerts.yaml` 的 `db-task.ordering-lease` 组随 `e76f6f747` 入库。全部**未编译、未测试，待 Codex 验证**。
-规格：[S4 规格](../handoff/godb-pipeline-impl-20261015/S4-g1-and-small-items-spec.md)；设计与三句语义（不是栅栏 / 只有失租才取消写 SQL / 在途取消后锁留给 TTL）、A3 相对规格的三处偏离见[瓶颈文档](../design/db-task-pipeline-bottlenecks.md) §7「S4 落码」，停机顺序见 §4.4「G6 停机顺序」。§3 表里 Lua `tonumber` 一项即本节的 `luaMarkAppliedEpoch` 十进制串比较。
+规格：S4 规格（原 `docs/handoff/godb-pipeline-impl-20261015/S4-g1-and-small-items-spec.md`，已清理，见 `ccf2840b2`）；设计与三句语义（不是栅栏 / 只有失租才取消写 SQL / 在途取消后锁留给 TTL）、A3 相对规格的三处偏离见[瓶颈文档](../design/db-task-pipeline-bottlenecks.md) §7「S4 落码」，停机顺序见 §4.4「G6 停机顺序」。§3 表里 Lua `tonumber` 一项即本节的 `luaMarkAppliedEpoch` 十进制串比较。
 
 ### 4.1 编译与单测
 
@@ -265,7 +265,7 @@ golden 表由 Go `crc32`、sarama、librdkafka 三方都通过才算成立；任
 ## 6. ③ 消费组按 zone 拆（S2）
 
 代码已落：go/db、`go/shared/kafkautil`、`tools/merge_zone`、`lib/kafka_consumer_groups.ps1`、`kafka_offset_reset.ps1` 等随 `de4960bee` 入库；`k8s_deploy.ps1`（R4）、`dev_tools.ps1`、契约测试、`deploy/k8s/README.md`、`db.yaml` 注解占位与告警组随 `e76f6f747` 入库。Kafka 镜像已四处钉到 `apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837`。**未编译、未测试，待 Codex 验证。**
-设计、四种 ConfigMap 形状、决策表与 runbook 以 `docs/design/db-consumer-group-per-zone.md`（本批另行撰写）为准；规格以 [S2 修订稿](../handoff/godb-pipeline-impl-20261015/S2-consumer-group-per-zone-addendum.md) 为准。
+设计、四种 ConfigMap 形状、决策表与 runbook 以 `docs/design/db-consumer-group-per-zone.md`（本批另行撰写）为准；规格以 S2 修订稿（原 `docs/handoff/godb-pipeline-impl-20261015/S2-consumer-group-per-zone-addendum.md`，已清理，见 `ccf2840b2`） 为准。
 
 ### 6.1 编译与单测（Codex）
 
@@ -417,13 +417,13 @@ pwsh tools/scripts/run_cpp_tests.ps1 -Filter currency
 > 2026-10-17 新增。状态：**已落码，未编译、未测试，待 Codex 验证。**
 
 代码已落：S1 的 go/db 部分（`internal/kafka/retry_routing.go`、`durable_enqueue.go`、`cmd/retry_requeue/main.go` 都首次出现在 `e76f6f747`）、`go/db/etc/db.yaml` 的 `RetryRouting` 与 `WaitAOFNumLocal` / `WaitAOFNumReplicas` / `WaitAOFTimeoutMs`、告警 `deploy/k8s/db-task-retry-alerts.yaml` 的 ④ 段已在 HEAD。R7 语义复核的修复截至 2026-10-17 在工作区、未提交：待重搬收据表（`retry_stranded.go`，指标 `db_retry_stranded_receipts`）、认领与收据 ack 的防重（`kafka:retry:guard:*`，见 §4.4 末条）、实例模式 HASH `kafka:retry:instance_mode:{topic}`、消费组错误观测（`consumer_group_errors.go`，指标 `db_consumer_group_errors_total{source}`）、入队未确认时的重新入组退避（`rejoin_backoff.go`）、`retry_requeue` 的 `-zone` 必填与退出码 4 / 5，以及告警 `DbRetryStrandedReceipts`、`DbConsumerGroupHeartbeatErrors`。
-设计与运维以 [db-retry-owner-routing.md](../design/db-retry-owner-routing.md) 为准（本批另行撰写）；规格以 [S1 修订稿](../handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-addendum.md) 为准，修订稿 §10 只列差异，没写到的照 [S1 原规格](../handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-spec.md)「上线与回滚」；回滚到 S1 之前的镜像按 [发布清单](release-checklist.md) §4「go/db 回滚到 S1(重试只交给分区属主)之前的版本」。
+设计与运维以 [db-retry-owner-routing.md](../design/db-retry-owner-routing.md) 为准（本批另行撰写）；规格以 S1 修订稿（原 `docs/handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-addendum.md`，已清理，见 `ccf2840b2`） 为准，修订稿 §10 只列差异，没写到的照 S1 原规格（原 `docs/handoff/godb-pipeline-impl-20261015/S1-retry-owner-waitaof-spec.md`，已清理，见 `ccf2840b2`）「上线与回滚」；回滚到 S1 之前的镜像按 [发布清单](release-checklist.md) §4「go/db 回滚到 S1(重试只交给分区属主)之前的版本」。
 
 ### 9.1 前置（线上不动）
 
 | # | 事项 | 执行者 | 状态 |
 |---|---|---|---|
-| 9.1.1 | 复验清单 [placement-reverify-checklist-20261012.md](../handoff/placement-reverify-checklist-20261012.md) §2「第 12 步」第 3 条「本机双 db 实例」，以及 §5「已知覆盖缺口」第 1、4、7 条（第 7 条由 `TestStop_RetryLoopJoinsWaitGroup` 覆盖）；compose 文件是 `deploy/docker-compose.yml`；结果写回 PROGRESS | Codex | 待做 |
+| 9.1.1 | 复验清单 `docs/handoff/placement-reverify-checklist-20261012.md`（已清理，见 `ccf2840b2`） §2「第 12 步」第 3 条「本机双 db 实例」，以及 §5「已知覆盖缺口」第 1、4、7 条（第 7 条由 `TestStop_RetryLoopJoinsWaitGroup` 覆盖）；compose 文件是 `deploy/docker-compose.yml`；结果写回 PROGRESS | Codex | 待做 |
 | 9.1.2 | 查清并记录各 zone 线上 go/db 的镜像与副本数；发布窗口不与 TiDB Phase 1 任何迁移批次重叠（[TiDB 决策](../design/global-data-layer-tidb-decision.md) D5 修订第 1 条：S1 整体是一个独立发布单元） | 负责人 | 待做 |
 | 9.1.3 | K8s 的 Redis（`redis-0`）`redis_version` ≥ 7.2、`appendonly` 为 `yes`：开启 WAITAOF 时 go/db 启动先探一次，失败拒启。按 `deploy/k8s/manifests/infra/redis.yaml` 的口令注入方式在容器内执行 `INFO server` / `CONFIG GET appendonly`，口令不进命令行与日志 | 负责人 | 待做 |
 
@@ -521,7 +521,7 @@ go run ./cmd/verifier -config etc/db.yaml -mode strict -wait 180s
 
 ## 10. task:result 读回执通知按 login 实例分频道（B0-3 第 2 批，2026-10-18 登记）
 
-go/db 按 `DBTask.reply_instance` 只 PUBLISH 一次：合法发发起方 login 的实例频道 `task:result:notify:<id>`，为空或不合法回落全服旧频道；新指标 `db_task_result_notify_total{target,result}`。改动清单、上线顺序与交 Codex 的权威验证命令见[规格](../handoff/launch-readiness-20261013/spec_B0-3_task_result_channel.md)文末「# 第 2 批交付（2026-10-18）」。代码在工作区，**未编译、未测试，待 Codex 验证**。
+go/db 按 `DBTask.reply_instance` 只 PUBLISH 一次：合法发发起方 login 的实例频道 `task:result:notify:<id>`，为空或不合法回落全服旧频道；新指标 `db_task_result_notify_total{target,result}`。改动清单、上线顺序与交 Codex 的权威验证命令见规格（原 `docs/handoff/launch-readiness-20261013/spec_B0-3_task_result_channel.md`，已清理，见 `ccf2840b2`）文末「# 第 2 批交付（2026-10-18）」。代码在工作区，**未编译、未测试，待 Codex 验证**。
 
 | # | 事项 | 状态 |
 |---|---|---|

@@ -349,9 +349,15 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 正常洪峰碰到早拒时(`GatePreauthBudgetRejecting` 响、握手 P99 也在变慢),先用 `kubectl set env` 调大前两个,不用改代码发版。
 
 **battle 直连同一套**(2026-11-19 补):规则、缺省推导、判定函数都在 core 的 `accept_admission.h`。
-- 池:battle 的池是「没完成票据握手、也没出示探测授权、还连着」的直连。`BattleClientEdge::AdmitConnection` 每次 accept 就地扫一遍会话表,
-  数出条数、挑出最老一条。直连数以 `BattleMaxConnections`(4096)为界,与 `battle_unauthenticated_connections` 的数法相同。
-- 淘汰:经会话里的 weak 连接 `forceClose`,会话由 `HandleClosed` 删。
+- 池:battle 的池是「没完成票据握手、也没出示探测授权」的直连,存成按 connId 有序的集合 `BattleClientEdge::unauthenticated_`
+  (connId 单调递增、从不复用,有序即建连先后,`begin()` 就是最老的)。
+  - 进池只在建连那一刻;出池在握手成功、探测授权验过、淘汰与断开四处。断开是 `HandleClosed`,也是会话表唯一的删除点;
+    `erase` 幂等,计数不会漂。
+  - 每次 accept 的代价是 O(1):池大小取 `size()`;最老一条只在池承压时才找,从 `begin()` 起找第一条还连着的,跳过 shutdown 之后
+    等延迟强关的那几条(至多 100ms)。`battle_unauthenticated_connections` 读的是同一个集合。
+  - 2026-11-20 前的第一版是每次 accept 扫一遍会话表,已改掉。准入回调排在速率闸前面,被拒的洪水连接也要走它:按每秒几千次 accept、
+    每次扫 4096 条算,单 loop 的 battle 会被它拖住,攻击者用很便宜的建连换走 battle 大量 CPU。
+- 淘汰:先移出池(这一刻起它不再算在池里,与 gate 先收回占位同一做法),再经会话里的 weak 连接 `forceClose`;会话由 `HandleClosed` 删。
 - loop 卡顿:节拍由 `Install` 起的 1 秒定时器打(只绑 weak 自己,挂主 EventLoop,不起线程)。
 - 缺省:上限 4096 时跟着速率下限,起点 500、预算 1000。覆盖变量 `BATTLE_PREAUTH_*`。
 - 指标与告警:`battle_preauth_*`,告警 `BattlePreauthBudgetRejecting`;`BattleUnauthenticatedConnectionsHigh` 改按早拒起点算占比。
@@ -377,8 +383,6 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 - 会话总数满员时,不淘汰未验签连接给新连接让位:未验签最多占预算(上限的 10%),login 在 90% 时就不再往这台派人。
 - 预算本身是全局的:CGNAT 后面的合法玩家与同出口的攻击者同池。按来源前缀限速见 P2-2(缺省关闭)。
-- battle 每次 accept 扫一遍会话表,是 O(直连数)。以 4096 为界,每秒 100 条新建时约 40 万次表项访问,
-  没有像 gate 那样维护占位与索引:battle 的「未认证」还要看探测授权,数一遍比在每个出口手写加减可靠,与它的指标同一做法。
 
 **测试**:
 - gate 的 `connection_admission_test.cpp`:
@@ -576,8 +580,9 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 **覆盖**：环境变量 `GATE_ACCEPT_RATE_PER_SECOND`、`GATE_ACCEPT_BURST`（规范十进制 1..1000000）。不设就是上面的推导；
 写错拒绝启动（与本文件其它启动门禁一致）；没有「0 = 关闭」，不留一个拼错就整个失效的开关。
 **压测要打超过缺省速率的建连时必须先设它**（运维手册 `gate-kernel-tuning-runbook.md` §3.2），否则桶用完之后压测机看到的是连接被重置。
-`k8s_deploy.ps1` 没有加对应参数：缺省值随 `GateMaxConnections` 走，不需要部署侧配合；实测要改缺省时改 `DefaultRateLimit` 的两个常数
-（在 `accept_admission.h`，battle 直连同一份推导，改了两边一起变；只想调一边就用各自的环境变量）。
+缺省值随 `GateMaxConnections` 走，平时不需要部署侧配合。压测或应急要改时，部署带 `k8s_deploy.ps1 -ConnectionAdmissionEnv GATE_ACCEPT_RATE_PER_SECOND=<n>,...`
+（2026-11-20 接线，本文件所有 `GATE_*` / `BATTLE_*` 覆盖变量都走它，见 P2-2 末尾「部署接线」）。参数不粘滞，长期要改的是推导：
+改 `DefaultRateLimit` 的两个常数（在 `accept_admission.h`，battle 直连同一份推导，改了两边一起变；只想调一边就用各自的环境变量）。
 
 **复核方法**（上线或压测之后）：看 `rate(gate_accepted_total[1m])` 的峰值离 `gate_accept_rate_limit_per_second` 多远，
 以及 `gate_rejected_total{reason="accept_rate"}` 在正常洪峰里是否为 0。
@@ -659,7 +664,9 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
   覆盖用 `BATTLE_ACCEPT_RATE_PER_SECOND` / `BATTLE_ACCEPT_BURST`，写错拒启。
 - **指标与告警**：9 个 `battle_*` 指标，与 gate 同构；告警 `deploy/k8s/battle-connection-alerts.yaml` 6 条，处置见运维手册 §3.3。
   （2026-11-19 补 P0-2 的未验签预算之后多了 4 个 `battle_preauth_*` 指标、两个拒绝原因与告警 `BattlePreauthBudgetRejecting`，共 7 条；
-  判定顺序变为「关源 → 总量 → 未验签预算 → 新建速率」，做法见 P0-2 的「battle 直连同一套」。）
+  2026-11-20 补 P2-2 的按来源前缀限速之后又多了 5 个 `battle_source_*` 指标、原因 `source_rate` 与告警
+  `BattleSourceRateLimited` / `BattleSourceTableFull`，共 9 条。判定顺序与 gate 相同:「关源 → 总量 → 按来源 → 未验签预算 → 新建速率」，
+  做法见 P0-2 的「battle 直连同一套」与 P2-2。）
   `battle_unauthenticated_connections` 不计出示过探测授权的连接（见下一条）。
 - ⚠️ **这套推导没有覆盖全服匹配的网络探测**。探测也连这个端口，有效期 120 秒，排队中的玩家到期前重探，所以每台的探测建连速率约等于
   「全服有探测计划的玩家数 ÷（这个机房的可探测 battle 数 × 重探周期）」，与它自己的连接上限无关。2026-11-19 之前探测计划每个机房只给
@@ -710,23 +717,33 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 前置条件（G9）解决后才有意义。而且**在游戏里这是高危操作**，见 §7。
 (2026-09-29 更正:前置条件在 external 形态下已具备、podip 下不具备,见 §4.2.1。)
 
-**状态(2026-11-19):gate 已落码,未编译、未运行,待 Codex 验证。battle 直连没有做。**
+**状态:gate 2026-11-19 落码;2026-11-20 纯逻辑挪进 core 的 `accept_admission.h`,battle 直连接上同一份,并加了「只限公网来源」。
+都未编译、未运行,待 Codex 验证。**
 
 前面几道都是全局的:持续超限时,合法新连接与攻击连接抢同一个速率桶,谁来得多谁占得多。这一道按来源前缀给每个来源一个小令牌桶,
 单个来源最多拿到全局速率的一成。做法照 §7 的约束:
 
 - **限速率不限总量**:不做每来源并发上限。CGNAT / 网吧 / 校园网 / 基站出口后面可能有几百上千个真玩家。
 - **按 /24、/64 聚合**:IPv4 取高 24 位,IPv6 取高 64 位。IPv6 按 /128 等于没做。IPv4 映射地址(`::ffff:a.b.c.d`)按 IPv4 算。
-- **缺省关闭**:只有 gate 看得到玩家真实源地址时才有意义,即 external 入口加 `externalTrafficPolicy: Local`(§4.2.1)。
-  podip 形态与代理型 LB 后面看到的是节点或 LB 的地址,开了会把所有人当成同一个来源限速。
-  开关是环境变量 `GATE_SOURCE_RATE_PER_SECOND`,设了就开;`GATE_SOURCE_BURST` 可选,只设它不设速率拒启。
+- **缺省关闭**:只有看得到玩家真实源地址时才有意义。gate 要 external 入口加 `externalTrafficPolicy: Local`(§4.2.1);
+  battle 的 hostPort / Agones 端口映射本来就保源地址(D89)。
+  开关是环境变量 `GATE_SOURCE_RATE_PER_SECOND` / `BATTLE_SOURCE_RATE_PER_SECOND`,设了就开;`*_SOURCE_BURST` 可选,只设它不设速率拒启。
+- **只限公网来源**(2026-11-20 补,`IsPublicSourcePrefix` / `RateLimitedSourceOf`):accept 时看到下面这些源地址,就不按来源限速。
+  - 地址段:私网(10/8、172.16/12、192.168/16)、回环、链路本地、运营商级 NAT 共享段 100.64/10、0/8,以及 IPv6 的 ::/64、
+    唯一本地 fc00::/7、链路本地 fe80::/10。
+  - 理由:这样的地址说明前面是代理、负载均衡或集群内的调用方。小游戏 WebSocket 经边缘 nginx 进来,看到的就是边缘 Pod 的内网地址。
+    accept 这一层还没读到任何字节,`X-Forwarded-For` 拿不到;按那个地址限速等于把它后面所有玩家当成一个来源一起限。
+  - 后果:podip 形态与代理型 LB 后面这一道自然不起作用,不再有「开错了就误伤所有人」的配置。
+  - 经边缘进来的连接,按客户端限速归边缘自己做:infra-up 的 `-WsEdgeSourceRatePerSecond`,nginx 按 /24 `limit_req`,
+    见 [minigame-websocket-gate.md](minigame-websocket-gate.md) W6。
 - **开了也只在承压时生效**,对应 §7 的「告警后自动开启」。承压的判据二选一:
   - 未验签池过了早拒起点(与 `GateUnauthenticatedConnectionsHigh` 同一信号);
   - 全局速率闸在最近一个握手期限(10 秒)内拒过连接(与 `GateAcceptRateLimited` 同一信号)。
   平时一条都不拦。
 - **不封来源、不落持久状态**:每个前缀只是一个会自己回满的桶。§7 说过,「拒绝 N 次就封 IP」是状态炸弹。
 
-**判定**(`connection_admission.h` 的 `SourceRateGate`,排在总量之后、未验签预算之前):
+**判定**(core `accept_admission.h` 的 `SourceRateGate` 与 `SourceRateUnderPressure`,gate 与 battle 各自的判定函数里排在总量之后、
+未验签预算之前):
 - 判定阶段只问前缀的桶(`WouldAdmit`,不改状态);所有闸都放行之后才记一笔(`Take`)。被别的闸拒掉的连接不消耗这个前缀的名额。
 - 超速的前缀在速率闸之前就被拒(`source_rate`),也就不消耗全局名额。
 - 排在预算之前,超速前缀的连接也不会让别人的老连接被淘汰。
@@ -748,16 +765,27 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
   拒掉新来源反而会把真玩家一起挡掉。
 - 内存上限约几 MB。
 
-**指标**:
+**指标**(battle 同构,前缀换成 `battle_`):
 - `gate_rejected_total{reason="source_rate"}`;
 - `gate_source_rate_limit_per_second` / `gate_source_burst`(关闭时为 0);
 - `gate_source_rate_active`:最近一次判定时是否生效;
 - `gate_source_tracked`、`gate_source_untracked_total`。
 
-前缀只进采样日志,不进标签,基数由攻击者控制。告警 `GateSourceRateLimited` 与 `GateSourceTableFull`。
+前缀只进采样日志,不进标签,基数由攻击者控制。告警 `GateSourceRateLimited` / `GateSourceTableFull`,battle 是
+`BattleSourceRateLimited` / `BattleSourceTableFull`。
 
-**没做的**:battle 直连没有按来源限速。battle 的 hostPort 形态保源地址(D89),需要时照 gate 的 `SourceRateGate` 接上即可。
-`k8s_deploy.ps1` 没有接线这两个变量,开启用 `kubectl set env`(运维手册 §3.2)。
+**battle 直连**(2026-11-20):battle 的推荐值按同一推导,`BattleMaxConnections` 4096 时全局取下限 100,每个前缀 10 条/秒、桶深 100。
+承压判据与 gate 相同,池指 battle 的未认证直连池。
+
+**部署接线**(2026-11-20,未运行):两个节点的 14 个覆盖变量(gate 的 `GATE_ACCEPT_*` / `GATE_PREAUTH_*` / `GATE_SOURCE_*` 七个,battle 同名七个)
+经 `k8s_deploy.ps1 -ConnectionAdmissionEnv` 写进工作负载,逗号分隔的「名字=值」,`dev_tools.ps1` / `k8s_image.ps1` 同名透传:
+- 名单在 `lib/k8s_client_entry.ps1` 契约的 `GateConnectionAdmissionEnvNames` / `BattleConnectionAdmissionEnvNames`,与 C++ 的 `k*Env` 逐个对照
+  (`k8s_client_entry_contract.tests.ps1`)。值只收规范十进制正整数,拼错、重名在部署入口就拒;范围与相互关系仍只由进程启动时校验,不在脚本里复制第二份规则。
+- 按角色分组:`GATE_*` 只进 zone-up 的 gate(Deployment / external StatefulSet),`BATTLE_*` 只进 infra-up 的 battle(Deployment / hostPort / Agones Fleet);
+  渲染顺序按名单,与命令行先后无关,同一组值不会无故触发滚动。
+- 不粘滞(同 `-GateRouterMode`):脚本不从集群读回旧值,下一次部署不带就回到推导缺省;每次部署打一行 `[connection-admission] ... overrides` 写明这次带了什么。
+  选不粘滞是因为这些覆盖只给压测与应急用,长期要改的是推导(§9.7 校准之后改常数),不是让部署参数常驻。
+- Agones Fleet 是 CRD,手改 env 会在下一次部署时被生成物覆盖,所以 battle 一律走这个参数;`kubectl set env` 只剩 Deployment 形态等不及部署时的应急用法(运维手册 §3.2 / §3.3)。
 
 ### P2-3 · 「上限满了正常玩家进不来」的二阶问题
 
@@ -923,6 +951,36 @@ output buffer。单独看每个都合理，乘起来超过任何合理预算。
 | 按来源限速只在承压时生效 | `GATE_SOURCE_RATE_PER_SECOND=20` 启动。先从 A 网段（一个 /24）建 300 条不发包的连接（不承压）；再从 B 网段建 1000 条把池推到起点之后；接着从 A 再建 300 条、从 C 网段建 50 条 | 不承压时 A 的 300 条全部接纳；承压后 A 先进约 200 条（桶深）、之后约 20 条/秒，其余读到 `ECONNRESET`、记在 `source_rate`；C 的 50 条全部接纳；`gate_source_rate_active` 为 1 |
 
 判据仍是 §9.4 那三条：攻击进行中已登录玩家的延迟不变、新玩家登录成功率高于阈值、进程 RSS 不涨。
+
+### 9.7 准入阈值的校准(2026-11-20 补;一轮都还没跑)
+
+现在 gate 与 battle 准入的缺省值全是推导出来的(P0-2、P1-3、P2-2 各节),没有压测数据。下面这组跑完之前,复盘里不要写「准入阈值合适」。
+跑完按结论改 `accept_admission.h` 里的推导常数并改写对应各节;`-ConnectionAdmissionEnv` 只给压测与应急用,不靠它常驻。
+
+**工具**:
+- 合法洪峰:`robot/` + `robot_stress.ps1`(走完整登录,每条连接都会验签)。
+- 未验签连接:`tools/scripts/preauth_flood.py`(2026-11-20 起)。它只建连不发包,报告每条连接是被 RST 拒(`reset`)、被 FIN 关(`closed`,收割或淘汰)
+  还是一直挂着(`held`),以及关掉时距建连多少毫秒。真规模只在 Linux 上跑(先调高 `ulimit -n`),本机只跑 `--self-test`(§9.3)。
+- 采集与复盘:`stress_snap.ps1 -CppMetricsBasePort`(本机)或 `-CppEndpoints`(K8s 上 port-forward gate / battle 的 9400 之后手传),
+  复盘只读 `stress_summarize.ps1` 的 N2 表(AGENTS.md §6.1),每一轮按 AGENTS.md §6.2 的前后流程来。
+- 阈值怎么改:部署带 `k8s_deploy.ps1 -ConnectionAdmissionEnv <名字>=<值>,...`(P2-2 末尾「部署接线」)。
+
+**要回答的问题**(列名是 N2 的;计数看相邻两个快照之差。「改动判据」一列是建议,没有先例,第一轮跑完可以改):
+
+| 阈值(上限 2 万时的缺省) | 推导依据 | 怎么量 | 改动判据 |
+| --- | --- | --- | --- |
+| 可淘汰年龄 3000 ms | 远大于正常握手耗时 | 合法洪峰:让上限八成的 robot 以最快速度一起重连(模拟 gate 重启后全体重连),看 `hs_p99`;login / data_service 加压时再测一次 | `hs_p99` 超过 1000 ms:承压时淘汰会关掉正在验签的真玩家,把年龄调到 `hs_p99` 的 3 倍以上(仍须小于 10 秒握手期限) |
+| 早拒起点 1000、预算 2000 | 预算 = 缺省持续速率 × 握手期限,起点取一半 | 同一次合法洪峰里 `unauth` 的峰值 | 峰值超过起点的一半:正常重连就会进承压,`pre_ed` 会拒真玩家;按「峰值 × 2」抬起点,预算跟着抬 |
+| 新建速率 200 条/秒、桶深 2 万 | 桶深 = 上限,一次整台重连全放行;之后按上限 1%/秒 | 合法洪峰结束 30 秒内再来一次(连续两次全量掉线),看 `rate` 列与 robot 全部登上的用时 | 第二次超过 100 秒才全部登上:调高持续速率 |
+| 未验签预算的防护效果 | 攻击连接占不满会话 | 合法洪峰进行中,另一台机器用 `preauth_flood.py --rate 2000` 打 60 秒 | 下面的「每一轮的判据」任一条不满足:看 N2 的拒绝原因与 `evict` / `reap`,找出哪一道闸没起作用 |
+| 按来源限速 20 条/秒、桶深 200(缺省关闭) | 全局缺省速率的 1/10;一个 /24 稳态最多占预算一成 | 设 `GATE_SOURCE_RATE_PER_SECOND=20`;同一台集群外压测机(同一个 /24,模拟网吧 / CGNAT 出口)起 300 个 robot 一起登录,另一段地址打洪水把池推过起点 | 那 300 个 robot 超过 60 秒才全部登上:推荐值偏小。集群内或私网来源不按来源限速(P2-2),这一行只能在 external 入口 + `externalTrafficPolicy: Local` 上量 |
+| battle 直连(上限 4096:起点 500、预算 1000、速率 100 条/秒) | 同一份推导 | `match-stress` 时看 battle 行的 `rate`(网络探测也建直连);再对一台 battle 打 `preauth_flood.py` | 探测打出 `rate` 拒绝:按运维手册 §3.3 的式子调 `BATTLE_ACCEPT_RATE_PER_SECOND`;洪水期间对局握手失败:同上面预算一行 |
+
+**每一轮的判据**(§9.4):洪水进行中已登录玩家的 p99 延迟不变;新玩家登录成功率与同一轮不打洪水的基线相比不明显下降
+(第一轮先记下两者的差,阈值请负责人按它定);gate / battle 的 RSS 不随洪水上涨。
+
+**结论写哪里**:复盘按 AGENTS.md §6 写进 `docs/stress/stress-<轮次>-*.md`,N2 表原样贴,与上一轮对比。改了常数的,同步改本文件对应各节的推导、
+运维手册 §3.2 / §3.3 的缺省值表,以及 `accept_admission_test.cpp` 里钉缺省值的用例。
 
 ---
 

@@ -56,7 +56,7 @@
 - Battle 普通退出：`cpp/nodes/battle/main.cpp` 的关闭钩子与 `logic/battle_room_manager.cpp` 的 `AbortAllRooms`；新建房准入见 `handler/grpc/battle_node.cpp`。
 - 版本分流：`proto/common/base/common.proto` 的 `NodeInfo` 当前没有发布轨道；`go/client_rpc_router/internal/logic/forwardlogic.go` 的 `pickTarget` 只按全局／zone 随机挑选；`go/scene_manager/scene_manager_service.go` 的 `LeaderEligible` 仅约束参选。
 - 退出预算：`go/data_service/data_service.go` 的关停顺序注释；mail／rank 使用的 `go/shared/domainhost/host.go` 明确有界退出，超时不能算完整排空。
-- 存储扩展：见 [Redis 物理扩展需求](../handoff/redis-horizontal-scaling-requirements-20261022.md)、[全局数据层 TiDB 决策](global-data-layer-tidb-decision.md)。
+- 存储扩展：见 Redis 物理扩展需求（原 `docs/handoff/redis-horizontal-scaling-requirements-20261022.md`，已清理，见 `ccf2840b2`）、[全局数据层 TiDB 决策](global-data-layer-tidb-decision.md)。
 
 2026-04-04 的 [滚动／重启实验](rolling-update-restart-resilience-tests.md) 只作历史材料。其“杀 Scene 无影响”主要观察连接与消息计数，不能替代当前资产、世界状态、对局和新旧版本端到端验收。
 

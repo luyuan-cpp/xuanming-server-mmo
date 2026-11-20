@@ -167,6 +167,7 @@ service LoginPreGate {
 > - `100 "ratelimit"` 与 `429`:上表动作只适用于**不持** `queue_token` 的请求;429 的「退避」指 30/60/120s。
 >   持 token 的客户端只在 queue-status 本身失败(网络错误 / HTTP 非 200 / `code=500`)时带 token 重调一次 assign-gate 作恢复。
 >   重入回这两种时保留 token、回到 queue-status 轮询,**不**退避重调 assign-gate,否则已被放行的玩家会错过 `AdmitTTL`(60s)放行窗口。
+>   重入自身网络 / HTTP 失败或回 `code=500` 同样保留 token、按退避接着查(2026-11-20 起,见该节第 6 条)。
 > - 表里未列的 `503`(`zone_maintenance` / `zone_closed` / `zone_not_open`)与 `404 zone_not_found`,由 gateway 区服准入在 assign-gate 与 queue-status 上都可能返回。持 token 时是终态:不重入,按错误结束。
 > - `410` 一行不变。
 
@@ -177,28 +178,47 @@ service LoginPreGate {
 ### AssignGate 决策树(top-to-bottom,first match wins)
 
 ```
-1. queue_token 非空
-     ├─ ParseAndVerifyQueueToken 失败 → status=EXPIRED
-     ├─ Poll 命中 admit → status=ADMITTED + gate token(consumeAdmit 一次性消费)
-     └─ 未命中 → status=QUEUEING + 当前 rank
+1. queue_token 非空(排队开着时)
+     ├─ 令牌验签失败 → status=EXPIRED
+     ├─ Poll 取到放行槽(或在重取窗口内) → status=ADMITTED + gate 票(取走时现签)
+     ├─ 仍在排队 → status=QUEUEING + 当前 rank
+     └─ 条目已不在(空闲过期、被清掉、放行窗口已过) → status=EXPIRED
 
-2. account 非空
-     └─ sessionmanager.GetSession() 返回非空 + GateID 非空
-         → 重连/顶号:跳过排队,fast path 签 token
-       否则 fall through
+2. 鉴权:账号只从 access_token 解出
+     ├─ 令牌无效 → status=UNAUTHENTICATED
+     └─ 不带令牌 → 匿名分配(只在 LegacyGateLoginEnabled 时允许),不免排队
 
 3. !Queue.Enabled
-     → fast path 签 token(legacy 行为,kill switch)
+     → 直接签票(kill switch,与没有排队时相同)
 
-4. FreeSlots > 0 且 ZCARD queue:{q:<id>} == 0
-     → fast path 签 token
+4. 请求的 zone 不是本 login 的 Node.ZoneId(含 0)
+     → status=ERROR。排队开着时只接本区:别的区的条目没有 dispatcher 出队
 
-5. else
-     → Enqueue:ZADD queue:{q:<id>} + 写 meta + token 反查索引
-     → 返回 status=QUEUEING + queue_token + rank
+5. 账号有角色已经在本区游戏里(重连 / 顶号,判定见 §8)
+     → 记一枚在途占位(reconnect:<player_id>,20s),跳过排队,签票
+
+6. FreeSlots > 0 且队列为空(读不出队列长度时按「有人在排」处理)
+     → 原子占一个在途名额(fast:<uuid>,20s),占到就签票;没占到落到第 7 步
+
+7. 入队:一个账号在一个 zone 只有一个条目
+     ├─ 账号已在排队 → 位置不变,多发一张令牌,status=QUEUEING + 原 rank
+     ├─ 账号已放行、放行槽还没人取 → 不重新入队,status=QUEUEING + rank 0
+     ├─ 队列已到 Queue.MaxQueueLength → status=QUEUE_FULL + retry_after_ms(30~40s),不入队、没有令牌
+     └─ 其余 → 排到队尾,status=QUEUEING + queue_token + rank
 ```
 
-> **(2026-11-12 更正,上树第 2 步、§4 的 `AssignGateRequest.account`、§8 与 §9;原文保留;已落码,未编译、未测试,待 Codex 验证)**
+上面是 2026-11-20 起的现行决策树(已落码,未编译、未测试,待 Codex 验证)。相对此前的版本改了六处,都是把登记过的「以后再修」和复查发现的问题一次改掉:
+
+- **一个账号一个条目(第 7 步)。** 此前每次不带令牌的 AssignGate 都新建一个条目:丢了令牌的客户端(回包丢失、换设备、重装)掉到队尾,原条目成了白占名额的孤儿;同一个账号也可以反复入队占位。现在条目号由账号推出(`loginqueue.queueIDForAccount`,对 zone 与账号做 HMAC,不带出账号原文),同一账号再次入队得到同一个条目,位置不变。旧令牌照样有效,两台设备同时轮询时先取到放行槽的那台进。匿名分配没有账号可认,仍然每次新建。入队改为一段脚本(`enqueueScript`),一次往返里判状态、写条目、登记令牌、读名次与总数(此前是一个 MULTI 加两次读)。
+- **队列有上限(第 7 步)。** 一个 zone 的排队键都在同一个 Redis 主节点上,这个主节点还放着别的 zone 的排队键和控制域的其它键,策略是 noeviction。队列无界时,把它写满的后果是这个主节点上所有写入一起被拒。`Queue.MaxQueueLength` 缺省 1000000,取自单 zone 排队容量分析的上界([全部 Redis 上 Cluster](./redis-cluster-all-domains-20261110.md) §6.2);超出的请求回 `QUEUE_FULL`,网关把它映射成前置限流那种重试提示(code=100、`queue_source="ratelimit"`),客户端不用改。已经在排的账号再入队不受上限影响。
+- **免排队的重连也占名额(第 5 步)。** 此前免排队的人不在任何计数里:一台 gate 掉线时,上面的人数随注册记录一起消失,这些人正在免排队重连,dispatcher 却看到整台 gate 的空位、把排队的人放进去,两拨人加起来超过区容量。现在免排队之前先记一枚在途占位,成员按 player_id 定名,同一个人反复调用不多占。
+- **重连判定看全部角色、并且只认本区(第 5 步,§8)。**
+- **只接本区的请求(第 4 步)。** `zone_id=0` 或别的区的条目写进去没有 dispatcher 出队,是只进不出的黑洞。网关按 zone 选 login、zone ≤ 0 不转发,正常到不了这里;这一步挡的是绕过网关直连 login 的调用方。
+- **读不出队列长度时不走快速通道(第 6 步)。** 此前这个错误被吞掉、当成队列为空,新来的人可能插到正在排队的人前面。
+
+dispatcher 那一侧同日加了每拍放行上限,见下文「Dispatcher Loop」。
+
+> **(2026-11-12 鉴权一步的来由;上面的决策树已按它改写,§4 的 `AssignGateRequest.account` 与 §9 的旧说法按本段读;已落码,未编译、未测试,待 Codex 验证)**
 > 原来的第 2 步用请求里客户端**自报**的 `account` 判「已有在线会话、免排队」,也拿它当排队身份:报出别人的账号名就能插队、冒用排队身份;
 > 第三方登录的客户端又不知道自己的账号名(`wx_<unionid>` 等由服务端算出),合法的免排队反而用不上。改为:
 > - **协议**:`AssignGateRequest` 删掉字段 3 `account`(`reserved 3; reserved "account";`),新增字段 5 `access_token`(`/api/login` 签发的那一个)。
@@ -409,7 +429,7 @@ free         = max(0, capacity - online - admitted_inflight)
 - **Q1**:快速通道的 `fast:<uuid>` 成员从不单独删除,每次写入又把整键 TTL 续上。已连上 gate 的快速通道玩家同时算进 `online` 和在途,持续有人登录时余量被重复扣到 0,「放一批、停最长 60s」。
 - **Q2**:取走即 SREM,而 gate 的人数要等下一次上报才涨。开区时每拍都按「在线 0、在途 0」再放一满批,能放进几倍容量。
 
-G4b-G 换成新键 `admitted:zset:{q:<z>}`(ZSET,分数 = 占位到期的 Unix 毫秒),每个成员按自己的分数到期。完整推导、测试与评审记录见 [spec_G4b-G.md](../handoff/launch-readiness-20261013/spec_G4b-G.md)。
+G4b-G 换成新键 `admitted:zset:{q:<z>}`(ZSET,分数 = 占位到期的 Unix 毫秒),每个成员按自己的分数到期。完整推导、测试与评审记录见 `docs/handoff/launch-readiness-20261013/spec_G4b-G.md`（已清理，见 `ccf2840b2`）。
 
 一个占位成员的一生(`G` = 交票后宽限 20s,2026-10-15 起;10-13 至 10-15 为 15s。`now` = login 进程时钟的 Unix 毫秒):
 
@@ -498,7 +518,7 @@ for each queueId in members:
 > candidates = CandidatesForZone(zoneId)
 > free = FreeSlots(candidates)
 > if free <= 0: return                        // zone 满时不出队,队首孤儿也要等有空位那一拍才清
-> batch = min(free, ZCARD)
+> batch = min(free, ZCARD, Queue.MaxAdmitPerTick)   // 2026-11-20 起一拍有上限(缺省 2000),取值见 §10
 > members = ZRANGE queue:{q:<zoneId>} 0 batch-1   // 只读,条目仍在队列
 > picker = 本拍的挑 gate 器(candidates)
 > entries = [ (queueId, picker.pick()) for each queueId in members ]   // 挑失败或无 gate:跳过该条,它从未离开队列、分数不变
@@ -632,14 +652,25 @@ if lock.IsLocked() {
 
 `enter_gs_type` 表(参见 [player_login_flow.md](./player_login_flow.md))规定:`REPLACE`(顶号)/`RECONNECT`(30s 重连)的玩家 **不应排队**——他本来就在游戏里,只是断线重连一下。
 
-实现:`AssignGateLogic.lookupSessionByAccount(account)`
-1. 从 Redis `account_data:{account}` 拿到 player_id 列表
-2. 调 `sessionmanager.GetSession(playerId)` 查 player_locator
-3. 若 `existing.GateID != ""` → 跳过排队,fast path
+实现(2026-11-20 起):`AssignGateLogic.reconnectingPlayer(account, zone)`,判定在纯函数 `findReconnectingPlayer` 里(`go/login/internal/logic/loginpregate/assigngatelogic.go`)。`account` 是 access token 解出的账号,匿名分配不走这一步。
 
-**已知妥协**:目前账号→player_id 取列表第一项。多角色账号需要扩展(查 `playerId` 列表里哪个有 ONLINE/DISCONNECTING session),不影响本期发布,留 TODO。
+1. 从账号角色目录(`AccountDirectory.Read`)读出账号的全部角色。
+2. 逐个角色查 player_locator 的会话(`sessionmanager.GetSession`),找到一个「已经占着本区一条 gate 连接」的就停。
+3. 找到 → 记在途占位(`Queue.HoldReconnectSlot`),跳过排队,按快速通道现挑一台 gate 签票。不钉原来那台:会话记的只是节点号,那台 gate 可能已经换掉;会话状态在 player_locator,换一台 gate 照样接得上。
 
-> **(2026-11-12 更正)** 上面的 `account` 现在是 access token 解出的账号,不再是请求里自报的值;匿名分配不走这一步。见 §5 末尾的更正。
+读角色目录或会话失败时当成新登录去排队,只会少免、不会错免。
+
+**怎样算「在本区」。** 会话里没有区号,login 也只看得见本区的 gate,所以这样判:
+
+- 角色的建角区就是本区:有在线会话就算。它的 gate 可能已经掉线、不在本区现在的 gate 列表里,这正是最需要免排队的重连。
+- 角色的建角区不是本区(别的区的角色,或合服并进来的角色):只有它的会话正连在本区现有的 gate 上才算。
+
+**为什么改。** 此前只看角色列表的第一项,也不看区:
+
+- 多角色账号用别的角色在线时,重连被当成新登录去排队(原「已知妥协」)。
+- 一个账号把角色挂在空闲的区里在线,就能拿它免掉爆满的区的排队。
+
+**残余。** 合服并进来的角色,原来连着的 gate 又恰好掉线时,判不出它在本区,重连要排队。要判准得让会话记下 gate 所在的区(player_locator 的会话加一个字段),或让 login 读合服映射(`shared/placement` 的 `MergedZoneCache`);两种都要给 login 加一条新的依赖,本次没做,登记在 §14 第 1 条。
 
 ---
 
@@ -685,8 +716,16 @@ Queue:
   DefaultRetryAfterMs: 2000         # 客户端轮询间隔建议
   DispatcherLockTTL: 30s            # leader 锁 TTL
   DispatcherLockKey: "dispatcher:lock:login_queue"  # 锁键前缀;实际 = <前缀>:zone:<Node.ZoneId>,每 zone 一个 leader
+  MaxAdmitPerTick: 2000             # 一拍最多放行多少人(2026-11-20);0 = 不设上限,生产不要写 0
+  MaxQueueLength: 1000000           # 一个 zone 的队列最多排多少人(2026-11-20),满了回 QUEUE_FULL;0 = 不设上限,生产不要写 0
   # 区容量不在这里配(2026-11-10 起):只认网关区服目录 zone_config.capacity,见上文「FreeSlots 公式」。
 ```
+
+**两个上限的取值(2026-11-20,不等压测,按现有依据定)。**
+
+- `MaxAdmitPerTick: 2000`。空位一下子腾出来时(运维调大区容量、一台 gate 掉线后人数清零),不设上限的话这一拍会把空位全部放满,几万人在同一个轮询周期里拿到票,同时去连 gate、进场景。2000 与网关前置限流开服档的区桶同值(每秒 2000,[限流设计](./open-server-rate-limit-design.md) §11.2):快速通道那一侧由区桶限速,放行这一侧由它限速,两条路的上限一致。它不是实测的进场吞吐,压测出基线后两处一起调。
+- `MaxQueueLength: 1000000`。取自单 zone 排队容量分析的上界([全部 Redis 上 Cluster](./redis-cluster-all-domains-20261110.md) §6.2 分析到 100 万人):超过分析过的规模就拒绝,不进入没有分析过的区间。
+- K8s 的 login ConfigMap 不渲染这两个键(`New-LoginQueueYaml` 只镜像它列出的键),集群里用代码缺省值,与 `login.yaml` 相同。要在 K8s 上改,先把这两个键加进那个函数与它的契约用例。
 
 > **(2026-10-18 更正,上面 `QueueEntryTTL` 一行的注释;原文保留;未编译、未测试)** 「ZSET / meta / token-index 的 TTL 上限」改读如下。
 > - **空闲 TTL。** meta、token 索引与队列键自最后一次成功的排队中查询(或入队)起算,至少保留 `QueueEntryTTL`、至多 1.25 倍。持续轮询的人不会因为等满 1h 被弹回队尾。
@@ -784,10 +823,11 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
 
 ## 14. 已知不足 / 后续工作
 
-1. **多角色账号重连**:`lookupSessionByAccount` 仅取第一个 player_id,极少数多角色账号在罕见情况下可能被错排。修复成本低,等真有玩家投诉再补。
-2. **Prometheus 接入**:列在 §11,本期未做,等首次生产灰度后再加。
-3. **进场景排队**:本期不做,等真有"攻城战"等玩法时按同一套 ZSET 模板升级。详见对话记录中 §"为什么本期不做"。
-4. **Queue token 转移**:玩家换设备重登拿到新 token,丢失原位置。目前可接受。
+1. **多角色账号重连**:2026-11-20 已修,重连判定看账号的全部角色并且只认本区(§8)。剩一个窄的残余:合服并进来的角色、原来连着的 gate 又恰好掉线时判不出它在本区,重连要排队;修法与代价见 §8「残余」。
+2. **Prometheus 接入**:已做(§11「Prometheus 指标」)。2026-11-20 加 `login_queue_assign_total{zone,outcome}`,按结果数排队开着时的 AssignGate(`fast_path` / `reconnect` / `enqueued` / `rejoined` / `queue_full`)。
+3. **进场景排队**:不做(2026-11-20 定案)。它是另一个功能:限制的是进某个场景的人数,不是进区的人数;现在没有需要它的玩法。到有这种玩法时单独设计,不预留。
+4. **Queue token 转移**:2026-11-20 已修。一个账号在一个 zone 只有一个条目,换设备、丢令牌之后不带令牌重新调 AssignGate,拿回的是原来的位置(§5 决策树第 7 步)。
+4a. **客户端显示预计等待时间(ETA)**:不做(2026-11-20 定案)。放行速率取决于在线玩家什么时候离开,不是一个稳定的速率:区满、没人下线时等待没有上界,估出来的时间会大幅跳动。服务端只给名次与总数,这两个数是准的。
 5. ~~**多 zone 公平性**:dispatcher 按 `activeZones` 顺序遍历,极端情况下前面 zone 抢光 admit 批次。~~ 已由 §7.1 消解:每个 zone 有独立的 leader,不存在 zone 之间互相抢批次。
 6. **取走后再轮询回「排队中、名次 0」**(2026-10-13 登记,G4b-G 不含):同一令牌取走之后再轮询,meta 与 token 索引还在、ZRANK 落空,回 QUEUEING、rank 0,直到 1h 过期;回包丢失时这张 gate 票找不回来。Java 版回 410。这是 `PARITY.md`「登录排队」行 ③ 的另一句(`spec_G4b-G.md` §5.8 第 1 条)。
    - **(2026-10-15 更正:已修;已落码,未编译、未测试,待 Codex 验证)** 取走之后再查,以及放行槽没人来取、按 `AdmitTTL` 过期之后再查,都回 EXPIRED(gateway 410,原因 `admit_window_passed`),判据是 meta 里的 `admitted_at`,见 §5 决策树后的更正。回包丢失时 gate 票仍找不回来,客户端从队尾重新排。PopAdmit 写放行槽之前丢掉的条目仍停在名次 0 直到 meta 过期(第 7 条)。

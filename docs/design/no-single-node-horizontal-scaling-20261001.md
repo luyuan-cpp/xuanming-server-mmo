@@ -266,7 +266,7 @@ kind 上:`zone-up` 后 `data-service-migrate` Job Complete、两个 Pod Ready;`k
 
 约束:C++ 侧 hiredis 没有集群客户端;`player:session:{id}` 等跨运行时契约 key 多方共写。
 
-> 2026-10-14 注(别的会话):「按用途拆」的后续设计在 [shared-redis-split-by-purpose.md](./shared-redis-split-by-purpose.md)(G4a,只出设计、未落码)。[容量模型](./capacity-model-hok-scale.md) §4.2 判定「按用途拆」只够到 S1,在 S3 目标下要改为集群化或单元化,修订项见 [交接](../handoff/handoff-launch-readiness-and-d1-20261013.md) §4 第 5 项。
+> 2026-10-14 注(别的会话):「按用途拆」的后续设计在 [shared-redis-split-by-purpose.md](./shared-redis-split-by-purpose.md)(G4a,只出设计、未落码)。[容量模型](./capacity-model-hok-scale.md) §4.2 判定「按用途拆」只够到 S1,在 S3 目标下要改为集群化或单元化,修订项见 交接（原 `docs/handoff/handoff-launch-readiness-and-d1-20261013.md`，已清理，见 `ccf2840b2`） §4 第 5 项。
 >
 > **两件事的关系(2026-10-16)**:本节解决的是**可用性**(主挂了几秒内自动切换,不再是单点),「按用途拆」解决的是**容量与爆炸半径**,两者正交。
 > G4a 设计稿第 8 行写明「不做哨兵 HA,HA 是后续项(§13)」,§13 第 13 条把「新实例是否也用 redis-ha 形态、补上 `-RedisReplicas` 的 apply 路径」列为后续 ——

@@ -4,7 +4,7 @@
 
 > **状态**：已落码，未编译、未测试，待 Codex 验证（AGENTS.md §10.1）。在 Codex 给出结果之前，本文任何一句都不等于「编译通过」或「已验证」。
 > **范围**：§A = S5a（C++ scene：发 DBTask 失败后的脏快照）；§B = S5b（Go + 部署脚本：db_task 的 retention.bytes 与 Kafka PVC 预算）。go/db、go/login 与 `tools/scripts/k8s_deploy.ps1` 的注释按「本文 §B」引用，章节号不要改。
-> **依据**：[S5 实现规格](../handoff/godb-pipeline-impl-20261015/S5-dirty-snapshot-retention-spec.md)（B-01…B-22）；S5a 的落码报告 [batch-reports.md](../handoff/godb-pipeline-impl-20261015/batch-reports.md) §C2；S5b 由主会话在 R3（Go 与部署脚本）与 R5a（复核修正）中落码，没有单独的阶段报告。**表述以截至 2026-10-16 的工作区代码为准**，与规格、阶段报告不一致的地方列在 §A.13 与 §B.9。
+> **依据**：S5 实现规格（原 `docs/handoff/godb-pipeline-impl-20261015/S5-dirty-snapshot-retention-spec.md`，已清理，见 `ccf2840b2`）（B-01…B-22）；S5a 的落码报告 `docs/handoff/godb-pipeline-impl-20261015/batch-reports.md`（已清理，见 `ccf2840b2`） §C2；S5b 由主会话在 R3（Go 与部署脚本）与 R5a（复核修正）中落码，没有单独的阶段报告。**表述以截至 2026-10-16 的工作区代码为准**，与规格、阶段报告不一致的地方列在 §A.13 与 §B.9。
 > **归属**：负责人 2026-10-13 把「scene 发 DBTask 失败的脏快照」与「db_task 的 retention / PVC」改判归 godb 交接（规格 B-18；[上线待做](../ops/godb-pipeline-launch-todo.md) §3）。全局单点交接不要重做这两项。
 > **运维版**：`deploy/k8s/README.md`「Kafka 磁盘预算与 db_task retention.bytes」一节是 §B 的操作手册（公式、缺省值、账本行、扩盘 runbook、立即改 topic 配置）。本文讲为什么这样设计，命令以 README 为准。
 > **总入口**：[Kafka topic 保留与耐久策略](./kafka-topic-retention-strategy.md)已于 2026-10-23 更新；db_task 的盘预算、实际缓冲与操作流程仍以本文 §B 与 README 为准。

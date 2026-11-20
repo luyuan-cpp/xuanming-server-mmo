@@ -8,7 +8,7 @@
 >
 > **适用范围(上线前收窄)**:负责人 2026-10-18 确认项目尚未上线(见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md) 文末「上线状态」):没有存量 zone,没有在跑的旧版 go/db / scene / login,首次上线以「go/db dual + scene / login 严格提交屏障」整批起步。所以本工具**只支持 strict 协议**:legacy 在 ps1 入口与工具入口都拒绝;只为新旧版本并存、旧镜像、旧二进制服务的校验不做;防并发运维只保留回档自身的 fail-closed 复核,不改 merge_zone。删掉的内容与补做的触发条件见 §8。
 >
-> 上游:回档语义裁决与脚本侧落码见 [zone_data_rollback.md](zone_data_rollback.md)「2026-10-18 修订」;工具契约见 `tools/scripts/k8s_zone_rollback.ps1` 文件头「zone_rollback_discard 契约」(B3 同批改写);交接见 [godb-pipeline-impl-handoff-20261015.md](../handoff/godb-pipeline-impl-handoff-20261015.md) §7.4;存盘围栏见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md)(v0.4);合服见 [server_merge_design.md](server_merge_design.md) 与 `tools/merge_zone`。
+> 上游:回档语义裁决与脚本侧落码见 [zone_data_rollback.md](zone_data_rollback.md)「2026-10-18 修订」;工具契约见 `tools/scripts/k8s_zone_rollback.ps1` 文件头「zone_rollback_discard 契约」(B3 同批改写);交接见 `docs/handoff/godb-pipeline-impl-handoff-20261015.md`（已清理，见 `ccf2840b2`） §7.4;存盘围栏见 [db-write-fencing-mysql.md](db-write-fencing-mysql.md)(v0.4);合服见 [server_merge_design.md](server_merge_design.md) 与 `tools/merge_zone`。
 >
 > 调研缺口(已补):v1 时「维护围栏」与「三个小项」两路专项调研因认证错误(403)未跑完;2026-10-19 已补跑两路只读代码核实,v1 中被证实的、需改的与漏掉的部分全部并入本文。
 

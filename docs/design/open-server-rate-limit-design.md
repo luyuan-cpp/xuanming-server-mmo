@@ -78,7 +78,7 @@ HTTP JSON 使用 snake_case，字段以 [LoginResponse](../../java/gateway_node/
 | 结果 | 语义 |
 |---|---|
 | login 的 `code=100` | 前置限流／波次重试提示，含 retry_after_ms；不是 login 真队列入队成功。 |
-| assign 的 `code=100, queue_source="ratelimit"` | 波次／zone 桶要求重试，无排队令牌与真实位次。queue_pos 是桶返回的提示值（波次可为 -1），不能展示为“前面 N 人”。 |
+| assign 的 `code=100, queue_source="ratelimit"` | 波次／zone 桶要求重试，无排队令牌与真实位次。2026-11-20 起 login 的队列到上限（`Queue.MaxQueueLength`，login 回 status=5）也是这个形状：没有入队，retry_after_ms 为 30～40 秒，queue_pos 为 -1。queue_pos 是桶返回的提示值（波次可为 -1），不能展示为“前面 N 人”。 |
 | assign 的 `code=100, queue_source="login"` | login 真队列返回 queue_token、queue_rank、queue_total；rank 从 0 开始。 |
 | `code=429` | IP 桶或账号冷却拒绝；assign 的 error 为 IP_RATE_LIMIT / ACCOUNT_COOLDOWN，login 使用其 DTO 的 message。 |
 | assign 的 `code=0` | 返回 gate_ip、gate_port、token_payload、token_signature、token_deadline。 |
@@ -173,7 +173,7 @@ Gateway 的 ratelimit 重试不创建同等状态。正常持票查询必须遵�
 | K8s Gateway 按档位启用、配置指纹 | 已有部署实现。 |
 | login 真排队 | 已有实现；K8s 合入门禁仍关闭，不能由旧矩阵推断可启用。 |
 | 专项指标、真实故障放行行为、阈值与尖峰容量 | 按对应验收记录判断；本文静态核对不补充运行通过结论。 |
-| 独立客户端、独立 Java 版 | Unity 持票轮询 2026-11-19 按 §11.5 补齐，未编译、未联网冒烟（§11.5 末段）；独立 Java 版 queue-status 回包与本仓一致，排队提示的下限与随机量待做（§二）。 |
+| 独立客户端、独立 Java 版 | Unity 按 §11.5 持票与无票规则全部落码（2026-11-19 ~ 20），未编译、未联网冒烟（§11.5 末段）；独立 Java 版 queue-status 回包与本仓一致，排队提示的下限与随机量待做（§二）。 |
 
 ## 十一、K8s 按发布档位开启（G4b）
 
@@ -188,7 +188,7 @@ Gateway 的 ratelimit 重试不创建同等状态。正常持票查询必须遵�
 | LoginQueue（当前门禁未清） | 关闭 | 关闭并提示门禁 | 在任何 kubectl 前拒绝 | 关闭 |
 
 当前 `LoginQueueMergeGateCleared=false`。三项门槛是指定多 zone 用例、G4b-G 回归和真实 Redis 最小冒烟，
-都取得运行证据并登记后，由负责人按[规格 §7](../handoff/launch-readiness-20261013/spec_G4b.md)清门禁。
+都取得运行证据并登记后，由负责人按规格 §7（原 `docs/handoff/launch-readiness-20261013/spec_G4b.md`，已清理，见 `ccf2840b2`）清门禁。
 本次不修改常量，不手改配置绕过。门禁关闭时不要求、解析或写入 QueueToken，不渲染 Queue 段与排队指纹；
 DryRun 的测试接缝只能模拟契约，不能打开真实部署。
 
@@ -224,7 +224,7 @@ J1 已做（2026-11-05，随令牌桶 Lua 一起）：先判 IP 再判 zone，zo
 
 ### 11.5 客户端退避要求
 
-本节保留 2026-10-15 已确定的契约，删除此前被更正的相互冲突版本。
+本节保留 2026-10-15 已确定的契约，删除此前被更正的相互冲突版本；第 6 条后半句 2026-11-20 由负责人改定（原为恢复重入自身失败即按错误结束）。
 `429 / 410 / 503` 等以下均指 JSON code；业务回包承载在 HTTP 200 中。
 
 **持有 queue_token：**
@@ -234,21 +234,27 @@ J1 已做（2026-11-05，随令牌桶 Lua 一起）：先判 IP 再判 zone，zo
 3. 仅查询出现网络错误、HTTP 非 200 或 JSON code=500 时，带原 token 调一次 assign-gate 作恢复。查询的非失败回包将连续失败数清零，恢复重入的回包不清零。
 4. 恢复回 code=0 则放行；回 100（login 或 ratelimit）或 429 时保留 token，按上述间隔回到 queue-status。不得套用无票 429 的 30/60/120s 重调节奏，否则可能错过 AdmitTTL 放行窗口。
 5. 查询回 code=503 的 zone_maintenance / zone_closed / zone_not_open，或 404 zone_not_found，是终态，不发恢复重入。代理返回的 HTTP 非 200 与这些业务结果分开判断。
-6. 任一端点回 410，丢弃 token，不带 token 重调 assign-gate。恢复重入自身网络／HTTP 失败或返回其它失败码时，按错误结束、交外层。
+6. 任一端点回 410，丢弃 token，不带 token 重调 assign-gate。恢复重入自身网络错误、HTTP 非 200 或回 code=500 时同样保留 token，按第 2 条的间隔回到 queue-status（连续失败数在查询失败时已加过，这里不清零），直到第 7 条的预算用完；回 401、503 zone_*、404 等其它失败码时按错误结束、交外层。
+   - 为什么（2026-11-20）：原文让重入自身失败即按错误结束，token 随之丢弃。客户端自己断网几秒（查询与紧接着的重入都连不上），或 login 短暂不可用而区桶仍有令牌（重入到了 login、回 500）时，玩家会丢排位、从队尾重排。
+   - 代价：服务端条目空闲 `QueueEntryTTL`（1h）才过期、token 有 24h 绝对寿命，保票重试只是让原条目继续有人来查，不新建条目、不多占名额。退避封顶后每 30~36 秒一次查询加一次重入，重入照样过 IP / zone 桶。
 7. 客户端总等待预算耗尽即停止发新请求。服务端放行槽、空闲 TTL 与 token 绝对寿命仍由排队设计分别约束，不能拿客户端重试代替延长放行票。
 
 **未持有 queue_token：** code=100（ratelimit）按 retry_after_ms 重调 assign-gate，缺省 2s，并打散重试（2026-11-19 起服务端给的值已含 2s 下限与 0–2s 随机量，见 §二「排队提示」；客户端仍按 max(retry_after_ms, 2s) 再加抖动，防旧网关原样下发 1ms）；
-真实客户端的 429 按 30/60/120s 退避并加抖动。它与持票规则不同。
+真实客户端的 429 按 30/60/120s 退避并加抖动，三次用完仍 429 就报错交玩家（AGENTS §11.3 要求重试有次数上限）。它与持票规则不同。
+429 在网关转发 login 之前就回了，`/api/login` 带的一次性渠道凭证没被用掉，原样重发安全。
 
 本仓 [robot 状态机](../../robot/http_assign_gate.go)已实现持票查询、抖动、恢复重入与预算检查，
-[回归测试源码](../../robot/http_assign_gate_test.go)覆盖相关分支；本次未运行。
+[回归测试源码](../../robot/http_assign_gate_test.go)覆盖相关分支；本次未运行。2026-11-20 按新第 6 条改：重入自身网络 / HTTP 失败时合成一个 code=500 交回状态机，与重入回 500 一样保票退避（未运行）。
 预算检查覆盖重试阶段的等待、恢复重入与 410 重调；首个 assign-gate 仍会执行，不保证已过期 ctx 零请求。
-robot 无票分支保留既有差异：100 不加抖动（服务端的随机量照样把它打散），429 直接交外层；410 换票时不主动清失败退避计数。
-Unity 客户端 2026-11-19 起按上面 7 条持票（`GameClient.EnterZone` 第 2 步，未编译、未联网冒烟）：
-两处排队等待（/api/login 与 assign-gate / queue-status）都按 max(retry_after_ms, 下限) 再加 [0, 20%] 抖动，抖动按不超过 30s 的基础间隔算（`GameClient.QueueRetryDelayMs`），下限平时 2s、查询连续失败时按第 2 条退避（`QueueBackoffFloorMs`）；
-查询失败带原 token 立即恢复重入一次，重入回 100 / 429 保票回到查询，重入自身失败按第 6 条报错退出；总预算 2 小时（排队期间不刷新 access token，过期后重入只会回 401）。
-`GatewayHttpClient` 对这两个端点只读 HTTP 200 的正文，非 200 一律算 HTTP 失败（Spring 缺省错误页没有 code，以前会被读成 0「放行」）。
-与 robot 的差异：无票 100 也加下限与抖动；410 丢票时连续失败数清零；无票的 410 直接报错，不再立即重调。无票 429 的 30/60/120s 退避仍没做，Unity 收到即报错。
+robot 无票分支保留两处有意差异：100 不加抖动（服务端的随机量照样把它打散），429 直接交外层（压测把 429 当失败，§11.7 R2）。410 换票时连续失败数清零（2026-11-20 起，与 Unity 一致）。
+Unity 客户端按上面 7 条持票（`GameClient.EnterZone` 第 2 步；2026-11-19 落码、11-20 补齐，未编译、未联网冒烟）：
+- 等待：两处排队等待（/api/login 与 assign-gate / queue-status）都按 max(retry_after_ms, 下限) 再加 [0, 20%] 抖动，抖动按不超过 30s 的基础间隔算（`GameClient.QueueRetryDelayMs`）；下限平时 2s，查询连续失败时按第 2 条退避（`QueueBackoffFloorMs`）。
+- 恢复：查询失败带原 token 立即恢复重入一次，重入回 100 / 429 / 500 或自身网络 / HTTP 失败都保票回到查询（第 6 条）。
+- 预算：第 1、2 步共用总预算 24 小时，与排队令牌的绝对寿命一致。access token 只有 2 小时，剩不到 10 分钟时排队循环先经 `/api/refresh-token` 换新；失败（网络 / 500）隔 60 秒再试，refresh 令牌被拒（401）按登录失效结束。
+- 无票 429：/api/login 与 assign-gate 都按 30、60、120 秒加抖动重试，一次进区合计最多 3 次（`RateLimitedBackoffMs`）。
+- `GatewayHttpClient` 的所有 POST 接口只读 HTTP 200 的正文，非 200 一律算 HTTP 失败（Spring 缺省错误页没有 code，以前会被读成 0「成功 / 放行」）。
+- 断线重连（`GameClient.Reconnect.cs`）把 100 ratelimit 当暂时结论，在 20 秒期限内按 max(重连退避, retry_after 加下限与抖动) 重调；真排队的 100 仍交回选服。
+- 与 robot 的差异：无票 100 加下限与抖动；无票 429 退避重试。无票的 410 两边都直接报错，不立即重调。
 已发出的 HTTP 请求按自身 perCallTimeout 完成，不随排队 ctx 立即取消，截止后收到 code=0 仍按放行处理。
 独立 Java 版的 `/api/queue-status` 与本仓网关回包一致（2026-11-19 核对：HTTP 恒 200，code 为 0 / 100 / 410 / 500 / 404 / 503，Java 另有请求体错误的 400），Unity 这套持票逻辑两版通用。
 
@@ -270,7 +276,7 @@ Unity 客户端 2026-11-19 起按上面 7 条持票（`GameClient.EnterZone` 第
 
 另需核对 zone 桶热键的 Redis 负载（每次检查一条 EVALSHA，ops/s ≈ 到达请求速率，含被拒的请求；2026-11-19 起排队提示有下限与随机量，守规矩的客户端排队时约「排队人数 / 3 秒」，见 §二「排队提示」，压测复核这个数）、启动期 Redis 依赖、后端故障放行、
 配置指纹、排队密钥轮换与各 zone 在线存量。
-阈值与 Redis 拆分的专项任务见[发布就绪规格](../handoff/launch-readiness-20261013/spec_G4b.md)和部署手册；
+阈值与 Redis 拆分的专项任务见发布就绪规格（原 `docs/handoff/launch-readiness-20261013/spec_G4b.md`，已清理，见 `ccf2840b2`）和部署手册；
 本文不据已有源码宣称这些验收完成。
 
 ### 11.8 验证证据边界

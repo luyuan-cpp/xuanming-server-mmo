@@ -137,7 +137,7 @@ gate 日志:VerifyGateToken 突然出现大量 token 过期 / 玩家被踢
 **根因**:在途占位没有覆盖「票已交出、gate 还没上报」这一段:这个人既不在在途里,也还不在 gate 的在线数里,下一拍又放一批。G4b-G 之前取走即撤占位,就是这一段(设计稿 §5「在途占位的生命周期」Q2)。
 **判读**:G4b-G 起在途占位是 `admitted:zset:{q:<id>}` ZSET,成员分数是到期 Unix 毫秒。排队领票后仍保留 `handoffGrace`(当前 20s,2026-10-15 起;此前 15s),覆盖客户端连 gate 到在线人数上报的窗口;不再在领票时 SREM。旧键 `admitted:zone:{id}` 不再读写,不能用它判断当前容量。
 **排查**:
-- 看成员:`redis-cli -c ZRANGE 'admitted:zset:{q:1}' 0 -1 WITHSCORES`。分数是占位到期的 Unix 毫秒,`fast:` 开头的是快速通道占位,其余是排队放行的 queueId。
+- 看成员:`redis-cli -c ZRANGE 'admitted:zset:{q:1}' 0 -1 WITHSCORES`。分数是占位到期的 Unix 毫秒。`fast:` 开头的是快速通道占位;`reconnect:<player_id>` 是免排队重连的占位(2026-11-20 起,同一个人只占一个);其余是排队放行的 queueId(账号的条目以 `a-` 开头,匿名的是 UUID)。
 - 只读统计未到期成员:先用 `redis-cli TIME` 取 Redis 当前 Unix 毫秒,再 `redis-cli -c ZCOUNT 'admitted:zset:{q:1}' '(<当前毫秒>' +inf`。裸 `ZCARD` 可能包含尚未被下一次容量查询清掉的过期成员。
 - 对照 `login_queue_admitted_inflight`、gate 在线数与 `login_queue_capacity`;在途数还包含 fast-path 的 `fast:<uuid>` 成员,没有固定的 `<50` 正常阈值:稳态约等于交票速率 × 20s(加上等轮询的放行数;2026-10-15 之前是 × 15s)。长时间顶在 `capacity − online` 而 gate 人数不涨 = 客户端拿了放行没去连 gate。
 - 超发时检查占位键是否被删 / 淘汰、过早到期、login 与 Redis 的时钟偏差以及旧二进制是否仍在运行。占位偏高通常会压低放行量,不能直接归因为超发。
@@ -168,7 +168,7 @@ G1b(2026-10-12)之后每个 zone 各有一个 leader,**不同 zone 各打印一�
 - 调大 `AdmitTTL` 到 120s,看 q_expired 是否回落
 - 不调 AdmitTTL,看是不是网络层 RTT 异常
 
-**调 `AdmitTTL`(2026-10-15 改写)**:排队开着时可以直接滚动调整 `AdmitTTL`,不必先关排队。在途占位键 `admitted:zset:{q:<z>}` 的整键 TTL 只延长不缩短(各副本写占位时,剩余 TTL 不足自己的 `max(AdmitTTL, 20s) + 1min` 才续),新旧值并存时小值副本不会把整键 TTL 压到大值副本写的占位之前。调小之后,已续上的较大整键 TTL 要自然走完才收敛(`redis-cli PTTL admitted:zset:zone:<z>` 一段时间内仍大于新值 + 1min 属正常),只影响 zone 下线后键多留多久。
+**调 `AdmitTTL`(2026-10-15 改写)**:排队开着时可以直接滚动调整 `AdmitTTL`,不必先关排队。在途占位键 `admitted:zset:{q:<z>}` 的整键 TTL 只延长不缩短(各副本写占位时,剩余 TTL 不足自己的 `max(AdmitTTL, 20s) + 1min` 才续),新旧值并存时小值副本不会把整键 TTL 压到大值副本写的占位之前。调小之后,已续上的较大整键 TTL 要自然走完才收敛(`redis-cli -c PTTL 'admitted:zset:{q:<z>}'` 一段时间内仍大于新值 + 1min 属正常),只影响 zone 下线后键多留多久。
 - 10-15 上午这里写过「新旧值之差不要超过 1min,更大的先 `-LoginQueue off` 再滚」,那是整键 TTL 还在无条件续期时的约束,已作废。
 - 例外:10-15 之前的 G4b-G 镜像(无条件续期)还在跑、又要在排队开着时改 `AdmitTTL` 时,旧约束仍对那部分副本成立;先按「故障应急」的升级顺序把所有副本升到新版本(排队关着滚)。依据见 `docs/handoff/launch-readiness-20261013/spec_G4b-G.md` §4.1、§5.5。
 
@@ -177,9 +177,11 @@ G1b(2026-10-12)之后每个 zone 各有一个 leader,**不同 zone 各打印一�
 [stats 30s] ... q_entered=4500 (期望 4080)
 玩家手感:断网重连也要排队 → 投诉
 ```
-**排查**:
-- AssignGate 进来的请求带 `account` 字段了吗?Java Gateway 透传了吗?
-- `player_locator.GetSession()` 返回 GateID 非空才豁免;手动查一个重连账号的 PlayerSession.State
+**排查**(2026-11-20 起的判定见设计稿 §8):
+- 看 `login_queue_assign_total{outcome="reconnect"}` 有没有在涨。完全不涨 = 豁免整条没走到:请求带 `access_token` 了吗(账号只从它解出,匿名分配不豁免)?账号角色目录读得到吗?
+- 账号的每个角色都会查 `player_locator.GetSession()`,有一个 GateID 非空、且在本区的就豁免。手动查这个账号各角色的 PlayerSession。
+- 别的区建的角色(含合服并进来的)只有会话正连在本区现有的 gate 上才豁免:它原来连的 gate 掉线后重连会被排队,这是已登记的残余(设计稿 §8)。
+- 豁免的人会在 `admitted:zset:{q:<z>}` 里留一枚 `reconnect:<player_id>` 占位 20s;一台 gate 掉线后这类占位大量出现属正常,它们替重连的人占着名额。
 
 ### 模式 6:Redis QPS 打爆
 ```
@@ -214,6 +216,8 @@ gate 机器 sysctl net.ipv4.ip_local_port_range 内 TIME_WAIT 占满
 > - 入队的 NX/GT;
 > - 毒丸 meta;
 > - RESP3 下的各查询分支。
+>
+> (2026-11-20 补)上面的「真实 Redis 7.x」定案为两轮,都是打开排队的前置:Redis 7.2 单实例一轮,Redis 8.10.2 Cluster 一轮(staging / prod 的排队键在控制集群上,放行流水线在集群下走另一条路径)。按当前键名与用例名写好的步骤在 `docs/PROGRESS.md` 2026-11-20「登录排队清合入门槛的 Codex 验证单」与「登录排队遗留项收口」两条;`spec_G4b-G.md` §8.4 的原文只作来由。
 
 ### 1. 单元 + 集成测试都过
 ```bash
@@ -252,10 +256,10 @@ cd go/login && go test ./internal/logic/pkg/loginqueue/... -count=1
 #   - dispatcher 失 leader → 自动退出
 #   - 客户端 QueryQueueStatus 报错 → robot fall through 到 outer retry
 #   - Redis 起来后,所有数据丢失(预期),robot 触发新一轮 AssignGate 重建队列
-#   (2026-10-16 更正,上面第 2 条原文保留)按 2026-10-15 客户端契约,queue-status 报 500 / 网络错误时
-#   robot 先带 token 重调一次 assign-gate 作恢复;重入也失败才返回错误、走外层重试。Redis 宕机期间
-#   重入多半回 500 或 410,所以仍会落到外层重试或丢 token 重排;queue-status 连续失败时轮询间隔按
-#   2s 起翻倍退避、封顶 30s(open-server-rate-limit-design.md §11.5 的 2026-10-15 补注)。
+#   (2026-11-20 更正,上面第 2 条原文保留)queue-status 报 500 / 网络错误时 robot 先带 token 重调一次
+#   assign-gate 作恢复;重入回 500 或自身网络失败也保留 token,按 2s 起翻倍、封顶 30s 的间隔接着查
+#   queue-status(open-server-rate-limit-design.md §11.5 第 6 条,2026-11-20 改定),5 分钟排队预算用完
+#   才走外层重试。Redis 起来后数据已丢,查询回 410,robot 丢 token 重排。
 ```
 
 ---
@@ -271,6 +275,7 @@ login 进程通过 go-zero 内置 `/metrics` endpoint(`login.yaml` 第 119 行 `
 | `login_queue_wait_seconds` | Histogram | zone | 入队到 admit 的端到端等待(buckets: 0.5/1/2/5/10/20/30/60/120/300/600s)|
 | `login_queue_admit_total` | Counter | zone | dispatcher 累计 admit 数,`rate(...[1m])` = drain QPS |
 | `login_queue_expired_total` | Counter | zone, reason | reason ∈ `bad_signature` / `ttl` / `meta_gone` / `queue_disabled` / `admit_window_passed`(2026-10-15 起:放行槽已被取走或已按 AdmitTTL 过期后再查,回 EXPIRED;此前这类查询回名次 0、最长卡 1h。稳态里它主要来自客户端取票后的重复查询,偏高说明放行后没人来取) |
+| `login_queue_assign_total` | Counter | zone, outcome | (2026-11-20)排队开着时每次 AssignGate 走了哪条路,不含带令牌的重入:`fast_path` / `reconnect`(免排队重连)/ `enqueued`(新条目)/ `rejoined`(账号已有条目,位置不变)/ `queue_full`(队列到 `Queue.MaxQueueLength`,没入队)。`queue_full` 持续非零 = 该调大上限或给这个 zone 扩容;`rejoined` 占比高 = 客户端在丢令牌 |
 | `login_queue_dispatcher_is_leader` | Gauge | pod, zone | 1=leader,0=standby;`sum by (zone) (...) == 1` 是稳态不变量(每 zone 一个 leader)。leader 每拍重发 1、备机每轮抢锁失败重发 0(2026-10-14 起),指标开关打开前写丢的样本下一拍就补上。**序列缺失不等于 0**:整 zone 没有副本上报时 `sum by (zone)` 根本不出这一组,发现不了整 zone 缺席,见下方 `absent` 告警 |
 | `login_queue_capacity` | Gauge | zone | `FreeSlots` 实际用的区容量:区服目录的 `zone_config.capacity`(读不到区服策略时按软上限)再按在接客的 gate 到自报 `max_connections` 90% 的承载封顶。每次算容量时写(快速通道每次 AssignGate、dispatcher 每个非空拍),排队关着时没有序列 |
 | `login_queue_configured_capacity` | Gauge | zone | 区服目录给本 zone 的容量,0 = 读不到区服策略。大于 `login_queue_capacity` = gate 台数装不下目录的容量,排队比配置的早开始拦人,持续 10 分钟报 `LoginQueueCapacityLimitedByGates`(`deploy/k8s/login-alerts.yaml`) |
@@ -325,9 +330,9 @@ rate(login_queue_expired_total{reason="bad_signature"}[5m]) > 10
 
 ## 已知不足(本期不修)
 
-1. **排队 token 不能转移**:玩家换设备重登会拿到新 queueToken,丢掉位置。生产可接受,因为玩家通常不会排队中换设备。
+1. ~~**排队 token 不能转移**:玩家换设备重登会拿到新 queueToken,丢掉位置。~~ 2026-11-20 已修:一个账号在一个 zone 只有一个条目,换设备、丢令牌之后不带令牌重新调 AssignGate,拿回的是原来的位置(设计稿 §5 决策树第 7 步)。
 2. ~~**多 zone 公平性**:dispatcher 按 `activeZones` 顺序遍历,理论上前面的 zone 抢先用完 admit 批次。~~ 2026-10-12 G1b 起每 zone 一个 leader,不存在 zone 之间抢批次(设计稿 §7.1、§14 第 5 条)。
-3. **客户端没有显示 ETA**:只有 `queue_rank` + `queue_total`,前端可以用 `rank / (capacity/sec)` 自己算 ETA。
+3. **客户端没有显示 ETA**:不做(2026-11-20 定案,设计稿 §14 第 4a 条)。放行速率取决于在线玩家什么时候离开,区满、没人下线时等待没有上界,估出来的时间不可信;服务端只给 `queue_rank` + `queue_total`。
 
 ---
 

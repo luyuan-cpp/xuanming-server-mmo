@@ -8,7 +8,7 @@
 **AI 没有可靠的跨会话记忆。** 每次新会话动手前必须按序读完：
 
 1. `AGENTS.md`（Claude Code 已通过 `CLAUDE.md` 自动导入，无需重复读取）
-2. `docs/PROGRESS.md` —— 当前进度
+2. `docs/PROGRESS.md` —— 当前进度（最新条目在文末；按任务关键词 grep 标题再读对应条目，不要从头整份读）
 3. `.github/copilot-instructions.md` —— 架构、构建与编码细则
 4. `docs/design/<相关服务>.md` —— 任务相关设计
 5. `git log -20 --oneline` —— 最近改动
@@ -79,9 +79,9 @@
 - 服务级决策 → 对应 `docs/design/<service>.md` 或服务 README
 - 压测结论 → `docs/stress/stress-<round>-*.md`
 - 运维手册与事故复盘 → `docs/ops/`
-- 交接说明与会话小结 → `docs/handoff/`
+- 交接说明与会话小结 → `docs/handoff/`（2026-11-20 负责人要求清理过时、废弃方案及已归档交接，仅保留当前有效交接与待验清单；旧交接原文用 `git show ccf2840b2:docs/handoff/<文件>` 查）
 - 已过期、仅作历史保留的文档 → `docs/archive/`
-- 周期进度与流水账 → `docs/PROGRESS.md`（只追加，不删旧条目；该文件在 `.gitattributes` 里配了 `merge=union`，两边各自追加不会冲突，所以补充旧条目要另起一条，不要回头改最后一条）
+- 周期进度与流水账 → `docs/PROGRESS.md`（只追加，不删旧条目；负责人要求瘦身时例外，2026-11-20 仅保留 11-19 起有效条目，11-18 及以前的历史原文用 `git show ccf2840b2:docs/PROGRESS.md` 查。该文件在 `.gitattributes` 里配了 `merge=union`，两边各自追加不会冲突，所以补充旧条目要另起一条，不要回头改最后一条）
 - 文档总索引 → `docs/README.md`（新增文档后在对应分类登记一行）
 
 **没写文档 = 没说过**（下个 AI 不会记得）。

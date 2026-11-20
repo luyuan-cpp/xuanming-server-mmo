@@ -1,6 +1,6 @@
 # 实名认证与未成年人防沉迷
 
-> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Codex 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。
+> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Codex 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。
 
 ## 0. 结论
 
@@ -102,6 +102,8 @@
 
 - **认证中的收尾**：下一次 `/api/login` 看到待查 ai，就调查询接口；查到结果按第 4 步处理。不加单独的查询接口。
 - **为什么走网关的 HTTP，不走 gate**：实名是账号级的事，在选区、排队之前做完；网关本来就把 `/api/login` 转给 login。
+- **全服调用额度**（2026-11-20）：国家系统按运营单位限流（实名 100 QPS、查询 300 QPS、上报 10 QPS，超出被封 1 分钟），与 login 有几个副本无关。额度放在登录域 Redis 的一个键里，所有副本共用（`nppa.Quota`，GCRA，按 Redis 服务器的时钟算）。只用到额定值的八成左右：实名 80/s 加 10 个突发、查询 240/s 加 20 个、上报 8/s，任何 1 秒内都不超额。取不到名额时，实名回「繁忙，请稍后重试」，而且先取名额再计当天次数，不占玩家的名额；查询留到下一次登录；上报攒到下一拍。额度读不了按没有名额处理。
+- **客服重置实名**（2026-11-20）：`LoginAdmin.ResetAccountRealName`，按角色或账号找到账号，清掉 pi 和认证中的提交，玩家下次登录重新实名。要 `x-admin-token`；必填操作人和理由，与对端地址一起进日志。账号填错了身份证号可能一个角色都建不了，所以也能直接按账号找。已在线的会话不动，下一次登录按新的实名判定。data_service 那一侧是 `ResetAccountRealName`，幂等，只认 login 的证明。
 
 ### 5.3 登录与进场拦截
 
@@ -130,9 +132,10 @@
   - 绑定时排一条上线（`bt=1`）；
   - Disconnect 时读出并删掉这条记录，`report` 为真就排一条下线（`bt=0`）；
   - `si` 取连接身份做 SHA-256 后的前 32 位十六进制，上线和下线一致。
-- **上报器**：每个 login 副本一个，进程内攒批：每批 ≤ 128 条，两次请求至少间隔 1 秒，同一时刻只有一个请求在途。失败就重试，直到这批里最早的事件已过 150 秒，丢弃并计数（`login_nppa_report_dropped_total`）。
-- **限流**：每个副本最多 1 QPS，login 副本数 ≤ 10 时合计不超过 10 QPS，容量约每秒 1280 条上下线。副本要超过 10 个时先联系国家系统管理员调流控（规范备注第 4 条），或改成集中上报。
-- **已知局限**：进程崩溃会丢还没发出的事件。180 秒的时限让持久化队列的收益很小，这里先不做。
+- **上报器**：每个 login 副本一个，进程内攒批：每批 ≤ 128 条，每秒一拍，每发一批先从全服共用的上报额度（8/s，见 §5.2「全服调用额度」）里取一个名额。取不到就攒到下一拍，批次自然变大。失败就重试，直到这批里最早的事件已过 150 秒，丢弃并计数（`login_nppa_report_total{result="dropped_age"}`）。
+- **限流与扩容**：副本加多少都不超出系统的 10 QPS，全服上限约每秒 1000 条上下线（8 批 × 128 条）。超过这个量要联系国家系统管理员调流控（规范备注第 4 条），与副本数无关。
+- **停机**：上报循环结束前，先把队列里剩下的取完，再在 2 秒内一批批发；发不完的计 `dropped_shutdown`。滚动重启不再丢事件。
+- **已知局限**：进程被强杀（OOM、kill -9）会丢还没发出的几秒。180 秒的时限让持久化队列的收益很小。要零丢失时，改成登录域 Redis 里的流，由一个副本集中发。
 - **会话收尾取不到记录时不重放 Disconnect**（2026-11-19 与断线重连会话对齐）：GETDEL 出错只记日志，Disconnect 照常回成功，这一条下线就不报了。理由有三：
   - 上报器本身至多一次（内存队列、150 秒内重试、进程退出即丢），在 Disconnect 上做到至少一次换不来端到端的保证；
   - GETDEL 结果未知时记录可能已经删掉，重放也取不回来；
@@ -168,8 +171,8 @@
   - 退款按净额算：订单绑定的那笔钱退回给用户之后，意图关掉，额度随之释放。
     - 渠道撤销（用户在渠道侧退款）：只有订单绑定的那笔（已绑定、还没报给商城，或取消后才到账、商城为它本身建了退款）的翻转才改意图状态。重复付款、金额或币种不符这些异常付款，以及拒收、转人工的，被撤销或撤回不改意图。这一条同时修了原来的问题：重复付款被撤销会把意图关掉，释放掉正付着的那一单的额度。
     - 商城的退款待办：原因是 `CANCELLED_LATE`、`DELIVERY_REJECTED`（退的是订单绑定的那笔，`CommerceApi.RefundReason.refundsOrdersOwnPayment`）时，渠道退成就关意图，再回执商城；重复付款、金额币种不符的退款不动意图。
-    - 金额或币种不符的那笔钱商城不绑定订单，意图却已记成已付（记账时还不知道商城的结论），额度在它退掉之后也不退：偏严，只出现在要告警排查的异常里。
-- **单日上限**：`Payment.Compliance.DailyLimitFenAge8To16`、`DailyLimitFenAge16To18`（分），缺省 0 = 不设。数字仍是充值设计 §18 第 7 条的待决项；负责人定了填进配置，不用改代码。
+    - 不算订单付款的钱（转人工的，金额或币种与意图冻结的对不上的，商城按异常付款退掉、不绑定订单）不记成已付、不占额度（2026-11-20 改，`core.settleIntent`）。我们定价的渠道一个商户单号只能付成一次，意图再也付不成，直接关掉，额度随之释放；商店渠道不动意图，照常到期。原来转人工的那笔让意图一直停在等付款、后台每个租约周期查一次渠道永不停，在途额度也一直占着，这一条一并修了。
+- **单日上限**：2026-11-20 按负责人「先按最标准的定」取单次上限，8–16 周岁每日 50 元、16–18 周岁每日 100 元，与单次、每月的数字一起只写在 `shared/antiaddiction.SpendLimitAt` 一处。《未成年人网络保护条例》要求设单日累计上限，但没给数字。按单次上限定，一天至多顶格充一笔，月额度至少要分 4 天才用得完。原来的 `Payment.Compliance.DailyLimitFenAge*` 两个配置项删了：额度是规则，不是部署参数，不能让两处各写一份。
 - **tip 码**（Tip.xlsx payment 段末尾，都不是故障）：`kPaymentRealNameRequired`、`kPaymentMinorNotAllowed`、`kPaymentMinorSingleLimit`、`kPaymentMinorDailyLimit`、`kPaymentMinorMonthlyLimit`。
 - **已知局限**：只在小游戏里玩、从没在 App 实名的人，我们拿不到他的年龄，他的小游戏消费只受平台的限额；他之后到 App 实名，之前在小游戏的消费也进不了我们的累计（意图上没有主体键）。平台不给开发者实名或年龄（§3），这一段只能由平台管。
 
@@ -219,12 +222,15 @@ AntiAddiction:
 - **小游戏客户端连 gate（WebSocket）**：互不影响。小游戏包不做实名。
 - **Java 版**：只在 Java 仓 `PARITY.md` 登记待做。两版共享的客户端契约是 `/api/real-name`、`LoginResponse.anti_addiction`、新 tip 码与踢线原因。
 
-## 7. 待负责人确认
+## 7. 负责人的决定
 
-1. **国内首发是否只有小游戏形态？** 只有小游戏的话，§5 推迟到开放 App 形态之前做（推荐），先办 §9 的手续；App 形态也首发，就按 §8 落码。
-2. **法定节假日的口径**：推荐按国务院放假通知里的全部放假日填 `ExtraPlayDays`（腾讯等大厂公开的寒暑假可玩日历按放假日排，本轮没有核实到原文）。
-3. **实名提交每日上限**：推荐 5 次。
-4. **K8s 部署参数是否同批**：推荐同批，否则线上开不了。
+2026-11-19 至 20 都已定，负责人的口径是「先按最标准的定，不等压测」：
+
+1. **国内首发是否只有小游戏形态**：App 形态也首发，§5 已按 §8 落码。
+2. **法定节假日的口径**：按国务院放假通知里的全部放假日（含调休凑出来的连休）填 `ExtraPlayDays`，腾讯等大厂公开的寒暑假可玩日历就是这样排的；运维每年按新的放假通知更新。名单漏填只会更严。
+3. **实名提交每日上限**：5 次（`AntiAddiction.DailySubmitLimit` 缺省值）。
+4. **K8s 部署参数**：同批，已落码。
+5. **未成年人单日充值上限**：等于单次上限（§5.6）。
 
 ## 8. 文件清单（App 形态服务端，约 50 个）
 
@@ -255,9 +261,9 @@ AntiAddiction:
 
 | 项 | 状态与原因 |
 |---|---|
-| K8s 部署参数 | **2026-11-19 已落码，未运行，待 Codex 跑契约测试**（命令见 `docs/PROGRESS.md` 同日「实名与防沉迷接进 K8s 部署脚本」条目）。`k8s_deploy.ps1 -LoginNppaAppId / -LoginNppaBizId`（要么都给要么都不给）渲染 login 顶层 `AntiAddiction` 段：`Enabled: true`、`PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]`、`Nppa.AppId / BizId`、`Nppa.SecretKeyEnv: "MMORPG_LOGIN_NPPA_SECRET_KEY"`；`-LoginAntiAddictionExtraPlayDays`（逗号分隔的北京日期）与接口测试用的 `-LoginNppaCheckUrl / -LoginNppaQueryUrl / -LoginNppaLoginoutUrl` 给了才写，`DailySubmitLimit` 不写（缺省 5）。secretKey 从部署机环境变量 `MMORPG_LOGIN_NPPA_SECRET_KEY`（32 位十六进制，任何档位都没有回落值）经工作负载密钥目录的单键 Secret `login-nppa` 注入 login 容器的同名变量，Pod 模板带指纹。不粘滞、防误关（线上开着而本次漏传或换了 AppId / BizId 就在写操作之前拒绝，确认开关同第三方登录 `-ConfirmLoginAuthProviderChange`）、`dev_tools.ps1` 照传与 `k8s-image-*` / `k8s-release-*` 拒绝、摘要行 `login_anti_addiction=` 都与小游戏同一套。login 是 SQL 写者：`AntiAddiction` 段要照抄进运维预置的 `runtimeConfigSecret` 才生效；部署另把 AppId / BizId 明文注入 login 主容器（`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`），login 启动时与运行配置比（`config.checkExpectedAntiAddiction`），漏抄、关着或抄成别的应用都拒启，不会带着关掉的防沉迷起来；所以开、关、换应用都是先改那份 Secret、不单独滚动 login，紧接着部署。data-service 与 payment 的清单各从运维预置的 `domain-service-secrets` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`（键 `account-directory-payment`，照 trade 那把写成 `optional: false`：每个 zone namespace 与 infra namespace 都要先预置、两边同值，见开服手册 §1）；data_service 的跨用途复用检查（`validateGlobalCallerSecrets`）也管这一把，部署脚本的写前门禁 `Assert-SharedDomainServiceSecretsForRun` 核它在、够长、与别的键不同、zone 与 infra 同值。本机 `go_services.ps1` 给 data_service 与 payment 发同一把开发密钥 |
+| K8s 部署参数 | **2026-11-19 已落码，未运行，待 Codex 跑契约测试**（命令见 `docs/PROGRESS.md` 同日「实名与防沉迷接进 K8s 部署脚本」条目）。`k8s_deploy.ps1 -LoginNppaAppId / -LoginNppaBizId`（要么都给要么都不给）渲染 login 顶层 `AntiAddiction` 段：`Enabled: true`、`PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]`、`Nppa.AppId / BizId`、`Nppa.SecretKeyEnv: "MMORPG_LOGIN_NPPA_SECRET_KEY"`；`-LoginAntiAddictionExtraPlayDays`（逗号分隔的北京日期）与接口测试用的 `-LoginNppaCheckUrl / -LoginNppaQueryUrl / -LoginNppaLoginoutUrl` 给了才写，`DailySubmitLimit` 不写（缺省 5）。secretKey 从部署机环境变量 `MMORPG_LOGIN_NPPA_SECRET_KEY`（32 位十六进制，任何档位都没有回落值）经工作负载密钥目录的单键 Secret `login-nppa` 注入 login 容器的同名变量，Pod 模板带指纹。不粘滞、防误关（线上开着而本次漏传或换了 AppId / BizId 就在写操作之前拒绝，确认开关同第三方登录 `-ConfirmLoginAuthProviderChange`）、`dev_tools.ps1` 照传与 `k8s-image-*` / `k8s-release-*` 拒绝、摘要行 `login_anti_addiction=` 都与小游戏同一套。login 是 SQL 写者：`AntiAddiction` 段要照抄进运维预置的 `runtimeConfigSecret` 才生效；部署另把 AppId / BizId 明文注入 login 主容器（`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`），login 启动时与运行配置比（`config.checkExpectedAntiAddiction`），漏抄、关着或抄成别的应用都拒启，不会带着关掉的防沉迷起来；所以开、关、换应用都是先改那份 Secret、不单独滚动 login，紧接着部署。data-service 与 payment 的清单各从 `domain-service-secrets` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`（键 `account-directory-payment`，照 trade 那把写成 `optional: false`）；data_service 的跨用途复用检查（`validateGlobalCallerSecrets`）也管这一把。这把不用运维预置：2026-11-20 起它和其余 15 把 zone 工作负载引用的内部调用密钥一起由部署维护（托管键表 `$script:ManagedDomainServiceSecrets`，门禁 `Initialize-ManagedDomainServiceSecrets`、写入 `Sync-ManagedDomainServiceSecrets`）：缺的补齐、全集群一个值，值不同、过短或与别的键同值时在任何写操作之前拒绝，带 `-ResyncDomainServiceSecrets` 才统一，见开服手册 §1 与 `docs/PROGRESS.md` 2026-11-20「部署替运维维护 domain-service-secrets 的内部调用密钥」条目。本机 `go_services.ps1` 给 data_service 与 payment 发同一把开发密钥 |
 | go/payment 限额闸 | **2026-11-19 已落码，未生成、未编译、未测试**（§5.6；命令见 `docs/PROGRESS.md` 同日「未成年人充值限额闸」条目）。K8s 上 payment 的 ConfigMap 要带 `DataServiceRpc`（集群的 etcd 发现）与 `Payment.Compliance` 的新键，归支付会话的 K8s 批次；密钥注入见上一行 |
-| 人工换实名 | 不做。pi 只写一次；填错别人的身份信息要换，走客服后台改库，当前没有管理 RPC |
+| 人工换实名 | 2026-11-20 已落码：`LoginAdmin.ResetAccountRealName`（§5.2「客服重置实名」） |
 
 ## 9. 负责人要亲自办的手续（Claude 不能代办）
 

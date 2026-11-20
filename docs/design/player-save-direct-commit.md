@@ -1,8 +1,8 @@
 # 存盘直接提交 TiDB:落码规格
 
-> **状态**:2026-11-12:§1.1 基础属性只存当前血蓝(未编译);§1 的 TiDB 预切已落码(未编译);§5.5、§5.6、§8、§9 里过渡期的说法按现状改正,几条待定项定案。v3 — 2026-11-05:§1.1 按「大小 × 变化频率」重新分行(钱包、背包、位置拆开,退役 kHot、kAsset),每行声明存盘方式,位置只顺带写;第一批代码已写,**未编译、未测试**(§1.1「落码」)。2026-11-06:第二批删掉 `player_database_1` 与 kLegacy1(§1.2),代码已写,**未编译、未测试**。v2 — 2026-10-30,已按[对抗评审](../handoff/player-save-direct-commit-20261030/spec-review-1.md)修正。B1~B7 代码已写,**未编译、未测试**。当时的过渡开关 `PlayerStorePath: redis | direct` 同日已随 B8 删除:直接提交 SQL 是唯一的存盘路径,玩家存档不经过 Redis(§8 末「2026-10-30」一条)。
+> **状态**:2026-11-12:§1.1 基础属性只存当前血蓝(未编译);§1 的 TiDB 预切已落码(未编译);§5.5、§5.6、§8、§9 里过渡期的说法按现状改正,几条待定项定案。v3 — 2026-11-05:§1.1 按「大小 × 变化频率」重新分行(钱包、背包、位置拆开,退役 kHot、kAsset),每行声明存盘方式,位置只顺带写;第一批代码已写,**未编译、未测试**(§1.1「落码」)。2026-11-06:第二批删掉 `player_database_1` 与 kLegacy1(§1.2),代码已写,**未编译、未测试**。v2 — 2026-10-30,已按对抗评审（原 `docs/handoff/player-save-direct-commit-20261030/spec-review-1.md`，已清理，见 `ccf2840b2`）修正。B1~B7 代码已写,**未编译、未测试**。当时的过渡开关 `PlayerStorePath: redis | direct` 同日已随 B8 删除:直接提交 SQL 是唯一的存盘路径,玩家存档不经过 Redis(§8 末「2026-10-30」一条)。
 > **上游**:[总体方案](./player-data-tidb-scaling-plan.md) §3、§4(本文是它 §13 的 A0,细化 A1~A6);[TiDB 决策 §9](./global-data-layer-tidb-decision.md)(方向与键族,本文回答 §9.4)。
-> **现状依据**:[三路盘点](../handoff/player-save-direct-commit-20261030/survey.md),行号以它为准。标注:[C] 读代码确认,[D] 文档记载,[I] 推断。
+> **现状依据**:三路盘点（原 `docs/handoff/player-save-direct-commit-20261030/survey.md`，已清理，见 `ccf2840b2`）,行号以它为准。标注:[C] 读代码确认,[D] 文档记载,[I] 推断。
 > **用户已定**:玩家数据只放 TiDB;存盘服务放 go/db;关键变化立即存 + 拆出热行;正常运行不丢、不回档;存盘不再按归属区选 topic 和库。
 
 ## 0. 结论
@@ -173,6 +173,7 @@ COMMIT
   - 进事务前校验挡掉 kind 非法、payload 超预算、nil payload(见上);
   - `playerstore.Store.VerifySchema` 在启动时核对表和列,缺了拒绝启动(挡住 1146、1054);
   - 超过传输上限(4 MiB)的请求 go/db 收不到,通道在本地回 `RESOURCE_EXHAUSTED`,那会被当成结果未知永远重试。scene 发送前按序列化大小预检,超限就按 `TOO_LARGE` 处理,排到下一轮回调,调用方可能还在自己的栈上;
+  - 存储侧整库不可达时靠熔断快速失败,键是存档库不是方法(2026-11-20,`playerstore/server.go` 的 `enterStore`):每个存档库一个 go-zero 熔断,包住打开与事务,开着时指向这个库的调用不碰库、立即回 `Unavailable`(记 `result="unavailable"`),别的库不受影响;闸门冻结与调用方取消不计失败。zrpc 自带的按方法熔断在 `db.go` 关掉:它不分库,一个库失联且流量占比过三分之一时会把指向健康库的调用一起挡掉(推导见 [存储不可用设计稿](db-task-store-unavailable-deferral.md) 文首);
   - 退出遇到确定性拒绝就放弃这一笔(§4);停机由 Node 的 drain 看门狗限时,到期把没有结论的玩家号打进 ERROR(`metric=player_store_shutdown_unsettled`)。**运行中的退出遇到结果未知不设单独的预算**:TiDB 故障和确定性 SQL 错误在这里分不清,放弃就是把一次故障升级成回档;实体留着不丢数据,玩家重连还能复用,代价只是这段时间占内存、连续失败时打日志(`metric=player_store_save_retry`)。
 
 ## 3. `LoadAndClaim`

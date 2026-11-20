@@ -4,7 +4,7 @@
 
 **负责人目标(2026-11-02)**:「我要达到全链路都能水平扩展」。下面第 4、5 条是已核实的阻塞,但本清单只列了这两条,不等于全链路只差这两条。额度重置后先按 [消除单节点总纲](../design/no-single-node-horizontal-scaling-20261001.md) 的口径逐环节重新盘点全链路:gate、login、client-rpc-router、data_service、scene_manager、scene、go/db、player_locator、各全局服务、Redis、Kafka、etcd、TiDB,看加机器能不能真正扩吞吐,把新发现补进本文,再按依赖顺序落码。现有的全服或多实例选主要逐个核:scene_manager 编排、player_locator 会话对账、guild / trade / player_inbox 资产通道。
 
-**接手先看这段(2026-11-01 第二轮)**:第 6、1 条和第 2 条的终结工具已落码,都没有编译,验证见 [progress.md](player-save-direct-commit-20261030/progress.md) §16「清单第 1、2、6 条」。11-02 又落了第 3 条的大部分和第 11、12 条。11-05 落了第 2 条后半、第 3 条剩余,收尾了第 6 条,都没有编译。11-05 起多个会话分工:第 2、3、6 条在「按缺口清单补完服务器代码」会话;第 1 条残余和待确认里的 Agones 渲染在「按缺口清单做完服务器代码(11-05 额度重置后)」会话(11-05 已落码,未编译);第 9 条 11-05 移交「Scene manager zone selection and etcd threshold」会话;第 4、5 条 11-05 由「控制面按 zone 化与控制域 Redis 分片(缺口第 4、5 条)」会话认领(原归上一会话,对方未动手、同意移交),先写设计再分批落码;第 8、10、13 条和全链路盘点在「服务器代码缺口清单」会话;第 7 条的残余 11-05 由「服务器代码缺口补完」会话做完(未编译)。生成器不清的残留头文件 `player_rollback_service_metadata.h` 要在重新生成之后删。
+**接手先看这段(2026-11-01 第二轮)**:第 6、1 条和第 2 条的终结工具已落码,都没有编译,验证见 `docs/handoff/player-save-direct-commit-20261030/progress.md`（已清理，见 `ccf2840b2`） §16「清单第 1、2、6 条」。11-02 又落了第 3 条的大部分和第 11、12 条。11-05 落了第 2 条后半、第 3 条剩余,收尾了第 6 条,都没有编译。11-05 起多个会话分工:第 2、3、6 条在「按缺口清单补完服务器代码」会话;第 1 条残余和待确认里的 Agones 渲染在「按缺口清单做完服务器代码(11-05 额度重置后)」会话(11-05 已落码,未编译);第 9 条 11-05 移交「Scene manager zone selection and etcd threshold」会话;第 4、5 条 11-05 由「控制面按 zone 化与控制域 Redis 分片(缺口第 4、5 条)」会话认领(原归上一会话,对方未动手、同意移交),先写设计再分批落码;第 8、10、13 条和全链路盘点在「服务器代码缺口清单」会话;第 7 条的残余 11-05 由「服务器代码缺口补完」会话做完(未编译)。生成器不清的残留头文件 `player_rollback_service_metadata.h` 要在重新生成之后删。
 
 **负责人 2026-11-06 定:第 15 条起全部做完。** 第 15 条及之后还没做完的条目,连同已落码条目的「仍剩」,等下次每周额度重置之后全部做完。重置时刻是本机时间 2026-11-12 15:00,重置前不再开新条目。截至 11-06 晚还要做的:
 
@@ -112,7 +112,7 @@
 
 结论:**没有全部做完。** 下面「未做」的项还在。负责人要求按最标准的方式做完;2026-11-01 暂停在这里是因为每周额度已用 94%(5 个会话共用,4 天后重置),不是判断它们不用做。
 
-## 这一轮已补(未编译,待 Codex 验证,命令见 [progress.md](player-save-direct-commit-20261030/progress.md) §16)
+## 这一轮已补(未编译,待 Codex 验证,命令见 `docs/handoff/player-save-direct-commit-20261030/progress.md`（已清理，见 `ccf2840b2`） §16)
 
 | 项 | 改了什么 |
 |---|---|
@@ -212,7 +212,7 @@
 10. **(11-05 已落码,未运行)压测工具前置。** `stress_snap.ps1` 缺省加抓 :9170(`t<N>m_match.txt`)与 :9190(`t<N>m_pl.txt`),这两个后缀进 Redis target 保留名;`stress_summarize.ps1` 新增 G1 / G2 / G3(按池撮合总览、按范围层级的成局与等待、按模式)和 PL1(player_locator 对账与服务端 RPC),L1 末列加 `bgz_fb` = `login_role_list_home_zone_fallback_total`,新参数 `-MatchRoundIntervalMs`(缺省 500);robot 新增 `join_queue` 动作与 `match-stress` 档(先地域探测再入队,排满 `match_queue.dwell_seconds` 撤单,成局后等这局结束再排;stress 档权重不变),配置样例 `robot/etc/robot.match-stress-100.yaml`。取值数组由 match、scope、player_locator 三处 Go 钉名测试守住。现状基线还没跑(要 Codex 按 AGENTS.md §6.2 跑一轮)。
 11. **(11-02 已加 `SceneManagerDeadNodeReconcileAbandoned`,未部署验证)`dead_node_reconcile_total{outcome="abandoned"}` 没有告警规则。**
 12. **(11-02 已删,未编译)login 死配置。** `TaskWaitTimeout`、`LoginTotalTimeout` 从 `config.go` 和 3 份配置里删掉。
-13. **(11-05 已落码,未编译,验证见 [mixed-version-persist-handoff-20261019.md](mixed-version-persist-handoff-20261019.md) §17)只在混版本时触发,上线前不阻塞。** 字段台账的机器门禁改为发布前封存:台账加 `sealed=` 行,生成器每次核对已封存世代不变,发布预检 `release.persist_schema.sealed` 要求封存到最大世代(设计 §3.1「封存」);运行期字段集合指纹没做,理由见设计 §13 第 11 条。战斗结算遇到不认识的币种改回 `kVersionSkew`,坏载荷照旧 `kDefer`。
+13. **(11-05 已落码,未编译,验证见 `docs/handoff/mixed-version-persist-handoff-20261019.md`（已清理，见 `ccf2840b2`） §17)只在混版本时触发,上线前不阻塞。** 字段台账的机器门禁改为发布前封存:台账加 `sealed=` 行,生成器每次核对已封存世代不变,发布预检 `release.persist_schema.sealed` 要求封存到最大世代(设计 §3.1「封存」);运行期字段集合指纹没做,理由见设计 §13 第 11 条。战斗结算遇到不认识的币种改回 `kVersionSkew`,坏载荷照旧 `kDefer`。
 
 ### 全链路水平扩展盘点(2026-11-05,只读)
 

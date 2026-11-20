@@ -129,7 +129,7 @@ BattleScript { schema_version = 1, script_id(官方)/0(玩家), name, descriptio
 | 表 | 主键 / 索引 | 内容 |
 |---|---|---|
 | `match_battle_script` | `script_id`;`(owner_player_id, script_id)`、`(review_state, submitted_ms, script_id)` | 当前提交版正文 + 审核状态;审核通过版正文与版本号(建房只用它) |
-| `match_battle_script_review` | `(script_id, revision)` | 审核流水:谁、通过 / 驳回、原因、审的那一版正文;只增不改 |
+| `match_battle_script_review` | `(script_id, revision)`;`(reviewed_ms, script_id, revision)` | 审核流水:谁、通过 / 驳回、原因、审的那一版正文;只增不改,保留 180 天后删(§6.4) |
 | `match_battle_script_loadout` | `(player_id, match_mode, battle_config_id)` | 选用:官方剧本 id 或本人剧本 id |
 
 `script_id` 向发号器领,与 battle_id 同一号段(`BattleIDBizTag`),事务外领,领不到整体失败。
@@ -146,6 +146,18 @@ BattleScript { schema_version = 1, script_id(官方)/0(玩家), name, descriptio
 - `MatchInternal.ListPendingBattleScripts` / `ReviewBattleScript`:serviceauth 调用方 `ops`,与 `SetSpectateFeatured` 同一把运营密钥(`Spectate.OpsCallerSecret`,K8s 由 Secret `match-ops-caller` 注入);带会话、入口未开、验签失败一律带内 DENIED。请求体不进日志(`IgnoreContentMethods`)。
 - 通过前在审核事务里按当前配表再校验一次,已不合法的只能驳回(INVALID)。驳回必须写原因(作者会看到)。
 - 工具 `go/match/cmd/battlescriptreview`:`-list` 打印待审剧本的完整正文(protobuf JSON),`-script -revision -approve|-reason -reviewer` 审一版。密钥只从环境变量 `MMORPG_MATCH_OPS_CALLER_SECRET` 读。
+
+### 6.4 审核流水的保留期(2026-11-20)
+
+- `match_battle_script_review` 保留 **180 天**,按审核时刻 `reviewed_ms`(match 库时间)算,与 data_service `transaction_log` 的审计保留同值。流水供玩家申诉、事后追责、核对审的是哪一版正文;它存着玩家写的正文与 `owner_player_id`,不能无限期留着。删角收尾不删它(审核留痕,`docs/design/account-deletion.md` §6.2),到期与别的流水一起删。
+- 配置 `BattleScript.ReviewRetentionDays`(`go/match/internal/config`,yaml 不写 = 180,0 = 缺省;非 0 越出 [30, 365] 拒启)。下限:短于 30 天,申诉、追责就查不到审了哪一版;上限:与 trade / guild 保留期配置的上限同值,玩家写的正文不变成近乎永久保留。不是提交点规则,不进策略指纹;滚动改配置时各副本短暂不同,只是按较短的那份先删。
+- 清理 `authority.PurgeExpiredBattleScriptReviews`:一次读一页(至多 1000 行)`reviewed_ms` 早于「库当前时刻 − 保留期」的行,按 `(reviewed_ms, script_id, revision)` 游标翻页,按主键删,DELETE 上再带一次到期条件。按游标翻页而不是每次从头删前 N 行:TiDB 删掉的行在 GC 之前仍留在索引前端,从头读每次都要先跨过它们。索引 `(reviewed_ms, script_id, revision)` 由 `CheckCandidateIndexes` 核对,缺了拒绝接流(迁移器不给已有的表补普通索引;项目未上线,清库重建即可)。
+- 循环 `match.battle_script_review.purge`(`internal/logic/battle_script_review_purge.go`):经 `StartRelayLoop`,一分钟一轮,活性记在 `match_loop_last_run_unixtime{point}`,只在 stable 副本起(canary 不跑全局后台)。一轮里连续清页,清到扫完、出错、满 20 页或超过 10 秒为止(`internal/logic/retention_purge.go`,与观战意图的保留期清理共用;一页 3 秒预算)。每个副本各跑各的、不分工:流水只增不改,一个 (script_id, revision) 只审一次,删掉的行不会以同一主键写回来,重复与交错删除都幂等。失败的那一页不动游标,记一次失败计数与英文日志,下一轮重试。
+- 容量:审核是人工逐份做的,写入很慢;一轮 20 页一天能删约 2880 万行。把保留期调短时一次到期的积压也按这个速度清。各副本扫的是同一段索引、不按副本分片:这张表的写入量由审核员人数决定,单个副本的吞吐已经远超,分片只会多一层成员表依赖。
+- 不用 TiDB 的表 TTL 属性(chat 原件用的做法):TTL 只认时间类型的列,而 match 的表由 proto 生成、时间都是整数毫秒;保留期是运行配置,TTL 的天数写在表属性里、改它要 DDL(运行账号没有);match 的 SQL 后端可以是 MySQL(开发环境),MySQL 没有 TTL、行就一直不删;搬库期间还要记得在目标集群上关开 TTL。应用层清理在两种后端上行为一致,真库用例直接测得到。
+- 失败与逾期(指标在 `internal/metrics/retention.go`,告警在 `deploy/k8s/match-alerts.yaml` 的 `match.retention` 组,做法同 data_service 的审计表清理):
+  - `match_retention_purge_failures_total{purge}`:失败的轮数,`purge` = `battle_script_review` / `spectator_intent`(观战意图清理共用这一条)。告警 `MatchRetentionPurgeFailing`:某个副本过去一小时失败超过 30 轮(一小时 60 轮的一半),持续 1 小时。
+  - `match_retention_oldest_unixtime{purge}` 与 `match_retention_max_age_seconds{purge}`:每轮清理之后读表里现存最老一行的审核时刻(`authority.OldestBattleScriptReviewMs`,空表报库当前时刻),以及生效的保留期。告警 `MatchRetentionBehind`:最老一行比保留期还老一天以上,持续 1 小时——清理在跑但没删掉时,只有它看得出来。报时刻不报年龄:年龄由规则用 `time()` 减,副本读不动库时它照样变老。观战意图不报这一项(请求头的行有意一直留着)。
 
 ## 7. 客户端协议(`MatchService`,只认会话本人)
 
@@ -168,6 +180,7 @@ BattleScript { schema_version = 1, script_id(官方)/0(玩家), name, descriptio
 ## 9. 可观测性
 
 - match:`match_battle_script_resolve_total{side, outcome}`(chosen_official / chosen_player / bound / none / fell_back)、`match_battle_script_request_total{rpc, result}`;label 不带玩家与剧本 id。
+- 审核流水保留期清理(§6.4):`match_battle_script_review_purged_total`(删除行数);循环活性 `match_loop_last_run_unixtime{point="match.battle_script_review.purge"}`,停住由 `MatchBackgroundLoopStalled` 报;失败 `match_retention_purge_failures_total{purge="battle_script_review"}`(告警 `MatchRetentionPurgeFailing`,日志 `[battle_script] Review retention purge failed`);逾期 `match_retention_oldest_unixtime` / `match_retention_max_age_seconds`(告警 `MatchRetentionBehind`)。
 - battle:被忽略的剧本逐条 ERROR(`CreateBattle battle script ignored`)。
 - 日志只记 script_id、revision、玩家 id,不记正文。
 
@@ -191,5 +204,5 @@ BattleScript { schema_version = 1, script_id(官方)/0(玩家), name, descriptio
 
 1. 选用者是队长;队员在队伍界面手动指派角色位没做(现在按职业等条件自动认领)。要做时在组队界面加「本局角色位」并随成局原件冻结。
 2. 剧本不自动用道具(会替玩家消耗资产,要单独的本人确认流程)。
-3. 角色删除后其剧本与选用不清理(每人至多 10 + 32 行,不阻塞角色过户;合服 / 删角口径另定)。
+3. 删角时本人的剧本与选用随删角收尾删除(`authority.RoleFencePurge`,2026-11-20);审核流水里他写的正文与 `owner_player_id` 按审计保留到期满(§6.4,缺省 180 天、最长 365 天),隐私政策要写明。
 4. 客户端编辑器先做「粘贴 protobuf JSON 导入」,可视化逐条编辑另立(客户端文档)。
