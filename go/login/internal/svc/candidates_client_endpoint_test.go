@@ -84,6 +84,19 @@ func TestBuildGateCandidates_UsesClientEndpoint(t *testing.T) {
 	}
 }
 
+// 小游戏客户端的 WebSocket 地址原样跟着候选走(docs/design/minigame-websocket-gate.md W7):gate 自报了就带上,没自报为空。
+// 它不参与选址,客户端地址的回落与去重照旧只看 client_endpoint / endpoint。
+func TestBuildGateCandidates_CarriesClientWsUrl(t *testing.T) {
+	const wsURL = "wss://ws.example.com/ws/10.244.0.4/18000"
+	withWs := gateNode(4, 1, 100, "10.244.0.4", 7, clientAddr("127.0.0.1", 30000))
+	withWs.ClientWsUrl = wsURL
+	nodes := []*basepb.NodeInfo{withWs, gateNode(5, 1, 100, "10.244.0.5", 3, clientAddr("127.0.0.1", 30001))}
+	assertCandidates(t, buildGateCandidates(watched(nodes...), 1, true), []loginqueue.GateCandidate{
+		{NodeID: 4, IP: "127.0.0.1", Port: 30000, WsURL: wsURL, PlayerCount: 7, ZoneID: 1},
+		{NodeID: 5, IP: "127.0.0.1", Port: 30001, PlayerCount: 3, ZoneID: 1},
+	})
+}
+
 // podip 模式 / 滚动过渡期:gate 没自报就回落 PodIP,行为与改动前一致。
 func TestBuildGateCandidates_FallsBackToEndpointWhenNotRequired(t *testing.T) {
 	nodes := []*basepb.NodeInfo{

@@ -969,21 +969,22 @@ namespace
 
 	TEST(RedisClusterTopologyTest, RefreshPolicyLimitsRateAndKeepsPeriod)
 	{
-		TopologyRefreshPolicy policy(30s, 1s);
+		TopologyRefreshPolicy policy(30s, 1s, 5s);
 		EXPECT_FALSE(policy.ShouldStart(kT0)) << "没有请求、也没开始过,不刷新";
 
 		policy.Request();
 		EXPECT_TRUE(policy.ShouldStart(kT0));
-		policy.OnStarted(kT0);
+		const uint64_t first = policy.OnStarted(kT0);
 		EXPECT_FALSE(policy.ShouldStart(kT0 + 2s)) << "同一时刻只有一次在途";
 
 		// 在途期间的请求不丢:那次应答可能早于触发它的事件。
 		policy.Request();
-		policy.OnFinished(true);
+		EXPECT_TRUE(policy.OnFinished(first, true));
 		EXPECT_FALSE(policy.ShouldStart(kT0 + 500ms)) << "限速:两次开始至少隔 1s";
 		EXPECT_TRUE(policy.ShouldStart(kT0 + 1s));
-		policy.OnStarted(kT0 + 1s);
-		policy.OnFinished(true);
+		const uint64_t second = policy.OnStarted(kT0 + 1s);
+		EXPECT_NE(second, first);
+		EXPECT_TRUE(policy.OnFinished(second, true));
 
 		EXPECT_FALSE(policy.ShouldStart(kT0 + 30s)) << "没有请求时只按周期刷新";
 		EXPECT_TRUE(policy.ShouldStart(kT0 + 31s));
@@ -991,12 +992,33 @@ namespace
 
 	TEST(RedisClusterTopologyTest, RefreshPolicyRetriesAfterFailure)
 	{
-		TopologyRefreshPolicy policy(30s, 1s);
+		TopologyRefreshPolicy policy(30s, 1s, 5s);
 		policy.Request();
-		policy.OnStarted(kT0);
-		policy.OnFinished(false);
+		const uint64_t generation = policy.OnStarted(kT0);
+		EXPECT_TRUE(policy.OnFinished(generation, false));
 		EXPECT_FALSE(policy.ShouldStart(kT0 + 500ms));
 		EXPECT_TRUE(policy.ShouldStart(kT0 + 1s));
+	}
+
+	// 断线重连 R19:应答一直不来时,在途过了上限就作废、保留请求,下一次照常开始;作废那次迟到的应答按代次丢弃,
+	// 不能把新的在途结束掉,也不能拿旧视图盖新视图。
+	TEST(RedisClusterTopologyTest, RefreshPolicyExpiresStuckInFlightAndDropsTheLateReply)
+	{
+		TopologyRefreshPolicy policy(30s, 1s, 5s);
+		policy.Request();
+		const uint64_t stuck = policy.OnStarted(kT0);
+		EXPECT_FALSE(policy.ExpireInFlight(kT0 + 4s)) << "没到上限不作废";
+		EXPECT_FALSE(policy.ShouldStart(kT0 + 4s));
+
+		EXPECT_TRUE(policy.ExpireInFlight(kT0 + 5s));
+		EXPECT_FALSE(policy.ExpireInFlight(kT0 + 6s)) << "已作废的不再报第二次";
+		EXPECT_TRUE(policy.ShouldStart(kT0 + 5s)) << "作废时保留请求,不用等周期";
+
+		EXPECT_FALSE(policy.OnFinished(stuck, true)) << "作废之后、新的一次开始之前迟到的应答也丢";
+		const uint64_t retry = policy.OnStarted(kT0 + 5s);
+		EXPECT_FALSE(policy.OnFinished(stuck, true)) << "旧代次的应答不能结束新的在途";
+		EXPECT_FALSE(policy.ShouldStart(kT0 + 7s)) << "新的一次仍在途";
+		EXPECT_TRUE(policy.OnFinished(retry, true));
 	}
 
 	// 重连抖动的用例随实现挪到了 RedisManager(redis_manager_auth_test.cpp 的 RedisManagerReconnectJitter.*):

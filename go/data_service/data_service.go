@@ -27,6 +27,7 @@ import (
 	"proto/data_service"
 	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/dbplacement"
 	"shared/dirshard"
 	"shared/drainproof"
@@ -236,6 +237,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("data_service")
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)

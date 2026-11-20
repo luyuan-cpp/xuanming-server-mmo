@@ -83,7 +83,8 @@ spec:
             description: >-
               过去 10 分钟 {{ $value | printf "%.0f" }} 次。TOO_LARGE = 单行 payload 超预算,这名玩家之后的进度都提交不了;先从 go/db 日志定位 player_id,
               查是哪个 kind 超了(db_player_store_row_bytes 看分布),再决定放宽预算还是清数据。INVALID = 请求不合法,是 scene 的 bug,看 scene 与 go/db 日志。
-              scene 带了本 go/db 不认识的行种属于版本不一致,回的是 SCHEMA_TOO_NEW,算在 DbPlayerStoreSchemaMismatch,不在这里。
+              scene 带了比本 go/db 认识的最大号还大的行种属于版本不一致,回的是 SCHEMA_TOO_NEW,算在 DbPlayerStoreSchemaMismatch,不在这里;
+              退役号(旧布局的 1、2、5)仍算 INVALID。
 
         # 世代不匹配,基本是发布顺序错了(每次升世代:go/db 全部 zone → scene)。
         - alert: DbPlayerStoreSchemaMismatch
@@ -95,7 +96,7 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 的玩家存档世代不匹配({{ $labels.result }})"
             description: >-
-              过去 10 分钟 {{ $value | printf "%.0f" }} 次。TOO_NEW = go/db 比 scene 或库里的数据旧(含 scene 带了本 go/db 不认识的行种),先把 go/db 升到不低于 scene 与数据世代的版本。
+              过去 10 分钟 {{ $value | printf "%.0f" }} 次。TOO_NEW = go/db 比 scene 或库里的数据旧(含 scene 带了比本 go/db 认识的最大号还大的行种),先把 go/db 升到不低于 scene 与数据世代的版本。
               REGRESSED = 有写方带着数据行、世代却低于库里的世代,也就是没把加载到的内容和世代带回来(合法的 scene 存盘取 max(自己的, 加载到的),回滚 scene 不会触发),按 scene 日志定位写方;受影响的玩家进度只在 scene 内存里。顺序错了只会重试 / 进场失败,不丢库里的数据;
               但 go/db 升上来之前 scene 进程退出(滚动、扩缩、崩溃),它内存里没提交的进度会丢。
               处理步骤见 deploy/k8s/README.md 的存档世代一节。

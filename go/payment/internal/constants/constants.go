@@ -21,6 +21,12 @@ const (
 	ErrCurrencyUnsupported = uint32(table.PaymentError_kPaymentCurrencyUnsupported)
 	ErrBusy                = uint32(table.PaymentError_kPaymentBusy)
 	ErrLoginRequired       = uint32(table.PaymentError_kPaymentLoginRequired)
+	// 未成年人充值限额闸(docs/design/real-name-anti-addiction.md §5.6),都是业务拒绝。
+	ErrRealNameRequired  = uint32(table.PaymentError_kPaymentRealNameRequired)
+	ErrMinorNotAllowed   = uint32(table.PaymentError_kPaymentMinorNotAllowed)
+	ErrMinorSingleLimit  = uint32(table.PaymentError_kPaymentMinorSingleLimit)
+	ErrMinorDailyLimit   = uint32(table.PaymentError_kPaymentMinorDailyLimit)
+	ErrMinorMonthlyLimit = uint32(table.PaymentError_kPaymentMinorMonthlyLimit)
 )
 
 // TipClassifier 是本服务的 in-band 业务码定性函数,定性全部来自 Tip.xlsx 的 fault 列。

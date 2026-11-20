@@ -90,7 +90,8 @@ spec:
             - name: POD_IP
               valueFrom:
                 fieldRef: {fieldPath: status.podIP}
-            # 与现有Redis部署相同：dev无口令时Secret缺席，非dev由共享部署门禁保证存在。
+            # 只给本机回落段用(PlayerRedis 没写地址时连 SharedRedisAddr)：dev 有核心口令时 redis-auth 在，没有时缺席；
+            # staging / prod 不部署核心、不建 redis-auth，PlayerRedis 写着集群地址，这条变量读不到也用不到。
             - name: MMORPG_MAIL_REDIS_PASSWORD
               valueFrom:
                 secretKeyRef: {name: redis-auth, key: password, optional: true}

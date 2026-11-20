@@ -402,6 +402,27 @@ param(
 	# 同样不粘滞:本次部署 gateway 而它为空时,若 zone namespace 里已有 Ingress gateway(留空 host 不会删它),
 	# 在写操作之前拒绝 —— 要么照传,要么先手动删掉 Ingress(不受 -AllowDisruptiveSwitch 豁免)。
 	[string]$GatewayTrustedProxies = "",
+	# 小游戏客户端(微信 / 抖音)的 WebSocket 入口(docs/design/minigame-websocket-gate.md W7、W8)。给了域名才启用,要求 -ClientEntryMode external:
+	#   - gate / battle 带上 CLIENT_WS_BASE_URL=wss://<域名>/ws,自报 client_ws_url = wss://<域名>/ws/<PodIP>/<端口>,
+	#     login / scene_manager / battle 把它下发给小游戏客户端(zone-up 与 infra-up 都要带这个参数);
+	#   - infra-up 在 infra namespace 部署 ws-edge(nginx):终止 TLS,按路径把连接一对一转到指定的 gate / battle Pod。原生客户端不经过它。
+	# 域名要 ICP 备案、指向 ws-edge 的 Service,并登记进两家平台的 socket 合法域名。
+	# 留空 = 不接小游戏。参数不粘滞:留空不会删已有的 ws-edge(要撤掉请手动 kubectl delete deploy,svc,cm,netpol);
+	# 但下一次不带它的 zone-up / infra-up 会让 gate / battle 停止自报 WebSocket 地址。
+	[string]$WsEdgeHost = "",
+	# infra namespace 里预置的 TLS Secret 名(kubernetes.io/tls,tls.crt 带完整证书链)。部署脚本不经手证书内容;给了 -WsEdgeHost 必填。
+	[string]$WsEdgeTlsSecret = "",
+	# 允许 ws-edge 转发到的 Pod 网段(集群的 Pod CIDR),逗号分隔的 IPv4 CIDR;给了 -WsEdgeHost 必填。
+	[string]$WsEdgePodCidrs = "",
+	[ValidateRange(1, 64)]
+	[int]$WsEdgeReplicas = 2,
+	# 同 -GateServiceType 的口径:托管云 LoadBalancer;自建集群 NodePort,接在外部四层负载均衡后面(-WsEdgeNodePort 0 = 由集群分配)。
+	[ValidateSet("LoadBalancer", "NodePort")]
+	[string]$WsEdgeServiceType = "LoadBalancer",
+	[ValidateRange(0, 32767)]
+	[int]$WsEdgeNodePort = 0,
+	# 钉住的 nginx 镜像;内网环境换成自己的镜像仓地址。
+	[string]$WsEdgeImage = "nginx:1.28.0",
 	# 集群内 login 的开发口令认证(2b §7):login ConfigMap 写 DevPasswordAuth(账号前缀 robot_ / dev_),共享口令从环境变量
 	# MMORPG_LOGIN_DEV_PASSWORD_SHARED_SECRET 读入 zone namespace 的 Secret login-dev-password,经 secretKeyRef 注入 login 容器的
 	# LOGIN_DEV_PASSWORD_SHARED_SECRET,绝不进 ConfigMap。**只允许 -ReleaseProfile dev**(与 release_preflight.ps1 的
@@ -484,6 +505,25 @@ param(
 	# 不粘滞、防误关(线上开着撤销而本次漏传或换了值,在写操作之前拒绝)与包装入口照传同上;本次没开时它的 Secret 在 login 部署之后删掉。
 	[string]$LoginAppleTeamId = "",
 	[string]$LoginAppleKeyId = "",
+	# 集群内 login 的实名认证与未成年人防沉迷(国内 App 形态,docs/design/real-name-anti-addiction.md §5.8)。-LoginNppaAppId 非空才渲染 login 顶层的
+	# AntiAddiction 段:Enabled: true、PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame](两个小游戏渠道由平台实名并执行限制)、
+	# Nppa.AppId / BizId(国家网络游戏防沉迷实名认证系统企业端给的应用标识与游戏备案识别码,要么都给要么都不给)与 Nppa.SecretKeyEnv(只写变量名)。
+	# secretKey 走工作负载密钥目录($script:WorkloadSecretCatalog 的 login-nppa):部署侧从环境变量 MMORPG_LOGIN_NPPA_SECRET_KEY(32 位十六进制)读入
+	# zone namespace 的单键 Secret login-nppa,经 secretKeyRef 注入 login 容器的同名变量,绝不进 ConfigMap;Pod 模板带指纹,只换密钥也会滚动。
+	# **任何档位**未设置或不是 32 位十六进制都在写操作之前拒绝(login 对这种配置拒启)。
+	# -LoginAntiAddictionExtraPlayDays:未成年人除周五到周日之外的可玩日,逗号分隔的北京日期 2006-01-02,按每年国务院放假通知填;漏填只会更严。
+	# -LoginNppaCheckUrl / -LoginNppaQueryUrl / -LoginNppaLoginoutUrl:只在企业端接口测试阶段填测试地址,留空 = 官方地址;须是 http(s)://主机[:端口][/路径]
+	# (官方的查询与上报地址就是 http,报文体已加密,所以各档位都接受 http)。这几项只能与 -LoginNppaAppId 一起给。
+	# 不粘滞、防误关(线上开着而本次漏传或换了 AppId / BizId,在写操作之前拒绝,确认开关是下面的 -ConfirmLoginAuthProviderChange)与包装入口照传
+	# 都同第三方登录;本次没开时 login-nppa 在 login 部署之后删掉。login 是 SQL 写者:AntiAddiction 段要照抄进运维预置的 runtimeConfigSecret 才生效;
+	# 部署另把 AppId / BizId 注入 login 主容器(MMORPG_LOGIN_NPPA_EXPECTED_APP_ID / _BIZ_ID),漏抄或抄成别的应用时 login 拒启。
+	# 所以开、关、换应用都是「先改 runtimeConfigSecret、不单独滚动 login,紧接着部署」,由部署来滚动 login。
+	[string]$LoginNppaAppId = "",
+	[string]$LoginNppaBizId = "",
+	[string]$LoginAntiAddictionExtraPlayDays = "",
+	[string]$LoginNppaCheckUrl = "",
+	[string]$LoginNppaQueryUrl = "",
+	[string]$LoginNppaLoginoutUrl = "",
 	# 确认本次部署就是要关掉或改动线上 login 的第三方登录配置(见上一段「防误关」)。不给时,线上配置会被本次参数关掉或改掉
 	# 就在任何写操作之前拒绝;给了只打警告放行。它是许可不是指令:线上与本次一致时给了也不改任何东西。不粘滞,只在被指定时透传。
 	[switch]$ConfirmLoginAuthProviderChange,
@@ -534,7 +574,8 @@ param(
 	# staging / prod 必须 on(或设环境变量 MMORPG_NETWORK_POLICIES=on,包装入口不透传本参数):没开时真部署在任何写操作之前拒绝,-DryRun 只打警告。
 	# on:每个被保护的工作负载一份 NetworkPolicy($script:GrpcAllowLists):工作负载清单里**声明了的**其它端口(节点口 / metrics /
 	#   日志 sidecar)照常对任何来源开放,只有 gRPC 口限定来源(任意 namespace 里 app 标签在名单里的 Pod);没声明的端口一律不通。
-	#   被保护的是 scene 与全部收玩家会话身份的服务:login(zone namespace)、chat / friend / guild / trade / mail / rank / match(infra)。
+	#   被保护的是 scene 与全部收玩家会话身份的服务:login(zone namespace)、chat / friend / guild / trade / mail / rank / payment / match(infra),
+	#   以及官方商城 mall 的内部 HTTP 口(infra)。
 	#   各自放行谁、依据哪段代码,见 $script:GrpcAllowLists 的注释与 deploy/k8s/README.md「gRPC 口准入与资产通道」。
 	# 新增调用方要同时改名单,否则开了就断。需要集群网络插件支持 NetworkPolicy(Calico / Cilium 等);不支持的插件上策略不生效(不断流,也不设防)。
 	[ValidateSet("off", "on")]
@@ -599,7 +640,15 @@ param(
 	# 留空 = 只有一个集群 main,地址取 -GlobalAuthorityTiDBHost。要搬库时把新旧集群都列上再滚动一遍,步骤见 docs/ops/db-move-runbook.md §2。
 	[string]$SqlClusters = "",
 	# 没有映射键的逻辑库所在的集群,必须在 -SqlClusters 里,地址必须等于 -GlobalAuthorityTiDBHost。-SqlClusters 留空时不用给。
-	[string]$SqlDefaultCluster = ""
+	[string]$SqlDefaultCluster = "",
+	# 支付服务的渠道配置(docs/design/payment-recharge.md §22.9;deploy/k8s/README.md「支付 payment」):一份 YAML 文件,内容是完整的顶层 Payment: 段
+	# (渠道开关、AppID、商户号、商品映射、NotifyBaseURL 等),密钥只写环境变量名、不写值。只用于部署全局 Go 服务的 infra-up / all-up,别的命令给了即拒绝。
+	# 脚本用它替换 payment 配置模板(go-svc-payment-config)的 Payment 段,再写死回调监听口与集群内商城地址(原文里的 NotifyListenAddr 与 Mall 子段不用)。
+	# 留空:dev 用 go/payment/etc/payment.yaml 的那一段(只开 devpay,密钥走工作负载密钥目录的 dev 回落值);staging / prod 渲染成不开任何渠道。
+	# 开着的渠道要的密钥由运维预置在 infra namespace 的 Secret payment-channel-secrets(键名 = 配置里各 *Env 指的变量名):本脚本在任何写操作之前
+	# 核对它在、键齐,不读值、不建、不删;改了密钥要 kubectl rollout restart statefulset/payment。合规闸(go/payment 的 config.Validate)不在这里放宽。
+	# 不粘滞:上次给过、这次没给,模板落回缺省段,商城的允许支付渠道跟着变。
+	[string]$PaymentConfigPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -715,6 +764,9 @@ $script:LoginDouyinMiniGameAppSecret = ""
 # 注销账号时撤销 Apple 令牌用的 Sign in with Apple 私钥 PEM(-LoginAppleTeamId / -LoginAppleKeyId),同样走工作负载密钥目录(login-apple-signin)。
 # 由 Initialize-InjectedSecrets 解析(只在本次部署 login 且给了 -LoginAppleTeamId 时);空串 = 本次不注入。
 $script:LoginAppleSignInPrivateKey = ""
+# login 实名与防沉迷的国家系统 secretKey(-LoginNppaAppId),同样走工作负载密钥目录(login-nppa)。
+# 由 Initialize-InjectedSecrets 解析(只在本次部署 login 且给了 -LoginNppaAppId 时);空串 = 本次不注入。
+$script:LoginNppaSecretKey = ""
 # gateway 管理面(/admin/**)的 X-Admin-Key,即 Spring 属性 admin.api-key(AdminApiKeyFilter 的 @Value("${admin.api-key}"))。
 # 部署侧从环境变量 MMORPG_GATEWAY_ADMIN_API_KEY 读入 zone namespace 的 Secret,经 secretKeyRef 注入 gateway 容器的 ADMIN_APIKEY,
 # 不进 ConfigMap。env 名取 Spring Boot 文档的规范写法(点换下划线、去掉短横、大写);OS 环境变量优先于 jar 内与 ConfigMap 挂载的
@@ -761,7 +813,7 @@ $script:ZoneCanaryKeepStableGoSvcs = @('data-service', 'player-locator')
 $script:NetworkPoliciesOn = ($NetworkPolicies -eq 'on') -or ([Environment]::GetEnvironmentVariable('MMORPG_NETWORK_POLICIES') -ceq 'on')
 # 写 SQL 的 Go 服务:Deployment 带写者 boot(Add-SqlWriterBootManifest),boot 目录要有 <ns>/<svc> 条目;全局服务的金丝雀副本另要 <ns>/<svc>-canary
 # (Assert-GlobalGoSvcCanaryPreflight)。k8s_migrate_gate.tests.ps1 按 AST 只抽函数,改这张表要同步那边夹具里的副本。
-$script:SqlWriterGoSvcs = @('db', 'data-service', 'login', 'chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player-inbox')
+$script:SqlWriterGoSvcs = @('db', 'data-service', 'login', 'chat', 'friend', 'guild', 'mail', 'rank', 'payment', 'match', 'trade', 'player-inbox')
 # 能起金丝雀副本的全局服务:接客户端请求、且 canary 副本已不跑全局后台(设计文档 §2.4、§2.5 与 §7「批 2b 的细节」)。
 # player-inbox 没有客户端路由,data-service、player-locator、scene-manager 不是全局池或只被服务间调用,battle 按整局(批 3),都不在其列。
 # match 的前提:线上 stable 已是「镜像只收 stable」的版本(match/internal/discovery.NodeWatcher.StableOnly),否则落到 canary 名下的匹配池会停摆。
@@ -828,6 +880,10 @@ $script:AssetOpSecrets = @{}
 #   trade:client-rpc-router、data-service(RoleFence 参与者接口)。trade → scene 的资产通道是 trade 往外拨,不经这个口。
 #   mail:client-rpc-router、data-service(RoleFence 参与者接口)、rank(MailRpc,榜单奖励)、Scene(战斗掉落放不下时改投邮件,MailAdmin.SendPersonalMail)。
 #   rank:client-rpc-router、match(结算后上报评分)。
+# 2026-11-19 补支付与官方商城(docs/design/payment-recharge.md §22):
+#   payment:client-rpc-router(路由表 PaymentNodeService)。渠道回调口 18130 是清单里声明的其它端口,对任何来源开放:回调来自集群外,靠渠道签名验真。
+#   mall(Java,策略由 Apply-MallWorkload 生成):受保护的是内部 HTTP 口 18120,调用方是 trade(gateway、delivery 两个角色)与 payment(payment 角色)。
+#          策略名沿用 -grpc-allowlist 后缀:k8s_netpol_probe.ps1 按这个后缀找策略,商城这一份同样会被实测。
 # 名单是 app 标签;运维工具(如 go/guild/cmd/assetopfix、TradeAdmin 的造数)要在名单内的 Pod 里跑、经 kubectl port-forward
 # (kubelet 在 Pod 自己的网络命名空间里连本机端口,不经过策略),或临时关掉策略。
 # 表里只写真实清单的标签(契约测试逐个核对)。金丝雀副本用 app: <名字>-canary(全局 Go 服务与 battle),生成策略时由 Get-ReleaseTrackAppLabels 补进两侧名单。
@@ -841,13 +897,18 @@ $script:GrpcAllowLists = [ordered]@{
 	trade  = [pscustomobject]@{ PolicyName = 'trade-grpc-allowlist'; TargetApps = @('trade'); AllowedApps = @('client-rpc-router', 'data-service') }
 	mail   = [pscustomobject]@{ PolicyName = 'mail-grpc-allowlist'; TargetApps = @('mail'); AllowedApps = @('client-rpc-router', 'data-service', 'rank', 'scene', 'scene-world', 'scene-instance') }
 	rank   = [pscustomobject]@{ PolicyName = 'rank-grpc-allowlist'; TargetApps = @('rank'); AllowedApps = @('client-rpc-router', 'match') }
+	payment = [pscustomobject]@{ PolicyName = 'payment-grpc-allowlist'; TargetApps = @('payment'); AllowedApps = @('client-rpc-router') }
+	mall   = [pscustomobject]@{ PolicyName = 'mall-grpc-allowlist'; TargetApps = @('mall'); AllowedApps = @('trade', 'payment') }
+	# 2026-11-20 内容安全(docs/design/rename-and-content-safety.md §6.1):调用方是收玩家文字的服务——login(建角名)、guild(帮会名、公告)、
+	# chat(聊天)、Scene(角色改名、宠物名)。它没有调用方签名(只读、无副作用),来源只靠这张名单限制;客户端经路由服到不了它,所以名单里没有 client-rpc-router。
+	'content-guard' = [pscustomobject]@{ PolicyName = 'content-guard-grpc-allowlist'; TargetApps = @('content-guard'); AllowedApps = @('login', 'guild', 'chat', 'scene', 'scene-world', 'scene-instance') }
 }
 # 共享 Redis 口令(MMORPG_REDIS_PASSWORD),由 Initialize-InjectedSecrets 解析:dev 档未注入时是空串。$null = 还没解析,
 # 控制端点在单实例时的口令来源(Get-ControlRedisPasswordSource → Get-SharedRedisClientPassword)与 Secret 同步(Sync-RedisAuthSecret)据此拒绝,不把「没解析」当成「没口令」。
 $script:RedisPassword = $null
-# 共享 Redis 口令的 Secret(名字 / 键),由 Sync-RedisAuthSecret 建或删。infra namespace 那份给 Redis 服务端(redis.yaml 等的
-# 可选引用 REDIS_PASSWORD)、battle 与全局 Go 服务;每个 zone namespace 一份同名副本给 gate / scene、zone 级 Go 服务与 gateway
-# —— Secret 不能跨 namespace 引用。清单里写的是字面量 redis-auth / password(deploy/k8s/manifests/infra 下的各份、go-svc/mail.yaml),
+# 核心单实例口令的 Secret(名字 / 键),由 Sync-RedisAuthSecret 建或删。核心只在 dev 没开控制集群时部署(Test-CoreRedisDeployed):
+# 那时 infra namespace 那份给核心服务端(redis.yaml 的可选引用 REDIS_PASSWORD)与全局 Go 服务,每个 zone namespace 一份同名副本给
+# scene、zone 级 Go 服务与 gateway —— Secret 不能跨 namespace 引用。staging / prod 口令是空串,各 namespace 的残留由它删掉。清单里写的是字面量 redis-auth / password(deploy/k8s/manifests/infra 下的各份、go-svc/mail.yaml),
 # 改名要同批改。
 $script:RedisAuthSecretName = 'redis-auth'
 $script:RedisAuthSecretKey = 'password'
@@ -862,7 +923,7 @@ $script:SharedRedisPasswordEnv = 'SHARED_REDIS_PASSWORD'
 # Go 服务 / gateway Pod 模板上的共享 Redis 口令指纹注解(只哈希口令),见 Add-SharedRedisAuthToManifest。
 $script:SharedRedisAuthHashAnnotation = 'mmorpg.io/shared-redis-auth-hash'
 # ConfigMap 里有共享 Redis 段的 Go 服务:ConfigMap 写变量名、容器注入口令、Pod 模板带指纹。各服务的段名见 New-GoSvcConfigMapYaml /
-# New-GuildServiceConfigYaml。chat、db、rank、client-rpc-router 不连共享 Redis。
+# New-GuildServiceConfigYaml。chat、db、rank、payment、client-rpc-router 不连共享 Redis。
 $script:SharedRedisAuthGoServices = @('login', 'data-service', 'player-locator', 'scene-manager', 'match', 'trade', 'friend', 'player-inbox', 'guild')
 # 只补指纹的 Go 服务:mail 的 ConfigMap 一直写 SharedRedisPasswordEnv: MMORPG_MAIL_REDIS_PASSWORD,manifest 自带对 redis-auth 的
 # 可选引用(go-svc/mail.yaml),口令早已不进 ConfigMap;缺的只是换口令时的滚动。
@@ -880,7 +941,7 @@ $script:ControlRedisClientServices = @('login', 'data-service', 'player-locator'
 # gate 的会话身份签名私钥(MMORPG_INTERNAL_AUTH_SIGNING_KEY,Secret gate-identity-auth)不在表里:只有 gate 引用它,
 # 由 Apply-Zone 在 gate 工作负载之前建;验签方只拿公钥列表(MMORPG_INTERNAL_AUTH_PUBLIC_KEYS,不是密钥,Apply-OneGoSvc 明文注入)。
 # 数据库凭据一律不在表里,本脚本也不往任何 Pod、Job 注入共享的数据库口令(最小权限):SQL 写者(Go 的
-# $script:SqlWriterGoSvcs 与 Java 的 gateway)常驻进程读运维预置的 runtimeConfigSecret、迁移 Job 读 schemaConfigSecret
+# $script:SqlWriterGoSvcs 与 Java 的 gateway、mall)常驻进程读运维预置的 runtimeConfigSecret、迁移 Job 读 schemaConfigSecret
 # (Add-SqlWriterBootManifest、Add-SchemaPermissionManifest),每个槽位一个专用账号,口令写在那两份 Secret 的配置里;
 # route-tool 的 tidb-prepare Job(k8s_route_tool.ps1)用 data-service 的 schema 身份(schemaPermissionSecret 的 dsn / principal),
 # freeze / unfreeze 用维护 owner 的身份、在运维机上跑(docs/ops/k8s-open-server-runbook.md §1);login 口令登录的只读连接串
@@ -894,6 +955,22 @@ $script:WorkloadSecretCatalog = [ordered]@{
 		Value = { Resolve-BattleTokenSecret } }
 	'match-ops-caller'  = @{ Env = 'MMORPG_MATCH_OPS_CALLER_SECRET'; SecretKey = 'secret'; Consumers = @('match')
 		Value = { Resolve-MatchOpsCallerSecret -ReleaseProfile $ReleaseProfile -SpectateTokenSecret (Resolve-SpectateTokenSecret -ReleaseProfile $ReleaseProfile -GateTokenSecret $script:GateTokenSecret) } }
+	# 官方商城四个调用角色的 HMAC 密钥(java/mall_game 的 commerce.*-secret;docs/design/payment-recharge.md §8.6、§22.9)。商城四把都验;
+	# trade 以 gateway、delivery 两个角色调商城,payment 以 payment 角色调,admin 留给运营工具。值在 Initialize-InjectedSecrets 里解析并核过互不相同
+	# (Resolve-CommerceSecrets),本次不部署消费者时是空串。各自的配置只写变量名:trade 的 Mall.*SecretEnv、payment 的 Payment.Mall.PaymentSecretEnv、
+	# 商城模板里对同名环境变量的引用(生成器里的字面量与这里的 Env 一致由契约测试核对)。
+	'commerce-gateway'  = @{ Env = 'MMORPG_COMMERCE_GATEWAY_SECRET'; SecretKey = 'secret'; Consumers = @('mall', 'trade')
+		Value = { [string]$script:CommerceSecrets['gateway'] } }
+	'commerce-payment'  = @{ Env = 'MMORPG_COMMERCE_PAYMENT_SECRET'; SecretKey = 'secret'; Consumers = @('mall', 'payment')
+		Value = { [string]$script:CommerceSecrets['payment'] } }
+	'commerce-delivery' = @{ Env = 'MMORPG_COMMERCE_DELIVERY_SECRET'; SecretKey = 'secret'; Consumers = @('mall', 'trade')
+		Value = { [string]$script:CommerceSecrets['delivery'] } }
+	'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; SecretKey = 'secret'; Consumers = @('mall')
+		Value = { [string]$script:CommerceSecrets['admin'] } }
+	# 支付服务 devpay 联调渠道的密钥:只有 dev 档、没给 -PaymentConfigPath 时有值(脚本自带的配置段只开 devpay,Get-PaymentDeployPlan)。
+	# 给了 -PaymentConfigPath 时渠道密钥全部来自运维预置的 Secret payment-channel-secrets,这一把不注入。
+	'payment-devpay'    = @{ Env = 'MMORPG_PAYMENT_DEVPAY_SECRET'; SecretKey = 'secret'; Consumers = @('payment')
+		Value = { [string]$script:PaymentDevPaySecret } }
 	'login-queue-token' = @{ Env = 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET'; SecretKey = 'secret'; Consumers = @('login')
 		Value = { [string]$script:LoginQueueTokenSecret } }
 	# login 小游戏登录的 AppSecret(-LoginWeChatMiniGameAppId / -LoginDouyinMiniGameAppId 才有值)。login 的配置只写变量名
@@ -906,6 +983,10 @@ $script:WorkloadSecretCatalog = [ordered]@{
 	# (AuthProviders.Apple.PrivateKeyEnv,New-LoginAuthProvidersYaml 里的字面量与这里的 Env 一致由契约测试核对)。
 	'login-apple-signin' = @{ Env = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY'; SecretKey = 'private-key'; Consumers = @('login')
 		Value = { [string]$script:LoginAppleSignInPrivateKey } }
+	# login 实名与防沉迷的国家系统 secretKey(-LoginNppaAppId 才有值)。login 的配置只写变量名(AntiAddiction.Nppa.SecretKeyEnv,
+	# New-LoginAntiAddictionYaml 里的字面量与这里的 Env 一致由契约测试核对)。
+	'login-nppa' = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; SecretKey = 'secret'; Consumers = @('login')
+		Value = { [string]$script:LoginNppaSecretKey } }
 }
 
 # 削峰(G4b)开服档起步值。单一来源:ConfigMap 生成、Pod 指纹、部署打印都只读这里。全部「待压测确认」(L-14)。
@@ -1205,6 +1286,31 @@ function Resolve-LoginAppleSignInPrivateKey {
 
 <#
 .SYNOPSIS
+	解析 login 实名与防沉迷的国家系统 secretKey(环境变量 MMORPG_LOGIN_NPPA_SECRET_KEY),返回值;不可用一律 throw。由 Initialize-InjectedSecrets
+	在写路径入口调用(只在本次部署 login 且给了 -LoginNppaAppId 时)。
+
+.DESCRIPTION
+	- 任何档位都没有回落值:login 对 SecretKeyEnv 指向的变量缺失 / 为空一律拒启(go/login/internal/config/anti_addiction.go resolveAntiAddiction)。
+	  staging / prod 的「未设置 / 占位 / 不足 32 位」由 Resolve-InjectedSecret 按它的原文 throw;dev 档这里补一次拒绝。
+	- 只收恰好 32 位十六进制(企业端给的 secretKey,解出 16 字节的 AES-128 密钥),与 login 的门禁一致;首尾带空白或换行同样拒绝(login 解不出)。
+	- 报错只点参数名与环境变量名,不回显值。读环境变量、不读本脚本的变量,契约测试按 AST 抽出来直接调。
+#>
+function Resolve-LoginNppaSecretKey {
+	param([Parameter(Mandatory = $true)][ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile)
+
+	$value = Resolve-InjectedSecret -EnvName "MMORPG_LOGIN_NPPA_SECRET_KEY" -DevFallback "" -ReleaseProfile $ReleaseProfile `
+		-Purpose "login 实名与防沉迷的国家系统 secretKey(AntiAddiction.Nppa.SecretKeyEnv)" -MinLength 32
+	if ([string]::IsNullOrWhiteSpace($value)) {
+		throw "-LoginNppaAppId needs the environment variable MMORPG_LOGIN_NPPA_SECRET_KEY (the secretKey issued by the NPPA anti-addiction real-name system, injected into login through a Secret); it is not set, so the deployment is refused (no profile has a fallback value)."
+	}
+	if ($value -cnotmatch '^[0-9A-Fa-f]{32}\z') {
+		throw "The environment variable MMORPG_LOGIN_NPPA_SECRET_KEY must be the 32-hex-character NPPA secretKey with no surrounding whitespace; login refuses to start with any other value."
+	}
+	return $value
+}
+
+<#
+.SYNOPSIS
 	SQL boot 目录里 login 条目的 passwordAuthSecret(口令登录只读连接串所在的 Secret 名)。纯函数:只看条目,合格就返回名字,不合格一律 throw。
 
 .DESCRIPTION
@@ -1483,6 +1589,9 @@ function Initialize-InjectedSecrets {
 		$script:ControlRedisPassword = Resolve-InjectedSecret -EnvName $controlRedisCluster.PasswordEnv `
 			-DevFallback "" -ReleaseProfile $ReleaseProfile -Purpose "控制 Redis Cluster 口令" -MinLength 12
 	}
+	# 两套集群的口令同样在任何写操作之前查字符集(渲染工作负载时 Get-SharedRedisClientPassword 再查一次)。
+	Assert-RedisPasswordYamlSafe -Password $script:PlayerRedisPassword -EnvName (Get-RedisCluster -Kind 'player').PasswordEnv
+	Assert-RedisPasswordYamlSafe -Password $script:ControlRedisPassword -EnvName $controlRedisCluster.PasswordEnv
 	# Java 网关数据源的用户名,只写进 java-svc-gateway-config 模板。dev 回落值以 deploy/docker-compose.yml + gateway_node
 	# application.yaml 的口径为准(appuser):mysql.yaml 用 MYSQL_USER 建的就是这个账号。
 	# 数据源口令不解析、不注入(2026-11-12 起):gateway 是写者,常驻进程的数据源账号与口令在运维预置的 runtimeConfigSecret 里
@@ -1528,6 +1637,12 @@ function Initialize-InjectedSecrets {
 	if (-not [string]::IsNullOrEmpty($LoginAppleTeamId) -and (Test-ZoneLoginDeployed)) {
 		$script:LoginAppleSignInPrivateKey = Resolve-LoginAppleSignInPrivateKey -ReleaseProfile $ReleaseProfile
 	}
+	# 实名与防沉迷的国家系统 secretKey(见 $script:LoginNppaSecretKey 处的说明),条件同上:只在本次部署 login 且给了 -LoginNppaAppId 时解析
+	# (参数门禁已保证 -LoginNppaBizId 也给了)。规则见 Resolve-LoginNppaSecretKey。
+	$script:LoginNppaSecretKey = ""
+	if (-not [string]::IsNullOrEmpty($LoginNppaAppId) -and (Test-ZoneLoginDeployed)) {
+		$script:LoginNppaSecretKey = Resolve-LoginNppaSecretKey -ReleaseProfile $ReleaseProfile
+	}
 
 	# 登录排队令牌的 HMAC 密钥(login Secrets.QueueToken,G4b)。生产模式开了排队就必需,且不得与 GateToken / InternalAuth 复用
 	# (go/login/internal/config/secrets.go ResolveSecrets 的必填与复用检查;不满足 login 拒启 → CrashLoopBackOff)。
@@ -1559,11 +1674,12 @@ function Initialize-InjectedSecrets {
 		if (Test-PlaceholderSecret -Value $script:GatewayAdminApiKey) {
 			Write-Warning "gateway admin password is a placeholder (MMORPG_GATEWAY_ADMIN_API_KEY unset or still a placeholder, ReleaseProfile=$ReleaseProfile): /admin/** authenticates with a public constant; allowed only for local dev. Non-dev profiles reject deployment."
 		}
-		# gateway 经 Spring 占位(ConfigMap 写 "${变量名}")读的几把密钥(gate 令牌、共享 Redis 口令、管理面口令):值里不得含 "${"
-		# (见 Assert-SpringPlaceholderSafe)。在任何写操作之前拒绝。
+		# gateway 经 Spring 占位(ConfigMap 写 "${变量名}")读的几把密钥(gate 令牌、Redis 口令、管理面口令):值里不得含 "${"
+		# (见 Assert-SpringPlaceholderSafe)。在任何写操作之前拒绝。Redis 口令取 gateway 实际的来源(控制端点:staging / prod 是控制集群的口令)。
+		$gatewayRedisSource = Get-SharedRedisClientSource -SvcName 'gateway'
 		foreach ($springSecret in @(
 				@{ Env = 'MMORPG_GATE_TOKEN_SECRET'; Value = $script:GateTokenSecret }
-				@{ Env = 'MMORPG_REDIS_PASSWORD'; Value = $script:RedisPassword }
+				@{ Env = $gatewayRedisSource.InputEnv; Value = [string]$gatewayRedisSource.Password }
 				@{ Env = 'MMORPG_GATEWAY_ADMIN_API_KEY'; Value = $script:GatewayAdminApiKey }
 			)) {
 			Assert-SpringPlaceholderSafe -EnvName $springSecret.Env -Value $springSecret.Value
@@ -1600,6 +1716,22 @@ function Initialize-InjectedSecrets {
 		}
 	}
 
+	# 官方商城的调用密钥与 devpay 联调密钥(工作负载密钥目录的 commerce-* 与 payment-devpay)。只在本次部署它们的消费者时解析:
+	# trade、payment 随全局 Go 服务,商城随全局 Java 服务;zone-up 不因它们被阻断。dev 档有回落值,照样经 Secret 注入。
+	$script:CommerceSecrets = @{}
+	$script:PaymentDevPaySecret = ''
+	if (Test-GlobalGoSvcDeployed) {
+		$script:CommerceSecrets = Resolve-CommerceSecrets -ReleaseProfile $ReleaseProfile -IncludeAdmin (Test-GlobalJavaSvcDeployed)
+		# devpay 只在 dev 档、用脚本自带的支付配置时开着(Get-PaymentDeployPlan 的 BuiltinDevPay)。payment 要求它至少 32 字节、不带首尾空白。
+		if ((Get-PaymentDeployPlan).BuiltinDevPay) {
+			$script:PaymentDevPaySecret = Resolve-InjectedSecret -EnvName 'MMORPG_PAYMENT_DEVPAY_SECRET' `
+				-DevFallback 'change-me-in-production-payment-devpay-hmac-key' -ReleaseProfile $ReleaseProfile -Purpose 'payment devpay channel secret' -MinLength 32
+			if ([System.Text.Encoding]::UTF8.GetByteCount($script:PaymentDevPaySecret) -lt 32 -or $script:PaymentDevPaySecret -match '["\\\s\p{Cc}]') {
+				throw 'MMORPG_PAYMENT_DEVPAY_SECRET must be at least 32 bytes and must not contain whitespace, double quotes, backslashes or control characters (the value is not shown). Nothing was written.'
+			}
+		}
+	}
+
 	# 邮件运维使用 serviceauth 的 admin 生产者签名；值由现役 domain-service-secrets 注入，不新建 M1 token。
 
 	# 通用资产通道签名密钥(-AssetOps on,见参数处说明)。各档位都没有回落值:同一把密钥要在 infra-up(guild / trade 签名)与每一次
@@ -1621,6 +1753,8 @@ function Initialize-InjectedSecrets {
 			@{ Env = 'MMORPG_GATE_TOKEN_SECRET'; Value = $script:GateTokenSecret }
 			@{ Env = 'MMORPG_INTERNAL_AUTH_SIGNING_KEY'; Value = $script:InternalAuthSigningKey }
 			@{ Env = 'MMORPG_REDIS_PASSWORD'; Value = $script:RedisPassword }
+			@{ Env = 'MMORPG_CONTROL_REDIS_PASSWORD'; Value = $script:ControlRedisPassword }
+			@{ Env = 'MMORPG_PLAYER_REDIS_PASSWORD'; Value = $script:PlayerRedisPassword }
 			@{ Env = 'MMORPG_GATEWAY_ADMIN_API_KEY'; Value = $script:GatewayAdminApiKey }
 			@{ Env = 'MMORPG_PLAYER_INBOX_ADMIN_TOKEN'; Value = $script:PlayerInboxAdminToken }
 			@{ Env = 'MAIL_PRODUCER_SECRET_ADMIN'; Value = [Environment]::GetEnvironmentVariable('MAIL_PRODUCER_SECRET_ADMIN') }
@@ -1861,7 +1995,7 @@ function Assert-PodNetworkEncryptionPreflight {
 }
 
 # gRPC 口准入的部署前检(写路径入口,任何写操作之前;docs/design/gate-online-identity.md §10.2)。staging / prod 必须开:
-# 收玩家会话身份的服务(login、chat、friend、guild、trade、mail、rank、match)与 scene 的 gRPC 口默认拒绝入站,只放行名单里的调用方,
+# 收玩家会话身份的服务(login、chat、friend、guild、trade、mail、rank、payment、match)与 scene 的 gRPC 口、官方商城的内部 HTTP 口默认拒绝入站,只放行名单里的调用方,
 # 不该直连它们的进程连端口都连不上。dev 不要求。-DryRun 没开只打警告。
 # 开着之后出了连不通的紧急情况:kubectl delete networkpolicy <服务>-grpc-allowlist 立刻放开那一个口,再补名单重新部署。
 function Assert-NetworkPoliciesPreflight {
@@ -2425,6 +2559,8 @@ function Get-GrpcClientDeadlineBudgetViolations {
 	  PlayerInboxNodeService     ← go/player_inbox/etc/player_inbox.yaml(scene 调 FetchItems / AckItems;
 	                                PlayerInboxAdmin 的方法同端口同 Timeout,C++ 不调用)
 	  PlayerStoreNodeService     ← go/db/etc/db.yaml(scene 调 LoadAndClaim / SavePlayer;这两个方法的 MethodTimeouts 高于全局 Timeout,逐条核对)
+	  MailNodeService            ← go/mail/etc/mail.yaml(scene 以 battle 身份调 MailAdmin.SendPersonalMail)
+	  ContentGuardNodeService    ← go/content_guard/etc/content_guard.yaml(scene 调 ContentGuard.CheckText 送检名字)
 	Battle / Etcd 没有 Go 服务端超时,不在表里;chat / friend / guild / team / trade / mail / rank 不在 C++ 节点白名单里,只经路由服到达
 	(mail 的 MailAdmin 是运维直连,同样没有 C++ 调用方)。
 	比对的是服务 yaml:scene-manager / match / 路由服 / login 的 go-svc ConfigMap 都从它镜像 Timeout
@@ -2448,6 +2584,8 @@ function Assert-GrpcClientDeadlineBudget {
 		PlayerStoreNodeService     = 'go/db/etc/db.yaml'
 		# 邮件(docs/design/battle-overflow-mail.md):scene 以 battle 身份调 MailAdmin.SendPersonalMail;mail 的 ConfigMap 从服务 yaml 镜像 Timeout。
 		MailNodeService            = 'go/mail/etc/mail.yaml'
+		# 内容安全(docs/design/rename-and-content-safety.md §6.6):scene 把玩家填写的名字送它判定;content-guard 的 ConfigMap 从服务 yaml 镜像 Timeout。
+		ContentGuardNodeService    = 'go/content_guard/etc/content_guard.yaml'
 	}
 	$notCalledFromCpp = Get-GrpcClientMethodsNotCalledFromCpp
 
@@ -2581,6 +2719,7 @@ function Assert-RouterForwardBudget {
 		TradeNodeService  = 'go/trade/etc/trade.yaml'
 		MailNodeService   = 'go/mail/etc/mail.yaml'
 		RankNodeService   = 'go/rank/etc/rank.yaml'
+		PaymentNodeService = 'go/payment/etc/payment.yaml'
 	}
 
 	# 与 Assert-GrpcClientDeadlineBudget 同一条纪律:文件缺席就 throw,不替你猜一个超时。
@@ -2655,6 +2794,7 @@ function Get-MysqlConnectionPlan {
 		# N = 7 台 tidb-server、每台上限 2000、不均衡系数 k = 1.5,都是规划值,待压测确认;规划档(目录 K=64、存档库 K=64)的峰值见 Get-MysqlConnectionLedger。
 		# 2026-11-06 A17b 从 6 台加到 7 台:每个 go/db、data_service 实例最坏各开 64 个存档库池(每库 2 条),手算峰值约 7276,超过 6 台的预算 6666。
 		# 2026-11-11 A17c 删掉 go/db 的本区库池(A17b 起每实例 8 条):规划档 10 个 go/db 实例少 80 条,手算峰值约 7196,仍超过 6 台的预算,台数不变。
+		# 2026-11-19 加入支付 payment 与官方商城 mall(各 2 副本 × 池 16):稳态 +64、滚动余量 +64,手算峰值约 7324,7 台的预算 8000 仍够,台数不变。
 		TidbServers                 = 7
 		TidbMaxConnectionsPerServer = 2000
 		TidbImbalanceFactor         = 1.5
@@ -2717,7 +2857,7 @@ function Get-ManifestDeploymentReplicas {
 .DESCRIPTION
 	池上限读各服务自己的配置(ConfigMap 生成器从同一批键镜像,所以这里读到的就是集群里生效的值,见 Get-MysqlPoolMirror);
 	副本数读 manifest;max_connections 读 mysql.yaml。
-	Java gateway 无论本次是否部署(没给 -JavaSvcRegistry 时跳过)都计入:总账按「可能同时存在」保守算。
+	Java gateway 与官方商城 mall 无论本次是否部署(没给 -JavaSvcRegistry 时跳过)都计入:总账按「可能同时存在」保守算。
 	login 的 PasswordAuth 只读池(LoginReplicas、LoginPasswordAuthMaxOpen)只在开了 -LoginPasswordAuth 时进账(Get-MysqlConnectionLedger 的
 	-LoginPasswordAuth);两项输入照常读出,不开时总账不读、不校验它们。
 	新增一个连这台 MySQL 的服务 = 这里加一组键,Get-MysqlConnectionLedger 的公式加一项。
@@ -2781,6 +2921,13 @@ function Get-MysqlConnectionLedgerInputs {
 		MailMaxOpen           = Get-AuthoritativeScalar -RelativePath 'go/mail/etc/mail.yaml' -KeyPath 'MaxOpenConns'
 		RankReplicas          = Get-ManifestDeploymentReplicas -RelativePath 'deploy/k8s/manifests/go-svc/rank.yaml'
 		RankMaxOpen           = Get-AuthoritativeScalar -RelativePath 'go/rank/etc/rank.yaml' -KeyPath 'MaxOpenConns'
+		# 支付(docs/design/payment-recharge.md §22):独占库 mmorpg_payment 一个池,上限取服务 yaml 的 MaxOpenConns,payment 的配置模板整份镜像这份 yaml。
+		PaymentReplicas       = Get-ManifestDeploymentReplicas -RelativePath 'deploy/k8s/manifests/go-svc/payment.yaml'
+		PaymentMaxOpen        = Get-AuthoritativeScalar -RelativePath 'go/payment/etc/payment.yaml' -KeyPath 'MaxOpenConns'
+		# 官方商城(java/mall_game):独占库 mmorpg_mall 一个 Hikari 池。池上限写在代码里(DatabaseConfiguration.poolConfig 的 setMaximumPoolSize),
+		# 没有配置项,所以这里是常数:那边改了这里跟着改。
+		MallReplicas          = Get-ManifestDeploymentReplicas -RelativePath 'deploy/k8s/manifests/java-svc/mall.yaml'
+		MallMaxPool           = 16
 		ChatReplicas          = Get-ManifestDeploymentReplicas -RelativePath 'deploy/k8s/manifests/go-svc/chat.yaml'
 		ChatMaxOpen           = Get-AuthoritativeScalar -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'MaxOpenConns'
 		# match 的池上限写在代码里(go/match/internal/authority/schema.go 的 authoritysql.Open),没有配置项,所以这里是常数:那边改了这里跟着改。
@@ -2802,7 +2949,7 @@ function Get-MysqlConnectionLedgerInputs {
 	  目录每片  = 按 K 收窄之后的 DsPlayerNameMaxOpen + DsDirectoryMaxOpen + DsRouteMaxOpen(Get-DirectoryShardPoolLimit)
 	  ds 每实例 = DsAuditStorePools × DsAuditMaxOpen(流水库)+ K × 目录每片 + E × 每库存档池(DsStoragePoolMaxOpen)
 	  每 zone   = 各自副本数 × (db、ds、gateway 每实例)之和;开了口令登录(-LoginPasswordAuth)再加 login 副本数 × 口令只读池(LoginPasswordAuthMaxOpen)
-	  全局      = friend、trade、player-inbox、guild、mail、rank、chat 与 match 的副本数 × 池上限
+	  全局      = friend、trade、player-inbox、guild、mail、rank、chat、match、payment 与 mall 的副本数 × 池上限
 	  稳态      = Z × 每 zone + 全局
 	  滚动余量  = R × (db + ds + gateway + 全局各服务 每实例;开了口令登录再加口令只读池)
 	  峰值      = 稳态 + 滚动余量 + 运维余量
@@ -2827,7 +2974,8 @@ function Get-MysqlConnectionLedger {
 	$required = @('MaxConnections', 'DbReplicas', 'DbStoreMaxOpen',
 		'DsReplicas', 'DsAuditStorePools', 'DsAuditMaxOpen', 'DsPlayerNameMaxOpen', 'DsDirectoryMaxOpen', 'DsRouteMaxOpen', 'DsStoragePoolMaxOpen',
 		'GatewayReplicas', 'GatewayMaxPool', 'FriendReplicas', 'FriendMaxOpen', 'TradeReplicas', 'TradeMaxOpen',
-		'PlayerInboxReplicas', 'PlayerInboxMaxOpen', 'GuildReplicas', 'GuildMaxOpen', 'MailReplicas', 'MailMaxOpen', 'RankReplicas', 'RankMaxOpen', 'ChatReplicas', 'ChatMaxOpen', 'MatchReplicas', 'MatchMaxOpen')
+		'PlayerInboxReplicas', 'PlayerInboxMaxOpen', 'GuildReplicas', 'GuildMaxOpen', 'MailReplicas', 'MailMaxOpen', 'RankReplicas', 'RankMaxOpen', 'ChatReplicas', 'ChatMaxOpen', 'MatchReplicas', 'MatchMaxOpen',
+		'PaymentReplicas', 'PaymentMaxOpen', 'MallReplicas', 'MallMaxPool')
 	$v = @{}
 	foreach ($key in $required) {
 		$n = 0
@@ -2867,13 +3015,14 @@ function Get-MysqlConnectionLedger {
 		$loginReplicas * $loginPasswordAuthPerInstance
 	# 变量名不用 $global:它是作用域修饰符的名字,读的人会以为在写全局作用域。
 	$globalPools = $v.FriendReplicas * $v.FriendMaxOpen + $v.TradeReplicas * $v.TradeMaxOpen + $v.PlayerInboxReplicas * $v.PlayerInboxMaxOpen +
-		$v.GuildReplicas * $v.GuildMaxOpen + $v.MailReplicas * $v.MailMaxOpen + $v.RankReplicas * $v.RankMaxOpen + $v.ChatReplicas * $v.ChatMaxOpen + $v.MatchReplicas * $v.MatchMaxOpen
+		$v.GuildReplicas * $v.GuildMaxOpen + $v.MailReplicas * $v.MailMaxOpen + $v.RankReplicas * $v.RankMaxOpen + $v.ChatReplicas * $v.ChatMaxOpen + $v.MatchReplicas * $v.MatchMaxOpen +
+		$v.PaymentReplicas * $v.PaymentMaxOpen + $v.MallReplicas * $v.MallMaxPool
 	$steady = $ZoneCount * $perZone + $globalPools
-	# 一个 zone 的三个 Deployment(开了口令登录是四个)与全局的八个 Deployment 各多 RolloutExtraPodsPerDeployment 个实例
+	# 一个 zone 的三个 Deployment(开了口令登录是四个)与全局的十个工作负载各多 RolloutExtraPodsPerDeployment 个实例
 	# (maxSurge 1 的新 Pod + 仍在优雅退出的旧 Pod;K8s 默认 25% 在 2 副本时 maxSurge 也是 1)。
 	# all-up 不带 -WaitReady 时各 zone 的滚动会重叠,不在这个余量里。
 	$surge = $RolloutExtraPodsPerDeployment * ($dbPerInstance + $dsPerInstance + $gatewayPerInstance + $loginPasswordAuthPerInstance + $v.FriendMaxOpen + $v.TradeMaxOpen + $v.PlayerInboxMaxOpen +
-		$v.GuildMaxOpen + $v.MailMaxOpen + $v.RankMaxOpen + $v.ChatMaxOpen + $v.MatchMaxOpen)
+		$v.GuildMaxOpen + $v.MailMaxOpen + $v.RankMaxOpen + $v.ChatMaxOpen + $v.MatchMaxOpen + $v.PaymentMaxOpen + $v.MallMaxPool)
 	$peak = $steady + $surge + $OpsReserve
 	$rollout = $RolloutExtraPodsPerDeployment
 	$dsInstances = $ZoneCount * $v.DsReplicas + $rollout
@@ -2895,6 +3044,8 @@ function Get-MysqlConnectionLedger {
 		mmorpg_rank     = ($v.RankReplicas + $rollout) * $v.RankMaxOpen
 		mmorpg_chat     = ($v.ChatReplicas + $rollout) * $v.ChatMaxOpen
 		mmorpg_match    = ($v.MatchReplicas + $rollout) * $v.MatchMaxOpen
+		mmorpg_payment  = ($v.PaymentReplicas + $rollout) * $v.PaymentMaxOpen
+		mmorpg_mall     = ($v.MallReplicas + $rollout) * $v.MallMaxPool
 	}
 	return [ordered]@{
 		DbPerInstance = $dbPerInstance; DsPerInstance = $dsPerInstance; GatewayPerInstance = $gatewayPerInstance
@@ -3376,7 +3527,7 @@ function Get-RedisPlayerPoolMirror {
 	2026-11-12 起全部是显式池(shared/clusterredis、playerredis,第 2b、4、5 批),没有 go-redis 缺省大小的池,DefaultPools 都是 0。
 	C++ 只有 scene 连 Redis(第 3 批;gate、battle 不连):每个 scene 进程控制域 1 条(tlsControlRedis)、玩家域 1 条(tlsPlayerRedis;没开玩家域
 	集群时沿用 control_redis 的地址,仍是独立客户端),在核心上的域各算 1 条(CppConnectionsPerProcess)。
-	不计入:client-rpc-router、go/db、chat、rank 不连 Redis;match 的私有 Redis 在 redis-match-cluster(Get-RedisMatchConnectionLedgerInputs);
+	不计入:client-rpc-router、go/db、chat、rank、payment 与 Java 的 mall 不连 Redis;match 的私有 Redis 在 redis-match-cluster(Get-RedisMatchConnectionLedgerInputs);
 	探针、运维 redis-cli 与一次性工具进规划档的 OpsReserve。
 	缺 manifest、replicas 不是恰好一处、MAXCLIENTS 不是恰好一处、池上限不是正整数,照常 throw。
 #>
@@ -4098,9 +4249,9 @@ function Invoke-RedisStatefulSetServerDryRun {
 #   legacy-deployment  线上没有 sts/redis,但还有 2026-09-19(2d29163f8)之前的 Deployment redis(emptyDir):Apply-Infra 会先删它
 #                      再建 StatefulSet = 停机切换且数据不迁移,要求 -ConfirmRedisCoreRestart
 #   unchanged          预演后的 Pod 模板与线上相同:apply 不会重启 redis Pod,放行
-#   restart            不同(含 1 → 3 要重建 StatefulSet 时调用方传空的线上摘要):apply 会重启 redis Pod,要求 -ConfirmRedisCoreRestart
+#   restart            不同:apply 会重启 redis Pod,要求 -ConfirmRedisCoreRestart
 #   orphan-pods        线上没有 sts/redis、也没有旧 Deployment,但还有 StatefulSet 形态的 redis-<n> Pod 在服务(--cascade=orphan 之后,
-#                      包括 1 → 3 切换在 orphan 删除之后 apply 失败的半截状态):本次 apply 新建的 StatefulSet 会收养并按新模板重建它们,
+#                      包括以前切过高可用的环境):本次 apply 新建的 StatefulSet 会收养并按新模板重建它们,
 #                      要求 -ConfirmRedisCoreRestart(以前这里判 absent 放行,是上面「另一个盲区」;2026-10-19 补上)
 function Get-RedisCoreRestartVerdict {
 	param(
@@ -4176,11 +4327,11 @@ function Get-LiveRedisCoreTemplateDigest {
 	做服务端预演(Invoke-RedisStatefulSetServerDryRun),拿预演结果的 spec.template 与线上的比较(Compare-RedisPodTemplateJson)。
 	这就是 kubectl diff 的比较,所以以前的盲区没有了:有人用 kubectl edit / set image / patch 带外改过清单里声明了的字段,预演结果
 	已被三方合并改回清单值,与线上不同,判 restart;线上没有摘要注解(P0-E 之前部署的)也不再一律要求确认,模板真没变就放行。
-	预演失败一律 throw(fail-closed)。1 → 3(-StatefulSetRecreated)要先删再建 StatefulSet,线上对象不能拿来预演,直接按重启处理。
+	预演失败一律 throw(fail-closed)。
 	运维后果:合入后第一次 infra-up 只在 Pod 模板真的变了时被拒;全新集群(未上线的首次部署)判 absent 放行,不需要 -ConfirmRedisCoreRestart。
 	被拒时按 deploy/k8s/README.md「Redis 连接上限与总账」在维护窗口里带 -ConfirmRedisCoreRestart 执行。
-	另一个盲区(2026-10-19 已补):有人 `kubectl delete sts redis --cascade=orphan`(改 volumeClaimTemplates 之类不可变字段的常规做法,
-	或 1 → 3 切换在 orphan 删除之后 apply 失败)后,redis-<n> Pod 与 PVC 仍在服务,以前这里查不到 sts、也查不到旧 Deployment,判 absent 放行。
+	另一个盲区(2026-10-19 已补):有人 `kubectl delete sts redis --cascade=orphan`(改 volumeClaimTemplates 之类不可变字段的常规做法)
+	后,redis-<n> Pod 与 PVC 仍在服务,以前这里查不到 sts、也查不到旧 Deployment,判 absent 放行。
 	现在没有 sts 与旧 Deployment 时再查带 app=redis 的 redis-<n> Pod(Get-LiveRedisOrphanPodOrdinals),有就判 orphan-pods,同样要求确认。
 #>
 function Assert-RedisCoreRestartConfirmed {
@@ -4451,7 +4602,7 @@ function ConvertFrom-RedisWipeProbe {
 
 .DESCRIPTION
 	实例按 infra namespace 里**实际存在**的 StatefulSet 列,不按本次参数(参数漏写一个用途就会漏清那个实例):
-	  redis                核心:单实例 1 个 Pod,高可用 3 个 Pod(清其中的主,从跟着复制)
+	  redis                核心单实例(只有 dev 部署):1 个 Pod;以前切过高可用、残留 3 个 Pod 时清其中的主,从跟着复制
 	  redis-match-cluster  match 的 Redis Cluster:逐主节点 FLUSHALL(Cluster 里 FLUSHALL 只清本节点)
 	  redis-player         玩家域 Redis Cluster(-PlayerRedisMasters):同上,逐主节点。口令在 Pod 自己的 REDIS_PASSWORD 里(Secret redis-player-auth)
 	  redis-control        控制 Redis Cluster(-ControlRedisMasters):同上,逐主节点,口令来自 Secret redis-control-auth。两套集群的名字取自 Get-RedisClusters,
@@ -4726,7 +4877,7 @@ $script:ControlRedisConfigHashAnnotation = 'mmorpg.io/control-redis-config-hash'
 
 .DESCRIPTION
 	开了控制集群(-ControlRedisMasters ≥ 3,staging / prod 必须开):redis-control 的种子,Cluster = $true,口令在 Secret redis-control-auth;
-	没开(只有 dev):核心单实例 redis.<infra>:6379(Service redis,单实例与高可用两种形态同一个地址),口令在 Secret redis-auth。
+	没开(只有 dev):核心单实例 redis.<infra>:6379(Service redis),口令在 Secret redis-auth。
 	消费方:Go 服务的 ControlRedis 段与 login 的排队、gateway 的限流(New-ControlRedisConfigYaml、gateway 的 spring.data.redis)、
 	C++ scene 的 control_redis(New-NodeConfigMapYaml)、各容器的口令变量(Add-SharedRedisAuthToManifest、Get-SceneControlRedisEnvLines)、
 	连接总账与 k8s_gate_drain.ps1 的排空标记。唤醒频道的发布方(scene)与订阅方(guild、trade、data-service)由此必然在同一套 Redis 上。
@@ -5102,8 +5253,8 @@ function New-RedisClusterManifest {
 	把一套集群的口令同步成一个 namespace 里的 Secret(redis-player-auth / redis-control-auth)。没开集群时什么都不做;开了集群而口令为空(dev)时删掉残留。
 
 .DESCRIPTION
-	infra namespace(集群本身与全局服务)一份;玩家域还要每个 zone namespace(login、player-locator、scene-manager、scene)各一份:Secret 不能跨 namespace 引用。
-	控制集群在 zone namespace 里的那一份随第 6b 批接入服务时加。
+	infra namespace(集群本身与全局服务)一份,每个 zone namespace 两套各一份(Apply-Zone 开头):Secret 不能跨 namespace 引用。
+	玩家域给 login、player-locator、scene-manager、data-service 与 scene,控制集群给 scene、zone 级 Go 服务与 gateway(缺口第 34 条第 6b-1 批)。
 	必须先于引用它的工作负载:Go 与 scene 的 secretKeyRef 不写 optional,缺 Secret 卡在 CreateContainerConfigError,而不是带着空口令起来收一屏 NOAUTH。
 #>
 function Sync-RedisClusterAuthSecret {
@@ -5334,6 +5485,13 @@ $GoSvcCatalogue = @{
 	# gate 是否只连路由服由 -GateRouterMode 决定:默认 "1" 下它是 gate 唯一的 gRPC 目标、依赖门等它就绪;以 "0" 回退时 gate 不连它。
 	# StartsBeforeZones:gate 的依赖门要等它,它自己启动不读全局库、不调 data_service,所以必须也可以排在 zone 之前。
 	"client-rpc-router" = @{ ConfigMap = "go-svc-client-rpc-router-config"; Manifest = "client-rpc-router.yaml"; Port = 50600; ConfigFlag = "-f"; ConfigFile = "client_rpc_router.yaml"; ImageName = "mmorpg-client-rpc-router"; Global = $true; StartsBeforeZones = $true }
+	# 内容安全 content-guard(docs/design/rename-and-content-safety.md §6):名字与聊天的文字送检。全局池、无状态(只连 etcd),与路由服同放 infra namespace。
+	# 端口 50250 与 go/content_guard/etc/content_guard.yaml、go_services.ps1 一致;metrics 9290(/healthz 也在这个口,就绪探针用它)。
+	# manifest 在 deploy/k8s/manifests/go-svc/content-guard.yaml(replicas 2 + podAntiAffinity + PDB,注入 POD_IP)。
+	# 不标 StartsBeforeZones:它自己启动不依赖别的服务,但也没有谁的依赖门在等它——调用方(login / guild / chat / scene)都是用到时才拨,
+	# 它没起来时这些入口回可重试的错误。排在缺省位置(第一个 zone 的 data-service 之后)即可。
+	# staging / prod 的 ConfigMap 要求词库(RequireLexicon: true):**首次部署前先用 go/content_guard/cmd/lexicon 把词库发布到 etcd**,否则副本不就绪。
+	"content-guard" = @{ ConfigMap = "go-svc-content-guard-config"; Manifest = "content-guard.yaml"; Port = 50250; ConfigFlag = "-f"; ConfigFile = "content_guard.yaml"; ImageName = "mmorpg-content-guard"; Global = $true }
 	# 聚宝斋 trade(docs/design/jubaozhai-market.md,P1):商品表天然有跨 zone 的行,所以是全局池(Global),与 chat 同放 infra namespace。
 	# 客户端只经 gate → client-rpc-router 可达:-GateRouterMode 默认 "1" 下可达;以 "0" 回退时「部署得起来但玩家不可达」,与 chat 同口径。
 	# 端口 50800 / metrics 9230 与 go/trade/etc/trade.yaml、go_services.ps1 一致;ImageName 与 go_svc_image.ps1 的 trade 条目一致。
@@ -5378,6 +5536,12 @@ $GoSvcCatalogue = @{
 	# 客户端只经 gate → client-rpc-router 可达(路由服按 RankNodeService.rpc/ 前缀发现,rank 的 go-zero Etcd.Key 留空,D-13);
 	# `-GateRouterMode 0` 时部署得起来但玩家够不着(与 chat / friend / mail 同口径)。端口与 go/rank/etc/rank.yaml、go_services.ps1 一致;
 	# 现役 rank 使用 SQL 权威代次及 rank-migrate，奖励经 mail 发放；不启用历史 Redis 写榜 runtime。榜的写入走全球权威库,不经 Kafka。
+	# 支付 payment(docs/design/payment-recharge.md §22):支付意图与渠道交易事实按订单存,是全局池(Global),infra namespace 一份。
+	# 客户端只经 gate → client-rpc-router 可达(路由服按 PaymentNodeService.rpc/ 前缀发现,payment 的 go-zero Etcd.Key 留空,D-13);
+	# 渠道回调走独立的 HTTP 口 18130,经 Service payment-notify 对集群外开放(manifests/go-svc/payment.yaml)。端口 51200 / metrics 9280 与
+	# go/payment/etc/payment.yaml、go_services.ps1 一致;ImageName 与 go_svc_image.ps1 的 payment 条目一致。独占库 mmorpg_payment(D-14),表由 payment-migrate Job 建。
+	# 它以 payment 角色调集群内的官方商城(Get-MallServiceUrl);Payment 段按 -PaymentConfigPath 渲染(Get-PaymentDeployPlan)。不在金丝雀名单里。
+	payment = @{ ConfigMap = "go-svc-payment-config"; Manifest = "payment.yaml"; Port = 51200; ConfigFlag = "-f"; ConfigFile = "payment.yaml"; ImageName = "mmorpg-payment"; Global = $true; MigrateJob = "payment-migrate.yaml" }
 }
 
 # 目录里非全局(= 随 zone 部署)的服务名。两处 zone 循环共用,避免各写一遍过滤条件。
@@ -5747,6 +5911,15 @@ function Assert-LogicalDbPreflight {
 $JavaSvcCatalogue = @{
 	auth    = @{ ConfigMap = "java-svc-auth-config";    Manifest = "auth.yaml";    HttpPort = 5555; GrpcPort = 5556; ImageName = "mmorpg-auth" }
 	gateway = @{ ConfigMap = "java-svc-gateway-config"; Manifest = "gateway.yaml"; HttpPort = 8081; GrpcPort = 0;    ImageName = "mmorpg-gateway" }
+	# 官方商城 mall(java/mall_game):全局服务(Global),infra namespace 一份,zone-up 不部署它(Get-ZoneScopedJavaSvcNames 排除)。
+	# infra-up / all-up 带 -JavaSvcRegistry 且同时部署全局 Go 服务时由 Apply-MallPrepare / Apply-MallWorkload 部署(Test-GlobalJavaSvcDeployed)。
+	# 端口 18120 与 jar 内 application.yaml 的 server.port 缺省值、Get-MallServiceUrl 一致;ImageName 与 java_svc_image.ps1 的 mall 条目一致。
+	mall    = @{ ConfigMap = "java-svc-mall-config";    Manifest = "mall.yaml";    HttpPort = 18120; GrpcPort = 0;   ImageName = "mmorpg-mall"; Global = $true }
+}
+
+# 目录里随 zone 部署的 Java 服务名,按名字排序(理由见 Get-GlobalGoSvcNames)。Global = $true 的全局服务(目前只有 mall)不在其中。
+function Get-ZoneScopedJavaSvcNames {
+	return @($JavaSvcCatalogue.Keys | Where-Object { -not $JavaSvcCatalogue[$_].Global } | Sort-Object)
 }
 
 # 注意:OpsProfile 的副本数下限只作用于 legacy 单池参数 $SceneReplicas 与全局的 $BattleReplicas。
@@ -6974,7 +7147,8 @@ function Assert-ClientEntryDeployPreflight {
 		-DeploysBattle $deploysBattle -BattleOrchestrator $BattleOrchestrator -AgonesFleetCrdPresent $agonesFleetCrdPresent `
 		-DeploysGateway $deploysGateway -GatewayIngressHost $GatewayIngressHost -GatewayIngressTlsSecret $GatewayIngressTlsSecret `
 		-GatewayTrustedProxies $GatewayTrustedProxies `
-		-LoginDevPasswordAuth $LoginDevPasswordAuth.IsPresent -ReleaseProfile $ReleaseProfile
+		-LoginDevPasswordAuth $LoginDevPasswordAuth.IsPresent -ReleaseProfile $ReleaseProfile `
+		-WsEdgeHost $WsEdgeHost -WsEdgeTlsSecret $WsEdgeTlsSecret -WsEdgePodCidrs $WsEdgePodCidrs
 
 	# -RequireClientEndpoint 是本脚本的参数(库只给 auto 的取值规则),矛盾检查并进同一份结果,一次报全。
 	$extraErrors = @()
@@ -7016,12 +7190,28 @@ function Assert-ClientEntryDeployPreflight {
 	# login 第三方登录(微信 / QQ)参数的形状门禁与 -LoginDevPasswordAuth 同在这里、排在密钥解析之前:非法 AppId / Endpoint 报的是参数原因,
 	# 而不是「缺 MMORPG_LOGIN_WECHAT_APP_SECRET」;也排在下面只读集群的现状预检之前(纯参数检查不该先等集群)。
 	Assert-LoginAuthProviderParams -DeploysLogin $deploysLogin
+	# 实名与防沉迷参数(-LoginNppa* / -LoginAntiAddictionExtraPlayDays)的形状门禁,口径同上:排在密钥解析与集群现状预检之前,
+	# 不论本次是否部署 login 都查。开着时提醒运维把 AntiAddiction 段抄进 runtimeConfigSecret(login 常驻进程读的是那份)。
+	$antiAddictionErrors = @(Get-LoginAntiAddictionParamErrors -AppId $LoginNppaAppId -BizId $LoginNppaBizId -ExtraPlayDays $LoginAntiAddictionExtraPlayDays `
+		-CheckUrl $LoginNppaCheckUrl -QueryUrl $LoginNppaQueryUrl -LoginoutUrl $LoginNppaLoginoutUrl)
+	if ($antiAddictionErrors.Count -gt 0) {
+		throw ("login anti-addiction parameter check failed ($($antiAddictionErrors.Count) problem(s)); nothing was written:`n  - " + ($antiAddictionErrors -join "`n  - "))
+	}
+	if (-not [string]::IsNullOrEmpty($LoginNppaAppId)) {
+		if ($deploysLogin) {
+			Write-Host "Login anti-addiction: on (AntiAddiction.Nppa.SecretKeyEnv=MMORPG_LOGIN_NPPA_SECRET_KEY, injected from the Secret login-nppa; the minigame channels are platform-managed). login reads its runtime config Secret: copy the AntiAddiction section of go-svc-login-config into it before this rollout; login refuses to start while that section is missing or names another app (MMORPG_LOGIN_NPPA_EXPECTED_APP_ID / _BIZ_ID)."
+		}
+		else {
+			Write-Warning "[login-anti-addiction] -LoginNppaAppId supplied, but login is not deployed in this run (only generated with Go services during zone-up / all-up; requires -GoSvcRegistry without -SkipGoSvc); flag has no effect."
+		}
+	}
 
 	if ($DryRun) {
 		Write-Host "[dry-run] Skipping current cluster-state preflight (gate / battle modes and address sources, gateway Ingress); actual execution checks before any writes."
 		if ($deploysLogin) {
 			Write-Host "[dry-run] Skipping login third-party auth (AuthProviders / Secret $($script:LoginOAuthSecretName)) cluster-state preflight; actual execution checks before any writes."
 			Write-Host "[dry-run] Skipping login password auth (PasswordAuth) cluster-state preflight; actual execution checks before any writes."
+			Write-Host "[dry-run] Skipping login anti-addiction (AntiAddiction) cluster-state preflight; actual execution checks before any writes."
 		}
 	}
 	else {
@@ -7032,9 +7222,11 @@ function Assert-ClientEntryDeployPreflight {
 			Assert-LoginAuthProviderClusterState -Zones $zones
 			# 口令登录的防误关闸(同一个确认开关):线上模板开着、本次没给 -LoginPasswordAuth,新 Pod 拿不到连接串。
 			Assert-LoginPasswordAuthClusterState -Zones $zones
+			# 实名与防沉迷的防误关闸(同一个确认开关):线上模板开着、本次漏传或换了 AppId / BizId,新 Pod 拿不到或拿错 secretKey。
+			Assert-LoginAntiAddictionClusterState -Zones $zones
 		}
 	}
-	Write-Host "Client entry: mode=$ClientEntryMode battle_orchestrator=$BattleOrchestrator gate_service_type=$GateServiceType gate_etp=$GateExternalTrafficPolicy require_client_endpoint=$(Resolve-RequireClientEndpoint)($RequireClientEndpoint) ingress_host=$(if ($GatewayIngressHost) { $GatewayIngressHost } else { '<none>' }) login_dev_password_auth=$($LoginDevPasswordAuth.IsPresent) login_password_auth=$($LoginPasswordAuth.IsPresent) login_wechat=$(-not [string]::IsNullOrEmpty($LoginWeChatAppId)) login_qq=$(-not [string]::IsNullOrEmpty($LoginQQAppId)) login_wechat_minigame=$(-not [string]::IsNullOrEmpty($LoginWeChatMiniGameAppId)) login_douyin_minigame=$(-not [string]::IsNullOrEmpty($LoginDouyinMiniGameAppId)) login_apple=$(-not [string]::IsNullOrEmpty($LoginAppleClientId)) login_google=$(-not [string]::IsNullOrEmpty($LoginGoogleClientId)) login_apple_revoke=$(-not [string]::IsNullOrEmpty($LoginAppleTeamId)) allow_disruptive_switch=$($AllowDisruptiveSwitch.IsPresent)"
+	Write-Host "Client entry: mode=$ClientEntryMode battle_orchestrator=$BattleOrchestrator gate_service_type=$GateServiceType gate_etp=$GateExternalTrafficPolicy require_client_endpoint=$(Resolve-RequireClientEndpoint)($RequireClientEndpoint) ingress_host=$(if ($GatewayIngressHost) { $GatewayIngressHost } else { '<none>' }) login_dev_password_auth=$($LoginDevPasswordAuth.IsPresent) login_password_auth=$($LoginPasswordAuth.IsPresent) login_wechat=$(-not [string]::IsNullOrEmpty($LoginWeChatAppId)) login_qq=$(-not [string]::IsNullOrEmpty($LoginQQAppId)) login_wechat_minigame=$(-not [string]::IsNullOrEmpty($LoginWeChatMiniGameAppId)) login_douyin_minigame=$(-not [string]::IsNullOrEmpty($LoginDouyinMiniGameAppId)) login_apple=$(-not [string]::IsNullOrEmpty($LoginAppleClientId)) login_google=$(-not [string]::IsNullOrEmpty($LoginGoogleClientId)) login_apple_revoke=$(-not [string]::IsNullOrEmpty($LoginAppleTeamId)) login_anti_addiction=$(-not [string]::IsNullOrEmpty($LoginNppaAppId)) allow_disruptive_switch=$($AllowDisruptiveSwitch.IsPresent)"
 }
 
 # login / scene_manager ConfigMap 的 RequireClientEndpoint 取值(见参数 -RequireClientEndpoint):auto 跟随 -ClientEntryMode
@@ -7196,6 +7388,13 @@ function Get-BattleEntryDrift {
 			return ,@("battle(namespace=$InfraNamespace):当前 $shape 的客户端主机覆盖是 '$liveHost'(空 = 取节点 / Agones 地址),本次 -ClientPublicHost 为 '$ClientPublicHost' —— 滚动后新开的房间改报新主机。要保持现状请$keep;确认要改请加 -AllowDisruptiveSwitch。")
 		}
 	}
+	# 小游戏的 WebSocket 基地址(-WsEdgeHost → CLIENT_WS_BASE_URL),口径同 Get-GateAddressDrift:线上已经在自报、本次漏传或换了域名才拦。
+	$liveWsBaseUrl = [string](Get-PodSpecEnvValue -PodSpec $podSpec -ContainerName "battle" -EnvName $contract.ClientWsBaseUrlEnv)
+	$planWsBaseUrl = Get-ClientWsBaseUrl
+	if ($liveWsBaseUrl -and $liveWsBaseUrl -cne $planWsBaseUrl) {
+		$liveWsHost = ($liveWsBaseUrl -replace '^wss?://', '') -replace '/.*$', ''
+		return ,@("battle(namespace=$InfraNamespace):当前 $shape 自报的小游戏 WebSocket 基地址是 '$liveWsBaseUrl',本次为 '$planWsBaseUrl'(空 = 不再自报) —— 滚动后新开的房间不再给小游戏客户端下发原来的入口。要保持现状请显式传 -WsEdgeHost $liveWsHost;确认要改请加 -AllowDisruptiveSwitch。")
+	}
 	return ,@()
 }
 
@@ -7293,6 +7492,14 @@ function Get-GateAddressDrift {
 	}
 	if ($liveSource.Host -ne $planSource.Host) {
 		$drifts += "${where}:gate 自报主机将从 $($liveSource.Host) 改为 $($planSource.Host)。现有 Pod 仍报旧主机,之后任何重建(排空、崩溃、节点故障)的 Pod 改报新主机,同一 zone 混用两套地址。要保持现状请显式传 $($liveSource.HostHint);确认要改请加 -AllowDisruptiveSwitch,并随即用 k8s_gate_drain.ps1 逐个排空重建全部 gate。"
+	}
+	# 小游戏的 WebSocket 基地址(-WsEdgeHost → CLIENT_WS_BASE_URL)同样不粘滞:线上已经在自报、本次漏传或换了域名,之后重建的 gate
+	# 就不再自报(或改报另一个入口),落到它上面的小游戏玩家拿不到入口,且不报任何错。线上为空、本次新开不拦:只是多下发一个地址。
+	$liveWsBaseUrl = [string](Get-PodSpecEnvValue -PodSpec $podSpec -ContainerName "gate" -EnvName $contract.ClientWsBaseUrlEnv)
+	$planWsBaseUrl = Get-ClientWsBaseUrl
+	if ($liveWsBaseUrl -and $liveWsBaseUrl -cne $planWsBaseUrl) {
+		$liveWsHost = ($liveWsBaseUrl -replace '^wss?://', '') -replace '/.*$', ''
+		$drifts += "${where}:gate 自报的小游戏 WebSocket 基地址将从 '$liveWsBaseUrl' 改为 '$planWsBaseUrl'(空 = 不再自报)。之后重建的 gate 按新值自报,落到它上面的小游戏玩家拿不到原来的入口。要保持现状请显式传 -WsEdgeHost $liveWsHost;确认要改请加 -AllowDisruptiveSwitch。"
 	}
 	return ,$drifts
 }
@@ -7454,45 +7661,40 @@ function Assert-TlsSecretProvisioned {
 
 <#
 .SYNOPSIS
-	战斗掉落改投邮件的发件密钥 mail-producer-battle 在集群里预置对了没有(docs/design/battle-overflow-mail.md §8)。
+	运维预置在 Secret domain-service-secrets 里、签名方与验签方分处 infra 与 zone 两个 namespace 的键:两侧都要有,值必须相同。
+	单一来源:写路径门禁 Assert-SharedDomainServiceSecretsForRun、契约测试与开服手册 §1 的 Secret 表都对照它。
 
 .DESCRIPTION
-	键在运维预置的 Secret domain-service-secrets 里:infra 命名空间的 mail(验签)与每个 zone 命名空间的 scene(签名)各一份,值必须相同。
-	  - 缺 Secret 或缺键:mail 与 scene 的 Pod 都卡在 CreateContainerConfigError(两边 manifest 都是 optional: false),拒绝;
-	  - 值为空或不足 32 字节:mail 启动失败(serviceauth.New),scene 静默关掉这个功能(只有启动时一行 WARN),拒绝;
-	  - 给了 -CompareWithNamespace(zone 侧传 infra):两边值不同,scene 签的请求被 mail 以 UNAUTHENTICATED 拒绝,待寄物品压着寄不出去,拒绝。
-	这是本脚本里唯一读取 domain-service-secrets 真实值的地方:「同值」只能靠比较得到。值只在内存里解码、取长度与摘要,
-	不打印、不写文件、不进错误信息;其余键仍不读。DryRun 不连集群,只打一行将要核对什么。
+	ZoneConsumers 是 zone 侧读这把的工作负载,决定 zone 侧什么时候核:含 scene(C++,每次 zone-up / all-up 都部署)就每次都核;
+	只有 data-service 的只在本次部署 zone 的 Go 服务时核(Test-ZoneDbDeployed)。InfraConsumers 都是全局 Go 服务,本次部署
+	全局 Go 服务时才核 infra 侧(Test-GlobalGoSvcDeployed)。键名与各清单 secretKeyRef 的 key 逐字相同(契约测试按清单核对)。
+	每把都经 serviceauth 验签:去掉首尾空白后至少 32 字节;不同用途互不相同(data_service 的 validateGlobalCallerSecrets 对复用拒启)。
+	引用它们的清单一律是 optional: false:缺键时 Pod 卡在 CreateContainerConfigError;两侧值不同时验签方以 UNAUTHENTICATED 拒绝,功能静默失效
+	(战斗掉落邮件寄不出去、过户 / 删角被拒、查不到实名)。只在 zone 一侧用的键(account-directory-login、account-directory-scene-manager、
+	role-fence-db、player-store-scene)签名与验签读的是同一份 Secret,不在表里。
 #>
-function Assert-MailProducerBattleSecret {
+$script:SharedDomainServiceSecrets = @(
+	[pscustomobject]@{ Key = 'mail-producer-battle'; ZoneConsumers = @('scene'); InfraConsumers = @('mail') }
+	[pscustomobject]@{ Key = 'account-directory-trade'; ZoneConsumers = @('scene', 'data-service'); InfraConsumers = @('trade') }
+	[pscustomobject]@{ Key = 'account-directory-scene'; ZoneConsumers = @('scene', 'data-service'); InfraConsumers = @('match', 'player-inbox') }
+	[pscustomobject]@{ Key = 'account-directory-payment'; ZoneConsumers = @('data-service'); InfraConsumers = @('payment') }
+	[pscustomobject]@{ Key = 'role-fence-coordinator'; ZoneConsumers = @('data-service'); InfraConsumers = @('friend', 'guild', 'mail', 'match', 'player-inbox', 'trade') }
+	[pscustomobject]@{ Key = 'role-fence-guild'; ZoneConsumers = @('data-service'); InfraConsumers = @('guild') }
+	[pscustomobject]@{ Key = 'role-fence-trade'; ZoneConsumers = @('data-service'); InfraConsumers = @('trade') }
+	[pscustomobject]@{ Key = 'role-fence-mail'; ZoneConsumers = @('data-service'); InfraConsumers = @('mail') }
+	[pscustomobject]@{ Key = 'role-fence-match'; ZoneConsumers = @('data-service'); InfraConsumers = @('match') }
+	[pscustomobject]@{ Key = 'role-fence-player-inbox'; ZoneConsumers = @('data-service'); InfraConsumers = @('player-inbox') }
+	[pscustomobject]@{ Key = 'role-fence-friend'; ZoneConsumers = @('data-service'); InfraConsumers = @('friend') }
+	[pscustomobject]@{ Key = 'role-fence-chat'; ZoneConsumers = @('data-service'); InfraConsumers = @('chat') }
+)
+
+# 读一个 namespace 的 domain-service-secrets(只读一次),把 -Keys 逐个解码成「去掉首尾空白之后的 SHA-256 摘要」,返回 键 → 摘要。
+# 缺 Secret、缺键、过短、base64 不合法、两把同值、kubectl 读失败都 throw,一次报全这个 namespace 的缺键与过短;报错只点键名,
+# 解出来的值不出这个函数。长度口径与验签两端一致:serviceauth 按 strings.TrimSpace 后取 len([]byte),scene 去掉首尾 ASCII 空白后按字节数比。
+function Read-DomainServiceSecretDigests {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
-		[Parameter(Mandatory = $true)][string]$Purpose,
-		[string]$CompareWithNamespace = ''
-	)
-
-	if ($DryRun) {
-		$sameAs = if ([string]::IsNullOrWhiteSpace($CompareWithNamespace)) { '' } else { ", and it must equal the same key in namespace $CompareWithNamespace" }
-		Write-Host "[dry-run] would check that Secret domain-service-secrets in namespace $Namespace has key mail-producer-battle (at least 32 bytes$sameAs) ($Purpose)"
-		return
-	}
-	$own = Read-MailProducerBattleSecret -Namespace $Namespace -Purpose $Purpose
-	if ([string]::IsNullOrWhiteSpace($CompareWithNamespace)) {
-		Write-Host "[preflight] mail-producer-battle is present in namespace $Namespace (at least 32 bytes) ($Purpose)"
-		return
-	}
-	$peer = Read-MailProducerBattleSecret -Namespace $CompareWithNamespace -Purpose "$Purpose; compared with namespace $Namespace"
-	if ($own.Sha256 -ne $peer.Sha256) {
-		throw "Secret domain-service-secrets key mail-producer-battle in namespace $Namespace differs from namespace $CompareWithNamespace ($Purpose). mail would refuse the scene's signature (UNAUTHENTICATED) and battle overflow mail would stay queued. Make the two values identical (values are not printed). Nothing was written for this step."
-	}
-	Write-Host "[preflight] mail-producer-battle in namespace $Namespace matches namespace $CompareWithNamespace ($Purpose)"
-}
-
-# 读一份 mail-producer-battle:缺 Secret、缺键、过短、base64 不合法、kubectl 读失败都 throw。
-# 返回的只有摘要;解出来的值不出这个函数,报错里也不带值。
-function Read-MailProducerBattleSecret {
-	param(
-		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string[]]$Keys,
 		[Parameter(Mandatory = $true)][string]$Purpose
 	)
 
@@ -7506,43 +7708,97 @@ function Read-MailProducerBattleSecret {
 	}
 	$text = ([string]($out | Out-String)).Trim()
 	if ([string]::IsNullOrEmpty($text)) {
-		throw "Secret domain-service-secrets is missing in namespace $Namespace ($Purpose). Provision it with the key mail-producer-battle first (at least 32 bytes, the same value in the infra namespace and in every zone namespace), see docs/ops/k8s-open-server-runbook.md §1. Nothing was written for this step."
+		throw "Secret domain-service-secrets is missing in namespace $Namespace ($Purpose). Provision it first with $($Keys -join ', ') (each at least 32 bytes, the same value in the infra namespace and in every zone namespace), see docs/ops/k8s-open-server-runbook.md §1. Nothing was written for this step."
 	}
 	$data = (ConvertFrom-Json -InputObject $text).data
-	$encoded = if ($null -eq $data) { '' } else { [string]$data.'mail-producer-battle' }
-	if ([string]::IsNullOrEmpty($encoded)) {
-		throw "Secret domain-service-secrets in namespace $Namespace lacks the key mail-producer-battle ($Purpose). The mail and scene pods would stay in CreateContainerConfigError. Nothing was written for this step."
+	$digests = [ordered]@{}
+	$missing = [System.Collections.Generic.List[string]]::new()
+	$short = [System.Collections.Generic.List[string]]::new()
+	foreach ($key in $Keys) {
+		$encoded = if ($null -eq $data) { '' } else { [string]$data.$key }
+		if ([string]::IsNullOrEmpty($encoded)) {
+			$missing.Add($key)
+			continue
+		}
+		try {
+			$value = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encoded)).Trim()
+		}
+		catch {
+			throw "The key $key in namespace $Namespace is not valid base64 ($Purpose). Nothing was written for this step."
+		}
+		$bytes = [System.Text.Encoding]::UTF8.GetBytes($value)
+		if ($bytes.Length -lt 32) {
+			$short.Add($key)
+			continue
+		}
+		$sha256 = [System.Security.Cryptography.SHA256]::Create()
+		try { $digests[$key] = ([BitConverter]::ToString($sha256.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant() }
+		finally { $sha256.Dispose() }
 	}
-	try {
-		$value = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encoded)).Trim()
+	if ($missing.Count -gt 0) {
+		throw "Secret domain-service-secrets in namespace $Namespace lacks the key(s) $($missing -join ', ') ($Purpose). The Pods that reference them would stay in CreateContainerConfigError. Nothing was written for this step."
 	}
-	catch {
-		throw "The key mail-producer-battle in namespace $Namespace is not valid base64 ($Purpose). Nothing was written for this step."
+	if ($short.Count -gt 0) {
+		throw "The key(s) $($short -join ', ') in namespace $Namespace are shorter than 32 bytes ($Purpose). The services that verify them refuse to start or switch the feature off. Nothing was written for this step."
 	}
-	# 字节数与两端口径一致:scene 去掉首尾 ASCII 空白后按字节数比(TrimAscii),mail 按 strings.TrimSpace 后取 len([]byte)。
-	$bytes = [System.Text.Encoding]::UTF8.GetBytes($value)
-	if ($bytes.Length -lt 32) {
-		throw "The key mail-producer-battle in namespace $Namespace is shorter than 32 bytes ($Purpose). mail refuses to start with it and scene would switch battle overflow mail off. Nothing was written for this step."
+	# 不同用途不得共用一把:持一把的服务就能冒充另一个调用方(data_service 对复用拒启)。
+	$keyByDigest = @{}
+	foreach ($key in $digests.Keys) {
+		$digest = $digests[$key]
+		if ($keyByDigest.ContainsKey($digest)) {
+			throw "The keys $($keyByDigest[$digest]) and $key in namespace $Namespace hold the same value ($Purpose). Every purpose needs its own secret, otherwise whoever holds one can act as the other caller. Nothing was written for this step."
+		}
+		$keyByDigest[$digest] = $key
 	}
-	$sha256 = [System.Security.Cryptography.SHA256]::Create()
-	try { $digest = $sha256.ComputeHash($bytes) }
-	finally { $sha256.Dispose() }
-	return [pscustomobject]@{ Sha256 = ([BitConverter]::ToString($digest) -replace '-', '').ToLowerInvariant() }
+	return $digests
 }
 
-# 本次命令要核对的 mail-producer-battle:infra 的 mail(本次部署全局 Go 服务时),以及每个 zone 的 scene(zone-up 与 all-up)。
-# zone 侧与 infra 比。DryRun 只打说明。写路径门禁调用,早于任何集群写操作。
-function Assert-MailProducerBattleSecretForRun {
-	$infraSide = ($Command -eq 'infra-up' -or ($Command -eq 'all-up' -and -not $SkipInfra)) -and
-		-not $SkipGoSvc -and -not [string]::IsNullOrWhiteSpace($GoSvcRegistry)
-	if ($infraSide) {
-		Assert-MailProducerBattleSecret -Namespace $InfraNamespace -Purpose 'mail verifies the battle overflow sender'
+<#
+.SYNOPSIS
+	本次命令要核对的跨 namespace 共享密钥($script:SharedDomainServiceSecrets):infra 侧在本次部署全局 Go 服务时核;每个 zone 侧在
+	zone-up / all-up 时核(只有 data-service 用的键要本次部署 zone 的 Go 服务),并与 infra 侧逐键比。写路径门禁调用,早于任何集群写操作。
+
+.DESCRIPTION
+	每个 namespace 只读一次 domain-service-secrets(Read-DomainServiceSecretDigests):键在、去掉首尾空白后至少 32 字节、互不相同;
+	zone 侧与 infra 侧摘要不同的键一次报全。这是本脚本里唯一读取 domain-service-secrets 真实值的地方(「同值」只能靠比较得到):
+	值只在内存里解码、取长度与摘要,不打印、不写文件、不进错误信息。DryRun 不连集群,每个 namespace 只打一行将要核对什么。
+#>
+function Assert-SharedDomainServiceSecretsForRun {
+	$infraKeys = @()
+	if (Test-GlobalGoSvcDeployed) {
+		$infraKeys = @($script:SharedDomainServiceSecrets | ForEach-Object { $_.Key })
 	}
-	if ($Command -notin @('zone-up', 'all-up')) { return }
-	$zoneNames = if ($Command -eq 'zone-up') { @($ZoneName) } else { @(Get-ZonesFromJson -Path (Resolve-ZonesConfigPath) | ForEach-Object { $_.name }) }
+	$zoneKeys = @()
+	$zoneNames = @()
+	if ($Command -in @('zone-up', 'all-up')) {
+		$zoneGoSvc = Test-ZoneDbDeployed
+		$zoneKeys = @($script:SharedDomainServiceSecrets | Where-Object { $zoneGoSvc -or $_.ZoneConsumers -contains 'scene' } | ForEach-Object { $_.Key })
+		$zoneNames = if ($Command -eq 'zone-up') { @($ZoneName) } else { @(Get-ZonesFromJson -Path (Resolve-ZonesConfigPath) | ForEach-Object { $_.name }) }
+	}
+	if ($DryRun) {
+		if ($infraKeys.Count -gt 0) {
+			Write-Host "[dry-run] would check that Secret domain-service-secrets in namespace $InfraNamespace has $($infraKeys -join ', ') (each at least 32 bytes, all different)"
+		}
+		foreach ($zoneName in $zoneNames) {
+			Write-Host "[dry-run] would check that Secret domain-service-secrets in namespace $(Get-ZoneNamespace -Name $zoneName) has $($zoneKeys -join ', ') (each at least 32 bytes, all different, each equal to the same key in namespace $InfraNamespace)"
+		}
+		return
+	}
+	if ($infraKeys.Count -eq 0 -and $zoneNames.Count -eq 0) { return }
+	# infra 侧只读一次:本次部署全局 Go 服务时核全表,只发 zone 时只读要比的那几把。
+	$readInfraKeys = if ($infraKeys.Count -gt 0) { $infraKeys } else { $zoneKeys }
+	$infraDigests = Read-DomainServiceSecretDigests -Namespace $InfraNamespace -Keys $readInfraKeys -Purpose 'shared with the zone namespaces'
+	if ($infraKeys.Count -gt 0) {
+		Write-Host "[preflight] domain-service-secrets in namespace $InfraNamespace has the $($infraKeys.Count) keys shared with the zones (each at least 32 bytes, all different)"
+	}
 	foreach ($zoneName in $zoneNames) {
-		Assert-MailProducerBattleSecret -Namespace (Get-ZoneNamespace -Name $zoneName) -CompareWithNamespace $InfraNamespace `
-			-Purpose "scene in zone $zoneName signs the battle overflow sender"
+		$namespace = Get-ZoneNamespace -Name $zoneName
+		$zoneDigests = Read-DomainServiceSecretDigests -Namespace $namespace -Keys $zoneKeys -Purpose "zone $zoneName"
+		$differ = @($zoneKeys | Where-Object { $zoneDigests[$_] -cne $infraDigests[$_] })
+		if ($differ.Count -gt 0) {
+			throw "Secret domain-service-secrets in namespace $namespace differs from namespace $InfraNamespace for $($differ -join ', ') (zone $zoneName). The verifying side rejects the signing side's calls (UNAUTHENTICATED), so the features behind these keys fail silently. Make the values identical (values are not printed). Nothing was written for this step."
+		}
+		Write-Host "[preflight] domain-service-secrets in namespace $namespace matches namespace $InfraNamespace for $($zoneKeys.Count) shared keys (zone $zoneName)"
 	}
 }
 
@@ -7608,9 +7864,10 @@ function Assert-SpringPlaceholderSafe {
 	把共享 Redis 口令同步成一个 namespace 里的 Secret redis-auth:口令非空时建或更新,为空(dev 未注入)时删掉残留。
 
 .DESCRIPTION
-	infra namespace 那份给核心 Redis 服务端(redis.yaml 的可选引用,Secret 不在 = 无口令启动;只有 dev 部署核心,staging / prod 口令是空串、这里删掉残留)、
-	battle 与全局 Go 服务(match / trade / friend / player-inbox / guild / mail);每个 zone namespace 一份同名副本给 gate / scene、
-	zone 级 Go 服务(login / data-service / player-locator / scene-manager)与 gateway(Secret 不能跨 namespace 引用)。
+	核心只在 dev 没开控制集群时部署(Test-CoreRedisDeployed),staging / prod 口令是空串,这里删掉各 namespace 的残留。部署核心时:
+	infra namespace 那份给核心服务端(redis.yaml 的可选引用,Secret 不在 = 无口令启动)与全局 Go 服务(控制域的 trade / friend / player-inbox / guild,
+	以及 match / mail 的回落段);每个 zone namespace 一份同名副本给 scene、zone 级 Go 服务(login / data-service / player-locator / scene-manager)
+	与 gateway(Secret 不能跨 namespace 引用)。
 	必须先于引用它的工作负载:服务端的引用是 optional,Pod 起来时 Secret 还不在就以无口令启动,而客户端带口令,全线被拒;
 	scene、Go 服务与 gateway 的引用不是 optional(Get-SceneControlRedisEnvLines、Add-SharedRedisAuthToManifest),缺 Secret 卡在
 	CreateContainerConfigError;mail 的 manifest 里那一条是 optional(dev 档 Secret 不存在,它按空口令连)。
@@ -7835,6 +8092,10 @@ service_discovery_prefixes:
   # 寄进邮箱(docs/design/battle-overflow-mail.md)。mail 经 go/shared/noderegistry 注册 NodeInfo;弱依赖,不进 DependencyGate。
   # 与 bin/etc/base_deploy_config.yaml 对齐。
   - "MailNodeService.rpc"
+  # 内容安全(Go-Zero gRPC,infra namespace 全服一份):scene 把玩家填写的名字(角色改名、宠物名)送它判定
+  # (docs/design/rename-and-content-safety.md §6.6)。content_guard 经 go/shared/noderegistry 注册 NodeInfo;弱依赖,不进 DependencyGate。
+  # 与 bin/etc/base_deploy_config.yaml 对齐。
+  - "ContentGuardNodeService.rpc"
 # 这里不写 AuditTopicGeneration(2026-11-12 起):C++ 不直接发审计 topic,世代号在 db 的 ConfigMap 里(AuditOutbox.TopicGeneration)。
 Kafka:
   Brokers:
@@ -9388,7 +9649,49 @@ function New-CppNodePodCommon {
 	return New-ClientEntryPodCommon -Image $Image -ImagePullPolicy $PullPolicy `
 		-LogVolumeSizeLimit $script:CppLogVolumeSizeLimit -LogPrunerCommand $script:CppLogPrunerCommand `
 		-GrpcServerMaxPollers 0 -PodAnnotations $podAnnotations -OpenFileLimitMode $NodeOpenFileLimitMode -MetricsPort $CppMetricsPort `
-		-ReleaseTrack $Track -BuildLabel (Get-CppBuildLabelValue -Image $Image) -SecretEnv $secretEnv @sidecar
+		-ReleaseTrack $Track -BuildLabel (Get-CppBuildLabelValue -Image $Image) -ClientWsBaseUrl (Get-ClientWsBaseUrl) `
+		-SecretEnv $secretEnv @sidecar
+}
+
+# 小游戏 WebSocket 入口的基地址(-WsEdgeHost,docs/design/minigame-websocket-gate.md W7):gate / battle 据它自报
+# client_ws_url = <基地址>/<PodIP>/<端口>,与 ws-edge 的转发路径(lib 契约 WsEdgePathPrefix)是同一个前缀。没给域名返回空串(不接小游戏)。
+function Get-ClientWsBaseUrl {
+	if ([string]::IsNullOrWhiteSpace($WsEdgeHost)) {
+		return ''
+	}
+	return "wss://$WsEdgeHost$((Get-ClientEntryContract).WsEdgePathPrefix)"
+}
+
+# ws-edge 的清单(lib New-WsEdgeYaml);没给 -WsEdgeHost 返回 $null。目标端口是 gate 与 battle 的客户端口(与 New-ExternalGateManifests、
+# New-BattleWorkloadManifest 传给生成器的 -RpcPort 相同),目标 app 标签含金丝雀 battle 池。
+function New-WsEdgeManifest {
+	if ([string]::IsNullOrWhiteSpace($WsEdgeHost)) {
+		return $null
+	}
+	return New-WsEdgeYaml -EdgeHost $WsEdgeHost -TlsSecretName $WsEdgeTlsSecret `
+		-PodCidrs (ConvertTo-ClientEntryCidrList -CommaSeparated $WsEdgePodCidrs) `
+		-TargetPorts @(18000, 20000) -TargetApps (Get-ReleaseTrackAppLabels -Apps @('gate', 'battle')) `
+		-Image $WsEdgeImage -Replicas $WsEdgeReplicas -ServiceType $WsEdgeServiceType -NodePort $WsEdgeNodePort
+}
+
+# ws-edge 要挂的 TLS Secret 必须已经预置:缺了 Pod 只会停在 ContainerCreating,而 gate / battle 已经在下发经它转发的地址。
+# 在 Apply-Infra 的第一个写操作之前调用;DryRun 只打一行说明,不连集群。只核对存在,不读内容。
+function Assert-WsEdgeTlsSecretPresent {
+	if ($DryRun) {
+		Write-Host "[dry-run] would check that TLS Secret $WsEdgeTlsSecret exists in namespace $InfraNamespace (ws-edge, -WsEdgeHost $WsEdgeHost)"
+		return
+	}
+	$allArgs = @()
+	$allArgs += Build-KubectlBaseArgs
+	$allArgs += @('get', 'secret', $WsEdgeTlsSecret, '-n', $InfraNamespace, '--ignore-not-found', '-o', 'name')
+	$out = & kubectl @allArgs
+	$exitCode = $LASTEXITCODE
+	if ($exitCode -ne 0) {
+		throw "Cannot read Secret $WsEdgeTlsSecret in namespace $InfraNamespace (ws-edge TLS): kubectl exit code $exitCode. Nothing was written."
+	}
+	if ([string]::IsNullOrWhiteSpace(([string]($out | Out-String)))) {
+		throw "TLS Secret $WsEdgeTlsSecret is missing in namespace $InfraNamespace (-WsEdgeHost $WsEdgeHost). Create it first (kubectl create secret tls, with the full certificate chain in tls.crt), see docs/design/minigame-websocket-gate.md W8. Nothing was written."
+	}
 }
 
 <#
@@ -9571,13 +9874,13 @@ function Write-CppOpenFileLimitRefusals {
 	}
 }
 
-# SQL 写者(Go 的 $script:SqlWriterGoSvcs 与 Java 的 gateway,含各自的 <svc>-canary)是 StatefulSet:Pod 序号就是写者名册的槽位
+# SQL 写者(Go 的 $script:SqlWriterGoSvcs 与 Java 的 gateway、mall,含各自的 <svc>-canary)是 StatefulSet:Pod 序号就是写者名册的槽位
 # (docs/design/writer-roster-exhaustion-20261106.md §5.5)。其余 Go / Java 服务和 C++ 节点是 Deployment。
 # 按名字等 rollout、读线上对象的地方按它取 kubectl 资源类型。
 function Get-WorkloadKind {
 	param([Parameter(Mandatory = $true)][string]$Name)
 	$service = $Name -creplace '-canary$', ''
-	if ($script:SqlWriterGoSvcs -ccontains $service -or $service -ceq 'gateway') { return 'statefulset' }
+	if ($script:SqlWriterGoSvcs -ccontains $service -or $service -cin @('gateway', 'mall')) { return 'statefulset' }
 	return 'deployment'
 }
 
@@ -9614,6 +9917,53 @@ function Wait-ForDeploymentReady {
 	throw "Deployment rollout failed: namespace=$Namespace deployment=$DeploymentName"
 }
 
+# StatefulSet 滚动的等待预算(秒),纯函数,契约测试按 AST 抽出直接调用(k8s_migrate_gate.tests.ps1)。
+# RollingUpdate 一次换一个副本,每个副本最慢要走完:旧 Pod 优雅退出(上限 terminationGracePeriodSeconds)
+# + 新 Pod 拉起到就绪(就绪探针的前几个周期,按 30s 留)+ minReadySeconds,才换下一个。预算 = max(-WaitTimeoutSeconds, 副本数 × 单副本耗时)。
+# 原来一律等 -WaitTimeoutSeconds(缺省 180s,按 Deployment 定的)。staging / prod 恒等 db 滚完再发 scene(数据覆写审计 r2-ps#11),
+# db 2 副本、宽限 45s、minReadySeconds 20 最慢就要 190s;副本一多就在发 scene 之前误判超时、中断发布
+# (fail-closed,不丢数据,但发布白白失败;2026-11-20 独立评审)。其余 SQL 写者与基础设施的 StatefulSet 同一条规则。
+function Get-StatefulSetRolloutWaitSeconds {
+	param(
+		[Parameter(Mandatory = $true)][int]$Replicas,
+		[Parameter(Mandatory = $true)][int]$TerminationGraceSeconds,
+		[Parameter(Mandatory = $true)][int]$MinReadySeconds,
+		[Parameter(Mandatory = $true)][int]$FloorSeconds
+	)
+	$podReadyAllowanceSeconds = 30
+	$perReplicaSeconds = $TerminationGraceSeconds + $MinReadySeconds + $podReadyAllowanceSeconds
+	return [Math]::Max($FloorSeconds, $Replicas * $perReplicaSeconds)
+}
+
+# 线上 StatefulSet 的滚动等待预算:读 spec 的副本数、minReadySeconds、terminationGracePeriodSeconds,交给上面的公式。
+# 读不到(对象不存在、kubectl 失败、字段不是整数)就退回 -WaitTimeoutSeconds:接下来的 rollout status 会照原样报出真正的错误。
+function Get-LiveStatefulSetRolloutWaitSeconds {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$StatefulSetName
+	)
+
+	$allArgs = @()
+	$allArgs += Build-KubectlBaseArgs
+	$allArgs += @("get", "statefulset", $StatefulSetName, "-n", $Namespace, "--ignore-not-found", "-o",
+		"jsonpath={.spec.replicas};{.spec.minReadySeconds};{.spec.template.spec.terminationGracePeriodSeconds}")
+	$out = & kubectl @allArgs
+	if ($LASTEXITCODE -ne 0) {
+		Write-Warning "Could not read the spec of statefulset/$StatefulSetName in $Namespace, waiting the default ${WaitTimeoutSeconds}s"
+		return $WaitTimeoutSeconds
+	}
+	$fields = @(([string]($out | Out-String)).Trim() -split ';')
+	$replicas = 0
+	$minReady = 0
+	$grace = 30 # K8s 缺省的 terminationGracePeriodSeconds
+	if ($fields.Count -ne 3 -or -not [int]::TryParse($fields[0], [ref]$replicas) -or
+		($fields[1] -ne '' -and -not [int]::TryParse($fields[1], [ref]$minReady)) -or
+		($fields[2] -ne '' -and -not [int]::TryParse($fields[2], [ref]$grace))) {
+		return $WaitTimeoutSeconds
+	}
+	return Get-StatefulSetRolloutWaitSeconds -Replicas $replicas -TerminationGraceSeconds $grace -MinReadySeconds $minReady -FloorSeconds $WaitTimeoutSeconds
+}
+
 # StatefulSet 版的 rollout 等待(etcd 与 kafka)。`kubectl rollout status statefulset/...`
 # 对 RollingUpdate 策略的 StatefulSet 有效,全部副本 Ready 才返回 0。
 # 之所以单独等它们:
@@ -9629,11 +9979,12 @@ function Wait-ForStatefulSetReady {
 	)
 
 	if ($DryRun) {
-		Write-Host "[dry-run] kubectl rollout status statefulset/$StatefulSetName -n $Namespace --timeout ${WaitTimeoutSeconds}s"
+		Write-Host "[dry-run] kubectl rollout status statefulset/$StatefulSetName -n $Namespace --timeout ${WaitTimeoutSeconds}s (a live run raises it to replicas x per-pod rollout time when that is longer)"
 		return
 	}
 
-	Invoke-Kubectl -Args @("rollout", "status", "statefulset/$StatefulSetName", "-n", $Namespace, "--timeout", ("{0}s" -f $WaitTimeoutSeconds)) -AllowFailure
+	$timeoutSeconds = Get-LiveStatefulSetRolloutWaitSeconds -Namespace $Namespace -StatefulSetName $StatefulSetName
+	Invoke-Kubectl -Args @("rollout", "status", "statefulset/$StatefulSetName", "-n", $Namespace, "--timeout", ("{0}s" -f $timeoutSeconds)) -AllowFailure
 	if ($LASTEXITCODE -eq 0) {
 		return
 	}
@@ -9729,7 +10080,7 @@ function Wait-ForZoneReady {
 	}
 	if (-not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry)) {
 		# 按名字排序,与 Apply-JavaSvcManifests 同一先后(理由见 Get-GlobalGoSvcNames)。
-		foreach ($svcName in @($JavaSvcCatalogue.Keys | Sort-Object)) {
+		foreach ($svcName in (Get-ZoneScopedJavaSvcNames)) {
 			# 目录里有条目但没有 manifest 的服务(auth:仓库里没有可打包的工程,
 			# manifests/java-svc/auth.yaml 也不存在)在 Apply-JavaSvcManifests 里只告警不 apply,
 			# 这里若照等就会在 `rollout status deploy/auth` 上白白超时,拖垮整条 -WaitReady。
@@ -10314,6 +10665,163 @@ function Assert-LoginPasswordAuthClusterState {
 	}
 	if ($problems.Count -gt 0) {
 		throw ("login password auth cluster-state preflight failed ($($problems.Count) zone(s)). Nothing was written.`n  - " + ($problems -join "`n  - "))
+	}
+}
+
+<#
+.SYNOPSIS
+	实名与防沉迷参数(-LoginNppaAppId / -LoginNppaBizId / -LoginAntiAddictionExtraPlayDays / -LoginNppaCheckUrl / -LoginNppaQueryUrl /
+	-LoginNppaLoginoutUrl)的形状校验。纯函数:只看入参,返回错误文本数组(空 = 合法),不抛、不打印。
+
+.DESCRIPTION
+	调用方:写路径入口的 Assert-ClientEntryDeployPreflight(密钥解析与任何写操作之前一次报全)与生成器 New-LoginAntiAddictionYaml(纵深防御)。
+	规则对齐 login 的启动期门禁(go/login/internal/config/anti_addiction.go resolveAntiAddiction),部署侧更严,宁可在部署时拒也不留一个拒启的 Pod:
+	  - AppId 空串 = 不开;AppId 与 BizId 要么都给要么都不给,只允许 [A-Za-z0-9_.-](原样写进 YAML 双引号标量,也进 HTTP 请求头)。
+	  - 可玩日与三个地址只能与 AppId 一起给:它们只在渲染 AntiAddiction 段时才写,静默丢掉等于让人以为生效了。
+	  - 可玩日逗号分隔(项两边的空白去掉),每项是存在的日期且恰好写成 yyyy-MM-dd:与 login 的 time.DateOnly 往返校验一致,
+	    2026-02-30、2026-1-5 都拒绝;空项(多写的逗号)拒绝。
+	  - 地址须是 http(s)://主机[:端口][/路径],不带用户信息、查询串与片段,不含 `${`;scheme 只认小写。官方的查询与上报地址就是 http,
+	    所以各档位都接受 http。
+	正则一律以 \z 收尾:.NET 的 $ 会放过结尾的一个换行,换行进 YAML 就是注入。报错只点参数名,不回显值。
+#>
+function Get-LoginAntiAddictionParamErrors {
+	param(
+		[AllowEmptyString()][string]$AppId = '',
+		[AllowEmptyString()][string]$BizId = '',
+		[AllowEmptyString()][string]$ExtraPlayDays = '',
+		[AllowEmptyString()][string]$CheckUrl = '',
+		[AllowEmptyString()][string]$QueryUrl = '',
+		[AllowEmptyString()][string]$LoginoutUrl = ''
+	)
+
+	$errors = [System.Collections.Generic.List[string]]::new()
+	$hasAppId = -not [string]::IsNullOrEmpty($AppId)
+	if ($hasAppId -ne (-not [string]::IsNullOrEmpty($BizId))) {
+		$errors.Add('-LoginNppaAppId and -LoginNppaBizId go together: login refuses to start with only one of AntiAddiction.Nppa.AppId / BizId.')
+	}
+	foreach ($id in @(
+			[pscustomobject]@{ Param = '-LoginNppaAppId'; Value = $AppId }
+			[pscustomobject]@{ Param = '-LoginNppaBizId'; Value = $BizId })) {
+		if (-not [string]::IsNullOrEmpty($id.Value) -and $id.Value -cnotmatch '^[A-Za-z0-9_.-]+\z') {
+			$errors.Add("$($id.Param) only allows [A-Za-z0-9_.-] (it is written verbatim into the login ConfigMap).")
+		}
+	}
+	$urls = @(
+		[pscustomobject]@{ Param = '-LoginNppaCheckUrl'; Value = $CheckUrl }
+		[pscustomobject]@{ Param = '-LoginNppaQueryUrl'; Value = $QueryUrl }
+		[pscustomobject]@{ Param = '-LoginNppaLoginoutUrl'; Value = $LoginoutUrl })
+	foreach ($extra in @([pscustomobject]@{ Param = '-LoginAntiAddictionExtraPlayDays'; Value = $ExtraPlayDays }) + $urls) {
+		if (-not [string]::IsNullOrEmpty($extra.Value) -and -not $hasAppId) {
+			$errors.Add("$($extra.Param) was given without -LoginNppaAppId: it is only written into the AntiAddiction section, so it would be dropped silently.")
+		}
+	}
+	if (-not [string]::IsNullOrEmpty($ExtraPlayDays)) {
+		foreach ($day in @($ExtraPlayDays -split ',')) {
+			$parsed = [datetime]::MinValue
+			if ($day.Trim() -cnotmatch '^[0-9]{4}-[0-9]{2}-[0-9]{2}\z' -or -not [datetime]::TryParseExact($day.Trim(), 'yyyy-MM-dd',
+					[System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::None, [ref]$parsed)) {
+				$errors.Add('-LoginAntiAddictionExtraPlayDays must be comma-separated existing Beijing dates written as yyyy-MM-dd (for example 2026-10-01,2026-10-02), with no empty item.')
+				break
+			}
+		}
+	}
+	foreach ($url in $urls) {
+		if ([string]::IsNullOrEmpty($url.Value)) { continue }
+		$m = [regex]::Match($url.Value, '^https?://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::(?<port>[0-9]{1,5}))?(?:/[A-Za-z0-9._~%/-]*)?\z')
+		if ($url.Value.Contains('${') -or -not $m.Success -or
+			($m.Groups['port'].Success -and ([int]$m.Groups['port'].Value -lt 1 -or [int]$m.Groups['port'].Value -gt 65535))) {
+			$errors.Add("$($url.Param) must be http(s)://host[:port][/path] with no user info, query string, fragment or `${...}; the path only uses [A-Za-z0-9._~%/-].")
+		}
+	}
+	# 逐条写进管道:调用方一律用 @(...) 收集,合法时得到空数组。
+	return $errors.ToArray()
+}
+
+<#
+.SYNOPSIS
+	login.yaml 顶层的 AntiAddiction 段(实名与未成年人防沉迷,-LoginNppaAppId)。AppId 为空 = 空串(不写,login 模板的产物与接入前逐字相同)。
+	纯函数:只看入参,参数不合法即 throw。
+
+.DESCRIPTION
+	键名核对自 go/login/internal/config/anti_addiction.go AntiAddictionConf / NppaConf:
+	  - Enabled: true;PlatformManagedAuthTypes 固定写两个小游戏渠道(由平台实名并执行限制;login 没有缺省值,国内部署必须显式写);
+	  - ExtraPlayDays 只在给了时写;DailySubmitLimit 不写 = login 缺省 5;
+	  - Nppa:AppId、BizId、SecretKeyEnv(字面量 MMORPG_LOGIN_NPPA_SECRET_KEY,与工作负载密钥目录 login-nppa 的 Env 逐字相同,由契约测试核对;
+	    本函数会被契约测试按 AST 单独抽出来跑,所以不读目录表);三个地址只在给了时写(不写 = 官方地址)。
+	值全部写成 YAML 双引号标量,字符集已由 Get-LoginAntiAddictionParamErrors 限定,不需要转义。AntiAddiction 在整份 login.yaml 里只此一处顶层键
+	(防误关闸的解析器 lib ConvertFrom-LoginAntiAddictionYaml 按这个形状读)。调用方:New-GoSvcConfigMapYaml 生成 login 的 ConfigMap。
+#>
+function New-LoginAntiAddictionYaml {
+	param(
+		[AllowEmptyString()][string]$AppId = '',
+		[AllowEmptyString()][string]$BizId = '',
+		[AllowEmptyString()][string]$ExtraPlayDays = '',
+		[AllowEmptyString()][string]$CheckUrl = '',
+		[AllowEmptyString()][string]$QueryUrl = '',
+		[AllowEmptyString()][string]$LoginoutUrl = ''
+	)
+
+	$errors = @(Get-LoginAntiAddictionParamErrors -AppId $AppId -BizId $BizId -ExtraPlayDays $ExtraPlayDays `
+		-CheckUrl $CheckUrl -QueryUrl $QueryUrl -LoginoutUrl $LoginoutUrl)
+	if ($errors.Count -gt 0) {
+		throw ('Cannot render the AntiAddiction section of the login ConfigMap: ' + ($errors -join ' '))
+	}
+	if ([string]::IsNullOrEmpty($AppId)) { return '' }
+
+	$lines = [System.Collections.Generic.List[string]]::new()
+	$lines.Add('# 实名与未成年人防沉迷(k8s_deploy.ps1 -LoginNppaAppId,New-LoginAntiAddictionYaml 生成;docs/design/real-name-anti-addiction.md §5.8)。')
+	$lines.Add('# secretKey 经单键 Secret login-nppa 注入 SecretKeyEnv 指向的容器环境变量;两个小游戏渠道由平台实名并执行限制。')
+	$lines.Add('AntiAddiction:')
+	$lines.Add('  Enabled: true')
+	$lines.Add('  PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]')
+	if (-not [string]::IsNullOrEmpty($ExtraPlayDays)) {
+		$lines.Add('  ExtraPlayDays: [' + ((@($ExtraPlayDays -split ',') | ForEach-Object { '"' + $_.Trim() + '"' }) -join ', ') + ']')
+	}
+	$lines.Add('  Nppa:')
+	$lines.Add("    AppId: `"$AppId`"")
+	$lines.Add("    BizId: `"$BizId`"")
+	$lines.Add('    SecretKeyEnv: "MMORPG_LOGIN_NPPA_SECRET_KEY"')
+	foreach ($url in ([ordered]@{ CheckUrl = $CheckUrl; QueryUrl = $QueryUrl; LoginoutUrl = $LoginoutUrl }).GetEnumerator()) {
+		if (-not [string]::IsNullOrEmpty($url.Value)) { $lines.Add("    $($url.Key): `"$($url.Value)`"") }
+	}
+	return ($lines -join "`n")
+}
+
+<#
+.SYNOPSIS
+	login 实名与防沉迷的防误关闸(集群现状预检,非 DryRun):本次要部署 login 的每个 zone,线上配置模板开着 AntiAddiction 而本次漏传
+	-LoginNppaAppId / -LoginNppaBizId 或换了值,就在任何写操作之前拒绝,所有 zone 一次报全。由 Assert-ClientEntryDeployPreflight 在
+	Assert-LoginPasswordAuthClusterState 之后调用。
+
+.DESCRIPTION
+	这几个参数不粘滞。漏传时 apply 照样成功,但新 Pod 模板不再注入 secretKey、Secret login-nppa 被删,而 login 读的 runtimeConfigSecret 里
+	防沉迷还开着:滚到的 Pod 因为变量缺失拒绝启动,之后任何 login Pod 重建都起不来。换了 AppId / BizId,注入的 secretKey 与运行配置里的应用对不上。
+	判据只有一份,在库里(lib Get-LoginAntiAddictionDrift);线上现状由 Get-LoginAntiAddictionLiveState 读 login ConfigMap 的 AntiAddiction 段。
+	与第三方登录共用确认开关 -ConfirmLoginAuthProviderChange:给了只打警告放行。任何 kubectl 失败都 throw(查不到不等于没开)。线上没开、本次新开不需要确认。
+	真要关或换应用的顺序:先改 login 的 runtimeConfigSecret(去掉或改好 AntiAddiction 段)、不单独滚动 login,紧接着部署并加确认开关,由部署滚动 login。
+	中间不能有 login 重启:模板还注入着旧的期望值与 secretKey(Apply-OneGoSvc 的 MMORPG_LOGIN_NPPA_EXPECTED_*),与改过的运行配置对不上,login 拒启。
+#>
+function Assert-LoginAntiAddictionClusterState {
+	param([Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Zones)
+
+	$problems = @()
+	foreach ($zone in $Zones) {
+		$namespace = Get-ZoneNamespace -Name $zone.Name
+		$state = Get-LoginAntiAddictionLiveState -Namespace $namespace -KubeContext $KubeContext -KubeConfig $KubeConfig
+		# [string] 转:契约测试按 AST 单独抽本函数跑时这两个变量可能没定义($null)。
+		$drift = Get-LoginAntiAddictionDrift -Live $state.Live -AppId ([string]$LoginNppaAppId) -BizId ([string]$LoginNppaBizId)
+		if ($drift.Drifts.Count -eq 0) { continue }
+		$keep = if ($drift.KeepArgs) { "To keep it on pass $($drift.KeepArgs)" } else { 'The live section cannot be read, so there is nothing to pass through' }
+		$text = "zone $($zone.Name) (namespace=$namespace): " + ($drift.Drifts -join '; ') + ". $keep; to go ahead add -ConfirmLoginAuthProviderChange."
+		if ($ConfirmLoginAuthProviderChange) {
+			Write-Warning "[login-anti-addiction] -ConfirmLoginAuthProviderChange supplied; allowed: $text"
+		}
+		else {
+			$problems += $text
+		}
+	}
+	if ($problems.Count -gt 0) {
+		throw ("login anti-addiction cluster-state preflight failed ($($problems.Count) zone(s)). Nothing was written.`n  - " + ($problems -join "`n  - "))
 	}
 }
 
@@ -10968,6 +11476,29 @@ function New-GoSvcConfigMapYaml {
 		$routerOptionalLines = $routerOptional -join "`n"
 	}
 
+	# 内容安全 content-guard 的契约值(docs/design/rename-and-content-safety.md §6):与路由服同理只在生成它自己的 ConfigMap 时求值。
+	# 值只从服务自己的 yaml 取。Mode 与 RequireLexicon 按档位:dev 照服务 yaml(dev、不要求词库,只凭内置的几个防冒充词也能判);
+	# 其余档位固定 pro、必须有词库(服务的 config.Validate 也强制 pro / pre 下 RequireLexicon 为 true)。
+	$contentGuardYaml           = 'go/content_guard/etc/content_guard.yaml'
+	$contentGuardName           = ''
+	$contentGuardTimeout        = ''
+	$contentGuardLeaseTTL       = ''
+	$contentGuardMaxTextBytes   = ''
+	$contentGuardEtcdKey        = ''
+	$contentGuardMode           = 'pro'
+	$contentGuardRequireLexicon = 'true'
+	if ($SvcName -eq 'content-guard') {
+		$contentGuardName         = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'Name'
+		$contentGuardTimeout      = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'Timeout'
+		$contentGuardLeaseTTL     = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'LeaseTTL'
+		$contentGuardMaxTextBytes = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'MaxTextBytes'
+		$contentGuardEtcdKey      = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'Etcd.Key'
+		if ($ReleaseProfile -eq 'dev') {
+			$contentGuardMode           = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'Mode'
+			$contentGuardRequireLexicon = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'RequireLexicon'
+		}
+	}
+
 	# 聚宝斋 trade 的契约值:键名与 go/trade/etc/trade.yaml、go/trade/internal/config 逐字一致,值只从服务 yaml 取。
 	# 与 chat 同理**只在生成 trade 自己的 ConfigMap 时求值**:go/trade 尚未落地或 trade.yaml 缺键时,
 	# 不能把 zone-up 里 db / login 等服务的 ConfigMap 一起拖挂;生成 trade 时照样 fail-closed。
@@ -10992,7 +11523,20 @@ function New-GoSvcConfigMapYaml {
 		$tradeSql = Get-TradeSqlSettings -Profile $ReleaseProfile -TiDBHost $TradeTiDBHost -DevelopmentHost "mysql.${InfraNamespace}:3306" -Backend $DatabaseBackend
 		$tradeAssetOpBlock = Get-AuthoritativeYamlBlock -RelativePath $tradeYaml -Key 'AssetOp'
 		$tradeCommerceBlock = Get-AuthoritativeYamlBlock -RelativePath $tradeYaml -Key 'Commerce'
+		# 官方商城在集群内(infra namespace 的 Service mall):URL 指向它;gateway、delivery 两把调用密钥只写变量名,值经工作负载密钥目录
+		# (commerce-gateway / commerce-delivery)注入。其余照服务 yaml 的 Mall 段;这三个键少了或重复就拒绝,不猜。资产通道关着时 trade 不连商城。
 		$tradeMallBlock = Get-AuthoritativeYamlBlock -RelativePath $tradeYaml -Key 'Mall'
+		foreach ($tradeMallLine in @(
+				@{ Key = 'URL'; Value = (Get-MallServiceUrl) }
+				@{ Key = 'GatewaySecretEnv'; Value = 'MMORPG_COMMERCE_GATEWAY_SECRET' }
+				@{ Key = 'DeliverySecretEnv'; Value = 'MMORPG_COMMERCE_DELIVERY_SECRET' }
+			)) {
+			$tradeMallPattern = '(?m)^  ' + $tradeMallLine.Key + ':[^\r\n]*'
+			if ([regex]::Matches($tradeMallBlock, $tradeMallPattern).Count -ne 1) {
+				throw "go/trade/etc/trade.yaml must have exactly one Mall.$($tradeMallLine.Key) line; cannot point trade at the in-cluster mall. Nothing was written."
+			}
+			$tradeMallBlock = [regex]::Replace($tradeMallBlock, $tradeMallPattern, ('  ' + $tradeMallLine.Key + ': ' + $tradeMallLine.Value))
+		}
 		$tradeName                  = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Name'
 		$tradeTimeout               = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Timeout'
 		$tradeLeaseTTL              = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'LeaseTTL'
@@ -11180,8 +11724,8 @@ function New-GoSvcConfigMapYaml {
 
 	# 玩家域的配置段与 login 自己的登录域段(-PlayerRedisMasters,见 New-PlayerRedisConfigYaml;池上限从服务 yaml 镜像,Get-RedisPlayerPoolMirror)。只在生成带这些段的服务时求值。
 	# 漏渲染的后果:Go 没写 Addrs 时静默回落到服务自己连的共享实例,上了集群之后表现是全员不在线,而且不报错。guild 与 mail 的文本不走这里的模板,在各自分支里写。
-	# 没建集群时本段只写池上限,地址靠回落:各服务回落到核心;scene-manager 的 Redis 段是控制域实例,它回落到 CoreRedis 段指的核心
-	# (go/scene_manager/internal/config/config.go EffectivePlayerRedis),所以 scene-manager 的 CoreRedis 必须指向核心。
+	# 没建集群时(只有 dev)本段只写池上限,地址靠回落:各服务回落到核心;scene-manager 回落到它的 ControlRedis
+	# (go/scene_manager/internal/config/config.go EffectivePlayerRedis),dev 没开控制集群时那也是核心。
 	# 登录域只有 login 连:chat、friend、guild、match、mail、trade 只认 gate 签名的会话身份原件,不渲染 LoginRedis / GlobalLoginSessions;chat 也没有玩家域段。
 	$playerRedisBlock = ''
 	$loginRedisBlock = ''
@@ -11361,7 +11905,7 @@ function New-GoSvcConfigMapYaml {
 
 	# login 的 Node.RedisClient 只是本机回落用的单实例段(go/login/internal/config/config.go:ControlRedis / PlayerRedis / LoginRedis 没写 Addrs 时
 	# 都落到它),K8s 上照旧写核心地址。控制域(gate 排空标记 gm 族、排队 / 准入 / 放行锁 q 族)在顶层 ControlRedis,地址取 Get-ControlRedisEndpoint;
-	# 排队不再单独拆实例(Node.QueueRedis 不写:G4a 第 1a 批的 redis-queue-g<N> 第 6b 批退役),排队键带 {q:<zone>},与 gate 标记同在控制域。
+	# 排队不再单独拆实例(G4a 第 1a 批的 redis-queue-g<N> 第 6b-1 批退役,login 的 Node.QueueRedis 段第 6b-2 批删除),排队键带 {q:<zone>},与 gate 标记同在控制域。
 	# ControlRedis 写了地址就不再继承 Node.RedisClient 的池与超时(clusterredis.Config.OrDefault),所以两项照 Node.RedisClient 的值写明:
 	# 池上限 = Node.RedisClient.PoolSize(总账读同一个键),拨号 / 读 / 写 3s = 3000ms。
 	$loginRedisDefaultTTL = '24h'
@@ -11390,6 +11934,16 @@ function New-GoSvcConfigMapYaml {
 			-ReleaseProfile $ReleaseProfile -WeChatAppSecretEnv $script:LoginWeChatAppSecretEnv
 		if (-not [string]::IsNullOrEmpty($authProvidersYaml)) {
 			$loginAuthProvidersBlock = "`n" + $authProvidersYaml
+		}
+	}
+	# login 的实名与防沉迷段(-LoginNppaAppId,New-LoginAntiAddictionYaml)。只在生成 login 自己的 ConfigMap 时求值;没给 = 空串,
+	# login 模板的产物与接入前逐字相同。只写公开值:secretKey 经工作负载密钥目录的 Secret login-nppa 注入 SecretKeyEnv 指向的变量。
+	$loginAntiAddictionBlock = ''
+	if ($SvcName -eq 'login') {
+		$antiAddictionYaml = New-LoginAntiAddictionYaml -AppId $LoginNppaAppId -BizId $LoginNppaBizId -ExtraPlayDays $LoginAntiAddictionExtraPlayDays `
+			-CheckUrl $LoginNppaCheckUrl -QueryUrl $LoginNppaQueryUrl -LoginoutUrl $LoginNppaLoginoutUrl
+		if (-not [string]::IsNullOrEmpty($antiAddictionYaml)) {
+			$loginAntiAddictionBlock = "`n" + $antiAddictionYaml
 		}
 	}
 
@@ -11438,6 +11992,29 @@ function New-GoSvcConfigMapYaml {
 			$source = $source -replace '(?m)^  Endpoints: \[127.0.0.1:9000\]\r?$', "  Etcd:`n    Hosts: [etcd.${InfraNamespace}:2379]`n    Key: dataservice.rpc"
 			$source = $source -replace '127.0.0.1:50900', "mail.${InfraNamespace}:50900"
 			$source = $source -replace '(?m)^TableDir:.*$', 'TableDir: /generated/tables'
+			$source.TrimEnd() + "`n" + $dbPlacementTop + "`n"
+		}
+		"payment" {
+			# 支付(docs/design/payment-recharge.md §22.9):顶层照 rank 的做法改容器寻址;Payment 段按 -PaymentConfigPath 与档位另渲染(Get-PaymentDeployPlan)。
+			$source = ((Get-Content -LiteralPath (Join-Path $RepoRoot 'go/payment/etc/payment.yaml') -Raw) -replace "`r`n", "`n").TrimEnd() + "`n"
+			$source = $source -replace '(?m)^ListenOn:.*$', 'ListenOn: 0.0.0.0:51200'
+			$source = $source -replace '(?m)^AdvertiseHost:.*$', 'AdvertiseHost: ""'
+			$authorityMode = if ($ReleaseProfile -eq 'dev') { 'dev' } else { 'pro' }
+			$source = $source -replace '(?m)^Mode:.*$', "Mode: $authorityMode"
+			if ($ReleaseProfile -ne 'dev') {
+				$source = $source -replace '(?m)^AutoMigrate:.*$', 'AutoMigrate: false'
+			}
+			$source = $source -replace '(?m)^Backend:.*$', "Backend: $DatabaseBackend"
+			$source = $source -replace '(?m)^ZoneId:.*$', "ZoneId: $CurrentZoneId"
+			$source = $source -replace '(?m)^MetricsListenAddr:.*$', 'MetricsListenAddr: 0.0.0.0:9280'
+			$source = $source -replace '127.0.0.1:2379', "etcd.${InfraNamespace}:2379"
+			$source = Add-RootEtcdEmptyKey -SvcName 'payment' -Source $source
+			# 换掉整段 Payment(段头加它下面缩进的行与空行)。按位置拼接,不用 -replace:替换文本里的 $ 会被当成反向引用。
+			$paymentBlocks = [regex]::Matches($source, '(?m)^Payment:[^\n]*\n(?:(?:[ ][^\n]*)?\n)*')
+			if ($paymentBlocks.Count -ne 1) {
+				throw "go/payment/etc/payment.yaml must have exactly one top-level Payment block; cannot render the payment config. Nothing was written."
+			}
+			$source = $source.Substring(0, $paymentBlocks[0].Index) + (Get-PaymentDeployPlan).Text + "`n`n" + $source.Substring($paymentBlocks[0].Index + $paymentBlocks[0].Length)
 			$source.TrimEnd() + "`n" + $dbPlacementTop + "`n"
 		}
 		"db" {
@@ -11740,7 +12317,7 @@ Secrets:
     Env: MMORPG_GATE_TOKEN_SECRET${loginQueueTokenSecretBlock}
 # 下发 gate 地址时是否必须用 gate 自报的客户端可达地址(NodeInfo.client_endpoint,D78):
 # true = 缺地址的 gate 不下发;false = 回落 endpoint(PodIP)。取值见 k8s_deploy.ps1 -RequireClientEndpoint(默认跟随 -ClientEntryMode)。
-RequireClientEndpoint: ${requireClientEndpointValue}${loginDevPasswordAuthBlock}${loginPasswordAuthBlock}${loginQueueBlock}${loginAuthProvidersBlock}
+RequireClientEndpoint: ${requireClientEndpointValue}${loginDevPasswordAuthBlock}${loginPasswordAuthBlock}${loginQueueBlock}${loginAuthProvidersBlock}${loginAntiAddictionBlock}
 ${loginPlacementBlock}
 # 控制面命令的生产者(login 只生产不消费),键与 go/login/internal/config KafkaConfig 逐字一致。
 Kafka:
@@ -11838,8 +12415,8 @@ Kafka:
 KafkaWriteTimeoutSeconds: ${sceneManagerKafkaWriteTimeout}
 # 铸造 owner_epoch 之后的落盘确认 WAITAOF(docs/design/zone-redis-regression-guard-20261022.md §4.3.2):铸造 EVAL 与 WAITAOF
 # 走每副本每节点 130 条上限的专用连接(ownerEpochMintPoolSize;Redis 连接总账 scene-manager 行 PlayerFixed),确认之后才推路由;确认不足按推送失败回滚、回 7。
-# NumLocal / TimeoutMs 镜像 scene_manager_service.yaml;NumReplicas 建了玩家域集群取 1,否则按共享 Redis 的形态(单实例 0、高可用 1)。
-# 开启时启动先探一次,失败拒启。只改 ConfigMap 不会滚动:改值(含单实例切高可用之后)必须 rollout restart deploy/scene-manager。
+# NumLocal / TimeoutMs 镜像 scene_manager_service.yaml;NumReplicas 建了玩家域集群取 1,落在核心单实例(只有 dev)取 0。
+# 开启时启动先探一次,失败拒启。只改 ConfigMap 不会滚动:改值(含开玩家域集群之后)必须 rollout restart deploy/scene-manager。
 OwnerEpochMint:
   WaitAOFNumLocal: ${sceneManagerWaitAOFNumLocal}
   WaitAOFNumReplicas: ${sceneManagerWaitAOFNumReplicas}
@@ -11898,7 +12475,8 @@ Etcd:
     - "etcd.${InfraNamespace}:2379"
   Key: matchservice.rpc
 # 三个存储(cross-zone-matchmaking.md D2 + redis-player-store-cluster.md §5.8):
-#   Redis       = 控制域共享单库,只作 MatchRedis 与 PlayerRedis 的回落目标
+#   Redis       = 核心单实例,只作回落目标:MatchRedis 本渲染总是写集群地址;PlayerRedis 只在没开玩家域集群(只有 dev)时回落到这里,
+#                 staging / prod 两段都走集群、不部署核心,这个地址不会被连
 #   PlayerRedis = 玩家域,只读跨运行时契约 key(player:{id}:location / player:session:{id} / battle:lock:{id},写者含 C++ scene)
 #   MatchRedis  = match 独占的 Redis Cluster,只放观战协调键 spectate:*(排队、票据、成局、组队的权威都在 SQL)
 Redis:
@@ -12040,6 +12618,40 @@ ZoneScopedNodeTypes:
 # 端口分工(契约 §7):9200 = 路由服;与 manifests/go-svc/client-rpc-router.yaml 的 metrics 容器端口 / 注解一致。
 MetricsListenAddr: ":9200"
 ${routerOptionalLines}
+"@
+		}
+		"content-guard" {
+@"
+Name: ${contentGuardName}
+ListenOn: 0.0.0.0:50250
+# dev 档 = go/content_guard/etc/content_guard.yaml 的值;staging / prod 固定 pro。显式写出,不赌 go-zero 缺省值。
+Mode: ${contentGuardMode}
+# 判定是纯内存计算,超时只是兜底。
+Timeout: ${contentGuardTimeout}
+# **必带**(服务 config.Validate 缺了直接拒启动):CheckText 的请求里是玩家的聊天原文和名字,
+# 不屏蔽的话 go-zero 的 Stat 拦截器会把它打进日志。
+Middlewares:
+  StatConf:
+    IgnoreContentMethods:
+      - /content_guard.ContentGuard/CheckText
+# Go 调用方(login / guild / chat)按这个发现键找它:go-zero 在键下的全部实例之间轮询,不像走 Service 地址那样整条连接落在一个 Pod 上。
+# scene 按 NodeInfo 前缀 ContentGuardNodeService.rpc 找,与这个键无关。
+Etcd:
+  Hosts:
+    - "etcd.${InfraNamespace}:2379"
+  Key: ${contentGuardEtcdKey}
+# 全局池:ZoneId 只影响它自己的注册路径;取命令行 -ZoneId,与路由服同口径。
+ZoneId: ${CurrentZoneId}
+LeaseTTL: ${contentGuardLeaseTTL}
+# 与 manifests/go-svc/content-guard.yaml 的 metrics 容器端口 / prometheus.io/port 注解 / 就绪探针一致(9290 = 内容安全)。
+MetricsListenAddr: ":9290"
+# 留空 = shared/killswitch 的 DefaultPrefix(/mmorpg/killswitch/),与其它服务共用同一棵规则树。
+KillSwitchPrefix: ""
+# 留空 = 缺省前缀 /mmorpg/content_guard/lexicon/;发布工具 go/content_guard/cmd/lexicon 的 -prefix 要与它相同。
+LexiconPrefix: ""
+# staging / prod 固定 true:没加载到词库的副本不就绪、不判定。首次部署前先发布词库。
+RequireLexicon: ${contentGuardRequireLexicon}
+MaxTextBytes: ${contentGuardMaxTextBytes}
 "@
 		}
 		"trade" {
@@ -12914,7 +13526,7 @@ function Rename-CanaryWorkload {
 #>
 function Add-MatchAuthoritySecretEnv {
 	param([string]$ManifestContent)
-	# domain-service-secrets沿现役mail/rank/目录签名合同由运维预置，本脚本不生成其真实值;读取只限两处:Assert-TlsSecretProvisioned 只查键在不在,Assert-MailProducerBattleSecret 只在内存里比 mail-producer-battle 的长度与摘要(不打印)。
+	# domain-service-secrets沿现役mail/rank/目录签名合同由运维预置，本脚本不生成其真实值;读取只限两处:Assert-TlsSecretProvisioned 只查键在不在,Assert-SharedDomainServiceSecretsForRun 只在内存里比共享键的长度与摘要(不打印)。
 	# 新协议部署前须在Match/Battle所属namespace预置独立key match-outcome-battle，
 	# 在Match/PlayerInbox所属namespace预置另一独立key player-inbox-match；同用途两端值须相同。
 	# 下方均为mandatory secretKeyRef，缺Secret/缺key由K8s拒启，不借其他用途密钥降级。所有档位相同。
@@ -13225,7 +13837,7 @@ function Add-PodTemplateAnnotationEntry {
 	ConfigMap 多一行顶层 SharedRedisPasswordEnv: SHARED_REDIS_PASSWORD(go/shared/redisauth 在启动时据此填各段,变量缺失或为空即拒启),
 	gateway 的 ConfigMap 写 spring.data.redis.password: "${SHARED_REDIS_PASSWORD}"(环境变量缺失时 @Value 解析失败,gateway 拒启);
 	容器经 secretKeyRef 从本 namespace 的那个 Secret 拿 SHARED_REDIS_PASSWORD,不写 optional。DryRun 输出与能读 ConfigMap 的 RBAC 都看不到口令。
-	两道保护:未解析 throw;非 dev 档为空 throw(写路径入口的 Resolve-InjectedSecret 已先拒,这里是纵深防御);
+	两道保护:未解析 throw;非 dev 档的集群来源为空 throw(写路径入口的 Resolve-InjectedSecret 已先拒,这里是纵深防御;核心单实例在非 dev 档不部署,口令恒为空串);
 	字符集按 Assert-RedisPasswordYamlSafe。dev 档未注入时返回空串:不注入环境变量、不写指纹,与改走 Secret 之前逐字相同。
 #>
 function Get-SharedRedisClientPassword {
@@ -13240,7 +13852,9 @@ function Get-SharedRedisClientPassword {
 	if ($null -eq $password) {
 		throw "生成 Go 服务 / gateway 的工作负载失败:Redis 口令未解析($($source.InputEnv))。请先调用 Initialize-InjectedSecrets(写操作路径会自动调用)。"
 	}
-	if ($password.Length -eq 0 -and $ReleaseProfile -ne 'dev') {
+	# 非 dev 档只有集群来源(控制集群)必须有口令:核心单实例在非 dev 档不部署(Test-CoreRedisDeployed),它的口令恒为空串,
+	# 指向它的只剩 match / mail 不会走到的回落段,空串 = 不注入。
+	if ($password.Length -eq 0 -and $ReleaseProfile -ne 'dev' -and [bool]$source.Cluster) {
 		throw "生成 Go 服务 / gateway 的工作负载失败:ReleaseProfile=$ReleaseProfile 要求 Redis 口令非空($($source.InputEnv)):该档 Redis 开了 requirepass,不带口令会全线 NOAUTH。"
 	}
 	Assert-RedisPasswordYamlSafe -Password $password -EnvName $source.InputEnv
@@ -13732,6 +14346,14 @@ function Apply-OneGoSvc {
 	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
 	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+	# payment 的渠道回调入口 Service payment-notify:类型与 gate 对外 Service 同一口径($GateServiceType,已经过 Apply-OpsProfileDefaults:
+	# managed-cloud 是 LoadBalancer,bare-metal 是 NodePort,custom 取 -GateServiceType)。服务名判断留在最外层:本函数会被按 AST 单独抽出来跑别的服务。
+	if ($SvcName -eq 'payment') {
+		if ([regex]::Matches($manifestContent, 'PLACEHOLDER_PAYMENT_NOTIFY_SERVICE_TYPE').Count -ne 1) {
+			throw "The payment manifest must carry the placeholder PLACEHOLDER_PAYMENT_NOTIFY_SERVICE_TYPE exactly once (the type of the Service payment-notify). Nothing was written for payment."
+		}
+		$manifestContent = $manifestContent.Replace('PLACEHOLDER_PAYMENT_NOTIFY_SERVICE_TYPE', $GateServiceType)
+	}
 	# login 开口令登录(-LoginPasswordAuth)时:内存请求与上限各加 Argon2id 的工作集(Add-LoginPasswordAuthMemory);口令库只读连接串经 secretKeyRef
 	# (不写 optional)注入 DSNEnv 指的变量。Secret 是运维预置的,名字取 SQL boot 目录 login 条目的 passwordAuthSecret:本脚本不读值、不建、不删,
 	# 所以 Pod 模板上没有它的指纹,换口令要运维 rollout restart。排在写者 init 容器注入之前:这时清单里只有 login 一个容器,两行 memory 与
@@ -13749,7 +14371,7 @@ function Apply-OneGoSvc {
 		# 先只留 Deployment、换副本数:下面的 SQL 写者注入要拿副本数和 <ns>/<svc>-canary 条目核对。改名放到 apply 之前。
 		$manifestContent = Select-GoSvcCanaryDeployment -SvcName $SvcName -ManifestContent $manifestContent
 	}
-	if ($SvcName -in @('login','chat','friend','guild','trade','match','mail','rank')) {
+	if ($SvcName -in @('login','chat','friend','guild','trade','match','mail','rank','payment')) {
 		# 验签方只拿 gate 的公钥列表(不是密钥,明文写进 env),不引用签名私钥所在的 Secret gate-identity-auth:
 		# 持公钥签不出名,任何一个验证方被攻破都冒充不了 gate(docs/design/gate-online-identity.md §10.1)。
 		$manifestContent = Add-GoSvcEnvEntries -SvcName $SvcName -ManifestContent $manifestContent `
@@ -13771,6 +14393,15 @@ function Apply-OneGoSvc {
 	if ($SvcName -eq 'data-service') {
 		if ($Stage -ne 'Prepare') { Assert-DataServiceRosterSchemas -Namespace $Namespace }
 		$manifestContent = Add-IdIssuerExpectedRegionEnv -ManifestContent $manifestContent
+	}
+	# login 开实名与防沉迷(-LoginNppaAppId)时把 AppId / BizId 写进主容器:login 启动时与运行配置里的 AntiAddiction 比,不一致拒启
+	# (go/login/internal/config/anti_addiction.go checkExpectedAntiAddiction)。login 是 SQL 写者,常驻进程读运维抄进 runtimeConfigSecret 的配置,
+	# 漏抄这一段时 login 照样起得来、防沉迷却是关的。不是密钥,明文写。服务名判断留在 -and 左边(本函数会被按 AST 单独抽出来跑别的服务)。
+	if ($SvcName -eq 'login' -and -not [string]::IsNullOrEmpty($LoginNppaAppId)) {
+		$manifestContent = Add-GoSvcEnvEntries -SvcName $SvcName -ManifestContent $manifestContent `
+			-Entries ([ordered]@{ MMORPG_LOGIN_NPPA_EXPECTED_APP_ID = $LoginNppaAppId; MMORPG_LOGIN_NPPA_EXPECTED_BIZ_ID = $LoginNppaBizId }) `
+			-NamesLabel 'MMORPG_LOGIN_NPPA_EXPECTED_*' -Purpose 'anti-addiction runtime config check' `
+			-Comment 'Injected by k8s_deploy.ps1 from -LoginNppaAppId / -LoginNppaBizId; login refuses to start when its AntiAddiction config differs. Do not write it by hand here.'
 	}
 
 	$commandTopic = Get-GoSvcCommandTopicContract
@@ -14079,6 +14710,11 @@ function Apply-OneGoSvc {
 	if ($SvcName -eq 'login' -and [string]::IsNullOrEmpty($script:LoginAppleSignInPrivateKey)) {
 		Invoke-Kubectl -Args @("delete", "secret", "login-apple-signin", "-n", $Namespace, "--ignore-not-found")
 	}
+	# 实名与防沉迷的 secretKey(-LoginNppaAppId)同理:本次没开就删目录表里的 login-nppa。线上开着而本次没给的情形已被
+	# Assert-LoginAntiAddictionClusterState 拦下或确认过。
+	if ($SvcName -eq 'login' -and [string]::IsNullOrEmpty($script:LoginNppaSecretKey)) {
+		Invoke-Kubectl -Args @("delete", "secret", "login-nppa", "-n", $Namespace, "--ignore-not-found")
+	}
 	if ($SvcName -eq 'player-inbox' -and -not $isPlayerInboxAdmin) {
 		# 本次未注入运维口令:新 Deployment 不再引用 Secret,删掉残留(放在 Deployment apply 之后,理由同上);
 		# 不粘滞 —— 上次带口令部署过、这次没带,运维接口随新 Pod 一起停用。
@@ -14304,7 +14940,7 @@ function Apply-SqlWriterPodReaper {
 	Write-Host "  [applied] sql-writer-pod-reaper -> $SqlWriterReaperImage (namespace $Namespace)"
 }
 
-# 全局池 Go 服务(目录里 Global = $true,目前是 match / chat / client-rpc-router / trade / friend / player-inbox / guild / mail / rank)部署到 $InfraNamespace 一次,
+# 全局池 Go 服务(目录里 Global = $true,目前是 match / chat / client-rpc-router / trade / friend / player-inbox / guild / mail / rank / payment / content-guard)部署到 $InfraNamespace 一次,
 # zone-up 不碰它们。启动依赖决定了要分两步(deploy/k8s/README.md「全局服务的部署顺序」):
 #   第一步 Apply-GlobalGoSvcManifests(Apply-Infra 调用):全部服务的 ConfigMap 与迁移 Job,只有 StartsBeforeZones 的服务连进程一起起。
 #     各服务只建自己的库,不再核别的服务的表;Job 的门禁不变:staging/prod 恒等 Complete,dev 仅 -WaitReady 下等(D-14 第 4 条)。
@@ -14412,8 +15048,11 @@ function Apply-GlobalGoSvcWorkloads {
 		Apply-OneGoSvc -SvcName $svcName -Namespace $InfraNamespace -CurrentZoneId $ZoneId -CurrentClusterId $ClusterId -Stage Workload
 	}
 	Apply-GlobalGoSvcCanaries -SvcNames $svcNames
+	# 官方商城(全局 Java 服务)的进程排在全局 Go 服务之后:它出问题(名册没定、业务表没装)不挡住别的全局服务。本次不部署它时是空操作。
+	Apply-MallWorkload
 	if ($WaitReady) {
 		Wait-ForGlobalGoSvcReady -SvcNames $svcNames
+		if (Test-GlobalJavaSvcDeployed) { Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName 'mall' }
 	}
 }
 
@@ -14857,6 +15496,532 @@ function Invoke-GatewaySchemaJob {
 	Write-Warning ("Dev profile without -WaitReady: apply gateway Deployment without waiting for {0}. Check 'kubectl -n {1} get job {0}' (COMPLETIONS 1/1) and 'kubectl -n {1} logs job/{0}'." -f $jobName, $Namespace)
 }
 
+# ─────────────────────────────────────────────────────────────────
+# 官方商城 mall 与支付 payment(docs/design/payment-recharge.md §22;部署说明见 deploy/k8s/README.md「商城 mall」「支付 payment」)
+# ─────────────────────────────────────────────────────────────────
+
+# 集群内商城的地址:infra namespace 的 Service mall。端口与 $JavaSvcCatalogue.mall.HttpPort、manifests/java-svc/mall.yaml 一致(契约测试钉住)。
+# trade 的 Mall.URL 与 payment 的 Payment.Mall.BaseURL 都取它。
+function Get-MallServiceUrl {
+	return "http://mall.${InfraNamespace}:18120"
+}
+
+# 本次是否部署全局 Java 服务(目前只有官方商城 mall):给了 -JavaSvcRegistry、不带 -SkipJavaSvc,并且同一次也部署全局 Go 服务
+# (infra-up,或不带 -SkipInfra 的 all-up)。要求同时部署全局 Go 服务,是因为商城只给 trade、payment 用:
+# 它的允许支付渠道取自同一次渲染的 payment 配置,进程也和全局写者同一步起(Apply-GlobalGoSvcWorkloads)。
+function Test-GlobalJavaSvcDeployed {
+	return ((Test-GlobalGoSvcDeployed) -and -not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry))
+}
+
+<#
+.SYNOPSIS
+	解析官方商城调用角色的 HMAC 密钥(环境变量 MMORPG_COMMERCE_<角色>_SECRET),返回有序表 { gateway; payment; delivery[; admin] };不合格一律 throw。
+
+.DESCRIPTION
+	商城按调用角色各验一把(java/mall_game 的 commerce.*-secret):trade 用 gateway、delivery,payment 用 payment,运营工具用 admin。
+	admin 那把只有商城读,-IncludeAdmin(本次部署商城)时才解析。dev 回落值是 git 里的公开常量,只给 dev 档;非 dev 档显式注入它同样拒绝。
+	形状各档位都查(dev 档 Resolve-InjectedSecret 不查长度):
+	  - 至少 32 字节:商城、trade、payment 三边都按这个下限拒启;
+	  - 不含空白、双引号、反斜杠、控制字符:三边各读各的,对首尾空白的处理不一样,含空白的密钥会让每个请求都验签失败;
+	  - 不含「美元符加左花括号」:商城经 Spring 占位读它,Spring 会把值里的占位再解析一遍(同 Assert-SpringPlaceholderSafe)。
+	几把互不相同:商城启动时逐对比较(CommerceProperties.validate),trade 也拒绝 gateway 与 delivery 同值。
+	只读环境变量,纯函数,契约测试按 AST 抽出直接调用。报错只点环境变量名,不回显值。
+#>
+function Resolve-CommerceSecrets {
+	param(
+		[Parameter(Mandatory = $true)][ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile,
+		[Parameter(Mandatory = $true)][bool]$IncludeAdmin
+	)
+
+	$roles = @('gateway', 'payment', 'delivery')
+	if ($IncludeAdmin) { $roles += 'admin' }
+	$secrets = [ordered]@{}
+	foreach ($role in $roles) {
+		$envName = 'MMORPG_COMMERCE_' + $role.ToUpperInvariant() + '_SECRET'
+		$devFallback = 'change-me-in-production-commerce-' + $role + '-hmac-key'
+		$value = Resolve-InjectedSecret -EnvName $envName -DevFallback $devFallback -ReleaseProfile $ReleaseProfile `
+			-Purpose "mall caller HMAC secret of the $role role" -MinLength 32
+		if ($ReleaseProfile -ne 'dev' -and $value -ceq $devFallback) {
+			throw ($envName + ' still holds the public dev placeholder; refusing it for ReleaseProfile=' + $ReleaseProfile + '. Nothing was written.')
+		}
+		if ([System.Text.Encoding]::UTF8.GetByteCount($value) -lt 32 -or $value -match '["\\\s\p{Cc}]' -or $value.Contains('${')) {
+			throw ($envName + ' must be at least 32 bytes and must not contain whitespace, double quotes, backslashes, control characters or "${" (the value is not shown). Nothing was written.')
+		}
+		foreach ($other in @($secrets.Keys)) {
+			if ($value -ceq [string]$secrets[$other]) {
+				throw ($envName + ' must differ from MMORPG_COMMERCE_' + ([string]$other).ToUpperInvariant() + '_SECRET: the mall verifies one secret per caller role and refuses to start when two are equal. Nothing was written.')
+			}
+		}
+		$secrets[$role] = $value
+	}
+	return $secrets
+}
+
+<#
+.SYNOPSIS
+	payment 配置的顶层 Payment 段(纯函数,契约测试按 AST 抽出直接调用)。返回 { Text; EnabledChannels; SecretEnvNames }。
+
+.DESCRIPTION
+	-BaseBlock 是要用的那一段 Payment(三种来源见 Get-PaymentDeployPlan)。本函数做三件事:
+	  1. 核形状:顶格只有 Payment: 这一个键;不用制表符;它下面的键缩进两格;七个渠道段写成块式;各 *Env 键的值是环境变量名(密钥值不进配置)。
+	  2. 写死两项:NotifyListenAddr(回调监听口,Service payment-notify 指向它)和整个 Mall 子段(集群内商城地址、payment 角色的密钥变量名;
+	     PaymentSubject、TimeoutMs 由调用方从服务 yaml 镜像,商城那边取同一个值)。原文里的这两项不管写了什么都换掉。
+	  3. 算出开着的渠道(渠道名,商城的允许渠道用同一份)和它们要的密钥变量名。某个 *Env 键原文没写时,取 -DefaultEnvNames 里服务 yaml 的那个值
+	     (与 Go 的缺省值相同);写成空串表示不用这一把。
+	开关判定偏向「开」:值不是 false / no / off / n 就算开着。漏判成关,商城会拒收这个渠道已经收到的钱。
+	渠道段名 → 渠道名与 go/payment 的 config.Enabled、channel.Name* 常量一致。报错不回显配置内容。
+#>
+function New-PaymentSectionYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$BaseBlock,
+		[Parameter(Mandatory = $true)][string]$MallBaseUrl,
+		[Parameter(Mandatory = $true)][string]$MallPaymentSubject,
+		[Parameter(Mandatory = $true)][string]$MallTimeoutMs,
+		# 服务 yaml 里各段的 *Env 键:'<段>.<键>' → 变量名。
+		[Parameter(Mandatory = $true)][System.Collections.IDictionary]$DefaultEnvNames,
+		# 报错里对这一段来源的称呼。
+		[Parameter(Mandatory = $true)][string]$SourceLabel
+	)
+
+	$channelSections = [ordered]@{
+		DevPay = 'devpay'; WechatPay = 'wechat_pay'; Alipay = 'alipay'; WechatMinigame = 'wechat_minigame'
+		DouyinMinigame = 'douyin_minigame'; Apple = 'apple'; Google = 'google'
+	}
+	$lines = @((($BaseBlock -replace "`r`n", "`n").TrimEnd()) -split "`n")
+	if (@($lines | Where-Object { $_.Contains("`t") }).Count -gt 0) {
+		throw "$SourceLabel must not contain tab characters; indent with spaces. Nothing was written."
+	}
+	$topLines = @($lines | Where-Object { $_ -match '^[^ #]' })
+	if ($topLines.Count -ne 1 -or $topLines[0] -cnotmatch '^Payment:[ ]*(#.*)?$') {
+		throw "$SourceLabel must hold exactly one top-level key, a block-style 'Payment:' ($($topLines.Count) top-level line(s) found; their content is not shown). Nothing was written."
+	}
+	$headerAt = [Array]::IndexOf($lines, $topLines[0])
+	$firstChild = @($lines | Select-Object -Skip ($headerAt + 1) | Where-Object { $_.Trim().Length -gt 0 -and -not $_.TrimStart().StartsWith('#') }) | Select-Object -First 1
+	if ($null -eq $firstChild -or $firstChild -cnotmatch '^  [^ ]') {
+		throw "$SourceLabel must indent the keys under Payment with exactly two spaces. Nothing was written."
+	}
+
+	$kept = [System.Collections.Generic.List[string]]::new()
+	$inMall = $false
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		$line = [string]$lines[$i]
+		if ($inMall) {
+			# Mall 子段一直到下一个缩进不超过两格的非空行(空行算在子段里)。
+			if ($line.Trim().Length -eq 0 -or $line -match '^ {3,}') { continue }
+			$inMall = $false
+		}
+		if ($line -cmatch '^  Mall:') { $inMall = $true; continue }
+		if ($line -cmatch '^  NotifyListenAddr:') { continue }
+		$kept.Add($line)
+		if ($i -eq $headerAt) {
+			$kept.Add('  # 下面两项由 k8s_deploy.ps1 写死(New-PaymentSectionYaml):回调监听口(Service payment-notify 指向它)与集群内商城。原文里写了什么都不用。')
+			$kept.Add('  NotifyListenAddr: 0.0.0.0:18130')
+			$kept.Add('  Mall:')
+			$kept.Add("    BaseURL: $MallBaseUrl")
+			$kept.Add("    PaymentSubject: $MallPaymentSubject")
+			$kept.Add('    PaymentSecretEnv: MMORPG_COMMERCE_PAYMENT_SECRET')
+			$kept.Add("    TimeoutMs: $MallTimeoutMs")
+		}
+	}
+	$text = $kept -join "`n"
+
+	$flat = (ConvertFrom-YamlToFlatMap -Text $text).Scalars
+	$enabled = [System.Collections.Generic.List[string]]::new()
+	$secretEnvNames = [System.Collections.Generic.List[string]]::new()
+	foreach ($section in @($channelSections.Keys)) {
+		$sectionPath = 'Payment.' + $section
+		if ($flat.Contains($sectionPath) -and -not [string]::IsNullOrWhiteSpace([string]$flat[$sectionPath])) {
+			throw "${SourceLabel}: write Payment.$section in block style (one key per line), so that its Enabled switch can be read. Nothing was written."
+		}
+		$enabledPath = $sectionPath + '.Enabled'
+		$enabledRaw = if ($flat.Contains($enabledPath)) { ([string]$flat[$enabledPath]).Trim() } else { '' }
+		$isOn = ($enabledRaw -ne '' -and $enabledRaw -notmatch '^(?:false|no|off|n)$')
+
+		$envNames = [ordered]@{}
+		foreach ($key in @($DefaultEnvNames.Keys)) {
+			$keyText = [string]$key
+			if ($keyText.StartsWith($section + '.', [System.StringComparison]::Ordinal)) { $envNames[$keyText.Substring($section.Length + 1)] = [string]$DefaultEnvNames[$key] }
+		}
+		foreach ($path in @($flat.Keys)) {
+			$pathText = [string]$path
+			if (-not $pathText.StartsWith($sectionPath + '.', [System.StringComparison]::Ordinal)) { continue }
+			$leaf = $pathText.Substring($sectionPath.Length + 1)
+			# 以 Env 结尾的键是「密钥在哪个环境变量里」;恰好叫 Env 的键不算(微信小游戏的环境号)。
+			if ($leaf -cmatch '^[A-Za-z0-9]+Env$') { $envNames[$leaf] = ([string]$flat[$path]).Trim() }
+		}
+		foreach ($leaf in @($envNames.Keys)) {
+			$envName = [string]$envNames[$leaf]
+			if ($envName -eq '') { continue }
+			if ($envName -cnotmatch '^[A-Z][A-Z0-9_]{0,127}$') {
+				throw "${SourceLabel}: Payment.$section.$leaf must name an environment variable (upper-case letters, digits and underscores); secret values never go into the config. Its value is not shown. Nothing was written."
+			}
+			if ($isOn) { $secretEnvNames.Add($envName) }
+		}
+		if ($isOn) { $enabled.Add([string]$channelSections[$section]) }
+	}
+	return [pscustomobject]@{
+		Text            = $text
+		EnabledChannels = [string[]]@($enabled)
+		SecretEnvNames  = [string[]]@($secretEnvNames | Sort-Object -Unique)
+	}
+}
+
+<#
+.SYNOPSIS
+	本次部署的 payment 配置段与它带出的事实:{ Text; EnabledChannels; SecretEnvNames; BuiltinDevPay; Source }。一次运行只算一遍。
+
+.DESCRIPTION
+	Payment 段的来源三选一:
+	  - 给了 -PaymentConfigPath:运维那份文件(整段 Payment,不含密钥值)。开着的渠道要的密钥全部来自运维预置的 Secret payment-channel-secrets;
+	  - 没给,dev:go/payment/etc/payment.yaml 的那一段(只开 devpay)。devpay 的密钥变量改指工作负载密钥目录的 payment-devpay,dev 有回落值,不用预置 Secret;
+	  - 没给,staging / prod:同一段关掉全部渠道(各平台 Channels: []、各段 Enabled: false)。payment 起得来,ListPayChannels 回空。
+	合规闸不在这里放宽:非 dev 档 Mode 固定 pro,go/payment 的 config.Validate 照常执行合规闸(Payment.Compliance.MinorSpendingGate;none 时生产模式不许开 wechat_pay、alipay、apple、google)并拒绝 devpay。
+	devpay 在非 dev 档这里先拒一次:商城的生产模式同样拒绝把 devpay 列进允许渠道,不拒的话一份写错的支付配置会让商城也起不来。
+	SecretEnvNames 是要在 payment-channel-secrets 里预置的键;BuiltinDevPay 为真时 devpay 那一把不在其中。
+#>
+function Get-PaymentDeployPlan {
+	if ($null -ne $script:PaymentDeployPlan) { return $script:PaymentDeployPlan }
+
+	$serviceYaml = 'go/payment/etc/payment.yaml'
+	$serviceBlock = (Get-AuthoritativeYamlBlock -RelativePath $serviceYaml -Key 'Payment') -replace "`r`n", "`n"
+	$defaultEnvNames = [ordered]@{}
+	$serviceFlat = (ConvertFrom-YamlToFlatMap -Text $serviceBlock).Scalars
+	foreach ($path in @($serviceFlat.Keys)) {
+		if ([string]$path -cmatch '^Payment\.([A-Za-z]+)\.([A-Za-z0-9]+Env)$') { $defaultEnvNames[$Matches[1] + '.' + $Matches[2]] = [string]$serviceFlat[$path] }
+	}
+	$fromFile = -not [string]::IsNullOrWhiteSpace($PaymentConfigPath)
+	$builtinDevPay = $false
+	if ($fromFile) {
+		if (-not (Test-Path -LiteralPath $PaymentConfigPath -PathType Leaf)) {
+			throw "-PaymentConfigPath '$PaymentConfigPath' is not a file. Nothing was written."
+		}
+		$baseBlock = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $PaymentConfigPath).ProviderPath)
+		$source = '-PaymentConfigPath'
+	}
+	elseif ($ReleaseProfile -eq 'dev') {
+		$devPaySecretEnv = '(?m)^(  DevPay:[ ]*\n(?:    [^\n]*\n)*?    SecretEnv:)[^\n]*'
+		if ([regex]::Matches($serviceBlock, $devPaySecretEnv).Count -ne 1) {
+			throw "$serviceYaml must have exactly one Payment.DevPay.SecretEnv line; cannot point the dev devpay secret at the workload secret catalog. Nothing was written."
+		}
+		$baseBlock = [regex]::Replace($serviceBlock, $devPaySecretEnv, '${1} MMORPG_PAYMENT_DEVPAY_SECRET')
+		$source = "$serviceYaml (dev)"
+		$builtinDevPay = $true
+	}
+	else {
+		$baseBlock = [regex]::Replace($serviceBlock, '(?m)^([ ]+Channels:)[^\n]*$', '${1} []')
+		$baseBlock = [regex]::Replace($baseBlock, '(?m)^([ ]+Enabled:)[^\n]*$', '${1} false')
+		$source = "$serviceYaml with every channel switched off"
+	}
+
+	$section = New-PaymentSectionYaml -BaseBlock $baseBlock -MallBaseUrl (Get-MallServiceUrl) `
+		-MallPaymentSubject (Get-AuthoritativeScalar -RelativePath $serviceYaml -KeyPath 'Payment.Mall.PaymentSubject') `
+		-MallTimeoutMs (Get-AuthoritativeScalar -RelativePath $serviceYaml -KeyPath 'Payment.Mall.TimeoutMs') `
+		-DefaultEnvNames $defaultEnvNames -SourceLabel $source
+	$channels = @($section.EnabledChannels)
+	if (-not $fromFile -and $ReleaseProfile -ne 'dev' -and $channels.Count -ne 0) {
+		throw "Internal error: the default payment config for ReleaseProfile=$ReleaseProfile still enables $($channels -join ', '). Check the Channels and Enabled lines of the Payment block in $serviceYaml. Nothing was written."
+	}
+	if ($ReleaseProfile -ne 'dev' -and $channels -ccontains 'devpay') {
+		throw "$source enables Payment.DevPay, which is only allowed with -ReleaseProfile dev: payment and the mall both refuse it in production mode. Nothing was written."
+	}
+	$secretEnvNames = @($section.SecretEnvNames)
+	if ($builtinDevPay) {
+		$builtinDevPay = ($channels -ccontains 'devpay')
+		# 这一把走工作负载密钥目录(payment-devpay),不在运维预置的 Secret 里。
+		$secretEnvNames = @($secretEnvNames | Where-Object { $_ -cne 'MMORPG_PAYMENT_DEVPAY_SECRET' })
+	}
+	$script:PaymentDeployPlan = [pscustomobject]@{
+		Text            = [string]$section.Text
+		EnabledChannels = [string[]]$channels
+		SecretEnvNames  = [string[]]$secretEnvNames
+		BuiltinDevPay   = [bool]$builtinDevPay
+		Source          = $source
+	}
+	return $script:PaymentDeployPlan
+}
+
+<#
+.SYNOPSIS
+	payment 开着的渠道要的密钥,在运维预置的 Secret payment-channel-secrets(infra namespace)里齐不齐。缺 Secret、缺键或键值为空,在任何写操作之前 throw。
+
+.DESCRIPTION
+	只查键名与长度(kubectl go-template 列出 .data 的键与 base64 长度),本进程不读值:渠道密钥是商户凭据,部署脚本不经手。
+	没有开着的渠道要它时什么都不查。DryRun 不连集群,只打一行将要核对什么。kubectl 失败直接 throw:查不到不等于在。
+#>
+function Assert-PaymentChannelSecrets {
+	$required = @((Get-PaymentDeployPlan).SecretEnvNames)
+	if ($required.Count -eq 0) { return }
+	$name = 'payment-channel-secrets'
+	if ($DryRun) {
+		Write-Host "[dry-run] would check that Secret $name in namespace $InfraNamespace has the non-empty keys $($required -join ', ') (payment channel secrets; the values are not read)"
+		return
+	}
+	$allArgs = @()
+	$allArgs += Build-KubectlBaseArgs
+	# 与 Assert-LoginPasswordAuthSecrets 同一手法:第一项固定是 found(区分「没有这个 Secret」与「Secret 没有键」),之后每项「键=base64 长度」,值不出 kubectl。
+	$allArgs += @('get', 'secret', $name, '-n', $InfraNamespace, '--ignore-not-found', '-o', 'go-template=found;{{range $k, $v := .data}}{{$k}}={{len $v}};{{end}}')
+	$out = & kubectl @allArgs
+	$exitCode = $LASTEXITCODE
+	if ($exitCode -ne 0) {
+		throw "Cannot read Secret $name in namespace $InfraNamespace (payment channel secrets): kubectl exit code $exitCode. Nothing was written."
+	}
+	$tokens = @(([string]($out | Out-String)).Trim() -split ';' | Where-Object { $_ -ne '' })
+	if ($tokens.Count -eq 0 -or $tokens[0] -cne 'found') {
+		throw "Secret $name does not exist in namespace ${InfraNamespace}, but the payment config enables channels that read $($required -join ', ') from it. Provision it first, one key per variable name (deploy/k8s/README.md, section payment). Nothing was written."
+	}
+	$present = @{}
+	foreach ($token in @($tokens | Select-Object -Skip 1)) {
+		if ($token -cmatch '^(?<key>[^=]+)=(?<length>\d+)$' -and [int]$Matches['length'] -gt 0) { $present[$Matches['key']] = $true }
+	}
+	$missing = @($required | Where-Object { -not $present.ContainsKey($_) })
+	if ($missing.Count -gt 0) {
+		throw "Secret $name in namespace $InfraNamespace has no non-empty key for $($missing -join ', '). The enabled payment channels read them and payment refuses to start without them. Nothing was written."
+	}
+}
+
+<#
+.SYNOPSIS
+	商城的 mmorpg_mall 连哪里、按什么档位核验:返回 @{ Host; Backend; RunMode; RequireTidb }。
+
+.DESCRIPTION
+	mmorpg_mall 与其余逻辑库在同一个全球权威 SQL 入口上。java/mall_game 只有两种核验:
+	  - require-tidb true:每条物理连接核对端是真实 TiDB 并固定强会话;
+	  - require-tidb false:不核对端,只许 run-mode dev / test(CommerceProperties.validate:prod 不允许关闭)。
+	它没有网关那样的 mysql 档(核对可写主库)。所以:
+	  - -DatabaseBackend tidb:require-tidb true;run-mode 跟发布档位,dev 档是 dev(devpay 联调渠道只许 dev),其余是 prod;
+	  - -DatabaseBackend mysql 且 dev 档:run-mode dev、require-tidb false;
+	  - -DatabaseBackend mysql 且 staging / prod:拒绝,不拿 dev 模式跑生产商城。这种部署不带商城(做法见报错)。
+	写路径入口 Assert-CommerceDeployPreflight 与配置模板、闸门表 Job 的渲染都调它,规则只有这一处。
+#>
+function Resolve-MallSqlMode {
+	$sql = Get-GlobalAuthoritySqlSettings -Profile $ReleaseProfile -CanonicalHost $GlobalAuthorityTiDBHost `
+		-FriendHost $FriendTiDBHost -TradeHost $TradeTiDBHost -MatchHost $MatchTiDBHost -DevelopmentHost "mysql.${InfraNamespace}:3306" -Backend $DatabaseBackend
+	$runMode = if ($ReleaseProfile -eq 'dev') { 'dev' } else { 'prod' }
+	if ($sql.Backend -eq 'tidb') {
+		return @{ Host = $sql.Host; Backend = 'tidb'; RunMode = $runMode; RequireTidb = 'true' }
+	}
+	if ($ReleaseProfile -ne 'dev') {
+		throw "mall: java/mall_game has no mysql tier, its production mode requires TiDB, so it cannot be deployed with -DatabaseBackend mysql in ReleaseProfile=$ReleaseProfile. Deploy the infra namespace without the mall: run infra-up without -JavaSvcRegistry (zone-up and all-up -SkipInfra still deploy the gateway). Nothing was written."
+	}
+	return @{ Host = $sql.Host; Backend = 'mysql'; RunMode = 'dev'; RequireTidb = 'false' }
+}
+
+<#
+.SYNOPSIS
+	商城的运行配置模板(ConfigMap java-svc-mall-config,键 application.yaml)。只渲染,不写集群。
+
+.DESCRIPTION
+	商城是 SQL 写者:常驻进程读的是运维预置的 runtimeConfigSecret,由 init 容器选出本槽位那一份、放成 application-k8s.yaml。
+	本模板就是那份文件的内容,运维照抄,把数据源的账号、口令换成这个槽位的(docs/ops/k8s-open-server-runbook.md §1)。
+	它盖在 jar 内的 application.yaml 之上,只写集群里不一样的键:
+	  - 监听地址与端口(jar 内缺省只听 127.0.0.1);
+	  - 数据源:全球权威 SQL 入口上的 mmorpg_mall,连接参数与本机路径(lib/sql_boot_catalog_local.ps1 的 New-LocalSqlBootJavaConfig)同一串;
+	  - 运行模式与 TiDB 核验(Resolve-MallSqlMode);
+	  - 四把调用密钥:只写对容器环境变量的引用,值经工作负载密钥目录注入(commerce-*);
+	  - payment 角色的调用方名:与 payment 模板的 Payment.Mall.PaymentSubject 取自同一个键;
+	  - 允许的支付渠道:就是 payment 模板里开着的渠道(Get-PaymentDeployPlan),两边不会各写一份;
+	  - span 导出:有节点采集器就发它,否则关掉导出(同 gateway)。
+#>
+function New-MallConfigMapYaml {
+	$mallSql = Resolve-MallSqlMode
+	$mallDbUser = $script:MysqlUser
+	$mallPaymentSubject = Get-AuthoritativeScalar -RelativePath 'go/payment/etc/payment.yaml' -KeyPath 'Payment.Mall.PaymentSubject'
+	$mallAllowedChannels = @((Get-PaymentDeployPlan).EnabledChannels) -join ','
+	# 拼成变量再嵌进下面的双引号 here-string,不用转义 $(同 gateway 的 $gatewayTokenSecretRef)。
+	$mallGatewaySecretRef = '${MMORPG_COMMERCE_GATEWAY_SECRET}'
+	$mallPaymentSecretRef = '${MMORPG_COMMERCE_PAYMENT_SECRET}'
+	$mallDeliverySecretRef = '${MMORPG_COMMERCE_DELIVERY_SECRET}'
+	$mallAdminSecretRef = '${MMORPG_COMMERCE_ADMIN_SECRET}'
+	$mallTraceAgent = Get-TraceAgentEndpoints
+	$mallOtlpBlock = if ($null -eq $mallTraceAgent) {
+		"  otlp:`n    tracing:`n      export:`n        enabled: false"
+	} else {
+		"  otlp:`n    tracing:`n      endpoint: $($mallTraceAgent.OtlpHttpTraces)"
+	}
+	$mallConfig = @"
+# 官方商城 mall 的运行配置模板,由 k8s_deploy.ps1 的 New-MallConfigMapYaml 生成,盖在 jar 内的 application.yaml 之上。
+# 常驻进程读的是运维预置的 runtimeConfigSecret:每个槽位照抄本段,把 spring.datasource 的 username / password 换成这个槽位的账号。
+server:
+  address: 0.0.0.0
+  port: $($JavaSvcCatalogue['mall'].HttpPort)
+management:
+$mallOtlpBlock
+spring:
+  datasource:
+    url: jdbc:mysql://$($mallSql.Host)/mmorpg_mall?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&connectTimeout=3000&socketTimeout=10000
+    username: "$mallDbUser"
+    password: ""
+commerce:
+  run-mode: $($mallSql.RunMode)
+  require-tidb: $($mallSql.RequireTidb)
+  gateway-secret: "$mallGatewaySecretRef"
+  payment-secret: "$mallPaymentSecretRef"
+  delivery-secret: "$mallDeliverySecretRef"
+  admin-secret: "$mallAdminSecretRef"
+  payment-subject: $mallPaymentSubject
+  allowed-payment-channels: "$mallAllowedChannels"
+"@
+
+	return @"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $($JavaSvcCatalogue['mall'].ConfigMap)
+data:
+  application.yaml: |
+$($mallConfig -split "`r?`n" | ForEach-Object { "    $_" } | Out-String)
+"@
+}
+
+<#
+.SYNOPSIS
+	渲染 mmorpg_mall 的建表 Job(闸门表与业务表,manifests/java-svc/mall-schema.yaml)和它读的 DDL ConfigMap,返回 { ConfigMap; Job; Image }。只渲染,不写集群。
+
+.DESCRIPTION
+	闸门表由 writer_authority prepare-schema 走共享的 EnsureCatalogSchema 建,各档位都跑(dev 的集群内 MySQL 也跑:mysql-init 只建库)。
+	镜像与 schema Secret 取自 boot 目录里 <infra>/mall 的条目(Get-SqlWriterCatalogEntry,名册定下来之前就能读),不合格就 throw。
+	商城的业务表与存储合同戳由同一次调用的 -ddl-file 装:java/mall_game 的 schema.sql 原样渲染进 ConfigMap mall-schema-sql(做法同 New-GatewaySchemaJobManifests)。
+	文件里只有 CREATE TABLE IF NOT EXISTS 与 INSERT IGNORE INTO,重跑无害;重跑不升级已有的库,结构对不上由商城启动时的核对拦下。
+#>
+function New-MallSchemaJobManifest {
+	$mallSql = Resolve-MallSqlMode
+	$entry = Get-SqlWriterCatalogEntry -Namespace $InfraNamespace -SvcName 'mall'
+	if (-not $entry.Contains('schemaPermissionSecret') -or [string]$entry.schemaPermissionSecret -cnotmatch '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$') {
+		throw "mall-schema: the boot catalog entry $InfraNamespace/mall has no valid schemaPermissionSecret. The writer gate tables of mmorpg_mall are created by the schema principal, not by the mall's normal account. Nothing was written."
+	}
+	if (-not $entry.Contains('registrarImage') -or [string]$entry.registrarImage -cnotmatch '^[A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}$') {
+		throw "mall-schema: the boot catalog entry $InfraNamespace/mall needs a registrarImage pinned by digest (writer_authority runs from it). Nothing was written."
+	}
+	$job = [System.IO.File]::ReadAllText((Join-Path $JavaSvcManifestsDir 'mall-schema.yaml'))
+	# 业务表文件原样进 ConfigMap 的一个键(块标量,每行缩进 4 格),Job 以 -ddl-file 读它。清单里写死的 -ddl-file 必须正是这个键。
+	$ddlText = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'java/mall_game/src/main/resources/db/schema.sql'))
+	$ddlLines = ($ddlText -replace "`r`n", "`n").TrimEnd("`n") -split "`n" | ForEach-Object { "    $_" }
+	$configMap = "apiVersion: v1`nkind: ConfigMap`nmetadata:`n  name: mall-schema-sql`n  labels: {app: mall-schema, tier: java-svc}`ndata:`n  schema.sql: |`n$($ddlLines -join "`n")`n"
+	$mountedDdl = @([regex]::Matches($job, '"-ddl-file",\s*"/app/mall-schema/([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+	if (($mountedDdl -join ',') -cne 'schema.sql') {
+		throw "mall-schema.yaml must pass exactly one -ddl-file /app/mall-schema/schema.sql (found: $($mountedDdl -join ', ')). Keep the Job args and New-MallSchemaJobManifest in step. Nothing was written."
+	}
+	$job = $job.Replace('PLACEHOLDER_REGISTRAR_IMAGE', [string]$entry.registrarImage)
+	$job = $job.Replace('PLACEHOLDER_SCHEMA_PERMISSION_SECRET', [string]$entry.schemaPermissionSecret)
+	$job = $job.Replace('PLACEHOLDER_DB_PLACEMENT_JSON', (ConvertTo-DbPlacementJson -Plan (Get-DbPlacementPlan -SqlHost $mallSql.Host)))
+	$job = $job.Replace('PLACEHOLDER_DB_PLACEMENT_REQUIRED', $(if ($ReleaseProfile -cne 'dev') { '1' } else { '' }))
+	$job = $job.Replace('PLACEHOLDER_SQL_BACKEND', [string]$mallSql.Backend)
+	$leftover = [regex]::Matches($job, '(__[A-Z][A-Z0-9_]*__|PLACEHOLDER_[A-Z_]+)') | ForEach-Object { $_.Value } | Sort-Object -Unique
+	if ($leftover.Count -gt 0) {
+		throw "mall-schema.yaml has unreplaced placeholders: $($leftover -join ', '). Add the matching Replace in New-MallSchemaJobManifest. Nothing was written."
+	}
+	return [pscustomobject]@{ ConfigMap = $configMap; Job = $job; Image = [string]$entry.registrarImage }
+}
+
+# 跑 New-MallSchemaJobManifest 渲染好的闸门表 Job:确认上一次不在途 → 删旧 Job → apply → 门禁下等它结束。
+# 门禁与等待口径同 Apply-GoSvcMigrateJob:staging / prod 恒等 Job Complete,失败或超时中断发布;dev 只在 -WaitReady 下等。
+# 入口是集群内那台 MySQL 时(只有 dev)先等它滚动完成,理由同 Apply-GoSvcMigrateJob。
+function Invoke-MallSchemaJob {
+	param([Parameter(Mandatory = $true)]$Rendered)
+
+	$jobName = 'mall-schema'
+	$gateOnJob = [bool]$WaitReady -or ($ReleaseProfile -ne 'dev')
+	if ($gateOnJob -and (Test-InfraMysqlInUse)) {
+		Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName 'mysql'
+	}
+	Assert-GoSvcMigrateJobNotInFlight -Namespace $InfraNamespace -JobName $jobName
+	Invoke-Kubectl -Args @("delete", "job", $jobName, "-n", $InfraNamespace, "--ignore-not-found")
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $Rendered.Job
+	Write-Host "  [applied] $jobName -> $($Rendered.Image) (writer gate tables of mmorpg_mall, before the mall StatefulSet)"
+	if ($gateOnJob) {
+		Wait-ForGoSvcMigrateJob -Namespace $InfraNamespace -JobName $jobName -SvcName 'mall'
+		return
+	}
+	Write-Warning ("Dev profile without -WaitReady: not waiting for {0}. Check 'kubectl -n {1} get job {0}' (COMPLETIONS 1/1) and 'kubectl -n {1} logs job/{0}'." -f $jobName, $InfraNamespace)
+}
+
+# 全局服务第一步里商城的部分(Apply-Infra 调用,排在全局 Go 服务的 ConfigMap 与迁移 Job 之后):配置模板、调用密钥的 Secret、闸门表 Job。
+# 先全部渲染完再写集群,形状或目录条目不对在商城的任何写操作之前拦下。本次不部署商城时什么都不做。
+function Apply-MallPrepare {
+	if (-not (Test-GlobalJavaSvcDeployed)) { return }
+
+	$configMapYaml = New-MallConfigMapYaml
+	$schemaJob = New-MallSchemaJobManifest
+	Write-Host "Applying the mall config template and schema Job to namespace $InfraNamespace (registry=$JavaSvcRegistry tag=$JavaSvcTag)"
+	Sync-WorkloadSecrets -Namespace $InfraNamespace -Consumer 'mall'
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $configMapYaml
+	# DDL 的 ConfigMap 先于 Job 落地:Job 一起来就要读它。
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $schemaJob.ConfigMap
+	Invoke-MallSchemaJob -Rendered $schemaJob
+	Write-Host "  [prepared] mall -> config template and schema Job applied; its StatefulSet starts with the other global writers, after a zone's data-service is ready"
+}
+
+# 全局服务第二步里商城的部分(Apply-GlobalGoSvcWorkloads 调用):写者 StatefulSet、准入策略、缩容收尾 CronJob。形状照 Apply-JavaSvcManifests 里 gateway 那一段。
+# 回收 CronJob(Apply-SqlWriterPodReaper)已由调用方先落地。本次不部署商城时什么都不做。
+function Apply-MallWorkload {
+	if (-not (Test-GlobalJavaSvcDeployed)) { return }
+
+	$svcName = 'mall'
+	$info = $JavaSvcCatalogue[$svcName]
+	$svcImage = "$JavaSvcRegistry/$($info.ImageName):$JavaSvcTag"
+	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
+	# 本服务要写的东西先全部在本地渲染完,再做任何集群写操作。
+	$manifestContent = [System.IO.File]::ReadAllText((Join-Path $JavaSvcManifestsDir $info.Manifest))
+	$manifestContent = $manifestContent.Replace('PLACEHOLDER_IMAGE', $svcImage).Replace('PLACEHOLDER_PULL_POLICY', $svcPullPolicy)
+	$manifestContent = Add-SqlWriterBootManifest -ManifestContent $manifestContent -Namespace $InfraNamespace -SvcName $svcName -RuntimeKind java
+	$manifestContent = Add-SqlWriterPlacementEnv -ManifestContent $manifestContent
+	$slotRetirerYaml = New-SqlWriterSlotRetirerManifest -Namespace $InfraNamespace -StatefulSet $svcName
+	# 四把调用密钥:每把一条 secretKeyRef env 与一条指纹注解(工作负载密钥目录)。
+	$manifestContent = Add-WorkloadSecretsToManifest -SvcName $svcName -ManifestContent $manifestContent
+	# 内部 HTTP 口准入(-NetworkPolicies on):只放行 trade 与 payment。清单里没有声明别的端口,开放端口是空表。
+	$allowList = $script:GrpcAllowLists[$svcName]
+	$policyYaml = $null
+	if ($script:NetworkPoliciesOn) {
+		$declaredPorts = @(Get-ManifestContainerPorts -ManifestContent $manifestContent)
+		if ($declaredPorts -notcontains [int]$info.HttpPort) {
+			throw "The mall manifest does not declare its HTTP port $($info.HttpPort) (HttpPort of the Java service catalogue): the NetworkPolicy would guard a port nothing listens on. Nothing was written for the mall."
+		}
+		$policyYaml = New-GrpcAllowListNetworkPolicyYaml -PolicyName $allowList.PolicyName -TargetApps (Get-ReleaseTrackAppLabels -Apps $allowList.TargetApps) `
+			-GrpcPort ([int]$info.HttpPort) -OpenTcpPorts @($declaredPorts | Where-Object { $_ -ne [int]$info.HttpPort }) -AllowedApps (Get-ReleaseTrackAppLabels -Apps $allowList.AllowedApps)
+	}
+
+	# 写操作:Secret → 准入策略 → StatefulSet → 缩容收尾 CronJob。secretKeyRef 不是 optional,Secret 必须先于工作负载落地。
+	Sync-WorkloadSecrets -Namespace $InfraNamespace -Consumer $svcName
+	if ($null -ne $policyYaml) {
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $policyYaml
+	}
+	# 写者缩容时当场收尾(Complete-SqlWriterScaleDown):apply 之前先读线上副本数。
+	$liveReplicas = Get-SqlWriterLiveReplicas -Namespace $InfraNamespace -StatefulSet $svcName
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $manifestContent
+	Write-Host "  [applied] $svcName -> $svcImage (http=$($info.HttpPort) pullPolicy=$svcPullPolicy)"
+	Apply-SqlWriterSlotRetirer -Namespace $InfraNamespace -StatefulSet $svcName -Manifest $slotRetirerYaml
+	Complete-SqlWriterScaleDown -Namespace $InfraNamespace -StatefulSet $svcName -LiveReplicas $liveReplicas -ManifestContent $manifestContent
+	if (-not $script:NetworkPoliciesOn) {
+		# 准入策略关着:删掉以前开着时留下的同名策略(删策略只会放开流量,不断流)。
+		Invoke-Kubectl -Args @("delete", "networkpolicy", $allowList.PolicyName, "-n", $InfraNamespace, "--ignore-not-found")
+	}
+}
+
+# 官方商城与支付的写前核对(写路径入口,早于密钥解析与任何写操作)。本次不部署全局 Go 服务时没有它们的事,只拒绝给了却用不上的参数。
+function Assert-CommerceDeployPreflight {
+	$deploysInfra = ($Command -eq 'infra-up' -or ($Command -eq 'all-up' -and -not $SkipInfra))
+	if (-not (Test-GlobalGoSvcDeployed)) {
+		if (-not [string]::IsNullOrWhiteSpace($PaymentConfigPath)) {
+			throw "-PaymentConfigPath only applies when the global Go services are deployed (infra-up, or all-up without -SkipInfra; with -GoSvcRegistry and without -SkipGoSvc): payment lives in the infra namespace. Nothing was written."
+		}
+		if ($deploysInfra -and -not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry)) {
+			# 开头「[Mall]Skipped:」刻意不留空格(理由同 [GlobalGoSvc]Deferred)。
+			Write-Warning "[Mall]Skipped:-JavaSvcRegistry was given, but the global Go services are not deployed in this run, so the mall is not deployed either: it serves trade and payment only and starts in the same step as the global writers."
+		}
+		return
+	}
+	$plan = Get-PaymentDeployPlan
+	$channelText = if ($plan.EnabledChannels.Count -gt 0) { $plan.EnabledChannels -join ',' } else { 'none' }
+	Write-Host "Payment: config=$($plan.Source) channels=$channelText notify_service_type=$GateServiceType channel_secret_keys=$($plan.SecretEnvNames.Count)"
+	Assert-PaymentChannelSecrets
+	if (Test-GlobalJavaSvcDeployed) {
+		$mallSql = Resolve-MallSqlMode
+		# 闸门表 Job 的目录条目(schema Secret、registrar 镜像)先核:只渲染不写,真正 apply 在 Apply-MallPrepare 里再渲染一次。
+		$null = New-MallSchemaJobManifest
+		Write-Host "Mall: database=mmorpg_mall backend=$($mallSql.Backend) run_mode=$($mallSql.RunMode) require_tidb=$($mallSql.RequireTidb) allowed_payment_channels=$channelText"
+	}
+}
+
 function Apply-JavaSvcManifests {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
@@ -14875,7 +16040,7 @@ function Apply-JavaSvcManifests {
 	Write-Host "Applying Java service manifests to namespace $Namespace (registry=$JavaSvcRegistry tag=$JavaSvcTag)"
 
 	# 按名字排序:$JavaSvcCatalogue 是普通哈希表,不排序时 apply 先后与 DryRun 输出每次运行都可能不同(理由见 Get-GlobalGoSvcNames)。
-	foreach ($svcName in @($JavaSvcCatalogue.Keys | Sort-Object)) {
+	foreach ($svcName in (Get-ZoneScopedJavaSvcNames)) {
 		$info = $JavaSvcCatalogue[$svcName]
 		$svcImage = "$JavaSvcRegistry/$($info.ImageName):$JavaSvcTag"
 		$isGateway = ($svcName -eq 'gateway')
@@ -15957,6 +17122,11 @@ function Apply-Infra {
 	if ($HostIdRegistry) {
 		Assert-TlsSecretProvisioned -Namespace $InfraNamespace -Name 'etcd-id-registry-tls' -Purpose 'server certificate of the global id registry (-HostIdRegistry)'
 	}
+	# 小游戏的 WebSocket 边缘(-WsEdgeHost):清单在任何写操作之前渲染完(参数形状不对在这里 throw),它要挂的 TLS Secret 同样必须已经预置。
+	$wsEdgeManifest = New-WsEdgeManifest
+	if ($null -ne $wsEdgeManifest) {
+		Assert-WsEdgeTlsSecretPresent
+	}
 	Write-Host "Deploying shared infrastructure to namespace $InfraNamespace"
 	Write-Host ("Kubernetes cluster uid: {0}{1} (carried by the etcd bootstrap tokens)" -f $kubeClusterUid, $(if ($DryRun) { ' [dry-run marker]' } else { '' }))
 	Write-Host "Kafka profile: $KafkaProfile (broker_retention_ms=$KafkaBrokerRetentionMs)"
@@ -16215,8 +17385,17 @@ function Apply-Infra {
 		Apply-CanaryBattlePool -Workload $canaryBattleWorkload
 	}
 
+	# 小游戏的 WebSocket 边缘:只按路径转发,不依赖 gate / battle 已经就绪。nginx.conf 变了 Deployment 才滚动(指纹在 Pod 模板注解里),
+	# 滚动会断开经过旧 Pod 的小游戏连接,玩家走断线重连。
+	if ($null -ne $wsEdgeManifest) {
+		Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $wsEdgeManifest
+		Write-Host "  [applied] ws-edge host=$WsEdgeHost replicas=$WsEdgeReplicas service=$WsEdgeServiceType tls=$WsEdgeTlsSecret pod_cidrs=$WsEdgePodCidrs"
+	}
+
 	# 全局池服务一份、放 infra namespace、所有 zone 共用。这里只做第一步,依赖 data-service 的进程见 Apply-GlobalGoSvcWorkloads。
 	Apply-GlobalGoSvcManifests
+	# 官方商城(全局 Java 服务)的配置模板与闸门表 Job;进程在 Apply-GlobalGoSvcWorkloads 里和其余全局写者同一步起。本次不部署它时是空操作。
+	Apply-MallPrepare
 }
 
 function Remove-Infra {
@@ -16298,6 +17477,8 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-RedisClusterPairing
 	# 逻辑库:没给 -DirectoryLogicalShards、-Region(staging、prod 必须显式),或 -SqlClusters 不合法,在这里拒绝(设计 §5.1、§8.1、§9)。
 	Assert-LogicalDbPreflight
+	# 官方商城与支付:-PaymentConfigPath 读不了或写得不对、开了渠道却缺运维预置的密钥 Secret、商城的库档位或目录条目不合格,在这里拒绝。
+	Assert-CommerceDeployPreflight
 	# 集群内 Loki:-LokiReplicas 不是 1 / 3、3 副本缺对象存储参数、夹具用在非 dev,或本次根本不部署集群内 Loki 却给了这些参数,在这里拒绝。
 	Assert-LokiDeployPreflight
 	# 日志推送地址会原样写进两份采集器 ConfigMap(C++ sidecar 与容器日志 DaemonSet):带凭据或写坏 Alloy 字符串的地址在这里拒绝。
@@ -16321,9 +17502,10 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-AssetOpClusterConsistency
 	# C++ gRPC deadline ≥ 目标 Go 服务 zrpc Timeout + 2000(上游比下游宽)。放在任何集群写操作之前:
 	# 不成立就整条拒绝,不留半截部署(见 Assert-GrpcClientDeadlineBudget)。
-	# 战斗掉落改投邮件的发件密钥(docs/design/battle-overflow-mail.md §8):infra 的 mail 与每个 zone 的 scene 都要有 mail-producer-battle,
-	# 且 zone 与 infra 同值。缺键两边 Pod 都起不来,值不同则 mail 验签拒绝、待寄物品压着寄不出去。只读;DryRun 只打一行说明。
-	Assert-MailProducerBattleSecretForRun
+	# 签名方与验签方分处 infra 与 zone 的共享密钥($script:SharedDomainServiceSecrets:战斗掉落改投邮件的发件密钥、账号目录与查实名的
+	# 调用密钥、角色护栏密钥):两侧都要有、至少 32 字节、互不相同,zone 与 infra 同值。缺键 Pod 起不来,值不同则验签方拒绝、功能静默失效。
+	# 只读;DryRun 每个 namespace 只打一行说明。
+	Assert-SharedDomainServiceSecretsForRun
 	Assert-GrpcClientDeadlineBudget
 	# 收件箱写前门禁(交接 player-inbox-handoff-20261015 §6 H1):渲染值只取 git 跟踪的两份 yaml;-PlayerInboxConsumer 与 yaml 不一致、
 	# 「消费端关而白名单非空」(当前检出里的两份 yaml,或非 DryRun 时另一侧线上已部署的值)且没传 -AllowPlayerInboxConsumerOff、

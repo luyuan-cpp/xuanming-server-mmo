@@ -52,6 +52,7 @@ enum class ClientRequestKind : uint8_t
 	kCreateAttributeScheme = 3,   // SceneAttributeClientPlayer.CreateAttributeScheme
 	kEquipmentCraft = 4,         // 打造与首次安装词条；另有forge_revision防止回执淘汰后重做。
 	kEquipmentMaterialReward = 5, // 材料自选领取，额度水位防止回执淘汰后再领。
+	kBuyAfkPass = 6,              // SceneAfkPassClientPlayer.BuyAfkPass(docs/design/afk-monthly-card.md §4.1);首次结果取当前月卡状态
 	kCount
 };
 
@@ -67,7 +68,8 @@ enum class ClientRequestVerdict : uint8_t
 
 // 名字表:日志用。下标即枚举值,static_assert 防脱节。
 inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhance_equip", "buy_mystery_merchant_goods",
-														  "create_attribute_scheme", "equipment_craft", "equipment_material_reward"};
+														  "create_attribute_scheme", "equipment_craft", "equipment_material_reward",
+														  "buy_afk_pass"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 

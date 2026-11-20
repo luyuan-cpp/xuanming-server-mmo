@@ -1184,12 +1184,12 @@ func auditRecord(t *testing.T, db *sql.DB, playerID, seq uint64, action inboxpb.
 	return a
 }
 
-// TestIntegrationAuditRecordsWhatWasDone 是评审 L9 的回归:条目终态行 30 天后被清理,原来的审计行只有
-// 「谁、何时、为什么」,清理之后就看不出处置类型、载荷和 request_id。现在审计行自足:
+// TestIntegrationAuditRecordsWhatWasDone 是评审 L9 的回归:原来的审计行只有「谁、何时、为什么」,处置类型、载荷和
+// request_id 要回头翻条目行(当时还以为终态行 30 天后会被清理)。现在审计行自足:
 //   - SANCTION:msg_type / request_id / issued_at_ms / 摘要 / 载荷取自刚写出的条目行,void_reason = 0;
 //   - VOID(从未投递直接作废、已投递挂指令):内容取自被作废的那一条,void_reason = 本次请求的原因;
 //   - 摘要可由审计行自己的 msg_type / issued_at_ms / payload 复算;零字节载荷也照样记下;
-//   - 条目终态行被清理之后,审计行原样还在。
+//   - 条目终态行是永久收据(没有清理,设计 §9.1),审计行不靠它也答得出「做了什么」。
 func TestIntegrationAuditRecordsWhatWasDone(t *testing.T) {
 	e := openIntegration(t)
 	const pid = uint64(5003)
@@ -1888,16 +1888,16 @@ func TestIntegrationPlayerItemsPagingReadsEveryRow(t *testing.T) {
 	} {
 		var got []uint64
 		pages := 0
-		err := e.store.forEachPlayerItemsPage(ctx, pid, tc.domain, tc.pageSize, func(rows []*inboxpb.PlayerInboxItemRow) error {
+		err := e.store.forEachPlayerItemsPage(ctx, pid, tc.domain, tc.pageSize, func(refs []FinalizedRef) error {
 			pages++
-			if len(rows) == 0 || len(rows) > tc.pageSize {
-				t.Fatalf("%s: 第 %d 页 %d 行,页长 %d", tc.name, pages, len(rows), tc.pageSize)
+			if len(refs) == 0 || len(refs) > tc.pageSize {
+				t.Fatalf("%s: 第 %d 页 %d 行,页长 %d", tc.name, pages, len(refs), tc.pageSize)
 			}
-			for _, row := range rows {
-				if row.GetPlayerId() != pid || row.GetDomain() != uint32(gmDomain) {
-					t.Fatalf("%s: 读到别的玩家或别的域的行 %+v", tc.name, row)
+			for _, ref := range refs {
+				if ref.PlayerID != pid || ref.Domain != gmDomain || ref.State != inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_PENDING {
+					t.Fatalf("%s: 读到别的玩家、别的域的行,或状态没读对 %+v", tc.name, ref)
 				}
-				got = append(got, row.GetSeq())
+				got = append(got, ref.Seq)
 			}
 			return nil
 		})
@@ -1914,14 +1914,14 @@ func TestIntegrationPlayerItemsPagingReadsEveryRow(t *testing.T) {
 
 	stop := errors.New("visit 要求停下")
 	calls := 0
-	err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 1, func([]*inboxpb.PlayerInboxItemRow) error {
+	err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 1, func([]FinalizedRef) error {
 		calls++
 		return stop
 	})
 	if !errors.Is(err, stop) || calls != 1 {
 		t.Fatalf("visit 出错要停在那一页并原样返回: calls=%d err=%v", calls, err)
 	}
-	if err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 0, func([]*inboxpb.PlayerInboxItemRow) error { return nil }); err == nil {
+	if err := e.store.forEachPlayerItemsPage(ctx, pid, gmDomain, 0, func([]FinalizedRef) error { return nil }); err == nil {
 		t.Fatal("页长 0 必须报错,不能死循环或当成读完")
 	}
 }

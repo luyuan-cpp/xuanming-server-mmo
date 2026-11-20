@@ -81,6 +81,7 @@ func (l *SetSessionLogic) SetSession(in *pb.SetSessionRequest) (*common.Empty, e
 		}
 		// LoginGeneration 刻意不继承:请求为 0(旧版 login)时如实写 0,表示这条会话没有代次;
 		// 继承旧值会让无代次的会话冒用上一次登录的代次,scene 栅栏会把它当成已放行的那次登录。
+		// SessionIncarnation 同样不继承:它属于写这条记录的连接,继承旧连接的值会让新连接自己的断线被判成陈旧而忽略。
 
 		// 重放判断必须排在代次栅栏之前:重放请求的代次与记录相等,先判栅栏会把丢包重试误拒成 stale。
 		if proto.Equal(s, current) {

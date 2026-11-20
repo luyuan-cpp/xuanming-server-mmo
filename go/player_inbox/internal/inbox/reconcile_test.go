@@ -31,7 +31,7 @@ const (
 	byAdmin    = inboxpb.PlayerInboxFinalizer_PLAYER_INBOX_FINALIZER_ADMIN
 )
 
-// rcDecision 是环里的一条结局(类型 GM 封锁,同 rcRow / rcRef)。
+// rcDecision 是环里的一条结局(类型 GM 封锁,同 rcRef)。
 func rcDecision(seq, requestID uint64, outcome inboxpb.PlayerInboxOutcome, reason uint32) *componentpb.PlayerInboxDecision {
 	return &componentpb.PlayerInboxDecision{Seq: seq, Outcome: uint32(outcome), Reason: reason, RequestId: requestID, MsgType: uint32(gmBlock)}
 }
@@ -61,18 +61,10 @@ func rcRing(first uint64, n int, skip uint64) *componentpb.PlayerInboxDomainCurs
 	return rcCursor(gmDomain, ds...)
 }
 
-// rcRef 是一条终态行的对账视图(类型 GM 封锁,原因码 0)。
+// rcRef 是一条条目行的对账视图(类型 GM 封锁,原因码 0;state 可以是 PENDING)。ReconcilePlayer 与定时对账都只读这几列。
 func rcRef(seq, requestID uint64, state inboxpb.PlayerInboxItemState, by inboxpb.PlayerInboxFinalizer) FinalizedRef {
 	return FinalizedRef{
 		PlayerID: 42, Domain: gmDomain, Seq: seq, State: state, RequestID: requestID, MsgType: gmBlock, FinalizedBy: by,
-	}
-}
-
-// rcRow 是 rcRef 的整行形状(ReconcilePlayer 读的是整行)。
-func rcRow(seq, requestID uint64, state inboxpb.PlayerInboxItemState, by inboxpb.PlayerInboxFinalizer) *inboxpb.PlayerInboxItemRow {
-	return &inboxpb.PlayerInboxItemRow{
-		PlayerId: 42, Domain: uint32(gmDomain), Seq: seq, RequestId: requestID, MsgType: uint32(gmBlock),
-		State: uint32(state), FinalizedBy: uint32(by),
 	}
 }
 

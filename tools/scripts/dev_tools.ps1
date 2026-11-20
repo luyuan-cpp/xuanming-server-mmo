@@ -131,6 +131,20 @@
     [string]$GatewayIngressTlsSecret = "",
     # 逗号分隔的 CIDR,原样透传。
     [string]$GatewayTrustedProxies = "",
+    # 小游戏客户端(微信 / 抖音)的 WebSocket 边缘,透传给 k8s_deploy.ps1 同名参数(语义见那边的参数注释与
+    # docs/design/minigame-websocket-gate.md W8)。字符串留空、数值取「未指定」时不透传,用 k8s_deploy.ps1 自己的默认值。
+    # 不粘滞:以 -WsEdgeHost 运行的环境每次 zone-up / infra-up / 发布都要再传同一组参数。
+    [string]$WsEdgeHost = "",
+    [string]$WsEdgeTlsSecret = "",
+    # 逗号分隔的 IPv4 CIDR,原样透传。
+    [string]$WsEdgePodCidrs = "",
+    # 0 = 未指定。
+    [int]$WsEdgeReplicas = 0,
+    [ValidateSet("", "LoadBalancer", "NodePort")]
+    [string]$WsEdgeServiceType = "",
+    # -1 = 未指定。
+    [int]$WsEdgeNodePort = -1,
+    [string]$WsEdgeImage = "",
     # 集群内 login 的开发口令认证(DevPasswordAuth),只允许 -ReleaseProfile dev,由 k8s_deploy.ps1 校验;
     # switch 只在被指定时透传,共享密钥走环境变量 / Secret,不经参数。不粘滞:dev zone 依赖开发口令登录时重新部署要照传,
     # 漏传则生成的 login 没有任何认证配置。
@@ -351,7 +365,16 @@
     # 注销账号时撤销 Apple 令牌的 Team ID / Key ID,透传给 k8s_deploy.ps1 同名参数,口径同上面四个;私钥 PEM 读环境变量
     # MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY,不经参数,规则只在 k8s_deploy.ps1。追加在末尾,理由同上。
     [string]$LoginAppleTeamId = "",
-    [string]$LoginAppleKeyId = ""
+    [string]$LoginAppleKeyId = "",
+    # 集群内 login 的实名与未成年人防沉迷,透传给 k8s_deploy.ps1 同名参数(k8s-zone-up / k8s-all-up),口径同上面几组:国家系统的 secretKey
+    # 读环境变量 MMORPG_LOGIN_NPPA_SECRET_KEY,不经参数;形状规则与防误关只在 k8s_deploy.ps1;非空才透传,k8s-image-* / k8s-release-* 显式给了即拒绝。
+    # 追加在末尾,理由同上。
+    [string]$LoginNppaAppId = "",
+    [string]$LoginNppaBizId = "",
+    [string]$LoginAntiAddictionExtraPlayDays = "",
+    [string]$LoginNppaCheckUrl = "",
+    [string]$LoginNppaQueryUrl = "",
+    [string]$LoginNppaLoginoutUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -834,6 +857,14 @@ function Invoke-K8sDeploy {
     if ($GateNodePortBase -ne -1) { $args.GateNodePortBase = $GateNodePortBase }
     if (-not [string]::IsNullOrWhiteSpace($GateExternalTrafficPolicy)) { $args.GateExternalTrafficPolicy = $GateExternalTrafficPolicy }
     if (-not [string]::IsNullOrWhiteSpace($BattleOrchestrator)) { $args.BattleOrchestrator = $BattleOrchestrator }
+    # 小游戏 WebSocket 边缘(-WsEdge*):字符串非空、数值给了才传。不粘滞:漏传由 k8s_deploy.ps1 按集群现状在写操作之前拒绝。
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeHost)) { $args.WsEdgeHost = $WsEdgeHost }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeTlsSecret)) { $args.WsEdgeTlsSecret = $WsEdgeTlsSecret }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgePodCidrs)) { $args.WsEdgePodCidrs = $WsEdgePodCidrs }
+    if ($WsEdgeReplicas -gt 0) { $args.WsEdgeReplicas = $WsEdgeReplicas }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeServiceType)) { $args.WsEdgeServiceType = $WsEdgeServiceType }
+    if ($WsEdgeNodePort -ne -1) { $args.WsEdgeNodePort = $WsEdgeNodePort }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeImage)) { $args.WsEdgeImage = $WsEdgeImage }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressHost)) { $args.GatewayIngressHost = $GatewayIngressHost }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressClassName)) { $args.GatewayIngressClassName = $GatewayIngressClassName }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret)) { $args.GatewayIngressTlsSecret = $GatewayIngressTlsSecret }
@@ -862,6 +893,13 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $args.LoginGoogleEndpoint = $LoginGoogleEndpoint }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleTeamId)) { $args.LoginAppleTeamId = $LoginAppleTeamId }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleKeyId)) { $args.LoginAppleKeyId = $LoginAppleKeyId }
+    # 实名与防沉迷的六个参数同一口径。
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaAppId)) { $args.LoginNppaAppId = $LoginNppaAppId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaBizId)) { $args.LoginNppaBizId = $LoginNppaBizId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAntiAddictionExtraPlayDays)) { $args.LoginAntiAddictionExtraPlayDays = $LoginAntiAddictionExtraPlayDays }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaCheckUrl)) { $args.LoginNppaCheckUrl = $LoginNppaCheckUrl }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaQueryUrl)) { $args.LoginNppaQueryUrl = $LoginNppaQueryUrl }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaLoginoutUrl)) { $args.LoginNppaLoginoutUrl = $LoginNppaLoginoutUrl }
     if ($ConfirmLoginAuthProviderChange) { $args.ConfirmLoginAuthProviderChange = $true }
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
@@ -1050,6 +1088,12 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $notForwarded += '-LoginGoogleEndpoint' }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleTeamId)) { $notForwarded += '-LoginAppleTeamId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleKeyId)) { $notForwarded += '-LoginAppleKeyId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaAppId)) { $notForwarded += '-LoginNppaAppId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaBizId)) { $notForwarded += '-LoginNppaBizId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginAntiAddictionExtraPlayDays)) { $notForwarded += '-LoginAntiAddictionExtraPlayDays' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaCheckUrl)) { $notForwarded += '-LoginNppaCheckUrl' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaQueryUrl)) { $notForwarded += '-LoginNppaQueryUrl' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginNppaLoginoutUrl)) { $notForwarded += '-LoginNppaLoginoutUrl' }
     if ($ConfirmLoginAuthProviderChange) { $notForwarded += '-ConfirmLoginAuthProviderChange' }
     if ($notForwarded.Count -gt 0) {
         throw "k8s-image-* / k8s-release-* 不支持 $($notForwarded -join ', '):k8s_image.ps1 不部署 Go / Java 服务,也不支持 Agones 高密度 / FleetAutoscaler。请改用 k8s-infra-up / k8s-zone-up / k8s-all-up(直接调 k8s_deploy.ps1)。"
@@ -1124,6 +1168,14 @@ function Invoke-K8sImage {
     if ($GateNodePortBase -ne -1) { $args.GateNodePortBase = $GateNodePortBase }
     if (-not [string]::IsNullOrWhiteSpace($GateExternalTrafficPolicy)) { $args.GateExternalTrafficPolicy = $GateExternalTrafficPolicy }
     if (-not [string]::IsNullOrWhiteSpace($BattleOrchestrator)) { $args.BattleOrchestrator = $BattleOrchestrator }
+    # 小游戏 WebSocket 边缘(-WsEdge*):字符串非空、数值给了才传。不粘滞:漏传由 k8s_deploy.ps1 按集群现状在写操作之前拒绝。
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeHost)) { $args.WsEdgeHost = $WsEdgeHost }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeTlsSecret)) { $args.WsEdgeTlsSecret = $WsEdgeTlsSecret }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgePodCidrs)) { $args.WsEdgePodCidrs = $WsEdgePodCidrs }
+    if ($WsEdgeReplicas -gt 0) { $args.WsEdgeReplicas = $WsEdgeReplicas }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeServiceType)) { $args.WsEdgeServiceType = $WsEdgeServiceType }
+    if ($WsEdgeNodePort -ne -1) { $args.WsEdgeNodePort = $WsEdgeNodePort }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeImage)) { $args.WsEdgeImage = $WsEdgeImage }
     # release-zone / release-all 同样重新生成 gate(release-all 还有 battle),切换形态的确认闸同一口径透传。
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     # release-all(不带 -SkipInfra)会 infra-up,共享 Redis 重启闸的确认同一口径透传。

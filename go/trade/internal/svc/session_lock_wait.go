@@ -10,7 +10,7 @@ package svc
 // 截止之后不提交另有两道闸,不靠这里:写者池(shared/authoritysql)把事务外的写也包进事务、ctx 结束后不发 COMMIT,
 // database/sql 的 Tx.Commit 同样先看 ctx。这里管的是「被放弃的语句还能占锁多久」以及「截止之前单条语句最多等多久」。
 //
-// 取值依据:trade 的整请求预算是 Timeout(4000)− InBandReplyReserve(500)= 3500 ms。1205 在 data.IsRetryableTxError 之列,
+// 取值依据:trade 的整请求预算是 Timeout(4000)− InBandReplyReserve(500)= 3500 ms。1205 在 authoritysql.IsRetryableTxError 之列,
 // 合同事务(CommerceRepo.Tx,2 次尝试)与收藏写都会整事务重跑;单条语句等任何锁最多 1 s 时,两次尝试加退避约 2 s,
 // 仍留出 1.5 s 给其余语句、提交与回包,而 WithTxRetry 每次尝试前先看 ctx,预算用完不会再开新事务。
 // 与 guild、data_service 路由库、player_inbox 同值;Java 版 trade 同样逐连接设(JDBC sessionVariables 的

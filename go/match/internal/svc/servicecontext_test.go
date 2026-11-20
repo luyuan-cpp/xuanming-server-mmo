@@ -19,8 +19,8 @@ func TestNewRedisHandlesFallsBackToShared(t *testing.T) {
 	c.Redis.RedisConf = redis.RedisConf{Host: mr.Addr(), Type: "node"}
 
 	matchRds := NewRedisHandles(c)
-	require.NoError(t, matchRds.Set("spectate:battles:active", "x"))
-	require.True(t, mr.Exists("spectate:battles:active"))
+	require.NoError(t, matchRds.Set("spectate:battles:active:{sba:0}", "x"))
+	require.True(t, mr.Exists("spectate:battles:active:{sba:0}"))
 }
 
 // MatchRedis 配置了独立实例:写入只落在它上面。
@@ -32,9 +32,9 @@ func TestNewRedisHandlesSeparatesWhenConfigured(t *testing.T) {
 	c.MatchRedis = redis.RedisConf{Host: private.Addr(), Type: "node"}
 
 	matchRds := NewRedisHandles(c)
-	require.NoError(t, matchRds.Set("spectate:battles:active", "x"))
-	require.True(t, private.Exists("spectate:battles:active"))
-	require.False(t, shared.Exists("spectate:battles:active"))
+	require.NoError(t, matchRds.Set("spectate:battles:active:{sba:0}", "x"))
+	require.True(t, private.Exists("spectate:battles:active:{sba:0}"))
+	require.False(t, shared.Exists("spectate:battles:active:{sba:0}"))
 }
 
 // 关停等结果消费组 lag 探针退出:StopAndReport 先停后台(取消探针的 ctx),再等探针 goroutine 关掉退出信号,之后才关资源。

@@ -442,6 +442,7 @@
     <ClInclude Include="node\system\node\node_connector.h" />
     <ClInclude Include="node\system\node\client_endpoint.h" />
     <ClInclude Include="node\system\node\open_file_limit.h" />
+    <ClInclude Include="node\system\node\clock_check.h" />
     <ClInclude Include="node\system\node\process_fd_metrics.h" />
     <ClInclude Include="node\system\node\release_track.h" />
     <ClInclude Include="node\system\node\node_planned_drain.h" />

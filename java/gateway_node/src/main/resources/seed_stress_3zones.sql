@@ -16,6 +16,9 @@
 -- robot-driven distribution comes purely from per-process yaml config,
 -- not from /api/server-list auto-routing.
 --
+-- 改已有行必须让 version 加一:网关的整行 PUT 按 ETag / If-Match 比版本,不加一的话
+-- 按改之前 GET 的 ETag 发的 PUT 照样通过,把这里刚改的值写回去(2026-11-19 评审补)。
+--
 -- Run against the mmorpg database:
 --   mysql -u root -p mmorpg < seed_stress_3zones.sql
 
@@ -29,7 +32,8 @@ ON DUPLICATE KEY UPDATE
     manual_status = VALUES(manual_status),
     capacity      = VALUES(capacity),
     recommended   = VALUES(recommended),
-    sort_order    = VALUES(sort_order);
+    sort_order    = VALUES(sort_order),
+    version       = version + 1;
 
 -- Sanity print so the operator sees what they just applied.
 SELECT zone_id, name, capacity, recommended, manual_status FROM zone_config ORDER BY sort_order;

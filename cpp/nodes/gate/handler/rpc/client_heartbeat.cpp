@@ -250,4 +250,9 @@ std::size_t PendingChecks()
 	return tlsSweeper.PendingChecks();
 }
 
+bool LoopRecentlyStalled(const SteadyTime now)
+{
+	return tlsSweeper.LoopRecentlyStalled(now);
+}
+
 } // namespace gate_client_heartbeat

@@ -213,6 +213,40 @@ func (a *sqlAdmin) TablesWithoutPrimaryKey(ctx context.Context, schema string) (
 	return missing, nil
 }
 
+// ttlEnabledMarker 是 TiDB 的 SHOW CREATE TABLE 里「这张表的 TTL 开着」的写法(v8.5.2 实测,整段是 /*T![ttl] TTL_ENABLE='ON' */)。
+// 字符串字面量里的单引号会被写成两个,所以注释、缺省值里有同样的字也匹配不上。
+const ttlEnabledMarker = "TTL_ENABLE='ON'"
+
+// TablesWithTTLEnabled 见 adminSide。TTL 属性不在 information_schema 里,只能逐表看 SHOW CREATE TABLE。
+func (a *sqlAdmin) TablesWithTTLEnabled(ctx context.Context, schema string) ([]string, error) {
+	if !identifierRe.MatchString(schema) {
+		return nil, errors.New("bad database name")
+	}
+	backend, err := a.ServerBackend(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if backend != string(authoritysql.BackendTiDB) {
+		return nil, nil
+	}
+	tables, err := queryNames(ctx, a.db, baseTablesSQL, schema)
+	if err != nil {
+		return nil, err
+	}
+	var enabled []string
+	for _, table := range tables {
+		var name, definition string
+		if err := a.db.QueryRowContext(ctx, "SHOW CREATE TABLE "+quoteIdentifier(schema)+"."+quoteIdentifier(table)).Scan(&name, &definition); err != nil {
+			return nil, fmt.Errorf("SHOW CREATE TABLE %s: %w", table, err)
+		}
+		// 去掉空格、统一大写再找:不同版本的 TiDB 输出的空格不完全一样(go/chat 的 hasRetentionAttributes 同样处理)。
+		if strings.Contains(strings.ToUpper(strings.ReplaceAll(definition, " ", "")), ttlEnabledMarker) {
+			enabled = append(enabled, table)
+		}
+	}
+	return enabled, nil
+}
+
 func (a *sqlAdmin) CreateSchema(ctx context.Context, schema, charset, collation string) error {
 	if !identifierRe.MatchString(schema) || !identifierRe.MatchString(charset) || !identifierRe.MatchString(collation) {
 		return errors.New("bad database name, charset or collation")

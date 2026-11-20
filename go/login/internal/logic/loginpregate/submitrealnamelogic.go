@@ -12,6 +12,8 @@ import (
 	"shared/generated/pb/table"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // SubmitRealNameLogic 是 /api/real-name(docs/design/real-name-anti-addiction.md §5.2)。凭 /api/login 签发的 access token 鉴权,
@@ -31,8 +33,9 @@ func NewSubmitRealNameLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Su
 	}
 }
 
-// SubmitRealName 结论都带内回:令牌不能用回 kLoginAccountNotFound(客户端回到登录),令牌存储故障回 kLoginAuthProviderUnavailable,
-// 其余见 realname.Service.Submit。账号已经实名、或本渠道由平台实名时不提交,直接回当前状态。部署没开防沉迷时回空应答。
+// SubmitRealName 令牌不能用回 gRPC UNAUTHENTICATED(网关回 401,客户端回到登录);其余结论带内回:令牌存储故障回
+// kLoginAuthProviderUnavailable,实名的结论见 realname.Service.Submit。账号已经实名、或本渠道由平台实名时不提交,
+// 直接回当前状态。部署没开防沉迷时回空应答。
 func (l *SubmitRealNameLogic) SubmitRealName(in *loginpb.SubmitRealNameRequest) (*loginpb.SubmitRealNameResponse, error) {
 	resp := &loginpb.SubmitRealNameResponse{}
 	aa := l.svcCtx.AntiAddiction
@@ -42,8 +45,7 @@ func (l *SubmitRealNameLogic) SubmitRealName(in *loginpb.SubmitRealNameRequest) 
 	data, err := l.svcCtx.TokenManager.ValidateAccess(l.ctx, in.GetAccessToken())
 	if err != nil {
 		if errors.Is(err, token.ErrAccessRejected) {
-			resp.ErrorMessage = &base.TipInfoMessage{Id: uint32(table.LoginError_kLoginAccountNotFound)}
-			return resp, nil
+			return nil, status.Error(codes.Unauthenticated, "access token rejected")
 		}
 		l.Errorf("[real-name] access token lookup failed: %v", err)
 		resp.ErrorMessage = &base.TipInfoMessage{Id: uint32(table.LoginError_kLoginAuthProviderUnavailable)}

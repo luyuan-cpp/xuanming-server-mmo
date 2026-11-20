@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 
+#include "proto/scene/player_afk_pass.pb.h"
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_currency.pb.h"
@@ -30,7 +31,8 @@ namespace
 {
 
 // 挂在 player service 上的全部 GM 方法:货币 4、宠物 1、属性 1;2026-10-07 加背包 1
-// (GmGrantItem,发任意物品 / 装备);回档/欠款 12 条桩 2026-11 已从 proto 删除。
+// (GmGrantItem,发任意物品 / 装备);2026-11-19 加挂机月卡 1(GmSetAfkPass,docs/design/afk-monthly-card.md §4.3);
+// 回档/欠款 12 条桩 2026-11 已从 proto 删除。
 // 清单写在这里**不是**为了让运行时去查它(运行时用前缀判据,不查表),
 // 而是为了让"新增一条 Gm* 却没被判据认出来"这件事在测试里就炸掉。
 constexpr std::string_view kKnownClientGmMethods[] = {
@@ -38,6 +40,7 @@ constexpr std::string_view kKnownClientGmMethods[] = {
 	"GmGrantPet",
 	"GmGrantItem",
 	"GmSetPlayerLevel",
+	"GmSetAfkPass",
 };
 
 bool StartsWithGmIgnoringCase(std::string_view name)
@@ -102,6 +105,21 @@ TEST(ClientGmGateTest, DescriptorScan)
 	ExpectEveryGmMethodIsGated(ScenePetClientPlayer::descriptor());
 	ExpectEveryGmMethodIsGated(SceneAttributeClientPlayer::descriptor());
 	ExpectEveryGmMethodIsGated(SceneBagClientPlayer::descriptor());
+	ExpectEveryGmMethodIsGated(SceneAfkPassClientPlayer::descriptor());
+}
+
+// 挂机月卡服务:GmSetAfkPass 必须被判成 GM 指令(prod 整条关掉),开通与查询是玩家日常操作,不能被误伤。
+TEST(ClientGmGateTest, AfkPassServiceGatesOnlyItsGmMethod)
+{
+	const auto *gm = SceneAfkPassClientPlayer::descriptor()->FindMethodByName("GmSetAfkPass");
+	ASSERT_NE(nullptr, gm) << "SceneAfkPassClientPlayer.GmSetAfkPass is missing: run proto-gen first";
+	EXPECT_TRUE(scene_gm_guard::IsClientGmMethodName(std::string(gm->name())));
+	for (const char *name : {"GetAfkPass", "BuyAfkPass"})
+	{
+		const auto *normal = SceneAfkPassClientPlayer::descriptor()->FindMethodByName(name);
+		ASSERT_NE(nullptr, normal) << "SceneAfkPassClientPlayer." << name << " is missing: run proto-gen first";
+		EXPECT_FALSE(scene_gm_guard::IsClientGmMethodName(std::string(normal->name()))) << name;
+	}
 }
 
 // 清单与描述符对账:kKnownClientGmMethods 里的 GmGrantItem 必须真的是 SceneBagClientPlayer 上的方法。

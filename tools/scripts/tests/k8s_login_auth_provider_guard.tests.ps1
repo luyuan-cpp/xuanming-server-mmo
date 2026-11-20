@@ -17,6 +17,11 @@
       - dev_tools.ps1 Invoke-K8sDeploy 非空 / 被指定才透传这七个参数;Invoke-K8sImage 在调 k8s_image.ps1 之前逐个拒绝它们。
     2026-11-12 起同一套判据也覆盖小游戏两段(-LoginWeChatMiniGame* / -LoginDouyinMiniGame*,AuthProviders.WeChatMiniGame / DouyinMiniGame),
     本文件的往返、差异、照传串、防误关闸与两处包装入口用例都带上了它们。
+    2026-11-19 起 Apple 段另有注销时撤销令牌的 TeamId / KeyId(-LoginAppleTeamId / -LoginAppleKeyId,docs/design/account-deletion.md §8.2),
+    同样有往返、差异、照传串、防误关闸与两处包装入口的用例。
+    2026-11-19 起 login 顶层的实名与防沉迷段(-LoginNppaAppId / -LoginNppaBizId 等六个参数,AntiAddiction;docs/design/real-name-anti-addiction.md §5.8)
+    有自己的一道防误关闸(lib 第 11 节 + k8s_deploy.ps1 Assert-LoginAntiAddictionClusterState,与第三方登录共用确认开关),第 5b 节钉住它的往返、
+    差异、认不出的形状、读现状、接入位置,第 6、7 节钉住两处包装入口。渲染与密钥注入的端到端用例在 k8s_deploy_contract.tests.ps1。
     包装层 splat 键的 AST 契约在 k8s_client_entry_contract.tests.ps1。
     全部在进程内跑,kubectl 一律由同名替身函数顶替(函数先于外部命令解析),不碰任何集群。
     负向用例一律断错误文本,不只断有没有抛异常。
@@ -40,7 +45,8 @@ $DeployAst = [System.Management.Automation.Language.Parser]::ParseFile($DeploySc
 if ($deployParseErrors.Count -gt 0) { throw "k8s_deploy.ps1 解析失败: $($deployParseErrors | Out-String)" }
 
 # 被测的 k8s_deploy.ps1 生产函数(顶层定义)按语法树取出,定义进本脚本作用域;找不到即前提被改掉,直接失败。
-$DeployFunctionNames = @('Get-LoginAuthProviderParamErrors', 'New-LoginAuthProvidersYaml', 'Assert-LoginAuthProviderClusterState', 'Get-ZoneNamespace')
+$DeployFunctionNames = @('Get-LoginAuthProviderParamErrors', 'New-LoginAuthProvidersYaml', 'Assert-LoginAuthProviderClusterState', 'Get-ZoneNamespace',
+    'Get-LoginAntiAddictionParamErrors', 'New-LoginAntiAddictionYaml', 'Assert-LoginAntiAddictionClusterState')
 foreach ($definition in $DeployAst.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -in $DeployFunctionNames }) {
     . ([scriptblock]::Create($definition.Extent.Text))
 }
@@ -65,6 +71,7 @@ function New-AuthYaml {
         -DouyinMiniGameAllowOpenId ([bool]$P.DouyinMiniGameAllowOpenId) `
         -AppleClientId ([string]$P.AppleClientId) -AppleEndpoint ([string]$P.AppleEndpoint) `
         -GoogleClientId ([string]$P.GoogleClientId) -GoogleEndpoint ([string]$P.GoogleEndpoint) `
+        -AppleTeamId ([string]$P.AppleTeamId) -AppleKeyId ([string]$P.AppleKeyId) `
         -ReleaseProfile $ReleaseProfile -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET'
 }
 
@@ -88,7 +95,8 @@ function Get-Drift {
         -DouyinMiniGameAppId ([string]$P.DouyinMiniGameAppId) -DouyinMiniGameEndpoint ([string]$P.DouyinMiniGameEndpoint) `
         -DouyinMiniGameAllowOpenId ([bool]$P.DouyinMiniGameAllowOpenId) `
         -AppleClientId ([string]$P.AppleClientId) -AppleEndpoint ([string]$P.AppleEndpoint) `
-        -GoogleClientId ([string]$P.GoogleClientId) -GoogleEndpoint ([string]$P.GoogleEndpoint)
+        -GoogleClientId ([string]$P.GoogleClientId) -GoogleEndpoint ([string]$P.GoogleEndpoint) `
+        -AppleTeamId ([string]$P.AppleTeamId) -AppleKeyId ([string]$P.AppleKeyId)
 }
 
 # 在 Base 上改几项 / 去掉几项,返回新表(不改 Base)。
@@ -133,6 +141,9 @@ $RoundTripCases = @(
     @{ Label = '只开 Apple / Google,Apple 带沙箱 Endpoint(dev 档 http)'
         P = @{ AppleClientId = 'com.example.mmorpg'; AppleEndpoint = 'http://apple-mock.contract.test:18090'; GoogleClientId = '1-abc.apps.googleusercontent.com' }
         Keep = '-LoginAppleClientId com.example.mmorpg -LoginAppleEndpoint http://apple-mock.contract.test:18090 -LoginGoogleClientId 1-abc.apps.googleusercontent.com' },
+    @{ Label = 'Apple 开着注销时的令牌撤销(TeamId / KeyId,照传串紧跟在 Apple 的 Endpoint 之后)'
+        P = @{ AppleClientId = 'com.example.mmorpg'; AppleEndpoint = 'https://apple-mock.contract.test'; AppleTeamId = 'ABCDE12345'; AppleKeyId = 'KEY0123456'; GoogleClientId = '1-abc.apps.googleusercontent.com' }
+        Keep = '-LoginAppleClientId com.example.mmorpg -LoginAppleEndpoint https://apple-mock.contract.test -LoginAppleTeamId ABCDE12345 -LoginAppleKeyId KEY0123456 -LoginGoogleClientId 1-abc.apps.googleusercontent.com' },
     @{ Label = '六个都开(照传串按微信 / QQ / 两个小游戏 / Apple / Google 的顺序)'
         P = @{ WeChatAppId = 'wx0123456789abcdef'; QQAppId = '100000001'; WeChatMiniGameAppId = 'wxfedcba9876543210'; DouyinMiniGameAppId = 'tt0123456789abcdef'
             AppleClientId = 'com.example.mmorpg'; GoogleClientId = '1-abc.apps.googleusercontent.com'; GoogleEndpoint = 'https://google-mock.contract.test' }
@@ -281,6 +292,56 @@ Test-Case '照传串(Apple / Google):线上只开这两段、本次全部漏传�
     $restored = [pscustomobject]@{ Live = $LiveIdTokenHandEdited } | ConvertTo-Json -Depth 6 | ConvertFrom-Json
     $p = @{ AppleClientId = 'com.example.mmorpg'; GoogleClientId = '1-abc.apps.googleusercontent.com' }
     Assert-Equal -Expected ((Get-Drift -Live $LiveIdTokenHandEdited -P $p).Drifts -join ' | ') -Actual ((Get-Drift -Live $restored.Live -P $p).Drifts -join ' | ') -Because 'JSON 往返前后的判定必须一致(含手改出来的标识键与 RequireUnionId)'
+}
+
+# Apple 注销时撤销令牌的 TeamId / KeyId:线上开着、本次漏传就关掉撤销并删私钥 Secret,换了值也要确认;线上没有、本次新开不算差异。
+$RevokeParams = @{ AppleClientId = 'com.example.mmorpg'; AppleTeamId = 'ABCDE12345'; AppleKeyId = 'KEY0123456' }
+$RevokeKeepText = '-LoginAppleClientId com.example.mmorpg -LoginAppleTeamId ABCDE12345 -LoginAppleKeyId KEY0123456'
+$LiveRevoke = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P $RevokeParams))
+$LiveAppleOnly = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P @{ AppleClientId = 'com.example.mmorpg' }))
+# 手改出来的形状:Google 段带着只有 Apple 段才有的三项(login 对这种配置拒启)。
+$LiveRevokeOnGoogle = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (@('AuthProviders:',
+            '  Google:', '    ClientId: "1-abc.apps.googleusercontent.com"', '    TeamId: "ABCDE12345"', '    KeyId: "KEY0123456"',
+            '    PrivateKeyEnv: "MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY"') -join "`n"))
+$RevokeDriftCases = @(
+    @{ Label = '漏传两项:关掉撤销,并删私钥 Secret'; Live = $LiveRevoke; P = @{ AppleClientId = 'com.example.mmorpg' }
+        Patterns = @('^线上 AuthProviders\.Apple 开着注销时的令牌撤销,本次没给 -LoginAppleTeamId / -LoginAppleKeyId:部署后注销的 Apple 账号不再撤销令牌\(只提示手动撤销\),并删除它的私钥 Secret$') },
+    @{ Label = '换了 KeyId(换私钥)'; Live = $LiveRevoke; P = (Get-Params -Base $RevokeParams -Set @{ AppleKeyId = 'KEY9999999' })
+        Patterns = @('^AuthProviders\.Apple\.KeyId 与线上不同\(本次 -LoginAppleKeyId 换了值') },
+    @{ Label = '换了 TeamId'; Live = $LiveRevoke; P = (Get-Params -Base $RevokeParams -Set @{ AppleTeamId = 'ZZZZZ99999' })
+        Patterns = @('^AuthProviders\.Apple\.TeamId 与线上不同\(本次 -LoginAppleTeamId 换了值') },
+    @{ Label = '整段漏传:Apple 登录随新 Pod 关闭,顺带删私钥 Secret(只报这一项)'; Live = $LiveRevoke; P = @{}
+        Patterns = @('^线上已开 AuthProviders\.Apple,本次没给 -LoginAppleClientId:部署后 Apple 登录随新 Pod 关闭,并删除它的私钥 Secret$') },
+    @{ Label = '线上只开 Apple 登录、本次加开撤销'; Live = $LiveAppleOnly; P = $RevokeParams; Patterns = @() },
+    @{ Label = 'Google 段手改带了 TeamId / KeyId:算生成器不写的键(PrivateKeyEnv 是生成器常量,不另报)'; Live = $LiveRevokeOnGoogle
+        P = @{ GoogleClientId = '1-abc.apps.googleusercontent.com' }
+        Patterns = @('^线上 AuthProviders\.Google 有生成器不写的键\(TeamId, KeyId\),本次部署会丢掉$') },
+    @{ Label = '照传全部'; Live = $LiveRevoke; P = $RevokeParams; Patterns = @() }
+)
+foreach ($driftCase in $RevokeDriftCases) {
+    Test-Case "差异判定(Apple 撤销令牌):$($driftCase.Label)" {
+        Assert-Equal -Expected '' -Actual (@($driftCase.Live.Errors) -join ' | ') -Because '前提:生成器写的(与手改出来的)形状解析器都认得出'
+        $drift = Get-Drift -Live $driftCase.Live -P $driftCase.P
+        Assert-Equal -Expected $driftCase.Patterns.Count -Actual $drift.Drifts.Count -Because "差异逐项计数(实际: $($drift.Drifts -join ' | '))"
+        foreach ($pattern in $driftCase.Patterns) {
+            Assert-True -Condition (@($drift.Drifts | Where-Object { $_ -match $pattern }).Count -eq 1) -Because "恰有一项匹配 /$pattern/(实际: $($drift.Drifts -join ' | '))"
+        }
+        Assert-NotMatch -Text ($drift.Drifts -join "`n") -Pattern 'ABCDE12345|KEY0123456|KEY9999999|ZZZZZ99999' -Because '差异文本只点键名与参数名,不回显值'
+    }
+}
+
+Test-Case '照传串(Apple 撤销令牌):线上开着撤销、本次全部漏传时还原 ClientId / TeamId / KeyId;形状不对的值写 <见 ConfigMap>;经 JSON 往返后判定不变' {
+    Assert-Equal -Expected $RevokeKeepText -Actual (Get-Drift -Live $LiveRevoke).KeepArgs -Because '照传串 = 线上现状对应的参数,撤销两项紧跟 Apple 的标识'
+    $handEdited = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (@('AuthProviders:', '  Apple:',
+                '    ClientId: "com.example.mmorpg"', '    TeamId: "abc;rm -rf"', '    KeyId: "KEY0123456"') -join "`n"))
+    $drift = Get-Drift -Live $handEdited
+    Assert-Equal -Expected '-LoginAppleClientId com.example.mmorpg -LoginAppleTeamId <见 ConfigMap> -LoginAppleKeyId KEY0123456' -Actual $drift.KeepArgs -Because '不是 10 位 [A-Z0-9] 的值不回显,也不让人照抄'
+    Assert-NotMatch -Text (($drift.Drifts -join "`n") + "`n" + $drift.KeepArgs) -Pattern ';rm' -Because '报错与照传串都不回显手改进去的文本'
+    $restored = [pscustomobject]@{ Live = $LiveRevoke } | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+    $p = @{ AppleClientId = 'com.example.mmorpg' }
+    Assert-Equal -Expected ((Get-Drift -Live $LiveRevoke -P $p).Drifts -join ' | ') -Actual ((Get-Drift -Live $restored.Live -P $p).Drifts -join ' | ') -Because 'JSON 往返前后的判定必须一致'
+    Assert-Equal -Expected 1 -Actual (Get-Drift -Live $restored.Live -P $p).Drifts.Count -Because '前提:往返后漏传撤销两项仍算一项差异'
+    Assert-Equal -Expected $RevokeKeepText -Actual (Get-Drift -Live $restored.Live).KeepArgs -Because '照传串同样不变'
 }
 
 Test-Case '照传串只按线上现状拼,与本次参数无关(全部漏传时报错里照抄它就能保持现状)' {
@@ -540,6 +601,43 @@ Test-Case 'k8s_deploy 防误关闸(Apple / Google):线上开着这两段、本�
     Assert-NotMatch -Text $errorText -Pattern 'AuthProviders\.Apple' -Because 'Apple 照传了,不报'
 }
 
+Test-Case 'k8s_deploy 防误关闸(Apple 撤销令牌):线上开着撤销、本次漏传 -LoginAppleTeamId / -LoginAppleKeyId 就拒绝并给出照传串;照传放行;换了 KeyId 同样拒绝(两个参数都传进了判据)' {
+    $NamespacePrefix = 'mmorpg-zone'
+    $KubeContext = 'contract-ctx'
+    $KubeConfig = 'C:/contract/kubeconfig'
+    $LoginWeChatAppId = ''; $LoginWeChatEndpoint = ''; $LoginWeChatAllowOpenId = [switch]$false
+    $LoginQQAppId = ''; $LoginQQEndpoint = ''; $LoginQQAllowOpenId = [switch]$false
+    $LoginWeChatMiniGameAppId = ''; $LoginWeChatMiniGameEndpoint = ''; $LoginWeChatMiniGameAllowOpenId = [switch]$false
+    $LoginDouyinMiniGameAppId = ''; $LoginDouyinMiniGameEndpoint = ''; $LoginDouyinMiniGameAllowOpenId = [switch]$false
+    $LoginAppleClientId = $RevokeParams.AppleClientId; $LoginAppleEndpoint = ''; $LoginGoogleClientId = ''; $LoginGoogleEndpoint = ''
+    $LoginAppleTeamId = ''; $LoginAppleKeyId = ''
+    $ConfirmLoginAuthProviderChange = [switch]$false
+    $revokeConfigMap = New-LoginConfigMapJson -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P $RevokeParams))
+    function Invoke-ClientEntryKubectl {
+        param([string[]]$KubectlArgs, [string]$KubeContext, [string]$KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure)
+        Assert-Equal -Expected 'get' -Actual $KubectlArgs[0] -Because '防误关闸只能查询'
+        if ($KubectlArgs[1] -ceq 'configmap') { return [pscustomobject]@{ ExitCode = 0; Stdout = $revokeConfigMap; Stderr = '' } }
+        if ($KubectlArgs[1] -ceq 'secret') { return [pscustomobject]@{ ExitCode = 0; Stdout = ''; Stderr = '' } }
+        throw "假 kubectl:没有规则命中这次调用:kubectl $($KubectlArgs -join ' ')"
+    }
+    $zones = @([pscustomobject]@{ Name = 'z1' })
+
+    $errorText = ''
+    try { Assert-LoginAuthProviderClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'login 第三方登录现状预检失败\(1 个 zone\),未做任何写操作' -Because '漏传撤销两项要拒绝(会关掉撤销、删掉私钥 Secret)'
+    Assert-Match -Text $errorText -Pattern ('线上 AuthProviders\.Apple 开着注销时的令牌撤销[^\r\n]*要保持现状请照传 ' + [regex]::Escape($RevokeKeepText) + ';确认要关闭或改动请加 -ConfirmLoginAuthProviderChange') -Because '报错给出含撤销两项的照传串与确认开关'
+
+    $LoginAppleTeamId = $RevokeParams.AppleTeamId; $LoginAppleKeyId = $RevokeParams.AppleKeyId
+    $kept = @(Assert-LoginAuthProviderClusterState -Zones $zones 3>&1)
+    Assert-Equal -Expected 0 -Actual @($kept | Where-Object { $_ -is [System.Management.Automation.WarningRecord] }).Count -Because '照传撤销两项即放行、不告警'
+
+    $LoginAppleKeyId = 'KEY9999999'
+    $errorText = ''
+    try { Assert-LoginAuthProviderClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'AuthProviders\.Apple\.KeyId 与线上不同' -Because '换了 -LoginAppleKeyId 同样拒绝(参数确实传进了判据)'
+    Assert-NotMatch -Text $errorText -Pattern 'AuthProviders\.Apple\.TeamId' -Because 'TeamId 照传了,不报'
+}
+
 Test-Case 'k8s_deploy 接入位置:防误关闸全文件只调一次,在 Assert-ClientEntryDeployPreflight 的 if ($DryRun) 的 else 分支、if ($deploysLogin) 之内,排在 Assert-ClientEntryClusterState 之后' {
     $guardCalls = @($DeployAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Assert-LoginAuthProviderClusterState' }, $true))
     Assert-Equal -Expected 1 -Actual $guardCalls.Count -Because '只有一个调用点'
@@ -570,6 +668,221 @@ Test-Case '库契约 LoginConfigMapName / LoginConfigMapKey / LoginOAuthSecretNa
 }
 
 # ─────────────────────────────────────────────────────────────────
+# 5b. login 实名与防沉迷(AntiAddiction)的防误关闸:lib 第 11 节 + k8s_deploy.ps1 Assert-LoginAntiAddictionClusterState
+# ─────────────────────────────────────────────────────────────────
+# 与第三方登录共用确认开关 -ConfirmLoginAuthProviderChange,判据各自独立。生成器 New-LoginAntiAddictionYaml 与解析器口径一致由往返用例钉住。
+
+$NppaParams = @{ AppId = 'nppa-contract-app-0123456789abcd'; BizId = '1101999999' }
+$NppaKeepText = '-LoginNppaAppId nppa-contract-app-0123456789abcd -LoginNppaBizId 1101999999'
+
+# 一组本次参数(键:AppId / BizId / ExtraPlayDays / CheckUrl / QueryUrl / LoginoutUrl,缺省即不给)→ 生产生成器渲染的 AntiAddiction 段。
+function New-AntiAddictionYaml {
+    param([hashtable]$P = @{})
+    return New-LoginAntiAddictionYaml -AppId ([string]$P.AppId) -BizId ([string]$P.BizId) -ExtraPlayDays ([string]$P.ExtraPlayDays) `
+        -CheckUrl ([string]$P.CheckUrl) -QueryUrl ([string]$P.QueryUrl) -LoginoutUrl ([string]$P.LoginoutUrl)
+}
+
+$LiveNppa = ConvertFrom-LoginAntiAddictionYaml -LoginYaml (New-LoginYamlWith -AuthYaml (New-AntiAddictionYaml -P $NppaParams))
+
+Test-Case '实名与防沉迷 生成器 ↔ 解析器往返:只给 AppId / BizId、再加可玩日与三个地址都读回开着与同一组标识(LF / CRLF 都认),同参重部署零差异;没有段、Enabled: false 都不算开;小写键照样认' {
+    $withExtras = $NppaParams + @{ ExtraPlayDays = '2026-10-01,2026-10-08'; CheckUrl = 'https://nppa-mock.contract.test/check'
+        QueryUrl = 'http://nppa-mock.contract.test/query'; LoginoutUrl = 'http://nppa-mock.contract.test/loginout' }
+    foreach ($p in @($NppaParams, $withExtras)) {
+        $lf = (New-LoginYamlWith -AuthYaml (New-AntiAddictionYaml -P $p)) -replace "`r`n", "`n"
+        foreach ($text in @($lf, ($lf -replace "`n", "`r`n"))) {
+            $live = ConvertFrom-LoginAntiAddictionYaml -LoginYaml $text
+            Assert-True -Condition ($live.Present -and $live.Enabled) -Because '生成器写出的段要读得回开着'
+            Assert-Equal -Expected 0 -Actual @($live.Errors).Count -Because "生成器的形状不能被判成认不出: $(@($live.Errors) -join '; ')"
+            Assert-Equal -Expected "$($p.AppId)|$($p.BizId)" -Actual "$($live.AppId)|$($live.BizId)" -Because '读回同一组 AppId / BizId'
+            $drift = Get-LoginAntiAddictionDrift -Live $live -AppId $p.AppId -BizId $p.BizId
+            Assert-True -Condition ($drift.Drifts.Count -eq 0 -and $drift.KeepArgs -eq '') -Because "同一组参数重部署:零差异(实际:$($drift.Drifts -join ' | '))"
+        }
+    }
+    $none = ConvertFrom-LoginAntiAddictionYaml -LoginYaml (New-LoginYamlWith)
+    Assert-True -Condition (-not $none.Present -and -not $none.Enabled -and @($none.Errors).Count -eq 0) -Because '没有段 = 没开'
+    $fresh = Get-LoginAntiAddictionDrift -Live $none -AppId $NppaParams.AppId -BizId $NppaParams.BizId
+    Assert-True -Condition ($fresh.Drifts.Count -eq 0 -and $fresh.KeepArgs -eq '') -Because '线上没开、本次新开:不算差异(开启是显式的)'
+    $off = ConvertFrom-LoginAntiAddictionYaml -LoginYaml (New-LoginYamlWith -AuthYaml "AntiAddiction:`n  Enabled: false")
+    Assert-True -Condition ($off.Present -and -not $off.Enabled -and @($off.Errors).Count -eq 0) -Because 'Enabled: false = 有段没开'
+    Assert-Equal -Expected 0 -Actual (Get-LoginAntiAddictionDrift -Live $off).Drifts.Count -Because '线上没开、本次也不开:没有差异'
+    $lower = ConvertFrom-LoginAntiAddictionYaml -LoginYaml (New-LoginYamlWith -AuthYaml "AntiAddiction:`n  enabled: true`n  nppa:`n    appid: `"a1`"`n    bizid: `"b1`"")
+    Assert-True -Condition ($lower.Enabled -and $lower.AppId -ceq 'a1' -and $lower.BizId -ceq 'b1' -and @($lower.Errors).Count -eq 0) -Because 'login 读键名不区分大小写,小写键照样生效'
+}
+
+$AntiAddictionDriftCases = @(
+    @{ Label = '线上开着、本次全部漏传(关闭:新 Pod 拿不到 secretKey)'; P = @{}
+        Patterns = @('^anti-addiction is on in the live login ConfigMap and -LoginNppaAppId / -LoginNppaBizId were not given: [^\r\n]*refuses to start') }
+    @{ Label = '换了 AppId'; P = @{ AppId = 'nppa-other-app'; BizId = $NppaParams.BizId }; Patterns = @('^AntiAddiction\.Nppa\.AppId differs from the live one \(-LoginNppaAppId changed\)') }
+    @{ Label = '换了 BizId'; P = @{ AppId = $NppaParams.AppId; BizId = '1101888888' }; Patterns = @('^AntiAddiction\.Nppa\.BizId differs from the live one \(-LoginNppaBizId changed\)') }
+    @{ Label = '两个都换了'; P = @{ AppId = 'nppa-other-app'; BizId = '1101888888' }; Patterns = @('^AntiAddiction\.Nppa\.AppId differs', '^AntiAddiction\.Nppa\.BizId differs') }
+)
+foreach ($driftCase in $AntiAddictionDriftCases) {
+    Test-Case "实名与防沉迷 差异判定:$($driftCase.Label)" {
+        $drift = Get-LoginAntiAddictionDrift -Live $LiveNppa -AppId ([string]$driftCase.P.AppId) -BizId ([string]$driftCase.P.BizId)
+        Assert-Equal -Expected $driftCase.Patterns.Count -Actual $drift.Drifts.Count -Because "差异条数(实际:$($drift.Drifts -join ' | '))"
+        for ($i = 0; $i -lt $driftCase.Patterns.Count; $i++) {
+            Assert-Match -Text $drift.Drifts[$i] -Pattern $driftCase.Patterns[$i] -Because '每条差异写明是哪一项、后果是什么'
+        }
+        Assert-Equal -Expected $NppaKeepText -Actual $drift.KeepArgs -Because '照传串按线上现状还原两个参数(与本次给了什么无关)'
+    }
+}
+
+Test-Case '实名与防沉迷 JSON 往返与照传串:线上现状经 ConvertTo-Json / ConvertFrom-Json 后判定不变;线上标识不在安全字符集或缺了时照传串写 <see ConfigMap>' {
+    $roundTrip = $LiveNppa | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+    $drift = Get-LoginAntiAddictionDrift -Live $roundTrip
+    Assert-Equal -Expected 1 -Actual $drift.Drifts.Count -Because 'JSON 往返之后判定不变'
+    Assert-Equal -Expected $NppaKeepText -Actual $drift.KeepArgs -Because 'JSON 往返之后照传串不变'
+    $odd = [pscustomobject]@{ Present = $true; Enabled = $true; AppId = 'app with space'; BizId = ''; Errors = [string[]]@() }
+    Assert-Equal -Expected '-LoginNppaAppId <see ConfigMap> -LoginNppaBizId <see ConfigMap>' -Actual (Get-LoginAntiAddictionDrift -Live $odd).KeepArgs `
+        -Because '照传串只回显安全字符集里的值;线上缺 BizId 也不拼出空参数'
+}
+
+$AntiAddictionUnreadableCases = @(
+    @{ Label = '顶格键大小写不是生成器的写法'; Section = "antiAddiction:`n  Enabled: true" }
+    @{ Label = '顶格键带引号'; Section = "`"AntiAddiction`":`n  Enabled: true" }
+    @{ Label = '同一行带值(flow 写法)'; Section = 'AntiAddiction: {Enabled: true}' }
+    @{ Label = '顶格键出现两次'; Section = "AntiAddiction:`n  Enabled: true`nAntiAddiction:`n  Enabled: false" }
+    @{ Label = 'Enabled 带引号'; Section = "AntiAddiction:`n  Enabled: `"true`"" }
+    @{ Label = 'Enabled 出现两次'; Section = "AntiAddiction:`n  Enabled: true`n  Enabled: false" }
+    @{ Label = '制表符缩进'; Section = "AntiAddiction:`n`tEnabled: true" }
+    @{ Label = 'AppId 没加引号'; Section = "AntiAddiction:`n  Enabled: true`n  Nppa:`n    AppId: nppa-unquoted-app-id`n    BizId: `"1101999999`""; NoEcho = 'nppa-unquoted-app-id' }
+    @{ Label = 'AppId 用单引号'; Section = "AntiAddiction:`n  Enabled: true`n  Nppa:`n    AppId: 'nppa-app'`n    BizId: `"1101999999`"" }
+    @{ Label = 'BizId 出现两次'; Section = "AntiAddiction:`n  Enabled: true`n  Nppa:`n    AppId: `"a`"`n    BizId: `"1`"`n    BizId: `"2`"" }
+    @{ Label = 'Nppa 同一行带值'; Section = "AntiAddiction:`n  Enabled: true`n  Nppa: {AppId: a}" }
+    @{ Label = '四格缩进的键不在 Nppa 下'; Section = "AntiAddiction:`n  Enabled: true`n    AppId: `"a`"" }
+    @{ Label = '可玩日写成块式序列'; Section = "AntiAddiction:`n  Enabled: true`n  ExtraPlayDays:`n    - `"2026-10-01`"" }
+)
+foreach ($case in $AntiAddictionUnreadableCases) {
+    Test-Case "实名与防沉迷 认不出的形状:$($case.Label) → Errors 非空,不论本次给没给参数,差异里整体算一项「判不出」(fail-closed),不回显值" {
+        $live = ConvertFrom-LoginAntiAddictionYaml -LoginYaml (New-LoginYamlWith -AuthYaml $case.Section)
+        Assert-True -Condition ($live.Present) -Because '顶格键在(任何写法)就算 Present'
+        Assert-True -Condition (@($live.Errors).Count -gt 0) -Because '认不出就记进 Errors,不能当作没开'
+        foreach ($p in @(@{}, $NppaParams)) {
+            $drift = Get-LoginAntiAddictionDrift -Live $live -AppId ([string]$p.AppId) -BizId ([string]$p.BizId)
+            Assert-Equal -Expected 1 -Actual $drift.Drifts.Count -Because '判不出整体算一项差异'
+            Assert-Match -Text $drift.Drifts[0] -Pattern 'cannot be read' -Because '写明是判不出'
+            Assert-Equal -Expected '' -Actual $drift.KeepArgs -Because '判不出就没有可照传的参数'
+            $text = ($drift.Drifts -join ' ') + ' ' + (@($live.Errors) -join ' ')
+            Assert-True -Condition (-not $text.Contains('contract-guard-secret-never-echoed') -and (-not $case.NoEcho -or -not $text.Contains([string]$case.NoEcho))) -Because 'Errors 与差异只写行号与键名,不回显值'
+        }
+    }
+}
+
+$AntiAddictionLiveCases = @(
+    @{ Label = 'ConfigMap 不在(首次部署 / namespace 已删)'; Stdout = ''
+        Expect = { param($s) Assert-True -Condition (-not $s.ConfigMapPresent -and -not $s.Live.Present -and -not $s.Live.Enabled) -Because '不在即没开' } }
+    @{ Label = '开着防沉迷'; Stdout = (New-LoginConfigMapJson -LoginYaml (New-LoginYamlWith -AuthYaml (New-AntiAddictionYaml -P $NppaParams)))
+        Expect = { param($s) Assert-True -Condition ($s.ConfigMapPresent -and $s.Live.Enabled -and $s.Live.AppId -ceq $NppaParams.AppId -and @($s.Live.Errors).Count -eq 0) -Because '读回开着与 AppId' } }
+    @{ Label = '返回不是 JSON'; Stdout = 'not-json{'
+        Expect = { param($s) Assert-True -Condition ($s.ConfigMapPresent -and @($s.Live.Errors | Where-Object { $_ -match 'did not come back as JSON' }).Count -eq 1) -Because '判不出,交给调用方 fail-closed' } }
+    @{ Label = '没有 login.yaml 键'; Stdout = (New-LoginConfigMapJson -LoginYaml '' -WithoutConfigKey)
+        Expect = { param($s) Assert-True -Condition ($s.ConfigMapPresent -and @($s.Live.Errors | Where-Object { $_ -match 'has no data\.login\.yaml' }).Count -eq 1) -Because '判不出,交给调用方 fail-closed' } }
+)
+foreach ($liveCase in $AntiAddictionLiveCases) {
+    Test-Case "Get-LoginAntiAddictionLiveState:$($liveCase.Label)(只查询一次 ConfigMap,带上调用方的 context / kubeconfig,不读 Secret login-nppa)" {
+        $calls = [System.Collections.Generic.List[object]]::new()
+        function Invoke-ClientEntryKubectl {
+            param([string[]]$KubectlArgs, [string]$KubeContext, [string]$KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure)
+            $line = $KubectlArgs -join ' '
+            $calls.Add([pscustomobject]@{ Line = $line; KubeContext = $KubeContext; KubeConfig = $KubeConfig; CaptureOutput = $CaptureOutput.IsPresent; AllowFailure = $AllowFailure.IsPresent })
+            if ($line -ceq 'get configmap go-svc-login-config -n mmorpg-zone-aaguard --ignore-not-found -o json') { return [pscustomobject]@{ ExitCode = 0; Stdout = [string]$liveCase.Stdout; Stderr = '' } }
+            throw "假 kubectl:没有规则命中这次调用:kubectl $line"
+        }
+        $state = Get-LoginAntiAddictionLiveState -Namespace 'mmorpg-zone-aaguard' -KubeContext 'contract-ctx' -KubeConfig 'C:/contract/kubeconfig'
+        & $liveCase.Expect $state
+        Assert-Equal -Expected 1 -Actual $calls.Count -Because '只读 login 的 ConfigMap 一次(secretKey 在 Secret 里,本进程不读)'
+        Assert-True -Condition ($calls[0].CaptureOutput -and -not $calls[0].AllowFailure) -Because 'kubectl 非 0 退出必须 throw(查不到不等于没开)'
+        Assert-Equal -Expected 'contract-ctx|C:/contract/kubeconfig' -Actual ("{0}|{1}" -f $calls[0].KubeContext, $calls[0].KubeConfig) -Because '查询必须带调用方给的 context 与 kubeconfig'
+    }
+}
+
+Test-Case 'k8s_deploy 防误关闸(实名与防沉迷):全部 zone 判完再一次拒绝并给出照传串;-ConfirmLoginAuthProviderChange 只告警放行;照传放行;换了 AppId 同样拒绝;kubectl 失败即拒绝' {
+    $NamespacePrefix = 'mmorpg-zone'
+    $KubeContext = 'contract-ctx'
+    $KubeConfig = 'C:/contract/kubeconfig'
+    $LoginNppaAppId = ''; $LoginNppaBizId = ''
+    $ConfirmLoginAuthProviderChange = [switch]$false
+    $configMaps = @{
+        'mmorpg-zone-z1' = (New-LoginConfigMapJson -LoginYaml (New-LoginYamlWith -AuthYaml (New-AntiAddictionYaml -P $NppaParams)))
+        'mmorpg-zone-z2' = (New-LoginConfigMapJson -LoginYaml (New-LoginYamlWith))
+        'mmorpg-zone-z3' = (New-LoginConfigMapJson -LoginYaml '' -WithoutConfigKey)
+        'mmorpg-zone-z4' = ''
+    }
+    $failNamespace = ''
+    $calls = [System.Collections.Generic.List[string]]::new()
+    function Invoke-ClientEntryKubectl {
+        param([string[]]$KubectlArgs, [string]$KubeContext, [string]$KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure)
+        $line = $KubectlArgs -join ' '
+        $calls.Add($line)
+        Assert-Equal -Expected 'get configmap' -Actual ($KubectlArgs[0..1] -join ' ') -Because '防误关闸只查询 login 的 ConfigMap,不读 Secret login-nppa'
+        Assert-Equal -Expected 'contract-ctx' -Actual $KubeContext -Because '查询必须带部署用的 context'
+        $namespace = $KubectlArgs[[array]::IndexOf($KubectlArgs, '-n') + 1]
+        if ($namespace -ceq $failNamespace) { throw "kubectl failed (exit 1): kubectl $line" }
+        return [pscustomobject]@{ ExitCode = 0; Stdout = [string]$configMaps[$namespace]; Stderr = '' }
+    }
+    $zones = @([pscustomobject]@{ Name = 'z1' }, [pscustomobject]@{ Name = 'z2' }, [pscustomobject]@{ Name = 'z3' }, [pscustomobject]@{ Name = 'z4' })
+
+    $errorText = ''
+    try { Assert-LoginAntiAddictionClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'login anti-addiction cluster-state preflight failed \(2 zone\(s\)\)\. Nothing was written\.' -Because '有差异的 zone 逐个计数,一次拒绝'
+    Assert-Equal -Expected 2 -Actual @([regex]::Matches($errorText, '(?m)^  - zone ')).Count -Because '每个有差异的 zone 一行'
+    Assert-Match -Text $errorText -Pattern ('zone z1 \(namespace=mmorpg-zone-z1\): anti-addiction is on[^\r\n]*To keep it on pass ' + [regex]::Escape($NppaKeepText) + '; to go ahead add -ConfirmLoginAuthProviderChange\.') `
+        -Because 'z1 开着、本次漏传:给出照传串与确认开关'
+    Assert-Match -Text $errorText -Pattern 'zone z3 \(namespace=mmorpg-zone-z3\): the AntiAddiction section of the live login ConfigMap cannot be read' -Because 'z3 判不出,fail-closed'
+    Assert-NotMatch -Text $errorText -Pattern 'zone z2|zone z4' -Because 'z2 没开、z4 没有 ConfigMap,不列'
+    Assert-Equal -Expected 4 -Actual $calls.Count -Because '四个 zone 都判完再拒绝(all-up 逐 zone 部署,不能留半截)'
+
+    $ConfirmLoginAuthProviderChange = [switch]$true
+    $records = @(Assert-LoginAntiAddictionClusterState -Zones $zones 3>&1)
+    $warnings = @($records | Where-Object { $_ -is [System.Management.Automation.WarningRecord] } | ForEach-Object { $_.Message })
+    Assert-Equal -Expected 2 -Actual $warnings.Count -Because '确认后不拒绝,每个有差异的 zone 告警一次'
+    Assert-True -Condition (@($warnings | Where-Object { $_ -match '^\[login-anti-addiction\] -ConfirmLoginAuthProviderChange supplied; allowed: zone z1 \(' }).Count -eq 1) -Because '告警写明放行的是什么'
+
+    $ConfirmLoginAuthProviderChange = [switch]$false
+    $configMaps['mmorpg-zone-z3'] = $configMaps['mmorpg-zone-z1']
+    $LoginNppaAppId = $NppaParams.AppId; $LoginNppaBizId = $NppaParams.BizId
+    $kept = @(Assert-LoginAntiAddictionClusterState -Zones $zones 3>&1)
+    Assert-Equal -Expected 0 -Actual @($kept | Where-Object { $_ -is [System.Management.Automation.WarningRecord] }).Count -Because '照传 AppId / BizId:不拒绝、不告警'
+
+    $LoginNppaAppId = 'nppa-other-app'
+    $errorText = ''
+    try { Assert-LoginAntiAddictionClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'AntiAddiction\.Nppa\.AppId differs from the live one' -Because '换了 -LoginNppaAppId 同样拒绝(参数确实传进了判据)'
+    Assert-NotMatch -Text $errorText -Pattern 'BizId differs' -Because 'BizId 照传了,不报'
+
+    $LoginNppaAppId = $NppaParams.AppId
+    $failNamespace = 'mmorpg-zone-z2'
+    $errorText = ''
+    try { Assert-LoginAntiAddictionClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'kubectl failed \(exit 1\)' -Because '读不到就拒绝部署(查不到不等于没开)'
+}
+
+Test-Case 'k8s_deploy 接入位置(实名与防沉迷):防误关闸全文件只调一次,在 Assert-ClientEntryDeployPreflight 的非 DryRun 分支、if ($deploysLogin) 之内,排在口令登录那道闸之后;参数门禁也在这个函数里、DryRun 分支之前' {
+    $preflight = $DeployAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-ClientEntryDeployPreflight' }, $false)
+    Assert-True -Condition ($null -ne $preflight) -Because '要有 Assert-ClientEntryDeployPreflight'
+    $guardCalls = @($DeployAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Assert-LoginAntiAddictionClusterState' }, $true))
+    Assert-Equal -Expected 1 -Actual $guardCalls.Count -Because '只有一个调用点'
+    $call = $guardCalls[0]
+    $ifs = [System.Collections.Generic.List[object]]::new()
+    $function = $null
+    for ($node = $call.Parent; $null -ne $node; $node = $node.Parent) {
+        if ($node -is [System.Management.Automation.Language.IfStatementAst]) { $ifs.Add($node) }
+        if ($node -is [System.Management.Automation.Language.FunctionDefinitionAst]) { $function = $node; break }
+    }
+    Assert-Equal -Expected 'Assert-ClientEntryDeployPreflight' -Actual $function.Name -Because '与集群现状预检同处(写路径入口、密钥解析与任何写操作之前)'
+    Assert-True -Condition ($ifs.Count -ge 2) -Because '外层 if ($DryRun),内层 if ($deploysLogin)'
+    Assert-Equal -Expected '$deploysLogin' -Actual $ifs[0].Clauses[0].Item1.Extent.Text -Because 'infra-up、-SkipGoSvc、k8s_image.ps1 路径都不碰 login,不能被这道闸拦住'
+    $dryRunIf = $ifs[1]
+    Assert-Equal -Expected '$DryRun' -Actual $dryRunIf.Clauses[0].Item1.Extent.Text -Because 'DryRun 不读集群'
+    Assert-True -Condition ($null -ne $dryRunIf.ElseClause -and $call.Extent.StartOffset -gt $dryRunIf.ElseClause.Extent.StartOffset -and $call.Extent.EndOffset -le $dryRunIf.ElseClause.Extent.EndOffset) -Because '只在非 DryRun 分支里调用'
+    Assert-Match -Text $dryRunIf.Clauses[0].Item2.Extent.Text -Pattern 'Skipping login anti-addiction' -Because 'DryRun 要写明跳过了这道现状预检'
+    $passwordGuard = $dryRunIf.ElseClause.Find({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Assert-LoginPasswordAuthClusterState' }, $true)
+    Assert-True -Condition ($null -ne $passwordGuard -and $passwordGuard.Extent.StartOffset -lt $call.Extent.StartOffset) -Because '与口令登录的防误关闸同一分支、排在其后(共用确认开关)'
+    $paramChecks = @($preflight.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Get-LoginAntiAddictionParamErrors' }, $true))
+    Assert-True -Condition ($paramChecks.Count -eq 1 -and $paramChecks[0].Extent.StartOffset -lt $dryRunIf.Extent.StartOffset) -Because '参数门禁在写路径入口、DryRun 分支之前:DryRun 同样拦参数错'
+}
+
+# ─────────────────────────────────────────────────────────────────
 # 6. dev_tools.ps1 Invoke-K8sDeploy:非空 / 被指定才透传
 # ─────────────────────────────────────────────────────────────────
 
@@ -587,7 +900,9 @@ function Invoke-DevToolsK8sDeployWith {
         $fakeBody = @(
             ('param($LoginWeChatAppId = "<unset>", $LoginWeChatEndpoint = "<unset>", [switch]$LoginWeChatAllowOpenId, $LoginQQAppId = "<unset>", $LoginQQEndpoint = "<unset>", [switch]$LoginQQAllowOpenId, [switch]$ConfirmLoginAuthProviderChange, ' +
                 '$LoginWeChatMiniGameAppId = "<unset>", $LoginWeChatMiniGameEndpoint = "<unset>", [switch]$LoginWeChatMiniGameAllowOpenId, $LoginDouyinMiniGameAppId = "<unset>", $LoginDouyinMiniGameEndpoint = "<unset>", [switch]$LoginDouyinMiniGameAllowOpenId, ' +
-                '$LoginAppleClientId = "<unset>", $LoginAppleEndpoint = "<unset>", $LoginGoogleClientId = "<unset>", $LoginGoogleEndpoint = "<unset>")'),
+                '$LoginAppleClientId = "<unset>", $LoginAppleEndpoint = "<unset>", $LoginGoogleClientId = "<unset>", $LoginGoogleEndpoint = "<unset>", ' +
+                '$LoginAppleTeamId = "<unset>", $LoginAppleKeyId = "<unset>", ' +
+                '$LoginNppaAppId = "<unset>", $LoginNppaBizId = "<unset>", $LoginAntiAddictionExtraPlayDays = "<unset>", $LoginNppaCheckUrl = "<unset>", $LoginNppaQueryUrl = "<unset>", $LoginNppaLoginoutUrl = "<unset>")'),
             '"LoginWeChatAppId=$LoginWeChatAppId"',
             '"LoginWeChatEndpoint=$LoginWeChatEndpoint"',
             '"LoginWeChatAllowOpenId=$($PSBoundParameters.ContainsKey(''LoginWeChatAllowOpenId''))"',
@@ -604,7 +919,15 @@ function Invoke-DevToolsK8sDeployWith {
             '"LoginAppleClientId=$LoginAppleClientId"',
             '"LoginAppleEndpoint=$LoginAppleEndpoint"',
             '"LoginGoogleClientId=$LoginGoogleClientId"',
-            '"LoginGoogleEndpoint=$LoginGoogleEndpoint"'
+            '"LoginGoogleEndpoint=$LoginGoogleEndpoint"',
+            '"LoginAppleTeamId=$LoginAppleTeamId"',
+            '"LoginAppleKeyId=$LoginAppleKeyId"',
+            '"LoginNppaAppId=$LoginNppaAppId"',
+            '"LoginNppaBizId=$LoginNppaBizId"',
+            '"LoginAntiAddictionExtraPlayDays=$LoginAntiAddictionExtraPlayDays"',
+            '"LoginNppaCheckUrl=$LoginNppaCheckUrl"',
+            '"LoginNppaQueryUrl=$LoginNppaQueryUrl"',
+            '"LoginNppaLoginoutUrl=$LoginNppaLoginoutUrl"'
         )
         Set-Content -LiteralPath (Join-Path $fakeDir 'k8s_deploy.ps1') -Encoding utf8 -Value $fakeBody
         $ScriptDir = $fakeDir
@@ -680,6 +1003,41 @@ Test-Case 'dev_tools Invoke-K8sDeploy:Apple / Google 的四个参数非空才透
         Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "给了就原样透传($expected),漏一个重部署就关掉或改掉线上的 Apple / Google 登录"
     }
     Assert-Match -Text $all -Pattern '(?m)^LoginWeChatMiniGameAppId=<unset>\r?$' -Because '只给 Apple / Google 参数时,小游戏的参数照旧不透传'
+}
+
+Test-Case 'dev_tools Invoke-K8sDeploy:Apple 撤销令牌的两个参数非空才透传给 k8s_deploy.ps1,留空 / 空白不透传' {
+    $unset = Invoke-DevToolsK8sDeployWith -Variables @{}
+    foreach ($expected in @('LoginAppleTeamId=<unset>', 'LoginAppleKeyId=<unset>')) {
+        Assert-Match -Text $unset -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "没给就不透传($expected):默认值只在 k8s_deploy.ps1 一处"
+    }
+    $blank = Invoke-DevToolsK8sDeployWith -Variables @{ LoginAppleTeamId = '   '; LoginAppleKeyId = '' }
+    Assert-Match -Text $blank -Pattern '(?m)^LoginAppleTeamId=<unset>\r?$' -Because '空白字符串不透传(透传了会被下游当成非法 Team ID)'
+    Assert-Match -Text $blank -Pattern '(?m)^LoginAppleKeyId=<unset>\r?$' -Because '空串不透传'
+
+    $all = Invoke-DevToolsK8sDeployWith -Variables @{ LoginAppleClientId = 'com.example.mmorpg'; LoginAppleTeamId = 'ABCDE12345'; LoginAppleKeyId = 'KEY0123456' }
+    foreach ($expected in @('LoginAppleClientId=com.example.mmorpg', 'LoginAppleTeamId=ABCDE12345', 'LoginAppleKeyId=KEY0123456')) {
+        Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "给了就原样透传($expected),漏一个重部署就关掉线上的 Apple 令牌撤销"
+    }
+}
+
+Test-Case 'dev_tools Invoke-K8sDeploy:实名与防沉迷的六个参数非空才透传给 k8s_deploy.ps1,留空 / 空白不透传' {
+    $values = @{
+        LoginNppaAppId = 'nppa-contract-app-0123456789abcd'; LoginNppaBizId = '1101999999'; LoginAntiAddictionExtraPlayDays = '2026-10-01,2026-10-08'
+        LoginNppaCheckUrl = 'https://nppa-mock.contract.test/check'; LoginNppaQueryUrl = 'http://nppa-mock.contract.test/query'; LoginNppaLoginoutUrl = 'http://nppa-mock.contract.test/loginout'
+    }
+    $unset = Invoke-DevToolsK8sDeployWith -Variables @{}
+    foreach ($name in $values.Keys) {
+        Assert-Match -Text $unset -Pattern ('(?m)^' + $name + '=<unset>\r?$') -Because "没给就不透传(-$name):默认值只在 k8s_deploy.ps1 一处"
+    }
+    $blank = Invoke-DevToolsK8sDeployWith -Variables @{ LoginNppaAppId = '   '; LoginAntiAddictionExtraPlayDays = '' }
+    Assert-Match -Text $blank -Pattern '(?m)^LoginNppaAppId=<unset>\r?$' -Because '空白字符串不透传(透传了会被下游当成非法 AppId)'
+    Assert-Match -Text $blank -Pattern '(?m)^LoginAntiAddictionExtraPlayDays=<unset>\r?$' -Because '空串不透传'
+
+    $all = Invoke-DevToolsK8sDeployWith -Variables $values
+    foreach ($name in $values.Keys) {
+        Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape("$name=$($values[$name])") + '\r?$') -Because "给了就原样透传(-$name),漏一个重部署就关掉或改掉线上的防沉迷"
+    }
+    Assert-Match -Text $all -Pattern '(?m)^LoginAppleTeamId=<unset>\r?$' -Because '只给防沉迷参数时,别的 login 参数照旧不透传'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -780,13 +1138,33 @@ Test-Case 'dev_tools Invoke-K8sImage:小游戏的六个参数在调 k8s_image.ps
     }
 }
 
-Test-Case 'dev_tools Invoke-K8sImage:Apple / Google 的四个参数在调 k8s_image.ps1 之前逐个拒绝(k8s_image.ps1 不部署 login)' {
+Test-Case 'dev_tools Invoke-K8sImage:Apple / Google 的四个参数与撤销 Apple 令牌的两个在调 k8s_image.ps1 之前逐个拒绝(k8s_image.ps1 不部署 login)' {
     $control = Invoke-DevToolsK8sImageWith -Variables @{}
     Assert-True -Condition ($null -eq $control.Error -and $control.DownstreamCalled) -Because "对照组必须调到假 k8s_image.ps1。错误: $($control.Error)"
     Assert-NotMatch -Text $control.DownstreamArgs -Pattern 'LoginApple|LoginGoogle' -Because '没给就不出现在下游参数里'
     $cases = @(
         @{ LoginAppleClientId = 'com.example.mmorpg' }, @{ LoginAppleEndpoint = 'https://apple-mock.contract.test' },
-        @{ LoginGoogleClientId = '1-abc.apps.googleusercontent.com' }, @{ LoginGoogleEndpoint = 'https://google-mock.contract.test' }
+        @{ LoginGoogleClientId = '1-abc.apps.googleusercontent.com' }, @{ LoginGoogleEndpoint = 'https://google-mock.contract.test' },
+        # 注销时撤销 Apple 令牌的两个参数同样只落在 login 上。
+        @{ LoginAppleTeamId = 'ABCDE12345' }, @{ LoginAppleKeyId = 'KEY0123456' }
+    )
+    foreach ($variables in $cases) {
+        $name = @($variables.Keys)[0]
+        $reject = Invoke-DevToolsK8sImageWith -Variables $variables
+        Assert-True -Condition ($null -ne $reject.Error) -Because "-$name 经 k8s-release-* 不生效(k8s_image.ps1 不部署 login),显式给了必须拒绝而不是静默吞掉"
+        Assert-Match -Text $reject.Error -Pattern "k8s-image-\* / k8s-release-\* 不支持 [^:]*-$name(,|:)" -Because "错误文本必须点名 -$name"
+        Assert-True -Condition (-not $reject.DownstreamCalled) -Because "-${name}:拒绝必须早于调用 k8s_image.ps1(镜像构建与推送都在那边)"
+    }
+}
+
+Test-Case 'dev_tools Invoke-K8sImage:实名与防沉迷的六个参数在调 k8s_image.ps1 之前逐个拒绝(k8s_image.ps1 不部署 login)' {
+    $control = Invoke-DevToolsK8sImageWith -Variables @{}
+    Assert-True -Condition ($null -eq $control.Error -and $control.DownstreamCalled) -Because "对照组必须调到假 k8s_image.ps1。错误: $($control.Error)"
+    Assert-NotMatch -Text $control.DownstreamArgs -Pattern 'LoginNppa|LoginAntiAddiction' -Because '没给就不出现在下游参数里'
+    $cases = @(
+        @{ LoginNppaAppId = 'nppa-contract-app-0123456789abcd' }, @{ LoginNppaBizId = '1101999999' }, @{ LoginAntiAddictionExtraPlayDays = '2026-10-01' },
+        @{ LoginNppaCheckUrl = 'https://nppa-mock.contract.test/check' }, @{ LoginNppaQueryUrl = 'http://nppa-mock.contract.test/query' },
+        @{ LoginNppaLoginoutUrl = 'http://nppa-mock.contract.test/loginout' }
     )
     foreach ($variables in $cases) {
         $name = @($variables.Keys)[0]

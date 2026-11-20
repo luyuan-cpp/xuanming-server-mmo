@@ -15,6 +15,7 @@
 
 #include "network/rpc_channel.h"
 #include "network/rpc_channel_stats.h"
+#include "../metrics/dependency_link_metrics.h"
 
 // 出站节点链路:一个 muduo TcpClient(enableRetry 自动重连)+ 当前连接上的 RpcChannel。
 //
@@ -44,6 +45,9 @@ public:
         // 回调在 connect() 里绑:构造函数里还拿不到 weak_from_this()。
         client_.enableRetry();
     }
+
+    // 只为连接指标配平(断线重连 R17):销毁时还算着可用,就按本端主动拆减掉。与连接生命周期无关(见类注释)。
+    ~RpcClient() { SetReady(false, /*expected=*/true); }
 
     const muduo::net::InetAddress& local_addr()const
     {
@@ -86,7 +90,7 @@ public:
     bool MarkReady(const muduo::net::TcpConnectionPtr& conn)
     {
         if (channelsClosed_ || !conn || !connected() || !channel_->IsBoundTo(conn)) return false;
-        ready_ = true;
+        SetReady(true, /*expected=*/false);
         consecutiveHandshakeFailures_ = 0;
         return true;
     }
@@ -213,7 +217,7 @@ public:
     // 不能让新连接上再登记出在途调用 —— 它们会拖到拆除之后才由 ~RpcChannel 失败。
     void CloseChannel()
     {
-        ready_ = false;
+        SetReady(false, /*expected=*/true);
         channelsClosed_ = true;
         if (channel_)
         {
@@ -250,7 +254,7 @@ private:
     {
         if (conn->connected())
         {
-            ready_ = false;
+            SetReady(false, /*expected=*/false); // 没等到旧连接的 DOWN 就来了新连接(不应发生):旧的按意外断开减
             conn->setTcpNoDelay(true);
             conn->setHighWaterMarkCallback(OnInterNodeHighWaterMark, kInterNodeHighWaterMark);
             if (channel_)
@@ -265,7 +269,7 @@ private:
             }
             else
             {
-                ready_ = readiness_ == Readiness::kOnConnect;
+                SetReady(readiness_ == Readiness::kOnConnect, /*expected=*/false);
             }
             LOG_INFO << "Connected to server at " << conn->peerAddress().toIpPort() << ".";
         }
@@ -273,7 +277,7 @@ private:
         {
             if (channel_ && channel_->IsBoundTo(conn))
             {
-                ready_ = false;
+                SetReady(false, /*expected=*/false);
                 // 在途调用以 kDisconnected 失败(回调 queueInLoop,不在本回调栈上执行);channel 随之丢弃 ——
                 // 本端在它上面接管(Adopt)的延后回复此后一律 lock 失败而丢弃,不会落到下一条连接上。
                 channel_->OnDisconnect();
@@ -290,6 +294,25 @@ private:
         if (connectionObserver_)
         {
             connectionObserver_(conn);
+        }
+    }
+
+    // ready_ 的唯一写入点:由假变真记一条可用的节点链路,由真变假减一条(断线重连 R17,dependency_link_metrics.h)。
+    // expected 为真表示本端主动拆(关机阶段 0、销毁),不计意外断开。
+    void SetReady(bool ready, bool expected)
+    {
+        if (ready == ready_)
+        {
+            return;
+        }
+        ready_ = ready;
+        if (ready)
+        {
+            dependency_link_metrics::OnUp(dependency_link_metrics::Dependency::kNodeLink);
+        }
+        else
+        {
+            dependency_link_metrics::OnDown(dependency_link_metrics::Dependency::kNodeLink, expected);
         }
     }
 

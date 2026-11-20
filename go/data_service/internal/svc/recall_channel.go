@@ -189,7 +189,8 @@ func (s *ServiceContext) recallFenceParticipant(secret string) (rfpb.RoleFencePa
 	if s.recallStore == nil {
 		return nil, errors.New("recall store is not assembled")
 	}
-	return rolefence.NewParticipantServer(s.recallStore.DB(), s.recallStore.PendingForRole, secret)
+	// 回收审计按审计保留期留着(docs/design/account-deletion.md §6.2),删角不清:NoPurge。
+	return rolefence.NewParticipantServer(s.recallStore.DB(), s.recallStore.PendingForRole, rolefence.NoPurge, secret)
 }
 
 // recallFenceReader 让流水库的副本直接读本进程的目录,不绕 RPC。

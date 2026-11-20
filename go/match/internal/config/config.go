@@ -99,9 +99,9 @@ type Config struct {
 	// Kafka 地址复用 Kafka.Brokers。
 	RatingEnabled bool `json:",default=true"`
 
-	// ResultTopic:battle 节点发对局结果(contracts.kafka.BattleResultEvent)的
-	// topic,全局无 zone 段,key=battle_id。C++ 侧 battle_room_manager.cpp 的
-	// kMatchResultsTopic 必须与之一致。
+	// ResultTopic:对局结果(contracts.kafka.BattleResultEvent)的 topic,全局无 zone 段,key=battle_id。
+	// 唯一的生产者是 match 自己的终局发件箱(svc 的 outcome outbox),只发 COMPLETE 的局;battle 节点不再直接发它。
+	// guild 的 TrialResult.Topic 必须与之一致。
 	ResultTopic string `json:",default=match-results"`
 
 	// ResultTopicPartitions:ResultTopic 的分区数。启动时用 kafkautil.EnsureTopics

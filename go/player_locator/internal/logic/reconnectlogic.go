@@ -95,6 +95,8 @@ func (l *ReconnectLogic) Reconnect(in *pb.ReconnectRequest) (*pb.ReconnectRespon
 	session.SessionId = in.NewSessionId
 	session.GateId = in.GateId
 	session.GateInstanceId = in.GateInstanceId
+	// 会话代次属于新连接,请求为 0 也照写 0:留着旧连接的值,新连接自己的断线会被 SetDisconnecting 判成陈旧而忽略。
+	session.SessionIncarnation = in.SessionIncarnation
 	session.TokenId = in.TokenId
 	session.TokenExpiryMs = in.TokenExpiryMs
 	session.RequestId = in.RequestId

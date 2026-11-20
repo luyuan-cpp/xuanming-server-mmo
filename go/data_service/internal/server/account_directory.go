@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+// accountLifecycleReader 是 ReadAccountDirectory 用的同一次目录读(列表 + 注销状态 + 实名 pi)。*store.AccountDirectoryStore 实现它;
+// 单测替身没实现时退回只读列表。
+type accountLifecycleReader interface {
+	ReadWithLifecycle(ctx context.Context, account string, create bool) (*dspb.AccountDirectoryResponse, error)
+}
+
 func (s *DataServiceServer) admitDirectory(ctx context.Context, method string, req proto.Message) error {
 	if s.svcCtx.AccountDirectoryAuth == nil || s.svcCtx.AccountDirectory == nil {
 		return status.Error(codes.Unavailable, "全局账号目录未就绪")
@@ -81,10 +87,17 @@ func (s *DataServiceServer) ReadAccountDirectory(ctx context.Context, in *dspb.R
 	if err := s.admitDirectory(ctx, "ReadAccountDirectory", in); err != nil {
 		return nil, err
 	}
-	// 注销装配了就顺带回注销状态(同一条语句读出,docs/design/account-deletion.md §4.3);没装配时照旧只回列表。
-	if s.svcCtx.AccountDeletions != nil {
-		out, err := s.svcCtx.AccountDeletions.ReadWithLifecycle(ctx, in.Account, in.CreateIfMissing)
-		return out, directoryError(err)
+	// 一律走同一次读:注销状态(docs/design/account-deletion.md §4.3)与实名 pi(real-name-anti-addiction.md §5.1)都在账号行上,
+	// 同一条语句读出。注销没装配(冷静期配置非法)时不回注销状态,实名照回:不能因为注销没装配就让防沉迷把账号全当成没实名。
+	if reader, ok := s.svcCtx.AccountDirectory.(accountLifecycleReader); ok {
+		out, err := reader.ReadWithLifecycle(ctx, in.Account, in.CreateIfMissing)
+		if err != nil {
+			return nil, directoryError(err)
+		}
+		if s.svcCtx.AccountDeletions == nil {
+			out.Lifecycle = nil
+		}
+		return out, nil
 	}
 	out, err := s.svcCtx.AccountDirectory.Read(ctx, in.Account, in.CreateIfMissing)
 	if err != nil {

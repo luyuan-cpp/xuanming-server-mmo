@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "engine/core/type_define/type_define.h"
+#include "../core/metrics/dependency_link_metrics.h"
 #include <muduo/contrib/hiredis/Hiredis.h>
 #include <muduo/net/InetAddress.h>
 #include <muduo/net/TimerId.h>
@@ -40,6 +41,8 @@ struct RedisConnectOptions
 	// 探测 PING 发出后这么多秒仍没有应答,就把连接当成已断开:摘下、释放、走既有重连。
 	// 两项可注入同样只为回归用例;生产保持默认。
 	double livenessTimeoutSec = kDefaultLivenessTimeoutSec;
+	// 这条连接记在哪一类依赖的连接指标上(断线重连 R17,metrics/dependency_link_metrics.h)。集群客户端按句柄的域填。
+	dependency_link_metrics::Dependency metricsDependency = dependency_link_metrics::Dependency::kRedisOther;
 };
 
 class RedisManager
@@ -134,6 +137,8 @@ private:
 	void OnAuthReply(hiredis::Hiredis *me, const redisReply *reply);
 	void PromoteHandshake();
 	void ResetConnections();
+	// 业务可见的连接不再可用:还记在「可用」里就减掉一条(expected 见 dependency_link_metrics::OnDown),否则什么都不做。
+	void CountConnectionDown(bool expected);
 	void StartLivenessTimer();
 	void CancelLivenessTimer();
 	void OnLivenessTick();
@@ -178,6 +183,9 @@ private:
 	// AUTH 已在当前握手连接上发出、还没有任何非空应答。SendAuth 成功时置位;收到非空应答、DoReconnect 报超时、
 	// ResetConnections 时清零。DoReconnect 看到它仍为真,就说明截止前没有应答,要按 AUTH 超时打 ERROR。
 	bool authAwaitingReply_ = false;
+	// 业务可见的连接此刻是否记在连接指标的「可用」里(PromoteHandshake 置位,CountConnectionDown 清掉):
+	// 保证每次 OnUp 恰好配一次 OnDown,停机、换 Connect 周期、存活摘下与断线哪条路先到都只减一次。
+	bool connectionCounted_ = false;
 	ReconnectCallback reconnectCb_;
 
 	// 存活探测。定时器从 Connect 跑到 Shutdown,每一跳自己判断当前有没有可探测的连接。

@@ -18,7 +18,6 @@ import (
 	"shared/looplive"
 	"shared/workshard"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -297,7 +296,7 @@ func (r *AssetOpRepo) EnsureSeqRows(ctx context.Context, nowMs uint64, keys ...S
 		return nil // 稳态:不开事务
 	}
 
-	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		return r.ensureSeqRowsTx(ctx, tx, nowMs, missing)
 	})
 }
@@ -666,7 +665,7 @@ func OpFromRecord(rec *tradepb.TradeAssetOpRecord, leaseToken uint64) (assetop.O
 // TiDB 上若自动提交(乐观、按 region 并行 prewrite),会与终结 / 人工终结的「点锁 PRIMARY → 行 key」各持一半互等,
 // 死锁检测器看不到,要等约 3s 的锁 TTL(2026-10-18 真 TiDB v8.5.2 实测;见 docs/ops/incident-friend-lock-order-deadlock-2026-09-21.md §9.7)。
 func (r *AssetOpRepo) markPoison(ctx context.Context, opID, token, nowMs, poisonUntilMs uint64) {
-	_ = assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	_ = assetop.WithTxRetry(ctx, r.db, txRetryAttempts, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		found, err := lockAssetOpRow(ctx, tx, opID)
 		if err != nil || !found {
 			return err // 行已被清理:没有可推迟的
@@ -701,7 +700,7 @@ func (r *AssetOpRepo) Finalize(ctx context.Context, op assetop.Op, status asseto
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
 	finalized := false
-	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		finalized = false
 		found, err := lockAssetOpRow(ctx, tx, op.OpID)
 		if err != nil {
@@ -824,7 +823,7 @@ func (r *AssetOpRepo) resolveManually(ctx context.Context, m assetop.ManualResol
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
 	resolved := false
-	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		resolved = false
 		found, err := lockAssetOpRow(ctx, tx, m.OpID)
 		if err != nil {
@@ -876,7 +875,7 @@ func (r *AssetOpRepo) resolveManually(ctx context.Context, m assetop.ManualResol
 func (r *AssetOpRepo) Reschedule(ctx context.Context, op assetop.Op, nextAttemptMs uint64, res assetop.Result, nowMs uint64) error {
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
-	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		found, err := lockAssetOpRow(ctx, tx, op.OpID)
 		if err != nil {
 			return fmt.Errorf("reschedule %s %d: %w", AssetOpTableName, op.OpID, err)
@@ -1088,7 +1087,7 @@ func (r *AssetOpRepo) Abandon(ctx context.Context, op assetop.Op, nowMs uint64) 
 	}
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
-	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		found, err := lockAssetOpRow(ctx, tx, op.OpID)
 		if err != nil {
 			return fmt.Errorf("abandon %s %d: %w", AssetOpTableName, op.OpID, err)
@@ -1384,7 +1383,7 @@ func (r *AssetOpRepo) deleteTerminalOp(ctx context.Context, opID, cutoffMs uint6
 	defer cancel()
 	st := cleanupStatuses()
 	var deleted int64
-	err := assetop.WithTxRetry(ctx, r.db, 1, IsRetryableTxError, func(tx *sql.Tx) error {
+	err := assetop.WithTxRetry(ctx, r.db, 1, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		deleted = 0 // 重试契约:结果只在成功返回前写到外层
 		found, err := lockAssetOpRow(ctx, tx, opID)
 		if err != nil {
@@ -1614,26 +1613,3 @@ const txRetryAttempts = 2
 // 毒行推迟时长**刻意不在这里**:它是 assetop.LoopConfig.PoisonDelay(由 trade.yaml 的
 // PoisonDelayMs 喂进来),循环算好绝对时刻经 Claim 的 poisonUntilMs 传进来。
 // 这里再写一份 const 就是第二份真相 —— 改 yaml 不生效,且不会有任何报错。
-
-// IsRetryableTxError 报告事务错误是否值得整体重试。shared/assetop 不引 MySQL 驱动,
-// 分类由调用方注入(§4.37);取值与 guild 一致:
-//
-//	1213 死锁 / 1205 锁等待超时 / 9007 TiDB 写冲突。
-//
-// 另认权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
-// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑是安全的。错误树里混有结局未知时它回假,照旧不重试。
-func IsRetryableTxError(err error) bool {
-	if authoritysql.IsAbortedBeforeCommit(err) {
-		return true
-	}
-	var myErr *mysql.MySQLError
-	if !errors.As(err, &myErr) {
-		return false
-	}
-	switch myErr.Number {
-	case 1213, 1205, 9007:
-		return true
-	default:
-		return false
-	}
-}

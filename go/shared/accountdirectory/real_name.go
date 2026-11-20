@@ -2,6 +2,7 @@ package accountdirectory
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	dspb "proto/data_service"
@@ -42,8 +43,15 @@ type RealNameClient struct {
 	secret string
 }
 
-func NewRealNameClient(rpc dspb.DataServiceClient, secret string) *RealNameClient {
-	return &RealNameClient{rpc: rpc, secret: secret}
+// NewRealNameClient 校验密钥(同 NewRouteClient)。不合格回错误,调用方拒绝启动:限额闸读不了实名,App 渠道一单也收不了。
+func NewRealNameClient(rpc dspb.DataServiceClient, secret string) (*RealNameClient, error) {
+	if rpc == nil {
+		return nil, errors.New("real-name lookup has no data_service client")
+	}
+	if _, err := serviceauth.New(map[string]string{PaymentCaller: secret}); err != nil {
+		return nil, err
+	}
+	return &RealNameClient{rpc: rpc, secret: secret}, nil
 }
 
 // RealNameOf 回玩家所属账号的 pi。found=false 表示角色不在目录里或已删;pi 为空表示账号没由游戏方实名

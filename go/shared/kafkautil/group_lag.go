@@ -880,6 +880,15 @@ type boundPartition struct {
 	pending      map[int64]*boundDelivery
 	// groupCommitted：initial 是组内已提交位点（assignment.Offset >= 0）；false = 这个组在该分区从没提交过，initial 只是日志起点。
 	groupCommitted bool
+	// startCommitted：groupCommitted 为假时，接纳第一条记录之前已把它的 offset 提交成组内位点（commitStartOffset）。
+	startCommitted bool
+}
+
+// hasCommitFrontier 报告组在该分区是否已有真实的已提交位点：打开时 assignment 就带着，或本 owner 在本代次提交过（含起点提交）。调用方持有 c.mu。
+// 没有时，之后的属主从日志起点读起；起点若已被保留期推过某条票据，它提交的位点照样 >= 0 且越过票据，却没处理过它（收尾核对，bound_consumer_tickets.go）。
+// 2026-11-19 起接纳任何记录之前都先有起点提交，所以已接纳记录的票据恒有位点；这条判据留作兜底。
+func (p *boundPartition) hasCommitFrontier() bool {
+	return p.groupCommitted || p.startCommitted || p.committed > p.initial
 }
 
 // boundGroupClient 是 owner 对消费组的全部要求；*kafkago.ConsumerGroup 满足它。单测换成替身，不连真实 Kafka。
@@ -950,6 +959,8 @@ type BoundConsumerGroup struct {
 	readLogStart func(ctx context.Context, topic string, partition int) (int64, error)
 	// readCommitted 读本组在 topic 这些分区上的已提交位点（-1 = 没提交过），收尾核对交还与恢复票据用。
 	readCommitted func(ctx context.Context, topic string, partitions []int32) (map[int32]int64, error)
+	// ticketConfirmBudget 是收尾核对的整体时间上限；<= 0 取 boundTicketConfirmBudget（单测设成小值，不等墙钟）。
+	ticketConfirmBudget time.Duration
 	// now 给死信原件打时间戳。
 	now func() time.Time
 }
@@ -1385,6 +1396,8 @@ func (c *BoundConsumerGroup) consumePartition(fetchContext, generationContext co
 	var fetchDelay time.Duration
 	// expected 是下一条应到的 offset：reader 从 initial 起读，之后每取到一条就推进到它的下一位（缺口核对见 admitGap）。
 	expected := partition.initial
+	// startPending：组在该分区从没提交过，接纳第一条之前要先提交起点（commitStartOffset）。只有本 worker 读写它。
+	startPending := !partition.groupCommitted
 	for {
 		message, err := partition.reader.FetchMessage(fetchContext)
 		if err != nil {
@@ -1418,6 +1431,12 @@ func (c *BoundConsumerGroup) consumePartition(fetchContext, generationContext co
 			return
 		}
 		expected = message.Offset + 1
+		if startPending {
+			if !c.commitStartOffset(fetchContext, generation, partition, message.Offset) {
+				return
+			}
+			startPending = false
+		}
 		if c.manual {
 			delivery := &boundDelivery{generation: generation, partition: partition, message: message}
 			select {
@@ -1447,6 +1466,39 @@ func (c *BoundConsumerGroup) consumePartition(fetchContext, generationContext co
 	}
 }
 
+// commitStartOffset 在组从没提交过的分区上接纳第一条记录之前，先用本代次把这条记录的 offset 提交成组内已提交位点
+// （负责人 2026-11-19 定，设计见 docs/design/kafka-bound-consumer-group.md §3.1）。
+// 不提交的话，这条接纳之后没结清就换代或换属主，新属主又从日志起点读起：起点若已被保留期推过它，就静默越过、谁都没处理过，
+// 恢复票据与收尾核对也核不出来。提交之后它再被保留期删掉，下一位属主打开时按「提交点越过保留范围」HOLD。
+// 起点取这条记录自己的 offset，不取打开时的 initial：代次还没读到任何记录就结束时不钉住起点，读到之前起点被推过去
+// （admitGap 对从没提交过的分区照常接纳）也不会把已删的那段算成本组欠下的。
+// 提交失败有界退避后重试，直到成功、代次结束或 owner 终止；后两种返回 false：这条还没接纳，之后由组内位点重投。
+func (c *BoundConsumerGroup) commitStartOffset(ctx context.Context, generation *kafkago.Generation, partition *boundPartition, offset int64) bool {
+	offsets := map[string]map[int]int64{partition.topic: {partition.partition: offset}}
+	var delay time.Duration
+	for {
+		err := c.commitOffsets(generation, offsets)
+		if err == nil {
+			c.mu.Lock()
+			partition.committed = offset
+			partition.startCommitted = true
+			c.signalLocked()
+			c.mu.Unlock()
+			return true
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+		delay = nextBoundRetryDelay(delay)
+		observeBoundRetry(c.config.Group.ID, boundStageCommit)
+		logx.Errorf("[kafka-bound] group=%s topic=%s partition=%d: the group never committed this partition; committing start offset %d before accepting the first record failed, retry in about %v: %v",
+			c.config.Group.ID, partition.topic, partition.partition, offset, delay, err)
+		if !c.sleep(ctx, delay) {
+			return false
+		}
+	}
+}
+
 // settleGuarded 结清一条已接纳记录并处置它的票据：交还给新属主（boundHandedOff）的票据留到 CloseAndReport 核结局，
 // 其余结局在这里结束票据。结清过程 panic 记 HOLD；先记 HOLD 再结束票据（defer 逆序），排空方不会在两步之间看到「没有在途、也没有未知」。
 func (c *BoundConsumerGroup) settleGuarded(fetchContext context.Context, generation *kafkago.Generation, partition *boundPartition, message kafkago.Message, finish func()) (outcome boundOutcome) {
@@ -1466,7 +1518,7 @@ func (c *BoundConsumerGroup) settleGuarded(fetchContext context.Context, generat
 	outcome = c.settleAccepted(fetchContext, generation, partition, message)
 	if outcome == boundHandedOff {
 		c.mu.Lock()
-		c.handoffs = append(c.handoffs, &boundHandoff{topic: partition.topic, partition: partition.partition, offset: message.Offset, generation: generation.ID, finish: finish})
+		c.handoffs = append(c.handoffs, &boundHandoff{topic: partition.topic, partition: partition.partition, offset: message.Offset, generation: generation.ID, frontier: partition.hasCommitFrontier(), finish: finish})
 		c.signalLocked()
 		c.mu.Unlock()
 		keepTicket = true
@@ -2291,7 +2343,7 @@ func (c *BoundConsumerGroup) releaseUncommitted(generation *kafkago.Generation, 
 					released.Released = append(released.Released, kafkago.Message{Topic: topic, Partition: id, Offset: offset})
 					if handoff {
 						partition.handedOff++
-						c.handoffs = append(c.handoffs, &boundHandoff{topic: topic, partition: id, offset: offset, generation: generation.ID, finish: delivery.finish})
+						c.handoffs = append(c.handoffs, &boundHandoff{topic: topic, partition: id, offset: offset, generation: generation.ID, frontier: partition.hasCommitFrontier(), finish: delivery.finish})
 					} else {
 						finished = append(finished, delivery.finish)
 					}

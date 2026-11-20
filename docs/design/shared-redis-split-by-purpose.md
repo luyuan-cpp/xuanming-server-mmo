@@ -1,4 +1,11 @@
-# 共享 Redis 按用途拆实例(G4a 设计稿)
+# 共享 Redis 按用途拆实例(G4a 设计稿,历史稿)
+
+> **历史稿(2026-11-19 标注,先读)**:本稿的路线——共享 Redis 按用途拆成多个单主实例(排队 `redis-queue-g<N>`、控制面按 zone 组分实例、映射与缓存各拆一个),核心走「单元化 + 单元内 Cluster」——已被[全部 Redis 上 Cluster](./redis-cluster-all-domains-20261110.md) 取代。现行形态:玩家域与登录域在玩家域集群 `redis-player`(设计见[玩家态 Redis 集群化](./redis-player-store-cluster.md)),其余用途在控制集群 `redis-control`,match 私有键在 `redis-match-cluster`;多键操作的键共用 hash tag,扩容 = 加主节点 + 原子迁 slot。核心单实例在 staging / prod 的退役归该稿第 6b-2 批(在做)。正文不再逐段改,按下面读:
+> - **作废**:按用途拆实例的拓扑、配置、迁移、容量与分批(§1、§3~§5、§6.1~§6.3、§7~§15、§24),以及第 1a 批已落的 queue 实例与 `-RedisSplit`(该稿第 6b-1 批已删);控制面按 zone 组分实例(§18);redis-cache(§19);核心单元化与单元内 Cluster(§20);mapping 三族 hash tag(§21,映射已改直读 TiDB);核心内存上界与冷卸载(§23);§25 拍板清单里与上述实例、单元、映射、缓存有关的条目;§17 表最后一列「上 Cluster 时怎么改形」(以各项现行的设计为准)。下面 11-13 的「部分被取代」注写的是第 6b 批落地之前的状态。
+> - **仍可参考**:
+>   - §2 盘点与 §16 的 2000 万 PCU 推算口径,只作历史输入:行号与键形都已过时,按存档键推算的部分按下面 10-24 注作废。现行设计稿把它当输入引用的地方:全部 Redis 上 Cluster §4.6 的唤醒发布量、玩家态 Redis 集群化 §10.1 的玩家域 ops。
+>   - §6.4 监控里第 1a 批落地的压测快照:`stress_snap.ps1 -RedisTargets` 抓 `redis-cli INFO`,`stress_summarize.ps1` 出 Redis 表,至今在用;集群 target 是之后加的(AGENTS.md §6.1)。
+>   - §22 账号目录落库的方向已由[账号角色目录的全局 SQL 权威](./account-role-authority.md)落地,以那份为准。
 
 > **部分过期(2026-10-30)**:玩家存档已不在 Redis([player-data-tidb-scaling-plan.md](./player-data-tidb-scaling-plan.md) §2),本文里 db_task、父快照相关的连接和容量估算作废。按用途拆实例的思路仍然适用于协调键。
 

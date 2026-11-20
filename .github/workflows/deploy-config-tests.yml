@@ -35,6 +35,9 @@ on:
       - "go/*/etc/**"
       - "deploy/k8s/manifests/**"
       - "java/gateway_node/src/main/resources/application.yaml"
+      - "java/mall_game/src/main/resources/application.yaml"
+      - "java/mall_game/src/main/resources/db/schema.sql"
+      - "java/mall_game/src/main/java/com/game/mall/DatabaseConfiguration.java"
       - "deploy/k8s/*.yaml"
       - "deploy/k8s/*.json"
       - "deploy/docker-compose.yml"
@@ -64,6 +67,7 @@ on:
       - "go/data_service/internal/store/account_directory_events.go"
       - "go/data_service/internal/store/account_role_name.go"
       - "go/data_service/internal/store/account_role_ref.go"
+      - "go/data_service/internal/store/account_deletion.go"
       - "go/db/internal/metrics/**"
       - "go/db/internal/playerstore/server.go"
       - "proto/player_store/player_store.proto"
@@ -92,6 +96,9 @@ on:
       - "cpp/nodes/gate/handler/rpc/connection_admission.*"
       - "cpp/nodes/gate/handler/rpc/client_session_handler.cpp"
       - "cpp/nodes/gate/main.cpp"
+      - "cpp/nodes/battle/client/battle_connection_admission.*"
+      - "cpp/nodes/battle/client/battle_client_edge.cpp"
+      - "cpp/nodes/battle/main.cpp"
       - "cpp/libs/services/scene/player/system/currency_metrics.cpp"
       - "cpp/libs/modules/currency/system/currency_clawback_stats.h"
       - "cpp/libs/modules/currency/system/currency_system.cpp"
@@ -106,6 +113,10 @@ on:
       - "cpp/libs/services/scene/player/system/player_save_metrics.cpp"
       - "cpp/libs/services/scene/player/system/player_store_client.cpp"
       - "cpp/nodes/scene/main.cpp"
+      - "go/content_guard/internal/metrics/metrics.go"
+      - "go/content_guard/internal/server/server.go"
+      - "go/content_guard/internal/lexstore/watcher.go"
+      - "go/content_guard/etc/content_guard.yaml"
   pull_request:
     branches: [main]
     paths:
@@ -119,6 +130,10 @@ on:
       # MySQL 连接总账(k8s_deploy.ps1 Get-MysqlConnectionLedger)在上面几类之外的输入:Java gateway 的 Hikari 池、
       # zones 配置(zones.json 等)、阈值与规划档同源的告警文件(*-alerts.yaml)。只匹配 deploy/k8s 一级目录
       - "java/gateway_node/src/main/resources/application.yaml"
+      # 官方商城的端口缺省值与 Hikari 池上限(k8s_mall_payment_deploy_contract.tests.ps1 对照目录、清单与连接总账里的常数)
+      - "java/mall_game/src/main/resources/application.yaml"
+      - "java/mall_game/src/main/resources/db/schema.sql"
+      - "java/mall_game/src/main/java/com/game/mall/DatabaseConfiguration.java"
       - "deploy/k8s/*.yaml"
       - "deploy/k8s/*.json"
       # 本机 / 预发 compose:etcd 的压缩与配额 env 必须与 K8s CronJob 同值、三处 etcd 镜像逐字相同
@@ -171,6 +186,7 @@ on:
       - "go/data_service/internal/store/account_directory_events.go"
       - "go/data_service/internal/store/account_role_name.go"
       - "go/data_service/internal/store/account_role_ref.go"
+      - "go/data_service/internal/store/account_deletion.go"
       - "go/db/internal/metrics/**"
       - "go/db/internal/playerstore/server.go"
       - "proto/player_store/player_store.proto"
@@ -209,6 +225,11 @@ on:
       - "cpp/nodes/gate/handler/rpc/connection_admission.*"
       - "cpp/nodes/gate/handler/rpc/client_session_handler.cpp"
       - "cpp/nodes/gate/main.cpp"
+      # battle 直连准入的指标名、拒绝原因与装配(准入回调、指标登记、启动配参、关源、各计数点),同样按名字被告警引用,
+      # 由 battle_connection_alerts_contract.tests.ps1 对照源码(它还读上面 gate 的 connection_admission.h 核对同义的 reason 取值)
+      - "cpp/nodes/battle/client/battle_connection_admission.*"
+      - "cpp/nodes/battle/client/battle_client_edge.cpp"
+      - "cpp/nodes/battle/main.cpp"
       # scene 补缴版本错位计数的指标名、自增点与登记(告警规则按名字引用,改名或少登记一行就永远不响),
       # 由 persist_version_skew_alerts_contract.tests.ps1 对照源码
       - "cpp/libs/services/scene/player/system/currency_metrics.cpp"
@@ -230,6 +251,13 @@ on:
       - "cpp/libs/services/scene/player/system/player_save_metrics.cpp"
       - "cpp/libs/services/scene/player/system/player_store_client.cpp"
       - "cpp/nodes/scene/main.cpp"
+      # 内容安全告警(content_guard_alerts_contract.tests.ps1)对照的源码:指标名在 metrics.go,verdict 标签的取值在 server.go,
+      # 加载失败的 reason 取值在 lexstore/watcher.go。只改这几份把名字改了,告警会静默失效。
+      # 服务 yaml 是部署契约用例(k8s_deploy_contract.tests.ps1「content-guard」)镜像 ConfigMap 的来源
+      - "go/content_guard/internal/metrics/metrics.go"
+      - "go/content_guard/internal/server/server.go"
+      - "go/content_guard/internal/lexstore/watcher.go"
+      - "go/content_guard/etc/content_guard.yaml"
   workflow_dispatch:
 
 permissions:

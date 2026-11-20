@@ -56,6 +56,7 @@ func TestEnterGameKeepsLoginSessionAndPublishesOriginalIdentity(t *testing.T) {
 			require.Equal(t, enterWiringAccount, binder.last.AuthenticatedAccount)
 			require.Equal(t, details.SessionIncarnation, binder.last.SessionIncarnation)
 			require.NotZero(t, binder.last.OwnerRevision, "绑定原身份必须携带实际归属修订")
+			require.Equal(t, binder.last.OwnerRevision, resp.GetOwnerRevision(), "受理应答把同一个归属修订交给客户端,供它作废换主人之前的本机待确认记录")
 			ref, ok := loginsession.RefOf(details)
 			require.True(t, ok)
 			account, err := loginsession.GetAccount(context.Background(), h.rdb, ref)

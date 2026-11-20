@@ -229,6 +229,12 @@ func TestGrpcAsyncClientTemplatesUseMuduoChannelAndRejectStreaming(t *testing.T)
 	if !strings.Contains(source, "GetDescriptor() != ::scene_manager::EnterSceneRequest::descriptor()") {
 		t.Fatal("类型擦除入口必须先校验请求动态类型")
 	}
+	// 本地就失败的调用也要记 client span(docs/design/distributed-tracing.md §10.3):typed 入口的本地失败一处,
+	// 类型擦除入口的两种类型不符各一处,都在排本地完成之前。
+	if strings.Count(source, "RecordGrpcLocalFailureSpan(kSceneManagerEnterSceneGrpcPath, ") != 3 ||
+		!strings.Contains(source, "RecordGrpcLocalFailureSpan(kSceneManagerEnterSceneGrpcPath, code, message);\n    QueueGrpcLocalCompletion(") {
+		t.Fatal("本地失败必须先记 client span 再排本地完成")
+	}
 	if !strings.Contains(source, "dynamic_cast<const ::scene_manager::EnterSceneRequest*>(&message)") ||
 		!strings.Contains(source, "nodeEntity, *typedRequest, options.metadata, options.deadline,") ||
 		strings.Contains(source, "static_cast<const ::scene_manager::EnterSceneRequest&>(message)") {

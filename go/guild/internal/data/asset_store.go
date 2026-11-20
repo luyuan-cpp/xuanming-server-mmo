@@ -416,14 +416,12 @@ func isTerminalRecord(st pb.GuildAssetOpStatus) bool {
 	}
 }
 
-// isRetryableBackground:后台写的重试分类 = 1213 / 9007 / errRetryTx(isRetryableTxError)再加 1205。
+// isRetryableBackground:后台写的重试分类 = errRetryTx 加全仓唯一的整笔重跑判定 authoritysql.IsRetryableTxError
+// (1213 / 1205 / 9007 与守卫判定的提交前中止,错误树里混有结局未知时不重试)。
 // 与请求路径不同,后台写**重试** 1205:它没有玩家在等"稍后重试"的提示,锁等待超时之后再排一次队
 // 比把一个已定的终局留在内存里、等下一轮重投再投一次 scene 划算得多。
-// 另认权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
-// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑是安全的。错误树里混有结局未知时它回假,照旧不重试。
-// 只加在这里,不加进 isRetryableTxError:那个还给请求路径的 retryOnDeadlock 计死锁指标、给 classifyCommitErr 分 COMMIT 错误用。
 func isRetryableBackground(err error) bool {
-	return isRetryableTxError(err) || isLockWaitTimeout(err) || authoritysql.IsAbortedBeforeCommit(err)
+	return errors.Is(err, errRetryTx) || authoritysql.IsRetryableTxError(err)
 }
 
 // FinalizedOp 是一次**本次**终结的摘要,供提交后的推送使用。

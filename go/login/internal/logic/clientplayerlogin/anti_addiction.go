@@ -14,6 +14,7 @@ import (
 	"login/internal/svc"
 	login_proto_common "proto/common/base"
 	dbpb "proto/common/database"
+	dspb "proto/data_service"
 	login_proto "proto/login"
 	"shared/generated/pb/table"
 	"shared/redisslot"
@@ -23,18 +24,23 @@ import (
 )
 
 // readAccountDirectoryWithRealName 与 readAccountDirectory 是同一次目录读,另带账号的实名 pi
-// (docs/design/real-name-anti-addiction.md §5.1)。目录实现不支持实名(测试替身)时 pi 为空。
-func readAccountDirectoryWithRealName(ctx context.Context, sc *svc.ServiceContext, account string, create bool) (*dbpb.UserAccounts, string, error) {
+// (docs/design/real-name-anti-addiction.md §5.1)与注销状态(docs/design/account-deletion.md §4.3)。
+// 目录实现不支持(测试替身)时 pi 为空、注销状态为空(0)。lifecycle 恒非 nil。
+func readAccountDirectoryWithRealName(ctx context.Context, sc *svc.ServiceContext, account string, create bool) (*dbpb.UserAccounts, string, *dspb.AccountLifecycle, error) {
 	realNames, ok := sc.RealNames()
 	if !ok {
 		userAccount, err := readAccountDirectory(ctx, sc, account, create)
-		return userAccount, "", err
+		return userAccount, "", &dspb.AccountLifecycle{}, err
 	}
 	out, err := realNames.ReadWithLifecycle(ctx, account, create)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
-	return &dbpb.UserAccounts{Account: account, SimplePlayers: out.GetPlayers()}, out.GetRealNamePi(), nil
+	lifecycle := out.GetLifecycle()
+	if lifecycle == nil {
+		lifecycle = &dspb.AccountLifecycle{}
+	}
+	return &dbpb.UserAccounts{Account: account, SimplePlayers: out.GetPlayers()}, out.GetRealNamePi(), lifecycle, nil
 }
 
 // httpLoginAntiAddiction 是 /api/login 应答里的防沉迷状态,只给客户端决定下一步,不拦(拦在 gate 上的 Login)。

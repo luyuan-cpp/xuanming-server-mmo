@@ -161,7 +161,7 @@ func TestTiDBPrepareAndBusinessWriteAreMutuallyExclusive(t *testing.T) {
 			return "", err
 		}
 		return "pending", nil
-	}, testCoordinatorSecret)
+	}, NoPurge, testCoordinatorSecret)
 	if err != nil {
 		t.Fatal(err)
 	}

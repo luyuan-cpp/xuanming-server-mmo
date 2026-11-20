@@ -24,6 +24,7 @@
 #include <muduo/net/TimerId.h>
 
 #include "muduo_grpc/channel.h"
+#include "network/grpc_link_metrics.h"
 #include "node/system/etcd/etcd_endpoint.h"
 #include "node/system/etcd/etcd_stream_backoff.h"
 #include "node/system/grpc_call_deadline.h"
@@ -164,6 +165,8 @@ public:
 		options.keepaliveTimeout = kKeepaliveTimeout;
 		options.backoff.max = kReconnectBackoffMax;
 		options.maxReceiveMessageBytes = kMaxReceiveMessageBytes;
+		// 注册与发现、热关停两条 etcd 通道都记在 etcd 这一类依赖上(断线重连 R17)。
+		options.linkObserver = ObserveGrpcLink(dependency_link_metrics::Dependency::kEtcd);
 		channel_ = muduo_grpc::Channel::Create(loop_, ip, parsed.port, options);
 		if (!channel_)
 		{

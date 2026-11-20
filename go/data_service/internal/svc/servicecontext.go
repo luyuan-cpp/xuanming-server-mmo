@@ -138,26 +138,26 @@ type PlayerRouteStore interface {
 
 type ServiceContext struct {
 	// 与所有业务池共用的本boot；main必须先关闭接纳并join真实工作，再Seal。
-	Writer                    authoritysql.WriterConfig
-	Writers                   map[string]authoritysql.WriterConfig
-	RootAdmission             *drainproof.Session
-	RelayAdmission            *drainproof.Session
-	RelayIngress              *drainproof.Session
-	DrainRuntime              *drainproof.Runtime
-	lifecycleMu               sync.Mutex
-	closeOnce                 sync.Once
-	closeErr                  error
-	closeCompleted            bool
-	upstreamClosers           []interface{ Close() error }
-	AccountDirectory          accountdirectory.Directory
+	Writer           authoritysql.WriterConfig
+	Writers          map[string]authoritysql.WriterConfig
+	RootAdmission    *drainproof.Session
+	RelayAdmission   *drainproof.Session
+	RelayIngress     *drainproof.Session
+	DrainRuntime     *drainproof.Runtime
+	lifecycleMu      sync.Mutex
+	closeOnce        sync.Once
+	closeErr         error
+	closeCompleted   bool
+	upstreamClosers  []interface{ Close() error }
+	AccountDirectory accountdirectory.Directory
 	// AccountDeletions 是账号注销在目录上的动作(docs/design/account-deletion.md §4),鉴权同 AccountDirectory(只认 login)。
 	// 冷静期配置非法时为 nil,四个注销 RPC 回 Unavailable,ReadAccountDirectory 照常、不带注销状态。DeletionCoolingOff 随它一起装配。
-	AccountDeletions          AccountDeletionStore
-	DeletionCoolingOff        time.Duration
+	AccountDeletions   AccountDeletionStore
+	DeletionCoolingOff time.Duration
 	// AccountRealNames 是账号行上的实名列(docs/design/real-name-anti-addiction.md §5.1):写只认 login,按玩家读只认 payment。
 	AccountRealNames AccountRealNameStore
 	// PaymentDirectoryAuth 验 go/payment 的调用证明,只给 GetAccountRealName 用;密钥缺失时为 nil,该 RPC 回 Unavailable。
-	PaymentDirectoryAuth *serviceauth.Verifier
+	PaymentDirectoryAuth      *serviceauth.Verifier
 	AccountDirectoryAuth      *serviceauth.Verifier
 	SceneManagerDirectoryAuth *serviceauth.Verifier
 	AccountRoleTrades         accountdirectory.RoleTrades

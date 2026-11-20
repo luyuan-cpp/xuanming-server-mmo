@@ -1,9 +1,11 @@
 # gate 连接准入控制：muduo 无条件 accept 的业界解法与本仓落地 (2026-09-03)
 
-> **状态（2026-11-12 更新）：** 本文起初是调研 / 设计文档；§6 的清单已陆续落码，各节自带状态：
-> P0-1（fd 上限）、P0-2 的握手死线、P0-3（LogLevel）、P0-4（accept 资源耗尽降级）、
-> **P1-1 ~ P1-4（准入前移到 Acceptor、拒绝发 RST、新建连接速率闸、连接类指标，2026-11-12 落码，未编译）**。
-> 仍未做：P0-2 的未验签独立预算 / LRU / 按概率早拒、P1-5 的其余条目、P2 全部。
+> **状态（2026-11-19 更新）：** 本文起初是调研 / 设计文档；§6 的清单已陆续落码，各节自带状态：
+> P0-1（fd 上限）、P0-2（握手死线；**未验签独立预算 / LRU 淘汰 / 按概率早拒，2026-11-19 落码，未编译；同日补了 loop 卡顿时不淘汰、
+> 运维覆盖变量、battle 直连同一套**）、P0-3（LogLevel）、P0-4（accept 资源耗尽降级）、
+> **P1-1 ~ P1-4（准入前移到 Acceptor、拒绝发 RST、新建连接速率闸、连接类指标，2026-11-12 落码，未编译）**、
+> **P2-2（gate 按来源前缀限速，缺省关闭、开了只在承压时生效，2026-11-19 落码，未编译）**。
+> 仍未做：P1-5 的其余条目、P2-1 / P2-3 第 3、4 条 / P2-4。
 > 文中引用的 `client_message_processor.cpp` 已更名为 `client_session_handler.cpp`，§4、§5 里的行号是 2026-09-03 的，以当前文件为准。
 >
 > 回答的是
@@ -145,7 +147,7 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 
 | # | 缺口 | 证据 |
 | --- | --- | --- |
-| G1 | **未认证连接零死线、零收割器**(2026-11-06 死线已落码,未编译;独立预算未做,见 P0-2) | 全 gate 只有一个定时器：`main.cpp:134` 声明、`main.cpp:315` 每 10s 上报 player_count。`SessionInfo`（`session_info_comp.h`）**整个结构体没有任何时间戳字段**——今天就算想写 sweeper 也没有判据数据。`setKeepAlive` 在 `cpp/` 下零命中 |
+| G1 | **未认证连接零死线、零收割器**(2026-11-06 死线已落码;2026-11-19 独立预算 / LRU 淘汰 / 按概率早拒落码;都未编译,见 P0-2) | 全 gate 只有一个定时器：`main.cpp:134` 声明、`main.cpp:315` 每 10s 上报 player_count。`SessionInfo`（`session_info_comp.h`）**整个结构体没有任何时间戳字段**——今天就算想写 sweeper 也没有判据数据。`setKeepAlive` 在 `cpp/` 下零命中 |
 | G2 | **闸门位置比注释声称的晚**：拒绝发生时 `TcpConnection`、两个 1KB Buffer、`connections_` map 节点、`epoll_ctl ADD` 已全部完成。**（2026-11-12 状态：已改，未编译，见 P1-1。）** | `TcpServer.cc newConnection` 先于我们的回调执行；`Buffer.h:45-46`（`kCheapPrepend=8`+`kInitialSize=1024`） |
 | G3 | **只有总量、没有速率**。每秒建 5000 条又立刻关的攻击者永远碰不到 `:468` 那条闸。**（2026-11-12 状态：已改，未编译，见 P1-3。）** | `client_message_processor.cpp:468` 是唯一判据 |
 | G4 | **`RLIMIT_NOFILE` 全链路无人设**：镜像没设、k8s 没有该 API 字段、进程从不 `setrlimit`。containerd 依赖 systemd v240+ 隐式默认 **soft=1024**——真正生效的上限很可能是 ~1000 而不是 20000，**`GateMaxConnections` 那条分支是够不着的死代码** | `Dockerfile.runtime`/`Dockerfile.cpp` 无 ulimit；`cpp/` 下 `setrlimit` 仅命中 Windows shim |
@@ -218,11 +220,12 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 5. **已验证会话可无限重发 `ClientTokenVerifyRequest`**（`:813` 直接 `sendReply(true,"")` 返回），
    每次都让 gate 序列化一条响应，既不过限流器也不计非法包。
 
-> **2026-11-12 现状（握手死线与 P1-1 ~ P1-4 落码之后；上面五条是 2026-09-03 的状态）**
+> **2026-11-19 现状（握手死线、P1-1 ~ P1-4 与 P0-2 的未验签预算落码之后，都未编译；上面五条是 2026-09-03 的状态）**
 >
-> - 第 1 条：不再能「永久持有」。未验签连接最多活 10 秒（握手死线），新建速率闸又把「不停补位」压到每秒上限的 1%：
->   攻击者第一次能在 10 秒内占满全部槽位（桶深等于上限），之后稳态最多占住上限的 10%。
->   这 10 秒里与之后抢同一个速率桶的合法新连接仍会被拒，要再往下压靠 P0-2 的未验签独立预算与 LRU（未做）。
+> - 第 1 条：不再能「永久持有」，也不再能占满全部槽位。未验签连接最多活 10 秒（握手死线），新建速率闸把「不停补位」压到每秒上限的 1%，
+>   未验签预算（P0-2）又把未验签连接封在上限的 10% 以内，突发也一样。池承压（过了上限的 5%）时，建连满 3 秒还没验签的连接
+>   先让位给新连接；池里全是刚建的连接时，新连接按概率被拒、到预算全拒。持续超限期间合法新连接仍与攻击连接抢同一个速率桶；
+>   gate 看得到真实源地址的部署形态里可以开按来源前缀限速（P2-2，缺省关闭），开了之后承压期间单个前缀最多拿到全局速率的一成。
 > - 第 2 条：每条被拒连接的开销降到 3 次系统调用、零分配、无 TIME_WAIT；被接纳的速率有上界（桶深 + 速率 × 时间）。
 >   建连又立刻关、但没超过速率的那部分仍然付全价，`:325` 那次 `toIpPort()` 也还在。
 > - 第 3、5 条：没有变化，见 G10。
@@ -267,7 +270,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 ### P0-2 · 未认证连接：独立预算 + 死线 + LRU 淘汰（对应 G1，堵 SECURITY.md 自认的洞）
 
-分两半:死线已落码(2026-11-06,未编译,待 Codex 验证);独立预算、LRU 淘汰、按概率早拒还没做。
+分两半:死线已落码(2026-11-06,未编译,待 Codex 验证);独立预算、LRU 淘汰、按概率早拒 2026-11-19 落码(未编译、未运行,待 Codex 验证)。
 
 **死线(已落码)。** 随客户端心跳一起做,设计见 [gate-client-heartbeat.md](gate-client-heartbeat.md) §5.1、§5.4:
 
@@ -286,21 +289,106 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
      Java gate 现为 30 秒,已登记对齐到 10 秒。
 - 计数与日志:`[ClientHeartbeat] summary` 的 `handshake_timeouts`;拒绝日志按 1024 采样。
 
-**独立预算 + LRU + 按概率早拒(未做)。** 有了死线,占槽的未验签连接每条最多活 10 秒,但持续高速建连仍能把槽位占满。
-2026-11-12 起新建连接速率闸(P1-3)给这件事加了上界:稳态下未验签连接最多占上限的 10%(速率 × 10 秒),
-但攻击期间合法新连接与攻击连接抢同一个速率桶,公平性仍要靠这里的独立预算。预算要用的计数已经有了:
-`SessionInfo::preAuthSlot` 是 RAII 占位(`pre_auth_slot.h`),`gate_connection_admission::UnauthenticatedConnections()` 是 O(1) 读数,
-指标 `gate_unauthenticated_connections` 导出的就是它(P1-4);做预算时在准入回调里加一条判据即可,不必再造计数。
-原方案的要点不变:
+**独立预算 + LRU 淘汰 + 按概率早拒(2026-11-19 落码,未编译、未运行;取值按下面的推导先定,没有等压测)。**
 
-- `HandleConnectionEstablished` 在现有总量闸之后再加一道 `preAuthCount >= kPreAuthMax`(取 `GateMaxConnections` 的 5–10%)。
-- ⚠️ **`preAuthCount` 必须用 RAII guard,不能手写 `++` / `--`**。现有代码已有 capacity 拒、`node_id=0` 拒、prod 空密钥拒等
-  多个早退分支,漏一次就永久泄漏一个槽位(Go `netutil.LimitListener` 的经典坑)。
-- 满池时不要一刀切:按 sshd `MaxStartups` 的 random early drop 按概率拒(§6.7),否则攻击者只要稳定占住阈值,合法玩家成功率就是 0。
-- 再叠一层 **LRU 淘汰最老的未认证连接**,把「新玩家被挡在外面」换成「攻击者的老连接先死」。
-- 新增前置:预算大小要按重连风暴实测。gate 重启或网络抖动后,成千上万个客户端同时重连,它们都短暂处于未验签状态;
-  预算定小了会把正在握手的合法客户端淘汰掉,而断线保留(`player-connection-lost-hold.md`)恰恰依赖这些客户端能马上重连回来。
-  所以这一半要带压测一起做。
+有了死线,占位的未验签连接每条最多活 10 秒;P1-3 的速率闸又把稳态压在上限的 10%(速率 × 10 秒)。剩下两个洞:
+速率闸的突发额度(桶深 = 上限)花完之前,只建连不验签的流量能在 10 秒内占满全部槽位;它占着位置期间,
+合法新连接即使抢到了速率名额也进不来。这一半给未验签连接单独一个池,把这两件事关上。
+
+**判定**(`connection_admission.h` 的 `DecidePreAuth`,准入回调里的一道,排在总量之后、速率之前)。
+池的大小 n 就是未验签占位数(P1-4 的 RAII 占位,`UnauthenticatedConnections()`),池上有早拒起点 S 与预算 B 两个点。新连接来时:
+
+1. n < S:放行。
+2. n ≥ S,而最老的一条未验签连接已建连满 3 秒(`kMinEvictableAge`):淘汰它,放行新连接。
+   攻击者占着不验签的老连接先死,新玩家不再被挡在外面。
+3. 没有够老的可以让位、n ≥ B:拒绝(`preauth_budget`)。
+4. 没有够老的可以让位、S ≤ n < B:按概率拒绝(`preauth_early_drop`),概率 p = (n − S) / (B − S),S 处 0、B 处 100%。
+
+先淘汰、后早拒:能腾出位置就不拒新连接。只有池里全是刚建的连接(一次只建连不验签的突发)时才拒,拒绝率随占用平滑上升,
+不在 B 处从 0 跳到 100%。
+
+**取值**(上限 20000 时 B = 2000、S = 1000、可淘汰年龄 3 秒;推导同样写在 `connection_admission.h`):
+
+| 参数 | 取值 | 依据 |
+| --- | --- | --- |
+| 预算 B | 缺省持续速率 × 握手期限,即上限的 10%;上限不到 1 万时跟着速率下限,为 1000 | 本节原定区间是上限的 5% ~ 10%,取上沿。这是速率闸放得进来的稳态流量在一个握手期限里能攒下的最多未验签连接,所以稳态下池到不了 B,预算只在突发额度被花掉的那几秒里起作用。login 在会话数到 90% 时就不再往这台派人,B 正好是剩下的 10%,未验签连接再多也挤不掉已验签会话的那 90%。用缺省速率而不是覆盖后的速率:压测调高速率闸不会顺带放大预算 |
+| 早拒起点 S | B 的一半,即上限的 5% | 合法洪峰的未验签池很小:客户端建连后立刻发验签,accept 时验签请求多半已在接收缓冲里。最坏的冷启动全量重连按 2 万条 5 秒内连进来、95% 的连接 50ms 验签、5% 首个数据段重传要 1.5 秒估,池约 490 条,是上限的 2.5%,起点留一倍余量。sshd 缺省 `MaxStartups 10:30:100` 的起点只有满点的 10%,那是给很少有人同时登录的 sshd 定的;gate 要扛重连风暴,起点必须高于合法洪峰 |
+| 早拒曲线 | sshd 公式 `p = rate + (100 − rate) × (n − S) / (B − S)` 取 rate = 0 | 即 Envoy overload manager scaled trigger 的形状。不取 sshd 缺省的 30% 起跳:起点已高于合法洪峰的估计,一次刚越过起点的合法洪峰不该被拒掉三成 |
+| 可淘汰年龄 | 3 秒 | 与 `GateHandshakeSlow`(握手 P99 > 3 秒)同值,建连 3 秒还没验签的落在最慢的 1% 里。三次握手已给出 RTT 样本,首个数据段连丢两次在 RTT ≤ 300ms 时仍落在 3 秒内。远小于 10 秒握手期限:承压时未验签连接活 3 秒左右就让位,对应 Envoy 的 `reduce_timeouts`(承压时把空闲超时缩到下限 `min_timeout`),只是按「谁最老」逐条执行。速率闸放进来的稳态流量下池停在 S,每条连接要活 S / 速率 = 5 秒才轮到它让位,比 3 秒长 |
+
+上限调得很小(本机、§9.6 把上限调到 50)时 S = 500 高于上限,这一道不起作用,由总量闸管,与速率闸设下限同一个用意。
+
+**淘汰**(`connection_admission.cpp` 的 `EvictUnauthenticated`):
+
+- 索引:每条领了占位的会话在 `OnSessionOpened` 时按建连先后进一个队列,条目是 `(session_id, 会话代次)`。
+  建连时刻取自单调时钟、只在 loop 线程上取,入队顺序就是建连时刻的顺序;年龄由占位里的 `OpenedAt()` 给出。
+  验签、断开、被淘汰之后条目不删,轮到它在队头时核对后丢弃(同 `LivenessSweeper` 的惰性丢弃),每条只进出一次。
+  队头的有效条目最多活到握手期限,所以队列长度不随累计建连数增长。
+- 核对:会话还在、代次相同(session_id 没被新连接复用)、还没验签、还持有占位。已验签的、已换人的会话都不会被选中。
+- 执行:先收回占位(这一刻起它不再算在池里),再经会话里的 weak 连接 `forceClose`。forceClose 只把连接置成 kDisconnecting,
+  真正的关闭排到之后的 loop 轮次,随后照常走断开回调删会话(没验签的会话没有角色,断开回调只删会话)。
+  不在准入回调(muduo 的回调栈)上同步摘会话。连接一进 kDisconnecting,`ProtobufCodec::onMessage` 就不再分发它的帧,
+  所以被选中之后它不会再验签成功,不会「刚验签就被关」。
+- 只在放行时执行:判定排在速率闸之前,淘汰要等速率闸也放行之后才做,速率闸拒了就不淘汰。
+  被预算或早拒拒掉的连接不消耗速率名额,与「总量排在速率前面」同一个理由。
+- 早拒的随机数是注入的:`UniformBelow` 函数指针,生产用线程局部的 `std::minstd_rand`,单测经 `SetEarlyDropRandomForTesting` 注入定值。
+  只在早拒带里越过起点时取一次。
+- 本端 loop 刚卡过时不淘汰(2026-11-19 补):`client_liveness.h` 的 `LoopStallWatch` 记 1 秒节拍。gate 的节拍就是握手死线那台
+  存活扫描(`gate_client_heartbeat::LoopRecentlyStalled`)。以下三种情况都算刚卡过,这时不给最老一条的年龄,判定落到早拒 / 预算:
+  还没打过拍;上一拍本身迟到;距上一拍已超过两个节拍。
+  理由与握手死线「迟到只推迟」相同:loop 卡过之后,验签请求可能还在接收缓冲里没读,「建连 3 秒还没验签」不可信。
+- ⚠️ 占位仍是 RAII(`pre_auth_slot.h`),不手写 `++` / `--`:连接回调有 capacity 拒、`node_id=0` 拒、prod 空密钥拒等多个早退分支,
+  漏一次就永久泄漏一个名额(Go `netutil.LimitListener` 的经典坑)。
+
+**覆盖变量**(2026-11-19 补):`GATE_PREAUTH_BUDGET`、`GATE_PREAUTH_EARLY_DROP_START`、`GATE_PREAUTH_EVICTABLE_AGE_MS`,
+规范十进制,写错拒启,没有「0 = 关闭」:
+- 只设预算时,起点按新预算取一半;
+- 起点不能大于预算;
+- 年龄 1 ~ 9999 毫秒,必须短于握手期限。
+解析在 core `accept_admission.h` 的 `ResolvePreAuthBudget`,gate 与 battle 各带自己的变量名。
+正常洪峰碰到早拒时(`GatePreauthBudgetRejecting` 响、握手 P99 也在变慢),先用 `kubectl set env` 调大前两个,不用改代码发版。
+
+**battle 直连同一套**(2026-11-19 补):规则、缺省推导、判定函数都在 core 的 `accept_admission.h`。
+- 池:battle 的池是「没完成票据握手、也没出示探测授权、还连着」的直连。`BattleClientEdge::AdmitConnection` 每次 accept 就地扫一遍会话表,
+  数出条数、挑出最老一条。直连数以 `BattleMaxConnections`(4096)为界,与 `battle_unauthenticated_connections` 的数法相同。
+- 淘汰:经会话里的 weak 连接 `forceClose`,会话由 `HandleClosed` 删。
+- loop 卡顿:节拍由 `Install` 起的 1 秒定时器打(只绑 weak 自己,挂主 EventLoop,不起线程)。
+- 缺省:上限 4096 时跟着速率下限,起点 500、预算 1000。覆盖变量 `BATTLE_PREAUTH_*`。
+- 指标与告警:`battle_preauth_*`,告警 `BattlePreauthBudgetRejecting`;`BattleUnauthenticatedConnectionsHigh` 改按早拒起点算占比。
+  处置见运维手册 §3.3。
+
+**与原方案的不同**(AGENTS §11 偏离须记录):
+
+1. **不在 `HandleConnectionEstablished` 里判,在准入回调里判。** P1-1 已把闸门前移到 Acceptor,被拒的连接不建任何对象。
+   连接回调里留的第二道只有总量:预算这一道要淘汰别的连接,只做一处。
+2. **淘汰从起点 S 开始,不只在满池时做。** 原方案「满池按概率拒,再叠一层 LRU」两样都放在满池处;早拒爬到 100% 时池到不了满点,
+   淘汰就永远轮不到。改成先淘汰、后早拒,两样才都生效。代价:池承压时,建连 3 秒还没验签的合法慢客户端会让位,客户端按断线退避重连。
+3. **没有等重连风暴实测再定预算**(原方案的「新增前置」)。负责人 2026-11-11 的口径是等压测的先按标准做法定。
+   原方案担心的「预算定小了会淘汰正在握手的合法客户端」由两处兜住:起点高于合法洪峰估计的两倍;只淘汰建连满 3 秒的连接,
+   毫秒级握手的合法客户端不会被选中。断线保留(`player-connection-lost-hold.md`)依赖的「客户端能马上重连回来」因此不受影响。
+4. **加了覆盖变量**(见上)。11-19 第一版没有加,理由是登录压测的连接毫秒级验签、池到不了起点;
+   当天负责人要求补上:正常洪峰碰到早拒时,运维要能不发版就调。
+
+**复核方法**(压测或上线之后):正常洪峰(冷启动重连、维护后重登)里 `gate_unauthenticated_connections` 的峰值离
+`gate_preauth_early_drop_start` 多远,`gate_preauth_evicted_total` 与 `gate_rejected_total{reason=~"preauth_.*"}` 是否为 0;
+`gate_handshake_duration_ms` 的 P99.9 是否远低于 3 秒。
+
+**已知局限**:
+
+- 会话总数满员时,不淘汰未验签连接给新连接让位:未验签最多占预算(上限的 10%),login 在 90% 时就不再往这台派人。
+- 预算本身是全局的:CGNAT 后面的合法玩家与同出口的攻击者同池。按来源前缀限速见 P2-2(缺省关闭)。
+- battle 每次 accept 扫一遍会话表,是 O(直连数)。以 4096 为界,每秒 100 条新建时约 40 万次表项访问,
+  没有像 gate 那样维护占位与索引:battle 的「未认证」还要看探测授权,数一遍比在每个出口手写加减可靠,与它的指标同一做法。
+
+**测试**:
+- gate 的 `connection_admission_test.cpp`:
+  - `ConnectionAdmissionPolicy.*`:预算推导、承压先淘汰后早拒、早拒概率恰好线性、退化配置、判定顺序、只在放行时淘汰、覆盖变量;
+  - `ConnectionAdmission.*`:按建连先后淘汰最老的、跳过已验签与会话号被复用的、满池全是刚建的连接时不消耗速率名额、注入的随机源、
+    loop 刚卡过时不淘汰;
+  - `ConnectionAdmissionEviction.*`:真实回环连接,被淘汰的那条关掉,晚建连的不受影响,会话留给断开回调。
+- `client_liveness_test.cpp` 的 `ClientLivenessLoopStall.*` 与 `ClientLivenessSweeper.ReportsALoopStallFromItsOwnSweepCadence`。
+- battle 的 `battle_connection_admission_test.cpp`(判定顺序、扫表挑最老的、按原因计数、BATTLE_* 变量)。
+- `accept_admission_test.cpp` 的 `AcceptAdmissionPolicy.PreAuthBudgetResolvesFromTheCallersEnvNames`。
 
 ### P0-3 · 修 LogLevel（对应 G5）
 
@@ -383,7 +471,7 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
     `tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1` 的 A1、A6、A7 守住三份一致与调用顺序。
 - **gate**
   - 判定在 `cpp/nodes/gate/handler/rpc/connection_admission.{h,cpp}`，顺序是「关源 → 总量 → 新建速率」（速率见 P1-3）。
-    总量排在速率前面：满员时被拒的连接不消耗速率名额。
+    总量排在速率前面：满员时被拒的连接不消耗速率名额。2026-11-19 起总量与速率之间多了 P0-2 的未验签预算，理由相同。
   - `main.cpp` 在 `SetAfterStart` 里、种好 session_id 的 node 段之后、装连接回调之前调 `n.GetTcpServer().setAdmissionCallback(...)`。
     回调不捕获任何对象，状态在该模块的线程局部变量里（AGENTS §11.7）；关源时 `disconnectAllClients` 同步调 `CloseSource()`。
   - 启动时 `ConfigureConnectionAdmissionOrDie()` 定下上限与速率闸参数，并打一行
@@ -451,7 +539,9 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 **落码前的核对结论**：G3 原样成立，唯一的判据是会话总数。
 
-**落码**：`connection_admission.h` 的 `AcceptRateGate`，全局一个，不按 IP（per-IP 的前置条件见 §7）。
+**落码**：`AcceptRateGate`，全局一个，不按 IP（per-IP 的前置条件见 §7）。
+（2026-11-19 起它与缺省速率推导、环境变量解析、握手耗时直方图一起挪到 core 的 `cpp/libs/engine/core/network/accept_admission.h`，
+gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using 引回，行为不变，见本节末「battle 直连面」。）
 算法是 GCRA（与令牌桶等价，和 `world_chat_push_budget.h` 同一算法）：只记一个「理论到达时刻」，全用整数时长，
 拒绝不改状态。位置是准入回调的第三道，排在关源与总量之后。单 IO 线程，不加锁。
 
@@ -486,12 +576,14 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 **覆盖**：环境变量 `GATE_ACCEPT_RATE_PER_SECOND`、`GATE_ACCEPT_BURST`（规范十进制 1..1000000）。不设就是上面的推导；
 写错拒绝启动（与本文件其它启动门禁一致）；没有「0 = 关闭」，不留一个拼错就整个失效的开关。
 **压测要打超过缺省速率的建连时必须先设它**（运维手册 `gate-kernel-tuning-runbook.md` §3.2），否则桶用完之后压测机看到的是连接被重置。
-`k8s_deploy.ps1` 没有加对应参数：缺省值随 `GateMaxConnections` 走，不需要部署侧配合；实测要改缺省时改 `DefaultRateLimit` 的两个常数。
+`k8s_deploy.ps1` 没有加对应参数：缺省值随 `GateMaxConnections` 走，不需要部署侧配合；实测要改缺省时改 `DefaultRateLimit` 的两个常数
+（在 `accept_admission.h`，battle 直连同一份推导，改了两边一起变；只想调一边就用各自的环境变量）。
 
 **复核方法**（上线或压测之后）：看 `rate(gate_accepted_total[1m])` 的峰值离 `gate_accept_rate_limit_per_second` 多远，
 以及 `gate_rejected_total{reason="accept_rate"}` 在正常洪峰里是否为 0。
 
-**测试**：`connection_admission_test.cpp` 的 `AcceptRateGate.*` 与 `ConnectionAdmissionPolicy.*`——起步是满桶、之后按间隔放行、
+**测试**：`cpp/tests/rpc_controller_test/accept_admission_test.cpp` 的 `AcceptRateGate.*` 与 `AcceptAdmissionPolicy.*`
+（2026-11-19 从 gate 的 `connection_admission_test.cpp` 挪来，断言没改；gate 那边留下拒绝原因、session id 硬上限、`GATE_*` 变量名与判定顺序）——起步是满桶、之后按间隔放行、
 空闲再久不超过桶深、任意窗口不超过「桶深 + 速率 × 时间」、拒绝不消耗也不推迟名额、时钟倒退只会多拒、缺省值的推导、环境变量解析。
 
 ### P1-4 · 埋点（对应 G13）
@@ -508,10 +600,14 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 | `gate_connections_current` | `gate_connections_current`、`gate_connections_max` | gauge | 会话数与生效上限；占比不用在规则里写死上限 |
 | `gate_unauthenticated_connections` | 同名 | gauge | 还没验签的连接数 |
 | `gate_accept_rate` | `gate_accepted_total` | counter | 导出计数器，速率在查询侧用 `rate()` 算（Prometheus 惯例；算好的速率换个窗口就没法再用） |
-| `gate_rejected_total{reason}` | 同名 | counter | reason ∈ `capacity` / `accept_rate` / `shutting_down` / `not_ready` / `no_token_secret` |
+| `gate_rejected_total{reason}` | 同名 | counter | reason ∈ `capacity` / `accept_rate` / `shutting_down` / `not_ready` / `no_token_secret` / `preauth_budget` / `preauth_early_drop`(后两个是 P0-2 的未验签预算,2026-11-19 加) |
 | `gate_handshake_duration` | `gate_handshake_duration_ms` | histogram | 建连到验签成功，毫秒。`prometheus_text::Writer` 只写整数，所以单位取毫秒并写进名字；桶 10 ~ 10000，1 秒以上分得细 |
 | `gate_preauth_reaped_total` | 同名 | counter | 建连满握手期限仍未验签、被关掉的连接；与 `[ClientHeartbeat] summary` 的 `handshake_timeouts` 读同一份计数 |
 | — | `gate_accept_rate_limit_per_second`、`gate_accept_burst` | gauge | 生效的速率闸参数，给「离阈值多远」的图用 |
+| — | `gate_preauth_evicted_total` | counter | 未验签池承压时，建连满 3 秒还没验签、被淘汰给新连接让位的连接（P0-2，2026-11-19 加） |
+| — | `gate_preauth_budget`、`gate_preauth_early_drop_start`、`gate_preauth_evictable_age_ms` | gauge | 生效的未验签预算、早拒起点与可淘汰年龄（P0-2，可被 `GATE_PREAUTH_*` 覆盖）；告警按它们算占比，不在规则里写死 |
+| — | `gate_source_rate_limit_per_second`、`gate_source_burst`、`gate_source_rate_active`、`gate_source_tracked` | gauge | 按来源前缀限速的参数（关闭时为 0）、最近一次判定时是否生效、登记着的前缀数（P2-2，2026-11-19 加） |
+| — | `gate_source_untracked_total` | counter | 前缀表满、没登记就放行的连接（P2-2 的 fail-open） |
 
 - **未验签连接数不靠手写加减。** 每条未验签会话持有一个 RAII 占位（`cpp/libs/services/gate/session/comp/pre_auth_slot.h`，
   `SessionInfo::preAuthSlot`）：建连时领、验签成功时还；会话从任何路径销毁（断开回调、无连接残留会话的就地摘除、清表）占位都随之归还。
@@ -522,18 +618,22 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 🚩 **高基数红线**：`peer_ip` / `session_id` / `account` **绝不能进 metrics label**——
 标签基数由攻击者控制，会把连接层 DoS 转成监控系统 DoS，而且监控挂了你就瞎了。
 排障维度进日志/trace，不进 label。本批唯一的标签是 `reason`（封闭枚举）；对端地址只出现在采样日志里。
-`gate_connection_alerts_contract.tests.ps1` 断言采集函数里只有这一个标签名。
+`gate_connection_alerts_contract.tests.ps1` 断言采集函数里只有封闭集合的标签名（2026-11-19 起是 `reason`，
+与小游戏 WebSocket 握手计数的 `result`）。
 
-**告警**：`deploy/k8s/gate-connection-alerts.yaml`，6 条，都是 warning；处置在运维手册 §3.2。
+**告警**：`deploy/k8s/gate-connection-alerts.yaml`，9 条（2026-11-19 补 P0-2 时加了 `GatePreauthBudgetRejecting`，补 P2-2 时加了 `GateSourceRateLimited`、`GateSourceTableFull`），都是 warning；处置在运维手册 §3.2。
 
 | 告警 | 条件 | 阈值依据 |
 | --- | --- | --- |
 | `GateConnectionsNearCapacity` | 会话数 / 上限 > 0.9，持续 5 分钟 | login 在 90% 就不再往这台派人 |
 | `GateRejectingAtCapacity` | 5 分钟内有 `capacity` 拒绝 | 发生一次就该知道 |
 | `GateAcceptRateLimited` | 5 分钟内有 `accept_rate` 拒绝 | 同上；用未验签连接数与握手耗时区分洪峰与攻击（§8） |
-| `GateUnauthenticatedConnectionsHigh` | 未验签连接 / 上限 > 0.05，持续 2 分钟 | 速率闸把稳态压在 10% 以内；正常接近 0；取预算区间的下沿 |
-| `GatePreauthConnectionsReaped` | 每秒收割超过 1 条，持续 5 分钟 | 偶发收割是常态（建连后网络断了），持续的不是 |
-| `GateHandshakeSlow` | 握手 P99 > 3 秒，持续 10 分钟 | 握手期限 10 秒，P99 到 3 秒说明正常客户端离被误关不远 |
+| `GateUnauthenticatedConnectionsHigh` | 未验签连接 / 早拒起点 > 0.8，持续 2 分钟（2026-11-19 前是「/ 上限 > 0.05」） | 正常接近 0，合法洪峰估计只到起点的一半；到了起点 gate 开始淘汰，池停在起点附近，所以取 0.8 而不是 1 |
+| `GatePreauthBudgetRejecting` | 5 分钟内有 `preauth_budget` / `preauth_early_drop` 拒绝（2026-11-19 加） | 池里全是刚建的连接、没有可以让位的，新连接被拒；赶上的合法玩家会被 RST，发生一次就该知道 |
+| `GatePreauthConnectionsReaped` | 每秒收割超过 1 条，持续 5 分钟 | 偶发收割是常态（建连后网络断了），持续的不是；池承压时这类连接多半 3 秒左右就被淘汰，记在 `gate_preauth_evicted_total` |
+| `GateHandshakeSlow` | 握手 P99 > 3 秒，持续 10 分钟 | 握手期限 10 秒，P99 到 3 秒说明正常客户端离被误关不远；也是 P0-2 可淘汰年龄的取值依据 |
+| `GateSourceRateLimited` | 5 分钟内有 `source_rate` 拒绝（P2-2） | 开着按来源限速且承压，有前缀超过它那一份；发生一次就该知道 |
+| `GateSourceTableFull` | 5 分钟内 `gate_source_untracked_total` 上涨（P2-2） | 前缀表满、按来源限速 fail-open 了；分布式洪水的形状 |
 
 **「先埋点，再定阈值」这条顺序**：本批把指标与按推导定的阈值一起上了，没有等指标先跑一段。理由是负责人 2026-11-11 定的口径
 （等压测的先按标准做法定）；握手期限、速率闸、告警阈值都写了推导，指标上线后按 §8 的判据复核，要调的只是常数。
@@ -541,6 +641,33 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 **测试**：`connection_admission_test.cpp` 的 `ConnectionAdmission.*`（占位随验签 / 会话销毁归还、共享占位只还一次、
 指标页的样本行、不出现高基数字样）；`gate_connection_alerts_contract.tests.ps1`（规则引用的指标名与 reason 取值都由 C++ 导出、
 装配都接上了、告警名不重名）。
+
+### P1-1 ~ P1-4 · battle 直连面（2026-11-19）
+
+**状态：已落码，未编译、未运行，待 Codex 验证。** battle 节点的客户端直连（`cpp/nodes/battle/client/battle_client_edge.cpp`，
+设计见 [turn-based-battle-server.md](turn-based-battle-server.md) D27）同样对公网开放。原来它在连接回调里判 `BattleMaxConnections`，
+超限 `forceClose`（建完 `TcpConnection` 再关、走 FIN、留 TIME_WAIT），没有新建速率闸，也没有连接类指标。现在与 gate 同一套：
+
+- **共享一份纯逻辑**：`cpp/libs/engine/core/network/accept_admission.h`（速率闸、缺省推导、环境变量解析、握手耗时直方图）。
+  拒绝原因、判定函数、计数与指标名各节点自己写：两边的原因集合不同（battle 没有 `not_ready`，gate 的 P0-2 还会加自己的判据）；
+  同义的原因用同一个标签取值（`capacity` / `accept_rate` / `shutting_down` / `no_token_secret`），由契约测试核对。
+- **判定**：`cpp/nodes/battle/client/battle_connection_admission.{h,cpp}`，顺序同样是「关源 → 总量 → 新建速率」。
+  `BattleClientEdge::Install` 经 `TcpServer::setAdmissionCallback` 装上，回调只绑 `weak_ptr<BattleClientEdge>`（AGENTS §11.7）。
+  被拒的连接以 RST 关闭，不建对象；连接回调里的总量判定留作第二道。battle 的 `closeSource`（停机、维护关源）同步关准入闸；
+  计划排空不关，打着的房间还要接重连。
+- **缺省值**：与 gate 同一推导。`BattleMaxConnections` 4096 时，持续速率取下限 100 条/秒，桶深 4096。
+  覆盖用 `BATTLE_ACCEPT_RATE_PER_SECOND` / `BATTLE_ACCEPT_BURST`，写错拒启。
+- **指标与告警**：9 个 `battle_*` 指标，与 gate 同构；告警 `deploy/k8s/battle-connection-alerts.yaml` 6 条，处置见运维手册 §3.3。
+  （2026-11-19 补 P0-2 的未验签预算之后多了 4 个 `battle_preauth_*` 指标、两个拒绝原因与告警 `BattlePreauthBudgetRejecting`，共 7 条；
+  判定顺序变为「关源 → 总量 → 未验签预算 → 新建速率」，做法见 P0-2 的「battle 直连同一套」。）
+  `battle_unauthenticated_connections` 不计出示过探测授权的连接（见下一条）。
+- ⚠️ **这套推导没有覆盖全服匹配的网络探测**。探测也连这个端口，有效期 120 秒，排队中的玩家到期前重探，所以每台的探测建连速率约等于
+  「全服有探测计划的玩家数 ÷（这个机房的可探测 battle 数 × 重探周期）」，与它自己的连接上限无关。2026-11-19 之前探测计划每个机房只给
+  NodeId 最小的那一台，全服的探测都落在它上面：1 万人排队、按 robot 的口径约 80 秒重探一次（有效期 120 秒减去提前量 40 秒），就是 125 条/秒，
+  超过缺省的 100 条/秒，超出的探测连接被 RST，客户端在这个机房的探测失败。现在 match 在机房内按玩家把探测分散到各台可探测的 battle
+  （`go/match/internal/logic/network_probe.go` 的 `probeTargets`，最高随机权重哈希，自报 CLOSED 的不探，未编译；推导见
+  [global-match-hierarchical-pools.md](global-match-hierarchical-pools.md) §5.1「探测目标」），机房里有 k 台时每台约为原来的 1/k。
+  只有一台 battle 的机房与原来一样：上线或跑 `match-stress` 压测前按运维手册 §3.3 估算，接近缺省时给 battle 设 `BATTLE_ACCEPT_RATE_PER_SECOND`。
 
 ### P1-5 · 部署清单补齐（对应 G9/G11）
 
@@ -581,15 +708,64 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 ### P2-2 · per-source 限制（默认关闭，告警后开启）
 
 前置条件（G9）解决后才有意义。而且**在游戏里这是高危操作**，见 §7。
-(2026-09-29 更正:前置条件在 external 形态下已具备、podip 下不具备,见 §4.2.1;限制本身仍未实现,未上集群验证。)
+(2026-09-29 更正:前置条件在 external 形态下已具备、podip 下不具备,见 §4.2.1。)
+
+**状态(2026-11-19):gate 已落码,未编译、未运行,待 Codex 验证。battle 直连没有做。**
+
+前面几道都是全局的:持续超限时,合法新连接与攻击连接抢同一个速率桶,谁来得多谁占得多。这一道按来源前缀给每个来源一个小令牌桶,
+单个来源最多拿到全局速率的一成。做法照 §7 的约束:
+
+- **限速率不限总量**:不做每来源并发上限。CGNAT / 网吧 / 校园网 / 基站出口后面可能有几百上千个真玩家。
+- **按 /24、/64 聚合**:IPv4 取高 24 位,IPv6 取高 64 位。IPv6 按 /128 等于没做。IPv4 映射地址(`::ffff:a.b.c.d`)按 IPv4 算。
+- **缺省关闭**:只有 gate 看得到玩家真实源地址时才有意义,即 external 入口加 `externalTrafficPolicy: Local`(§4.2.1)。
+  podip 形态与代理型 LB 后面看到的是节点或 LB 的地址,开了会把所有人当成同一个来源限速。
+  开关是环境变量 `GATE_SOURCE_RATE_PER_SECOND`,设了就开;`GATE_SOURCE_BURST` 可选,只设它不设速率拒启。
+- **开了也只在承压时生效**,对应 §7 的「告警后自动开启」。承压的判据二选一:
+  - 未验签池过了早拒起点(与 `GateUnauthenticatedConnectionsHigh` 同一信号);
+  - 全局速率闸在最近一个握手期限(10 秒)内拒过连接(与 `GateAcceptRateLimited` 同一信号)。
+  平时一条都不拦。
+- **不封来源、不落持久状态**:每个前缀只是一个会自己回满的桶。§7 说过,「拒绝 N 次就封 IP」是状态炸弹。
+
+**判定**(`connection_admission.h` 的 `SourceRateGate`,排在总量之后、未验签预算之前):
+- 判定阶段只问前缀的桶(`WouldAdmit`,不改状态);所有闸都放行之后才记一笔(`Take`)。被别的闸拒掉的连接不消耗这个前缀的名额。
+- 超速的前缀在速率闸之前就被拒(`source_rate`),也就不消耗全局名额。
+- 排在预算之前,超速前缀的连接也不会让别人的老连接被淘汰。
+
+**推荐参数**(`DefaultSourceRateLimit`,启动日志会打出来;没有压测数据,按推导先定):
+
+| 参数 | 上限 2 万时 | 依据 |
+| --- | --- | --- |
+| 单前缀持续速率 | 20 条/秒(全局缺省持续速率的 1/10;全局取下限 100 时为 10) | 至少要十个前缀一起来才吃得满全局速率闸 |
+| 单前缀桶深 | 200(持续速率 × 握手期限) | 单个前缀稳态下最多占住未验签预算(2000)的一成 |
+
+承压期间,一个 /24 后面几百个真玩家同时重连:先放行一个桶深,之后按持续速率进,几十秒内接完。
+这是攻击期间的降级,平时不生效。被拒的前缀是已知的运营商出口、握手耗时又正常时,调高这两个变量(运维手册 §3.2)。
+
+**前缀表有上限**(`kMaxTrackedSources` = 65536):
+- 满了先清掉桶已回满的前缀(与没登记过等价),每秒最多清一次。
+- 清不出位置时,新前缀不登记、直接放行。这是 fail-open,§11.3 要求的配套:计 `gate_source_untracked_total`、采样日志、告警 `GateSourceTableFull`。
+- 理由:只有极分散的来源(上万个前缀同时建连)才撑得满它。那时这一道帮不上忙,全局速率闸与未验签预算照常生效;
+  拒掉新来源反而会把真玩家一起挡掉。
+- 内存上限约几 MB。
+
+**指标**:
+- `gate_rejected_total{reason="source_rate"}`;
+- `gate_source_rate_limit_per_second` / `gate_source_burst`(关闭时为 0);
+- `gate_source_rate_active`:最近一次判定时是否生效;
+- `gate_source_tracked`、`gate_source_untracked_total`。
+
+前缀只进采样日志,不进标签,基数由攻击者控制。告警 `GateSourceRateLimited` 与 `GateSourceTableFull`。
+
+**没做的**:battle 直连没有按来源限速。battle 的 hostPort 形态保源地址(D89),需要时照 gate 的 `SourceRateGate` 接上即可。
+`k8s_deploy.ps1` 没有接线这两个变量,开启用 `kubectl set env`(运维手册 §3.2)。
 
 ### P2-3 · 「上限满了正常玩家进不来」的二阶问题
 
 这是纯数量上限的**根本病**，不能靠调大数值解决（**线性抬高攻击者成本的同时线性抬高你的爆炸半径，比值永远不变**）。
 可用的手段，按性价比：
 
-1. 未认证池独立 + LRU 淘汰（P0-2）——**主力**。
-2. Random early drop（sshd 公式）——避免悬崖。
+1. 未认证池独立 + LRU 淘汰（P0-2）——**主力**。（2026-11-19 落码，未编译；只淘汰建连满 3 秒的，见 P0-2。）
+2. Random early drop（sshd 公式）——避免悬崖。（同上；只在池里没有可以让位的连接时才按概率拒。）
 3. **为重连预留配额**：分级降级的原则是「保住已在局内的玩家 > 接纳新玩家」，
    而断线重连比全新登录优先。参照 Redis/PG「保留管理通道」的同一条硬规矩。
 4. 排队服——⚠️ 只是把「连接耗尽」换成「队列耗尽」，队列本身需要独立上限、超时和防刷
@@ -609,7 +785,7 @@ gate 的票据零件**全都有**（HMAC-SHA256 + expire + gate_node_id 绑定 +
 
 | 不要做 | 为什么 |
 | --- | --- |
-| **per-IP 硬并发上限** | CGNAT / 网吧 / 校园网 / 手游基站出口后面可能有几百上千真玩家（Cloudflare 数据：CGNAT IP 被限速的频率是非 CGNAT 的三倍）。要限就**限速率不限总量**，按 `/24`（IPv4）与 `/64`（IPv6，按 `/128` 等于没做——单主机在自己的 /64 里能生成 2^64 个源地址）聚合，默认关闭、告警后自动开启。有了票据先行之后，**per-账号并发才是正确的维度** |
+| **per-IP 硬并发上限** | CGNAT / 网吧 / 校园网 / 手游基站出口后面可能有几百上千真玩家（Cloudflare 数据：CGNAT IP 被限速的频率是非 CGNAT 的三倍）。要限就**限速率不限总量**，按 `/24`（IPv4）与 `/64`（IPv6，按 `/128` 等于没做——单主机在自己的 /64 里能生成 2^64 个源地址）聚合，默认关闭、告警后自动开启。有了票据先行之后，**per-账号并发才是正确的维度**。（2026-11-19：gate 按这一条做了按来源前缀限速，见 P2-2。） |
 | **自适应 / 动态限流**（Vegas、Gradient2、AIMD、CoDel） | 三条前提 gate 一条都不满足：长连接寿命小时级（调低上限对已有连接零作用）、延迟信号被玩家行为噪声淹没、误判 → 拒真实玩家 → 重连风暴 → 看起来更过载 → 继续调低，**是正反馈自杀环**。硬上限 + 压测标定在工程上严格更优 |
 | **`setThreadNum` 来「扛更多连接」** | accept 永远在 base loop 单线程（`TcpServer::newConnection` 第一行就是 `assertInLoopThread`），线程池只分摊已建立连接的读写。而 `tlsSessionManager` 是 `thread_local`——一开线程池，20000 上限**静默变成 20000×N**，`rejectedCount` 变成数据竞争，`SessionIdGenerator` 劈开会让两个玩家拿到同一个 session_id（**会话劫持形状的 bug**，不只是资源 bug）。`:455-460` 那段警告注释必须保留，并应升级成启动断言 |
 | **`SO_REUSEPORT`** | 同上会劈开会话表；且滚动升级时监听 socket 一关，它队列里的半连接与未 accept 的子 socket **全被内核丢弃**；分流是纯哈希静态的，不看队列深度 |
@@ -642,6 +818,13 @@ gate 的票据零件**全都有**（HMAC-SHA256 + expire + gate_node_id 绑定 +
 
 **推论**：`gate_unauthenticated_connections` 与 `gate_handshake_duration` 这两个指标不只是用来定阈值，
 它们是**区分洪峰与攻击的唯一判据**。没有它们，任何自动处置都在赌。
+
+**P0-2 的未验签预算怎么不误伤洪峰（2026-11-19）**：它的判据正是上表的「未认证池占用」，不是新建速率。
+- 正常洪峰里池占用低：验签请求在建连后立刻到，最坏的冷启动全量重连估计也只到上限的 2.5%，早拒起点定在 5%，碰不到。
+- 起点之上先淘汰、后早拒，而淘汰只换掉建连满 3 秒还没验签的连接：毫秒级握手的合法客户端不会被选中。
+- 上表把 random early drop 列为会误伤的手段，指的是起点订在合法洪峰之下。这里只在「池过了起点、而且里面全是刚建的连接」时才按概率拒，
+  那是只建连不验签的突发的形状。洪峰与攻击叠在一起时，赶上那几秒的合法客户端会被 RST，退避后重连。
+- 复核看 P0-2 的「复核方法」：正常洪峰里 `gate_preauth_evicted_total` 与 `gate_rejected_total{reason=~"preauth_.*"}` 应为 0。
 
 ⚠️ **最坏 case 是冷启动 + 全量重连**：gate 重启后 0 连接，全服客户端同时重连，几秒内打满上限，
 而这批连接**全部**需要做 HMAC token 校验，CPU 峰值远高于稳态。
@@ -704,9 +887,10 @@ conntrack -C; cat /proc/sys/net/netfilter/nf_conntrack_max
 ⚠️ 定容时 `GateMaxConnections` 与每连接高水位是**相乘的**：20000 × 2MB = 40GB 理论最坏
 output buffer。单独看每个都合理，乘起来超过任何合理预算。
 
-### 9.6 P1-1 ~ P1-4 的验收（2026-11-12 补）
+### 9.6 P1-1 ~ P1-4 与 P0-2 未验签预算的验收（2026-11-12 补，2026-11-19 补 P0-2）
 
-单测与契约测试的命令在 `docs/PROGRESS.md` 2026-11-12「gate 连接准入 P1-1 ~ P1-4」条目里。下面是要在 Linux 容器里看的行为
+单测与契约测试的命令在 `docs/PROGRESS.md` 2026-11-12「gate 连接准入 P1-1 ~ P1-4」、2026-11-19「gate 未验签连接预算」与
+2026-11-19「未验签预算收尾」三个条目里。下面是要在 Linux 容器里看的行为
 （本机 Windows 只能验单测；`ss`、TIME_WAIT 计数都是 Linux 上的）。
 
 准备：一台 gate，`GateMaxConnections` 调小（例如 50），`MMORPG_METRICS_PORT=9400`，按 §9.3 写一个只建连不发包的裸 dial 循环。
@@ -721,6 +905,22 @@ output buffer。单独看每个都合理，乘起来超过任何合理预算。
 | 速率闸参数写错拒启 | `GATE_ACCEPT_RATE_PER_SECOND=0` 启动 | 进程退出，stderr 最后一行含 `Refusing to start: GATE_ACCEPT_RATE_PER_SECOND must be an integer` |
 | 正常登录不受影响 | 缺省参数下跑一轮 robot 登录冒烟 | 全部登录成功；`gate_rejected_total` 各 reason 都是 0；`gate_handshake_duration_ms_count` 等于登录的 robot 数 |
 | 关源 | 给 gate 发 SIGTERM，期间继续建连 | 新连接读到 `ECONNRESET`；`gate_rejected_total{reason="shutting_down"}` 增加（进程退出前抓得到的话） |
+
+上面各行的上限是 50：P0-2 的早拒起点 500 高于它，未验签预算不起作用，结果与 P0-2 落码前相同，`gate_preauth_*` 都不动。
+
+**P0-2 的未验签预算（2026-11-19 补）**：`GateMaxConnections` 用缺省 20000（早拒起点 1000、预算 2000，启动日志
+`Client connection admission ENFORCED at accept, ...` 那一行带 `preauth_early_drop_start=1000 preauth_budget=2000`），速率闸用缺省（桶深 20000，不会先拦）。
+
+| 要证明的事 | 做法 | 通过标准 |
+| --- | --- | --- |
+| 不承压时不起作用 | 建 900 条不发包的连接 | 全部接纳；`gate_unauthenticated_connections` 到 900；`gate_preauth_evicted_total` 与 `gate_rejected_total{reason=~"preauth_.*"}` 都不动；约 10 秒后被握手期限收割 |
+| 承压时最老的先让位 | 1 秒内建 1000 条不发包的连接，等 4 秒，再 1 秒内建 200 条 | 后 200 条全部接纳；`gate_preauth_evicted_total` 增加约 200；最早建的约 200 条在第 4~5 秒被关（客户端读到 EOF，这是建出来的连接被关，走 FIN 不是 RST）；`gate_unauthenticated_connections` 停在 1000 上下；`preauth_*` 拒绝不动 |
+| 全是刚建的连接时按概率拒 | 1 秒内建 3000 条不发包的连接 | 前 1000 条全部接纳，之后被拒的读到 `ECONNRESET`；`gate_unauthenticated_connections` 停在 2000 以下（按公式约 1860）；被拒的几乎都记在 `preauth_early_drop`；`gate_rejected_total{reason="accept_rate"}` 不动（被预算拒掉的不消耗速率名额） |
+| 已验签的会话不受影响 | 上面两种流量期间跑 robot 登录冒烟 | 已登录的 robot 不掉线；「承压时最老的先让位」期间新登录全部成功；「全是刚建的连接」那几秒里新登录可能被 RST，退避重连后成功 |
+| 覆盖变量生效、写错拒启 | `GATE_PREAUTH_BUDGET=4000` 启动；再用 `GATE_PREAUTH_EARLY_DROP_START=5000` 启动 | 第一次启动日志带 `preauth_early_drop_start=2000 preauth_budget=4000`；第二次进程退出，stderr 最后一行含 `Refusing to start: GATE_PREAUTH_EARLY_DROP_START=5000 must not exceed the budget` |
+| loop 卡顿时不淘汰 | 池到起点之后给 gate 发 `SIGSTOP`，5 秒后 `SIGCONT`，紧接着建 50 条 | 恢复后的头一两秒 `gate_preauth_evicted_total` 不涨、新连接按早拒 / 预算处置；之后恢复淘汰 |
+| 按来源限速缺省关闭 | 不设 `GATE_SOURCE_RATE_PER_SECOND`，从同一个 IP 在 1 秒内建 1500 条不发包的连接 | `gate_source_rate_limit_per_second` 为 0；`gate_rejected_total{reason="source_rate"}` 不动（拒绝都记在 `preauth_*`） |
+| 按来源限速只在承压时生效 | `GATE_SOURCE_RATE_PER_SECOND=20` 启动。先从 A 网段（一个 /24）建 300 条不发包的连接（不承压）；再从 B 网段建 1000 条把池推到起点之后；接着从 A 再建 300 条、从 C 网段建 50 条 | 不承压时 A 的 300 条全部接纳；承压后 A 先进约 200 条（桶深）、之后约 20 条/秒，其余读到 `ECONNRESET`、记在 `source_rate`；C 的 50 条全部接纳；`gate_source_rate_active` 为 1 |
 
 判据仍是 §9.4 那三条：攻击进行中已登录玩家的延迟不变、新玩家登录成功率高于阈值、进程 RSS 不涨。
 

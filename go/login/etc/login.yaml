@@ -66,12 +66,9 @@ Node:
     # tools/scripts/k8s_deploy.ps1 把它镜像进 login ConfigMap(要求正整数),
     # Redis 连接总账读同一个键:改它看部署时打印的 "Redis connection ledger" 一行。池等满会排队(go-redis PoolTimeout)。
     PoolSize: 20
-  # QueueRedis(可选,G4a 第 1a 批):排队、准入与放行锁单独所在的 Redis。本机单实例不写,即与下面的 ControlRedis 共用同一个句柄;
-  # K8s 上由 tools/scripts/k8s_deploy.ps1 -RedisSplit queue 整段渲染(字段同 RedisClient,全部必填,含 PoolSize)。
-  # gate 标记不在这里,始终在 ControlRedis。
 
 # 控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.3、§4.4):gate 排空 / 已排空 / 停写标记 gate:{gm:<zone>}:<id>:…,
-# 以及排队、准入与放行锁 queue:{q:<zone>} 等(没写 Node.QueueRedis 时)。键带 hash tag,句柄发送前按控制集群键策略核对。
+# 以及排队、准入与放行锁 queue:{q:<zone>} 等。键带 hash tag,句柄发送前按控制集群键策略核对。
 # 没写 Addrs 时指向上面 Node.RedisClient 那一个实例,地址、口令、库号、超时、连接池跟着它;上 Redis Cluster 时写
 # Addrs(集群种子)+ Cluster: true。口令的环境变量名写顶层 SharedRedisPasswordEnv,不写这里的 PasswordEnv。
 # 这里不写任何键:本机就是回落。
@@ -200,6 +197,25 @@ DataServiceRpc:
   NonBlock: true
   Middlewares:
     Breaker: true
+
+# 内容安全(go/content_guard;docs/design/rename-and-content-safety.md §6.6):建角时玩家自己起的名字先送它判定,
+# 命中屏蔽词回 kRoleNameSensitive,它不可达回 kRoleNameCheckUnavailable(可重试),不放行没检过的名字。
+# 服务端生成的默认名(空名建角)不送检。
+# 整段不写 = 不送检,只剩 playername 的几个内置防冒充词,只允许本机;Required: true 时没配目标拒启
+# (staging / prod 由部署脚本写 true)。NonBlock:内容安全晚起不挡 login 启动。熔断:它整体不可用时快速失败,
+# 不让每次建角都等满一个超时。TimeoutMs 是单次送检的时限,判定是纯内存计算,正常在几毫秒内。
+ContentGuard:
+  Rpc:
+    Etcd:
+      Hosts:
+        - 127.0.0.1:2379
+      Key: contentguard.rpc
+    Timeout: 500
+    NonBlock: true
+    Middlewares:
+      Breaker: true
+  Required: false
+  TimeoutMs: 300
 
 # PlayerId 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
 # Enabled:**只有显式写 true 才开**;整块不写 = 关 = 发不出 id,建角一律失败。
@@ -457,6 +473,11 @@ AuthProviders:
 #   # Google 填服务端 OAuth 客户端 ID(必须以 .apps.googleusercontent.com 结尾)。Endpoint 只给沙箱 mock 用。
 #   Apple:
 #     ClientId: "com.example.mmorpg"
+#     # 注销账号时撤销 Sign in with Apple 授权(docs/design/account-deletion.md §8),三项要么都写要么都不写;
+#     # 都不写时注销照常,只提示玩家到 Apple 设置里手动移除。私钥是 .p8 的 PEM 原文,只从环境变量读(K8s:Secret login-apple-signin)。
+#     TeamId: "ABCDE12345"
+#     KeyId: "FGHIJ67890"
+#     PrivateKeyEnv: "MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY"
 #   Google:
 #     ClientId: "123456789012-abc.apps.googleusercontent.com"
 #   # NetEase URS — provider is currently a stub (see auth-provider-framework.md).
@@ -568,4 +589,18 @@ GateDrain:
   DrainedBelowPlayers: 0  # 在线 <= 它即判定排空
   Deadline: 25m           # 从标 draining 起等这么久还剩人也判定可缩容(打 ERROR);0 = 只认人走干净
   # 排空时把在线连接按限速迁到同 zone 其他 gate(msg 124 + 租约内重连回原场景,
-  # docs/design/gate-drain-session-migrati
+  # docs/design/gate-drain-session-migration.md)。子块可缺省,缺省即下面这组值。
+  Migrate:
+    Enabled: true         # 默认开(2026-11-12 定案);false 是应急开关,最多一个许可租期后所有 gate 停止迁移
+    RatePerSecond: 20     # 每台排空中的 gate 每秒最多发起的迁移数;0 等同关闭
+    StartAfter: 0s        # 标记 draining 之后多久开始迁移,留给玩家自然下线
+
+# 链路追踪阶段三(docs/design/distributed-tracing.md §10.3):go-zero 把 span 经 OTLP/gRPC 送本机 Alloy
+# (deploy/docker-compose.observability.yml,dev.bat obs 起),Alloy 尾部采样后存进 Tempo。Name 与 Loki 的 service 标签同值。
+# 头部全采(Sampler 1.0),取舍在采集器。Alloy 没起时导出器在后台重连、丢 span,不影响业务;不想导出就加 Disabled: true。
+# K8s 上由 k8s_deploy.ps1 按是否部署了节点采集器重写整段(New-GoSvcConfigMapYaml),不搬本机这个地址。
+Telemetry:
+  Name: login
+  Endpoint: 127.0.0.1:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc

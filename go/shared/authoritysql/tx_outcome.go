@@ -3,6 +3,8 @@ package authoritysql
 import (
 	"errors"
 	"strings"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 // 本文件是 R6(docs/design/infra-reconnect-overview.md §4.1,负责人 2026-11-10 拍板)的判定材料。
@@ -24,6 +26,35 @@ var ErrTxAbortedBeforeCommit = errors.New("authority SQL transaction aborted bef
 // 错误树里同时有结局未知时回假:只要有一处可能已经提交,整体就不能按确定没写处理(与 ClassifyOutcome「有一个未知整体就是未知」同一口径)。
 func IsAbortedBeforeCommit(err error) bool {
 	return errors.Is(err, ErrTxAbortedBeforeCommit) && !errors.Is(err, ErrOutcomeUnknown)
+}
+
+// IsRetryableTxError 判定「这笔事务已整体回滚,把整笔重跑一遍是安全的」,是各服务事务重试的唯一判定
+// (R6 残余,2026-11-19 收成一处;原来 trade、player_inbox、data_service 召回、guild 后台各写一份):
+//   - 提交前中止(IsAbortedBeforeCommit):只发过纯 DML、COMMIT 还没发时连接断开或调用取消,库会回滚未提交的事务;
+//   - 1213 死锁:回滚了整个事务;
+//   - 1205 锁等待超时:只回滚了这条语句,调用方回滚事务后整笔重跑;COMMIT 不等行锁,不会由它报出;
+//   - 9007 TiDB 写冲突:事务已回滚。迁到 TiDB 后它会取代死锁成为最常见的一类,漏判就等于不重试。
+//
+// 错误树里有结局未知时一律回假:只要有一处可能已经提交,就不能整笔重跑。守卫把 COMMIT 自身的错误判为结局未知、
+// 不带底层错误号(unknownError 没有 Unwrap),所以守卫池上提交期报出的错误号走不到下面的 switch。
+// 只判「重跑安全」,不判「值不值得重跑」:次数、退避、取消,以及要不要对 1205 重跑,由调用方的重试循环定。
+func IsRetryableTxError(err error) bool {
+	if errors.Is(err, ErrOutcomeUnknown) {
+		return false
+	}
+	if errors.Is(err, ErrTxAbortedBeforeCommit) {
+		return true
+	}
+	var myErr *mysql.MySQLError
+	if !errors.As(err, &myErr) {
+		return false
+	}
+	switch myErr.Number {
+	case mysqlErrDeadlock, mysqlErrLockWaitTimeout, tidbErrWriteConflict:
+		return true
+	default:
+		return false
+	}
 }
 
 // plainDMLStatement 报告 query 是不是纯 DML:首个关键字是 SELECT / INSERT / UPDATE / DELETE / REPLACE / WITH。

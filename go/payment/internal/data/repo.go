@@ -39,7 +39,8 @@ const (
 func Revoked(revision uint32) bool { return revision%2 == 1 }
 
 // Repo 只用单条自动提交语句,不开显式事务:每一步都按自然键幂等,中途崩溃由下一次查单、回调或扫描补齐
-// (先写付款事实、再改意图状态,见 core.Service.record)。
+// (先写付款事实、再改意图状态,见 core.Service.record)。唯一的例外是未成年人额度(spend.go):
+// 「核对额度 + 建意图 / 转已付」必须在同一个人的额度行锁下一次提交,否则两笔并发的预占会各自看不见对方而一起超限。
 // 「领取」一律是带旧值比对的 UPDATE:多副本同时扫到同一行时只有一个改成功,其余放手。
 // 同一条 UPDATE 里依赖本行旧值的表达式写在被赋值的列之前(MySQL 按从左到右求值,TiDB 与之兼容)。
 type Repo struct{ db *sql.DB }
@@ -49,12 +50,21 @@ func New(db *sql.DB) *Repo { return &Repo{db: db} }
 type scanner interface{ Scan(...any) error }
 
 const intentColumns = "order_hi,order_lo,order_id,player_id,channel,amount_minor,currency,state,expire_ms,next_check_ms,check_count,checked_ms," +
-	"created_ms,updated_ms,channel_ref,channel_ref_ms,sku_id,payer_id"
+	"created_ms,updated_ms,channel_ref,channel_ref_ms,sku_id,payer_id,spender_hi,spender_lo,paid_ms,minor_age"
+
+const insertIntentSQL = "INSERT INTO payment_intent (" + intentColumns + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+
+func intentArgs(rec *paymentpb.PaymentIntentRecord) []any {
+	return []any{rec.OrderHi, rec.OrderLo, rec.OrderId, rec.PlayerId, rec.Channel, rec.AmountMinor, rec.Currency, rec.State,
+		rec.ExpireMs, rec.NextCheckMs, rec.CheckCount, rec.CheckedMs, rec.CreatedMs, rec.UpdatedMs, rec.ChannelRef, rec.ChannelRefMs, rec.SkuId, rec.PayerId,
+		rec.SpenderHi, rec.SpenderLo, rec.PaidMs, rec.MinorAge}
+}
 
 func scanIntent(row scanner) (*paymentpb.PaymentIntentRecord, error) {
 	r := &paymentpb.PaymentIntentRecord{}
 	err := row.Scan(&r.OrderHi, &r.OrderLo, &r.OrderId, &r.PlayerId, &r.Channel, &r.AmountMinor, &r.Currency, &r.State,
-		&r.ExpireMs, &r.NextCheckMs, &r.CheckCount, &r.CheckedMs, &r.CreatedMs, &r.UpdatedMs, &r.ChannelRef, &r.ChannelRefMs, &r.SkuId, &r.PayerId)
+		&r.ExpireMs, &r.NextCheckMs, &r.CheckCount, &r.CheckedMs, &r.CreatedMs, &r.UpdatedMs, &r.ChannelRef, &r.ChannelRefMs, &r.SkuId, &r.PayerId,
+		&r.SpenderHi, &r.SpenderLo, &r.PaidMs, &r.MinorAge)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -132,9 +142,7 @@ func (r *Repo) Intent(ctx context.Context, hi, lo uint64) (*paymentpb.PaymentInt
 // InsertIntent 新建一行支付意图。同一订单已有意图时不改它,返回已有的那一行与 false:
 // 并发建意图的两个请求只有一个插入成功,另一个拿到同一行,渠道以第一个为准。
 func (r *Repo) InsertIntent(ctx context.Context, rec *paymentpb.PaymentIntentRecord) (*paymentpb.PaymentIntentRecord, bool, error) {
-	_, err := r.db.ExecContext(ctx, "INSERT INTO payment_intent ("+intentColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-		rec.OrderHi, rec.OrderLo, rec.OrderId, rec.PlayerId, rec.Channel, rec.AmountMinor, rec.Currency, rec.State,
-		rec.ExpireMs, rec.NextCheckMs, rec.CheckCount, rec.CheckedMs, rec.CreatedMs, rec.UpdatedMs, rec.ChannelRef, rec.ChannelRefMs, rec.SkuId, rec.PayerId)
+	_, err := r.db.ExecContext(ctx, insertIntentSQL, intentArgs(rec)...)
 	if err == nil {
 		return rec, true, nil
 	}
@@ -189,15 +197,17 @@ func (r *Repo) CloseIntent(ctx context.Context, hi, lo, now uint64) (bool, error
 }
 
 // MarkIntentPaid 把意图标成已付,清掉渠道引用。已关闭的也改:钱是渠道确认收到的,事实优先于本服务的超时判断。
+// 未成年人已关闭的意图,调用方先经 ReviveMinorIntent 在额度行锁下复核(core.Service.record)。
 func (r *Repo) MarkIntentPaid(ctx context.Context, hi, lo, now uint64) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE payment_intent SET state=?,channel_ref='',updated_ms=? WHERE order_hi=? AND order_lo=? AND state<>?",
-		IntentPaid, now, hi, lo, IntentPaid)
+	_, err := r.db.ExecContext(ctx, "UPDATE payment_intent SET state=?,paid_ms=GREATEST(?,created_ms),channel_ref='',updated_ms=? WHERE order_hi=? AND order_lo=? AND state<>?",
+		IntentPaid, now, now, hi, lo, IntentPaid)
 	return err
 }
 
-// SetIntentState 按付款事实的翻转改意图的展示状态(撤销 → CLOSED,撤销被撤回 → PAID)。
+// SetIntentState 按付款事实的翻转改意图的展示状态(撤销 → CLOSED,撤销被撤回 → PAID)。转 PAID 时重记 paid_ms:撤回的那笔计入撤回时的月与日。
 func (r *Repo) SetIntentState(ctx context.Context, hi, lo uint64, state uint32, now uint64) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE payment_intent SET state=?,channel_ref='',updated_ms=? WHERE order_hi=? AND order_lo=?", state, now, hi, lo)
+	_, err := r.db.ExecContext(ctx, "UPDATE payment_intent SET paid_ms=CASE WHEN ?=? THEN GREATEST(?,created_ms) ELSE paid_ms END,state=?,channel_ref='',updated_ms=? WHERE order_hi=? AND order_lo=?",
+		state, IntentPaid, now, state, now, hi, lo)
 	return err
 }
 

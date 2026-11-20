@@ -300,3 +300,32 @@ func TestTxCommitFailureStaysUnknown(t *testing.T) {
 		t.Fatalf("unknown=%t valid=%t commits=%d", WriterOutcomeUnknownSeen(ctx), c.IsValid(), w.commits)
 	}
 }
+
+// 各服务事务重试的唯一判定(R6 残余):提交前中止与三种「已回滚」的错误号可重跑,穿透 %w 与 Join;
+// 树里混有结局未知时一律不可重跑;唯一键冲突、普通错误、nil 不可重跑。
+func TestIsRetryableTxError(t *testing.T) {
+	unknownErr := unknown(phaseCommit, nil)
+	deadlock := &mysql.MySQLError{Number: mysqlErrDeadlock}
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"plain", errors.New("other"), false},
+		{"deadlock", deadlock, true},
+		{"lock wait timeout", &mysql.MySQLError{Number: mysqlErrLockWaitTimeout}, true},
+		{"tidb write conflict wrapped", fmt.Errorf("insert: %w", &mysql.MySQLError{Number: tidbErrWriteConflict}), true},
+		{"duplicate entry", &mysql.MySQLError{Number: mysqlErrDuplicateEntry}, false},
+		{"aborted before commit wrapped", fmt.Errorf("exec: %w", ErrTxAbortedBeforeCommit), true},
+		{"aborted joined with rollback error", errors.Join(ErrTxAbortedBeforeCommit, errors.New("rollback")), true},
+		{"commit outcome unknown", unknownErr, false},
+		{"deadlock joined with unknown", errors.Join(deadlock, unknownErr), false},
+		{"aborted joined with unknown", errors.Join(ErrTxAbortedBeforeCommit, unknownErr), false},
+	}
+	for _, tc := range cases {
+		if got := IsRetryableTxError(tc.err); got != tc.want {
+			t.Errorf("%s: IsRetryableTxError(%v) = %v, want %v", tc.name, tc.err, got, tc.want)
+		}
+	}
+}

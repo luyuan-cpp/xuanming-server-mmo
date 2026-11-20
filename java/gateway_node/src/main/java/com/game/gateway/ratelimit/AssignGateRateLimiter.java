@@ -13,23 +13,33 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
+import java.util.function.LongUnaryOperator;
 
 /**
  * {@code /api/login} 与 {@code /api/assign-gate} 的前置限流,依次判:
  *
  * <ol>
- *   <li>开服波次:区不在当前波次 → 排队(retry_after = 距开放的毫秒,queue_pos = -1);</li>
+ *   <li>开服波次:区不在当前波次 → 排队(retry_after 由距开放的毫秒算出,见下「排队提示」;queue_pos = -1);</li>
  *   <li>IP 令牌桶(全部 gateway 共享)空 → 429 {@code IP_RATE_LIMIT};</li>
- *   <li>区令牌桶(全部 gateway 共享;zone_id = 0 跳过)空 → 排队(retry_after = 区桶补到一个令牌要等的毫秒),
- *       这时 IP 令牌不扣;</li>
+ *   <li>区令牌桶(全部 gateway 共享;zone_id = 0 跳过)空 → 排队(retry_after 由区桶补到一个令牌要等的毫秒算出),
+ *       这时 IP 桶只扣 {@code queue-retry-ip-cost-milli}(缺省 0.1 个令牌);</li>
  *   <li>账号冷却(进程内):同一端点上同一(账号, 客户端 IP)距上次放行不足冷却窗口 → 429 {@code ACCOUNT_COOLDOWN}。</li>
  * </ol>
+ *
+ * <p><b>排队提示(2026-11-19)。</b>两种排队的 retry_after_ms 都是 max(下限, 原始等待) 再加 [0, 抖动上界) 的均匀随机量
+ * (缺省下限 2000ms、抖动 2000ms,{@code queue-retry-min-ms} / {@code queue-retry-jitter-ms})。以前原样下发「区桶补到一个令牌
+ * 要等的毫秒」,2000 rps 时只有 1ms,客户端照做就是每个往返重试一次,区桶空时 IP 令牌又全额退还、IP 桶拦不住,排队的人越多,
+ * 打到同一个 {@code rl:zone:<id>} 键上的请求越多,超过一台 Redis 主节点后命令超时、整体 fail-open,正好在最该限流时放开。
+ * 有了下限,守规矩的客户端排队时每 2~4 秒一次,这个键的负载约为「排队人数 / 3 秒」;随机量把同一时刻被拒的一批人
+ * (波次开放那一刻、区桶刚被抽空时)摊开,不再整批同时回来。区桶空时 IP 桶扣一小份,不守提示的单个 IP 最多打
+ * ip-rps × 1000 / 这一份 次/秒(缺省 50),之后被 IP 桶 429,429 只读 IP 桶、不碰区桶。
  *
  * <p><b>两个桶在一次 {@link RateLimitStore#admit} 里判</b>(Redis 上 2026-11-12 起每个桶一段单键 Lua,区桶空时退还 IP 令牌,
  * 两键可以在 Redis Cluster 的不同节点上,见 {@link RedisRateLimitStore})。
  * 2026-11-05 起先 IP 后区(服务器缺口清单第 29 条,同时了结开服限流设计的 R13 / J1):以前先扣区桶,被 IP 桶拒掉的请求
- * 也已经吃掉一个区令牌,单个 IP 狂发就能把全区的桶掏空、让所有人排队。区桶空时 IP 令牌不扣:排队中的重试不吃 IP 桶,
- * 同一 NAT 后面的一群人等区桶时不会被 429 踢出排队。判定顺序与 Java 版(xuanming-server-mmo 的 RateLimiter)一致。
+ * 也已经吃掉一个区令牌,单个 IP 狂发就能把全区的桶掏空、让所有人排队。区桶空时 IP 令牌只扣一小份(2026-11-19 前是全额退还):
+ * 排队中的重试几乎不吃 IP 桶,同一 NAT 后面的一群人等区桶时不会被 429 踢出排队,不守提示的单个 IP 也刷不动区桶。
+ * 判定顺序与 Java 版(xuanming-server-mmo 的 RateLimiter)一致;排队提示的下限、抖动与 IP 扣一小份 Java 版待做。
  *
  * <p><b>Redis 出错 fail-open。</b>限流是保护手段,不能因为它不可用把全服挡在门外:存储抛异常时放过两个桶,之后
  * {@link #FAIL_OPEN_HOLD_MS} 内不再碰 Redis、直接放过两个桶(熔断);到期只放一个请求去探(半开),探通即恢复限流。
@@ -80,6 +90,8 @@ public class AssignGateRateLimiter {
     private final RateLimitProperties props;
     private final WaveSchedule wave;
     private final LongSupplier monotonicMs;
+    /** 给一个正的上界 n,返回 [0, n) 里的均匀随机数;只用来算排队提示的随机量。 */
+    private final LongUnaryOperator randomBelow;
     private final Map<Outcome, Counter> decisions = new EnumMap<>(Outcome.class);
     private final Counter storeErrors;
     private final Counter bypassed;
@@ -91,13 +103,16 @@ public class AssignGateRateLimiter {
     /**
      * @param store       全部 gateway 共享的令牌桶;null = 限流关闭,一律放行
      * @param monotonicMs 单调时钟(毫秒),熔断与账号冷却都用它;生产传 {@code System.nanoTime() / 1_000_000}
+     * @param randomBelow 给正的上界 n 返回 [0, n) 的均匀随机数,算排队提示的随机量;生产传
+     *                    {@code n -> ThreadLocalRandom.current().nextLong(n)},须线程安全
      */
     public AssignGateRateLimiter(RateLimitStore store, RateLimitProperties props, WaveSchedule wave,
-                                 MeterRegistry registry, LongSupplier monotonicMs) {
+                                 MeterRegistry registry, LongSupplier monotonicMs, LongUnaryOperator randomBelow) {
         this.store = store;
         this.props = props;
         this.wave = wave;
         this.monotonicMs = monotonicMs;
+        this.randomBelow = randomBelow;
         for (Outcome outcome : Outcome.values()) {
             decisions.put(outcome, Counter.builder("gateway.rate_limit.decisions")
                     .description("前置限流每次判定的结果")
@@ -126,7 +141,7 @@ public class AssignGateRateLimiter {
             return RateLimitDecision.pass();
         }
         if (!wave.isOpen(zoneId)) {
-            return count(Outcome.WAVE_QUEUE, RateLimitDecision.queue(wave.secondsUntilOpen(zoneId) * 1000L, -1));
+            return count(Outcome.WAVE_QUEUE, RateLimitDecision.queue(queueRetryAfterMs(wave.secondsUntilOpen(zoneId) * 1000L), -1));
         }
 
         // IP 桶键与冷却键共用同一个归一化后的 IP。ClientIpResolver 约定永不返回 null;万一传进来 null / 空白,统一落到
@@ -140,12 +155,23 @@ public class AssignGateRateLimiter {
         }
         if (admission.kind() == Admission.Kind.ZONE_EMPTY) {
             // queue_pos 只是提示值(区桶空时恒为 0),不是真实排位,见开服限流设计 §三。
-            return count(Outcome.ZONE_QUEUE, RateLimitDecision.queue(admission.waitMs(), 0));
+            return count(Outcome.ZONE_QUEUE, RateLimitDecision.queue(queueRetryAfterMs(admission.waitMs()), 0));
         }
         if (inCooldown(cooldownScope, account, ip, now)) {
             return count(Outcome.COOLDOWN_DENY, RateLimitDecision.deny("ACCOUNT_COOLDOWN"));
         }
         return count(Outcome.PASS, RateLimitDecision.pass());
+    }
+
+    /**
+     * 排队提示的 retry_after_ms:不短于下限,再加 [0, 抖动上界) 的均匀随机量(见类注释「排队提示」)。
+     *
+     * @param waitMs 原始等待:距波次开放的毫秒,或区桶补到一个令牌的毫秒
+     */
+    private long queueRetryAfterMs(long waitMs) {
+        long jitterBound = props.getQueueRetryJitterMs();
+        long jitter = jitterBound > 0 ? randomBelow.applyAsLong(jitterBound) : 0;
+        return Math.max(props.getQueueRetryMinMs(), waitMs) + jitter;
     }
 
     /** 判两个桶;Redis 出错或熔断期间按放行处理(fail-open,见类注释)。 */

@@ -187,8 +187,9 @@ namespace connection_lost_hold
 	// ── 挂机月卡:离线托管(docs/design/player-connection-lost-hold.md §4.1)──
 	// 开通了挂机(挂机月卡有效)的玩家断线后不按 kHoldWindow 退出,一直保留到重连、月卡到期或被别的退出取代;
 	// 托管期间角色留在场景与 AOI 里,组队跟随照常把他带着走(team-follow-server-trail.md §3.6)。
-	// 月卡事实源:玩家域 Redis 键 player:afk_pass:{<player_id>},值为到期的 Unix 秒(购买 / 开通流程写入,
-	// 与 go/shared/redisslot AfkPassKey 同形)。player_locator 的租约监视在月卡有效期间每 5 分钟给断线会话续租
+	// 月卡事实源:存档里的 PlayerUint64Comp.afk_pass_expires_at(到期 Unix 秒,docs/design/afk-monthly-card.md);scene 读
+	// 本实体内存里的那一份(AfkPassSystem::ExpiresAt)。玩家域 Redis 键 player:afk_pass:{<player_id>} 是它提交之后的投影,
+	// 给 player_locator 读:租约监视在月卡有效期间每 5 分钟给断线会话续租
 	// (go/player_locator/internal/logic/leasemonitor.go afkPassState),所以托管期间 login 的断线租约一直在,
 	// 不受上面 kLoginReconnectLease 那条 static_assert 的约束;它只在看到月卡失效之后才让租约到期。
 
@@ -206,7 +207,7 @@ namespace connection_lost_hold
 	// 之后才让断线租约到期,提前这么多退出,租约到期时退出存盘已经落地、断线释放标记已写,LeaveScene 当场拿到证据。
 	inline constexpr std::chrono::seconds kHostingExitLead = kSweepInterval + kReleaseMargin;
 
-	// 月卡已知的到期时刻过去这么久仍确认不了续费(Redis 一直读不成),按到期处理、照常退出:
+	// 月卡已知的到期时刻过去这么久仍确认不了续费(查询一直没有结果;2026-11-19 起改读内存、不会失败,这一支留作完整定义),按到期处理、照常退出:
 	// 查询失败时先保持托管(与 player_locator 查不出来时推迟清理同口径),但不让托管无限期挂着。
 	inline constexpr std::chrono::seconds kHostingUnconfirmedGrace{30};
 
@@ -313,7 +314,7 @@ struct PlayerConnectionLostComp
 	uint64_t loginGeneration{0};
 	// ── 挂机月卡(离线托管,见 connection_lost_hold::JudgeHold)。只由 AfkHostingSystem 写(查询发出与回包)。──
 	connection_lost_hold::AfkPass afkPass{connection_lost_hold::AfkPass::kUnknown};
-	uint64_t afkPassExpiresAtSec{0}; // afkPass == kActive 时有效:月卡到期的 Unix 秒(Redis 原值)
+	uint64_t afkPassExpiresAtSec{0}; // afkPass == kActive 时有效:月卡到期的 Unix 秒(PlayerUint64Comp.afk_pass_expires_at)
 	bool afkProbeInFlight{false};    // 有一次月卡查询在途:不重复发
 	bool hostingStarted{false};      // 已按"托管开始"处理过(由服务器开启组队跟随只做一次)
 };

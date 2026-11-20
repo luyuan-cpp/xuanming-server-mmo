@@ -414,8 +414,13 @@ func joinRequestParts(request string) (uint64, uint64, error) {
 }
 
 // CancelIntent 的提交是 UNKNOWN Join 可以安全放弃的唯一依据。墓碑不影响玩家的新 request_id。
+// 点名的票或意图是角色过户前的主人留下的:现主人没有可撤的东西,原件原样不动,回成功(QueueRequestClosed 同口径)。
 func (s *Store) CancelIntent(ctx context.Context, pid uint64, ticket, request string) error {
-	return s.Fenced(ctx, func() error { return s.cancelIntentOnce(ctx, pid, ticket, request) })
+	err := s.Fenced(ctx, func() error { return s.cancelIntentOnce(ctx, pid, ticket, request) })
+	if errors.Is(err, ErrForeignOriginal) {
+		return nil
+	}
+	return err
 }
 
 func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, request string) error {
@@ -444,9 +449,10 @@ func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, reques
 	if request == "" && old.Ticket == ticket {
 		request = old.RequestId
 	}
+	// lockActor 已核对会话是角色现主人:下面两处主人不同,都只能是过户前留下的原件。
 	actor := originalPlayer(ctx, pid)
 	if old.Ticket != "" && ((request != "" && old.RequestId == request) || (ticket != "" && old.Ticket == ticket)) && (old.OwnerAccount != actor.OwnerAccount || old.OwnerRevision != actor.OwnerRevision) {
-		return ErrOriginalPlayer
+		return ErrForeignOriginal
 	}
 	if request != "" {
 		high, low, parseErr := joinRequestParts(request)
@@ -457,7 +463,7 @@ func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, reques
 		var revision uint64
 		read := tx.QueryRowContext(ctx, "SELECT owner_account,owner_revision FROM match_join_intent WHERE player_id=? AND request_high=? AND request_low=? FOR UPDATE", pid, high, low).Scan(&owner, &revision)
 		if read == nil && (owner != actor.OwnerAccount || revision != actor.OwnerRevision) {
-			return ErrOriginalPlayer
+			return ErrForeignOriginal
 		}
 		if read != nil && !errors.Is(read, sql.ErrNoRows) {
 			return read
@@ -476,6 +482,17 @@ func (s *Store) cancelIntentOnce(ctx context.Context, pid uint64, ticket, reques
 
 func (s *Store) RequestCancelled(ctx context.Context, pid uint64, request string) (cancelled bool, err error) {
 	err = s.Fenced(ctx, func() (e error) { cancelled, e = s.requestCancelledOnce(ctx, pid, request); return e })
+	return cancelled, err
+}
+
+// QueueRequestClosed 回答「这个请求号还会不会入队」。有撤销墓碑是不会;原件是角色过户前的主人留下的也是不会:
+// 现主人沿它 Join 会被拒(joinOnce 核原主人),前主人的旧会话过不了护栏。GetQueueStatus 的 request_cancelled 用它,
+// 客户端据此释放本机原意图;把后一种当故障回,客户端会永远卡在排队恢复里。
+func (s *Store) QueueRequestClosed(ctx context.Context, pid uint64, request string) (bool, error) {
+	cancelled, err := s.RequestCancelled(ctx, pid, request)
+	if errors.Is(err, ErrForeignOriginal) {
+		return true, nil
+	}
 	return cancelled, err
 }
 

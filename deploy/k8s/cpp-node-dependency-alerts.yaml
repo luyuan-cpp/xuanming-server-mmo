@@ -1,0 +1,68 @@
+# C++ 节点(gate / scene / battle)到各依赖的连接告警(2026-11-19;docs/design/infra-reconnect-overview.md §1.8、§4.1 R17)。
+#
+# 指标由 C++ 节点的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400),
+# 定义在 cpp/libs/engine/core/metrics/dependency_link_metrics.h,dependency 取值:
+#   redis_player / redis_control(scene 的两个 Redis 句柄,每个节点一条连接)、redis_other、etcd(注册与发现、热关停)、
+#   grpc(调 Go 服务)、node_link(节点之间的 RPC 链路)。
+#   - cpp_node_dependency_connections{dependency}:此刻可用的连接数(Redis 过了 AUTH、gRPC 过了 HTTP/2 握手、节点链路过了身份握手);
+#   - cpp_node_dependency_lost_total{dependency}:可用的连接意外断掉的次数(本端停机、换连接、对端 GOAWAY 优雅退役不算);
+#   - cpp_node_dependency_connect_failures_total{dependency,reason}:建连失败,reason ∈ connect / auth / handshake。
+# 每类依赖、每个原因进程一启动就以 0 导出,increase() 抓得到第一次;节点没用到的依赖 connections 恒为 0,
+# 所以规则只看失败与意外断开的增量,不看 connections 是否为 0。
+# Kafka 不在这里:librdkafka 自管连接,C++ 生产者刻意不挂 event_cb(kafka_producer.h)。
+#
+# 为什么要报:以前这些连接只有日志,依赖整个连不上、或者连接反复断开重连,只能翻日志发现(R17)。
+#   - 建连一直失败:Redis 每 3~4 秒重试一次,gRPC / etcd 按退避(etcd 封顶 5s、业务通道封顶 120s)重试,5 分钟的窗口里都至少有两次;
+#     连续 5 分钟每个窗口都有失败,就是依赖不可达或口令 / 身份配错,不是一次抖动。
+#   - 反复断开:15 分钟里同一个节点对同一类依赖意外断了 3 次以上。node_link 不进这条:对端节点每次滚动重启都会让链路断一次,
+#     发布期间必然成批出现;节点链路的判死由心跳与 scene_manager 的死节点收尾处理。
+#
+# 规则引用的指标名、标签取值由 tools/scripts/tests/cpp_node_dependency_alerts_contract.tests.ps1 对照 C++ 源码钉住。
+#
+# 安装(与其余告警文件相同,手工 apply):
+#   kubectl apply -n observability -f deploy/k8s/cpp-node-dependency-alerts.yaml
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cpp-node-dependency-alerts
+  labels:
+    app: cpp-node
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: cpp-node.dependencies
+      interval: 30s
+      rules:
+        - alert: CppNodeDependencyConnectFailing
+          expr: |
+            sum by (namespace, instance, dependency, reason) (increase(cpp_node_dependency_connect_failures_total[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 连 {{ $labels.dependency }} 一直失败({{ $labels.reason }})"
+            description: >-
+              这个节点 5 分钟以上每个 5 分钟窗口都有建连失败。reason=connect 是连不上(地址、网络、对端没起来);
+              reason=auth 是 Redis AUTH 被拒或没有应答(口令 Secret 与 Redis 不一致,查 redis-auth / redis-control-auth);
+              reason=handshake 是节点链路身份握手失败(对端换了进程或配错了 zone)。期间依赖它的功能不可用:
+              Redis 连不上时 scene 的资产唤醒、分线目录、玩家域读写失败;etcd 连不上时注册续不了租;grpc 连不上时调 Go 服务失败。
+              日志里搜这个依赖的连接日志(Redis connect attempt failed / AUTH、muduo_grpc channel ... TRANSIENT_FAILURE、Node handshake failed)。
+        - alert: CppNodeDependencyFlapping
+          expr: |
+            sum by (namespace, instance, dependency) (increase(cpp_node_dependency_lost_total{dependency!="node_link"}[15m])) >= 3
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 到 {{ $labels.dependency }} 的连接反复断开"
+            description: >-
+              15 分钟内意外断开 {{ $value | printf "%.0f" }} 次(本端停机、换连接、对端优雅退役不算)。每次断开,在途的命令或调用
+              按结局未知处理,重连期间依赖它的功能不可用。Redis 多半是存活探测超时(日志 zone_redis_liveness_timeout)或对端重启;
+              etcd / grpc 多半是 keepalive 没回或对端被强杀。对照同一时段别的节点是否也在断:只有这一个节点在断,先查它所在节点的网络。

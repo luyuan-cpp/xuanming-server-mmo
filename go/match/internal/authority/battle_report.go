@@ -23,7 +23,8 @@ import (
 // 正文(match_battle_report)和每名玩家的列表(match_player_battle_report)只在终局事务里写:只有 COMPLETE 的局才有
 // 战报,而且和战果同一个事务提交。回放外壳不合格只丢回放、不挡终局(BR-7);SQL 错误和事务里其他行一样,整笔回滚,
 // battle 按原字节重放。每名玩家只留最近 BattleReportsKeptPerPlayer 条:同一事务把超出的最旧行删掉,正文的
-// ref_count 随之减一,减到 0 删正文。读路径只读、不加锁。
+// ref_count 随之减一,减到 0 删正文。读路径只读、不加锁。唯一的例外是删角收尾(role_fence_purge.go):删掉已删除角色的全部列表行,
+// 正文按同一段 releaseBattleReportsTx 减引用数。
 
 // BattleReportsKeptPerPlayer 是每名玩家保留的 PVP 战报条数(负责人 2026-11-06 定)。Java 版同值。
 const BattleReportsKeptPerPlayer = 100

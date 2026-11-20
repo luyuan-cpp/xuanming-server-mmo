@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -147,6 +148,38 @@ func TestReleaseRemovedRoleNameInvalidatesTheNameCache(t *testing.T) {
 	steps.setOwner(11, "", 2, 0)
 	require.NoError(t, s.releaseRemovedRoleName(ctx, 11), "缓存只是展示用的读缓存:删不掉不改释放的结局")
 	require.Len(t, cache.deleted, nameCacheInvalidateAttempts, "重来次数有上限")
+}
+
+// deadlineNameCache 记下每次 DEL 拿到的 ctx 还剩多久,并立即失败(模拟 Redis 不通)。
+type deadlineNameCache struct{ remaining []time.Duration }
+
+func (c *deadlineNameCache) DelPlayerName(ctx context.Context, _ uint64) error {
+	left := time.Duration(-1)
+	if deadline, ok := ctx.Deadline(); ok {
+		left = time.Until(deadline)
+	}
+	c.remaining = append(c.remaining, left)
+	return errors.New("redis down")
+}
+
+// 用例「删名字缓存有自己的上限,不借用调用方的整段预算」(2026-11-19 评审补):删角收尾一共 removedRoleSettleTimeout,
+// 删缓存在释放名字之后、删小表那一行之前。改之前 DEL 直接用收尾的 ctx,Redis 被黑洞时吃满预算,删小表那一行拿到的是
+// 已过期的 ctx,每一轮都记 drop_removal_row;这里给的 ctx 还剩一小时,改之前每次 DEL 看到的剩余时间都远大于上限。
+func TestNameCacheInvalidationHasItsOwnBudget(t *testing.T) {
+	s, _, _ := namedFlowStore(t)
+	cache := &deadlineNameCache{}
+	s.ConfigureNameCache(cache)
+	parent, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+
+	s.invalidateNameCache(parent, 11)
+
+	require.Len(t, cache.remaining, nameCacheInvalidateAttempts, "上限之内照常重来")
+	for _, left := range cache.remaining {
+		require.Positive(t, left, "删缓存必须带截止时间")
+		require.LessOrEqual(t, left, nameCacheInvalidateBudget, "删缓存不能借用调用方的整段预算")
+	}
+	require.NoError(t, parent.Err(), "调用方的 ctx 不受影响")
 }
 
 // 用例「删角释放名字失败要计数」:释放失败,收尾回错误、计 release_name 一次;释放之前就失败的不碰缓存。

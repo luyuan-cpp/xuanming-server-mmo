@@ -113,6 +113,7 @@ public:
         kReply,                    // 同步:Proceed → 业务 → FinishOk
         kHoldBeforeBusiness,       // 守护段式延后:不 Proceed,留着句柄
         kHoldAfterBusinessStarted, // 业务已开始、延后完成(§15.3 Q6):TryStartBusiness 后留着 ServerCall
+        kReject,                   // 守护段同步拒绝:Reject(rejectStatus),不进业务
     };
 
     void RegisterMethods(muduo_grpc::MethodTable &table) override
@@ -123,6 +124,7 @@ public:
     }
 
     Mode mode{Mode::kReply};
+    muduo_grpc::Status rejectStatus{muduo_grpc::StatusCode::kInvalidArgument, "rejected by test"};
     int dispatched{0};
     int businessRuns{0};
     muduo_grpc::Metadata receivedMetadata;
@@ -163,6 +165,9 @@ private:
                 ++businessRuns;
                 heldAfterBusinessStarted.push_back(call->server_call());
             }
+            return;
+        case Mode::kReject:
+            call->Reject(rejectStatus);
             return;
         }
     }
@@ -665,6 +670,93 @@ TEST_F(GrpcTraceLoopbackTest, FailedCallMarksTheClientSpanWithTheGrpcStatus)
     EXPECT_EQ(client->StatusMessage(), "DEADLINE_EXCEEDED");
     ASSERT_TRUE(client->has_grpc_status);
     EXPECT_EQ(client->grpc_status_code, kGrpcStatusDeadlineExceeded);
+    // 服务端:调用已由截止收口,之后的 Proceed 不再执行业务;server span 在这里结束并标错,最终状态码不经 GrpcUnaryCall,不记码。
+    const auto server = std::find_if(spans.begin(), spans.end(),
+                                     [](const tracing::SpanRecord &span) { return span.kind == tracing::SpanKind::kServer; });
+    ASSERT_NE(server, spans.end());
+    EXPECT_EQ(server->status, tracing::SpanStatus::kError);
+    EXPECT_EQ(server->StatusMessage(), "call completed before the handler ran");
+    EXPECT_FALSE(server->has_grpc_status);
+}
+
+// 守护段异步之后才 Proceed(§10.3):server span 由 GrpcUnaryCall 接过去,量到回复发出为止,派发返回时不交出。
+TEST_F(GrpcTraceLoopbackTest, DeferredProceedEndsTheServerSpanWhenTheReplyIsSent)
+{
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    service_.mode = LoopbackDataService::Mode::kHoldBeforeBusiness;
+    const auto observed = std::make_shared<Observed>();
+    SendInLoop(observed, 42, kLiveness, {}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return service_.heldBeforeBusiness.size() == 1; }, kLiveness));
+    RunLoopFor(50ms);
+    const auto serverSpanCount = [&] {
+        const auto spans = sink.Spans();
+        return std::count_if(spans.begin(), spans.end(),
+                             [](const tracing::SpanRecord &span) { return span.kind == tracing::SpanKind::kServer; });
+    };
+    EXPECT_EQ(serverSpanCount(), 0) << "回复还没发,server span 不该结束";
+
+    service_.heldBeforeBusiness.front()->Proceed();
+    ASSERT_TRUE(RunLoopUntil([&] { return observed->calls > 0; }, kLiveness));
+    ASSERT_EQ(observed->code, kGrpcStatusOk) << observed->message;
+    const auto spans = sink.Spans();
+    const auto server = std::find_if(spans.begin(), spans.end(),
+                                     [](const tracing::SpanRecord &span) { return span.kind == tracing::SpanKind::kServer; });
+    ASSERT_NE(server, spans.end());
+    EXPECT_EQ(serverSpanCount(), 1);
+    ASSERT_TRUE(server->has_grpc_status);
+    EXPECT_EQ(server->grpc_status_code, kGrpcStatusOk);
+    EXPECT_EQ(server->status, tracing::SpanStatus::kUnset);
+    EXPECT_TRUE(server->parent_is_remote);
+    EXPECT_GE(server->end_unix_nano - server->start_unix_nano, 50'000'000u) << "量到 Proceed 发出回复,含上面等的 50ms";
+}
+
+// 服务端 span 只把服务端的故障码标成错误(OTel gRPC 约定):INVALID_ARGUMENT 是调用方的问题,只记码;
+// UNAVAILABLE 是服务端的问题,标错。client span 不论哪种非 OK 都标错。
+TEST_F(GrpcTraceLoopbackTest, ServerSpanMarksOnlyServerFaultCodesAsErrors)
+{
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    service_.mode = LoopbackDataService::Mode::kReject;
+    const auto findServer = [&](uint32_t code) -> std::optional<tracing::SpanRecord> {
+        for (const auto &span : sink.Spans())
+        {
+            if (span.kind == tracing::SpanKind::kServer && span.has_grpc_status && span.grpc_status_code == code)
+            {
+                return span;
+            }
+        }
+        return std::nullopt;
+    };
+
+    constexpr auto kInvalidArgument = static_cast<uint32_t>(muduo_grpc::StatusCode::kInvalidArgument);
+    constexpr auto kUnavailable = static_cast<uint32_t>(muduo_grpc::StatusCode::kUnavailable);
+    service_.rejectStatus = muduo_grpc::Status(muduo_grpc::StatusCode::kInvalidArgument, "bad request");
+    const auto invalid = std::make_shared<Observed>();
+    SendInLoop(invalid, 1, kLiveness, {}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return invalid->calls > 0; }, kLiveness));
+    EXPECT_EQ(invalid->code, kInvalidArgument);
+
+    service_.rejectStatus = muduo_grpc::Status(muduo_grpc::StatusCode::kUnavailable, "shutting down");
+    const auto unavailable = std::make_shared<Observed>();
+    SendInLoop(unavailable, 2, kLiveness, {}, /*underTrace=*/true);
+    ASSERT_TRUE(RunLoopUntil([&] { return unavailable->calls > 0; }, kLiveness));
+    EXPECT_EQ(unavailable->code, kUnavailable);
+
+    const auto invalidServer = findServer(kInvalidArgument);
+    ASSERT_TRUE(invalidServer.has_value());
+    EXPECT_EQ(invalidServer->status, tracing::SpanStatus::kUnset);
+    const auto unavailableServer = findServer(kUnavailable);
+    ASSERT_TRUE(unavailableServer.has_value());
+    EXPECT_EQ(unavailableServer->status, tracing::SpanStatus::kError);
+    EXPECT_EQ(unavailableServer->StatusMessage(), "shutting down");
+    for (const auto &span : sink.Spans())
+    {
+        if (span.kind == tracing::SpanKind::kClient)
+        {
+            EXPECT_EQ(span.status, tracing::SpanStatus::kError) << "client span 的非 OK 一律标错";
+        }
+    }
 }
 
 // 实体上没有通道,生成的客户端在本地以失败完成:回调同样回到发起方的 trace(QueueGrpcLocalCompletion 的包装)。
@@ -677,6 +769,34 @@ TEST_F(GrpcTraceLoopbackTest, LocalFailureCompletesUnderTheCallerTrace)
     EXPECT_NE(observed->code, kGrpcStatusOk);
     ASSERT_TRUE(observed->sentTrace.IsValid());
     EXPECT_EQ(observed->doneTrace.trace_id.bytes, observed->sentTrace.trace_id.bytes);
+}
+
+// 本地就失败的调用也记 client span(§10.3):生成的客户端在排本地完成之前调 RecordGrpcLocalFailureSpan。
+// 生成代码要 Codex 按新模板重新生成后才带这一行,所以这里直接核对接缝本身:名字去掉开头的 /、记码、标错、父是发起方。
+TEST_F(GrpcTraceLoopbackTest, LocalFailureSpanCarriesTheMethodCodeAndReason)
+{
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    tracing::TraceContext caller;
+    {
+        tracing::ScopedSpan span;
+        caller = tracing::Current();
+        RecordGrpcLocalFailureSpan(data_service::kDataServiceGetPlayerHomeZoneGrpcPath, kGrpcStatusUnavailable,
+                                   "node transport missing or closing");
+    }
+    RecordGrpcLocalFailureSpan(data_service::kDataServiceGetPlayerHomeZoneGrpcPath, kGrpcStatusUnavailable,
+                               "not in a trace");   // 不在 trace 里:什么都不记
+    const auto spans = sink.Spans();
+    ASSERT_EQ(spans.size(), 1u);
+    EXPECT_EQ(spans[0].kind, tracing::SpanKind::kClient);
+    EXPECT_EQ(spans[0].system, tracing::SpanSystem::kGrpc);
+    EXPECT_EQ(spans[0].parent_span_id.bytes, caller.span_id.bytes);
+    EXPECT_EQ(spans[0].status, tracing::SpanStatus::kError);
+    EXPECT_EQ(spans[0].StatusMessage(), "node transport missing or closing");
+    ASSERT_TRUE(spans[0].has_grpc_status);
+    EXPECT_EQ(spans[0].grpc_status_code, kGrpcStatusUnavailable);
+    ASSERT_FALSE(spans[0].Name().empty());
+    EXPECT_NE(spans[0].Name().front(), '/');
 }
 
 // 业务方法体在请求顶层 player_id 的日志上下文里执行,执行完恢复(GrpcUnaryCall::Proceed,§5.5)。

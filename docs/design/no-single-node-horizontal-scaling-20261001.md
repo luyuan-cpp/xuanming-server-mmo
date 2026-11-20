@@ -475,7 +475,7 @@ data_service 侧要配 `GuildInternalRpc`、NetworkPolicy 收口内部 RPC、首
 |---|---|---|---|---|
 | `guild:assetop:maintenance:leader` | 全服 | 日对账只读 PENDING、刷 gauge；每小时最多自动放弃 200 行。重投 Tick 每个副本都跑，不归这把锁管 | 异常积压 | 保持 |
 | `trade:assetop:maintenance:leader` | 全服 | 同上，只放弃 TRADE_DEBIT；`AssetOp.Enabled` 现为 false | 异常积压 | 保持 |
-| `player_inbox:maintenance:leader` 下的清理、补发、gauge | 全服 | 清理已空转；补发只扫到期未通知的行；gauge 是两条聚合查询 | 近零、异常、在途量 | 保持 |
+| `player_inbox:maintenance:leader` 下的补发、gauge | 全服 | 补发只扫到期未通知的行；gauge 是两条聚合查询；没有清理循环（原来空转的那个 2026-11-12 已删，条目行永久保留） | 近零、异常、在途量 | 保持 |
 | 同一把锁下的定时对账 | 全服 | 每小时读 24 小时内由消费方终结的行，每轮最多 2000 名玩家，超出就截断 | 业务量（战斗结算也进对账） | **改分片**（11-06 已落码，未编译）：64 个逻辑片用 HRW 分给 etcd 里注册的 stable 副本（与 match 的 poolowner 同法），每个副本只对账自己的分片，gauge 按本副本的分片求和，告警仍取 max() > 0。做法见[收件箱设计](player-inbox-service.md) §9.3「分片归属」 |
 | `player_locator:session_reconciler:leader` 下的写者检查 | 全服 | 每 60 秒一次 etcd 只读 Txn | 节点数 | 保持 |
 | 同一把锁下的补建与日审计 | 全服 | 全键 SCAN 加逐 slot SSCAN，限速 200 页/秒 | 在线会话数；2000 万在线时一遍约 19 小时（[会话索引设计](player-locator-gate-session-index.md) §7） | **改分片**（11-10 已落码，未编译）：玩家域是 Cluster 时复用死 gate 清扫的 256 段租约，每个副本逐 slot 用 `CLUSTER GETKEYSINSLOT` 列键补成员、清脏成员，进度按段记在控制域；leader 只发布一遍、等它做完，就绪与审计的判据不变。单实例玩家域（dev）仍由 leader 自己扫。做法见会话索引设计 §4.5。扫描限速 `ScanPagesPerSecond` 11-12 定为全服预算，各副本按持有的段数分摊（落码未编译）：加副本不加重玩家域 Redis 的负担，一遍的耗时由预算定，不再留给压测按副本数去调 |

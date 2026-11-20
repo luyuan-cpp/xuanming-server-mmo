@@ -23,6 +23,7 @@ import (
 	login_proto_login "proto/login"
 	"shared/buildinfo"
 	"shared/callerauth"
+	"shared/clockcheck"
 	"shared/drainproof"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -65,6 +66,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("login")
 
 	// Load config file
 	//
@@ -218,10 +220,7 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 		return err
 	}
 
-	if err := loginNode.KeepAlive(); err != nil {
-		logx.Errorf("Failed to keep node alive: %v", err)
-		return err
-	}
+	loginNode.KeepAlive()
 
 	defer func() {
 		if err := loginNode.Close(); err != nil {
@@ -439,15 +438,9 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	}
 	fmt.Printf("  kafka:       %v\n", cfg.Kafka.Brokers)
 	fmt.Printf("  redis:       %s\n", cfg.Node.RedisClient.Host)
-	// 控制集群(gate 标记;没配 Node.QueueRedis 时也承载排队与放行锁):没写 ControlRedis.Addrs 时就是上一行那个实例。
+	// 控制集群(gate 标记、排队与放行锁):没写 ControlRedis.Addrs 时就是上一行那个实例。
 	controlRedisConf := cfg.EffectiveControlRedis()
 	fmt.Printf("  control redis: %s\n", controlRedisConf.Describe())
-	// 排队与放行锁所在实例(G4a 第 1a 批):没配 Node.QueueRedis 时与上一行共用同一个句柄。
-	if cfg.Node.QueueRedis != nil {
-		fmt.Printf("  queue redis: %s\n", cfg.Node.QueueRedis.Host)
-	} else {
-		fmt.Printf("  queue redis: shared with control redis\n")
-	}
 	playerRedisConf, loginRedisConf := cfg.EffectivePlayerRedis(), cfg.EffectiveLoginRedis()
 	fmt.Printf("  player redis: %s\n", playerRedisConf.Describe())
 	fmt.Printf("  login redis:  %s\n", loginRedisConf.Describe())

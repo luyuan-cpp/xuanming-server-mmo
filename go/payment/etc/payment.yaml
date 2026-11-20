@@ -14,13 +14,21 @@ DSNEnv: MMORPG_PAYMENT_SQL_DSN
 Backend: tidb
 MaxOpenConns: 16
 AutoMigrate: false
+# 只在 Payment.Compliance.MinorSpendingGate=realname 时连:建意图前按玩家读账号上的实名(GetAccountRealName)。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 2000
+  NonBlock: true
 Log:
   ServiceName: payment
   Mode: console
   Level: info
 
 Payment:
-  # 渠道回调的监听地址;本机联调直接打它,K8s 上经 Ingress 暴露为 https://<支付域名>/notify/<渠道>。
+  # 渠道回调的监听地址;本机联调直接打它。K8s 上由部署脚本改成 0.0.0.0:18130,经 Service payment-notify 与外部负载均衡暴露为 https://<支付域名>/notify/<渠道>。
   NotifyListenAddr: 127.0.0.1:18130
   # 微信支付、支付宝下单时带的回调根地址(公网 https)。本机联调只开 devpay 时可以不填。
   NotifyBaseURL: ""
@@ -43,8 +51,14 @@ Payment:
       Channels: [devpay]
   # 商城 SKU 在按商品定价的渠道上的商品号(App Store / Google Play / 微信小游戏道具 ID);没登记的 SKU 不能走这些渠道。
   Products: []
+  # 合规闸(docs/design/real-name-anti-addiction.md §5.6):none = 不接实名,生产模式下 App 渠道拒启;
+  # realname = 建意图前按账号目录的实名执行未成年人充值限额(要 DataServiceRpc 与 MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT),App 渠道才能在生产开;
+  # overseas = 部署在中国大陆以外,不读实名,App 渠道照开。
   Compliance:
     MinorSpendingGate: none
+    # 未成年人单日累计上限(分),0 = 不设;数字待负责人定(充值设计 §18 第 7 条)。
+    DailyLimitFenAge8To16: 0
+    DailyLimitFenAge16To18: 0
   DevPay:
     Enabled: true
     SecretEnv: PAYMENT_DEVPAY_SECRET

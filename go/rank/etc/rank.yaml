@@ -18,6 +18,9 @@ DataServiceRpc:
 MailRpc:
   Endpoints: [127.0.0.1:50900]
   Timeout: 1800
+  # 不在启动时阻塞拨号:mail 没起来时 rank 照常启动，封榜发奖按截止失败、下一轮重发。阻塞拨号 3 秒连不上就启动失败，
+  # K8s 冷启动时会连锁 CrashLoop(docs/design/infra-reconnect-overview.md §1.6、R5)。ConfigMap 由这份 yaml 生成。
+  NonBlock: true
 MailSecretEnv: MAIL_PRODUCER_SECRET_RANK
 # 必须与 go/mail/etc/mail.yaml 的 Mail.MaxPersonalMailTtlDays 同值(rank 读不到邮件配置;config_test.go 核对两份)。
 # 封榜写出的奖励邮件过期时刻 = 封榜 + min(30 天, 本值),写定后不随配置变化;越出 2~365 拒启(发件时至少剩 24 小时可领,1 天发不出)。改邮件有效期时两边同批改。

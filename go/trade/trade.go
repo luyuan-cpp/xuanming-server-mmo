@@ -45,6 +45,7 @@ import (
 	"schemamigrate"
 
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -106,6 +107,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("trade")
 	if err := validateMigrationFlags(*migrateOnly, *allowModify); err != nil {
 		fmt.Fprintf(os.Stderr, "[trade] %v\n", err)
 		os.Exit(schemamigrate.ExitFailed)
@@ -244,7 +246,7 @@ func runTrade(c config.Config) (runErr error) {
 		return fmt.Errorf("[trade] role_fence 表不可用,先执行 %s: %w", migrateRemedyCommand, fenceErr)
 	}
 	// 没配协调者密钥拒启:参与者不可达时过户和删角会一直被拒,不如在启动时暴露。
-	participant, err := rolefence.NewParticipantServer(svcCtx.DB, commerce.RolePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	participant, err := rolefence.NewParticipantServer(svcCtx.DB, commerce.RolePending, commerce.RolePurge, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if err != nil {
 		return fmt.Errorf("[trade] 角色护栏参与者装配失败: %w", err)
 	}

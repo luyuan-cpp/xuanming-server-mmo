@@ -25,10 +25,13 @@ type Config struct {
 	AutoMigrate       bool               `json:"AutoMigrate,default=false"`
 	DbPlacement       dbplacement.Config `json:",optional"`
 	Payment           PaymentConf        `json:"Payment"`
+	// DataServiceRpc 只在 Payment.Compliance.MinorSpendingGate=realname 时用:按玩家读账号上的实名(GetAccountRealName),
+	// 调用方密钥在环境变量 MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT。
+	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
 }
 
 type PaymentConf struct {
-	// NotifyListenAddr 是渠道回调的 HTTP 监听地址(经 Ingress 暴露到公网;微信只认 80/443)。与 gRPC、指标端口分开。
+	// NotifyListenAddr 是渠道回调的 HTTP 监听地址(K8s 上经 Service payment-notify + 外部负载均衡暴露到公网,HTTPS 在负载均衡上终结;微信只认 80/443)。与 gRPC、指标端口分开。
 	NotifyListenAddr string `json:"NotifyListenAddr"`
 	// NotifyBaseURL 是渠道回调用的公网根地址(如 https://pay.example.com),微信支付、支付宝下单时带上 <根>/notify/<渠道>。
 	NotifyBaseURL  string             `json:"NotifyBaseURL,optional"`
@@ -67,12 +70,25 @@ type ProductConf struct {
 	WechatMinigame string `json:"WechatMinigame,optional"`
 }
 
-// ComplianceConf 是国内收费的合规闸(设计 §12):实名与未成年人消费限额。
-// MinorSpendingGate 目前只有 none(本服务还没接实名与限额):生产模式下 APP 内的真钱渠道拒绝启用;
-// 小游戏渠道的实名与未成年人消费限制由微信 / 抖音平台执行,照常可用(上线前按平台规则核对)。
+// ComplianceConf 是国内收费的合规闸(设计 §12):实名与未成年人消费限额。MinorSpendingGate 取值:
+//   - none:不接实名。生产模式下 App 内的真钱渠道拒绝启用;小游戏渠道的实名与未成年人消费限制由微信 / 抖音平台执行,照常可用。
+//   - realname:建意图前按 data_service 账号目录里的实名执行未成年人充值限额(docs/design/real-name-anti-addiction.md §5.6),
+//     App 渠道才能在生产模式开。小游戏渠道上没有实名的账号仍由平台管。
+//   - overseas:部署在中国大陆以外,不适用上面的法规:App 渠道照开、不读实名。当地的未成年人消费规则由商店(家长控制)与运营按当地法规执行。
 type ComplianceConf struct {
 	MinorSpendingGate string `json:"MinorSpendingGate,default=none"`
+	// 《未成年人网络保护条例》要求的单日累计上限(分),按年龄段:8 周岁以上未满 16 周岁、16 周岁以上未满 18 周岁。
+	// 0 = 不设;数字待负责人定(充值设计 §18 第 7 条)。单次、每月上限是法规定额,写在 shared/antiaddiction。
+	DailyLimitFenAge8To16  uint64 `json:"DailyLimitFenAge8To16,optional"`
+	DailyLimitFenAge16To18 uint64 `json:"DailyLimitFenAge16To18,optional"`
 }
+
+// MinorSpendingGate 的取值。
+const (
+	MinorSpendingGateNone     = "none"
+	MinorSpendingGateRealName = "realname"
+	MinorSpendingGateOverseas = "overseas"
+)
 
 // TestConf 是一个渠道的测试交易(沙箱、许可测试账号)发不发货。生产环境只给审核账号开。
 type TestConf struct {
@@ -212,16 +228,27 @@ func (c Config) Validate() error {
 	if (p.WechatPay.Endpoint != "" || p.Alipay.Gateway != "") && !relaxed {
 		return errors.New("payment config: overriding the WeChat Pay endpoint or the Alipay gateway is only allowed with Mode=dev or Mode=test")
 	}
-	if p.Compliance.MinorSpendingGate != "none" {
-		return fmt.Errorf("payment config: Payment.Compliance.MinorSpendingGate %q is unknown; the only implemented value is none", p.Compliance.MinorSpendingGate)
-	}
-	if !relaxed {
-		for _, name := range []string{"wechat_pay", "alipay", "apple", "google"} {
-			if p.Enabled(name) {
-				return fmt.Errorf("payment config: %s cannot be enabled in production mode before the real-name and minor spending limit gate exists "+
-					"(docs/design/payment-recharge.md §12, §22.8); mini-game channels rely on the platform's own limits", name)
+	switch p.Compliance.MinorSpendingGate {
+	case MinorSpendingGateRealName:
+		d := c.DataServiceRpc
+		if d.Etcd.Key == "" && len(d.Endpoints) == 0 && d.Target == "" {
+			return errors.New("payment config: Payment.Compliance.MinorSpendingGate=realname reads real names through data_service; " +
+				"DataServiceRpc needs one of Etcd.Key, Endpoints or Target")
+		}
+	case MinorSpendingGateOverseas:
+		// 大陆以外的部署:不读实名,App 渠道照开(见 ComplianceConf)。
+	case MinorSpendingGateNone:
+		if !relaxed {
+			for _, name := range []string{"wechat_pay", "alipay", "apple", "google"} {
+				if p.Enabled(name) {
+					return fmt.Errorf("payment config: %s cannot be enabled in production mode with Payment.Compliance.MinorSpendingGate=none; "+
+						"use realname in mainland China or overseas elsewhere (docs/design/payment-recharge.md §12, real-name-anti-addiction.md §5.6); "+
+						"mini-game channels rely on the platform's own limits", name)
+				}
 			}
 		}
+	default:
+		return fmt.Errorf("payment config: Payment.Compliance.MinorSpendingGate %q is unknown; use none, realname or overseas", p.Compliance.MinorSpendingGate)
 	}
 	seen := map[string]bool{}
 	for _, platform := range p.Platforms {

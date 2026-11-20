@@ -32,9 +32,8 @@ import (
 //   - 按需打开**从不建库、不跑 DDL**:只 Ping + 断言连上的库 + 只读 schema 闸,库不存在就报错延后,
 //     绝不会因为一条畸形的落点记录在生产实例上建出一个新库。
 
-// ErrStoreUnavailable 表示落点库暂时拿不到:不被放行、库不存在、连不上或 schema 闸未通过。
-// 调用方(消费者)对写任务一律延后重试且不耗重试次数(§6.1):写进死信等于丢盘,而这类故障修好配置 / 库之后
-// 任务就能落地。
+// ErrStoreUnavailable 表示落点库打不开:不被放行、库不存在、连不上或 schema 闸未通过(打开失败的冷却期内复用上次的错误)。
+// 存盘接口把它回成 codes.Unavailable,scene 按原序号退避重试;审计转发本轮跳过这个库。修好配置 / 库之后照常落地。
 var ErrStoreUnavailable = errors.New("placement store unavailable")
 
 // AdmitStore 的放行依据,用于日志与 cmd/migrate 判断是否需要把库名并进交给迁移 runner 的有效白名单。
@@ -45,13 +44,13 @@ const (
 
 const (
 	// defaultStoreOpenTimeout 是一次按需打开(Ping + DATABASE() 断言 + 只读 schema 闸)的总预算。
-	// 打开发生在 worker 的处理路径上,期间同一子分片的任务都在等,所以远小于启动期的
+	// 打开发生在第一次指向这个库的那次调用里,同一个库的并发调用共享它的结果、一起在等,所以远小于启动期的
 	// schemaDriftCheckTimeout(30s);健康实例上整套核对是毫秒级。
 	defaultStoreOpenTimeout = 10 * time.Second
 
 	// defaultStoreOpenRetryBackoff 是打开失败后的冷却期:期间对同一个库的请求直接返回上次的错误,不再拨号。
-	// 没有冷却时,一个连不上的库会让每条指向它的任务都在 worker 上等满打开预算,同一子分片里与它
-	// 无关的玩家一起被拖住;有了冷却,坏库上的任务秒级转进重试队列,别的玩家照常落库。
+	// 没有冷却时,一个连不上的库会让每次指向它的调用都等满打开预算;有了冷却,这些调用秒级失败,
+	// 由调用方(scene 的存档重试、审计转发的下一轮)按自己的节拍再来,别的库照常落库。
 	defaultStoreOpenRetryBackoff = 10 * time.Second
 )
 
@@ -87,15 +86,9 @@ type StoreRegistryOptions struct {
 	Now          func() time.Time
 	OpenTimeout  time.Duration
 	RetryBackoff time.Duration
-
-	// 以下四个是运行期失联的探活与冷却(store_health.go)。为零时用默认值;Ping 为 nil 时 PingContext 本库连接池。
-	ProbeTimeout time.Duration
-	Cooldown     time.Duration
-	Jitter       func(time.Duration) time.Duration
-	Ping         func(ctx context.Context, store *GameDB) error
 }
 
-// StoreRegistry 按落点编号给出已打开的库。并发安全:所有 worker 子分片共用一个实例。
+// StoreRegistry 按落点编号给出已打开的库。并发安全:进程内所有调用(存档直接提交、审计转发)共用一个实例。
 type StoreRegistry struct {
 	allow         dbguard.Allowlist
 	allowFamilies bool
@@ -108,16 +101,9 @@ type StoreRegistry struct {
 	// 用 go-zero 自带的实现,不为此引入 golang.org/x/sync。
 	flight syncx.SingleFlight
 
-	probeTimeout time.Duration
-	cooldown     time.Duration
-	jitter       func(time.Duration) time.Duration
-	ping         func(ctx context.Context, store *GameDB) error
-
 	mu       sync.RWMutex
 	stores   map[uint32]*GameDB
 	failures map[uint32]storeOpenFailure
-	// cooling 是已打开、但被探活确认不可达、正在冷却的库(store_health.go)。
-	cooling map[uint32]storeCooldown
 }
 
 type storeOpenFailure struct {
@@ -142,22 +128,6 @@ func NewStoreRegistry(opts StoreRegistryOptions) (*StoreRegistry, error) {
 	if retryBackoff <= 0 {
 		retryBackoff = defaultStoreOpenRetryBackoff
 	}
-	probeTimeout := opts.ProbeTimeout
-	if probeTimeout <= 0 {
-		probeTimeout = defaultStoreProbeTimeout
-	}
-	cooldown := opts.Cooldown
-	if cooldown <= 0 {
-		cooldown = defaultStoreCooldown
-	}
-	jitter := opts.Jitter
-	if jitter == nil {
-		jitter = defaultCooldownJitter
-	}
-	ping := opts.Ping
-	if ping == nil {
-		ping = pingStore
-	}
 	metrics.SetPlacementOpenStores(0)
 	return &StoreRegistry{
 		allow:         opts.Allow,
@@ -166,14 +136,9 @@ func NewStoreRegistry(opts StoreRegistryOptions) (*StoreRegistry, error) {
 		now:           now,
 		openTimeout:   openTimeout,
 		retryBackoff:  retryBackoff,
-		probeTimeout:  probeTimeout,
-		cooldown:      cooldown,
-		jitter:        jitter,
-		ping:          ping,
 		flight:        syncx.NewSingleFlight(),
 		stores:        map[uint32]*GameDB{},
 		failures:      map[uint32]storeOpenFailure{},
-		cooling:       map[uint32]storeCooldown{},
 	}, nil
 }
 
@@ -255,15 +220,14 @@ func applyStorePool(handle *sql.DB, pool StorePoolOptions) {
 //
 // 参数里的 context 不参与打开:同一个库的打开结果被所有并发请求共享,不能随第一个调用方的取消一起失败;
 // 打开用自己的有界 context(openTimeout)。返回的错误一律包着 ErrStoreUnavailable。
+//
+// 已打开的库在运行期失联时照常交出:每次调用自己等到拨号 / 读超时或调用方的截止时间后失败,由调用方退避重试。
+// 没有运行期冷却是定案(2026-11-19,依据见 docs/design/db-task-store-unavailable-deferral.md 文首)。
 func (r *StoreRegistry) Store(_ context.Context, storageID uint32) (*GameDB, error) {
 	r.mu.RLock()
 	store := r.stores[storageID]
-	cooling, isCooling := r.cooling[storageID]
 	r.mu.RUnlock()
 	if store != nil {
-		if isCooling {
-			return r.storeAfterCooldown(storageID, store, cooling)
-		}
 		return store, nil
 	}
 
@@ -406,7 +370,6 @@ func OpenPlacementStore(ctx context.Context, dbName string, pool StorePoolOption
 		_ = handle.Close()
 		return nil, fmt.Errorf("verify player store %s: %w", dbName, err)
 	}
-	store.Connector = connector
 	return store, nil
 }
 

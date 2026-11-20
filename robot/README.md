@@ -37,6 +37,26 @@ zone_id: 0
 
 分配后的持票查询与恢复由 `AssignGateWithQueue` 处理，契约见[开服削峰设计 §11.5](../docs/design/open-server-rate-limit-design.md)。
 
+## 传输方式
+
+缺省走 TCP,与原生客户端相同。微信 / 抖音小游戏只有 WebSocket,gate 与 battle 的客户端端口两种连接都接
+([设计](../docs/design/minigame-websocket-gate.md))。要让机器人走小游戏那条路,在任意一份配置里加:
+
+```yaml
+transport:
+  kind: websocket             # 缺省 tcp
+  require_advertised: false   # true = 服务端没下发 WebSocket 地址就失败,不回落到直连;经边缘验证时打开
+  dial_addr: ""               # 实际拨的 host:port,握手的 Host 与 TLS 的 SNI 仍按下发地址;边缘域名在本机解析不到时用
+  insecure_skip_verify: false # 不校验边缘证书,只给自签证书的测试环境
+```
+
+- 对所有模式生效:登录、跟随重定向(msg 124)、战斗直连、地域测速、`heartbeat-idle-smoke` 的裸连接都按它连。
+- 地址:服务端下发了就用下发的(assign-gate / queue-status 的 `gate_ws_url`、msg 124 的 `target_ws_url`、战斗分配与测速目标的
+  `ws_url`);没下发时直连 `ws://<ip>:<端口>/`。本机栈没有边缘、节点也不自报地址,靠这条回落就能跑。
+- 后三项只在 `kind: websocket` 下有效,写了却没选 websocket 会拒绝启动(否则等于悄悄测了 TCP)。
+- 实现上每条连接多一个本机回环监听和一跳回环 TCP(`muduoclient` 只会自己拨 TCP),适合冒烟与小规模,不要拿它打高并发压测。
+  代码在 `pkg/transport.go`。
+
 ## 模式
 
 | `mode` | 做什么 |

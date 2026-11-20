@@ -10,7 +10,7 @@
 
 ## 1. 问题与现状
 
-会话对账兜住「gate 整机崩溃 → 断线回调不执行 → SetDisconnecting 永远不来 → 会话永久 ONLINE」。gate 崩溃时断线通知根本不发(`cpp/nodes/gate/handler/rpc/client_message_processor.cpp` 单向通知、不重试),会话键又没有 TTL,对账是这类会话唯一的自愈路径。
+会话对账兜住「gate 整机崩溃 → 断线回调不执行 → SetDisconnecting 永远不来 → 会话永久 ONLINE」。gate 活着时断线通知至少送达一次:gate 持有这条通知,login 只在关栅栏与 SetDisconnecting 都成功后才回成功,没成就由 gate 退避重发(`cpp/nodes/gate/handler/rpc/login_session_renewal.h`,2026-11-19 落码,未编译)。gate 进程一没(崩溃、kill,或停机时还没送达),它手里的通知随之消失,会话键又没有 TTL,对账是这类会话唯一的自愈路径。
 
 旧实现(2026-08-10 起,HEAD 360d56ae5 之前):每个 zone 的每个 locator 副本各自每 60s `SCAN MATCH player:session:* COUNT 500` 走完整个共享 Redis 键空间,命中的键逐个 GET。所有 zone 的 locator 连同一个 Redis(D12),所以全服 2Z 个实例在重复扫同一个键空间。根因:会话键按 player_id 散列,没有按 gate 的二级结构,判定「哪些会话挂在死 gate 上」只能扫全库。负载推算见 §7。
 
@@ -170,7 +170,7 @@ last_success{index} 按「完成一拍」推进:预算截断、被跳过的单�
 
 **能力键**(2026-10-31 按 slot 分桶换 v2 前缀,就绪标记的值前缀同步换 `v2:`。项目未上线,没有 v1 写者要迁移,这只是让形状变化时的旧写者判定继续成立):新版 locator 的 etcd 注册事务多写一个同租约的能力键(`node.WithLeaseBoundMarkers`;首注册、换 node_id 重新分配、租约丢失后的重注册三处都带上)。NodeInfo 与能力键同生同灭,不存在「有 NodeInfo 没能力键」的误判窗口;Close 时先删 NodeInfo 再撤租约,窗口是「有能力键没 NodeInfo」,不会被判为旧写者。能力键不放在 `PlayerLocatorNodeService.rpc/` 下:C++ 把该前缀当 zone 级发现前缀解析,混进非 NodeInfo 值有解析风险。
 
-allocator 是 guild / scene_manager / match / client_rpc_router / data_service 的逐字副本(各文件头有约定)。主体保持逐字,只在 player_locator 加一个可选的 `extraOps` 变参钩子(缺省为空),其余副本头注释登记了这一处差异。
+注册本身由 `go/shared/noderegistry` 做(2026-11-19 起 `internal/node` 只是它的薄适配层,断线重连 R3):`node.WithLeaseBoundMarkers` 收集的前缀原样交给共享包的 `Spec.LeaseBoundMarkers`,由它在同一笔注册事务、同一个租约里写能力键。原来各服务逐字复制的 allocator 与 player_locator 自加的 `extraOps` 钩子都已删除。
 
 **升级**(只涉及 player_locator,任意顺序逐 zone 发布,不需要开关):
 
@@ -231,7 +231,11 @@ allocator 是 guild / scene_manager / match / client_rpc_router / data_service �
 3. **补建不续点**:换主后新 leader 从头扫(游标不持久化)。目标规模下一遍接近 19 小时(§7),发版频率高于这个时,补建可能总被打断,`PlayerLocatorGateIndexNotReady` 会亮(该告警用短子查询抹平换主空档,24 小时里有换主也照样能等满,§9);后续改进是把 SCAN 游标与代次一起存进 Redis。让一遍从头重来的来源不止换主:单页连续 5 次失败(Redis 长时间抖动)、**任何一次 SCAN 失败**(ScanEachMaster 不重试,玩家域客户端又不自动重放,一次超时就作废一遍;2026-10-31 换成 ScanEachMaster 的代价,SCAN 是只读的,后续可以在 ScanEachMaster 里对同一游标重试)、扫描期间拓扑或节点身份变化、补建开始前写者检查失败、补建期间出现旧写者(gen 变化)都会让这一遍作废;审计失败则冷却 1 小时后重来。
    - (2026-10-18 评审增补)读不到 `run_id`(托管 Redis 屏蔽 INFO 或不返回该字段)时每一遍都作废,补建永远不会宣布就绪、只能一直跑限速的全键扫描;NotReady 会亮,届时需改用别的重启探测。
 4. **环境隔离前提**:所有共用同一会话 Redis 的 locator 必须注册在 reconciler 读的同一个 etcd。多套环境共用 etcd:别的环境的旧版 locator 被误判为旧写者,只多补建。多套环境共用 Redis 但 etcd 不同:别的环境的 gate 会被当成死 gate、误转换 —— 旧实现同样存在,非本项引入。
-5. **覆盖面与旧实现相同**:gate 存活、但断线通知在 gate→login 或 login→locator 上丢失的会话,对账看不到。人工补救见 `docs/ops/release-checklist.md` 附录 F.B-1「定向补救」。按 gate 建的索引为后续「gate 定期上报自己持有的会话,locator 与索引求差」创造了条件。
+5. **gate 活着时漏掉的断线通知,对账看不到**(覆盖面与旧实现相同)。2026-11-19 起这一类只剩两种:
+   - gate 的待送达表满时拒收的通知。gate→login、login→locator 上的失败都会被 gate 原样重发,直到 login 确认,不再丢;但一台 gate 最多存 131071 条,满了新来的不入表,gate 打带 player_id 的 ERROR 并计 `gate_login_disconnect_total{result="dropped"}`。要 login 或 player_locator 长时间不可用、同时这台 gate 上断开的连接超过这个数才会出现;
+   - login 的 EnterGame 后台链补挂断线租约穷尽重试(login 打 `CRITICAL: session stuck ONLINE`)。这条补偿没有上游会重发。
+
+   这两种都按 `docs/ops/release-checklist.md` 附录 F.B-1「定向补救」人工处理。gate 进程没了的那一类(包括停机时还没送达、拆除前 gate 打 `[LoginDisconnect] N Disconnect notices were not confirmed` 的那些)由死 gate 清扫补投,不用人工。按 gate 建的索引为后续「gate 定期上报自己持有的会话,locator 与索引求差」创造了条件。
 6. **miniredis 与真实 Redis 的差异**:`string.sub`、`redis.pcall`、SSCAN 游标语义(miniredis 按偏移,删除期间会跳过元素;生产 Redis 不会),以及 miniredis 不是集群、CROSSSLOT 只靠发送前守卫与契约测试拦。需在真实 Redis 上按 §12 末尾的步骤核对,上 Cluster 后按总设计 §14.2 再跑一遍。
 7. **GateInstanceId 不做字符集校验**:不合法的值不建索引会让那条会话永远不被对账,比照写更糟;gate uuid 由 C++ uuid 生成器产出。
 8. **回滚后 3.5 拍内又再升级**(2026-10-18 评审增补):若期间没有任何新版 leader 在一次成功的 etcd 读里看到旧 Pod,残留的就绪标记还在租约内,第一任新 leader 读到零旧写者会直接续上它(§6)。回滚窗口里旧写者写的 ONLINE 会话不在索引里,这些会话所在的 gate 一旦死掉,要等日审计才补进索引后处理。窗口长度不超过 3.5 拍;兜底是日审计与 `PlayerLocatorGateIndexAuditRepaired` 告警。与残余风险 1 同类(「只活在没有新版 leader 的时段」的旧写者),根因是标记只能由看见旧写者的读来作废。

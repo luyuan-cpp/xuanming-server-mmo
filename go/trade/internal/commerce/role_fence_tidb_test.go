@@ -385,7 +385,7 @@ func insertFenceFixture(t *testing.T, db *sql.DB, table string, row proto.Messag
 // prepareFreeze 走真的 PrepareRoleFreeze:鉴权、写副本、读挂起,有挂起就回滚。
 func prepareFreeze(t *testing.T, db *sql.DB, state *rfpb.RoleFenceState) *rfpb.PrepareRoleFreezeResponse {
 	t.Helper()
-	server, err := rolefence.NewParticipantServer(db, RolePending, fenceCoordinatorSecret)
+	server, err := rolefence.NewParticipantServer(db, RolePending, RolePurge, fenceCoordinatorSecret)
 	require.NoError(t, err)
 	in := &rfpb.PrepareRoleFreezeRequest{State: state}
 	require.NoError(t, serviceauth.Sign(rfpb.RoleFenceParticipant_PrepareRoleFreeze_FullMethodName, in, rolefence.CoordinatorCaller, fenceCoordinatorSecret, uint64(time.Now().UnixMilli())))

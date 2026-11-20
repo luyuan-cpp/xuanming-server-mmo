@@ -75,7 +75,7 @@ function Get-WorkloadBlock {
 # 名单同 k8s_deploy.ps1 的 $script:SqlWriterGoSvcs。
 function Get-ServiceWorkloadKind {
     param([Parameter(Mandatory = $true)][string]$Name)
-    if (@('db', 'data-service', 'login', 'chat', 'friend', 'guild', 'mail', 'rank', 'match', 'trade', 'player-inbox') -ccontains $Name) { return 'StatefulSet' }
+    if (@('db', 'data-service', 'login', 'chat', 'friend', 'guild', 'mail', 'rank', 'payment', 'match', 'trade', 'player-inbox') -ccontains $Name) { return 'StatefulSet' }
     return 'Deployment'
 }
 

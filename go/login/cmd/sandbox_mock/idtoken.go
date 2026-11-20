@@ -86,19 +86,27 @@ func (i *idTokenIssuer) mintHandler(issuer string, ttl time.Duration, salt strin
 		if user == "EXPIRED" {
 			iat, exp = iat.Add(-2*time.Hour), iat.Add(-time.Hour)
 		}
+		// jti 每次不同:RS256 签名是确定的,同一种子同一秒签出的令牌会逐字节相同,而 login 把身份令牌做成一次性的
+		// (docs/design/account-deletion.md §3.4),第二次登录会被当成重放。真实渠道的令牌也各不相同。
 		token, err := i.sign(map[string]any{
 			"iss": issuer,
 			"aud": aud,
 			"sub": "sandbox_" + hashTo12(user, salt),
 			"iat": iat.Unix(),
 			"exp": exp.Unix(),
+			"jti": randomHex(8),
 		})
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			writeJSON(w, map[string]any{"error": "sign failed"})
 			return
 		}
-		writeJSON(w, map[string]any{"id_token": token})
+		out := map[string]any{"id_token": token}
+		if issuer == sandboxAppleIssuer {
+			// 代替 Apple 在同一次授权里给的授权码,申请注销时连同令牌一起送(apple_revoke.go 的 /auth/token 认它)。
+			out["authorization_code"] = "mock-code-" + randomHex(8)
+		}
+		writeJSON(w, out)
 	}
 }
 

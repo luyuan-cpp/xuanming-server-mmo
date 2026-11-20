@@ -19,10 +19,12 @@ import (
 	"scene_manager/internal/server"
 	"scene_manager/internal/svc"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/generated/table"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/leader"
+	sharedregistry "shared/noderegistry"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/shutdownbudget"
@@ -45,6 +47,9 @@ var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 // safego 点位名(会变成 safego_panic_total 的 label,必须是常量)。
 const safePointSnowflakeLeaseWatch = "scene_manager.snowflake_lease_watch"
 
+// listenProbeTimeout 是注册 C++ NodeInfo 之前等本进程 gRPC 端口可连的上限(与 match / chat 同值)。
+const listenProbeTimeout = 30 * time.Second
+
 func main() {
 	flag.Parse()
 	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
@@ -53,6 +58,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("scene_manager")
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
@@ -232,6 +238,17 @@ func main() {
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
 	defer s.Stop()
 
+	// **先起 gRPC,再注册**(R19,照 match / chat):C++ scene 一看到 NodeInfo 就会拨,端口还没 accept 时注册等于公布一个
+	// 会拒连的节点。Start 阻塞到服务退出,所以放后台 goroutine;刻意用裸 go:Start 在监听失败时 panic,那就应该让进程死掉。
+	serveDone := make(chan struct{})
+	go func() {
+		defer close(serveDone)
+		s.Start()
+	}()
+	if err := sharedregistry.WaitForListening(context.Background(), c.ListenOn, listenProbeTimeout); err != nil {
+		panic("SceneManager gRPC port is not accepting, refusing to register in etcd: " + err.Error())
+	}
+
 	// Register with etcd in C++ NodeInfo convention so Scene nodes can discover us.
 	host, port := parseListenOn(c.ListenOn)
 	nr, err := noderegistry.Register(
@@ -298,7 +315,7 @@ func main() {
 		})
 	}
 
-	s.Start()
+	<-serveDone
 }
 
 // buildUnaryInterceptors 组装本服务的一元拦截器链。

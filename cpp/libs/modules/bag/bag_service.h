@@ -53,8 +53,10 @@ public:
 	//
 	// 本类是这件事的唯一出口:下面每个出包入口在**成功**之后各调一次 NotifySpaceFreed,玩法入口(使用、出售、丢弃、寄出、
 	// 上架托管、存仓库……)只要经这些入口出包就自动唤醒,不各自去调收件箱:
-	//   RemoveItem、RemoveItemsExact、RemoveItemsByGuid(整批销毁成功)、RemoveItemsClamped 与 ConsumeInventoryAndGrant
-	//   (真扣到了东西)、MergeAndCompact / SortByPlayerRequest(合堆退役了实例)、RetrieveFromTemporary(临时格搬走了实例)。
+	//   RemoveItem、RemoveItemsExact、RemoveItemsByGuid(整批销毁成功)、RemoveItemsClamped、ConsumeInventoryAndGrant 与
+	//   ExchangeInventoryExact(真扣到了东西)、MergeAndCompact / SortByPlayerRequest(合堆退役了实例)、
+	//   RetrieveFromTemporary(临时格搬走了实例)。以后加扩容 / 解锁格子的入口(今天 Bag::ExpandCapacity 没有生产调用方)
+	//   同样要在成功之后调 NotifySpaceFreed。
 	// 「腾出位置」只看这两个包里有没有东西被移走 —— 实例销毁或搬走(格子空出来),或可叠加的堆被扣掉一部分(同种物品又能并进去);
 	// 不算净值:同一笔里又放进了东西(兑换的获得、取回进人物背包)照样通知,订阅方只是把下一次尝试提前,放不下就照常退避。
 	// 仓库、装备栏、动态包不通知:入账不落在那里。失败、一件没动的调用不通知。

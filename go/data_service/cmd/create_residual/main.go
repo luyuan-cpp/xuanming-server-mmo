@@ -11,7 +11,9 @@
 // -repair 带 name 时必须给 -name-cache-addrs(ControlRedis.Addrs,逗号分隔的种子地址;ControlRedis.Cluster 为真时再加 -name-cache-cluster),
 // 口令从 -name-cache-pass-env 指的环境变量读。
 //
-// 连接用维护身份(MMORPG_SQL_OPERATOR_PRINCIPAL),不过写者闸门,每笔写在事务里自己锁本库闸门行;库被搬库或维护冻结时那一项拒绝。
+// 连接用修复身份(MMORPG_SQL_REPAIR_PRINCIPAL,授权由 tools/scripts/maintenance_drain.ps1 的 render-repair-role 生成,
+// plan 与 apply 同一个身份;维护身份不授业务表,负责人 2026-11-19 定),不过写者闸门,每笔写在事务里自己锁本库闸门行;
+// 库被搬库或维护冻结时那一项拒绝。
 // 库在哪按映射(MMORPG_DB_PLACEMENT)逐库解析,没有映射就拒绝,不连连接串里的地址。
 package main
 
@@ -68,7 +70,7 @@ type opener func(ctx context.Context, o options) (auditor, func(), error)
 
 func main() {
 	var o options
-	flag.StringVar(&o.dsnEnv, "dsn-env", "CREATE_RESIDUAL_DSN", "全局库 DSN 所在的环境变量名(维护身份)")
+	flag.StringVar(&o.dsnEnv, "dsn-env", "CREATE_RESIDUAL_DSN", "全局库 DSN 所在的环境变量名(修复身份)")
 	flag.StringVar(&o.schema, "schema", "", "目录基名(SnapshotMySQL.DBName),DSN 的库名要写它")
 	flag.IntVar(&o.logicalShards, "logical-shards", 1, "目录分片数(Directory.LogicalShards)")
 	flag.StringVar(&o.stores, "storage-ids", "", "要核的存档库 storage_id,逗号分隔;落点不在里面的角色只报 storage_not_listed")
@@ -254,9 +256,9 @@ func openAuditor(ctx context.Context, o options) (auditor, func(), error) {
 	if err != nil {
 		return nil, nil, errors.New("invalid " + authoritysql.BackendEnv)
 	}
-	permission, err := authoritysql.LoadOperatorPermission(os.Getenv)
+	permission, err := authoritysql.LoadRepairPermission(os.Getenv)
 	if err != nil {
-		return nil, nil, errors.New("missing SQL operator identity")
+		return nil, nil, errors.New("missing SQL repair identity (" + authoritysql.RepairPrincipalEnv + ")")
 	}
 	// 从环境读 DSN 后只取连接配置,错误里不回显原 DSN 或密码。
 	cfg, err := mysql.ParseDSN(os.Getenv(o.dsnEnv))

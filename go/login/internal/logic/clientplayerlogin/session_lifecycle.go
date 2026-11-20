@@ -66,9 +66,12 @@ func sessionPlayersToSettle(fromGate, bound uint64) []uint64 {
 	return players
 }
 
-// deletePlayerSession / markPlayerSessionDisconnecting 的 gateInstanceID 是发起这次清理的 gate 实例 uuid
+// deletePlayerSession / markPlayerSessionDisconnecting(WithRetry) 的 gateInstanceID 是发起这次清理的 gate 实例 uuid
 // (Disconnect / LeaveGame 取 SessionDetails.gate_instance_id,入场链补偿取 state.gateInstanceID)。
 // player_locator 据此忽略旧实例迟到的同号上报;空 = 不校验(docs/design/scene-enter-chain-residuals.md §6)。
+// markPlayerSessionDisconnecting(WithRetry) 另带同一条连接的会话代次(SessionDetails.session_incarnation,入场链补偿取
+// state.fenceKey.Incarnation),player_locator 按同一规则忽略同一 gate 进程里同号旧连接迟到的断线;0 = 不校验
+// (docs/design/gate-online-identity.md §10.4「断线通知」)。
 func deletePlayerSession(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, sessionID uint32, gateInstanceID string) {
 	if playerID == 0 || sessionID == 0 {
 		return
@@ -79,27 +82,42 @@ func deletePlayerSession(ctx context.Context, svcCtx *svc.ServiceContext, player
 	}
 }
 
-func markPlayerSessionDisconnecting(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, sessionID uint32, gateInstanceID string) {
+// markPlayerSessionDisconnecting 调一次 player_locator 的 SetDisconnecting(会话转成 DISCONNECTING、挂 30s 断线租约),
+// 失败原样返回,自己不重试:重试只放在一层(docs/design/infra-reconnect-overview.md §1.3)。
+//
+// 这一步是整条清理状态机的**唯一**入口:只有 SetDisconnecting 的 Lua 会把玩家 ZADD 进租约 ZSET,LeaseMonitor 只消费该 ZSET。
+// 会话键又是无 TTL 写入的,所以失败不能吞掉,由调用方兜住:
+//   - Disconnect 回 Unavailable,gate 持有这条通知、退避重发到成功为止(cpp/nodes/gate/handler/rpc/login_session_renewal.h);
+//   - EnterGame 后台链的补偿没有上游会重发,用 markPlayerSessionDisconnectingWithRetry。
+//
+// 重放安全:会话已是 DISCONNECTING 时 player_locator 直接回成功、不延长租约;会话号、gate 实例或会话代次对不上时忽略。
+func markPlayerSessionDisconnecting(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, sessionID uint32,
+	gateInstanceID string, sessionIncarnation uint64,
+) error {
 	if playerID == 0 {
-		return
+		return nil
 	}
+	if err := sessionmanager.SetSessionDisconnecting(ctx, svcCtx.PlayerLocatorClient, playerID, sessionID, gateInstanceID, sessionIncarnation); err != nil {
+		return err
+	}
+	logx.Infof("Session disconnecting with 30s lease: player=%d session=%d gate_instance=%q incarnation=%d",
+		playerID, sessionID, gateInstanceID, sessionIncarnation)
+	return nil
+}
 
-	// 这一步是整条清理状态机的**唯一**入口:只有 SetDisconnecting 的 Lua 会把
-	// 玩家 ZADD 进租约 ZSET,LeaseMonitor 只消费该 ZSET。会话键又是无 TTL 写入
-	// 的,所以这条 RPC 丢了 = 会话永久停留 ONLINE(公会永久显示在线、
-	// LeaveScene 永不执行、位置与实例人数泄漏),没有任何对账路径能补救。
-	// gate 侧发出通知前就删了本地会话、也不重试 —— login 是最后一道有状态的
-	// 关口,不能一次失败就吞掉。带退避重试若干次,吃掉 player_locator
-	// 发版/重启量级的不可用窗口;仍失败则 CRITICAL 级日志留人工线索
-	// (兜底是 docs/ops/release-checklist.md 附录 F.B-1 的「定向补救」:按日志里的玩家逐个补投断线。
-	// gate 已死的那一类由 player_locator 的死 gate 清扫自动补投,不用人工;不做全键 SCAN)。
+// markPlayerSessionDisconnectingWithRetry 是 EnterGame 后台链补偿用的版本(entergamelogic.go compensateFenceBind):
+// 后台链早已回过受理,gate 不知道这次补偿,没有上游会重发,所以这里自己带退避重试若干次,吃掉 player_locator
+// 发版 / 重启量级的不可用窗口;仍失败则 CRITICAL 级日志留人工线索(兜底是 docs/ops/release-checklist.md 附录 F.B-1 的
+// 「定向补救」:按日志里的玩家逐个补投断线。gate 已死的那一类由 player_locator 的死 gate 清扫自动补投,不用人工;不做全键 SCAN)。
+func markPlayerSessionDisconnectingWithRetry(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, sessionID uint32,
+	gateInstanceID string, sessionIncarnation uint64,
+) {
 	const maxAttempts = 4
 	backoff := 200 * time.Millisecond
 	var lastErr error
 	for attempt := 1; ; attempt++ {
-		lastErr = sessionmanager.SetSessionDisconnecting(ctx, svcCtx.PlayerLocatorClient, playerID, sessionID, gateInstanceID)
+		lastErr = markPlayerSessionDisconnecting(ctx, svcCtx, playerID, sessionID, gateInstanceID, sessionIncarnation)
 		if lastErr == nil {
-			logx.Infof("Session disconnecting with 30s lease: player=%d session=%d gate_instance=%q", playerID, sessionID, gateInstanceID)
 			return
 		}
 		if attempt >= maxAttempts || ctx.Err() != nil {
@@ -115,6 +133,6 @@ func markPlayerSessionDisconnecting(ctx context.Context, svcCtx *svc.ServiceCont
 	}
 
 	logx.Severef("CRITICAL: session stuck ONLINE — SetSessionDisconnecting exhausted retries "+
-		"player=%d session=%d gate_instance=%q err=%v (manual fix: see release-checklist F.B-1 targeted remediation)",
-		playerID, sessionID, gateInstanceID, lastErr)
+		"player=%d session=%d gate_instance=%q incarnation=%d err=%v (manual fix: see release-checklist F.B-1 targeted remediation)",
+		playerID, sessionID, gateInstanceID, sessionIncarnation, lastErr)
 }

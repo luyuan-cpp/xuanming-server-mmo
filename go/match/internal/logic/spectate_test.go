@@ -89,7 +89,7 @@ func registerPrivateBattle(t *testing.T, svcCtx *svc.ServiceContext, battleId ui
 	registerSpectateBattle(svcCtx, battleId, matchpb.MatchMode_MATCH_MODE_1V1, nowMs())
 	require.Equal(t, activeBefore, activeIndexSize(t, svcCtx), "私密局登记后不进活跃集合")
 	if stale {
-		_, err := svcCtx.MatchRedis.Zadd(spectateBattlesActiveKey, int64(nowMs()), strconv.FormatUint(battleId, 10))
+		_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.keyFor(battleId), int64(nowMs()), strconv.FormatUint(battleId, 10))
 		require.NoError(t, err)
 	}
 }
@@ -101,9 +101,7 @@ func staleCreatedAtMs() uint64 {
 
 func activeIndexSize(t *testing.T, svcCtx *svc.ServiceContext) int {
 	t.Helper()
-	card, err := svcCtx.MatchRedis.Zcard(spectateBattlesActiveKey)
-	require.NoError(t, err)
-	return card
+	return spectateIndexSize(t, svcCtx, spectateActiveIndex)
 }
 
 // ---- 索引 ----
@@ -115,10 +113,8 @@ func TestSpectateRegisterRemoveRoundTrip(t *testing.T) {
 	createdAt := nowMs()
 	registerSpectateBattle(svcCtx, battleId, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, createdAt)
 
-	members, err := mr.ZMembers(spectateBattlesActiveKey)
-	require.NoError(t, err)
-	require.Equal(t, []string{"880001"}, members)
-	score, err := mr.ZScore(spectateBattlesActiveKey, "880001")
+	require.Equal(t, []string{"880001"}, spectateIndexMembers(t, mr, spectateActiveIndex))
+	score, err := mr.ZScore(spectateActiveIndex.keyFor(battleId), "880001")
 	require.NoError(t, err)
 	require.Equal(t, float64(createdAt), score)
 
@@ -132,7 +128,7 @@ func TestPickRandomBattleNeverReturnsStaleOrGarbage(t *testing.T) {
 	fresh, stale := uint64(880010), uint64(880011)
 	registerBattle(t, svcCtx, fresh, nowMs())
 	registerBattle(t, svcCtx, stale, staleCreatedAtMs())
-	_, err := svcCtx.MatchRedis.Zadd(spectateBattlesActiveKey, int64(nowMs()), "not-a-battle-id")
+	_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.bucketKey(3), int64(nowMs()), "not-a-battle-id")
 	require.NoError(t, err)
 
 	for i := 0; i < 10; i++ {
@@ -147,7 +143,7 @@ func TestPickRandomBattleEvictsAllBadMembersAndReportsNone(t *testing.T) {
 	svcCtx, _ := newTestSvcCtx(t)
 	stale := uint64(880012)
 	registerBattle(t, svcCtx, stale, staleCreatedAtMs())
-	_, err := svcCtx.MatchRedis.Zadd(spectateBattlesActiveKey, int64(nowMs()), "garbage")
+	_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.bucketKey(5), int64(nowMs()), "garbage")
 	require.NoError(t, err)
 
 	picked, err := pickRandomBattle(svcCtx)
@@ -180,9 +176,7 @@ func TestCleanupExpiredSpectateIndexKeepsFresh(t *testing.T) {
 
 	cleanupExpiredSpectateIndex(svcCtx)
 
-	members, err := mr.ZMembers(spectateBattlesActiveKey)
-	require.NoError(t, err)
-	require.Equal(t, []string{"880020"}, members)
+	require.Equal(t, []string{"880020"}, spectateIndexMembers(t, mr, spectateActiveIndex))
 }
 
 // ---- 列表 ----
@@ -194,7 +188,7 @@ func TestListWatchableBattlesNewestFirstAndEvictsOrphans(t *testing.T) {
 	registerBattle(t, svcCtx, 880030, base-3000, "老场")
 	registerBattle(t, svcCtx, 880031, base-2000, "中场")
 	registerBattle(t, svcCtx, 880032, base-1000, "新场")
-	_, err := svcCtx.MatchRedis.Zadd(spectateBattlesActiveKey, int64(base), "880033") // 孤儿
+	_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.keyFor(880033), int64(base), "880033") // 孤儿
 	require.NoError(t, err)
 
 	resp, err := NewListWatchableBattlesLogic(context.Background(), svcCtx).
@@ -271,9 +265,7 @@ func TestListWatchableBattlesHidesPrivateMember(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resp.GetBattles(), 1)
 	require.Equal(t, public, resp.GetBattles()[0].GetBattleId())
-	members, err := mr.ZMembers(spectateBattlesActiveKey)
-	require.NoError(t, err)
-	require.Equal(t, []string{strconv.FormatUint(public, 10)}, members, "私密成员被摘掉")
+	require.Equal(t, []string{strconv.FormatUint(public, 10)}, spectateIndexMembers(t, mr, spectateActiveIndex), "私密成员被摘掉")
 }
 
 // COMPLETE 之后成局仍是 state 4:读到终局已落定的场不列出,这场的观战数据一并摘掉(R2-GO 严重-1)。

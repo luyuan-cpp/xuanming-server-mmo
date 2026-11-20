@@ -182,6 +182,48 @@ inline IdleCheck DecideIdleCheck(const ClientLiveness &liveness, const SteadyTim
 	return {IdleVerdict::kDead, now};
 }
 
+// 本端 loop 是否刚卡过。由一个按 checkPeriod 周期运行的定时器调 Tick:两拍之间隔了两个节拍以上,说明 loop 卡过,
+// 客户端的帧可能还在接收缓冲里没读,「建连多久还没验签」「多久没收到帧」这类按时长关连接的判定这时不可信。
+// LivenessSweeper 每轮扫描 Tick 一次;不走它的(battle 直连面)自己起一个节拍定时器 Tick。
+// gate 与 battle 的未验签淘汰(accept_admission.h DecidePreAuth)在 RecentlyStalled 时不淘汰。
+class LoopStallWatch
+{
+public:
+	explicit LoopStallWatch(const std::chrono::milliseconds checkPeriod) : checkPeriod_(checkPeriod) {}
+
+	// 距上一拍多久;还没有过一拍时为空。
+	std::optional<SteadyTime::duration> GapSinceLastTick(const SteadyTime now) const
+	{
+		if (!lastTickAt_)
+		{
+			return std::nullopt;
+		}
+		return now - *lastTickAt_;
+	}
+
+	// 记一拍,返回这一拍是否迟到:距上一拍超过两个节拍。首拍没有参照,不算迟到。
+	bool Tick(const SteadyTime now)
+	{
+		const std::optional<SteadyTime::duration> gap = GapSinceLastTick(now);
+		lastTickLate_ = gap && *gap > 2 * checkPeriod_;
+		lastTickAt_ = now;
+		return lastTickLate_;
+	}
+
+	// 现在按时长关连接是否不安全:还没有过一拍;上一拍本身迟到(刚恢复,积压的输入可能还没读完);
+	// 或距上一拍已超过两个节拍(loop 正卡着,或刚恢复、节拍还没轮到)。
+	bool RecentlyStalled(const SteadyTime now) const
+	{
+		const std::optional<SteadyTime::duration> gap = GapSinceLastTick(now);
+		return !gap || lastTickLate_ || *gap > 2 * checkPeriod_;
+	}
+
+private:
+	std::chrono::milliseconds checkPeriod_;
+	std::optional<SteadyTime> lastTickAt_;
+	bool lastTickLate_{false};
+};
+
 // 检查点堆(gate 用):按到期时刻排序的 (到期时刻, session_id, 会话代次, 种类)。一条连接至多同时有两个检查点:
 //   - 握手检查点:建连时登记,在建连 + handshakeTimeout 到期;到期时已验签就作废;
 //   - 空闲检查点:开始跟踪时登记,之后每条跟踪中的连接恰好一个。到期时距上一帧不足 idleTimeout 就按
@@ -217,7 +259,7 @@ public:
 		uint64_t idleClosed{0};        // 跟踪中、静默满 idleTimeout,已回调 onIdle
 	};
 
-	explicit LivenessSweeper(const ClientLivenessPolicy &policy) : policy_(policy) {}
+	explicit LivenessSweeper(const ClientLivenessPolicy &policy) : policy_(policy), stall_(policy.checkPeriod) {}
 
 	// 建连时调用(会话还没验签时):建连 + handshakeTimeout 到期仍未验签就关。
 	void ExpectHandshake(const uint32_t sessionId, const uint64_t incarnation, const SteadyTime connectedAt)
@@ -242,13 +284,12 @@ public:
 		SweepResult result;
 		// 距上一次扫描超过两个节拍,说明本端 loop 卡过:客户端的帧可能还在接收缓冲里没读
 		// (Linux muduo 的 timerfd 与连接 fd 在同一次 epoll_wait 里返回、先后不定)。这一轮不关任何连接,
-		// 改在约一个节拍后、积压的输入已经读过时再判。首轮扫描没有参照,不算迟到。
-		if (lastSweepAt_)
+		// 改在约一个节拍后、积压的输入已经读过时再判。首轮扫描没有参照,不算迟到。判定口径在 LoopStallWatch。
+		if (const std::optional<Duration> gap = stall_.GapSinceLastTick(now))
 		{
-			result.checkGap = now - *lastSweepAt_;
-			result.late = result.checkGap > 2 * policy_.checkPeriod;
+			result.checkGap = *gap;
 		}
-		lastSweepAt_ = now;
+		result.late = stall_.Tick(now);
 		// 新登记的检查点到期时刻都晚于 now,本轮不会再被取出。
 		while (!checkpoints_.empty() && checkpoints_.top().due <= now)
 		{
@@ -305,6 +346,9 @@ public:
 	// 堆里的检查点数,含已关闭会话、已验签连接尚未到期的那些。只用于观测(汇总日志),不参与判定。
 	std::size_t PendingChecks() const { return checkpoints_.size(); }
 
+	// 本端 loop 是否刚卡过(口径见 LoopStallWatch::RecentlyStalled;节拍就是本类的扫描)。
+	bool LoopRecentlyStalled(const SteadyTime now) const { return stall_.RecentlyStalled(now); }
+
 	const ClientLivenessPolicy &policy() const { return policy_; }
 
 private:
@@ -328,7 +372,7 @@ private:
 
 	ClientLivenessPolicy policy_;
 	std::priority_queue<Checkpoint, std::vector<Checkpoint>, DueLater> checkpoints_;
-	std::optional<SteadyTime> lastSweepAt_;
+	LoopStallWatch stall_;
 };
 
 } // namespace client_liveness

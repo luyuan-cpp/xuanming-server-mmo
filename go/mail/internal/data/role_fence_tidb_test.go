@@ -118,7 +118,7 @@ func TestTiDBGuildLookupFailureOnlyHidesGuildText(t *testing.T) {
 
 func mailPrepareFreeze(t *testing.T, ctx context.Context, db *sql.DB, token uint64) *rfpb.PrepareRoleFreezeResponse {
 	t.Helper()
-	server, err := rolefence.NewParticipantServer(db, RolePending, mailFenceCoordinatorSecret)
+	server, err := rolefence.NewParticipantServer(db, RolePending, RolePurge, mailFenceCoordinatorSecret)
 	if err != nil {
 		t.Fatal(err)
 	}

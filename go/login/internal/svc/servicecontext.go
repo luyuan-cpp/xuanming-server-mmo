@@ -35,6 +35,7 @@ import (
 	"shared/accountdirectory"
 	"shared/clientendpoint"
 	"shared/clusterredis"
+	"shared/contentguard"
 	"shared/generated/table"
 	"shared/idsegment"
 	"shared/playerredis"
@@ -62,12 +63,10 @@ type ServiceContext struct {
 	AccountDeletions accountdirectory.Deletions
 	AccountDeletion  *accountdeletion.Service
 	// ControlRedis 是控制集群句柄(shared/clusterredis,ControlClusterKeys 键策略;2026-11-12 取代不带守卫的 RedisClient):
-	// gate 排空 / 已排空 / 停写标记(gm 族)。没写 ControlRedis.Addrs 时连的是 Node.RedisClient 那一个实例。
+	// gate 排空 / 已排空 / 停写标记(gm 族),以及排队(loginqueue.Queue)与放行锁(loginqueue.Dispatcher,q 族)。
+	// 没写 ControlRedis.Addrs 时连的是 Node.RedisClient 那一个实例。
 	ControlRedis redis.UniversalClient
-	// QueueRedis 只给排队(loginqueue.Queue)与放行锁(loginqueue.Dispatcher)用(q 族),键策略同上。Node.QueueRedis 没配置时
-	// 与 ControlRedis 是同一个客户端(newQueueRedis)。gate 标记始终走 ControlRedis。
-	QueueRedis redis.UniversalClient
-	// queueAdmitRedis 是放行流水线专用的句柄:与 QueueRedis 连同一处,不挂发送前守卫(mustNewQueueAdmitRedis)。
+	// queueAdmitRedis 是放行流水线专用的句柄:与 ControlRedis 连同一处,不挂发送前守卫(mustNewQueueAdmitRedis)。
 	// 只在 Queue.Enabled 时建;nil 时 initLoginQueue 不换句柄(只构造了 ServiceContext 的单测,句柄本来就不带守卫)。
 	queueAdmitRedis redis.UniversalClient
 	// PlayerRedis 是玩家域句柄(shared/playerredis,生产是 Redis Cluster):player_locker、login_idempotent、login_generation。
@@ -91,7 +90,11 @@ type ServiceContext struct {
 	// DataServiceClient 连接。永不为 nil;没配 DataServiceRpc 时内部客户端为 nil,所有方法
 	// 返回 playernamereg.ErrUnavailable —— CreatePlayer 据此拒绝建角(登记是唯一性的提交点,
 	// fail-closed),角色列表 / EnterGame 的名字回源则按「查不到」放行(展示数据,fail-open)。
-	PlayerNames         *playernamereg.Client
+	PlayerNames *playernamereg.Client
+	// ContentGuard 把玩家自己起的角色名送内容安全服务判定(docs/design/rename-and-content-safety.md §6.6)。
+	// 起服后永不为 nil;没配目标时是一个一律放行的客户端(只允许本机)。测试里直接构造 ServiceContext 时可以留 nil,
+	// CreatePlayer 把 nil 当作没接内容安全。
+	ContentGuard        contentguard.Checker
 	NodeInfo            login_proto.NodeInfo
 	KafkaClient         *kafka.CommandProducer
 	PlayerLocatorClient plpb.PlayerLocatorClient
@@ -166,14 +169,13 @@ func NewServiceContext() *ServiceContext {
 		}
 	}()
 
-	// 控制集群句柄:gate 标记,以及没单独配排队实例时的排队与放行锁。四个句柄都经 shared/clusterredis 建:
+	// 控制集群句柄:gate 标记、排队与放行锁。三个域句柄都经 shared/clusterredis 建:
 	// 发送前按各自的键策略核对键,结果未知的命令不由客户端重发;连不上或配置非法起服即失败。
 	controlConf := config.AppConfig.EffectiveControlRedis()
 	controlRedis := mustNewControlRedis(ctx, "ControlRedis", controlConf)
-	queueRedis, queueConf := newQueueRedis(ctx, controlRedis, controlConf, config.AppConfig.EffectiveQueueRedis())
 	var queueAdmitRedis redis.UniversalClient
 	if config.AppConfig.Queue.Enabled {
-		queueAdmitRedis = mustNewQueueAdmitRedis(ctx, queueConf)
+		queueAdmitRedis = mustNewQueueAdmitRedis(ctx, controlConf)
 	}
 	playerRedis := mustNewDomainRedis(ctx, "PlayerRedis", config.AppConfig.EffectivePlayerRedis())
 	loginRedis := mustNewDomainRedis(ctx, "LoginRedis", config.AppConfig.EffectiveLoginRedis())
@@ -244,7 +246,6 @@ func NewServiceContext() *ServiceContext {
 		rootAdmission:       drainproof.New(),
 		preloads:            drainproof.New(),
 		ControlRedis:        controlRedis,
-		QueueRedis:          queueRedis,
 		queueAdmitRedis:     queueAdmitRedis,
 		PlayerRedis:         playerRedis,
 		LoginRedis:          loginRedis,
@@ -261,33 +262,19 @@ func NewServiceContext() *ServiceContext {
 	sc.initPlayerIDMinter()
 	sc.initHomeZoneResolver() // 依赖 initPlayerIDMinter 可能已拨好的 DataServiceClient
 	sc.initPlayerNames()      // 依赖 initHomeZoneResolver 兜底拨好的 DataServiceClient
+	// 内容安全:配置要求(Required)而没配目标、或客户端建不起来,起服即失败,不带着「名字不送检」对外服务。
+	contentGuard, err := contentguard.New("login", config.AppConfig.ContentGuard)
+	if err != nil {
+		logx.Error(err)
+		panic(err)
+	}
+	sc.ContentGuard = contentGuard
 	directoryClient := accountdirectory.NewClient(sc.DataServiceClient, os.Getenv(accountdirectory.SecretEnv))
 	sc.AccountDirectory = directoryClient
 	sc.initAccountDeletion(directoryClient)
 	sc.initAntiAddiction()
 	initialized = true
 	return sc
-}
-
-// queueRedis 是 initLoginQueue 取排队句柄的唯一入口。QueueRedis 为 nil 只出现在只构造了 ControlRedis 的
-// ServiceContext(单测);按「未配置 = 与控制集群句柄共用」处理,与 newQueueRedis 的缺省同一语义。
-func (s *ServiceContext) queueRedis() redis.UniversalClient {
-	if s.QueueRedis != nil {
-		return s.QueueRedis
-	}
-	return s.ControlRedis
-}
-
-// newQueueRedis 返回排队与放行锁用的句柄,以及它所连实例的配置(放行流水线的专用句柄按它另建)。
-// split 为 nil(Node.QueueRedis 整段没写)时原样返回控制集群的句柄与配置:同一个客户端、不多开连接池。
-// 配置了就按同一个构造器另建一个,键策略相同;配置非法或 Ping 不通起服即失败。
-func newQueueRedis(ctx context.Context, control redis.UniversalClient, controlConf clusterredis.Config,
-	split *clusterredis.Config) (redis.UniversalClient, clusterredis.Config) {
-	if split == nil {
-		logx.Info("Redis queue client: shared with ControlRedis")
-		return control, controlConf
-	}
-	return mustNewControlRedis(ctx, "Node.QueueRedis", *split), *split
 }
 
 // mustNewDomainRedis 按配置建玩家域或登录域句柄,配置非法或连不上起服即失败。错误与日志不带口令。
@@ -612,7 +599,7 @@ func (s *ServiceContext) initLoginQueue() {
 		panic(fmt.Errorf("login queue: %w", err))
 	}
 	s.LoginQueue = loginqueue.New(
-		s.queueRedis(),
+		s.ControlRedis,
 		cfg.QueueEntryTTL,
 		cfg.AdmitTTL,
 		s.QueueTokenSigningSecret(),
@@ -630,7 +617,7 @@ func (s *ServiceContext) initLoginQueue() {
 	queueDispatcher, err := loginqueue.NewDispatcher(
 		s.LoginQueue,
 		s.queueCapProvider,
-		s.queueRedis(), // 放行锁与队列同实例:同一 zone 的 leader 只看这一个实例上的锁
+		s.ControlRedis, // 放行锁与队列同在控制集群:同一 zone 的 leader 只看这一处的锁
 		// dispatcher 这条参数是给 gate token 签名用的(它只挑 gate、
 		// 真正签名在 consume 时由 handler 做),所以传 gate 密钥不是队列密钥。
 		s.GateTokenSigningSecret(),

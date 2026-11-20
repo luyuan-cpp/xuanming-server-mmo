@@ -32,6 +32,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"shared/authoritysql"
+
 	"guild/internal/constants"
 )
 
@@ -350,7 +352,8 @@ func TestCommitTxNormalizesUnknownOutcome(t *testing.T) {
 
 	// 结论明确:原样返回,不许伪装成写冲突(否则客户端会去重试一个根本没提交的事务)。
 	for _, err := range []error{sql.ErrTxDone, context.Canceled, context.DeadlineExceeded,
-		fmt.Errorf("commit: %w", context.DeadlineExceeded)} {
+		fmt.Errorf("commit: %w", context.DeadlineExceeded),
+		fmt.Errorf("commit: %w", authoritysql.ErrTxAbortedBeforeCommit)} {
 		assert.ErrorIs(t, classifyCommitErr(err), err, "%v 应原样返回", err)
 		assert.NotErrorIs(t, classifyCommitErr(err), ErrWriteConflict)
 	}
@@ -401,6 +404,35 @@ func TestRetryOnDeadlock(t *testing.T) {
 		})
 		// 锁等待本身已被 innodb_lock_wait_timeout=1 封顶,再等一轮只会白吃同步预算。
 		assert.ErrorIs(t, err, ErrWriteConflict)
+		assert.Equal(t, 1, calls)
+	})
+
+	t.Run("提交前中止换连接重跑、不计死锁", func(t *testing.T) {
+		observed := 0
+		prev := txDeadlockObserved
+		txDeadlockObserved = func(string, error) { observed++ }
+		t.Cleanup(func() { txDeadlockObserved = prev })
+		calls := 0
+		err := retryOnDeadlock(context.Background(), opSetRole, func() error {
+			calls++
+			if calls == 1 {
+				return fmt.Errorf("update member: %w", authoritysql.ErrTxAbortedBeforeCommit)
+			}
+			return nil
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 2, calls)
+		assert.Equal(t, 0, observed, "提交前中止不是锁冲突,guild_tx_deadlock_total 不该涨")
+	})
+
+	t.Run("提交前中止与结局未知混在一起时不重跑", func(t *testing.T) {
+		calls := 0
+		mixed := errors.Join(authoritysql.ErrTxAbortedBeforeCommit, fmt.Errorf("commit: %w", authoritysql.ErrOutcomeUnknown))
+		err := retryOnDeadlock(context.Background(), opSetRole, func() error {
+			calls++
+			return mixed
+		})
+		assert.ErrorIs(t, err, authoritysql.ErrOutcomeUnknown)
 		assert.Equal(t, 1, calls)
 	})
 

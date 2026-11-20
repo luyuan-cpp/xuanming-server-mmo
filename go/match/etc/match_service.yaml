@@ -150,8 +150,8 @@ MetricsListenAddr: ":9170"
 # 评分存 SQL 权威库的 match_rating(默认 1500),入账幂等靠 match_rating_applied。
 # RatingEnabled:消费 Kafka 对局结果更新 Elo;关闭后评分停在 1500,匹配退化为纯等待序。
 RatingEnabled: true
-# battle 节点发 BattleResultEvent 的 topic(全局无 zone 段,key=battle_id),与 C++
-# battle_room_manager.cpp 的 kMatchResultsTopic 一致;启动时确保存在。分区数是不可变契约。
+# 对局结果 BattleResultEvent 的 topic(全局无 zone 段,key=battle_id):match 自己的终局发件箱发,只发 COMPLETE 的局,
+# 作废(ABORT)的局不进这个 topic;battle 节点不再直接发它。消费方是 match 的评分与 guild 的历练结算;启动时确保存在。分区数是不可变契约。
 ResultTopic: match-results
 ResultTopicPartitions: 3
 # 消费组:多实例同组分摊分区,每条结果只被一个实例消费。

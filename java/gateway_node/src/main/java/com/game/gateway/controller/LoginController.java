@@ -2,6 +2,8 @@ package com.game.gateway.controller;
 
 import com.game.gateway.dto.LoginRequest;
 import com.game.gateway.dto.LoginResponse;
+import com.game.gateway.dto.RealNameRequest;
+import com.game.gateway.dto.RealNameResponse;
 import com.game.gateway.ratelimit.AssignGateRateLimiter;
 import com.game.gateway.ratelimit.ClientIpResolver;
 import com.game.gateway.ratelimit.RateLimitDecision;
@@ -60,6 +62,20 @@ public class LoginController {
         }
 
         return loginService.login(req);
+    }
+
+    /**
+     * 实名提交(docs/design/real-name-anti-addiction.md §5.2)。冷却键按 access token 的摘要分桶,与 /api/assign-gate 同一个算法、
+     * 不同命名空间;login 另有按账号的每日次数上限。请求体(姓名、身份证号)不进日志。
+     */
+    @PostMapping("/real-name")
+    public RealNameResponse realName(@RequestBody RealNameRequest req, HttpServletRequest http) {
+        String ip = ipResolver.resolve(http);
+        RateLimitDecision decision = limiter.check(req.getZoneId(), ip, AssignGateController.cooldownKey(req.getAccessToken()), "real-name");
+        if (decision.isQueue() || decision.isDeny()) {
+            return RealNameResponse.of(LoginResponse.CODE_RATE_LIMITED, decision.isDeny() ? decision.getReason() : "rate_limited", null, null);
+        }
+        return loginService.submitRealName(req);
     }
 
     /** For third-party auth the proto's {@code account} field is empty; use auth_token as the cooldown key. */

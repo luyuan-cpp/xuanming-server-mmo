@@ -292,6 +292,9 @@ struct RpcDoneCallback::State
     MessagePtr response;
     bool completed{false};
     std::shared_ptr<RpcMaintenanceOperation> maintenance;
+    // 本次派发的 server span(docs/design/distributed-tracing.md §10.3):Adopt 时从派发作用域接过来,
+    // 延后回复发出(CompleteDeferred)或句柄被丢弃(析构)时结束。
+    tracing::PendingSpan span;
 
     ~State();
 };
@@ -354,13 +357,16 @@ public:
         if (!completed_) state_->maintenance = maintenance_;
         if (completed_)
         {
-            // handler 已经同步 Run 过:交出一个已完成的句柄,之后的 Run 都是空操作。
+            // handler 已经同步 Run 过:交出一个已完成的句柄,之后的 Run 都是空操作。server span 留在派发作用域里结束。
             state_->completed = true;
             LOG_ERROR << "[RpcChannel] RpcDoneCallback::Adopt after done->Run(): method=" << MethodNameOf(messageId_)
                       << ", message_id=" << messageId_;
         }
         else
         {
+            // 回复改由句柄延后发出:server span 跟着句柄走,量到那一刻(Adopt 只在 handler 的同步执行里调用,
+            // 最内层在录的就是这次派发的 server span)。
+            state_->span = tracing::PendingSpan::TakeCurrentServerSpan(tracing::SpanSystem::kRpc0);
             Bump(GetRpcChannelStats().adopted);
         }
         return state_;
@@ -409,6 +415,13 @@ private:
 
 RpcDoneCallback::State::~State()
 {
+    // 句柄没 Run / Fail 就被丢掉:server span 在这里结束并标错(双向请求回 REPLY_DROPPED,单向请求没有回复)。
+    // 已完成的由 CompleteDeferred 结束过,这里是空操作。End 只交给线程安全的导出去处,在哪个线程析构都可以。
+    if (!completed)
+    {
+        span.SetError("REPLY_DROPPED");
+    }
+    span.End();
     if (completed || id == kNoInflightCallId)
     {
         return;
@@ -499,6 +512,12 @@ void RpcChannel::CompleteDeferred(RpcDoneCallback::State &state, GameErrorCode e
     }
     state.completed = true;
     const auto maintenance = std::move(state.maintenance);
+    // 延后回复的 server span(Adopt 时接过来的)量到这里:回复发出,或确定发不出(§10.3)。
+    tracing::PendingSpan span = std::move(state.span);
+    if (error != RPC_NO_ERROR)
+    {
+        span.SetError(GameErrorCode_Name(error));
+    }
     if (error == HANDLER_FAILED)
     {
         Bump(GetRpcChannelStats().handlerFailed);
@@ -508,16 +527,21 @@ void RpcChannel::CompleteDeferred(RpcDoneCallback::State &state, GameErrorCode e
     if (!locked)
     {
         Bump(GetRpcChannelStats().replyChannelGone);
+        span.SetError("REPLY_CHANNEL_GONE");
+        span.End();
         return;
     }
     locked->loop_.assertInLoopThread();
     if (!locked->IsConnected())
     {
         Bump(GetRpcChannelStats().replyChannelGone);
+        span.SetError("REPLY_CHANNEL_GONE");
+        span.End();
         return;
     }
     const bool sent = locked->DoneCallback(state.id, state.messageId, error == RPC_NO_ERROR ? state.response.get() : nullptr, error);
     if (maintenance) maintenance->known = sent && error == RPC_NO_ERROR;
+    span.End();
 }
 
 // ====================== RpcChannel ======================
@@ -583,6 +607,12 @@ void RpcChannel::FailNotSent(muduo::net::EventLoop &loop, uint32_t messageId, Cl
 {
     auto &stats = GetRpcChannelStats();
     Bump(stats.started);
+    // 调用被尝试了就有 client span(docs/design/distributed-tracing.md §10.3):本地确定没发出的也记一个,标错,说明是原因。
+    // 在发起方的栈上、发起时的上下文里;发起时不在 trace 里则是空 span。
+    tracing::PendingSpan span = tracing::PendingSpan::StartChildOf(
+        tracing::Current(), tracing::SpanKind::kClient, tracing::SpanSystem::kRpc0, RpcSpanNameOf(messageId));
+    span.SetError(reason);
+    span.End();
     // 采样用同步递增的计数:notSent 要等排队的投递执行后才加,同一轮里一串本地失败会看到同一个值,采样形同虚设。
     static std::atomic<uint64_t> notSentOccurrences{0};
     if (ShouldLogRpcEvent(Bump(notSentOccurrences)))
@@ -680,7 +710,8 @@ void RpcChannel::CallMethodWithResponseType(uint32_t messageId, const ProtobufMe
     message.set_type(REQUEST);
     message.set_message_id(messageId);
     // client span(docs/design/distributed-tracing.md §10.3):当前 span 的子 span,信封带它的上下文,对端的 server span 以它为父。
-    // 本地没发出去的(下面两条 notSent)不记 span,span 随作用域丢掉;发起时不在 trace 里则是空 span,信封不带 trace。
+    // 下面两条 notSent 由 FailNotSent 另记一个标错的 span,这一个(上下文没上线)随作用域丢掉;
+    // 发起时不在 trace 里则是空 span,信封不带 trace。
     tracing::PendingSpan span = tracing::PendingSpan::StartChildOf(
         tracing::Current(), tracing::SpanKind::kClient, tracing::SpanSystem::kRpc0, RpcSpanNameOf(messageId));
     WriteTraceToRpcEnvelope(span.Context(), message);
@@ -716,6 +747,11 @@ bool RpcChannel::SendRequest(uint32_t messageId, const ProtobufMessage &request)
     auto &stats = GetRpcChannelStats();
     auto reject = [&](const char *reason)
     {
+        // 同 FailNotSent:被拒的单向请求也记一个标错的 client span(§10.3)。
+        tracing::PendingSpan rejected = tracing::PendingSpan::StartChildOf(
+            tracing::Current(), tracing::SpanKind::kClient, tracing::SpanSystem::kRpc0, RpcSpanNameOf(messageId));
+        rejected.SetError(reason);
+        rejected.End();
         const auto n = Bump(stats.onewayRejected);
         if (ShouldLogRpcEvent(n))
         {
@@ -1136,10 +1172,11 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
 {
     // 派发期间接续信封上的 trace(合法就建子 span,否则开新根),退出时恢复派发前的值。早年这里直接 Set(NewRoot())
     // 且从不恢复,TLS 里的 trace 一直留到下一次派发,之后同一线程上跑的回包回调、超时回调都挂到它下面。
-    // 这个子 span 就是本次派发的 server span(docs/design/distributed-tracing.md §10.3),作用域结束时交给导出去处:
-    // 覆盖派发前的拒绝与同步执行的 handler;handler Adopt 之后的延后回复不延长它。
-    const tracing::ScopedIncoming dispatchTrace(IncomingTraceOf(message), tracing::SpanKind::kServer,
-                                                tracing::SpanSystem::kRpc0, RpcSpanNameOf(message.message_id()));
+    // 这个子 span 就是本次派发的 server span(docs/design/distributed-tracing.md §10.3),量到回复发出为止:
+    // 派发前的拒绝与同步回复都在作用域里,作用域结束时交给导出去处;handler Adopt 时由完成句柄接过去,延后回复发出
+    // (或句柄被丢弃)时结束。不声明成 const:接过去与 MarkCurrentSpanError 都要经线程上下文改它的记录器。
+    tracing::ScopedIncoming dispatchTrace(IncomingTraceOf(message), tracing::SpanKind::kServer, tracing::SpanSystem::kRpc0,
+                                          RpcSpanNameOf(message.message_id()));
 
     const uint32_t messageId = message.message_id();
     if (!IsDispatchableMessageId(messageId))

@@ -10,6 +10,7 @@
 #include "node.h"
 #include "network/network_utils.h"
 #include "network/grpc_trace_hooks.h"
+#include "network/grpc_link_metrics.h"
 #include "thread_context/node_context_manager.h"
 #include "muduo_grpc/channel.h"
 #include "node/system/node/muduo_grpc_channel_slot.h"
@@ -76,6 +77,8 @@ void NodeConnector::ConnectToGrpcNode(const NodeInfo &nodeInfo)
 	muduo_grpc::ChannelOptions channelOptions;
 	// 业务调用带上当前 trace,完成回调回到发起时的 trace(docs/design/distributed-tracing.md §5.3)。
 	channelOptions.unaryInterceptor = grpc_tracing::InjectTraceIntoUnaryCall;
+	// 连接状态记在调 Go 服务的 gRPC 这一类依赖上(断线重连 R17)。
+	channelOptions.linkObserver = ObserveGrpcLink(dependency_link_metrics::Dependency::kGrpc);
 	if (nodeInfo.node_type() == common::base::PlayerStoreNodeService)
 	{
 		channelOptions.maxReceiveMessageBytes = player_store_path::kMaxClaimResponseBytes;

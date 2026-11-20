@@ -15,6 +15,7 @@ import (
 	"shared/assetopwake"
 	"shared/authoritysql"
 	"shared/clusterredis"
+	"shared/contentguard"
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/playerredis"
@@ -78,6 +79,9 @@ type Config struct {
 	// 配置目标即拨号,不受 IdSegment.Enabled 控制;常驻服务缺它拒绝启动(guild.go 读合服映射)。
 	// optional 只为 -migrate:只建表的形态不连 data_service。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
+	// ContentGuard 是内容安全服务(go/content_guard)的调用端:帮会名与公告先送检
+	// (docs/design/rename-and-content-safety.md §6.6)。没配目标时不送检,仅供本机开发;staging / prod 写 Required: true,没配就拒启。
+	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
 	// IdSegment 控制 guild_id 的号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
 	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 发不出 guild_id,建帮一律失败**:
 	// 没有回退号源(AGENTS §7 第 1 条),启动时只打一条 ERROR(svc/guild_id_minter.go)。
@@ -141,7 +145,7 @@ type ActivityConf struct {
 type TrialResultConf struct {
 	// Enabled 打开结果消费。它与 Kafka.Brokers 一起决定历练是否开放,见 Config.TrialResultActive。
 	Enabled bool `json:",optional"`
-	// Topic 必须与 match 的 ResultTopic、battle 的 kMatchResultsTopic 一致。
+	// Topic 必须与 match 的 ResultTopic 一致(生产者是 match 的终局发件箱,battle 节点不再直接发)。
 	Topic string `json:",default=match-results"`
 	// Partitions 必须与 match 的 ResultTopicPartitions 相同:topic 由先起的一方建出来,分区数建后不可变。
 	Partitions int32 `json:",default=3"`

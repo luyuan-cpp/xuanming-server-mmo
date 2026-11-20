@@ -28,6 +28,9 @@ func deliveringTrade() (*tradepb.TradeCommerceRecord, *tradepb.TradeCommerceWork
 		manualLeg("seller_receive", 1, 4, 0, 0, currencyBundle(30)),
 		manualLeg("buyer_receive", 2, 4, 0, 0, itemBundle(10, 3)),
 	}}
+	// 两条交付腿付出的是对方托管的资产,与 plan 用 transferLeg 建腿时一样:货出自卖家(1),钱出自买家(2)。
+	leg(w, "seller_receive").EscrowOwnerId = 2
+	leg(w, "buyer_receive").EscrowOwnerId = 1
 	return r, w
 }
 
@@ -134,6 +137,31 @@ func TestBuyerSurplusIsNeverHeldAndSurvivesTheUnwind(t *testing.T) {
 	require.Equal(t, uint64(2), leg(w, "buyer_return").PlayerId)
 }
 
+// 撮合成交子单的托管者按两张母单各自的扣出腿记:卖单改绑过时下单人已是新角色(11),扣出腿上才是当初托管的那个(1)。
+// 买家那条被拒整单退回时,货退给卖单现在的下单人,但不是他托管的,按成交所得判、照常过获取封禁;钱退回买家本人(2026-11-20 独立评审)。
+func TestFillLegsRecordTheEscrowOwnerFromTheParentDebits(t *testing.T) {
+	buy := &tradepb.TradeCommerceRecord{CommerceId: 51, Kind: 4, Side: 1, SellerPlayerId: 2, UnitPrice: 12, CurrencyType: 1, ItemConfigId: 10}
+	sell := &tradepb.TradeCommerceRecord{CommerceId: 52, Kind: 4, Side: 2, SellerPlayerId: 11}
+	buyW := &tradepb.TradeCommerceWorkflow{Legs: []*tradepb.TradeCommerceLeg{manualLeg("seller_debit", 2, 3, 501, outcomeApplied, currencyBundle(60))}}
+	sellW := &tradepb.TradeCommerceWorkflow{Legs: []*tradepb.TradeCommerceLeg{manualLeg("seller_debit", 1, 3, 502, outcomeApplied, itemBundle(10, 5))}}
+	mw := &tradepb.TradeCommerceWorkflow{Stage: "deliver"}
+	require.NoError(t, addFillLegs(mw, buy, sell, buyW, sellW, 5, 10))
+	require.Equal(t, uint64(1), leg(mw, "buyer_receive").EscrowOwnerId, "货是卖单当初托管的那个角色的")
+	require.Equal(t, uint64(2), leg(mw, "seller_receive").EscrowOwnerId)
+	require.Equal(t, uint64(2), leg(mw, "buyer_surplus").EscrowOwnerId)
+	require.True(t, proto.Equal(currencyBundle(10), leg(mw, "buyer_surplus").Bundle), "差价 5 × (12 - 10)")
+
+	r := &tradepb.TradeCommerceRecord{CommerceId: 53, Kind: 4, Status: Delivering, SellerPlayerId: 11, BuyerPlayerId: 2}
+	leg(mw, "buyer_receive").OpId, leg(mw, "buyer_receive").Outcome = 601, outcomeRejected
+	require.NoError(t, (&Engine{}).plan(r, mw, 1000))
+	require.Equal(t, "return", mw.Stage)
+	require.Equal(t, uint64(11), leg(mw, "seller_return").PlayerId)
+	require.Equal(t, uint32(rollbackpb.TransactionType_TX_AUCTION_BUY), legTxType(leg(mw, "seller_return")), "改绑后的角色拿到的不是自己托管的货")
+	require.Equal(t, uint32(rollbackpb.TransactionType_TX_AUCTION_RETURN), legTxType(leg(mw, "buyer_return")), "钱退回买家本人")
+
+	require.Error(t, addFillLegs(&tradepb.TradeCommerceWorkflow{}, buy, sell, &tradepb.TradeCommerceWorkflow{}, sellW, 5, 10), "母单缺扣出腿是坏数据")
+}
+
 // 拍卖:钱在赢家的出价合同里,拍品只退货、不建 buyer_return;退货到账后拍品按撤单结案,出价看到拍品撤了自己退款(settleHeldBid)。
 func TestAuctionUnwindReturnsOnlyTheGoods(t *testing.T) {
 	r := &tradepb.TradeCommerceRecord{CommerceId: 41, Kind: 5, Status: Delivering, SellerPlayerId: 1, BuyerPlayerId: 2, Version: 6}
@@ -175,6 +203,28 @@ func TestHeldBidKeepsFundsUnlessTheLotSentTheProceeds(t *testing.T) {
 	require.False(t, heldBidKeepsFunds(lot, 42), "原腿发出过,补发还没发也不自动退款")
 }
 
+// 赢家那份货到过(在途、到账、部分到账,含补发腿)时,拍品按撤单结案是自相矛盾:冻结款再退给赢家就是货款两得,不自动退款。
+// 买家那条终局没到账(被拒)、卖家所得没发,才是整单退回的正常形状(2026-11-20 独立评审补的防御)。
+func TestHeldBidKeepsFundsOnlyWhenTheWinnerGotNothing(t *testing.T) {
+	lotWithBuyerLeg := func(buyer *tradepb.TradeCommerceLeg) *tradepb.TradeCommerceWorkflow {
+		return &tradepb.TradeCommerceWorkflow{WinningBidId: 42, Legs: []*tradepb.TradeCommerceLeg{
+			buyer,
+			manualLeg("seller_receive", 1, 4, 0, 0, currencyBundle(80)),
+		}}
+	}
+	require.True(t, heldBidKeepsFunds(lotWithBuyerLeg(manualLeg("buyer_receive", 2, 4, 104, outcomeRejected, itemBundle(10, 1))), 42), "被拒、卖家所得没发:正常的整单退回")
+	require.True(t, heldBidKeepsFunds(lotWithBuyerLeg(manualLeg("buyer_receive", 2, 4, 0, 0, itemBundle(10, 1))), 42), "货没发出")
+	require.False(t, heldBidKeepsFunds(lotWithBuyerLeg(manualLeg("buyer_receive", 2, 4, 104, outcomeApplied, itemBundle(10, 1))), 42), "货已到账")
+	require.False(t, heldBidKeepsFunds(lotWithBuyerLeg(manualLeg("buyer_receive", 2, 4, 104, partialOutcome, itemBundle(10, 1))), 42), "货部分到账")
+	require.False(t, heldBidKeepsFunds(lotWithBuyerLeg(manualLeg("buyer_receive", 2, 4, 104, 0, itemBundle(10, 1))), 42), "货还在途,可能已到")
+
+	reissued := lotWithBuyerLeg(manualLeg("buyer_receive", 2, 4, 104, outcomeRejected, itemBundle(10, 1)))
+	reissued.Legs[0].SupersededBy = "buyer_receive#2"
+	reissued.Legs = append(reissued.Legs, manualLeg("buyer_receive#2", 2, 4, 106, outcomeApplied, itemBundle(10, 1)))
+	require.False(t, heldBidKeepsFunds(reissued, 42), "补发腿到过账也算货已交出")
+	require.True(t, heldBidKeepsFunds(reissued, 43), "拍品不引用的出价,冻结款只属于出价人")
+}
+
 // 买家那份补发过(部分到账后补的缺口)、补发腿又被拒:原样退回会把已经交出的那部分再退一遍,所以不整单退回,
 // 转人工;卖家所得继续压着,合同不会停在交付阶段空转。
 func TestReissuedBuyerLegFailingGoesManualInsteadOfUnwinding(t *testing.T) {
@@ -194,6 +244,7 @@ func TestReissuedBuyerLegFailingGoesManualInsteadOfUnwinding(t *testing.T) {
 }
 
 // 改绑把还没发出的卖家所得原地改给新角色(不算补发):买家那条被拒时照常整单退回,货退给改绑后的角色。
+// 那名角色拿到的不是自己托管的货,按成交所得判、照常过获取封禁;钱付回买家本人,仍是退回(2026-11-20 独立评审)。
 func TestRetargetedSellerProceedsStillUnwind(t *testing.T) {
 	r, w := deliveringTrade()
 	leg(w, "seller_receive").PlayerId = 11
@@ -203,7 +254,11 @@ func TestRetargetedSellerProceedsStillUnwind(t *testing.T) {
 	require.True(t, unwindable(w))
 	require.NoError(t, (&Engine{}).plan(r, w, 1000))
 	require.Equal(t, "return", w.Stage)
-	require.Equal(t, uint64(11), leg(w, "seller_return").PlayerId)
+	goodsBack := leg(w, "seller_return")
+	require.Equal(t, uint64(11), goodsBack.PlayerId)
+	require.Equal(t, uint64(1), goodsBack.EscrowOwnerId, "托管者仍是原卖家")
+	require.Equal(t, uint32(rollbackpb.TransactionType_TX_AUCTION_BUY), legTxType(goodsBack), "改绑后的角色拿到的不是自己托管的货")
+	require.Equal(t, uint32(rollbackpb.TransactionType_TX_AUCTION_RETURN), legTxType(leg(w, "buyer_return")), "钱付回买家本人")
 }
 
 // 闸上线之前两条已经一起发出的存量合同:买家那条被拒、卖家那条已到账,不能退回,照旧转人工(与 TestPlanFinalCreditFailureRecordsQuarantine 同口径)。

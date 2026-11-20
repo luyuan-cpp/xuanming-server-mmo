@@ -87,10 +87,11 @@ func settleBuyerFirstDelivery(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCo
 	}
 	buyer.SupersededBy = unwoundBy
 	seller.SupersededBy = unwoundBy
-	addLeg(w, "seller_return", seller.GetPlayerId(), 4, proto.Clone(buyer.GetBundle()).(*assetpb.AssetBundle))
+	// 退回的正是两条交付腿付出的那两份,托管者照抄:货是 buyer_receive 付出的,钱是 seller_receive 付出的。
+	addEscrowLeg(w, "seller_return", seller.GetPlayerId(), buyer.GetEscrowOwnerId(), proto.Clone(buyer.GetBundle()).(*assetpb.AssetBundle))
 	if r.GetKind() != 5 {
 		// 拍品(kind 5)不退钱:钱还在赢家的出价合同里,由它看到拍品撤了之后自己退(settleHeldBid)。
-		addLeg(w, "buyer_return", buyer.GetPlayerId(), 4, proto.Clone(seller.GetBundle()).(*assetpb.AssetBundle))
+		addEscrowLeg(w, "buyer_return", buyer.GetPlayerId(), seller.GetEscrowOwnerId(), proto.Clone(seller.GetBundle()).(*assetpb.AssetBundle))
 	}
 	w.Stage = "return"
 	r.Status = CancelPending
@@ -108,13 +109,24 @@ func unwindable(w *tradepb.TradeCommerceWorkflow) bool {
 }
 
 // heldBidKeepsFunds 报告拍品按撤单结案之后,停在 bid_held 的出价的冻结款是否还在出价里、可以由出价自己退回。
-// 拍品不引用这条出价时,冻结款只属于出价人;引用时看拍品的卖家所得原腿:从没发出,拍品就没动过这笔钱
-// (补发只给发出后没到账的腿,原腿没发出就没有补发)。发出过却按撤单结案是自相矛盾(钱可能已经付给卖家),
-// 不能自动退款,settleHeldBid 按坏数据隔离成人工。
+// 拍品不引用这条出价时,冻结款只属于出价人。引用时两条都要成立:
+//   - 拍品的卖家所得原腿从没发出:拍品就没动过这笔钱(补发只给发出后没到账的腿,原腿没发出就没有补发);
+//   - 赢家那份货一点没到过:买家交付腿及其补发要么没发出,要么终局没到账。在途、到账、部分到账都算可能到过,
+//     钱再退给赢家就是货款两得(2026-11-20 独立评审补的防御,现有路径到不了)。
+//
+// 任一条不成立,按撤单结案就是自相矛盾,不能自动退款,settleHeldBid 按坏数据隔离成人工。
 func heldBidKeepsFunds(lot *tradepb.TradeCommerceWorkflow, bidID uint64) bool {
 	if lot.GetWinningBidId() != bidID {
 		return true
 	}
-	proceeds := leg(lot, "seller_receive")
-	return proceeds == nil || proceeds.GetOpId() == 0
+	if proceeds := leg(lot, "seller_receive"); proceeds != nil && proceeds.GetOpId() != 0 {
+		return false
+	}
+	for _, l := range lot.GetLegs() {
+		base, _, _ := strings.Cut(l.GetRole(), "#")
+		if base == "buyer_receive" && l.GetOpId() != 0 && (!done(l) || applied(l) || l.GetOutcome() == partialOutcome) {
+			return false
+		}
+	}
+	return true
 }

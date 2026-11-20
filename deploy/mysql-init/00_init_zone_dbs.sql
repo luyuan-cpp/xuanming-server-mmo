@@ -12,6 +12,9 @@ CREATE DATABASE IF NOT EXISTS mmorpg_mail DEFAULT CHARACTER SET utf8mb4 COLLATE 
 CREATE DATABASE IF NOT EXISTS mmorpg_rank DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 -- 支付服务(go/payment)的支付意图与渠道交易事实;表由 payment -migrate 建。
 CREATE DATABASE IF NOT EXISTS mmorpg_payment DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- 官方商城(java/mall_game)的独占库。这里只建库:闸门表由 writer_authority prepare-schema 建(K8s 上是 Job mall-schema),
+-- 业务表由 java/mall_game/src/main/resources/db/schema.sql 一次性装进全新的库。
+CREATE DATABASE IF NOT EXISTS mmorpg_mall DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS mmorpg_chat DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 -- 匹配与组队的 SQL 权威；表由 match -migrate 建，只建自己的库。
 CREATE DATABASE IF NOT EXISTS mmorpg_match DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

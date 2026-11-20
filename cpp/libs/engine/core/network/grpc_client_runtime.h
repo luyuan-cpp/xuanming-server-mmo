@@ -5,8 +5,10 @@
 // 第 3 批起传输是 muduo_grpc::Channel(实体上的 MuduoGrpcChannelPtr 组件);官方 CompletionQueue、
 // GrpcClientRuntime 计数与 5ms 轮询都已删除。只在节点所属 EventLoop 线程使用。
 
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "entt/src/entt/entity/registry.hpp"
@@ -50,6 +52,22 @@ inline thread_local size_t localCompletions{0};
         LOG_FATAL << "gRPC completion drain must be checked on its owning EventLoop thread";
     }
     return grpc_client_runtime_detail::localCompletions == 0;
+}
+
+// 本地就失败的调用(实体没有通道、请求序列化失败、请求类型不符)同样记一个 client span(docs/design/distributed-tracing.md §10.3,
+// 调用被尝试了就有 span):名字同真实调用("pkg.Svc/Method"),记 rpc.grpc.status_code,标错,说明是本地原因。
+// 生成的客户端在排本地完成之前、在发起方的栈上调用;发起时不在 trace 里什么都不记。
+inline void RecordGrpcLocalFailureSpan(std::string_view methodPath, uint32_t code, std::string_view reason)
+{
+    if (!methodPath.empty() && methodPath.front() == '/')
+    {
+        methodPath.remove_prefix(1);   // 与 grpc_tracing::GrpcSpanNameOf 同一口径
+    }
+    tracing::PendingSpan span = tracing::PendingSpan::StartChildOf(tracing::Current(), tracing::SpanKind::kClient,
+                                                                   tracing::SpanSystem::kGrpc, tracing::SpanName{methodPath});
+    span.SetGrpcStatusCode(code);
+    span.SetError(reason);
+    span.End();
 }
 
 // 本地就失败的调用(实体没有通道、请求序列化失败)与真实应答一样延后到下一轮投递:

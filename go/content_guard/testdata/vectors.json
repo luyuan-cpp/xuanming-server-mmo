@@ -1,0 +1,33 @@
+{
+  "comment": "Shared behaviour vectors for the local text filter (docs/design/rename-and-content-safety.md 6.3). Both server versions must satisfy every case. scene is the action class: name (names and labels), notice (guild announcement), chat. The built-in impersonation words (官方, 客服, 管理员, 系统, 运营 as substrings; gm as a prefix) are always present and are not listed in deny.",
+  "deny": [
+    {"word": "加微信", "category": "ad", "mode": "sub"},
+    {"word": "发财", "category": "ad", "mode": "sub"},
+    {"word": "笨蛋", "category": "abuse", "mode": "sub"},
+    {"word": "臭", "category": "abuse", "mode": "sub"},
+    {"word": "av", "category": "porn", "mode": "token"}
+  ],
+  "allow": ["臭豆腐"],
+  "cases": [
+    {"name": "plain chat passes", "scene": "chat", "text": "今天一起刷副本吗", "verdict": "pass", "category": "none"},
+    {"name": "empty text passes", "scene": "chat", "text": "", "verdict": "pass", "category": "none"},
+    {"name": "abuse is masked in chat", "scene": "chat", "text": "你个笨蛋", "verdict": "masked", "masked": "你个**", "category": "abuse"},
+    {"name": "separators inside a hit are masked with it", "scene": "chat", "text": "笨 蛋!", "verdict": "masked", "masked": "***!", "category": "abuse"},
+    {"name": "ad with dashes is rejected", "scene": "chat", "text": "加—微—信", "verdict": "reject", "category": "ad"},
+    {"name": "traditional characters fold to simplified", "scene": "chat", "text": "恭喜發財", "verdict": "reject", "category": "ad"},
+    {"name": "token word inside an english word does not match", "scene": "chat", "text": "have fun", "verdict": "pass", "category": "none"},
+    {"name": "token word next to chinese matches", "scene": "chat", "text": "看AV", "verdict": "reject", "category": "porn"},
+    {"name": "full width letters fold to ascii", "scene": "chat", "text": "ＡＶ", "verdict": "reject", "category": "porn"},
+    {"name": "impersonation words are ignored in chat", "scene": "chat", "text": "官方什么时候更新", "verdict": "pass", "category": "none"},
+    {"name": "allow word suppresses the hit inside it", "scene": "chat", "text": "我爱吃臭豆腐", "verdict": "pass", "category": "none"},
+    {"name": "hits outside the allow word still count", "scene": "chat", "text": "臭豆腐不臭,你臭", "verdict": "masked", "masked": "臭豆腐不*,你*", "category": "abuse"},
+    {"name": "reject wins over mask", "scene": "chat", "text": "笨蛋,加微信", "verdict": "reject", "category": "ad"},
+    {"name": "built-in words reject a name", "scene": "name", "text": "官方客服", "verdict": "reject", "category": "impersonation"},
+    {"name": "gm prefix rejects a name", "scene": "name", "text": "GM小明", "verdict": "reject", "category": "impersonation"},
+    {"name": "gm inside a name is fine", "scene": "name", "text": "sigma", "verdict": "pass", "category": "none"},
+    {"name": "abuse rejects a name instead of masking", "scene": "name", "text": "大笨蛋", "verdict": "reject", "category": "abuse"},
+    {"name": "clean name passes", "scene": "name", "text": "逍遥子", "verdict": "pass", "category": "none"},
+    {"name": "impersonation words are ignored in a notice", "scene": "notice", "text": "本帮欢迎新人,系统学习打法", "verdict": "pass", "category": "none"},
+    {"name": "abuse rejects a notice", "scene": "notice", "text": "不来的都是笨蛋", "verdict": "reject", "category": "abuse"}
+  ]
+}

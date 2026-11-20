@@ -235,7 +235,7 @@ static muduo_grpc::Channel *PickRouterChannel(const uint32_t messageIdForLog)
 	// MuduoGrpcChannelPtr、NodeInfo 要到拆除才清,这段窗口(排空预算到期后强行 Finalize、Finalize 之后才断开的会话)
 	// 靠 PickRouter 的候选条件(HasUsableGrpcClient)挡住,正常关机另有排空门(main.cpp 的 SetShutdownDrainComplete:
 	// beforeShutdown 记下的会话都走完断线处理、通道都空闲才 Finalize)。这里再挡一层,防选点条件日后改松时落成空指针解引用。
-	// 返回 nullptr 后 lane 回带 id 的 1003,断线通知只留痕、由 login 租约兜底。
+	// 返回 nullptr 后 lane 回带 id 的 1003;gate 合成的 login 请求按没发出处理,断线通知留在待送达表里,退避之后再试。
 	auto &routerRegistry = tlsNodeContextManager.GetRegistry(eNodeType::ClientRpcRouterNodeService);
 	const auto *routerChannel = routerRegistry.try_get<MuduoGrpcChannelPtr>(*routerNode);
 	if (routerChannel == nullptr || !*routerChannel)
@@ -274,7 +274,7 @@ static client_rpc_router::ForwardRequest MakeForwardRequest(const ClientRequest 
 // 返回 kSent = 已交给路由服通道,之后恰好一次完成;两种「没发出」都不会有任何回调(client_request_lane.h 的契约):
 //   kNoRouter     本地尚未发现任何可用的路由服实例(启动窗口 / 路由服全部下线 / 缺通道),PickRouterChannel 已采样留痕;
 //   kCallNotBuilt 调用没构造出来(签名失败、消息号越界、没有 gRPC 方法名),SendForward 已采样留痕。
-// 调用方决定后果:路由 lane 回客户端带请求 id 的 kServiceUnavailable;断线通知没有客户端可回,只留痕。
+// 调用方决定后果:路由 lane 回客户端带请求 id 的 kServiceUnavailable。
 // 路由 lane 经 gate_lane::SetRouterSender 注入本函数(client_request_lane.h)。
 static gate_lane::RouterSendResult SendRawViaRouter(const ClientRequest &request, const std::string &sessionDetailsBin)
 {
@@ -288,40 +288,25 @@ static gate_lane::RouterSendResult SendRawViaRouter(const ClientRequest &request
 			   : gate_lane::RouterSendResult::kCallNotBuilt;
 }
 
-// 不经路由 lane 的发送(gate 合成的断线通知):SessionDetails 的 gate_call_seq 留 0,回包不归 lane 认领。
-// 返回是否已交给路由服;没发出时 PickRouterChannel / SendForward 已采样留痕,调用方只留痕、不重试。
-static bool SendViaRouter(const ClientRequest &request, const SessionDetails &sessionDetails)
-{
-	return SendRawViaRouter(request, sessionDetails.SerializeAsString()) == gate_lane::RouterSendResult::kSent;
-}
-
-// gate 合成、应答只给 gate 自己用的 login 请求的统一出口(排空迁移要票、登录态续租)。这类请求的请求体为空,身份全在
-// SessionDetails 里。与断线通知同一种 gate 合成请求:会话身份走同一个 BuildSessionDetails、带会话代次(login 按
-// gate_instance_id + 会话代次认这条连接),gate_call_seq 留 0 —— 不进路由 lane,不占客户端请求的单飞槽,也不排在客户端请求后面。
-// 应答只交给 done,不进回包桥、不推给客户端。
-//   Reply      { bool delivered; Response response; } 形状的结构。delivered = false:调用失败或应答不可解析;
+// gate 合成、应答只给 gate 自己用的 login 请求的统一出口(排空迁移要票、登录态续租、断线通知)。身份全在 SessionDetails 里:
+// 会话身份走同一个 BuildSessionDetails、带会话代次(login 按 gate_instance_id + 会话代次认这条连接),gate_call_seq 留 0 ——
+// 不进路由 lane,不占客户端请求的单飞槽,也不排在客户端请求后面。应答只交给 done,不进回包桥、不推给客户端。
+//   sessionDetailsBin 序列化好的 SessionDetails。断线通知用断线当下的那一份,连接没了之后重发也原样带它;
+//   request    请求体。排空迁移与续租为空;断线通知带 session_id(login 只做一致性核对);
+//   Reply      { bool delivered; Response response; } 形状的结构。delivered = false:调用失败、login 回了错误或应答不可解析;
 //   sendDirect 直连模式下生成的 loginpb::SendClientPlayerLogin<方法>;
-//   what       日志里对这类请求的称呼(英文)。
-// 返回 false = 没发出(没有路由服 / login 实例、缺通道、会话序列化失败、直连模式签名失败),done 不会被调用;
+//   what       日志里对这类请求的称呼(英文);sessionId 只进日志。
+// 返回 false = 没发出(没有路由服 / login 实例、缺通道、直连模式签名失败),done 不会被调用;
 // 路由模式的签名失败由 SendForwardForInternalReply 同步回调 done(按调用失败处理),这里仍返回 true。
 template <typename Request, typename Response, typename Reply>
-static bool SendGateSynthesizedLoginRequest(const char *what, const uint32_t messageId, const SessionId sessionId,
-	const SessionInfo &session, std::function<void(const Reply &, std::chrono::steady_clock::time_point)> done,
+static bool SendGateSynthesizedLoginRequestWithDetails(const char *what, const uint32_t messageId, const SessionId sessionId,
+	const std::string &sessionDetailsBin, const Request &request,
+	std::function<void(const Reply &, std::chrono::steady_clock::time_point)> done,
 	void (*sendDirect)(entt::registry &, entt::entity, const Request &, GrpcDone<Response>, const GrpcCallOptions &))
 {
-	SessionDetails sessionDetails = BuildSessionDetails(sessionId, session.playerId, &session);
-	sessionDetails.set_session_incarnation(session.incarnation);
-	std::string sessionDetailsBin;
-	if (!sessionDetails.SerializeToString(&sessionDetailsBin))
-	{
-		LOG_ERROR << what << " not sent: session details serialization failed, session_id=" << sessionId;
-		return false;
-	}
-	const Request request;
-
 	if (gate_router_mode::IsRouterModeEnabled())
 	{
-		// 路由模式:gate 对 login 零 stub,合成一条 ClientRequest 经路由服转给同 zone 的 login(与断线通知同一条 Forward)。
+		// 路由模式:gate 对 login 零 stub,合成一条 ClientRequest 经路由服转给同 zone 的 login。
 		muduo_grpc::Channel *routerChannel = PickRouterChannel(messageId);
 		if (routerChannel == nullptr)
 		{
@@ -373,6 +358,25 @@ static bool SendGateSynthesizedLoginRequest(const char *what, const uint32_t mes
 	return true;
 }
 
+// 连接还在时的 gate 合成请求(排空迁移要票、续租):按会话此刻的状态构造 SessionDetails,请求体为空。
+// 返回值与 done 的契约同 SendGateSynthesizedLoginRequestWithDetails;会话序列化失败也算没发出。
+template <typename Request, typename Response, typename Reply>
+static bool SendGateSynthesizedLoginRequest(const char *what, const uint32_t messageId, const SessionId sessionId,
+	const SessionInfo &session, std::function<void(const Reply &, std::chrono::steady_clock::time_point)> done,
+	void (*sendDirect)(entt::registry &, entt::entity, const Request &, GrpcDone<Response>, const GrpcCallOptions &))
+{
+	SessionDetails sessionDetails = BuildSessionDetails(sessionId, session.playerId, &session);
+	sessionDetails.set_session_incarnation(session.incarnation);
+	std::string sessionDetailsBin;
+	if (!sessionDetails.SerializeToString(&sessionDetailsBin))
+	{
+		LOG_ERROR << what << " not sent: session details serialization failed, session_id=" << sessionId;
+		return false;
+	}
+	return SendGateSynthesizedLoginRequestWithDetails<Request, Response, Reply>(what, messageId, sessionId, sessionDetailsBin,
+		Request{}, std::move(done), sendDirect);
+}
+
 // 排空迁移向 login 要一张换 gate 的票(ClientPlayerLogin.RequestGateMigration,docs/design/gate-drain-session-migration.md §4.3),
 // 经 gate_drain_migration::SetRequestSender 注入。票据是否送出由 drain_migration 复核会话后决定。
 static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInfo &session,
@@ -391,6 +395,18 @@ static bool SendLoginSessionRenewRequest(const SessionId sessionId, const Sessio
 	return SendGateSynthesizedLoginRequest<loginpb::RenewSessionRequest, loginpb::RenewSessionResponse,
 		gate_login_renewal::RequestReply>("Login session renewal", ClientPlayerLoginRenewSessionMessageId,
 		sessionId, session, std::move(done), &loginpb::SendClientPlayerLoginRenewSession);
+}
+
+// 已关闭连接的断线通知(ClientPlayerLogin.Disconnect),经 gate_login_renewal::SetDisconnectSender 注入。连接与会话都已不在,
+// 身份用断线当下序列化好的那份 SessionDetails;什么时候发、没成怎么重发都在 login_session_renewal.cpp。
+static bool SendLoginDisconnectNotice(const gate_login_renewal::DisconnectNotice &notice,
+	gate_login_renewal::DisconnectReplyCallback done)
+{
+	loginpb::LoginNodeDisconnectRequest request;
+	request.set_session_id(notice.sessionId);
+	return SendGateSynthesizedLoginRequestWithDetails<loginpb::LoginNodeDisconnectRequest, loginpb::LoginEmptyResponse,
+		gate_login_renewal::DisconnectReply>("Login disconnect notice", ClientPlayerLoginDisconnectMessageId,
+		notice.sessionId, notice.sessionDetailsBin, request, std::move(done), &loginpb::SendClientPlayerLoginDisconnect);
 }
 
 // ---- 客户端 LeaveGame / EnterGame 的会话状态变化(client-request-ordering.md §4.4、§4.6;location-release-binding.md §3.5)----
@@ -484,8 +500,10 @@ GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 	// 排空迁移的两个出口(drain_migration.h):向 login 要票、推 msg 124。同样是函数指针,不捕获对象。
 	gate_drain_migration::SetRequestSender(&SendGateMigrationRequest);
 	gate_drain_migration::SetRedirectPusher(&gate_redirect::PushRedirect);
-	// 登录态续租的出口(login_session_renewal.h):为仍然连着的连接向 login 发 RenewSession。同样是函数指针,不捕获对象。
+	// 登录态续租与断线通知的两个出口(login_session_renewal.h):为仍然连着的连接向 login 发 RenewSession;为已关闭的连接发
+	// Disconnect,login 确认之前由该模块退避重发。同样是函数指针,不捕获对象。
 	gate_login_renewal::SetRequestSender(&SendLoginSessionRenewRequest);
+	gate_login_renewal::SetDisconnectSender(&SendLoginDisconnectNotice);
 	// 场景 lane 的发送出口(client_scene_lane.h):把客户端消息交给会话当前绑定的 scene 节点。同样是函数指针,不捕获对象。
 	gate_scene_lane::SetSceneSender(&SendClientMessageToScene, kGateToSceneClientCallTimeout);
 
@@ -795,8 +813,10 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 	// 永久留在 ONLINE。
 	if (shouldNotifyLogin)
 	{
-		loginpb::LoginNodeDisconnectRequest request;
-		request.set_session_id(sessionId);
+		// 通知交给登录态续租模块送达(login_session_renewal.h):本拍预算有余量就当场发出;login 确认(它自己的清理与
+		// SetDisconnecting 都成了)之前,失败、没发出、结果未知都按退避原样重发。两种出站模式同一个出口(SendLoginDisconnectNotice:
+		// 路由模式合成 58 号经路由服 Forward,直连模式直发 login),应答都要检查。不能在这里发完就忘:会话随后就删,
+		// 一次丢失(挑不到 login 或路由服、调用失败、login 的下游失败)就再没有人能补,player_locator 的会话没有 TTL、停在 ONLINE。
 		// 未绑定玩家时 player_id 为 0(kInvalidGuid 由 BuildSessionDetails 归一;见上面的注释:Login 会在 playerID==0 门禁早退)。
 		SessionDetails sessionDetails = BuildSessionDetails(sessionId, playerId, &sessionIt->second);
 		// 必须带会话代次:login 会话栅栏按 (gate_instance_id, session_incarnation) 记闭合标记,
@@ -804,65 +824,23 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 		// (client-request-ordering.md §6.2)。shouldNotifyLogin 蕴含 sessionFound,且此处在
 		// 下面的 OnSessionClosing / erase 之前,sessionIt 有效。gate_call_seq 留 0:回包不归 lane。
 		sessionDetails.set_session_incarnation(sessionIt->second.incarnation);
-
-		if (gate_router_mode::IsRouterModeEnabled())
+		gate_login_renewal::DisconnectNotice notice;
+		notice.sessionId = sessionId;
+		notice.incarnation = sessionIt->second.incarnation;
+		notice.playerId = PlayerForLogContext(playerId);
+		if (sessionDetails.SerializeToString(&notice.sessionDetailsBin))
 		{
-			// 路由模式(client-rpc-router.md D34):gate 对 login 零 stub,断线通知合成一条
-			// ClientRequest 走与客户端请求同一条 Forward 路径,路由服按 message_id 转给
-			// 同 zone 的 login,Login 侧看到的请求体与 metadata 与直连时完全相同。
-			// id=0:这是单向通知;回包 MessageContent 到达时会话已 erase,桥接找不到会话
-			// 直接丢弃 —— 与直连模式下 LoginNodeDisconnectResponse 的处置一致。
-			// 没发出时(无路由服采样 WARN;签名失败等调用没构造出来采样 ERROR,不再进失败桥)已经留痕;这里没有客户端
-			// 可回 tip,Login 侧的会话状态由其自身租约超时兜底(与直连模式下 login 全下线时的行为一致)。
-			ClientRequest disconnectRequest;
-			disconnectRequest.set_id(0);
-			disconnectRequest.set_message_id(ClientPlayerLoginDisconnectMessageId);
-			disconnectRequest.set_body(request.SerializeAsString());
-			SendViaRouter(disconnectRequest, sessionDetails);
+			gate_login_renewal::NoteConnectionClosed(std::move(notice), std::chrono::steady_clock::now());
 		}
 		else
 		{
-			const auto loginNode = PickRandomNode(eNodeType::LoginNodeService);
-			if (loginNode)
-			{
-				GrpcCallOptions options;
-				std::string bin;
-				if (sessionDetails.SerializeToString(&bin))
-				{
-					options.metadata.emplace_back(kSessionBinMetaKey, bin);
-				}
-				if (caller_auth::Append(options.metadata,
-					gRpcMethodRegistry[ClientPlayerLoginDisconnectMessageId].grpcFullMethod,
-					bin))
-				{
-				loginpb::SendClientPlayerLoginDisconnect(
-					tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request,
-					[sessionId](const GrpcCallOutcome &outcome, const loginpb::LoginEmptyResponse *)
-					{
-						if (outcome.ok())
-						{
-							return; // 会话随后就 erase,没有客户端可回。
-						}
-						static uint64_t failedCount = 0;
-						if ((failedCount++ & 0x3FF) == 0)
-						{
-							LOG_WARN << "Login disconnect call failed (sampled), session_id=" << sessionId
-							         << ", code=" << outcome.code << ", message=" << outcome.message
-							         << ", failed_total=" << failedCount;
-						}
-					},
-					options);
-				}
-				else
-				{
-					LOG_ERROR << "Disconnect notification signing failed; continuing local session cleanup";
-				}
-			}
+			LOG_ERROR << "Disconnect notice not queued: session details serialization failed, session_id=" << sessionId
+					  << ", player_id=" << notice.playerId;
 		}
 	}
 
 	// 路由 lane:注销在途调用(晚到的回包一律丢弃)、丢弃没发出的排队项;不等在途调用(O8)。
-	// gate 合成的 Disconnect 不进 lane(上面已直接发出,gate_call_seq = 0),由 login 会话栅栏兜底。
+	// gate 合成的 Disconnect 不进 lane(上面已交给续租模块送达,gate_call_seq = 0),由 login 会话栅栏兜底。
 	if (sessionFound)
 	{
 		gate_lane::OnSessionClosing(sessionIt->second);
@@ -917,10 +895,10 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 	// 不影响下面「第一道闸」的口径。这个根也是一个 server span(§10.3;没配导出时不读时钟)。
 	tracing::ScopedRoot connectTrace(tracing::SpanSystem::kGateClient, tracing::SpanName{"gate.connect"});
 	// 并发连接上限的第二道(纵深防御)。第一道在 muduo Acceptor 的准入回调里(connection_admission.h,
-	// main.cpp 经 TcpServer::setAdmissionCallback 装上):关源、总量、新建速率都在 accept 之后、TcpConnection 建出来
-	// 之前判,被拒的连接当场以 RST 关闭,走不到这里(docs/design/gate-connection-admission-control.md P1-1 ~ P1-3)。
+	// main.cpp 经 TcpServer::setAdmissionCallback 装上):关源、总量、未验签预算、新建速率都在 accept 之后、TcpConnection 建出来
+	// 之前判,被拒的连接当场以 RST 关闭,走不到这里(docs/design/gate-connection-admission-control.md P0-2、P1-1 ~ P1-3)。
 	// 这里留着同一条总量判据,是为了准入回调没装上时(单测直接调本函数,或以后有人改了装配顺序)上限仍然成立:
-	// 在发 session_id、建 SessionInfo 之前拒掉。
+	// 在发 session_id、建 SessionInfo 之前拒掉。未验签预算不在这里重判:它要淘汰别的连接,只在准入回调里做一处。
 	//
 	// gate 是唯一对公网开放的端口,而 muduo 的 TcpServer 无条件 accept:没有这两道闸,不需要任何凭证,
 	// 只要一直建连就能把 gate 的 fd、SessionMap 和每连接读写缓冲吃光;token 校验发生在这之后,
@@ -1049,8 +1027,9 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 
 	const auto sessionEntry = tlsSessionManager.sessions().emplace(sessionId, std::move(session)).first;
 	const auto establishedAt = std::chrono::steady_clock::now();
-	// 连接类指标(connection_admission.h):计一次接纳;还没验签的会话领一个未验签占位,验签成功或会话销毁时归还。
-	gate_connection_admission::OnSessionOpened(sessionEntry->second, establishedAt);
+	// 连接类指标(connection_admission.h):计一次接纳;还没验签的会话领一个未验签占位,验签成功或会话销毁时归还,
+	// 并按建连先后进未验签预算的淘汰索引(承压时最老的先让位,索引按 session_id 与会话代次核对)。
+	gate_connection_admission::OnSessionOpened(sessionEntry->first, sessionEntry->second, establishedAt);
 	// 握手期限(docs/design/gate-client-heartbeat.md §5.1):建连 10s 内必须验签,判据是距建连的时长,不看期间有没有发字节。
 	// dev 免验签的会话上面已置 verified,不用登记。
 	if (!sessionEntry->second.verified)

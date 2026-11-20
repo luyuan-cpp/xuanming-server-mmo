@@ -24,7 +24,7 @@
 #   每个时刻 HTTP 抓完后,再对 -RedisTargets 里的每个实例抓一次 `redis-cli INFO <sections>`,
 #   存成 `t{N}m_redis_<name>.txt`,首行是 `# stress_snap target=<name> spec=<spec> captured_at=<ISO8601>`,
 #   之后是 INFO 原文。stress_summarize.ps1 用两次快照之差出 ops/s、CPU、命令级耗时。
-#   本机与 K8s 都没有 redis_exporter,所以走 INFO 文本快照。
+#   快照统一抓 INFO 文本,汇总脚本只认这一种格式。本机没有 redis_exporter;K8s 上各 Redis 都带 exporter,但这里不读它。
 #
 # 参数:
 #   -RedisTargets       hashtable,name → spec,缺省 @{ core = 'docker:redis' };传 @{} 关闭 Redis 抓取。

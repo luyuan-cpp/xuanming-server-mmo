@@ -97,39 +97,6 @@ const (
 	PlayerStoreUnknown     = "unknown_outcome"
 )
 
-// storeCooldownCollector 在每次抓取时现算 db_store_cooldown_stores:此刻仍在库级冷却期内(探活确认整库不可达)的库个数,
-// 按连接池类别分。不用 Gauge 在进出冷却时设值:冷却到期后要等下一次选库探活才删记录,某个库到期后再也没有流量时
-// 设值式的指标会一直挂着,告警跟着常亮。
-type storeCooldownCollector struct {
-	source func() map[string]int
-	desc   *prometheus.Desc
-}
-
-func (c *storeCooldownCollector) Describe(ch chan<- *prometheus.Desc) { ch <- c.desc }
-
-func (c *storeCooldownCollector) Collect(ch chan<- prometheus.Metric) {
-	counts := c.source()
-	for _, pool := range poolClasses {
-		ch <- prometheus.MustNewConstMetric(c.desc, prometheus.GaugeValue, float64(counts[pool]), pool)
-	}
-}
-
-// NewStoreCooldownCollector 只构造不注册(单测用自己的注册表)。
-func NewStoreCooldownCollector(source func() map[string]int) prometheus.Collector {
-	desc := prometheus.NewDesc(prometheus.BuildFQName("", subsystem, "store_cooldown_stores"),
-		"Player store databases currently cooling down after a probe confirmed they are unreachable. pool: store.",
-		[]string{"pool"}, nil)
-	return &storeCooldownCollector{source: source, desc: desc}
-}
-
-// RegisterStoreCooldown 把落点库注册表的冷却计数接到默认注册表。进程内调一次;注册失败只记日志,不挡落库。
-func RegisterStoreCooldown(source func() map[string]int) {
-	register()
-	if err := prometheus.Register(NewStoreCooldownCollector(source)); err != nil {
-		logx.Errorf("[metrics] register store cooldown collector failed (db_store_cooldown_stores unavailable): %v", err)
-	}
-}
-
 // 按需打开落点库的 result label 取值。
 const (
 	StoreOpenOK       = "ok"
@@ -144,7 +111,7 @@ const (
 	PoolStore = "store" // 地域存档库 player_store_{>=1000000}_db,每个库一个池
 )
 
-// poolClasses 是两个按类别输出的收集器要逐项输出的全部类别(没有池时输出 0,不存在序列从无到有的漏报)。
+// poolClasses 是连接池收集器要逐项输出的全部类别(没有池时输出 0,不存在序列从无到有的漏报)。
 var poolClasses = []string{PoolStore}
 
 // NewSQLPoolCollector 只构造不注册(单测用自己的注册表)。sql_client 取本包的 subsystem("db")。

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"robot/metrics"
+	"robot/pkg"
 )
 
 // httpAssignGateRequest mirrors java/gateway_node AssignGateRequest. Snake
@@ -37,6 +38,7 @@ type httpAssignGateResponse struct {
 	Code           int    `json:"code"`
 	GateIP         string `json:"gate_ip"`
 	GatePort       int    `json:"gate_port"`
+	GateWsURL      string `json:"gate_ws_url"` // 小游戏连这台 gate 的 WebSocket 地址,gate 没自报时为空
 	TokenPayload   []byte `json:"token_payload"`
 	TokenSignature []byte `json:"token_signature"`
 	TokenDeadline  int64  `json:"token_deadline"`
@@ -102,6 +104,11 @@ func postJSONWithClient(client *http.Client, url string, payload any, timeout ti
 	if err := json.Unmarshal(respBody, &out); err != nil {
 		// 错误会进入日志；应答正文和解码错误的值字段都可能含票据。
 		return nil, fmt.Errorf("decode resp: status=%d response_bytes=%d error_type=%T", httpResp.StatusCode, len(respBody), err)
+	}
+	// 放行回包(assign-gate 与 queue-status 共用这个形状)带着 gate 地址:把同一台 gate 的 WebSocket 地址登记下来,
+	// 连接时按 ip:port 查(pkg/transport.go)。没带就清掉旧记录。
+	if out.Code == 0 && out.GateIP != "" {
+		pkg.AdvertiseWsURL(out.GateIP, out.GatePort, out.GateWsURL)
 	}
 	return &out, nil
 }

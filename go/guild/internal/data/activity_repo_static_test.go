@@ -421,10 +421,17 @@ func TestActivityLockOrderInSource(t *testing.T) {
 		}},
 		{"activity_repo.go", "deleteGuildActivityProgress", []string{"readActivityProgressKeys", "sqlDeleteActivityProgress"}},
 		{"activity_repo.go", "deleteGuildTrialBattles", []string{"sqlSelectStartedTrialBattlesOfGuild", "sqlDeleteTrialBattle"}},
-		{"guild_manage_repo.go", "DisbandGuild", []string{
-			"lockGuildRow", "lockAllMembers", "sqlDeleteMember", "deleteApplicationRows",
+		// 解散:G(核授权)之后的写都在 disbandLockedGuild,删角收尾的单人帮解散共用这一段。
+		{"guild_manage_repo.go", "DisbandGuild", []string{"lockGuildRow", "disbandLockedGuild"}},
+		{"guild_manage_repo.go", "disbandLockedGuild", []string{
+			"lockAllMembers", "sqlDeleteMember", "deleteApplicationRows",
 			"accelerateDonationDeadlines", "deleteGuildActivityProgress", "deleteGuildTrialBattles", "sqlDeleteGuild",
 		}},
+		// 删角收尾:G → S → M(离帮 / 让位 / 解散)→ A → Q / C / R。
+		{"role_fence_purge.go", "PurgeRemovedRole", []string{"purgeGuildMembership", "deleteApplicationsOfPlayer", "purgePlayerRows"}},
+		{"role_fence_purge.go", "purgeGuildMembership", []string{"lockGuildRow", "sqlLockPlayerState", "leaveGuildOnPurge"}},
+		{"role_fence_purge.go", "handOverGuild", []string{"lockMemberPair", "sqlUpdateMemberRole", "sqlDeleteMember", "countMembersByRole"}},
+		{"role_fence_purge.go", "disbandSoloGuild", []string{"sqlEnsurePlayerState", "disbandLockedGuild"}},
 
 		// 历练结算:G → [T 普通读] → M → Q(全部)→ [C 普通读] → O → C → P(+ 再写 G)→ 再写 M → T → W。
 		{"activity_repo.go", "settleTrialBattle", []string{

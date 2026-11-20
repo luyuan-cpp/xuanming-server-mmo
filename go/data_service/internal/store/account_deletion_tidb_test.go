@@ -151,6 +151,15 @@ func TestTiDBAccountDeletionPrecheckBlocksWithoutWriting(t *testing.T) {
 	require.EqualValues(t, 9201, out.Blockers[0].PlayerId)
 	require.Equal(t, "guild_leader", out.Blockers[0].Reason)
 	require.Equal(t, dspb.AccountDeletionState_ACCOUNT_DELETION_STATE_NONE, deletionState(t, s, ctx, account), "预检没过什么都不写")
+	// 试探必须带删角令牌:参与者不收没有令牌的 PrepareRoleFreeze,而且按令牌种类选删角的判据(不是过户的「先离帮」)。
+	fences.mu.Lock()
+	probed := fences.probed[len(fences.probed)-1]
+	fences.mu.Unlock()
+	require.Equal(t, rolefence.RemovalToken(9201), probed.FreezeToken)
+	require.False(t, probed.FreezeFinal)
+	owner, err := s.Lookup(ctx, 9201)
+	require.NoError(t, err)
+	require.Zero(t, owner.TradeListingId, "试探不写目录行")
 
 	// 问不齐不算通过。
 	fences.setDryRun(rolefence.PrepareRetry)
@@ -158,6 +167,24 @@ func TestTiDBAccountDeletionPrecheckBlocksWithoutWriting(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dspb.AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_RETRY, out.Outcome)
 	require.Equal(t, dspb.AccountDeletionState_ACCOUNT_DELETION_STATE_NONE, deletionState(t, s, ctx, account))
+
+	// 运维代办:帮主不拦(没有玩家去转让,执行时收尾自动让位);在途业务照拦。
+	fences.setDryRun(rolefence.PrepareBlocked)
+	fences.mu.Lock()
+	fences.blockers = []string{"guild_leader", "trade_commerce"}
+	fences.mu.Unlock()
+	out, err = s.RequestDeletion(ctx, account, DeletionSourceAdmin, 0)
+	require.NoError(t, err)
+	require.Equal(t, dspb.AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_BLOCKED, out.Outcome)
+	require.Len(t, out.Blockers, 1)
+	require.Equal(t, "trade_commerce", out.Blockers[0].Reason)
+	fences.mu.Lock()
+	fences.blockers = []string{"guild_leader"}
+	fences.mu.Unlock()
+	out, err = s.RequestDeletion(ctx, account, DeletionSourceAdmin, 0)
+	require.NoError(t, err)
+	require.Equal(t, dspb.AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_OK, out.Outcome)
+	require.Equal(t, dspb.AccountDeletionState_ACCOUNT_DELETION_STATE_PENDING, deletionState(t, s, ctx, account))
 }
 
 func TestTiDBAccountDeletionOverdueCount(t *testing.T) {

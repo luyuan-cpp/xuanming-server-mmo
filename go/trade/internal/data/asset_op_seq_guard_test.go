@@ -29,6 +29,7 @@ import (
 	assetpb "proto/common/asset"
 
 	"shared/assetop"
+	"shared/authoritysql"
 )
 
 // ── 录制驱动 ────────────────────────────────────────────────
@@ -653,7 +654,7 @@ func TestAllocateSeqsTxFailsClosedWhenRowVanished(t *testing.T) {
 			t.Fatalf("确认读落空之后仍然去取了玩家 seq 行的 X:应当在一把锁都没拿之前就失败: %s", stmt)
 		}
 	}
-	if IsRetryableTxError(err) {
+	if authoritysql.IsRetryableTxError(err) {
 		t.Error("ErrSeqRowMissingInTx 不得被判成可重试错误:行不会自己回来,重试只是空转")
 	}
 }

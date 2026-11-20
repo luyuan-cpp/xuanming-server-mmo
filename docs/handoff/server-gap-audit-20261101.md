@@ -64,6 +64,28 @@
 - Codex 11-11 报的 `asset_op_system.cpp:431` 裸指针成员阻塞(`dev.bat build` 停在 scene),已由别的会话改成 `std::string`。
 - 11-12 晚复核:第 2 条残余与第 24 条热池拆分都已落码(未生成、未编译,见 `docs/PROGRESS.md` 2026-11-12 两条同名条目);第 34 条第 2a 批负责人同意一批改约 60 个文件,会话正在做,2b~7 批排在它之后。按模式分榜的会话把第 18 条的「N+」接进了它的按榜快照,两条客户端用例仍在;A18 的连接复用在第 20 条合并读的基础上接着做,不冲突。
 
+**11-19 核对(「接着做完服务器剩下的代码(缺口清单续)」会话,由「Turn battle gap closure handoff」开出;只对文档、代码与在跑会话核对,没有编译)**:
+
+- **做完的(本会话,都未编译,命令在 `docs/PROGRESS.md` 2026-11-19 四条)**:断线重连清单剩下的四项。
+  - R3:guild、player_locator、login 三份注册实现迁成 `shared/noderegistry` 薄适配层,注册层告警 `noderegistry-alerts.yaml`;
+  - R6 残余:「事务已整体回滚、可整笔重跑」收成 `authoritysql.IsRetryableTxError` 一处,guild 请求路径接上提交前中止,mail / rank 的事务循环换成共享骨架;
+  - R17:C++ 各依赖的连接指标与告警 `cpp-node-dependency-alerts.yaml`;
+  - R19:C++ etcd 地址改为只认一个、CLUSTER SLOTS 在途加上限、Kafka 启动核对不再卡主循环两分钟,scene_manager / client_rpc_router 先监听后注册,两侧过时注释;其余子项核过不用改,理由在 `infra-reconnect-overview.md` §4.1 R19 行。
+- **有会话在做(11-19 看过它们正在改文件)**:
+  - 第 34 条:代码与文档都已写完(第 6b-2 批由「控制面按 zone 化」会话、第 7 批由「Redis 分布式水平扩展」会话,11-19 各自在上面第 34 条下记了),只剩 Codex 验证。
+  - 断线重连 §4 末尾五条待确认:「所有服务中 redis mysql tidb etcd 等包括工会啊」会话在做,已修 match 组队池成局冲突误记 HOLD、Go 内部调用补 keepalive,gate 断线通知改成「至少送达一次」在改。
+  - gate 连接准入:P0-2(预算 / LRU / 按概率早拒)归「gate 未验签连接预算、LRU 淘汰与按概率早拒(准入 P0-2)」会话;battle 前移归「battle 直连准入前移到 Acceptor、拒绝发 RST、加速率闸」会话。
+  - 小游戏 WebSocket 接 gate / battle:「小游戏客户端连 gate:WebSocket 入口与传输」会话已在落码(Go 与本仓 Java 网关的 ws 地址)。
+  - App 形态的实名防沉迷:「实名认证与未成年人防沉迷」会话已在落码(login / data_service 的接入点)。
+  - 客户端 Apple / Google 登录与账号注销:「海外上架」会话在做。
+  - 上面两项原来记的是「约 60 / 约 50 个文件,等负责人批准」;是否已经批准,以那两个会话里负责人的回复为准。
+- **等负责人批准(「游戏应用支付系统接入」会话已空闲,批准后由它接着做)**:
+  - 支付的 K8s 部署:清单、`payment-migrate` Job、Secret、部署契约测试本身不缺决定,缺的是回调入口——微信 / 支付宝 / App Store / Google Play 的到账通知要一个公网 HTTPS 域名与证书,用哪个域名、证书怎么签要负责人定;
+  - App Store、Google Play 的客户端桥:工程里没有 StoreKit 2 / Play Billing 插件,装哪一个(AGENTS §10.2:装依赖要授权)要负责人定;
+  - 生产四个 App 渠道的开关:等实名会话的未成年人充值限额(合规闸),不是批准项,是依赖。
+- **新发现**:go/db 存档库的运行期冷却(`ReportConnLost` / `CoolingDown`)随已删的 Kafka 任务消费者一起没了调用方,`db_store_cooldown_stores` 恒为 0。11-19 定为整套删除(连同 `storeerr` 与这个指标,打开失败的冷却保留;依据在 `docs/design/db-task-store-unavailable-deferral.md` 文首),代码已改、未编译,验证看 PROGRESS 2026-11-19「go/db 删除存档库运行期冷却」。
+- 第 1~35 条其余状态照 11-11 / 11-12 核对:剩下的是 Codex 验证或 Java 待做。
+
 **11-11 归属核对(会话「服务器代码缺口清单」逐条核对;负责人要求每一条剩下的事都要有窗口)**:下表是 11-11 全部条目里还没收尾的部分。「Codex」表示剩下的只是编译、测试、冒烟、部署契约或压测执行;「Java」表示只剩 Java 版,已在 Java 仓 `PARITY.md` 登记待做。新开的窗口都在 main 上做、不开分支。
 
 | 条目 | 还剩什么 | 归谁 |
@@ -272,6 +294,12 @@
 ### 11-10 新发现:挡水平扩展
 
 34. **(11-10 负责人要求;「Redis 分布式水平扩展」会话认领;设计已写、未落码,见 [redis-cluster-all-domains-20261110.md](../design/redis-cluster-all-domains-20261110.md))服务器里的 Redis 没有全部分布式水平扩展。** **11-11 接手**:原认领会话已结束(PROGRESS 11-11 有记),由「服务器代码缺口补完」[37a1b5] 接手,从批 1 开始按设计稿 §10 逐批落码;同名会话 [aca21c] 及其他会话要动第 34 条,先找它对分工。
+   - **11-19 收口**:
+     - 第 34 条各批的代码与文档都已写完(第 6b-2 批 11-19 写完,见下面 6b 那几条)。
+     - 观战大厅三把全服 ZSET 拆成 16 桶,列表读加每副本 1 秒缓存(PROGRESS 11-19)。
+     - 设计稿 §6.2「排队不拆分片」与 §6.3「单 zone 独占主节点,再大就拆 zone」已定案,不再等压测。
+     - 全部未编译,待 Codex 按各批 PROGRESS 条目验证。
+     - `9824368eb` 把 match 观战的生产代码提交了,配套测试还在工作区:单看 HEAD 编不过,两者要一起提交。
    - **11-11 第 1 批落码,未编译**:[37a1b5] 写了 `go/shared/clusterredis`(从 playerredis 拷来,加两种键策略)与 `go/shared/redisslot/control_keys.go` 之后不在了。「Redis 分布式水平扩展」会话(现为 [3204dc],负责人 11-11 让它开工)接着补完:`playerredis` 改成只剩别名、控制策略用例、C++ 族表镜像、`KeyDomain` 与 `SPUBLISH` 登记。第 2a 批起由 [3204dc] 继续,要动第 34 条的会话先找它。验证命令见 PROGRESS 2026-11-11「全部 Redis 上 Cluster 第 1 批」。
    - **11-12 第 2a 批落码,未编译**:「Redis 上 Cluster 第 2a 批:scene_manager 键改形」会话把 scene_manager 控制域键全部改成 `{ctl:<z>}`(场景键加 zone 参数、删 `scene:<id>:zone` 与 `foreign` 分支、只给场景号的入口按本进程的 zone),四个跨语言键同批改 C++,约 100 个文件(超过每批 30 个,理由见设计稿 §10 表第 2a 行;负责人 11-12 答「同意一批做完」,当时问的是约 60 个文件,实际约 100 个)。验证命令见 PROGRESS 2026-11-12「全部 Redis 上 Cluster 第 2a 批」;第 2b 批(换句柄)起未开工。做 2a 的会话只受派这一批,不接后面的批次;截至 11-12,第 2b、3、6、7 批清单里无人认领(第 4、5 批见下两条),由发起会话「Redis 分布式水平扩展」或负责人安排。第 2b 批还要等「分布式锁安全性与一致性」会话的 R7(任期号)与第 5c 批的 `shared/leader` UniversalClient 版 store。
    - **11-12 第 5 批由「按缺口清单做完服务器代码(11-05 额度重置后)」会话认领并开工**(它只依赖第 1 批,与第 2a 批不碰同一批文件):拆成 5a(guild 键改形、去 SCAN、每 zone 维护锁、assetopfix,连同 `tools/data_consistency_check`)、5b(friend 换句柄、player_locator 控制键加 `{pl:gix}`)、5c(data_service 名字缓存 `MGetBySlot` 与换句柄、trade 与 player_inbox 换句柄、`shared/leader` 的 UniversalClient 版 store、R8 收口)、5d(这六个服务 `ControlRedis` 段的最小渲染与契约测试;集群模板与参数仍归第 6 批),逐个落码、各记一条 PROGRESS。唤醒频道改分片(SPUBLISH / SSUBSCRIBE)仍归第 3 批,本批不动。第 2b、3、6、7 批还没人认领(第 4 批见下一条)。**11-12 晚子批状态(全部未编译,见 PROGRESS 同日「第 5a / 5b / 5c 批」三条)**:5a guild 已落码(`tools/data_consistency_check` 由「数据审计遗留」会话改,本会话没碰);5b friend、player_locator 已落码;5c data_service 唤醒句柄与 trade 已落码、`shared/leader` 新增 `store_universal.go`(`NewUniversalStore`),data_service 名字缓存(`MGetBySlot`)与 player_inbox 因别的会话正在改同一批文件未做;5d 渲染未做(`k8s_deploy.ps1` 与部署契约测试正被别的会话改),要改的点列在 5c 条目末尾。**11-12 深夜收尾(未编译,见 PROGRESS 同日「第 5 批收尾」)**:player_inbox 的 `CoreRedis` 已换成 `ControlRedis`(选主改 `NewUniversalStore`),唤醒频道的过时注释已改;5d 渲染并入第 6b 批,由「控制面按 zone 化与控制域 Redis 分片(缺口第 4、5 条)」会话做,它要求别的会话不要改 `k8s_deploy.ps1` 与那三份部署契约测试;在 6b 接上之前 guild、friend、player_locator、data_service、trade、player_inbox 的 K8s 渲染与部署契约测试会读不到旧段名而报错。**只剩 data_service 名字缓存**(`NameCacheRedis` 换 UniversalClient、`MGetBySlot`、`create_residual` 的 `-name-cache-*` 参数):`data_service.go`、`routing/player_name_cache.go`、`cmd/create_residual` 当时有别的会话的在途改动,没人认领;接手的会话先看这三个文件的 `git diff`,做完告诉第 6b 批的会话。
@@ -284,9 +312,11 @@
      - **11-13 6b 开工**:第 2b(scene_manager)、3(C++ `control_redis`、gate / battle 不连 Redis)、5(guild、friend、player_locator、data_service、trade、player_inbox)批的会话都已告知配置段定稿,第 5 批的 5d(`k8s_deploy.ps1` 渲染)并进 6b;data_service 的 `NameCacheRedis` 仍保留,等名字缓存改完再合并。
      - **11-13 名字缓存改完,第 5 批代码全部写完**(G4a 会话 [5e2384],未编译):`NameCacheRedis` 段删除、并进 `ControlRedis`;批量读改单键 GET 管道(不用 `MGetBySlot`:不带 tag 的同槽两键会被控制集群守卫拒绝,理由在设计稿 §4.8);常驻启动无条件要求 `ControlRedis.Addrs`;`create_residual` 参数改 `-name-cache-addrs` / `-name-cache-cluster`。6b 渲染里 data_service 可以删 `NameCacheRedis` 段了(已发消息)。验证见 PROGRESS 2026-11-13「第 5 批收尾——data_service 名字缓存并进控制集群」。
      - **11-19 6b-1 代码写完,未运行**(同一会话;验证命令见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 6b-1 批」,落码与偏差见设计稿 §10.7):全部控制域客户端(八个 Go 服务、gateway、scene)接控制端点,gate / battle 不连 Redis,口令按服务取 Secret,开控制集群必须同时开玩家域集群,总账按域拆,退役 queue / ctl 实例与 `-RedisSplit` 等五个参数,集群成员反亲和在 staging / prod 改 required。6a 与 6b-1 一起验证。6b-2(退役 staging / prod 的核心单实例、`-RedisReplicas` 与 `redis-ha.yaml`)由同一会话接着做;第 7 批文档由「Redis 分布式水平扩展」会话接,`deploy/k8s/README.md` 与 `deploy/k8s/AGENTS.md` 归 6b。
+     - **11-19 6b-2 代码写完,未运行**(同一会话;验证命令见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 6b-2 批」,落码与定案见设计稿 §10.8):staging / prod 不再部署核心单实例(`Test-CoreRedisDeployed`:只有 dev 没开控制集群时部署),也不读 `MMORPG_REDIS_PASSWORD`;`-RedisReplicas` 与高可用清单 `redis-ha.yaml` 退役;match / mail 指向核心的回落段定案为不换(那两档走不到,走到也是连不上);附带删 login 的 `Node.QueueRedis`(7 个 Go 文件,单独一组验证)。至此第 34 条只剩各批的 Codex 验证。
    - **11-12 第 3 批由「Redis 上 Cluster 第 3 批:C++ 控制集群句柄与分片唤醒」会话认领并开工**(「Redis 分布式水平扩展」会话分派):C++ scene 两个句柄合成 `tlsControlRedis`、配置段合成 `control_redis`、三处读与归属对账、唤醒改 `SPUBLISH`、gate / battle 不再连 Redis、CreateScene 校验 zone(内部协议加字段)。Go `go/shared/assetopwake` 的 64 路 `SSUBSCRIBE` 由同题会话 [0cc556] 做(两边对好频道写法,只改那个包,订阅方调用点不动)。K8s 的 node-config 渲染与 gate / battle 口令环境变量仍归 6b。要动 `player_landing.h` 的唤醒常量、C++ 的 `control_redis` 配置段或 CreateScene 节点请求的会话先找它。
    - **11-12 第 3 批已落码,未生成协议、未编译**(PROGRESS 2026-11-12「全部 Redis 上 Cluster 第 3 批」与「第 3 批 Go 部分」两条,协调与偏差在设计稿 §10.5):3a 句柄、配置、唤醒发布、gate / battle 不连 Redis;3b CreateScene 校验 zone(`CreateSceneRequest.zone_id = 7`,节点 zone 不符或为 0 拒建);Go 订阅自己收包与重订,没用 `ChannelWithSubscriptions`(go-redis 在集群上自动重订会连错节点)。另加 Go 订阅端的真 Redis 用例(按环境变量开),Codex 在本机 7.2 与 8.x 两套集群各跑一轮。**K8s 上第 6b 批落地之前不要部署 scene**:旧渲染的 node-config 让它连到 127.0.0.1:6379(渲染要求已发给 6b,写在 §10.5)。仍剩:C++ 在真集群上的冒烟(等 2b、5、6b)。**11-19 补**:唤醒订阅只订本副本负责的片(guild、trade 用重投那张分工表,data_service 另开全服成员表),每条唤醒只投给 3 个副本,与 zone 数无关;新指标 `assetop_wake_subscribed_shards` 与告警。未编译,见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 3 批收尾」。
    - **11-12 第 2b 批落码,未编译**:做 2a 的会话接着做(负责人 11-12 在该会话说「没做完就按最标准的方式去做」,并同意这一批一次做完)。scene_manager 的 go-zero Redis 句柄与 `CoreRedis` 段退役,控制域与 gate 标记都走新的控制集群句柄 `controlredis.Client`(`clusterredis.New(…, ControlClusterKeys)` 上的形状适配层,调用点不改写);配置段 `ControlRedis`,配置里还写着 `Redis.Host` 就拒启;选主换 `leader.NewUniversalStore`,删 `shared/leader/store_gozero.go`;负载分刷新带围栏的 ZADD 单发;测试里经控制句柄读写玩家域键的 190 处改走玩家域句柄。52 个文件(问的时候估约 45)。验证命令见 PROGRESS 2026-11-12「全部 Redis 上 Cluster 第 2b 批」。**第 6b 批落地之前不要往 K8s 部署 scene-manager**(旧渲染会拒启),渲染要求写在设计稿 §10.4 末尾。
+   - **11-19 第 7 批(文档)已完成**(「Redis 分布式水平扩展」会话,只改文档,见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 7 批」):控制面设计稿、玩家域设计、TiDB 总体方案、G4a 设计稿(标历史稿)与文档索引、AGENTS.md §6、`tools/scripts/README.md` 按现状改写;设计稿 §6.2 / §6.3 按负责人 11-19「不等压测,按最标准的定」定案:排队不拆分片(每 zone 一个有序集合 + 按名次拉长 `RetryAfterMs` + 区服容量封顶),单 zone 的槽可迁到独占主节点、再大拆 zone、不拆脚本里的键。`deploy/k8s/README.md`、`deploy/k8s/AGENTS.md` 归 6b。第 34 条剩第 6b-2 批与全部批次的 Codex 验证;设计稿 §4.9 的观战大厅三把全局键由另一会话 11-19 拆桶落码(未编译,见该节)。
    - 负责人原话:「我要分布式水平扩展」。按 zone 组分单主实例(`redis-queue-g<N>`、`redis-ctl-g<N>`)和核心单主都不算完成,所有 Redis 都要能加主节点扩写入。
    - 现状(11-10 只读盘点):
      - 只有玩家域集群(玩家 + 登录域,已落码未运行)和 match 私有集群是 Cluster;排队、控制域每个 zone 组一个主;核心 `redis` 全服一个主,上面有 gate 标记、唤醒频道、四个服务的选主锁、guild 与 friend 私有键、player_locator 控制键、名字缓存。

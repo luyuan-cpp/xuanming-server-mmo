@@ -164,6 +164,8 @@ double RedisManager::JitteredReconnectIntervalSec(double baseSec, double jitterS
 
 void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAddress &addr, RedisConnectOptions options)
 {
+	// 换 Connect 周期是本端主动丢掉旧连接;要在 options_ 换成新值之前减,记回旧连接所属的那一类依赖。
+	CountConnectionDown(/*expected=*/true);
 	if (loop_)
 	{
 		CancelReconnectTimer();
@@ -220,6 +222,7 @@ void RedisManager::Shutdown()
 	// 若仍在 I/O 分发中，Hiredis 工厂保证实际析构在 pending 阶段完成。
 	lifetimeToken_.reset();
 	loop_.reset();
+	CountConnectionDown(/*expected=*/true);
 	// 释放业务连接可能同步回调并重入或销毁管理器，必须作为最后一步。
 	ResetConnections();
 }
@@ -247,6 +250,10 @@ void RedisManager::StartHandshake()
 			if (!token.lock()) return;
 			LOG_ERROR << "Redis disconnected (status=" << status << ", reason=" << DescribeConnectionError(*me, options_.password)
 					  << "), scheduling reconnect to " << redisAddr_.toIpPort();
+			if (me == connection_.get())
+			{
+				CountConnectionDown(/*expected=*/false); // 握手连接(还没移交)断开不算:它从没可用过
+			}
 			ScheduleReconnect();
 		});
 	handshakeRedis_->connect();
@@ -258,6 +265,7 @@ void RedisManager::OnHandshakeConnected(hiredis::Hiredis *me, int status)
 	{
 		LOG_WARN << "Redis connect attempt failed (status=" << status << ", reason="
 				 << DescribeConnectionError(*me, options_.password) << ") to " << redisAddr_.toIpPort() << ", will retry";
+		dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kConnect);
 		ScheduleReconnect();
 		return;
 	}
@@ -304,6 +312,7 @@ void RedisManager::SendAuth()
 	LOG_ERROR << "Redis AUTH could not be sent to " << redisAddr_.toIpPort() << " (ret=" << ret
 			  << ") -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec_
 			  << "s (metric=zone_redis_auth_failed)";
+	dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
 }
 
 void RedisManager::OnAuthReply(hiredis::Hiredis *me, const redisReply *reply)
@@ -329,12 +338,17 @@ void RedisManager::OnAuthReply(hiredis::Hiredis *me, const redisReply *reply)
 	LOG_ERROR << "Redis AUTH rejected by " << redisAddr_.toIpPort() << ": " << DescribeAuthFailure(reply, options_.password)
 			  << " -- zone Redis stays unavailable, retrying every " << reconnectPeriodSec_
 			  << "s (metric=zone_redis_auth_failed)";
+	dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
 	ScheduleReconnect(); // 截止定时器已在跑时是空操作;兜底保证一定会重试
 }
 
 void RedisManager::PromoteHandshake()
 {
 	CancelReconnectTimer();
+	// 被替换的旧连接按不变量已经断开、早已减过;万一还记着(不应发生),先减掉再加,gauge 不漂。
+	CountConnectionDown(/*expected=*/true);
+	connectionCounted_ = true;
+	dependency_link_metrics::OnUp(options_.metricsDependency);
 	// shared_ptr 移动赋值:先让 connection_ 指向握手连接,再释放被替换的对象。被替换的只会是占位对象或已断开的旧连接
 	// (见头文件不变量),析构不触发任何回调。握手连接本身没有被销毁,所以在它自己的连接 / 命令回调栈里移交是安全的。
 	connection_ = std::move(handshakeRedis_);
@@ -412,6 +426,7 @@ void RedisManager::DoReconnect()
 		LOG_ERROR << "Redis AUTH timed out on " << redisAddr_.toIpPort() << ": no reply within "
 				  << reconnectPeriodSec_ << "s of connecting -- zone Redis stays unavailable, retrying every "
 				  << reconnectPeriodSec_ << "s (metric=zone_redis_auth_failed)";
+		dependency_link_metrics::OnConnectFailed(options_.metricsDependency, dependency_link_metrics::FailureReason::kAuth);
 		authAwaitingReply_ = false;
 	}
 	LOG_INFO << "Attempting Redis reconnect to " << redisAddr_.toIpPort();
@@ -433,6 +448,16 @@ void RedisManager::ResetConnections()
 	// 显式拆除不是握手失败，不报 AUTH 超时。释放 oldZone 以后不得再访问管理器成员。
 	ReleaseConnection(oldHandshake);
 	ReleaseConnection(oldZone);
+}
+
+void RedisManager::CountConnectionDown(bool expected)
+{
+	if (!connectionCounted_)
+	{
+		return;
+	}
+	connectionCounted_ = false;
+	dependency_link_metrics::OnDown(options_.metricsDependency, expected);
 }
 
 void RedisManager::StartLivenessTimer()
@@ -544,6 +569,8 @@ void RedisManager::DropUnresponsive(std::uint64_t generation)
 			  << options_.livenessTimeoutSec << "s -- dropping the connection (in-flight commands complete with null replies), "
 			  << "reconnecting every " << reconnectPeriodSec_ << "s (metric=zone_redis_liveness_timeout)";
 	ResetLivenessProbe();
+	// 被摘下连接的断线回调随释放清掉,不会再走那条路减,所以在这里减。
+	CountConnectionDown(/*expected=*/false);
 
 	// 空应答 = 结果未知,不是"没执行":close 之后内核仍会重传已写出的命令,它们可能晚于重连后新连接上的命令到达 Redis
 	// 并被执行(第二轮审计 r2-lc#1 / r2-lc#2)。上层不得假设"摘连接前发出的命令先于重连后发出的命令";需要这种保证的写

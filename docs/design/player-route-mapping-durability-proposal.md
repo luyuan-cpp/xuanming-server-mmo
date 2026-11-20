@@ -1422,7 +1422,7 @@ tidb-phase1-and-launch-readiness.md §5.1 单行热点一行与 §7 L-12 已加�
 
 | 环节 | 现状 | 加机器能扩吗 | 备注 |
 |---|---|---|---|
-| Java gateway 限流（staging / prod 缺省开） | 每 zone 一个 `rl:zone:{id}` 桶，被该 zone 全部 gateway 副本 CAS 争用；单次桶操作时限 500ms，超时或出错时放行（fail-open） | 不能（每 zone 单键写热点） | 开服洪峰时冲突重试会放大往返，超过时限就不扣桶直接放行 |
+| Java gateway 限流（staging / prod 缺省开） | 每 zone 一个 `rl:zone:{id}` 桶，被该 zone 全部 gateway 副本 CAS 争用；单次桶操作时限 500ms，超时或出错时放行（fail-open） | 不能（每 zone 单键写热点） | 开服洪峰时冲突重试会放大往返，超过时限就不扣桶直接放行。**已修（2026-11-05 / 11-12 / 11-19）**：改 Lua，没有 CAS 冲突；每个桶一段单键脚本，上了 Cluster；排队提示加 2s 下限与 0~2s 随机量，排队重试扣 0.1 个 IP 令牌。这个键的负载降到约「排队人数 / 3 秒」，单 zone 上限是一台主节点（[开服限流设计](./open-server-rate-limit-design.md) §二「排队提示」） |
 | gate Login 经 client-rpc-router（K8s 缺省 `-GateRouterMode 1`） | 多一跳 gRPC；全局池，不连 Redis，用 list-watch 镜像 | 能 | — |
 | player_locator 会话对账 leader | 全服一个（`player_locator:session_reconciler:leader`），后台任务 | 不能 | 不在登录同步路径上 |
 | data_service 路由对账 leader | 全服一个，租约在全局库 `route_reconcile` id=1；只在 db_first 下装配（已在 HEAD 接线，未编译、未测试） | 不能 | 每拍对共享 DB 0 做一次全库 `SCAN merge:in_progress:*`。这一步不看 Arm，从 P2 起就跑。三把映射键都没有 TTL，所以扫描量随累计注册人数增长；一拍扫不完 3s，标记就一直挂不上。预热 / 修补峰值约 20000 EVALSHA/s，外加约 6 万键/s 的 MGET，正好和读方回源、go/db 闸关着的窗口重叠。成本均未评估 |

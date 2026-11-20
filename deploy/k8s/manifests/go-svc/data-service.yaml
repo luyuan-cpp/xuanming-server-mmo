@@ -127,6 +127,10 @@ spec:
             - name: MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: account-directory-scene, optional: false}
+            # 验 go/payment 按玩家查实名(GetAccountRealName,未成年人充值限额用;docs/design/real-name-anti-addiction.md §5.6),与 payment 同值。
+            - name: MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: account-directory-payment, optional: false}
             # GM 批量回收的资产指令签名,和 scene 同值。-AssetOps on 时 Recall.Enabled=true,这时缺它拒启。没开时用不到,所以 optional。
             - name: MMORPG_ASSET_OP_SECRET_DATA_SERVICE
               valueFrom:

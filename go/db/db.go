@@ -20,6 +20,7 @@ import (
 	storepb "proto/player_store"
 	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/drainproof"
 	"shared/etcdwatch"
 	"shared/grpcstats"
@@ -63,6 +64,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("db")
 
 	// Load config
 	conf.MustLoad(*configFile, &config.AppConfig)
@@ -112,8 +114,6 @@ func main() {
 	// 连接池指标(mmorpg_sql_pool_*{sql_client="db",pool="store"},G2b):所有地域存档库的池聚合成一类,
 	// 每次抓取时现取 sql.DBStats。必须在 metrics.Start 之前注册;注册失败只记日志,不挡落库。
 	metrics.RegisterSQLPools(stores.PoolSamples)
-	// 库级冷却(L-04):db_store_cooldown_stores 在每次抓取时按注册表现算,同样必须在 metrics.Start 之前注册。
-	metrics.RegisterStoreCooldown(stores.CooldownCounts)
 
 	if maintenanceRuntime != nil {
 		writerConfigs, err := proto_sql.CurrentWriterConfigs()

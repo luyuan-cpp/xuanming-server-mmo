@@ -18,7 +18,7 @@ const DatabaseName = "mmorpg_payment"
 
 // Tables 是 schemamigrate 的表清单,启动核对与 -migrate 共用。
 func Tables() []proto.Message {
-	return []proto.Message{&paymentpb.PaymentIntentRecord{}, &paymentpb.PaymentTxnRecord{}, &paymentpb.PaymentChannelCursorRecord{}}
+	return []proto.Message{&paymentpb.PaymentIntentRecord{}, &paymentpb.PaymentTxnRecord{}, &paymentpb.PaymentChannelCursorRecord{}, &paymentpb.PaymentSpendRecord{}}
 }
 
 // ErrInvalidKey 表示订单号、商户单号或渠道交易号不是约定的形状。
@@ -88,6 +88,13 @@ func ValidTransactionID(transactionID string) bool {
 // 行里另存交易号原文,读回时比对,撞键按存储损坏处理,不会把两笔钱并成一笔。
 func TxnKey(transactionID string) (hi, lo uint64) {
 	sum := sha256.Sum256([]byte(transactionID))
+	return binary.BigEndian.Uint64(sum[:8]), binary.BigEndian.Uint64(sum[8:16])
+}
+
+// SpenderKey 由国家系统的实名标识 pi 派生未成年人额度的主体键(SHA-256 的前 16 字节):同一个人的多个账号得到同一个键,
+// 库里不存 pi 本身(pi 的前 6 位就是出生日期)。
+func SpenderKey(pi string) (hi, lo uint64) {
+	sum := sha256.Sum256([]byte("spender|" + pi))
 	return binary.BigEndian.Uint64(sum[:8]), binary.BigEndian.Uint64(sum[8:16])
 }
 

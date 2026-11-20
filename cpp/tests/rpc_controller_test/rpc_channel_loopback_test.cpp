@@ -2481,6 +2481,106 @@ TEST_F(RpcChannelLoopback, RejectedDispatchMarksTheServerSpanAsAnError)
     EXPECT_EQ(server->parent_span_id.bytes, upstream.span_id.bytes);
 }
 
+// handler Adopt 之后延后回复(§10.3):server span 跟着完成句柄走,量到回复发出为止,派发返回时不交出;
+// 没 Run / Fail 就被丢掉的句柄同样结束 server span,标 REPLY_DROPPED。
+TEST_F(RpcChannelLoopback, AdoptedReplyEndsTheServerSpanWhenTheReplyIsSent)
+{
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    auto log = std::make_shared<CallLog>();
+    tracing::TraceContext caller;
+    RunInLoopAndWait([&] {
+        tracing::ScopedSpan span;
+        caller = tracing::Current();
+        Issue(*client_, log, "parked", kPrepareId, PrepareBattleRequest{});   // battle_node_id 为 0:存一个副本
+        PrepareBattleRequest drop;
+        drop.set_battle_id(kDropAdoptedReply);
+        Issue(*client_, log, "dropped", kPrepareId, drop);
+    });
+    const auto serverSpans = [&] {
+        std::vector<tracing::SpanRecord> found;
+        for (const auto& span : sink.Spans())
+        {
+            if (span.kind == tracing::SpanKind::kServer && span.trace_id.bytes == caller.trace_id.bytes)
+            {
+                found.push_back(span);
+            }
+        }
+        return found;
+    };
+    ASSERT_TRUE(log->WaitForCount(1));
+    ASSERT_TRUE(WaitUntil([this] { return service_.parked.size() == 1; }));
+    ASSERT_TRUE(WaitUntil([&] { return serverSpans().size() == 1; }));
+    {
+        const auto spans = serverSpans();
+        EXPECT_EQ(spans[0].status, tracing::SpanStatus::kError);
+        EXPECT_EQ(spans[0].StatusMessage(), "REPLY_DROPPED") << "丢掉的句柄结束 server span 并标错";
+    }
+    std::this_thread::sleep_for(50ms);
+    EXPECT_EQ(serverSpans().size(), 1u) << "存着的那一个还没回复,它的 server span 不该结束";
+
+    RunInLoopAndWait([this] {
+        service_.parked.front().Run();
+        service_.parked.clear();
+    });
+    ASSERT_TRUE(log->WaitForCount(2));
+    ASSERT_TRUE(WaitUntil([&] { return serverSpans().size() == 2; }));
+    const auto spans = serverSpans();
+    const auto replied = std::find_if(spans.begin(), spans.end(),
+                                      [](const tracing::SpanRecord& span) { return span.status == tracing::SpanStatus::kUnset; });
+    ASSERT_NE(replied, spans.end()) << "Run 发出回复时结束,状态正常";
+    EXPECT_TRUE(replied->parent_is_remote);
+    EXPECT_GE(replied->end_unix_nano - replied->start_unix_nano, 50'000'000u) << "量到延后的回复,含上面等的 50ms";
+    const auto all = sink.Spans();
+    EXPECT_TRUE(std::any_of(all.begin(), all.end(), [&](const tracing::SpanRecord& span) {
+        return span.kind == tracing::SpanKind::kClient && span.span_id.bytes == replied->parent_span_id.bytes &&
+               span.parent_span_id.bytes == caller.span_id.bytes;
+    })) << "父是这次调用的 client span";
+}
+
+// 本地确定没发出的调用同样记一个 client span 并标错,说明是原因(§10.3:调用被尝试了就有 span):
+// 没有 channel 的 RpcClient、不合法的超时、被拒的单向请求各一个。对端一帧都没收到,所以没有 server span。
+TEST_F(RpcChannelLoopback, LocalFailuresRecordAnErrorClientSpan)
+{
+    ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
+    span_test::RecordingSink sink;
+    const span_test::ScopedSinkInstall install(&sink);
+    auto log = std::make_shared<CallLog>();
+    RpcClientPtr idle;
+    tracing::TraceContext caller;
+    bool onewayAccepted = true;
+    RunInLoopAndWait([&] {
+        tracing::ScopedSpan span;
+        caller = tracing::Current();
+        idle = std::make_shared<RpcClient>(&Loop(), serverAddr_);   // 没调 connect:没有 channel
+        Issue(*idle, log, "not_connected", kProcessId, ProcessRequest(1));
+        Issue(*client_, log, "zero_timeout", kProcessId, ProcessRequest(2), std::chrono::milliseconds::zero());
+        onewayAccepted = client_->SendRequest(kProcessId, CreateSceneRequest{});
+    });
+    ASSERT_TRUE(log->WaitForCount(2));
+    EXPECT_FALSE(onewayAccepted);
+    RunInLoopAndWait([&] { idle.reset(); });
+
+    std::vector<std::string> reasons;
+    for (const auto& span : sink.Spans())
+    {
+        if (span.trace_id.bytes != caller.trace_id.bytes)
+        {
+            continue;
+        }
+        EXPECT_EQ(span.kind, tracing::SpanKind::kClient);
+        EXPECT_EQ(span.system, tracing::SpanSystem::kRpc0);
+        EXPECT_EQ(span.status, tracing::SpanStatus::kError);
+        EXPECT_EQ(span.parent_span_id.bytes, caller.span_id.bytes);
+        reasons.emplace_back(span.StatusMessage());
+    }
+    std::sort(reasons.begin(), reasons.end());
+    EXPECT_EQ(reasons, (std::vector<std::string>{"link not ready", "non-positive timeout",
+                                                 "request type does not match registry"}));
+}
+
 // 端到端:对端 handler 接上同一条 trace(子 span),回包回调回到发起方的 trace。
 TEST_F(RpcChannelLoopback, ServerHandlerAndReplyCallbackStayOnTheCallerTrace)
 {

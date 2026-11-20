@@ -415,6 +415,9 @@ func (s *Service) refundOne(parent context.Context, ch channel.Channel, item mal
 		}
 	}
 	txn.RefundId = progress.RefundID
+	if err := s.releaseRefunded(ctx, txn, item.Reason, nowMs); err != nil {
+		return err
+	}
 	if err := s.reportRefund(callCtx, ch, item, txn); err != nil {
 		progress.NextMs, progress.LastError = retryAt, errorClass(err)
 		if errors.Is(err, mall.ErrConflict) {
@@ -573,7 +576,7 @@ var (
 // RegisterMetrics 把指标登记到默认注册表(domainhost 的 /metrics 输出它)。只调一次;用例不调,计数照常可用。
 func RegisterMetrics() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(channelCalls, notifications, intents, facts, mallPushes, refunds, mallOldestPending)
+		prometheus.MustRegister(channelCalls, notifications, intents, facts, mallPushes, refunds, mallOldestPending, minorGate)
 	})
 }
 

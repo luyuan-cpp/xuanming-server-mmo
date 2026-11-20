@@ -775,8 +775,8 @@ func clampSceneMemberBudget(value, def int) int {
 //   - 取值越界由 Validate 拒绝,svc.NewServiceContext 据此拒启;开启时启动先探一次(每个主节点先写探针键再 WAITAOF),
 //     失败同样拒启。
 //
-// K8s 上 WaitAOFNumReplicas 由 tools/scripts/k8s_deploy.ps1 渲染:Get-OwnerEpochMintWaitAOFNumReplicas 按共享 Redis 的形态取
-// (单实例 0、高可用 1),建了玩家域集群时固定取 1(铸造的键在集群上,每主至少 1 副本);本地 yaml 那一项保持 0 给 compose 单实例用。
+// K8s 上 WaitAOFNumReplicas 由 tools/scripts/k8s_deploy.ps1 按玩家域所在的 Redis 渲染:建了玩家域集群取 1(铸造的键在集群上,
+// 每主至少 1 副本),落在核心单实例(只有 dev)取 0;本地 yaml 那一项保持 0 给 compose 单实例用。
 type OwnerEpochMintConfig struct {
 	WaitAOFNumLocal    *int `json:",optional"` // 0 | 1;nil = 1
 	WaitAOFNumReplicas *int `json:",optional"` // [0, 16];nil = 0

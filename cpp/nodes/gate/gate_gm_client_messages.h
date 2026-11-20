@@ -25,6 +25,7 @@
 // 登记进本表 = 这条 RPC 在非 dev/test 环境被**整条关掉**,不是给它加了鉴权:dev/test 下任何
 // 过了会话校验的客户端都能调。
 
+#include "rpc/service_metadata/player_afk_pass_service_metadata.h"
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
 #include "rpc/service_metadata/player_bag_service_metadata.h"
 #include "rpc/service_metadata/player_currency_service_metadata.h"
@@ -50,9 +51,12 @@ inline constexpr uint32_t kGmClientMessageIds[] = {
 	// 发任意物品 / 装备(docs/design/equipment-attributes.md §4.6)。常量由 proto-gen 按
 	// proto/scene/player_bag.proto 的 `rpc GmGrantItem` 生成进 player_bag_service_metadata.h。
 	SceneBagClientPlayerGmGrantItemMessageId,
+	// 设定挂机月卡剩余时长(docs/design/afk-monthly-card.md §4.3),联调与 robot 用。常量由 proto-gen 按
+	// proto/scene/player_afk_pass.proto 的 `rpc GmSetAfkPass` 生成进 player_afk_pass_service_metadata.h。
+	SceneAfkPassClientPlayerGmSetAfkPassMessageId,
 };
 
-// 线性扫 7 个 uint32 —— 在每条客户端包的热路径上,但这比任何哈希表都快,
+// 线性扫 8 个 uint32 —— 在每条客户端包的热路径上,但这比任何哈希表都快,
 // 而且没有静态初始化顺序问题。加到几十条再考虑换 switch。
 inline bool IsGmClientMessage(uint32_t messageId)
 {

@@ -71,6 +71,26 @@ func TestRouteCallerSecretIsOptionalButIndependent(t *testing.T) {
 	require.Error(t, validateGlobalCallerSecrets(get))
 }
 
+// payment 查实名的密钥和角色护栏同一规矩:可以缺(只停用 GetAccountRealName),配了就不能和别的调用方共用,也不能太短。
+func TestPaymentCallerSecretIsOptionalButIndependent(t *testing.T) {
+	values := map[string]string{
+		"MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN":         strings.Repeat("l", 32),
+		"MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE":         strings.Repeat("t", 32),
+		"MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE":         strings.Repeat("s", 32),
+		"MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE_MANAGER": strings.Repeat("r", 32),
+	}
+	get := func(name string) string { return values[name] }
+	require.NoError(t, validateGlobalCallerSecrets(get), "没配 payment 的密钥:只停用查实名,不拒启")
+	values[accountdirectory.PaymentSecretEnv] = strings.Repeat("p", 32)
+	require.NoError(t, validateGlobalCallerSecrets(get))
+	values[accountdirectory.PaymentSecretEnv] = values["MMORPG_ACCOUNT_DIRECTORY_SECRET_TRADE"]
+	require.Error(t, validateGlobalCallerSecrets(get), "trade 不能拿 payment 的身份读全体玩家的实名")
+	values[accountdirectory.PaymentSecretEnv] = " " + values["MMORPG_ACCOUNT_DIRECTORY_SECRET_LOGIN"] + " "
+	require.Error(t, validateGlobalCallerSecrets(get), "去掉首尾空白之后同值也算复用")
+	values[accountdirectory.PaymentSecretEnv] = "short"
+	require.Error(t, validateGlobalCallerSecrets(get))
+}
+
 // 写资格要恰好覆盖要写的逻辑库:少一份那个库打不开,多一份说明名册和配置不是同一次部署。
 func TestCheckWriterSchemas(t *testing.T) {
 	schemas := []string{"g_00", "g_01", "g_ledger", "player_store_1000000_db"}

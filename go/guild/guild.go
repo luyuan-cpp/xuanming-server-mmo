@@ -41,7 +41,9 @@ import (
 	rfpb "proto/role_fence"
 	"schemamigrate"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/clusterredis"
+	"shared/contentguard"
 	"shared/etcdwatch"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
@@ -107,6 +109,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("guild")
 	conf.MustLoad(*configFile, &config.AppConfig)
 	// 停机强退时限要盖住在途请求与 StopAndReport 的有序收尾(guildShutdownDrain);必须在建 zrpc 服务之前。
 	shutdownbudget.ApplyWithBackgroundDrain(&config.AppConfig.RpcServerConf, guildShutdownDrain)
@@ -199,9 +202,9 @@ func main() {
 	if err := repo.ConfigureRoleFence(fenceStates, authoritysql.Backend(config.AppConfig.MySQL.Backend)); err != nil {
 		logx.Must(err)
 	}
-	// data_service 过户、删角之前先冻结本库副本并核挂起全集。
-	roleFence, err := rolefence.NewParticipantServer(svcCtx.DB, data.RoleFencePending, os.Getenv(rolefence.CoordinatorSecretEnv))
-	if err != nil {
+	// 角色护栏参与者要等 guildLogic 建好才装配(删角收尾提交后要推送),那时节点已经注册进 etcd;协调者密钥在这里先核一遍,
+	// 配置错的实例不注册。
+	if err := rolefence.ValidateCoordinatorSecret(os.Getenv(rolefence.CoordinatorSecretEnv)); err != nil {
 		logx.Must(fmt.Errorf("guild role fence participant: %w", err))
 	}
 
@@ -240,9 +243,7 @@ func main() {
 		}
 	}()
 
-	if err := n.KeepAlive(); err != nil {
-		logx.Must(fmt.Errorf("keep alive: %w", err))
-	}
+	n.KeepAlive()
 	logx.Infof("Guild node registered: id=%d uuid=%s", n.Info.NodeId, n.Info.NodeUuid)
 
 	// 这个客户端给 killswitch 与场景节点镜像做 watch;keepalive 让 watch 不会因为半开连接静默停住(etcdwatch 包注释)。
@@ -496,11 +497,18 @@ func main() {
 	if err != nil {
 		logx.Must(err)
 	}
+	// 内容安全:帮会名与公告送检(logic/content_check.go)。配置要求(Required)而没配目标、或客户端建不起来,起服即失败;
+	// 没配目标且不要求时得到一个一律放行的客户端并打一行警告(只允许本机)。拨号是 NonBlock,内容安全晚起不挡 guild 启动。
+	contentGuard, err := contentguard.New("guild", config.AppConfig.ContentGuard)
+	if err != nil {
+		logx.Must(fmt.Errorf("content guard client: %w", err))
+	}
 	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, homeZones,
 		logic.WithApplicationQuota(applicationQuota),
 		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerRedis, relay)),
 		logic.WithApplyPushGate(repo.TryMarkApplyPush),
 		logic.WithPlayerNames(playerNames),
+		logic.WithContentGuard(contentGuard),
 		logic.WithEconomy(economy),
 		logic.WithActivities(activities),
 		logic.WithSyncBumper(logic.NewGuildSyncBumper(svcCtx.PlayerSyncBumper, relay)))
@@ -508,6 +516,13 @@ func main() {
 	// 终结推送回调。必须在重投循环与 gRPC server 启动**之前**赋值:此后只读,不需要同步。
 	// 晚于它们赋值 = 启动初期被循环终结的行不推送,且与读它的 worker 构成数据竞争。
 	assetStore.OnFinalized = guildLogic.OnAssetFinalized
+
+	// data_service 过户、删角之前先冻结本库副本并核挂起全集;删角之后清本库这名玩家的个人数据。
+	// 清理要在提交之后推送、bump 摘要(帮主让位、成员离帮),所以接在 guildLogic 之后装配。
+	roleFence, err := rolefence.NewParticipantServer(svcCtx.DB, data.RoleFencePending, guildLogic.RoleFencePurge, os.Getenv(rolefence.CoordinatorSecretEnv))
+	if err != nil {
+		logx.Must(fmt.Errorf("guild role fence participant: %w", err))
+	}
 
 	// Start gRPC server
 	serverRegistered := make(chan struct{})

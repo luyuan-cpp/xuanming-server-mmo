@@ -98,7 +98,7 @@
   - `Check(ledger, key, kind, fingerprint, result)` 返回 `kNew`、`kReplay` 或 `kMismatch`。
   - `Remember(...)`：先淘汰到不足 32 条（按 seq，不按下标），再追加，seq 取 `next_seq`，旧存档的 `next_seq = 0` 按 1 处理。
   - `Validate(ledger)`：条数超过 256，键为 0 或重复，指纹不是 16 字节，seq 为 0、重复或不小于 `next_seq`，任一条成立都判坏。2026-11-17 起还校验装备那两部分：材料额度要自洽（当日已得不超上限、是每场份数的整数倍、游戏日对齐）；打造和领取的回执里，水位不为 0、不超过账本当前水位、互不重复。**不校验种类**：新版本写进来的种类原样携带，同一个键再来时按「种类不同」拒绝。256 这个上限比容量宽，将来下调容量时旧存档不会被判坏。
-- `ClientRequestKind` 的值随存档落盘，**不可重排、不可复用**，删掉的种类留空号：1 强化、2 神秘商人购买、3 新建加点方案、4 装备打造与首次装词条、5 材料自选领取，0 不合法。最后一项是 `kCount`，名字表用 `static_assert` 对齐。
+- `ClientRequestKind` 的值随存档落盘，**不可重排、不可复用**，删掉的种类留空号：1 强化、2 神秘商人购买、3 新建加点方案、4 装备打造与首次装词条、5 材料自选领取、6 挂机月卡开通（2026-11-19），0 不合法。最后一项是 `kCount`，名字表用 `static_assert` 对齐。
 - 指纹算法随存档落盘，是契约，不能改：清键之后做确定性序列化（`SetSerializationDeterministic`），再取 SHA-256 的前 16 字节。序列化写法照 `service_call_auth::Digest`。请求以后加字段会自动算进指纹。
 
 ### 3.3 接入层（`namespace client_request_dedup`）
@@ -138,6 +138,7 @@
 | 强化 | `SceneBagClientPlayerHandler::EnhanceEquip`：先查键，命中就重放；没命中才进 `PlayerEquipSystem::Enhance`（里面有 `expected_level` 乐观比较）。指纹含 `item_id` 与 `expected_level` | `enhance_success`、`enhance_level` | 2026-11-08 单测通过；robot 冒烟未跑 |
 | 装备打造 / 首次装词条（种类 4） | `PlayerEquipmentV1System::Commit`。键必须非 0。同键换参数回 REJECTED；账本不可用回 UNKNOWN；回执被挤出后，请求里的 `expected_forge_revision` 对不上账本水位，回 UNKNOWN，不重做 | `equipment_item_id`、`forge_revision` | 2026-11-17 Codex 落码；规则与验证状态见装备设计稿「第三批」 |
 | 材料自选领取（种类 5） | `PlayerEquipmentMaterialRewardSystem::Claim`。同上，水位是 `material_reward.revision` | 领取水位、两种材料各领了多少 | 2026-11-17 Codex 落码；见装备设计稿「第四批」 |
+| 挂机月卡开通（种类 6） | `AfkPassSystem::Buy`（`afk_pass.cpp`）。键必须非 0；查账排在规则表、报价、冻结、叠加上限、余额之前；扣灵石、写到期、记键在同一次同步调用里。指纹含报价（币种、价格） | 无（月卡状态取当前，[挂机月卡](afk-monthly-card.md) §4.1） | 2026-11-19 落码，未编译 |
 
 后两种与前三种有两处不同，都写在装备设计稿里：它们先在账本的副本上记账、校验通过再换入，和背包改动同一次提交；它们的应答带 `outcome` 与 `durable`，客户端把整份请求存在本地，重启后带原键重发。
 

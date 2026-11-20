@@ -59,6 +59,8 @@ func main() {
 	if err != nil {
 		zap.L().Fatal("load config", zap.Error(err))
 	}
+	// 传输方式(TCP / 小游戏的 WebSocket)对全进程生效,要在建立任何连接之前定下来。
+	pkg.ConfigureTransport(cfg.Transport)
 
 	// Load tables (Skill, Class) and auto-resolve skill_ids if not configured.
 	cfg.LoadTables()
@@ -223,6 +225,13 @@ func main() {
 	// 见 team_follow_smoke_scenario.go 与 docs/design/team-system.md「组队跟随 v1.1」;前置条件写在 etc/team_follow_smoke.yaml 文件头。
 	if cfg.Mode == "team-follow-smoke" {
 		RunTeamFollowSmoke(cfg)
+		return
+	}
+
+	// Afk-pass-follow-smoke 模式:队员开通挂机月卡 → 断线 → 队长同节点、跨节点各换一次线 → 托管的队员跟过去并继续沿路跟。
+	// 见 afk_pass_follow_smoke_scenario.go 与 docs/design/afk-monthly-card.md §8;前置条件写在 etc/afk_pass_follow_smoke.yaml 文件头。
+	if cfg.Mode == "afk-pass-follow-smoke" {
+		RunAfkPassFollowSmoke(cfg)
 		return
 	}
 

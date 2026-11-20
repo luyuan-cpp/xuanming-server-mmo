@@ -21,6 +21,7 @@ import (
 
 const AccountDirectoryTableName = "account_directory"
 const AccountRoleTableName = "account_role"
+
 // accountDirectoryDDL:deletion_* 五列是账号注销的状态(account_deletion.go,2026-11-19 加列;项目未上线,旧库重建)。
 // idx_account_directory_deletion 给执行者扫到期账号,正常账号都是 (0,0),扫描只碰注销中的那一小段。
 const accountDirectoryDDL = "CREATE TABLE IF NOT EXISTS account_directory (account VARBINARY(191) NOT NULL COMMENT 'pb:1',created_ms BIGINT UNSIGNED NOT NULL COMMENT 'pb:2'," +

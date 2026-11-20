@@ -174,7 +174,7 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 
 ### 3.5 本地缓存(弱依赖)
 
-- 文件:`<数据目录>/snowflake-<kind>.json` = `{cluster, id, uuid, incarnation, lastWatermark, lastAckWall}`,写临时文件 + rename 原子替换。写盘时机以 §7.5-5 为准(稳态零写盘):申领 / reclaim 后第一次 Ack 落一次身份,水位写失败的故障期每拍落本地高水位,`Close()` 落最终值(`allocator.go` 的 `cache` 注释);2026-11-20 评审改正,原写「每次水位写成功后更新」。
+- 文件:`<数据目录>/snowflake-<kind>.json` = `{cluster, id, uuid, incarnation, lastWatermark, lastAckWall}`,写临时文件 + rename 原子替换。写盘时机以 §7.5-5 为准(稳态零写盘):申领 / reclaim 后第一次 Ack 落一次身份,水位写失败的故障期每拍落本地高水位,`Close()` 落最终值(`allocator.go` 的 `cache` 注释);2026-11-19 评审改正,原写「每次水位写成功后更新」。
 - 启动:etcd 可达 → 正常申领(缓存只做日志关联);etcd 不可达 且 `now − lastAckWall < F` → 用缓存 id 起,`SetGuardTime(max(now, lastWatermark + lead))`,后台每 2s 重试注册,注册成功前 lastAck 不推进(所以最多再撑 F);超过 F 仍未注册 → fence。
 - 缓存另记落盘那一刻观测到的水位 key 的 ModRevision(`watermarkRev`,Go 实现,2026-11-05 加;同批加的毫秒水位 `watermarkMsRev` 2026-11-12 随毫秒水位删除,旧文件里的这个字段读时被忽略)。etcd 回来时前任的 slots key 多半已随 lease 过期,重新注册走 3.4 的重建分支,靠它做 revision 比较。它只在既有落盘时机抄入、不额外写盘:优雅退出与故障期崩溃时是准的;稳态崩溃时落后于前任后来的写入,缺字段的旧文件读成 0 —— 两者都只会让重建 fence(多一次重启),不会放行。
 - etcd 不可达 且缓存过期 → 等 etcd(今天的行为)。

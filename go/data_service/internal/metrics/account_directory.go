@@ -36,8 +36,8 @@ var (
 	roleRemovalSettleFailuresTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "account_role_removal_settle_failures_total",
-		Help: "Role removals whose post-tombstone settle did not finish, by step (release_name|drop_removal_row). " +
-			"The removal stays committed; the name stays held by the removed role and the background resumer retries.",
+		Help: "Role removals whose post-tombstone settle did not finish, by step (release_name|purge_data|drop_removal_row). " +
+			"The removal stays committed; the name or the removed role's data stays until the background resumer retries.",
 	}, []string{"step"})
 
 	roleRemovalResumeTotal = prometheus.NewCounterVec(prometheus.CounterOpts{

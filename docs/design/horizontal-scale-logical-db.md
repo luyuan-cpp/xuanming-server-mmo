@@ -72,7 +72,7 @@
   - 为什么可以:读不需要写资格(主体、注册、slot 是写的前提),数据都在主库上,谁读都是同一份已提交数据。以前每条读都开一个自动事务:读 `route_meta` 两次、锁或改写一个 `writer_slot`(LOCK_TOUCH 档下是一次真正的写)、读注册表、提交,所有实例的读都在改写这张小表(第 20 条的热点之一)。
   - 为什么不丢一致性:先核后读是两条自动提交语句。核的那一刻库可写、之后才冻结时,读到的不晚于冻结那一刻的数据(冻结之后源库不再有写),线性化到核的那一刻;核到冻结就挡回去,所以读不到切换之后的旧库。
   - 显式事务里的读、走 `Query` 的写照旧走事务闸门,提交点语义不变。读到可写时清掉 `writer_frozen_seconds` 的计时,但不算「过过闸门」,启动阶段的放行规则不受只读流量影响。
-- **结局分类**:`authoritysql.IsWriterFrozen(err)` 判「冻结,这次确定没写」,要求错误树的每个叶子都是冻结,混进别的失败(尤其 `ErrOutcomeUnknown`)就不算。`ClassifyOutcome(err)` 分成 `OutcomeOK`、`OutcomeFrozen`、`OutcomeUnknown`、`OutcomeFailed`,结局未知优先。后台循环对冻结不打排空 HOLD:trade 恢复循环和清理、`shared/assetop` 重投、player_inbox 清理和提醒、rank 发奖、mail、friend、guild 的清理和历练巡检、match 的 relay 工作。match 结果消费者撞冻结不占重试次数,否则窗口稍长消费者就停了。RPC 路径的判定在 serverbase。
+- **结局分类**:`authoritysql.IsWriterFrozen(err)` 判「冻结,这次确定没写」,要求错误树的每个叶子都是冻结,混进别的失败(尤其 `ErrOutcomeUnknown`)就不算。`ClassifyOutcome(err)` 分成 `OutcomeOK`、`OutcomeFrozen`、`OutcomeUnknown`、`OutcomeFailed`,结局未知优先。后台循环对冻结不打排空 HOLD:trade 恢复循环和清理、`shared/assetop` 重投、player_inbox 提醒、rank 发奖、mail、friend、guild 的清理和历练巡检、match 的 relay 工作。match 结果消费者撞冻结不占重试次数,否则窗口稍长消费者就停了。RPC 路径的判定在 serverbase。
 - **trade 恢复循环的判定更宽**:`commerce.OutcomeKnown(err)` 在冻结之外还放过事务回滚之后的拒绝(`errRolePreparing`、`errRoleConflict`、`Rejection`、`rolefence.ErrUnavailable`、`ErrRoleNotFound`)和只读步骤的失败(拉商城待办、读合同、读目录)。这些在产生错误的地方标记(`rolledBack`、`noWrite`),判定走错误树,每个分支都要确定才算。没标的都算未知:回报商城失败、提交失败。只读步骤的语句被连接层报成 `ErrOutcomeUnknown` 也标成确定:连接层不分读写,这条语句本来没写。合同推进的单行失败照旧由 `deferCommerce` 推迟,不回给调用方,所以单行提交结局未知在这里也不 Hold:连接层把事务里被取消的语句也报成结局未知,按它 Hold 的话,行锁等待超过子预算就会打 Hold。
 - **观测**:`writer_frozen_seconds{logical_db}`,这个进程观察到闸门连续冻结了多久,解冻后第一笔过闸、或第一条事务外的读读到可写就归零,15 秒没再撞到也归零(没有流量的进程不受影响,也不上报)。第一次撞到才注册序列。告警 `WriterGateFrozenTooLong`:超过 2 分钟,多半是工具被杀或翻转结局未知,处置见手册 §6。
 
@@ -206,6 +206,7 @@ const DDL; func EnsureSchema(ctx, db) error; func VerifySchema(ctx, db) error //
 service RoleFenceParticipant {
   rpc PrepareRoleFreeze(PrepareRoleFreezeRequest) returns (PrepareRoleFreezeResponse);
   rpc ApplyRoleFence(ApplyRoleFenceRequest) returns (ApplyRoleFenceResponse);
+  rpc PurgeRemovedRole(PurgeRemovedRoleRequest) returns (PurgeRemovedRoleResponse); // 2026-11-19 加,见下面「删角收尾清数据」
 }
 message PrepareRoleFreezeRequest  { RoleFenceState state = 1; common.base.ServiceCallAuth auth = 2; bool dry_run = 3; }
 message PrepareRoleFreezeResponse { bool clean = 1; string blocker = 2; bool stale = 3; bool retry = 4; }
@@ -215,7 +216,7 @@ message ApplyRoleFenceResponse    { bool retry = 1; }
 
 - 鉴权:`ServiceCallAuth`,协调者密钥 `MMORPG_ROLE_FENCE_SECRET_COORDINATOR`,caller 是 `coordinator`。方法名由 `rolefence.Methods()` 给出。trade、mail、friend、player_inbox 的方法清单都是客户端白名单,不加这两个方法:协调者的调用不带会话,按内部调用放行,带会话的调用被白名单挡住。proto 包名是 `rolefence`,方法路径 `/rolefence.RoleFenceParticipant/...`。
 - 这个 service 没有自己的节点类型(`ENodeType` 里没有对应值):六个参与者各自注册,协调者按 `RoleFence.Participants` 拨号。所以 protogen 不把它收进客户端路由表,也不收进 C++ 按节点类型的方法注册和 deadline 分发(`RPCServiceInfo.HasNodeType`)。客户端协议对不上节点类型时生成直接失败。
-- `shared/rolefence.NewParticipantServer(db, pending, secret)` 提供实现,服务只注入 `pending func(ctx, tx, state) (blocker string, err error)` 和协调者密钥。friend 注入 `rolefence.NoPending`,没注入算装配失败,不算没有挂起。
+- `shared/rolefence.NewParticipantServer(db, pending, purge, secret)` 提供实现,服务只注入 `pending func(ctx, tx, state) (blocker string, err error)`、删角收尾的 `purge func(ctx, tx, player) error`(2026-11-19 加,见 §3.5「删角收尾清数据」)和协调者密钥。friend 注入 `rolefence.NoPending`;本库没有要清的数据的注入 `rolefence.NoPurge`;两者没注入都算装配失败,不算没有挂起 / 没有要清的。
 - `PrepareRoleFreeze` 在一个事务里:`Apply`;副本版本更大回 `stale=true`;再 `FOR UPDATE` 读本库的挂起全集。有挂起就**回滚**(本库不冻结)回 `clean=false`。没有就提交。这和今天 `verify` 的判据逐条相同,只是拆到各服务。
 - `dry_run=true` 不 `Apply`,不锁副本,只跑 `pending`,事务回滚。结论只用来挡住注定被拒的 Begin,提交点仍是真正的 Prepare。带最终令牌的状态不接受:最终令牌是全通过之后才写的。
 - `blocker` 是低基数枚举字符串,进指标 label,不含玩家信息。
@@ -273,6 +274,10 @@ chat 不是参与者:它不写资产,沿用 TTL 校验,校验改成调 `GetRoleF
 
 **Remove**(`RemoveAccountRoles`):同样两阶段,准备令牌是 `RemovalToken`。第 1 步写 `prepare_token` 和小表 `account_role_removal(player_id, account, owner_revision, started_ms)`;全通过后才进墓碑事务:持角色行锁再核一次登记全部关闭,墓碑、清令牌、删小表、推送。投票期间有实例进场就放弃,和有不通过一样清令牌,回 `ErrConflict`。问不齐回 `ErrRetryLater`,令牌留着。data_service 后台把超过 5 分钟的 `account_role_removal` 行按同一流程继续或放弃(每分钟一轮,每轮 64 行,走 RELAY 门禁,排空前停)。多名角色逐个走,不再是一个事务:中途失败时前面的已经删了,原请求重放幂等。全程只在玩家分片上开事务,不碰账号 guard;墓碑提交之后删账号分片的 ref,失败无害,见 §5.2。删角不试探:没有重放循环,不会反复打断玩家。
 
+**删角收尾清数据**(2026-11-19,[账号注销](account-deletion.md) §6,未编译):墓碑之后的收尾(`settleRemovedRole`)在释放名字与删小表之间加一步:删这名玩家在落点存档库的全部 `player_store` 行,再并行调六个参与者的 `PurgeRemovedRole`(`shared/rolefence`:请求必须是墓碑;一个事务里按版本合并进副本、锁副本复核是墓碑,再调服务注入的 `PurgeFunc`)。墓碑之后各副本拒绝一切业务写入,入场登记也进不来,所以清数据不用两阶段;任何一步没清完小表留着,后台 `ResumeRemovals` 整组重来,每一步都可重复。`NewParticipantServer` 多一个 purge 参数,没有要清的数据的注入 `rolefence.NoPurge`(流水库的回收审计)。收尾预算由 1 秒放到 4 秒。
+
+2026-11-20 补(未编译):`PurgeFunc` 要在提交之后做的非数据库副作用(缓存失效、摘榜、推送)用 `rolefence.OnCommit(ctx, fn)` 登记,`PurgeRemovedRole` 在清理事务提交成功之后按登记顺序跑(回滚不跑,ctx 与调用方取消脱钩,3 秒预算),失败只记日志;在别处调回错误。`PendingFunc` 能用 `rolefence.Probing(ctx)` 分清试探(dry_run)与真正的冻结,只给「要玩家自己先处理、执行时由收尾代为处理」的挂起用,目前只有 guild 的帮主([账号注销](account-deletion.md) §6.3)。参与者晚于节点注册才装配的服务用 `rolefence.ValidateCoordinatorSecret` 在注册前先核密钥。
+
 **装配**:协调者在 `go/data_service/internal/rolefencecoord`,配置 `RoleFence.Participants`(`{Name, Endpoints 或 Etcd}`),必须逐个对上 `rolefence.Participants` 这六个。缺配置或缺密钥时不装配,`Begin`、`Transfer`、`Remove` 回 `ErrRetryLater`,不能跳过参与者;`Cancel` 不拒绝,它只放开限制,推送丢了也会自愈。Prepare 一轮上限 1.5 秒,试探 0.8 秒。Push 异步发,不等结果,上限 2 秒。`home_zone` 取自 `account_role.role_proto`,建角时已核等于路由的 `home_zone`。
 
 **解冻丢推送不要紧**:副本还是冻结态,下一次访问 `RunTx` 自愈。**冻结丢推送也不要紧**:Prepare 没成功,Begin 就过不去。**转最终令牌的推送丢了也不要紧**:令牌不变,业务写入照样拒绝;认 final 的判定都先自愈。
@@ -316,7 +321,7 @@ message GetRoleFenceStateResponse { bool found = 1; RoleFenceState state = 2; bo
 | 带内故障码、码表之外的码 | 未知,Hold | 同上 |
 | `NotFound`、`InvalidArgument`、`FailedPrecondition`、`AlreadyExists`、`PermissionDenied`、`Unauthenticated`、`OutOfRange` | 确定 | 服务端明确没有写入,下面逐个核过 |
 | `Aborted` | 确定 | 这次请求没有结局未知的写。目录的 `ErrNotCommitted`(§5.3)、`ErrRetryLater`(下面)、入口归属预检(`roleidentity.OwnershipInterceptor`,guild / match / trade 在用,只读)这一次判不了时回它。handler 回它之前要能证明这一点 |
-| `ResourceExhausted` | 确定 | 全仓只有目录的「账号角色数已满」回它,建角和过户都在提交点之前拒绝。别的 handler 不要拿它表示过载 |
+| `ResourceExhausted` | 确定 | 全仓只有目录的「账号角色数已满」回它,建角和过户都在提交点之前拒绝。账号在注销中(冷静期或执行中)名额按 0 算,同样回它(2026-11-19,[账号注销](account-deletion.md) §4.3)。别的 handler 不要拿它表示过载 |
 | 闸门冻结(`errWriterFrozen`,内层拦截器确认这次请求没有结局未知的 SQL 才回它) | 确定 | 冻结的闸门上没有写入;之前提交成功的写结局已知 |
 | 自愈读不到目录(`errNoWriteRetry`,同样由内层拦截器确认) | 确定 | 事务已回滚,见 §3.3。映射成非故障 tip 的不改写 |
 | 其余 `Unavailable`、`DeadlineExceeded`、`Canceled`、`Internal`、`Unknown` | 未知,Hold | 提交可能已经成了 |
@@ -669,6 +674,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
      - 代价是冻结窗口变长,约等于 verify 的比对耗时,这段时间这个库读写暂停。它的时限单独给(`-compare-budget`,默认 30 秒),不占 `-budget`:`-budget` 原来挡的是「复制追不上时源库冻着干等」,库大了比对要很久,不能因此把这一条也放宽。愿意停多久由运维用参数明说,工具不按 verify 的耗时自动放宽。
      - 库大到不能接受时用 `-skip-final-compare` 显式跳过:标准错误输出告警、写进本地日志,`Move.FinalCompareSkipped` 和翻转同一次 CAS 写进映射。跳过之后只剩 audit 能发现漏写,那时已经翻转。缺省不跳过。
      - 源库上不过闸门的后台删除(TiDB 的 TTL 任务)冻结之后照样跑,撞上这次比对会判不一致并回滚,没有数据损失,重跑 verify 即可。
+     - **冻结之前核两侧的表都关着 TTL**(2026-11-19,`requireTTLOff`)。上一条只是代价最小的一面:翻转之后 audit 读的是冻结的源库的**当前数据**,源库的 TTL 任务每过一个 `TTL_JOB_INTERVAL` 接着删过期行,audit 必然对不上,冻结的源库也不再是翻转那一刻的原样。所以 cutover 预检逐表看 `SHOW CREATE TABLE`(TTL 属性不在 `information_schema` 里),任何一侧有表是 `TTL_ENABLE='ON'` 就拒绝并点名,由运维在源集群逐表关掉。关表属性而不是全局开关 `tidb_ttl_job_enable`:全局开关连别的库一起停,而且总要再打开,那时源库这几张表又接着删;表属性关掉之后一直留到 cleanup 删库。目标的从 BR 恢复起就是 `OFF`(TiCDC 的下游也被强制成 `OFF`),audit 通过之后由运维打开。工具只看属性,不看有没有任务还在跑:刚关掉就切,没跑完的任务仍可能撞上静止比对,回滚重来,不丢数据。
    - 把目标位置 CAS 写进映射(`Move.TargetPoint`)。窗口崩在打开目标闸门之后时,重跑复用它,不重读:重读的位置已经包含那次打开,audit 会报不一致。
    - 查目标 processlist(TiDB `cluster_processlist`,MySQL `performance_schema.threads`):锁定的账号连着就回滚,`ACCOUNT LOCK` 不踢已有连接。没锁的账号只看连到这个库的。
    - `ACCOUNT UNLOCK`,再打开目标库闸门(`ReleaseWriters`,闸门表是复制过去的冻结点)。解锁排在前面:解锁之后、闸门打开之前连上来的写者还是过不了闸。两步都幂等,重跑接着做。
@@ -681,6 +687,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 7. `cleanup`:保留期(默认 7 天)过后才允许删源库,必须显式 `-confirm-drop`,要求 `audit` 成功过,删之前核闸门确实是这个 run 冻结的。
    - **删之前核复制流已经撤掉**(2026-11-12)。`DROP DATABASE` 也会被复制:翻转之后 changefeed 没 remove(或只 pause)、通道只 `STOP REPLICA` 没 `RESET REPLICA ALL` 时,源库的 DROP 顺着它到达目标,正在收写入的整个库被删。反向搬时 `-retention 0s` 翻转完立刻 cleanup,最容易撞上。
    - 核的是 `Move.VerifiedFeed` 记下的那一条,所以 `cleanup` 要带 `-sync`(必填,不给就拒绝)。TiDB 档问 TiCDC:查得到就拒绝,不管状态;只有 TiCDC 明确回「没有这个 changefeed」(HTTP 400 加 `ErrChangeFeedNotExists`)才算撤掉,光秃秃的 404 不算(地址写错碰到别的 HTTP 服务也是它)。MySQL 档连目标读 `performance_schema.replication_connection_configuration`,这个通道还有配置就拒绝。查不成一律拒绝。
+   - **TiCDC 说「没有」之前先核它健康**(2026-11-19,`requireHealthy`)。查 changefeed 答的是 owner 内存里的那一份:owner 刚接任、还没把 changefeed 装进去,或者集群里各节点版本不一致(滚动升级到一半)时,还在的 changefeed 它也答 `ErrChangeFeedNotExists`。这两种情况 `GET /api/v2/health` 都报不健康,所以先问健康、再问 changefeed,不健康按查不成拒绝。这一条和上一条的状态码一样没有在真实 TiCDC 上核过(本机没有镜像,只从 tiflow `release-8.5` 的 `cdc/api/util.go` 核到 `ErrChangeFeedNotExists` 属于按 400 回的那一组),手册 §10 有核法。
    - TiDB 档只认 cutover 读这条流用的 TiCDC 地址(`Move.FeedEndpoint`):换一个 TiCDC 去问,答「没有」不说明它撤掉了。反向搬时两个方向的 changefeed 常常同名,分别在两个集群的 TiCDC 上,照抄上一次的 `-sync` 就会问错。同一个 TiCDC 集群换了地址时用 `-allow-addr-mismatch`。MySQL 档查的是目标,靠连接串地址和 `SqlClusters` 的核对绑定。
    - 核完紧接着 DROP。只认记下的那一条流;翻转之后另起的同方向复制工具不知道,手册写明要自己撤。
 
@@ -691,6 +698,11 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 - 写者账号要在目标集群提前建好,闸门表随复制过去,boot 授权继续有效。
 - 迁移中 DDL 禁止,`-migrate` 看到 `state=MOVING` 拒绝。
 - 不过闸门的工具在迁移期间禁用,手册 §2 有清单。`admission_recover` 同事务锁 `route_meta` 判 `writable`,冻结就拒绝,而且必须配 `MMORPG_DB_PLACEMENT`。
+- **修复身份**(负责人 2026-11-19 定):直接改业务行的数据修复工具(`create_residual`、`admission_recover`)用第五种主体 `MMORPG_SQL_REPAIR_PRINCIPAL`,与 runtime / registrar / maintenance / schema 都不同;维护身份不授业务表。
+  - 为什么:维护身份能冻结、解冻、改闸门行,再给它业务写,就是一把钥匙既能关闸又能改数据,泄露或误用时影响面最大,审计里也分不出排空操作和数据修复。修复身份反过来动不了闸门和名册。
+  - 授权由 `maintenance_drain.ps1 render-repair-role` 按两个工具实际执行的语句逐表生成,闸门行只读、墓碑只能插入;内容与操作步骤见 PITR 手册 §4.1a。
+  - plan 与 apply 用同一个修复身份,不再单设只读身份:plan 本来就在修复窗口里跑,修复账号平时锁着,多一套口令换不来多少。
+  - 列级授权(只许改某几列)没用:TiDB 上列级权限的行为没在真库核过,先按表级授,真库核过之后再收紧。
 - 一次只搬一个逻辑库。`plan`、`prepare` 看到别的库在搬就拒绝。
 - Java 进程(网关的 `mmorpg` 库)不做动态拨号,翻转后滚动重启,手册 §9。`java/authority_jdbc` 把闸门冻结映射成可重试的 `WriterFrozenException`(`SQLTransientException`,SQLSTATE 40001)。
 

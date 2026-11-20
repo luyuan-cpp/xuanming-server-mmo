@@ -1,0 +1,177 @@
+# payment:真钱支付的渠道适配(docs/design/payment-recharge.md §22)。
+#
+# 全局池,只部署到 infra namespace 一次。k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true:
+# ConfigMap 与 payment-migrate Job 在基础设施阶段,进程排在第一个 zone 的 data-service 之后。形状照 rank.yaml。
+#
+# 三个端口:
+#   - grpc 51200:客户端协议 ClientPlayerPayment,只经 gate → client-rpc-router 到达(-NetworkPolicies on 时只放行路由服);
+#   - metrics 9280:Prometheus 抓取与探针(/healthz);
+#   - notify 18130:渠道回调 /notify/<渠道名>,明文 HTTP。经下面的 Service payment-notify 对集群外开放。
+#
+# 密钥:
+#   - 商城调用密钥(payment 角色)与 dev 档的 devpay 联调密钥走工作负载密钥目录($script:WorkloadSecretCatalog),env 与指纹由脚本注入,本文件不要手写;
+#   - 真实渠道的密钥由运维预置在 Secret payment-channel-secrets(键名 = 配置里各 *Env 指的变量名),下面 envFrom 整体注入。
+#     没开要它的渠道时这个 Secret 可以不存在,所以引用是 optional;开了渠道而它不在、缺键,部署脚本在任何写操作之前拒绝,
+#     进程启动时也会对缺失的变量拒启并点名。脚本不读它的值,没有指纹:改了之后要 kubectl rollout restart statefulset/payment。
+#   - 按玩家查实名的账号目录调用密钥在运维预置的 Secret domain-service-secrets(键 account-directory-payment,与每个 zone 的 data-service 同值),
+#     下面 secretKeyRef 注入,不是 optional:缺键时 Pod 卡在 CreateContainerConfigError。
+#
+# 库 mmorpg_payment 只登记在 deploy/mysql-init/00_init_zone_dbs.sql;表由同目录 payment-migrate.yaml 建。
+# 连接数:配置的 MaxOpenConns × replicas 要算进 MySQL 连接总账(k8s_deploy.ps1 Get-MysqlConnectionLedger)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment
+  labels: {app: payment, tier: go-svc}
+spec:
+  selector: {app: payment}
+  ports:
+    - {name: grpc, port: 51200, targetPort: 51200}
+---
+# 渠道回调的集群外入口。类型由 k8s_deploy.ps1 填,与 gate 对外 Service 同一口径:
+# -OpsProfile managed-cloud 是 LoadBalancer,bare-metal 是 NodePort,custom 取 -GateServiceType。
+# TLS 不在 Pod 里终结:云负载均衡用云厂商的注解在 443 上终结 HTTPS,或由外部七层终结后回源到这里。
+# 各渠道后台登记的回调地址是 https://<支付域名>/notify/<渠道名>,域名解析到这个 Service 的外部地址。
+# 只暴露回调口:gRPC 与指标口不在这个 Service 里。
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-notify
+  labels: {app: payment, tier: go-svc}
+spec:
+  type: PLACEHOLDER_PAYMENT_NOTIFY_SERVICE_TYPE
+  selector: {app: payment}
+  ports:
+    - {name: notify, port: 443, targetPort: notify}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: payment
+  labels: {app: payment, tier: go-svc}
+spec:
+  # 进程无状态,多副本安全:后台任务靠行上的租约列互斥(docs/design/payment-recharge.md §22.2)。
+  replicas: 2
+  # SQL 写者是 StatefulSet:Pod 序号就是写者名册的槽位,每次启动在同一槽位上换代,名册不随启动次数消耗
+  # (docs/design/writer-roster-exhaustion-20261106.md §5.5)。滚动一次换一个副本,不能 maxSurge。
+  serviceName: payment
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels: {app: payment}
+  template:
+    metadata:
+      labels: {app: payment, tier: go-svc, mmorpg.io/sql-writer: "true"}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9280"
+        prometheus.io/path: /metrics
+    spec:
+      terminationGracePeriodSeconds: 35
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels: {app: payment}
+                topologyKey: kubernetes.io/hostname
+      # 独立registrar只在init读取槽位名册与控制凭据,按 Pod 序号选槽位、现场生成这一代的身份;normal只见本Pod选中配置。
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: sql-writer-registrar
+          image: PLACEHOLDER_SQL_WRITER_REGISTRAR_IMAGE
+          command: ["/bin/sh", "-ec"]
+          args: ["umask 077; mkdir -p /run/sql-writer/grant/private /run/sql-writer/runtime/private/env; exec /app/service \"$@\"","--","-command","register","-roster","/run/sql-writer/input/request/roster.json","-roster-sha256","PLACEHOLDER_SQL_WRITER_ROSTER_SHA256","-input-root","/run/sql-writer/input","-lock-qualification","/run/sql-writer/input/request/lock-qualification.original","-runtime-config-output","/run/sql-writer/runtime/private/payment.yaml","-runtime-env-output","/run/sql-writer/runtime/private/env","-boot-output","/run/sql-writer/grant/private/boot-grant.json","-deployment-id","$(MMORPG_SQL_DEPLOYMENT_ID)","-pod-name","$(POD_NAME)"]
+          env:
+            - name: MMORPG_SQL_DEPLOYMENT_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: MMORPG_SQL_OPERATOR_PRINCIPAL
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: principal, optional: false}
+            - name: MMORPG_SQL_REGISTRAR_DSN
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SQL_WRITER_REGISTRAR_SECRET, key: dsn, optional: false}
+            - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
+              value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
+          volumeMounts:
+            - {name: sql-writer-request, mountPath: /run/sql-writer/input/request, readOnly: true}
+            - {name: sql-writer-runtime-input, mountPath: /run/sql-writer/input/runtime, readOnly: true}
+            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant}
+            - {name: svc-config, mountPath: /run/sql-writer/runtime}
+      containers:
+        - name: payment
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          command: ["/bin/sh", "-ec"]
+          args: ["(umask 077; mkdir -p /run/sql-writer/consume/private); if ls /run/sql-writer/consume/private/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/private/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; MMORPG_PAYMENT_SQL_DSN=\"$(cat /app/etc/private/env/MMORPG_PAYMENT_SQL_DSN)\"; export MMORPG_PAYMENT_SQL_DSN; exec /app/service \"$@\"","--","-f","/app/etc/private/payment.yaml"]
+          env:
+          # grant只读，consume留在同PodemptyDir；同Podrestart不得重复消费boot。
+            - name: MMORPG_SQL_WRITER_GRANT_FILE
+              value: /run/sql-writer/grant/private/boot-grant.json
+            - name: MMORPG_SQL_WRITER_CONSUME_DIR
+              value: /run/sql-writer/consume/private
+            - name: MMORPG_SQL_DEPLOYMENT_ID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256
+              value: "PLACEHOLDER_SQL_WRITER_PHYSICAL_SHA256"
+            - name: POD_IP
+              valueFrom:
+                fieldRef: {fieldPath: status.podIP}
+            # 按玩家查实名(data_service GetAccountRealName,未成年人充值限额用;docs/design/real-name-anti-addiction.md §5.6)的调用密钥,
+            # 与每个 zone 的 data-service 同值。
+            - name: MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: account-directory-payment, optional: false}
+          envFrom:
+            # 真实渠道的密钥(见文件头)。没开要它的渠道时这个 Secret 可以不存在。
+            - secretRef: {name: payment-channel-secrets, optional: true}
+          ports:
+            - {name: grpc, containerPort: 51200}
+            - {name: metrics, containerPort: 9280}
+            - {name: notify, containerPort: 18130}
+          readinessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec: {command: [sh, -c, "sleep 5"]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 1000m, memory: 512Mi}
+          volumeMounts:
+            - {name: sql-writer-grant, mountPath: /run/sql-writer/grant, readOnly: true}
+            - {name: sql-writer-consume, mountPath: /run/sql-writer/consume}
+            - {name: svc-config, mountPath: /app/etc, readOnly: true}
+      volumes:
+        - name: sql-writer-request
+          secret: {secretName: PLACEHOLDER_SQL_WRITER_REQUEST_SECRET, defaultMode: 288}
+        - name: sql-writer-runtime-input
+          secret: {secretName: PLACEHOLDER_SQL_WRITER_RUNTIME_SECRET, defaultMode: 288}
+        - name: sql-writer-grant
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
+        - name: sql-writer-consume
+          emptyDir: {medium: Memory, sizeLimit: 1Mi}
+        - name: svc-config
+          emptyDir: {medium: Memory, sizeLimit: 20Mi}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: payment}

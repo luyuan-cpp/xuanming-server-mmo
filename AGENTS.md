@@ -100,7 +100,7 @@
   文件命名 `t<N>m_login.txt` / `t<N>m_sm.txt` / `t<N>m_db.txt` / `t<N>m_ds.txt`，summarize 脚本自动按后缀分流。
   同一时刻还对 `-RedisTargets`（缺省 `@{ core = 'docker:redis' }`）抓 `redis-cli INFO` 快照 `t<N>m_redis_<name>.txt`，
   汇总脚本相邻两份求差出 Redis 的 ops/s、CPU、热点命令；Redis 求差要基线，`-Stages` 建议带上 0。
-  玩家域上了 Redis Cluster 时，target 写 `k8s-cluster:<namespace>/redis-player` 或 `docker-cluster:redis-player-cluster-0:7100`：逐主节点抓，R1 / R2 逐主节点出行，再合成一行 `<name>-all`。
+  Redis Cluster 的 target：K8s 上玩家域写 `k8s-cluster:<namespace>/redis-player`，控制集群写 `k8s-cluster:<namespace>/redis-control`；本机开发集群写 `docker-cluster:redis-player-cluster-0:7100`（本机控制域的句柄缺省回落单实例 `redis`，指到开发集群时与玩家域共用这一套，指法见 `tools/scripts/README.md`「compose.redis-cluster.yml」）。集群 target 逐主节点抓，R1 / R2 逐主节点出行，再合成一行 `<name>-all`。
 - 旧式单端口手拉（legacy 兼容）：`curl -s http://127.0.0.1:9101/metrics > $RunDir/prom-snapshots/t<n>m.txt`。
 - 历史复盘文档（`stress-1zone-*.md`）直接复用脚本输出的表格，不要再贴 raw count/sum 数字。
 
@@ -111,7 +111,7 @@
    - `robot/logs/stress-*` 旧目录（留最近 1 个备查，其余删掉）
    - `bin/log/*` cpp gate/scene 日志
    - 各 go service stderr/stdout（`go-svc-stop` + 删 `tools/scripts/.run/` 的 pid/log）
-   - 清掉残留 lock / session key：`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`（单实例加玩家域开发集群的每个主节点），K8s 压测环境用 `-Command k8s-redis-wipe -ConfirmWipeAllRedis`。Redis Cluster 的 `FLUSHALL` 只清本节点，不要只对一个节点执行
+   - 清掉残留 lock / session key：`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`（单实例加本机开发集群 `redis-player-cluster-*` 的每个主节点；本机控制句柄指到开发集群时也在这一套里），K8s 压测环境用 `-Command k8s-redis-wipe -ConfirmWipeAllRedis`（只许 `mmorpg-stress-*` 的 infra namespace，逐主节点清其中实际存在的 `redis`、`redis-match-cluster`、`redis-player`、`redis-control`）。Redis Cluster 的 `FLUSHALL` 只清本节点，不要只对一个节点执行
    - kafka topic offset reset（`pwsh tools/scripts/dev_tools.ps1 -Command kafka-offset-reset`）+ broker 数据目录可选清，生产/历史不要清
    - prom snapshot 目录 = 新建 `robot/logs/stress-<name>-<ts>/prom-snapshots/`
 3. **压测中** —— 至少在 ramp 完成 / 稳态中段 / 稳态末三个时刻拉 snapshot 进 `prom-snapshots/`。
@@ -180,6 +180,7 @@
 
 - Claude ❌ 不跑 `msbuild` / `dotnet build` / `go build` / `go test` / `go vet` / `mvn` / `cmake` / `build.bat` / `build_linux.sh` 等任何构建、测试或压测命令，也不为“验证一下”而跑。
 - Claude ✅ 改完代码后，给出 Codex 可直接执行的细节：**目标工程/服务、具体命令、工作目录、环境变量、前置清理、期望产物、通过标准、失败时要保留的日志或摘要**。多个工程要说明先后顺序；C++ MSBuild 必须串行 `/m:1`，并发会报假的 C1041 / LNK1104。
+- Claude ✅ 改了 C++ 源码时，交付前先在仓库根跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`。它是只读的源码文本预检（几秒，不编译、不起服务），不在上面禁跑之列。类 / 结构体里不得有裸指针成员，违例会让 MSBuild 的 no-raw-pointer-member 门禁在首错处停下，整个工程不编不测；写法见 `.github/copilot-instructions.md`「C++ 类成员不放裸指针」一节。命中自己的文件就改，命中别的会话正在写的文件只告知对方；结论以门禁为准。
 - Codex 按上述细节执行本地编译、测试、压测与汇总，不自行脑补压测口径或宣称性能结论。
 - Claude 在没有 Codex 运行结果前，**不得声称“编译通过”“测试绿”“已验证”**；交付说明必须如实写明“未编译，待 Codex 验证”。
 

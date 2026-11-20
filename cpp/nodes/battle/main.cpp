@@ -242,16 +242,30 @@ namespace
         const auto rateLimit = battle_connection_admission::ResolveRateLimit(
             std::getenv(battle_connection_admission::kAcceptRateEnv),
             std::getenv(battle_connection_admission::kAcceptBurstEnv), effectiveMaxConnections, error);
-        if (!rateLimit)
+        // 未验签预算(与 gate 同一份规则,docs/design/gate-connection-admission-control.md P0-2):缺省由上限推导,
+        // BATTLE_PREAUTH_* 可覆盖,写错同样拒启。
+        const auto preAuthBudget =
+            rateLimit ? battle_connection_admission::ResolvePreAuthBudget(
+                            std::getenv(battle_connection_admission::kPreAuthBudgetEnv),
+                            std::getenv(battle_connection_admission::kPreAuthEarlyDropStartEnv),
+                            std::getenv(battle_connection_admission::kPreAuthEvictableAgeEnv), effectiveMaxConnections,
+                            error)
+                      : std::nullopt;
+        if (!rateLimit || !preAuthBudget)
         {
             LOG_FATAL << "Refusing to start: " << error;
             return;
         }
-        edge.ConfigureAdmission(*rateLimit);
+        edge.ConfigureAdmission(*rateLimit, *preAuthBudget);
         LOG_INFO << "Battle client connection admission ENFORCED at accept, max_connections=" << effectiveMaxConnections
                  << " accept_rate_per_second=" << rateLimit->perSecond << " accept_burst=" << rateLimit->burst
-                 << " (override the rate gate with " << battle_connection_admission::kAcceptRateEnv << " / "
-                 << battle_connection_admission::kAcceptBurstEnv << ")";
+                 << " preauth_early_drop_start=" << preAuthBudget->earlyDropStart
+                 << " preauth_budget=" << preAuthBudget->full
+                 << " preauth_evictable_age_ms=" << preAuthBudget->minEvictableAge.count()
+                 << " (overrides: " << battle_connection_admission::kAcceptRateEnv << " / "
+                 << battle_connection_admission::kAcceptBurstEnv << ", " << battle_connection_admission::kPreAuthBudgetEnv
+                 << " / " << battle_connection_admission::kPreAuthEarlyDropStartEnv << " / "
+                 << battle_connection_admission::kPreAuthEvictableAgeEnv << ")";
     }
 
     struct BattleNodeHooks

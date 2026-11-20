@@ -81,4 +81,8 @@ const Counters &GetCounters();
 // 检查点堆的大小(含已关闭会话、已验签连接尚未到期的检查点),只作观测。
 std::size_t PendingChecks();
 
+// 本端 loop 是否刚卡过(client_liveness.h LoopStallWatch;节拍就是 SweepLiveness 每秒一次的扫描,还没扫过也算卡过)。
+// 未验签淘汰(connection_admission.cpp)这时不淘汰:验签请求可能还在接收缓冲里没读,与握手期限这一侧的「迟到只推迟」同一口径。
+bool LoopRecentlyStalled(client_liveness::SteadyTime now);
+
 } // namespace gate_client_heartbeat

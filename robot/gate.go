@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"robot/config"
+	"robot/pkg"
 )
 
 type gateAssignment struct {
@@ -149,6 +150,7 @@ func assignGateHTTP(gatewayAddr string, zoneId uint32) (*gateAssignment, error) 
 	var resp struct {
 		GateIP         string `json:"gate_ip"`
 		GatePort       uint32 `json:"gate_port"`
+		GateWsURL      string `json:"gate_ws_url"`
 		TokenPayload   []byte `json:"token_payload"`
 		TokenSignature []byte `json:"token_signature"`
 		Error          string `json:"error,omitempty"`
@@ -162,6 +164,8 @@ func assignGateHTTP(gatewayAddr string, zoneId uint32) (*gateAssignment, error) 
 	if resp.GateIP == "" || resp.GatePort == 0 {
 		return nil, fmt.Errorf("AssignGate returned empty address")
 	}
+	// 小游戏连这台 gate 的 WebSocket 地址:登记下来,连接时按 ip:port 查(pkg/transport.go)。
+	pkg.AdvertiseWsURL(resp.GateIP, int(resp.GatePort), resp.GateWsURL)
 
 	return &gateAssignment{
 		addr:      fmt.Sprintf("%s:%d", resp.GateIP, resp.GatePort),

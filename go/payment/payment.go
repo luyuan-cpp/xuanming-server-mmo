@@ -1,7 +1,7 @@
 // payment 服务:真钱支付的渠道适配(docs/design/payment-recharge.md §22)。
 //
 // 全局一份、多副本、进程无状态:数据在独占库 mmorpg_payment(port-decisions D-14)。客户端协议 ClientPlayerPayment 经 gate → 路由服到达
-// (按 PaymentNodeService.rpc 前缀发现);渠道回调走独立的 HTTP 端口(Payment.NotifyListenAddr,经 Ingress 暴露到公网)。
+// (按 PaymentNodeService.rpc 前缀发现);渠道回调走独立的 HTTP 端口(Payment.NotifyListenAddr,K8s 上经 Service payment-notify + 外部负载均衡暴露到公网)。
 // 订单在商城(java/mall_game),本服务以 payment 角色向它记账、同步修订、回执退款;发货与扣回由 trade 收敛。
 //
 // 两种运行形态:
@@ -36,6 +36,7 @@ import (
 	"schemamigrate"
 	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/dbplacement"
 	"shared/domainhost"
 	"shared/drainproof"
@@ -58,6 +59,7 @@ func main() {
 	if *version {
 		return
 	}
+	clockcheck.MustPass("payment")
 	var c config.Config
 	conf.MustLoad(*file, &c)
 	if err := run(c, *migrate); err != nil {
@@ -180,7 +182,11 @@ func run(c config.Config, migrate bool) (runErr error) {
 	if err != nil {
 		return err
 	}
-	svc, err := core.New(data.New(db), mallClient, channels, platforms, serviceOptions(c))
+	realNames, err := realNameClient(c)
+	if err != nil {
+		return err
+	}
+	svc, err := core.New(data.New(db), mallClient, channels, platforms, serviceOptions(c, realNames))
 	if err != nil {
 		return err
 	}

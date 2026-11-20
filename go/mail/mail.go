@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"shared/drainproof"
+	"shared/grpckeepalive"
 	"shared/serverbase"
 	"strings"
 	"sync"
@@ -35,6 +36,7 @@ import (
 	"shared/assetop"
 	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/dbplacement"
 	"shared/domainhost"
 	tables "shared/generated/table"
@@ -109,6 +111,7 @@ func main() {
 	if *version {
 		return
 	}
+	clockcheck.MustPass("mail")
 	var c config
 	conf.MustLoad(*file, &c)
 	if err := run(c, *migrate); err != nil {
@@ -238,11 +241,12 @@ func run(c config, migrate bool) (runErr error) {
 	if err = rolefence.VerifySchema(ctx, db); err != nil {
 		return fmt.Errorf("role_fence 表不可用,先运行 mail -migrate: %w", err)
 	}
-	participant, err := rolefence.NewParticipantServer(db, data.RolePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	participant, err := rolefence.NewParticipantServer(db, data.RolePending, data.RolePurge, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if err != nil {
 		return fmt.Errorf("角色护栏参与者装配失败: %w", err)
 	}
-	guildRPC, err := zrpc.NewClient(c.GuildRpc)
+	// guild 经 K8s Service 直连:对端整机掉电时,keepalive 让连接在一次调用后 20 秒内断开重连(shared/grpckeepalive)。
+	guildRPC, err := zrpc.NewClient(c.GuildRpc, zrpc.WithDialOption(grpckeepalive.DialOption()))
 	if err != nil {
 		return fmt.Errorf("帮会客户端装配失败: %w", err)
 	}

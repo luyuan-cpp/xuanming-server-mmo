@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -195,8 +196,10 @@ public class RateLimitConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = "gate.rate-limit", name = "enabled", havingValue = "true")
-    public RateLimitStore rateLimitStore(RateLimitRedis redis) {
-        return new RedisRateLimitStore(redis.commands());
+    public RateLimitStore rateLimitStore(RateLimitRedis redis, RateLimitProperties props) {
+        // 存储只在限流打开时创建,且先于限流器创建:配置写错在这里就拒启,报错指出是哪个键。
+        requireValidLimits(props);
+        return new RedisRateLimitStore(redis.commands(), props.getQueueRetryIpCostMilli());
     }
 
     @Bean
@@ -206,23 +209,33 @@ public class RateLimitConfig {
         RateLimitStore s = store.getIfAvailable();
         if (s == null) {
             log.info("RateLimiter disabled (gate.rate-limit.enabled=false) — pass-through mode");
-        } else {
-            requireValidLimits(props);
         }
         long boot = System.currentTimeMillis() / 1000L;
         WaveSchedule wave = new WaveSchedule(props.getWave(), boot);
-        return new AssignGateRateLimiter(s, props, wave, registry, () -> System.nanoTime() / 1_000_000L);
+        return new AssignGateRateLimiter(s, props, wave, registry, () -> System.nanoTime() / 1_000_000L,
+                bound -> ThreadLocalRandom.current().nextLong(bound));
     }
 
     /**
      * 限流打开时,桶阈值必须为正,否则拒启(2026-11-05)。rps 为 0 时 Lua 里补充与等待都要除以它;burst 为 0 的桶永远不足
      * 一个令牌,等于把这一层全部挡死。单区覆盖的 rps / burst 写 0 表示沿用缺省,负数视为写错。包内可见,供单测钉住。
+     *
+     * <p>排队提示(2026-11-19,见 {@link AssignGateRateLimiter} 类注释):下限必须为正 —— 0 就退回「补到一个令牌只要 1ms」
+     * 的紧循环重试;随机量不能为负;区桶空时 IP 桶扣的那一份在 0~1000(千分之一令牌)之间。
      */
     static void requireValidLimits(RateLimitProperties props) {
         requirePositive("zone-default-rps", props.getZoneDefaultRps());
         requirePositive("zone-default-burst", props.getZoneDefaultBurst());
         requirePositive("ip-rps", props.getIpRps());
         requirePositive("ip-burst", props.getIpBurst());
+        requirePositive("queue-retry-min-ms", props.getQueueRetryMinMs());
+        if (props.getQueueRetryJitterMs() < 0) {
+            throw new IllegalStateException("gate.rate-limit.queue-retry-jitter-ms 不能为负,当前 " + props.getQueueRetryJitterMs());
+        }
+        long cost = props.getQueueRetryIpCostMilli();
+        if (cost < 0 || cost > RedisRateLimitStore.ONE_TOKEN_MILLI) {
+            throw new IllegalStateException("gate.rate-limit.queue-retry-ip-cost-milli 必须在 0~1000 之间(千分之一令牌),当前 " + cost);
+        }
         for (Map.Entry<Long, RateLimitProperties.ZoneLimit> e : props.getZoneOverrides().entrySet()) {
             RateLimitProperties.ZoneLimit limit = e.getValue();
             if (limit == null || limit.getRps() < 0 || limit.getBurst() < 0) {

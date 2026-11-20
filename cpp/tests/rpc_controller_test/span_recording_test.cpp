@@ -7,6 +7,8 @@
 //   * PendingSpan 是当前 span 的子 span(同 trace、新 span_id),End 恰好一次,移走后原对象不再记录;父无效时是空 span;
 //   * ScopedSpan(captured) 原样装回(同一个 span_id),在它里面开的 client span 以捕获的那个已导出 span 为父;
 //   * MarkCurrentSpanError 只标最内层的在录 span;恢复作用域与不录的作用域里什么都不标;
+//   * TakeCurrentServerSpan 只接最内层、类型与来源都对得上的在录 server span:接走后作用域退出不再结束它,
+//     由接手方在回复发出时结束(同一个 span_id、同一个父);对不上的返回空 span,作用域照旧结束自己的;
 //   * 名字按 "head/tail" 拼,超长截断;结束时刻不早于开始时刻。
 //
 // 与 rpc_controller_test.cpp 同一工程、同一个 main。夹具在开始和结束时复位本线程的 trace,并装 / 摘测试用的去处。
@@ -250,6 +252,55 @@ TEST_F(SpanRecordingTest, MarkCurrentSpanErrorMarksOnlyTheInnermostRecordingSpan
 
     tracing::MarkCurrentSpanError("no span");   // 作用域都退出了:什么都不做
     EXPECT_EQ(sink_.Count(), 2u);
+}
+
+TEST_F(SpanRecordingTest, TakenServerSpanOutlivesItsDispatchScopeAndEndsWhereTheReplyIsSent)
+{
+    const span_test::ScopedSinkInstall install(&sink_);
+    const tracing::TraceContext upstream = tracing::NewRoot();
+    tracing::TraceContext dispatched;
+    tracing::PendingSpan reply;
+    {
+        tracing::ScopedIncoming dispatch(upstream, SpanKind::kServer, SpanSystem::kRpc0, SpanName{"Scene", "PrepareBattle"});
+        dispatched = tracing::Current();
+        reply = tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kRpc0);
+        ASSERT_TRUE(reply.Recording());
+        EXPECT_EQ(reply.Context().span_id.bytes, dispatched.span_id.bytes) << "接过来的就是派发的 server span";
+        EXPECT_EQ(tracing::Current().span_id.bytes, dispatched.span_id.bytes) << "作用域照旧装着它的上下文";
+        tracing::MarkCurrentSpanError("ignored");   // 接走之后当前线程上没有在录的 span
+    }
+    EXPECT_EQ(sink_.Count(), 0u) << "派发作用域退出时不结束接走的 span";
+
+    reply.SetError("HANDLER_FAILED");
+    reply.End();
+    ASSERT_EQ(sink_.Count(), 1u);
+    const tracing::SpanRecord span = sink_.Spans()[0];
+    EXPECT_EQ(span.span_id.bytes, dispatched.span_id.bytes);
+    EXPECT_EQ(span.parent_span_id.bytes, upstream.span_id.bytes);
+    EXPECT_TRUE(span.parent_is_remote);
+    EXPECT_EQ(span.kind, SpanKind::kServer);
+    EXPECT_EQ(span.Name(), "Scene/PrepareBattle");
+    EXPECT_EQ(span.status, tracing::SpanStatus::kError);
+    EXPECT_EQ(span.StatusMessage(), "HANDLER_FAILED") << "接走之后的 MarkCurrentSpanError 没标到它";
+}
+
+TEST_F(SpanRecordingTest, TakeCurrentServerSpanTakesOnlyAMatchingInnermostRecordingServerSpan)
+{
+    const span_test::ScopedSinkInstall install(&sink_);
+    {
+        tracing::ScopedIncoming grpc(tracing::NewRoot(), SpanKind::kServer, SpanSystem::kGrpc, SpanName{"pkg.Svc/M"});
+        EXPECT_FALSE(tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kRpc0).Recording()) << "来源不对";
+        {
+            const tracing::ScopedSpan nested(tracing::Current());   // 不录的嵌套作用域:最内层没有在录的 span
+            EXPECT_FALSE(tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kGrpc).Recording());
+        }
+    }
+    {
+        tracing::ScopedIncoming consumer(tracing::NewRoot(), SpanKind::kConsumer, SpanSystem::kKafka, SpanName{"topic"});
+        EXPECT_FALSE(tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kKafka).Recording()) << "consumer 不是 server";
+    }
+    EXPECT_FALSE(tracing::PendingSpan::TakeCurrentServerSpan(SpanSystem::kGrpc).Recording()) << "作用域外什么都没有";
+    EXPECT_EQ(sink_.Count(), 2u) << "没被接走的照旧在作用域退出时结束";
 }
 
 TEST_F(SpanRecordingTest, SpanRecordJoinsAndTruncatesNames)

@@ -3,6 +3,7 @@
 > **负责人要求(2026-10-31)**:「我确实会有不停服迁移物理库的」。一个逻辑库(比如 `player_store_3_db`、`mmorpg_guild`)要能从物理集群 A 搬到集群 B,玩家不掉线、不丢数据,只有秒级暂停,业务收到可重试错误。实现口径:窗口里这个库的写者池**读写都暂停**,都回可重试错误(设计 §2)。
 > **状态**:工具、连接层、手册已按[设计 §8](../design/horizontal-scale-logical-db.md)落码,**未编译、未测试、未演练**。§10 的验证跑通之前,不能在真实环境执行。部署渲染已由 K1 接上,同样未编译:`k8s_deploy.ps1` 按 `-SqlClusters`、`-SqlDefaultCluster` 渲染服务 yaml 的 `DbPlacement` 段,写者的 registrar init 自带 `MMORPG_DB_PLACEMENT`。
 > **2026-11-12 起的三处变化**(同样未编译):`cleanup` 删源库之前核复制流已经撤掉,要带 `-sync`(第 9 步);`cutover` 的冻结窗口里两边静止之后再比一次全量,窗口因此变长(第 5 步);校验和同时比表的定义,没有主键的表不能搬(§2 第 6 条)。
+> **2026-11-19 起的两处变化**(同样未编译):`cutover` 冻结之前核两侧这个库的表都关着 TTL,开着就拒绝(第 5 步);`cleanup` 问 TiCDC 之前先核它健康,不健康时它说「没有这个 changefeed」不算数(第 9 步)。
 
 ## 1. 方案
 
@@ -50,7 +51,7 @@
 
    **搬的是目录库时,结束之后跑一次名字收尾**(2026-11-12)。冻结期间建角回滚的释放可能失败:释放之前要在玩家片证明角色永远不会提交,玩家片冻结时这一步写不了墓碑,名字留成孤儿(login 记 `[player-name] orphan reservation` 和 `login_create_player_name_orphan_total`)。`cutover` 或 `rollback` 结束、闸门打开之后跑 `create_residual -target names`(不带 `-shard`:名字行按 `name_norm` 分片,孤儿名字的名字行不在冻结的那一片上;plan,再 `-mode apply -repair name`,参数见 [PITR 手册](mysql-backup-pitr-runbook.md) §4.1a 第 2、3 步),它报 `orphan_name` 并按同带 token 的 `ReleasePlayerName` 收掉,有提交证据的只报告。不用再按日志逐条带 token 释放。
 
-3. **账号在目标集群提前建好,口令相同**:写者账号(`writer_registry` 里 ACTIVE 的 `sql_principal`,加上名册里的全部主体:滚动重启时新 Pod 用名册里下一个)、注册账号、schema 账号和维护账号。`plan` 逐个核账号存在,`cutover` 冻结之前再核一遍,再比一遍两侧的 `SHOW GRANTS`。连接串不换,换的只有地址。BR 和 `mysqldump` 都不带 `mysql.*`,账号和授权要自己建;授权是按表的,表要先存在,所以放在全量恢复之后(§4 第 3 步)。
+3. **账号在目标集群提前建好,口令相同**:写者账号(`writer_registry` 里 ACTIVE 的 `sql_principal`,加上名册里的全部主体:滚动重启时新 Pod 用名册里下一个)、注册账号、schema 账号和维护账号;搬的是目录片或存档库时还有修复身份(`create_residual`、`admission_recover` 用,`plan` 不核它,要自己建好并在目标集群重跑 `render-repair-role` 的授权,否则搬完这两个工具连不上)。`plan` 逐个核账号存在,`cutover` 冻结之前再核一遍,再比一遍两侧的 `SHOW GRANTS`。连接串不换,换的只有地址。BR 和 `mysqldump` 都不带 `mysql.*`,账号和授权要自己建;授权是按表的,表要先存在,所以放在全量恢复之后(§4 第 3 步)。
 
 4. **工具用的账号**:
 
@@ -247,6 +248,23 @@ dbmove prepare -db mmorpg_guild -target-cluster b -run-id <run-id> -roster <名�
 
 **第 5 步:cutover。** 选低峰,不和发布同时。`verify` 超过 `-verify-max-age`(默认 6 小时)会被拒绝,重跑一次。时间从比较的位置算,不从工具开始的时刻算:TiDB 档是 `primary_ts` 的物理时间,MySQL 档是 verify 开始时。
 
+**库里有带 TTL 的表时(TiDB 档),先在源集群把它们的 TTL 关掉**(2026-11-19 起 `cutover` 会核,开着就拒绝并点名表;现在只有 `mmorpg_chat` 的 `chat_send_authority`):
+
+```sql
+-- 源集群,逐表执行。哪些表带 TTL:cutover 的拒绝信息里有,或者看 SHOW CREATE TABLE 里的 TTL_ENABLE='ON'
+ALTER TABLE mmorpg_chat.chat_send_authority TTL_ENABLE='OFF';
+-- 关掉属性之后,已经在跑的 TTL 任务不会立刻停。下面这条查不到行再往下走
+SELECT t.table_name, s.current_job_id
+  FROM information_schema.tables t JOIN mysql.tidb_ttl_table_status s ON s.parent_table_id = t.tidb_table_id
+ WHERE t.table_schema = 'mmorpg_chat' AND s.current_job_id IS NOT NULL;
+```
+
+- 原因:TTL 任务是库自己发起的删除,不过闸门,源库冻结之后它照样删行。窗口里那次全量比对撞上就回滚、清掉 `verify` 记录;更要紧的是翻转之后,冻结的源库每过一个 `TTL_JOB_INTERVAL`(TiDB 缺省 1 小时,`chat_send_authority` 配的是 24 小时)被删掉一批过期行,而 `audit` 读的是源库的当前数据,必然对不上,冻结的源库也不再是翻转那一刻的原样。
+- 关表属性,不关全局开关 `tidb_ttl_job_enable`:全局开关连同一个集群上别的库一起停,而且搬完总要再打开,那时源库这几张表又接着删。表属性关掉之后一直留到 `cleanup` 删库,不用再管。
+- 这条语句只改表属性:不动表的定义摘要,不用重跑 `verify`;被 TiCDC 复制到目标也没有影响,目标本来就是 `OFF`(第 8 步)。`verify` 本身不受 TTL 影响(两边站在 syncpoint 的一对快照上,TTL 的删除是按顺序复制过去的普通事务),所以放在 `verify` 之前之后都行,只要在 `cutover` 之前。
+- 工具只核属性,不核有没有任务还在跑。上面第二条语句不查就切,没跑完的任务仍可能撞上窗口里的比对:回滚,不丢数据,但要重跑 `verify`。
+- 关掉之后**不要再打开**,直到这个库 `cleanup` 掉。只有放弃这次搬迁才在源集群改回 `ON`(§7)。目标集群的在 `audit` 通过之后打开(第 8 步)。这段时间 chat 启动时会打一行 ERROR(`chat_send_authority has no enabled TTL attribute`),是预期的。
+
 ```
 dbmove cutover -db mmorpg_guild -run-id <run-id> -sync ticdc:cdc-a:8300:dbmove-mmorpg-guild \
   -roster <名册文件,逗号分隔> -metrics-targets guild-0:<metrics 端口>,guild-1:<metrics 端口>
@@ -258,10 +276,11 @@ dbmove cutover -db mmorpg_guild -run-id <run-id> -sync ticdc:cdc-a:8300:dbmove-m
 
 - 这段时间这个库的读写一直暂停,时长约等于 `verify` 那次比对的耗时。小库是秒级;大库按 `verify` 输出的耗时估,**把 `-compare-budget` 设到比它大**:愿意让这个库停多久,由运维用这个参数明说。`cutover` 在冻结之前先比这两个数,装不下就退出码 1(`cannot hold`),不去白冻结一次。它和 `-budget` 分开算:库再大,等复制追平也只等 `-budget`,不会因为比对要很久就把源库冻着干等的时间也放宽。
 - 库大到这样的暂停不能接受时,加 `-skip-final-compare` 跳过这次比对,窗口回到秒级。代价是 `verify` 之后复制有没有漏写,翻转之前没有人查过。跳过时工具在标准错误输出打一行 `WARNING: [cutover] -skip-final-compare is set`,写进本地日志,并把 `final_compare_skipped: true` 和翻转一起记进映射。**跳过之后翻转一完成就跑 `audit`**(第 7 步),它是唯一的核对;`audit` 通过之前不要 `cleanup`,冻结的源库是唯一的退路。
-- 带 TTL 的表(第 8 步后面的 `mmorpg_chat`):源集群的 TTL 任务不过闸门,冻结之后它照样删行。正好在窗口里删,这次比对会判不一致并回滚;没有数据损失,但 `verify` 记录被清掉,要重跑。
+- 带 TTL 的表:源库的 TTL 已经按本步开头关掉(工具冻结之前会核),正常情况下窗口里没有 TTL 删除。刚关掉属性、还有任务没跑完就切时仍可能撞上:这次比对判不一致并回滚;没有数据损失,但 `verify` 记录被清掉,要重跑。
 
 冻结之前核完这些,一条不过就退出码 1,什么都没变:
 
+- TiDB 档:两侧这个库都没有开着 TTL 的表(源库的按本步开头关掉;目标的从恢复起就该是 `OFF`,见第 8 步);
 - 复制流还是 `verify` 时那一条,配置摘要没变,延迟低于 `-max-lag`;MySQL 档目标上没有开跳过错误的开关(§3);
 - `-compare-budget` 装得下窗口里那次全量比对(没加 `-skip-final-compare` 时);
 - 维护账号能控制两侧闸门;
@@ -300,8 +319,9 @@ dbmove audit -db mmorpg_guild -run-id <run-id> -metrics-targets guild-0:<metrics
 
 **搬的是 `mmorpg_chat` 时,同一步把保留期重新打开**(TiDB 档,2026-11-12 起)。`chat_send_authority` 带 TTL 属性,原件保留 30 天后由库删除(`docs/design/chat-world-channel-fanout.md` §5.2)。
 
-- BR 恢复出来的表 `TTL_ENABLE` 是 `OFF`(BR 的既定行为,免得一恢复就删),TiCDC 的下游也应保持 `OFF`:源集群的 TTL 删除是普通事务,会随复制到目标;目标自己再删一遍的话,两边删的行不同步,`verify` 与 `audit` 在固定位置上的校验和会对不上。所以**从恢复到 audit 通过,目标上不要开 TTL**。先查一眼:`SHOW CREATE TABLE mmorpg_chat.chat_send_authority` 里应当是 `TTL_ENABLE='OFF'`,不是就先关掉。
+- BR 恢复出来的表 `TTL_ENABLE` 是 `OFF`(BR 的既定行为,免得一恢复就删),TiCDC 的下游也应保持 `OFF`:源集群的 TTL 删除是普通事务,会随复制到目标;目标自己再删一遍的话,两边删的行不同步,`verify` 与 `audit` 在固定位置上的校验和会对不上。所以**从恢复到 audit 通过,目标上不要开 TTL**。先查一眼:`SHOW CREATE TABLE mmorpg_chat.chat_send_authority` 里应当是 `TTL_ENABLE='OFF'`,不是就先关掉;`cutover` 冻结之前也会核,目标有表开着就拒绝。
 - audit 通过之后在目标集群执行 `ALTER TABLE mmorpg_chat.chat_send_authority TTL_ENABLE='ON';`。忘了这一步,表从此只增不减;chat 每次启动会打一行 ERROR(`chat_send_authority has no enabled TTL attribute`),看到它就回来补这条。
+- 源集群那张表保持 `OFF`(第 5 步关的),不要跟着打开:`cleanup` 之前冻结的源库是退路,要留着翻转那一刻的原样。
 - 别的逻辑库以后有带 TTL 的表,同样处理。
 
 **第 9 步:cleanup。** 保留期默认 7 天。冻结的源库是目标出问题时唯一的退路,不要急着删。
@@ -318,6 +338,7 @@ dbmove cleanup -db mmorpg_guild -run-id <run-id> -sync ticdc:cdc-a:8300:dbmove-m
 
 - 核的是映射里 `move.verified_feed` 记下的那一条。TiDB 档问 TiCDC:changefeed 还查得到就拒绝(`still exists`),不管它是 `normal`、`stopped`(暂停)还是 `failed`;只有 TiCDC 明确回答「没有这个 changefeed」才算撤掉。MySQL 档连目标(要设 `DBMOVE_TARGET_ADMIN_DSN`,地址同样要和 `SqlClusters` 对上),目标上还有这个通道的配置就拒绝(`is still configured on the target`),`RESET REPLICA ALL` 之后才没有。
 - 查不成一律拒绝(`cannot tell whether the replication stream`):TiCDC 连不上、回 5xx、回一个说不清的 404,或者读不了目标的 `performance_schema`。不知道不等于没有。
+- TiDB 档先问 TiCDC 健不健康(`GET /api/v2/health`),再问 changefeed(2026-11-19 起)。TiCDC 查 changefeed 答的是 owner 内存里的那一份:owner 刚接任,或者 TiCDC 滚动升级到一半、各节点版本不一致时,还在的 changefeed 它也答「没有」。这时候的「没有」不算数,工具按查不成拒绝(`does not report healthy`)。等 TiCDC 恢复健康再跑,不要在 TiCDC 升级期间做 `cleanup`。
 - TiDB 档只在 `cutover` 读过这条流的那个 TiCDC 地址上问(映射的 `move.feed_endpoint`)。换一个 TiCDC,它当然答「没有这个 changefeed」,这不说明什么;地址对不上就拒绝(`proves nothing`)。**反向搬的时候最容易写错**:复制方向反过来了,changefeed 在另一个集群的 TiCDC 上,id 却常常同名。确实是同一个 TiCDC 集群的另一个地址(换了 capture、走隧道)时加 `-allow-addr-mismatch`。
 - `-sync` 里的 changefeed 或通道名和映射记下的不一样也拒绝(`-sync names ...`)。
 - 工具只认 `verify` 记下的那一条。翻转之后另外起的、同方向的复制(别的 changefeed id、别的通道名)要自己撤,工具不知道它们。
@@ -351,8 +372,9 @@ dbmove cleanup -db mmorpg_guild -run-id <run-id> -sync ticdc:cdc-a:8300:dbmove-m
 | 退出码 1,`the config of the replication stream changed since the last verify` | 复制流没换,配置被改过:TiDB 档是 changefeed 的 `config`(过滤规则、`ignore-txn-start-ts` 等,TiCDC 升级带来的缺省项变化也算),MySQL 档是通道的复制过滤 | 什么都没变。改过之后可能有一段写没复制过去,重跑 verify,报差异就从全量重来(§3) |
 | 退出码 1,`replica_skip_errors=...`、`replica_exec_mode=...` | MySQL 档目标主库开着跳过错误的开关:应用出错的事件被直接跳过,目标可能已经少了写入 | 什么都没变。改回 `replica_skip_errors=OFF`、`replica_exec_mode=STRICT`;之前有没有跳过已经说不清,从全量重来(§3) |
 | 退出码 1,`which -compare-budget=... cannot hold` | `verify` 那次比对的耗时不小于 `-compare-budget`(默认 30 秒),窗口里的全量比对装不下 | 什么都没变,没有冻结过。把 `-compare-budget` 调到比 `verify` 的耗时大(这个库要停这么久),或者按 §4 第 5 步权衡 `-skip-final-compare` |
+| 退出码 1,`have TTL enabled on the source`(或 `on the target`) | TiDB 档,点名的表 TTL 开着。TTL 任务不过闸门:源库的在冻结之后照样删行,窗口里的比对和之后的 `audit` 都会对不上;目标的会和复制过来的删除各删各的 | 什么都没变,没有冻结过。源库的按 §4 第 5 步逐表 `ALTER TABLE ... TTL_ENABLE='OFF'`,等正在跑的 TTL 任务结束再重跑;目标的同样关掉,`audit` 通过之后才打开(第 8 步)。报 `cannot read the TTL attribute` 是管理员账号看不了表定义,补这个库全部表的 SELECT(§2 第 4 条) |
 | 退出码 2,`cutover rolled back`,原因是 `replication is broken: the replication stream changed since the last verify`(或 `the config of the replication stream changed ...`) | 预检之后、窗口里复制流被重建了,或者它的配置被改了 | 已回滚,verify 记录已清。查是谁动的,重跑 verify |
-| 退出码 2,`cutover rolled back`,原因是 `the target differs from the frozen source after replication caught up` | 窗口里的全量比对不一致:源库冻结、复制追平之后两边内容不同。`verify` 之后复制被跳过了一段(§3 禁止的那几种操作),或者有人写过目标;带 TTL 的表也可能是源集群的 TTL 任务正好在窗口里删行 | 已回滚,业务恢复,verify 记录已清,**没有翻转**。输出里有不一致的表和两边的行数、摘要。查 changefeed 或通道的操作记录;重跑 verify,报差异就从全量重来(§3)。只是 TTL 撞上的话重跑 verify 会通过 |
+| 退出码 2,`cutover rolled back`,原因是 `the target differs from the frozen source after replication caught up` | 窗口里的全量比对不一致:源库冻结、复制追平之后两边内容不同。`verify` 之后复制被跳过了一段(§3 禁止的那几种操作),或者有人写过目标;带 TTL 的表刚关掉 TTL、还有任务没跑完就切,也是这个样子(§4 第 5 步) | 已回滚,业务恢复,verify 记录已清,**没有翻转**。输出里有不一致的表和两边的行数、摘要。查 changefeed 或通道的操作记录;重跑 verify,报差异就从全量重来(§3)。只是 TTL 撞上的话重跑 verify 会通过 |
 | 退出码 2,`cutover rolled back`,原因是 `comparing the frozen source with the target was cut short` 或 `compare the frozen source with the target: ...` | 窗口里的全量比对没做完:超了 `-compare-budget`,或者读表出错(输出里有原因) | 已回滚,verify 记录留着(没有证据说数据不一致)。前者加大 `-compare-budget`,后者按原因修,重跑 cutover |
 | 退出码 1,`points at the target itself`、`is not a replica of the source` | MySQL 档 `DBMOVE_VERIFY_SOURCE_DSN` 配错了:指到了目标,或者集合里没有复制来源的事务 | 什么都没变。改成源库的副本 |
 | 退出码 1,`the target admin account is not enough` | TiDB 档的 `DBMOVE_TARGET_ADMIN_DSN` 账号没有全局 `PROCESS`,查连接只看得到自己 | 什么都没变。补权限(§2),重跑 |
@@ -384,7 +406,7 @@ dbmove cleanup -db mmorpg_guild -run-id <run-id> -sync ticdc:cdc-a:8300:dbmove-m
 | 退出码 1,`cannot rule out that the flip took effect`;退出码 3,`the flip may have taken effect on the target` | 目标闸门被这个 run 打开过(`writer_epoch` 比冻结的源库大),而且写者账号连着目标,或者读不到目标。可能是翻转落地之后 etcd 回档、标记还没写;也可能是有进程提前配了新地址 | **源库保持冻结,不要手动解冻**。看输出里的账号和库名,查进程的 `db_placement_version` 和日志:进程确实收到过翻转,按下面「etcd 从备份恢复」写回映射;只是提前配错的进程,改回去、断开连接,重跑 rollback。目标真的没了才加 `-target-lost` |
 | 翻转之后写者连目标报账号已锁,或 rollback 报 `Re-run cutover` | 并发跑了 rollback 或 prepare,翻转赢了但账号被锁上了 | 重跑 cutover,输出 `already done` 并解锁。不要并发跑两个步骤 |
 | cleanup 退出码 1,`still exists`(TiDB 档)或 `is still configured on the target`(MySQL 档) | 喂过目标的复制流没撤掉,暂停、停住都算。这时删源库,`DROP DATABASE` 会顺着它到达目标,删掉正在用的库 | 什么都没删。按 §4 第 6 步撤掉(`changefeed remove`、`RESET REPLICA ALL`),重跑 cleanup |
-| cleanup 退出码 1,`cannot tell whether the replication stream` | 查不到复制流还在不在:TiCDC 连不上或回了说不清的答案;MySQL 档读不了目标的 `performance_schema` | 什么都没删。修连接或权限(§2 第 4 条),重跑。不要因为查不到就手工 `DROP DATABASE` |
+| cleanup 退出码 1,`cannot tell whether the replication stream` | 查不到复制流还在不在:TiCDC 连不上或回了说不清的答案;TiCDC 不健康(`does not report healthy`:owner 刚接任,或者滚动升级到一半,这时它对还在的 changefeed 也答「没有」);MySQL 档读不了目标的 `performance_schema` | 什么都没删。修连接或权限(§2 第 4 条),TiCDC 不健康就等它恢复(`curl <cdc>/api/v2/health` 回 200),重跑。不要因为查不到就手工 `DROP DATABASE` |
 | cleanup 退出码 1,`proves nothing` | `-sync` 的 TiCDC 地址不是 `cutover` 读这条流用的那个(映射的 `move.feed_endpoint`)。常见于反向搬之后照抄了上一次的 `-sync` | 什么都没删。改成 `cutover` 用的 `-sync`。确实是同一个 TiCDC 集群的另一个地址才加 `-allow-addr-mismatch` |
 | cleanup 退出码 1,`-sync names ...` | `-sync` 里的 changefeed 或通道名不是这次搬迁 `verify` 记下的那一个,或者档位不对 | 什么都没删。按映射的 `move.verified_feed` 改 `-sync` |
 | cleanup 退出码 1,`does not record the replication stream` | 映射里没有 `move.verified_feed`:映射是手工写回的,漏了这一段 | 什么都没删。按本地日志里 `verify` 那一行(`replication stream {...}`)把 `verified_feed` 写回映射,TiDB 档连 `feed_endpoint` 一起,再重跑 |
@@ -406,6 +428,7 @@ dbmove rollback -db mmorpg_guild -run-id <run-id>
 ```
 
 - **翻转之前**:先读目标上的翻转标记(读到就拒绝:映射只在 etcd 里,etcd 回档过的话它说没翻转不算数),再核目标闸门没有被这个 run 打开过、或者打开过但没有写者连着(§6),把写者账号再锁一遍(崩在解锁之后的话还开着),把映射改回 `ACTIVE`(让并发的翻转失效),最后解冻源库。解冻之后源库的闸门表复制到目标,目标又是 `writable=1`,所以锁账号排在解冻前面。重跑幂等。输出 `[rollback] ok: mmorpg_guild is ACTIVE on cluster a and writable`。然后停复制(§4 第 6 步),删掉目标上的半成品:`DROP DATABASE mmorpg_guild;`。不删的话下一次 `plan` 会拒绝。
+- **源集群的 TTL**:为 `cutover` 关掉的表(§4 第 5 步),回滚之后还要接着搬就保持 `OFF`;不搬了就在源集群改回 `ALTER TABLE ... TTL_ENABLE='ON'`,否则这些表从此只增不减。
 - **账号回滚之后保持锁定**。下一次 `prepare` 幂等,不用动。不打算再搬到这个集群时手工 `ALTER USER ... ACCOUNT UNLOCK` 或者删账号。
 - **目标连不上**:读不到翻转标记,分不清翻转过没有,默认拒绝。确定目标没收过写入之后加 `-target-lost`,不读标记、不碰账号,只改映射、解冻源库。目标恢复之后手工核账号还锁着,再删半成品。
 - **翻转之后**:拒绝。目标已经在收写入,回到源库会丢这部分数据。要回去只能反向再搬一次:先撤掉这一次的复制(§4 第 6 步),再 `cleanup` 源库(保留期没到就加 `-retention 0s -confirm-drop`,`-sync` 照带),再用新的 run id 从 `plan` 开始。`-retention 0s` 是翻转之后立刻删源库,这时复制多半还在跑:不撤掉它,`DROP DATABASE` 会被复制到正在收写入的目标上,所以 `cleanup` 看到复制流还在就拒绝。反向搬走完全相同的账号流程,`-retention 0s` 不改变这一点:原来的源集群这时是目标,`prepare` 在上面锁写者账号,`cutover` 解锁。账号在那个集群上还写别的库的话,要加 `-allow-shared-writer-accounts`(§4 第 1 步)。
@@ -435,7 +458,7 @@ dbmove rollback -db mmorpg_guild -run-id <run-id>
 
 - **进程版本落后或没上报**:按 §6 处理那个进程,重跑 audit。不影响数据。
 - **表内容不一致**:先不要 cleanup,冻结的源库是证据也是退路。报告里有表名和两边的行数、摘要;报的是 `the table definition differs` 时是表定义不同,方括号里列出只在一边出现的列或索引。
-  1. 看是不是操作问题:审计副本的位置对不对(MySQL 档工具会核),有没有人手动写过源库(`db_move_sentinel` 之外不该有变化)。
+  1. 看是不是操作问题:审计副本的位置对不对(MySQL 档工具会核),有没有人手动写过源库(`db_move_sentinel` 之外不该有变化)。TiDB 档再看源集群这个库的表是不是开着 TTL(`SHOW CREATE TABLE`;`cutover` 之后又被打开,或者翻转是 2026-11-19 之前的工具做的):冻结的源库被 TTL 任务删过行时,不一致的只有带 TTL 的表,而且源库的行数比目标少。
   2. 是真不一致:写入已经落在目标上,不能简单切回。按表用 `sync-diff-inspector`(TiDB)或逐行比对找出差异行,判断是复制丢了还是后来的业务写入。这是数据事故,按事故流程处理,保留本地日志、changefeed 或通道的状态、差异行。
 
 ## 9. Java 进程的库
@@ -498,6 +521,19 @@ $env:DBPLACEMENT_IT_ETCD='127.0.0.1:2379'; go test -count=1 -run '^TestStoreAgai
 - `TestITCutoverOnRealDatabases`:窗口里多了一次全量比对,读两侧主库的当前数据。
 - TiCDC 对不存在的 changefeed 的回答(HTTP 400 加 `CDC:ErrChangeFeedNotExists`)只有替身用例,`cleanup` 认的就是它:用真实 TiCDC `curl` 一个不存在的 id 核一次,状态码或错误码不同就改 `changefeedNotExists`,否则 `cleanup` 永远拒绝。changefeed 的 `config` 整份取摘要,连读两次同一个 changefeed 摘要要相同(`verify` 自己会比,不同就一直报 `changed during verify`)。
 
+2026-11-19 新加的两处,同样没跑过:
+
+- `TestCutoverRefusesBeforeFreezing` 新增三条(源库有表开着 TTL、目标有表开着 TTL、读不到 TTL 属性)、`TestTicdcStillExists` 新增一段(TiCDC 不健康时的「没有」不算撤掉),都是替身用例,随 `go test ./...` 跑。
+- `TestITTTLAttributeOnRealDatabases`(真库):TiDB 上带 TTL 的表被 `TablesWithTTLEnabled` 点名、`requireTTLOff` 拒绝,`ALTER TABLE ... TTL_ENABLE='OFF'` 之后放行,注释里的同样文字不算;mysql 档恒为空。
+- TiCDC 的 `GET /api/v2/health` 只有替身用例,`cleanup` 现在先问它:用真实 TiCDC `curl <cdc>/api/v2/health` 核一次,健康时要是 200;再在滚动升级中途(各节点版本不一致)核它不是 200,同时 `curl` 一个还在的 changefeed 看它答什么。端点不存在或健康时不是 200 就改 `requireHealthy`,否则 `cleanup` 永远拒绝。新架构的 TiCDC(`pingcap/ticdc`)两条都要另核。
+
+**2026-11-19 Claude 在本机一次性容器上手工核过的语句形状**(`pingcap/tidb:v8.5.2` 单机、`mysql/community-server:8.4.13`,用完已删)。只核了工具发的语句和它读的列在真库上是什么样,**Go 用例一条没跑**;单机 TiDB 用的是内置存储,`ADMIN CHECKSUM TABLE` 的数值是假的,`Total_kvs` 仍要在带 TiKV 的集群上核。
+
+- TiDB:`information_schema.columns` 的七列、`information_schema.statistics` 的 `expression`、`sub_part`(前缀索引有值)、`collation`、`non_unique`(文本 `0`/`1`)都读得出来;整数主键(聚簇)、非聚簇主键的索引名都是 `PRIMARY`,只有唯一键的表没有这一行。`tidb_snapshot` 下 `information_schema`、`SHOW CREATE TABLE`、`ADMIN CHECKSUM TABLE`(五列)、逐行摘要都能跑,读到的是那一刻的表定义和数据(之后建的表、加的索引、插的行都看不到)。逐行摘要对 `('a,b','c')` 与 `('a','b,c')`、`('',NULL)` 与 `(NULL,'')` 给出不同的值,空表是 0 行、摘要 0。`@@tidb_current_ts` 事务里非 0,自动提交下是 0。
+- TiDB 的 TTL:`SHOW CREATE TABLE` 里是 `/*T![ttl] TTL_ENABLE='ON' */`,关掉之后是 `'OFF'`;注释里写同样的字会变成 `''ON''`,匹配不上。`information_schema` 里没有带 TTL 的列。`mysql.tidb_ttl_table_status` 的 `parent_table_id` 等于 `information_schema.tables.tidb_table_id`(分区表每个分区一行),没有任务在跑时 `current_job_id` 是 `NULL`。TTL 任务确实照常删行,不看应用的闸门。
+- MySQL:`@@global.replica_skip_errors`(缺省 `OFF`)、`@@global.replica_exec_mode`(缺省 `STRICT`)读得出来。`replication_connection_configuration` 配了通道就有行,`STOP REPLICA` 之后还在,`RESET REPLICA ALL FOR CHANNEL` 之后没有;`AUTO_POSITION` 是文本 `1`,没连上来源时 `SOURCE_UUID` 为空。`replication_applier_filters` 的 `FILTER_NAME`、`FILTER_RULE`(`REPLICATE_DO_DB` / 库名)。`information_schema` 的同一组列、`CHECKSUM TABLE` 的两列。
+- TiCDC:本机没有镜像,没连过真的。只从 tiflow `release-8.5` 的 `cdc/api/util.go` 核到 `ErrChangeFeedNotExists` 在 `httpBadRequestError`(按 400 回的那一组)里;中间件、响应体、`/api/v2/health`、changefeed 详情的字段名没核到,仍按上面几条用真实 TiCDC 核。
+
 **演练**,两个集群各一套(TiDB 两个、MySQL 两个),`robot` 持续在线,按 §4 全程跑一遍:
 
 | 场景 | 步骤 | 通过标准 |
@@ -525,5 +561,7 @@ $env:DBPLACEMENT_IT_ETCD='127.0.0.1:2379'; go test -count=1 -run '^TestStoreAgai
 | **改复制的过滤** | `verify` 之后 `changefeed pause`、`update` 加一条排除规则、`resume`;MySQL 档 `CHANGE REPLICATION FILTER ... FOR CHANNEL` 加一条忽略规则;再试目标带 `replica_skip_errors=1062` 启动 | `cutover` 退出码 1,点名 `the config of the replication stream changed`(后一种是 `replica_skip_errors=1062`),什么都没变 |
 | **窗口装不下比对** | 用一个 `verify` 要比几十秒的库,`-compare-budget 5s` 跑 cutover;再用够大的 `-compare-budget`,`-budget` 保持默认 | 前者退出码 1(`cannot hold`),源库没有冻结过;后者成功,窗口时长约等于 `verify` 的比对耗时加几秒,比对超过 30 秒也不因为 `-budget` 回滚 |
 | **表定义不同、没有主键** | 复制期在目标上删一个唯一索引再建成普通索引,跑 verify;另建一个没有主键的表,跑 plan | verify 退出码 1,报 `the table definition differs` 并点名那个索引;plan 退出码 1,点名那张表 |
+| **带 TTL 的表**(TiDB 档) | 搬 `mmorpg_chat`,事先在 `chat_send_authority` 插几行 `accepted_at` 早于 30 天的。先不关 TTL 跑 cutover;按 §4 第 5 步关掉再跑;翻转之后在源集群把这张表的 TTL 打开、`TTL_JOB_INTERVAL` 临时改成 `1m`,等它删过一轮再跑 audit | 第一次退出码 1,点名 `chat_send_authority` 和 `on the source`,源库没有冻结过;关掉之后正常翻转;最后那次 audit 退出码 1,只有这张表不一致、源库行数更少(这就是不关 TTL 的后果),源集群改回 `OFF` 之后不再变 |
+| **TiCDC 升级中 cleanup**(TiDB 档) | 第 6 步不做;TiCDC 滚动升级到一半、两个版本并存时跑 `cleanup -retention 0s -confirm-drop`,同时 `curl` 这个 changefeed 和 `/api/v2/health` 记下它答什么 | 退出码 1(`does not report healthy`,或者 `still exists`),源库还在,目标库没有被删。`curl` 的两个回答抄进报告:健康检查要是在这时回 200 而 changefeed 又答「没有」,`requireHealthy` 就挡不住,要另想办法 |
 
 **不要**在报告里写「性能提升」或「线上可用」,这些场景只证明逻辑。压测口径按 AGENTS.md §6。

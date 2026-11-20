@@ -75,7 +75,8 @@ go run ./cmd/kafka_dlq replay -brokers <...> -group guild-trial -from <起> -to 
 ## 2. 保留期删掉了本组还没处理的记录(`KafkaBoundConsumerRetentionLoss`)
 
 **数据已丢**。owner 不静默跳过,而是 HOLD 并永久停止取新;之后每次打开该分区都会因「提交点越过保留范围」再次 HOLD
-(data_service 会反复退出)。处置:
+(data_service 会反复退出)。2026-11-19 起新组在分区上接纳第一条之前先把它提交成起点,所以接纳过、还没结清的记录被删,
+也是在下一位属主打开分区时报「提交点越过保留范围」(日志里没有上面那行 `RECORDS DELETED ...`,丢失范围是组内位点到日志起点),同样按下面处置。处置:
 
 1. 从日志 `RECORDS DELETED BY RETENTION BEFORE THIS GROUP PROCESSED THEM: expected offset A, log start B ...` 记下 topic、分区、`[A, B)`,上报负责人。
 2. 按业务补:data_service 审计见 [audit-topic-generation-bump-runbook.md](audit-topic-generation-bump-runbook.md) §7(条数口径与上报);

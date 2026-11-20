@@ -609,6 +609,17 @@ protected:
         mailItem->set_config_id(3);
         mailItem->set_count(1);
 
+        // 技能冷却与下线保留的 Buff(realtime-cooldown-buff-persistence.md),覆盖三个可携带类型
+        // (CooldownTimeListComp / CooldownTimeComp / SavedBuffComp)。冷却组件原样挂上、存盘原样拷回,
+        // 开始时刻取过去的值,加载不改写;Buff 条目在只走 Unmarshal 的路径上停在暂存组件里,存盘原样写回。
+        auto &cooldown = (*db.mutable_skill_cooldowns()->mutable_cooldown_list())[1];
+        cooldown.set_cooldown_table_id(1);
+        cooldown.set_start(1700000000000);
+        auto *savedBuff = db.add_saved_buffs();
+        savedBuff->set_buff_table_id(16);
+        savedBuff->set_layer(1);
+        savedBuff->set_expire_at_ms(1900000000000);
+
         // 夹具自洽:校验不过时加载会挂失效标记、打 ERROR,往返仍能过,但测的就是一个被 fail-closed 的玩家了。
         EXPECT_TRUE(ValidateAssetOpLedger(db.asset_op_ledger()).empty()) << ValidateAssetOpLedger(db.asset_op_ledger());
         EXPECT_TRUE(player_inbox_rules::ValidateLedger(db.inbox_ledger()).empty())

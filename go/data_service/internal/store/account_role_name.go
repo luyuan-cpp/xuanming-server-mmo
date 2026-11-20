@@ -48,8 +48,9 @@ const (
 	// nameBindTimeout 是提交之后绑定名字的预算。不跟请求 ctx:走到这里角色已经提交,login 的截止可能已过,
 	// 绑定还是要做完,少一条要核账补的残留;也不能拖太久占着 handler。
 	nameBindTimeout = time.Second
-	// removedRoleSettleTimeout 是删角写完墓碑之后收尾(释放名字、删小表那一行)的预算,理由同上。没做完由后台接着做。
-	removedRoleSettleTimeout = time.Second
+	// removedRoleSettleTimeout 是删角写完墓碑之后收尾(释放名字、清数据、删小表那一行)的预算,理由同上。没做完由后台接着做。
+	// 清数据要并行问六个参与者(协调者 purgeTimeout 2 秒),所以比释放名字本身要的长(2026-11-19 由 1 秒放到 4 秒)。
+	removedRoleSettleTimeout = 4 * time.Second
 )
 
 // ConfigurePlayerNames 接上名字登记表,在装配完成、对外服务之前调。两边必须开在同一组目录逻辑库上(svc 用同一份 MySQLConfig 开)。
@@ -171,6 +172,12 @@ func (s *AccountDirectoryStore) settleRemovedRole(ctx context.Context, player ui
 		s.noteRemovalSettleFailed(RemovalSettleReleaseName)
 		logx.Errorf("[player-name] name of a removed role is not released yet, the removal resumer retries: player=%d: %v", player, err)
 		return fmt.Errorf("release the name of removed role %d: %w", player, err)
+	}
+	// 清数据(docs/design/account-deletion.md §6.1):存档行与六个参与者的个人数据。没清完小表那一行留着,后台接着清。
+	if err := s.purgeRemovedRole(ctx, player); err != nil {
+		s.noteRemovalSettleFailed(RemovalSettlePurge)
+		logx.Errorf("[account-role-removal] data of a removed role is not purged yet, the removal resumer retries: player=%d: %v", player, err)
+		return fmt.Errorf("purge the data of removed role %d: %w", player, err)
 	}
 	if err := s.dropSettledRemoval(ctx, player); err != nil {
 		s.noteRemovalSettleFailed(RemovalSettleDropRow)

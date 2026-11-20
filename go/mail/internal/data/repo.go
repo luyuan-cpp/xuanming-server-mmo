@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	mailpb "proto/mail"
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/mailgrant"
 	"shared/rolefence"
 	"shared/serviceauth"
@@ -28,6 +29,9 @@ var (
 	ErrAttachment = errors.New("邮件附件无效")
 	ErrProtected  = errors.New("邮件附件仍受保护")
 	ErrDenied     = errors.New("邮件发件方无权操作")
+	// ErrRecipientDeleted:个人邮件的收件人角色已删除(本库护栏副本是墓碑,docs/design/account-deletion.md §6.2)。
+	// 是确定的拒收,发件方按终态处理(rank 的奖励直接放弃),不再重投。
+	ErrRecipientDeleted = errors.New("收件人角色已删除")
 )
 
 type NextID func(context.Context) (uint64, error)
@@ -60,33 +64,16 @@ func (r *Repo) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 	return r.runGuarded(ctx, func() error { return r.txRetry(ctx, fn) })
 }
 
+// txRetry 跑一笔可整笔重跑的邮件事务:先锁行动者行,再跑 fn。骨架是 assetop.WithTxRetry(READ COMMITTED、最多 3 次、
+// 指数退避带抖动、可取消),判定是全仓唯一的 authoritysql.IsRetryableTxError(1213 / 1205 / 9007 与守卫判定的提交前中止,
+// 结局未知不重试;R6 残余,原来这里只认 1213 / 1205、退避不带抖动)。提交结果未知不自动重做业务。
 func (r *Repo) txRetry(ctx context.Context, fn func(*sql.Tx) error) error {
-	for attempt := 0; attempt < 3; attempt++ {
-		tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-		if err != nil {
+	return assetop.WithTxRetry(ctx, r.db, 3, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
+		if err := r.lockActor(ctx, tx); err != nil {
 			return err
 		}
-		err = r.lockActor(ctx, tx)
-		if err == nil {
-			err = fn(tx)
-		}
-		if err == nil {
-			return tx.Commit()
-		}
-		_ = tx.Rollback()
-		var me *mysql.MySQLError
-		if !errors.As(err, &me) || (me.Number != 1213 && me.Number != 1205) || attempt == 2 {
-			return err
-		}
-		timer := time.NewTimer(time.Duration(attempt+1) * 15 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
-		}
-	}
-	return ErrConflict
+		return fn(tx)
+	})
 }
 
 const messageColumns = "mail_id,owner_player_id,guild_id,kind,sender_kind,request_id,request_hash,title,body,attachments,sent_ms,expire_ms,campaign_id,manifest_generation"
@@ -212,12 +199,21 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 	// 读侧 ListMails 有 LIMIT 硬上限,发件方只有运维和帮会公告。
 	personal := kind == mailpb.MailKind_MAIL_KIND_PERSONAL
 	if personal {
+		// 收件人角色已删除就拒收,也不给他建邮箱行。这里是不加锁的预检,提交点在事务里锁副本再核(lockLiveRecipient)。
+		if fence, e := rolefence.Read(ctx, r.db, in.RecipientPlayerId); e == nil && fence.Account == "" {
+			return nil, ErrRecipientDeleted
+		} else if e != nil && !errors.Is(e, rolefence.ErrMissing) {
+			return nil, e
+		}
 		if _, err = r.db.ExecContext(ctx, "INSERT IGNORE INTO mail_box (player_id,created_ms) VALUES (?,?)", in.RecipientPlayerId, now); err != nil {
 			return nil, err
 		}
 	}
 	err = r.tx(ctx, func(tx *sql.Tx) error {
 		if personal {
+			if err := lockLiveRecipient(ctx, tx, in.RecipientPlayerId); err != nil {
+				return err
+			}
 			var box uint64
 			if err := tx.QueryRowContext(ctx, "SELECT player_id FROM mail_box WHERE player_id=? FOR UPDATE", in.RecipientPlayerId).Scan(&box); err != nil {
 				return err

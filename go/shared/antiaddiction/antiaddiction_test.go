@@ -23,8 +23,8 @@ func TestBirthDateDecodesSpecExample(t *testing.T) {
 func TestBirthDateRejectsMalformed(t *testing.T) {
 	for _, pi := range []string{
 		"",
-		specPI[:37],                            // 短一位
-		specPI + "0",                           // 长一位
+		specPI[:37],                              // 短一位
+		specPI + "0",                             // 长一位
 		"1HPFML09b57f3f8185f8cb5094ea3f26278efb", // 大写
 		"zzzzzz09b57f3f8185f8cb5094ea3f26278efb", // 日期段超出 26 进制字符
 		"00000009b57f3f8185f8cb5094ea3f26278efb", // 解出 0 年

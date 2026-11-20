@@ -62,6 +62,8 @@ func rejection(err error) *base.TipInfoMessage {
 		code = uint32(table.MailError_kMailExpired)
 	case errors.Is(err, data.ErrBoxFull):
 		code = uint32(table.MailError_kMailRecipientBoxFull)
+	case errors.Is(err, data.ErrRecipientDeleted):
+		code = uint32(table.MailError_kMailRecipientDeleted)
 	case errors.Is(err, data.ErrAttachment):
 		code = uint32(table.MailError_kMailAttachmentInvalid)
 	case errors.Is(err, data.ErrConflict):

@@ -216,7 +216,9 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 
 	// trace 在调用方线程上取一次,同一次 send 里的重试带同一个值(docs/design/distributed-tracing.md §5.4)。
 	// 阶段三(§10.3)起消息头带的是本次发送的 producer span 的上下文:当前 span 的子 span,消费端的 consumer span 以它为父。
-	// 它覆盖这次 send(入 librdkafka 队列与重试),不等投递回执:回执异步到达,与这条请求的耗时无关(OTel 消息约定的 send span)。
+	// 它覆盖这次 send(入 librdkafka 队列与重试),是 OTel 消息约定里的 send span,不等投递回执:本生产者的回执只在本线程
+	// 下一次 send / flush 的 poll 里派发,等它会把两次发送之间的空闲算进 span(量的不是 broker 的确认耗时)。投递失败照旧
+	// 记 ERROR 日志带 topic / key,并计入 DeliveryFailed。
 	// 不在 trace 里的发送是空 span,消息头不带 trace,与改动前逐字节相同。
 	tracing::PendingSpan span = tracing::PendingSpan::StartChildOf(
 		tracing::Current(), tracing::SpanKind::kProducer, tracing::SpanSystem::kKafka, tracing::SpanName{topic});

@@ -45,6 +45,12 @@ comments as English to dodge a hazard the build already handled.
 - MSVC (`/std:c++latest`) has a known issue (C3495) capturing `entt::entity` (enum class) variables in lambdas via simple capture `[entity]`.
 - **Workaround**: Use init-capture syntax: `[entity = entity]()` instead of `[entity]()`.
 
+## C++ 类成员不放裸指针（no-raw-pointer-member 门禁）
+- MSBuild 编译每个 C++ 工程前先跑 `tools/scripts/check_no_raw_pointer_member.ps1`（`Directory.Build.targets` 的 `NoRawPointerMemberCheck`），规则在 `cpp/plugin/no_raw_ptr_matcher.cq`：类 / 结构体 / 联合体的非静态成员不得是指针类型。`const char *` 算，函数里的局部结构体（含测试夹具）也算；静态成员、指针数组、`std::vector<T*>` 这类容器、函数参数与局部变量不算。`third_party`、`generated`、`cpp/libs/engine/muduo_windows` 不查。
+- 门禁逐个翻译单元检查，首个违例就让整个工程失败：后面的单元不再检查，这个工程的用例一条都跑不到。
+- 写法：名字用 `std::string_view`；非空借用用引用成员；可空借用用 `std::optional<std::reference_wrapper<T>>`；拥有用智能指针。`std::string + std::string_view` 要到 C++26 才有，拼接时包一层 `std::string(...)`。
+- 交付前的文本预检：仓库根 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`（只读、几秒、Linux 也能跑，CI 的 `test_cpp*` 一步会跑它）。它靠文本识别，结论以门禁为准；误报或漏报时改识别规则并补它的自测用例。
+
 ## TimerTaskComp Lifecycle & EventLoop Destruction Order
 - `TimerTaskComp::Cancel()` must null-check `GetThreadEventLoop()` before calling `loop->cancel()`. The EventLoop destructor sets `t_loopInThisThread = NULL` **before** entt registry cleanup destroys entity components.
 - **Rule**: `Cancel()` must skip `loop->cancel()` when the loop is already gone to prevent nullptr crashes. 

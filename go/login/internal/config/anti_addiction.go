@@ -37,9 +37,37 @@ type NppaConf struct {
 	LoginoutUrl  string `json:",optional"`
 }
 
-// resolveAntiAddiction 在任何外部连接之前核防沉迷配置并取出 secretKey(ResolveSecrets 调)。关着时什么都不查。
+// 部署脚本开了防沉迷(k8s_deploy.ps1 -LoginNppaAppId / -LoginNppaBizId)时注入的期望值。K8s 上 login 是 SQL 写者,常驻进程读运维
+// 抄进 runtimeConfigSecret 的配置:漏抄 AntiAddiction 段时 login 照样起得来、防沉迷却是关的,抄成别的应用则国家系统全部验签失败。
+// 启动时与配置比,不一致拒启(同 data_service 的 MMORPG_ID_ISSUER_EXPECTED_REGION)。本机与 docker 联调没有这两个变量,不比。
+const (
+	ExpectedNppaAppIdEnv = "MMORPG_LOGIN_NPPA_EXPECTED_APP_ID"
+	ExpectedNppaBizIdEnv = "MMORPG_LOGIN_NPPA_EXPECTED_BIZ_ID"
+)
+
+// checkExpectedAntiAddiction 比部署期望与实际读到的配置。两个变量都没有 = 部署没开或不在 K8s 上,不比;
+// 只有一个、开关关着、AppId / BizId 不同,一律拒绝(fail-closed)。按字节比,不 trim:部署往两处写的是同一个值。
+func checkExpectedAntiAddiction(c AntiAddictionConf, lookup func(string) (string, bool)) error {
+	wantAppId, _ := lookup(ExpectedNppaAppIdEnv)
+	wantBizId, _ := lookup(ExpectedNppaBizIdEnv)
+	if wantAppId == "" && wantBizId == "" {
+		return nil
+	}
+	if !c.Enabled {
+		return fmt.Errorf("the deployment turns anti-addiction on (%s / %s are injected) but AntiAddiction.Enabled is false: copy the AntiAddiction section of the rendered login ConfigMap into the runtime config", ExpectedNppaAppIdEnv, ExpectedNppaBizIdEnv)
+	}
+	if c.Nppa.AppId != wantAppId || c.Nppa.BizId != wantBizId {
+		return fmt.Errorf("AntiAddiction.Nppa.AppId / BizId differ from the deployment (%s / %s): fix the runtime config", ExpectedNppaAppIdEnv, ExpectedNppaBizIdEnv)
+	}
+	return nil
+}
+
+// resolveAntiAddiction 在任何外部连接之前核防沉迷配置并取出 secretKey(ResolveSecrets 调)。先与部署期望比;关着时别的都不查。
 // 错误文案不带密钥的值。
 func resolveAntiAddiction(c AntiAddictionConf, lookup func(string) (string, bool)) (string, error) {
+	if err := checkExpectedAntiAddiction(c, lookup); err != nil {
+		return "", err
+	}
 	if !c.Enabled {
 		return "", nil
 	}

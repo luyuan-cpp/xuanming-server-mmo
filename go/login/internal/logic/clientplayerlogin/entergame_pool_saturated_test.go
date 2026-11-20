@@ -80,6 +80,9 @@ func TestEnterGame_PoolSaturatedCountsWithoutLatencySample(t *testing.T) {
 		t.Fatalf("tip = %d, want kLoginInProgress(%d) as back-pressure when the preload pool is full",
 			got, uint32(table.LoginError_kLoginInProgress))
 	}
+	if got := resp.GetOwnerRevision(); got != 0 {
+		t.Fatalf("owner_revision = %d on a rejected EnterGame, want 0 (only an accepted reply carries it)", got)
+	}
 
 	after, found := enterGameSeries(t, "entergame_total", "pool_saturated")
 	if !found || after-before != 1 {

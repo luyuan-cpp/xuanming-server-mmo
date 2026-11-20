@@ -213,7 +213,7 @@ func TestShardOutOfRangeIsRejected(t *testing.T) {
 // 没有映射就不知道库在哪:拒绝,不连连接串里的地址;也不去连名字缓存。
 func TestRequiresDbPlacement(t *testing.T) {
 	t.Setenv(authoritysql.BackendEnv, "mysql")
-	t.Setenv("MMORPG_SQL_OPERATOR_PRINCIPAL", "maintenance@%")
+	t.Setenv(authoritysql.RepairPrincipalEnv, "repair@%")
 	t.Setenv("CREATE_RESIDUAL_TEST_DSN", "u:p@tcp(127.0.0.1:1)/mmorpg_global")
 	t.Setenv(dbplacement.EnvConfig, "")
 	o := optionsFixture("plan", "")
@@ -223,6 +223,21 @@ func TestRequiresDbPlacement(t *testing.T) {
 	require.Equal(t, 2, code)
 	require.Contains(t, errOut.String(), dbplacement.EnvConfig)
 	require.False(t, strings.Contains(errOut.String(), "u:p@"), "不回显连接串")
+	require.Empty(t, out.String())
+}
+
+// 用例「只给维护身份不行」(2026-11-19):工具连库用修复身份 MMORPG_SQL_REPAIR_PRINCIPAL,维护身份不授业务表。
+// 只设维护身份时在碰库、碰映射之前就拒绝,报出要的变量名;改之前它照常往下走,真库上再被 1142 拒。
+func TestRequiresTheRepairIdentityNotTheMaintenanceOne(t *testing.T) {
+	t.Setenv(authoritysql.BackendEnv, "mysql")
+	t.Setenv("MMORPG_SQL_OPERATOR_PRINCIPAL", "maintenance@%")
+	t.Setenv(authoritysql.RepairPrincipalEnv, "")
+	t.Setenv("CREATE_RESIDUAL_TEST_DSN", "u:p@tcp(127.0.0.1:1)/mmorpg_global")
+	o := optionsFixture("plan", "")
+	o.dsnEnv, o.schema, o.stores, o.logicalShards = "CREATE_RESIDUAL_TEST_DSN", "mmorpg_global", "1", 1
+	var out, errOut bytes.Buffer
+	require.Equal(t, 2, run(context.Background(), o, &out, &errOut, openAuditor))
+	require.Contains(t, errOut.String(), authoritysql.RepairPrincipalEnv)
 	require.Empty(t, out.String())
 }
 

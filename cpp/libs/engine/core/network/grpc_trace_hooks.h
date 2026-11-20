@@ -29,9 +29,9 @@ muduo_grpc::UnaryCallback InjectTraceIntoUnaryCall(const std::string &method, mu
                                                    muduo_grpc::UnaryCallback done);
 
 // 节点 gRPC 服务端的派发拦截(ServerOptions::dispatchInterceptor)。metadata 带合法的 traceparent 就在它下面建子 span,
-// 否则开新根;这个 span 就是本次调用的 server span。作用域覆盖整个同步 handler,包括守护段;守护段发起异步步骤、
-// 之后再 Proceed 的情况,由那个异步原语自己的恢复传下去,server span 不随之延长(完整耗时看调用方的 client span)。
-// traceparent 不合法绝不拒绝请求。
+// 否则开新根;这个 span 就是本次调用的 server span。作用域覆盖整个同步 handler,包括守护段;生成的 RegisterMethods 在作用域里
+// 构造的 GrpcUnaryCall 把 server span 接过去,量到调用完成(FinishOk / FinishError)为止,守护段异步之后再 Proceed 的也一样;
+// 日志上下文由那个异步原语自己的恢复传下去。traceparent 不合法绝不拒绝请求。
 void DispatchUnderIncomingTrace(const std::string &methodPath, const muduo_grpc::Metadata &metadata,
                                 const std::function<void()> &invoke);
 

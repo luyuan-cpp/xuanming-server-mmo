@@ -2,10 +2,13 @@ package logic
 
 import (
 	"context"
+	"errors"
+
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"match/internal/authority"
 	"match/internal/constants"
 	"match/internal/svc"
 
@@ -34,6 +37,9 @@ func NewCancelQueueLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Cance
 //   - 带原请求编号且命中整队发起:撤这支整队(CancelTeamLaunchForActor);
 //   - 本人的票属于整队排队:撤这一单并通知全队(CancelTeamQueueForActor);
 //   - 其余:单排票撤销(CancelIntent)。已成局的票撤不动,开局结局由成局原件决定。
+//
+// 点名的请求号或票若是角色过户前的主人留下的,现主人没有可撤的东西:回成功,原件不动;
+// 随后的 GetQueueStatus 回 request_cancelled=true,客户端据此释放本机原意图。
 func (l *CancelQueueLogic) CancelQueue(in *matchpb.CancelQueueRequest) (*base.Empty, error) {
 	playerId := authoritativePlayerID(l.ctx, in.PlayerId)
 	if playerId == 0 {
@@ -49,6 +55,10 @@ func (l *CancelQueueLogic) CancelQueue(in *matchpb.CancelQueueRequest) (*base.Em
 	}
 	if in.RequestId != "" {
 		launch, e := l.svcCtx.Authority.TeamLaunch(l.ctx, playerId, in.RequestId)
+		if errors.Is(e, authority.ErrForeignOriginal) {
+			// 请求号是角色过户前的主人留下的整队原件:现主人没有可撤的东西,原件不动(CancelIntent 同口径)。
+			return &base.Empty{}, nil
+		}
 		if e != nil {
 			return nil, e
 		}

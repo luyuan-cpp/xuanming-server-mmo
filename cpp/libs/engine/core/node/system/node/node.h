@@ -254,7 +254,8 @@ public:
     //
     // 关键约束:调用点**不得**紧接着 LOG_FATAL / abort。玩家存盘是异步的
     // (提交请求还在发往 go/db 的路上),abort 会把它们全部丢掉。
-    // 这里的顺序是:fence 发号 -> 跑业务收尾 hook -> 有界等待收尾完成 -> 正常退出。
+    // 这里的顺序是:停掉注册重试与健康检查 -> 跑业务收尾 hook -> 有界等待收尾完成 -> 正常退出。
+    // 不用 fence 发号:永久 guid 走号段,与路由 node_id 无关(node.cpp 同函数第 1 步)。
     virtual void OnNodeIdConflictShutdown(NodeIdConflictReason reason);
 
     // 非阻塞地把停机请求投递到 EventLoop。适合 RPC handler / 信号转发器:

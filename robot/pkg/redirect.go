@@ -30,8 +30,11 @@ import (
 // RedirectTarget 是 RedirectToGateNotify 的字段搬到 pkg 层的形状,
 // 免得 pkg 反过来依赖 proto/scene(handler 负责把 notify 翻译成它)。
 type RedirectTarget struct {
-	IP        string
-	Port      int
+	IP   string
+	Port int
+	// WsURL 是 notify 的 target_ws_url:同一台 gate 给小游戏客户端连的 WebSocket 地址,没下发为空。
+	// 只在 WebSocket 传输下用到(transport.go)。
+	WsURL     string
 	Payload   []byte // GateTokenPayload 序列化结果,原样转发给目标 gate
 	Signature []byte // HMAC-SHA256 十六进制签名,原样转发
 	Deadline  int64  // unix 秒;0 表示 notify 没带
@@ -106,7 +109,7 @@ func (t RedirectTarget) Addr() string {
 // FollowRedirect 让 gc 真正搬到 target 上去:
 //
 //  1. 本地校验 target(地址、token 截止时间)、确认注册了重登录实现、检查环路熔断;
-//  2. 探一次 TCP 看目标 gate 通不通(muduo 拨号永不报错,不探就只能表现为静默卡住);
+//  2. 按当前传输方式探一次目标 gate 通不通(muduo 拨号永不报错,不探就只能表现为静默卡住);
 //  3. 换连接:先接上新 gate,再关掉老 gate 的连接(SwapConn);
 //  4. 首包发 ClientTokenVerifyRequest,payload/signature 原样来自 notify;
 //  5. 在新连接上完整重跑 Login + EnterGame(token 只认证 TCP,不转移登录会话);
@@ -157,7 +160,9 @@ func followRedirectLocked(gc *GameClient, target RedirectTarget, fn ReloginFunc)
 	}
 	gc.redirectHops++
 
-	if err := probeTCP(target.Addr(), redirectDialTimeout); err != nil {
+	// 先登记目标 gate 的 WebSocket 地址:下面的探测与换连接都按 ip:port 查它(没下发就清掉旧记录)。
+	AdvertiseWsURL(target.IP, target.Port, target.WsURL)
+	if err := probeReachable(target, redirectDialTimeout); err != nil {
 		return fmt.Errorf("redirect: target gate %s unreachable: %w", target.Addr(), err)
 	}
 
@@ -212,9 +217,10 @@ func (gc *GameClient) RedirectHops() int {
 	return gc.redirectHops
 }
 
-// probeTCP 只是"拨通就挂",用来把不可达变成一条立刻可见的错误。
-func probeTCP(addr string, timeout time.Duration) error {
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+// probeReachable 只是"拨通就挂",用来把不可达变成一条立刻可见的错误。
+// WebSocket 传输下拨的是完整的 WebSocket 握手:目标不接小游戏、边缘转不过去,都在这里报出来。
+func probeReachable(target RedirectTarget, timeout time.Duration) error {
+	conn, err := DialStream(target.IP, target.Port, timeout)
 	if err != nil {
 		return err
 	}

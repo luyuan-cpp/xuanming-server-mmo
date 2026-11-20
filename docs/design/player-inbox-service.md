@@ -72,7 +72,7 @@ item原唯一行改为永久收据，正常终态仍精确为APPLIED/REJECTED/VO
    - 入箱提交后，经 Kafka `scene-cmd` 定向提醒。
    - 在线有界兜底：默认 30 分钟，可配置，0 表示关闭。
    - 战斗解冻时，如果之前因为战斗延后，就立即重查。
-   - 背包腾位时（目前只有临时格取回成功），执行器因背包放不下而延后的域提前到下一个 tick 重试（2026-11-06）。
+   - 背包腾位时（人物背包或临时格腾出位置的成功操作，经 `BagService` 的腾位通知；2026-11-12 起，之前只有临时格取回），执行器因背包放不下而延后的域提前到下一个 tick 重试（2026-11-06）。
 7. **安全**：
    - 运维接口用独立的 `PlayerInbox.AdminToken`，由 k8s Secret 常驻，不与回档口令共用。
    - Fetch / Ack 不做调用方签名，靠围栏上界加告警防错。威胁模型见 §1.6，备选见 D6。
@@ -97,7 +97,7 @@ item原唯一行改为永久收据，正常终态仍精确为APPLIED/REJECTED/VO
 | 按固定的 player_id 和目标域保存待办，等目标消费者就绪后恰好处理一次 | 业务规则（能不能执行、怎么执行），由各域的执行器决定 |
 | 入箱分级（只收持久类）、幂等、容量上限、玩家存在校验 | 消费端去重的最终依据：它在消费方账本里，与业务效果同一次落盘 |
 | 分配 seq、记录投递、owner_epoch 围栏、登记结局 | 余额和物品的增减，归资产通道 |
-| 作废指令、保留期清理、在线提醒与补发、对账、指标 | 玩家能看到的信件归邮件；「需要刷新」的信号归 playersync |
+| 作废指令、在线提醒与补发、对账、指标 | 玩家能看到的信件归邮件；「需要刷新」的信号归 playersync；保留期清理不做：条目行是永久收据（§9.1） |
 
 ### 1.2 与现有渠道的关系
 
@@ -225,7 +225,7 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
 
 | # | 不变量 | 靠什么保证 |
 |---|---|---|
-| IB-1 | 持久类条目入箱后，在有明确结局之前不会被删除或覆盖 | 清理只删终态行；满箱拒收，不挤掉旧条目 |
+| IB-1 | 持久类条目入箱后，在有明确结局之前不会被删除或覆盖 | 条目行永久保留，没有清理（终态行是永久收据，§9.1）；满箱拒收，不挤掉旧条目 |
 | IB-2 | 同一个 (producer_kind, request_id) 最多一行；同键不同内容报冲突 | 表的唯一键，加上 sha256(类型 ‖ 签发时刻 ‖ 载荷) 比对；在流行锁内权威复读 |
 | IB-3 | 消费效果和账本是同一条记录、同一次落盘；Ack 只报告已经落盘的结局 | 新字段与 currency 在同一次 Marshal 里写出（与 I3 同构）；durable 判定读最后一次落盘的快照 |
 | IB-4 | 结局一旦终结就不再翻转 | Ack 对终态行只做比对，不一致只告警 |
@@ -442,7 +442,7 @@ message player_inbox_item_row {
   option(OptionTableName)  = "player_inbox_item";
   option(OptionPrimaryKey) = "shard,player_id,domain,seq";
   option(OptionUniqueKey)  = "shard,player_id,producer_kind,request_id"; // 全表唯一的 UNIQUE = 幂等键
-  option(OptionIndex)      = "shard,state,updated_ms";                    // 清理 / 对账 / 运维列表
+  option(OptionIndex)      = "shard,state,updated_ms";                    // 对账 / 运维列表
   option(OptionTiDBNonclusteredPK)  = true;
   option(OptionTiDBShardRowIDBits)  = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -830,7 +830,7 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 
 **生产方契约**（写进 runbook 和接口注释）：
 - `request_id` 和 `issued_at_ms` 都按工单只生成一次，重试时两者都原样带回。
-- `issued_at` 在内容摘要里，所以在保留期内刷新它重试会得到 CONFLICT，这个错误是看得见的，不会静默重复入箱。
+- `issued_at` 在内容摘要里，所以刷新它再重试会得到 CONFLICT（原行永久保留，多久之后重试都一样），这个错误是看得见的，不会静默重复入箱。
 - 终态行永久保留（§9.1）。遵守契约的重试一定命中还在的行，返回 DUPLICATE，不会重复入箱。签发时间超过 7 天的请求照旧被拒，但判重排在时间窗之前，原来那条收据总在。
 
 **分配公式的说明**：`now_ms << 12` 约为 2^53，每毫秒可以容纳 4096 个号，远大于 `max_pending`。
@@ -938,7 +938,7 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 3. **在线有界兜底**：配置项 `GameConfig.player_inbox.periodic_fetch_minutes`，默认 30，±20% 抖动，0 表示关闭。计时只记在运行时，不写进存档。它只用来兜住提醒丢失，对长期在线的玩家才有意义。
 4. **战斗解冻**：在 `player_battle.cpp` 的 `RemoveInBattleComp` 里加一行 `PlayerInboxSystem::OnBattleFreezeCleared(player)`（C1）。如果之前是因为战斗延后的，就立即重查。
    - 【事实】这里已经发出资产唤醒 `kBattleFreezeCleared`（`player_battle.cpp:167-181`；`player_landing.h:151`）。不加这一行，战斗结束后最多要再等 60 秒的退避。
-5. **背包腾位**（2026-11-06）：`PlayerBagSystem::RetrieveTemporary` 取回成功后调 `PlayerInboxSystem::OnBagSpaceFreed(player)`。
+5. **背包腾位**（2026-11-06；2026-11-12 起）：人物背包或临时格腾出位置的成功操作（出包、扣消耗、整理合堆、取回临时格、穿到空槽）经 `BagService` 的腾位通知调 `PlayerInboxSystem::OnBagSpaceFreed(player)`；订阅方由 scene main 在 `PlayerInboxSystem::Initialize` 之后经 `BagService::SetSpaceFreedListener` 装上（`bag-rule-policy-layering.md` §6.6「腾位唤醒」）。2026-11-12 之前只有 `PlayerBagSystem::RetrieveTemporary` 取回成功后直接调。
    - 只处理执行器因背包放不下而 DEFER 的域：执行器在 DEFER 的 `reason` 里带回 `kBagItemNotStacked`，收件箱记在本域的 `executorDeferReason` 上。
    - 对这些域把 `nextCheckMs` 提到现在，下一个 tick 就续做。不清 `failStreak`、不动 `recheckRequested`、不打断在途的一轮，其它域不碰。
    - 不加这一行，两包都满的战斗结算在玩家取回之后最多还要再等 60 秒的退避。详见 `bag-rule-policy-layering.md` §6.6。
@@ -1266,7 +1266,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 **定时作业**（第 4 批；2026-11-06 起按分片分给每个 stable 副本，见下文「分片归属」；评审 M5、M6、L4、L11 与复核 R1 修订，以 `reconcile.go` / `loops.go` / `internal/shardowner` 为准）：
 
 *分片归属*（2026-11-06，[消除单节点总纲](no-single-node-horizontal-scaling-20261001.md) §9）：
-- 对账的活随业务量增长（战斗结算也进对账），原来只在维护领导者上跑，同一时刻只有一个副本在干，加副本扩不了吞吐。现在每个副本只对账自己负责的分片，各有一份每轮预算，总吞吐随副本数增长；清理、补发、扫描型 gauge 仍只在领导者上跑。
+- 对账的活随业务量增长（战斗结算也进对账），原来只在维护领导者上跑，同一时刻只有一个副本在干，加副本扩不了吞吐。现在每个副本只对账自己负责的分片，各有一份每轮预算，总吞吐随副本数增长；补发、扫描型 gauge 仍只在领导者上跑（没有清理循环，§9.1）。
 - 64 个分片用最高随机权重哈希（HRW）分给 stable 副本。`internal/shardowner.Owner` 把片号转为十进制键，委托 `shared/workshard.Owner`；与 match、trade 共用打分实现：`SHA-256(成员 + NUL 字节 + 键)` 的前 8 字节按大端序取 `uint64`，分数最高者负责，同分取字典序较小的成员。成员表来自 etcd 里本服务的注册（`PlayerInboxNodeService.rpc/` 前缀，按 node_uuid 区分进程），只算 stable 轨道；canary 副本不负责任何分片（[发布轨道](release-track-gray-canary.md) §2.5）。
 - 2026-11-06 将 FNV-1a 打分替换为上述摘要，修复短数字分片键扩散不足导致的归属集中。算法切换本身会重新分配分片；项目尚未上线，归属不写入持久数据，本次无需数据迁移。固定新算法后，增成员只把部分分片交给新成员，减成员只重分配原属该成员的分片。固定样本的分散回归不代表任意成员集合、任意键都能均匀分配。
 - 成员表完成第一次全量读之前、或本进程还没注册时，本副本整轮不读。之后 watch 断开重连期间沿用上一次的成员表。
@@ -1380,8 +1380,8 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 - **不会成环**：每个事务只碰一个 (player, domain)，同一条流内部天然串行，不同流之间不存在环。
 - **Redis 读**：只在事务外进行，不在持有行锁时等待 Redis。
   - 核心 Redis 客户端开 `ContextTimeoutEnabled`，读写超时各 1 秒（代码常量），`PoolSize` 必须显式写正整数（现为 20，与 Redis 连接总账读同一个键）（评审 L7）。否则 500ms / 200ms 的调用预算管不住 socket 读，in-band 回故障的契约会被击穿。选主的 `FenceAfter` 门槛核对过，不用改。
-- **后台循环**：清理、补发、扫描型 gauge 只在 `go/shared/leader` 选出的领导者上跑；对账按分片分给每个 stable 副本（§9.3「分片归属」）。
-  - 清理只删终态行，逐行 autocommit，不持流行锁。Ack 不会修改终态行，所以两者不会反向抢锁。
+- **后台循环**：补发、扫描型 gauge 只在 `go/shared/leader` 选出的领导者上跑；对账按分片分给每个 stable 副本（§9.3「分片归属」）。
+  - 没有清理循环：条目行永久保留（§9.1），原来空转的清理循环 2026-11-12 已删除。
   - 补发的每一步都是 CAS，领导者切换期间重叠执行也无害。
 - **关停顺序**：先取消各后台循环和领导者选举，有界等待它们退出，再关闭连接池。
 
@@ -1496,7 +1496,7 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 - `internal/config/{config.go, config_test.go}`：Validate 拒绝非空 Key，断言库名；`AdminToken` 为空则运维接口停用；`EnqueueTypes`、连接池、核心 Redis、Kafka、scene 节点镜像、`DataServiceRpc`（Validate 要求必配，照 `go/trade/internal/config/config.go:440-441` 的 `HasRpcTarget` 判定）。
 - `internal/svc/servicecontext.go`、`internal/data/tables.go`、`internal/lifecycle/{lifecycle.go, lifecycle_unix.go, lifecycle_windows.go}`、`internal/metrics/metrics.go`。
 - `internal/constants/{constants.go, constants_test.go}`。
-- `internal/inbox/`：`registry.go`、`fence.go`、`seq.go`、`shard.go`、`store.go`、`notify.go`、`loops.go`（清理、补发、gauge、领导者），以及各自的 `_test.go`，另加 `store_integration_test.go`。
+- `internal/inbox/`：`registry.go`、`fence.go`、`seq.go`、`shard.go`、`store.go`、`notify.go`、`loops.go`（补发、gauge、对账、领导者），以及各自的 `_test.go`，另加 `store_integration_test.go`。
 - `internal/server/`：`player_inbox_server.go`、`player_inbox_admin_server.go`、`admin_auth.go`，以及测试。
 - `internal/logic/`：`gm_sanction_logic.go` 及测试。
 - `go.sum` 由 Codex 跑 `go mod tidy` 生成。
@@ -1512,14 +1512,14 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
 | Fetch | 快路径不加锁、不写；有条目时走锁路径 |
 | Ack | 七种结果，含 MISMATCH；ADVANCE 之后旧 Ack 被拒 |
 | 作废 | 未投递直接 VOIDED，已投递挂指令 |
-| 后台循环 | 清理跳过 PENDING；补发以 next_seq 做 CAS，覆盖「同一毫秒两次入箱」；只在领导者上执行 |
+| 后台循环 | 补发以 next_seq 做 CAS，覆盖「同一毫秒两次入箱」；只在领导者上执行；没有清理循环（§9.1） |
 | 重试 | 可重试判定覆盖 1213、1205、9007 |
 | 鉴权 | 口令为空时停用；口令错误返回 PermissionDenied |
 | 强制作废（评审 M1） | 只有 PROVEN 放行；回放、UNKNOWN 一类、环里出现本行 request_id、水位没到、读不到存档、账本不合法（含环超过 32 条）、从未投递一律拒绝，行不变、不写审计（`force_void_test.go`） |
 | 对账（M5 / M6 / L4 / L11） | 步长轮转连续 16 轮覆盖全部分片；截断计数；账本 8 路并发读；空洞谓词五类判定；不合法账本不判「无差异」；当选后首轮 1–5 分钟；Go 环容量常量与 C++ 头文件同值 |
 | 分片（L5） | mix64 参考值；bwmarrin ID 在新公式下打散；旧公式的行被 `CheckRowShards` 点名、启动拒绝 |
 | 提醒（L6） | 落定 / 退避两类结局；退避 30 秒起、封顶 30 分钟；`node_missing` 悬满 1 小时才落定；积压仍计入退避中的行 |
-| 审计（L9） | 内容列只取自条目行；条目行清理之后审计行仍答得出「做了什么」 |
+| 审计（L9） | 内容列只取自条目行；审计行自足，摘要可由它自己的字段复算，不靠条目行也答得出「做了什么」（条目行永久保留，没有清理） |
 | 配置 | 挂欠款进白名单即拒启；对账窗口 ≥ 2 × 间隔；`Middlewares.Stat` 开着时 Fetch / Ack 必须列进 `IgnoreContentMethods`（评审 L12，不记请求体）；`ControlRedis.PoolSizePerNode` 必须为正 |
 | 告警守卫 | `TestAlertRulesReferenceRegisteredMetrics`：告警文件里的指标名都已注册 |
 | 测试库守卫（L14） | 集成测试 DROP 之前库名必须命中 `^(player_inbox_it\|player_inbox_it_\d+_\d+)$` |
@@ -1685,7 +1685,7 @@ Codex 跑 `pwsh -File tools/scripts/tests/*.tests.ps1` 里受影响的几个文�
 | D6 | Fetch / Ack 是否做调用方签名 | v1 不签名，只做围栏上界、request_id 核对和告警，残余风险写明（§1.6） | 集群内网本来就能直接改存档（核心 Redis 无 AUTH）。备选：第 1 批就照 assetop 做 scene→收件箱 HMAC，多约 6 个文件，外加一把 scene 密钥的部署链 |
 | D7 | 回档口径 | 账本随回档回退。预检列出差异，需要显式接受；GM 类型人工补发；与回档栅栏同批实现 | 自动重放欠款可能重复处罚 |
 | D13 | Java 怎么跟进 | 契约随第 1 批同步；功能也走收件箱，欠款不再走离线编辑；在 C++ 第 3 批之后实现，PARITY 记「Java 待做」 | 保持「不踢人」的行为一致 |
-| D14 | 参数 | 每域 64 条；终态保留 30 天；签发窗 7 天；在线兜底 30 分钟（0 表示关闭）；投递告警阈值 5；已投递未确认告警 1 小时；tip 段 base=29000；独立端口 50950 / :9270 | 请确认，或给出运营侧的数据 |
+| D14 | 参数 | 每域 64 条；终态行永久保留（原定 30 天，2026-11-10 起改为永久收据，§9.1）；签发窗 7 天；在线兜底 30 分钟（0 表示关闭）；投递告警阈值 5；已投递未确认告警 1 小时；tip 段 base=29000；独立端口 50950 / :9270 | 请确认，或给出运营侧的数据 |
 | D8 | 表的形态 | NONCLUSTERED + shard 前缀 + 第 4 批索引预切 | 不改 proto2mysql。备选：照 player_route 手写聚簇 DDL，点查少一次回表，但要走 D-14 的「手写 DDL 例外」申请 |
 | D9 | 孤儿表 `player_debt` 怎么处理 | 标注弃用，不再接任何读写 | 避免第二份事实源（DRY） |
 | D10 | GM 道具 / 货币回收走哪条路 | 在资产通道新开一条流，另行立项 | 那是余额和物品的收回 |

@@ -366,7 +366,7 @@ public class AssignGateService {
             }
             case STATUS_ADMITTED:
             default:
-                return admittedResponse(rsp.ip, rsp.port, rsp.tokenPayload, rsp.tokenSignature, rsp.tokenDeadline, rsp.error);
+                return admittedResponse(rsp.ip, rsp.port, rsp.wsUrl, rsp.tokenPayload, rsp.tokenSignature, rsp.tokenDeadline, rsp.error);
         }
     }
 
@@ -398,11 +398,11 @@ public class AssignGateService {
             }
             case STATUS_ADMITTED:
             default:
-                return admittedResponse(rsp.ip, rsp.port, rsp.tokenPayload, rsp.tokenSignature, rsp.tokenDeadline, rsp.error);
+                return admittedResponse(rsp.ip, rsp.port, rsp.wsUrl, rsp.tokenPayload, rsp.tokenSignature, rsp.tokenDeadline, rsp.error);
         }
     }
 
-    private static AssignGateResponse admittedResponse(String ip, int port, byte[] payload, byte[] sig, long deadline, String err) {
+    private static AssignGateResponse admittedResponse(String ip, int port, String wsUrl, byte[] payload, byte[] sig, long deadline, String err) {
         AssignGateResponse out = new AssignGateResponse();
         if (ip == null || ip.isBlank()) {
             // Defensive: ADMITTED without an endpoint shouldn't happen, but if
@@ -415,6 +415,8 @@ public class AssignGateService {
         out.setCode(HTTP_OK);
         out.setGateIp(ip);
         out.setGatePort(port);
+        // 小游戏客户端连这个 WebSocket 地址(docs/design/minigame-websocket-gate.md W7);这台 gate 没自报时不出现在应答里。
+        out.setGateWsUrl(wsUrl == null || wsUrl.isBlank() ? null : wsUrl);
         out.setTokenPayload(payload);
         out.setTokenSignature(sig);
         out.setTokenDeadline(deadline);

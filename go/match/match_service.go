@@ -36,6 +36,7 @@ import (
 	teampb "proto/team"
 
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -95,6 +96,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("match")
 	if err := validateMigrationFlags(*migrateOnly, *allowModify); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(schemamigrate.ExitFailed)
@@ -210,7 +212,7 @@ func main() {
 		os.Exit(1)
 	}
 	// 角色护栏参与者(docs/design/horizontal-scale-logical-db.md §3.4):data_service 过户、删角之前先冻结本库副本并核挂起。
-	roleFence, roleFenceErr := rolefence.NewParticipantServer(svcCtx.Authority.DB, authority.RoleFencePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	roleFence, roleFenceErr := rolefence.NewParticipantServer(svcCtx.Authority.DB, authority.RoleFencePending, authority.RoleFencePurge, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if roleFenceErr != nil {
 		logx.Errorf("role fence participant not ready; refusing to start: %v", roleFenceErr)
 		cancel()

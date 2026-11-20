@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"client_rpc_router/internal/config"
 	"client_rpc_router/internal/metrics"
@@ -23,7 +24,9 @@ import (
 	base "proto/common/base"
 
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/grpcstats"
+	sharedregistry "shared/noderegistry"
 	"shared/releasetrack"
 	"shared/shutdownbudget"
 
@@ -39,6 +42,9 @@ var configFile = flag.String("f", "etc/client_rpc_router.yaml", "the config file
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
+// listenProbeTimeout 是注册 C++ NodeInfo 之前等本进程 gRPC 端口可连的上限(与 match / chat 同值)。
+const listenProbeTimeout = 30 * time.Second
+
 func main() {
 	flag.Parse()
 	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
@@ -47,6 +53,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("client_rpc_router")
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
@@ -92,6 +99,18 @@ func main() {
 	)
 	defer s.Stop()
 
+	// **先起 gRPC,再注册**(R19,照 match / chat):gate 一看到 NodeInfo 就会拨,端口还没 accept 时注册等于公布一个会拒连的节点。
+	// Start 阻塞到服务退出,所以放后台 goroutine;刻意用裸 go:Start 在监听失败时 panic,那就应该让进程死掉。
+	// 注册之前到达的请求(只可能来自不经 etcd 发现的调用方)没有子集身份,按 SetSubsetIdentity 的约定在全部实例里挑目标。
+	serveDone := make(chan struct{})
+	go func() {
+		defer close(serveDone)
+		s.Start()
+	}()
+	if err := sharedregistry.WaitForListening(context.Background(), c.ListenOn, listenProbeTimeout); err != nil {
+		panic("ClientRpcRouter gRPC port is not accepting, refusing to register in etcd: " + err.Error())
+	}
+
 	// 照 C++ NodeInfo 约定注册进 etcd(PROTOCOL_GRPC),gate 按
 	// ClientRpcRouterNodeService.rpc/ 前缀发现本服务。
 	// 写进 NodeInfo 的是**对外地址**而不是监听地址:K8s 上 ListenOn 恒为 0.0.0.0,原样注册的话
@@ -110,7 +129,7 @@ func main() {
 	}
 	nr.KeepAlive()
 	defer nr.Close()
-	// 有了 node_uuid 才知道本路由服在同轨道路由服里的名次;s.Start() 之前设好,接到的每个请求都按子集挑全服池目标。
+	// 有了 node_uuid 才知道本路由服在同轨道路由服里的名次;注册之后立即设好,gate 经 etcd 发现本实例之后接到的每个请求都按子集挑全服池目标。
 	// 重新注册(失租)沿用同一个 node_uuid,这里只设一次。
 	svcCtx.SetSubsetIdentity(nr.Info.NodeUuid, releaseTrack)
 	svcCtx.KillSwitch.AddInstance(nr.Info.NodeUuid) // 认 instance/<本进程 uuid>/ 下的热关停规则
@@ -138,7 +157,7 @@ func main() {
 	fmt.Printf("  subset_size: %d (global targets per router, 0 = all)\n", c.GlobalTargetSubsetSize)
 	fmt.Println("=============================================================")
 
-	s.Start()
+	<-serveDone
 }
 
 // parseListenOn 把 "host:port" 拆成两部分(与 match 同写法)。

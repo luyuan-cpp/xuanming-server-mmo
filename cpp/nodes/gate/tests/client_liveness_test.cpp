@@ -584,3 +584,35 @@ TEST(ClientLivenessSweeper, OnlyDueCheckpointsAreExamined)
 	EXPECT_EQ(fake.idleClosed[1].first, 2u);
 	EXPECT_EQ(sweeper.PendingChecks(), 0u);
 }
+
+// loop 卡顿判定(未验签淘汰据此不淘汰):还没打过拍算卡过;距上一拍超过两个节拍、或上一拍本身迟到都算卡过;准时的一拍之后恢复。
+TEST(ClientLivenessLoopStall, StallIsReportedUntilAnOnTimeTickFollows)
+{
+	client_liveness::LoopStallWatch watch(kPeriod);
+	const SteadyTime start = At(seconds(0));
+	EXPECT_TRUE(watch.RecentlyStalled(start)) << "还没打过拍";
+	EXPECT_FALSE(watch.Tick(start)) << "首拍没有参照,不算迟到";
+	EXPECT_FALSE(watch.RecentlyStalled(start + kPeriod));
+	EXPECT_FALSE(watch.RecentlyStalled(start + 2 * kPeriod)) << "恰好两个节拍不算";
+	EXPECT_TRUE(watch.RecentlyStalled(start + 2 * kPeriod + milliseconds(1))) << "节拍还没轮到:loop 正卡着";
+	EXPECT_TRUE(watch.Tick(start + seconds(5))) << "隔了 5 秒的一拍迟到了";
+	EXPECT_TRUE(watch.RecentlyStalled(start + seconds(5))) << "刚恢复:积压的输入可能还没读完";
+	EXPECT_FALSE(watch.Tick(start + seconds(6)));
+	EXPECT_FALSE(watch.RecentlyStalled(start + seconds(6))) << "准时的一拍之后恢复";
+	EXPECT_EQ(watch.GapSinceLastTick(start + seconds(7)), std::optional<SteadyTime::duration>(seconds(1)));
+}
+
+// 扫描器报告的卡顿就是它自己的迟到判定(同一个节拍)。
+TEST(ClientLivenessSweeper, ReportsALoopStallFromItsOwnSweepCadence)
+{
+	LivenessSweeper sweeper(kClientLiveness);
+	FakeSessions fake;
+	const SteadyTime start = At(seconds(0));
+	EXPECT_TRUE(sweeper.LoopRecentlyStalled(start)) << "还没扫过";
+	EXPECT_FALSE(fake.Sweep(sweeper, start).late);
+	EXPECT_FALSE(sweeper.LoopRecentlyStalled(start + kPeriod));
+	EXPECT_TRUE(fake.Sweep(sweeper, start + seconds(5)).late);
+	EXPECT_TRUE(sweeper.LoopRecentlyStalled(start + seconds(5)));
+	EXPECT_FALSE(fake.Sweep(sweeper, start + seconds(6)).late);
+	EXPECT_FALSE(sweeper.LoopRecentlyStalled(start + seconds(6)));
+}

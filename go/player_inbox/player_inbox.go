@@ -45,6 +45,7 @@ import (
 	"schemamigrate"
 
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
@@ -98,6 +99,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("player_inbox")
 	if err := validateMigrationFlags(*migrateOnly, *allowModify); err != nil {
 		fmt.Fprintf(os.Stderr, "[player_inbox] %v\n", err)
 		os.Exit(schemamigrate.ExitFailed)
@@ -227,7 +229,7 @@ func runPlayerInbox(c config.Config) (runErr error) {
 		return indexErr
 	}
 	// 没配协调者密钥拒启:参与者不可达时过户和删角会一直被拒,不如在启动时暴露。
-	participant, err := rolefence.NewParticipantServer(svcCtx.DB, inbox.RolePending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	participant, err := rolefence.NewParticipantServer(svcCtx.DB, inbox.RolePending, inbox.RolePurge, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if err != nil {
 		return fmt.Errorf("[player_inbox] role fence participant: %w", err)
 	}

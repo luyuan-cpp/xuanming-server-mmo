@@ -1,6 +1,10 @@
 #include "buff.h"
+#include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <optional>
 #include <ranges>
+#include <vector>
 #include "table/code/buff_table.h"
 #include "combat/buff/system/buff_impl.h"
 #include "proto/common/component/buff_comp.pb.h"
@@ -17,6 +21,8 @@
 #include "proto/common/component/battle_comp.pb.h" // InBattleComp:回合制战斗局中闸
 #include "core/system/id_generator.h"
 #include "spatial/system/aoi.h" // RefreshTargetVisibility:隐身状态变化后重判 AOI 观察者
+#include "time/system/time.h"
+#include "engine/core/utils/proto/unknown_field_carry.h" // 恢复的条目带回更新版本的 SavedBuffComp 字段
 #include <thread_context/ecs_context.h>
 
 
@@ -69,9 +75,28 @@ uint64_t SteadyNowMilliseconds()
 // 这是有意保留的差异 —— 子 buff 链路(同一 owner 挂多条同表子 buff)依赖它,要对齐须另行决策。
 // 以前 no_caster 写的是 entt::null(uint64 全 1),叠层时却拿它和施法者整数比较,永远不等:
 // 每挂一次就新建一条,max_layer 形同虚设(C003)。
+//
+// 下线保留的 Buff(keep_on_logout)同样不区分施法者:存档不记施法者,恢复出来的条目没有施法者;
+// 按施法者分条的话,之后别人再施加同一个 Buff 会另起一条,效果翻倍(docs/design/realtime-cooldown-buff-persistence.md §2.5)。
+bool IgnoresCaster(const BuffTable& buffRow)
+{
+    return buffRow.no_caster() != 0 || buffRow.keep_on_logout() != 0;
+}
+
 uint64_t ProcessedCasterOf(const BuffTable& buffRow, uint64_t caster)
 {
-    return buffRow.no_caster() != 0 ? kNoBuffCaster : caster;
+    return IgnoresCaster(buffRow) ? kNoBuffCaster : caster;
+}
+
+// 是不是别的条目的子项(登记在某条的 sub_buff_list_id 里)。子项由父项负责,存档不单独写它。
+bool IsSubBuffOfAnother(const BuffListComp& buffList, uint64_t buffId)
+{
+    for (const auto& [ownerId, owner] : buffList) {
+        if (ownerId != buffId && owner.buffPb.sub_buff_list_id().contains(buffId)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool IsCombatIdleBonus(const BuffListComp& buffList, uint64_t childId)
@@ -124,6 +149,77 @@ bool HasStealthBuffExcept(const entt::entity parent, const uint64_t excludeBuffI
     return false;
 }
 
+namespace {
+
+// 永久:显式无限时长,或旧配置 duration<0(非零)。duration 为 0 的是瞬时 Buff,挂上即到期。
+bool IsPermanentBuff(const BuffTable& buffRow)
+{
+    return buffRow.infinite_duration() != 0 || (buffRow.duration() < 0 && !IsZero(buffRow.duration()));
+}
+
+// 存档里的到期时刻换算成从现在起还剩的毫秒,上限是表里的整时长:写盘节点时钟超前也最多多出这么多。
+// 到期时刻 0 = 存档时是永久 Buff,表改成了有时限,从现在起算一个整时长。返回 0 = 已到期(或表改成了瞬时)。
+uint64_t SavedBuffRemainingMs(uint64_t expireAtMs, uint64_t nowMs, double durationSeconds)
+{
+    const uint64_t capMs = durationSeconds > 0 ? static_cast<uint64_t>(std::llround(durationSeconds * 1000.0)) : 0;
+    if (expireAtMs == 0) {
+        return capMs;
+    }
+    return expireAtMs > nowMs ? std::min(expireAtMs - nowMs, capMs) : 0;
+}
+
+// 新建一条 Buff 条目并让它生效:登记脱战子项归属、OnBuffStart、到期计时。施加(AddOrUpdateBuffWithOwner)与
+// 存档恢复(RestoreSavedBuffs)共用,冻结、回合战斗、免疫、驱散、叠层由调用方先判。
+// lifetimeSeconds 为空 = 永久;<= 0 = 当场到期(瞬时 Buff,返回的条目号已不在列表里);> 0 = 挂到期定时器。
+uint64_t StartBuffEntry(const entt::entity parent, const BuffTable& buffRow, const uint64_t caster, const uint32_t layer,
+                        const std::optional<double> lifetimeSeconds, const uint64_t combatIdleOwnerId)
+{
+    // 此处延迟创建:BuffListComp 是按需状态(没有它 = 身上没有 buff),这里是它唯一的创建入口,
+    // 帧末 Update 发现列表空了再摘掉。施加路径在免疫 / 驱散 / 叠层判断之后才走到这里 —— 被拒绝、纯驱散、
+    // 叠层的施加都不会给实体凭空挂上一张空表(F037);以前在驱散判断之前就 get_or_emplace。
+    auto& buffList = tlsEcs.actorRegistry.get_or_emplace<BuffListComp>(parent);
+
+    BuffEntry newBuff;
+    newBuff.buffPb.set_caster(caster);
+    newBuff.buffPb.set_processed_caster(ProcessedCasterOf(buffRow, caster));
+    newBuff.buffPb.set_layer(layer);
+
+    const uint64_t newBuffId = GenerateUniqueBuffId(buffList);
+    newBuff.buffPb.set_buff_id(newBuffId);
+    newBuff.buffPb.set_buff_table_id(buffRow.id());
+    newBuff.dataPbPtr = CreateBuffDataPtr(&buffRow);
+    if (lifetimeSeconds && *lifetimeSeconds > 0) {
+        newBuff.expireAtMs = TimeSystem::NowMillisecondsUTC() +
+            static_cast<uint64_t>(std::llround(*lifetimeSeconds * 1000.0));
+    }
+
+    auto [fst, snd] = buffList.emplace(newBuffId, std::move(newBuff));
+    if (combatIdleOwnerId != UINT64_MAX) {
+        // 子项插入时同时登记归属,让普通叠层与父移除看到完整父子关系。
+        buffList.at(combatIdleOwnerId).buffPb.mutable_sub_buff_list_id()->emplace(newBuffId, false);
+    }
+    BuffSystem::OnBuffStart(parent, fst->second, &buffRow);
+
+    if (!lifetimeSeconds) {
+        return newBuffId;
+    }
+    if (*lifetimeSeconds > 0) {
+        fst->second.expireTimerTaskComp.RunAfter(*lifetimeSeconds, [parent, newBuffId] {
+            if (!tlsEcs.actorRegistry.valid(parent))
+            {
+                return;
+            }
+            BuffSystem::OnBuffExpire(parent, newBuffId);
+            });
+    }
+    else {
+        BuffSystem::OnBuffExpire(parent, newBuffId);
+    }
+    return newBuffId;
+}
+
+} // namespace
+
 // 按施法者整数施加或叠层 Buff。
 std::tuple<uint32_t, uint64_t> BuffSystem::AddOrUpdateBuff(
     const entt::entity parent,
@@ -144,8 +240,8 @@ std::tuple<uint32_t, uint64_t> BuffSystem::AddOrUpdateBuffWithOwner(
         return {kThisEntityIsInvalid, UINT64_MAX};
     }
 
-    // 冻结中的目标(归属交接在途:跨 zone 传送 / 跨节点换图):buff 列表已经在冻结那一刻的
-    // 存盘里打进 PlayerAllData,接手的节点会照快照重建。源端此时再加 buff,只会造出一条
+    // 冻结中的目标(归属交接在途:跨 zone 传送 / 跨节点换图):下线保留的 buff 已经在冻结那一刻的
+    // 存盘里写进存档,接手的节点照存档恢复,其余 buff 本来就不跨节点。源端此时再加 buff,只会造出一条
     // 只有这个将死的源端实体看得见的孤儿。cross-zone-readiness-audit.md §11.4 的
     // 默认策略是 "buff drop"。
     //
@@ -200,48 +296,12 @@ std::tuple<uint32_t, uint64_t> BuffSystem::AddOrUpdateBuffWithOwner(
         }
     }
 
-    // 此处延迟创建:BuffListComp 是按需状态(没有它 = 身上没有 buff),这里是它唯一的创建入口,
-    // 帧末 Update 发现列表空了再摘掉。放在免疫 / 驱散 / 叠层判断之后 —— 被拒绝、纯驱散、
-    // 叠层的施加都不会给实体凭空挂上一张空表(F037);以前在驱散判断之前就 get_or_emplace。
-    auto& buffList = tlsEcs.actorRegistry.get_or_emplace<BuffListComp>(parent);
-
-    BuffEntry newBuff;
-    newBuff.buffPb.set_caster(caster);
-    newBuff.buffPb.set_processed_caster(ProcessedCasterOf(*buffRow, caster));
     // 新条目就是第 1 层,叠层上限 max_layer 才是「最多几层」(与回合引擎新建条目的 layer=1 一致)。
     // 以前从 0 起算,max_layer=N 实际能叠到 N+1 次。
-    newBuff.buffPb.set_layer(1);
-
-    uint64_t newBuffId = GenerateUniqueBuffId(buffList);
-    newBuff.buffPb.set_buff_id(newBuffId);
-    newBuff.buffPb.set_buff_table_id(buffTableId);
-    newBuff.dataPbPtr = CreateBuffDataPtr(buffRow);
-
-    auto [fst, snd] = buffList.emplace(newBuffId, std::move(newBuff));
-    if (combatIdleOwnerId != UINT64_MAX) {
-        // 子项插入时同时登记归属,让普通叠层与父移除看到完整父子关系。
-        buffList.at(combatIdleOwnerId).buffPb.mutable_sub_buff_list_id()->emplace(newBuffId, false);
-    }
-    OnBuffStart(parent, fst->second, buffRow);
-
-    // 显式无限时长优先于 duration，同时保留旧配置 duration<0 的永久语义。
-    if (buffRow->infinite_duration() != 0) {
-        return {kSuccess, newBuffId};
-    }
-    if (buffRow->duration() > 0) {
-        fst->second.expireTimerTaskComp.RunAfter(buffRow->duration(), [parent, newBuffId] {
-            if (!tlsEcs.actorRegistry.valid(parent))
-            {
-                return;
-            }
-            OnBuffExpire(parent, newBuffId);
-            });
-    }
-    else if (IsZero(buffRow->duration())) {
-        OnBuffExpire(parent, newBuffId);
-    }
-
-    return {kSuccess, newBuffId};
+    // 显式无限时长优先于 duration，同时保留旧配置 duration<0 的永久语义;duration 为 0 挂上即到期。
+    const auto lifetimeSeconds =
+        IsPermanentBuff(*buffRow) ? std::nullopt : std::optional<double>(buffRow->duration());
+    return {kSuccess, StartBuffEntry(parent, *buffRow, caster, 1, lifetimeSeconds, combatIdleOwnerId)};
 }
 
 // 系统施加，不指定施法者。
@@ -346,8 +406,8 @@ bool BuffSystem::HandleExistingBuff(const entt::entity parentEntity,
     LookupBuffOrReturnFalse(buffTableId);
 
     // 按施法者隔离却没有施法者时，保持每次新建一条的既有行为。
-    // no_caster 的 buff 不看施法者，照常叠层。
-    if (buffRow->no_caster() == 0 && caster == kNoBuffCaster) {
+    // no_caster 与下线保留的 buff 不看施法者，照常叠层。
+    if (!IgnoresCaster(*buffRow) && caster == kNoBuffCaster) {
         return false;
     }
 
@@ -713,6 +773,85 @@ void BuffSystem::Update(const double delta, uint64_t nowMilliseconds) {
         // EnTT 允许遍历中移除「当前实体」的被遍历组件。
         if (buffListComp.empty()) {
             tlsEcs.actorRegistry.remove<BuffListComp>(target);
+        }
+    }
+}
+
+// 下线保留的 Buff 写进存档(docs/design/realtime-cooldown-buff-persistence.md §2.4、§5)。
+bool BuffSystem::SaveKeptBuffs(const entt::entity parent, google::protobuf::RepeatedPtrField<SavedBuffComp>& out)
+{
+    out.Clear();
+    // 恢复还没跑到(不经 InitPlayerFromAllData 的加载):暂存的条目原样写回,不丢。
+    if (const auto* pending = tlsEcs.actorRegistry.try_get<SavedBuffsPendingComp>(parent)) {
+        out = pending->buffs;
+    }
+    const auto* buffList = tlsEcs.actorRegistry.try_get<BuffListComp>(parent);
+    if (buffList == nullptr) {
+        return true;
+    }
+
+    // 按 buff_id 写出:同样的状态产出同样的字节,这一行不会因为 unordered_map 的遍历顺序被判脏。
+    std::vector<const BuffEntry*> kept;
+    for (const auto& [buffId, entry] : *buffList) {
+        const auto* buffRow = BuffTableManager::Instance().FindByIdSilent(entry.buffPb.buff_table_id()).first;
+        // 子项由父项负责:父项恢复后按自己的逻辑重新挂,单独恢复会留下没人撤销的孤儿(脱战加成)。
+        if (buffRow != nullptr && buffRow->keep_on_logout() != 0 && !IsSubBuffOfAnother(*buffList, buffId)) {
+            kept.push_back(&entry);
+        }
+    }
+    std::sort(kept.begin(), kept.end(), [](const BuffEntry* lhs, const BuffEntry* rhs) {
+        return lhs->buffPb.buff_id() < rhs->buffPb.buff_id();
+    });
+    for (const auto* entry : kept) {
+        auto& saved = *out.Add();
+        if (!unknown_field_carry::Restore(entry->persistUnknown, saved)) {
+            return false;
+        }
+        saved.set_buff_table_id(entry->buffPb.buff_table_id());
+        saved.set_layer(entry->buffPb.layer());
+        // 到点而到期回调还没跑的也照写:恢复时按到期时刻丢掉,这里不读时钟。
+        saved.set_expire_at_ms(entry->expireAtMs);
+    }
+    return true;
+}
+
+// 存档里的下线保留 Buff 放回实体(同文 §2.5):按加载时的表裁剪,不重跑准入判断。
+void BuffSystem::RestoreSavedBuffs(const entt::entity parent)
+{
+    auto* pending = tlsEcs.actorRegistry.try_get<SavedBuffsPendingComp>(parent);
+    if (pending == nullptr) {
+        return;
+    }
+    const auto saved = std::move(pending->buffs);
+    tlsEcs.actorRegistry.remove<SavedBuffsPendingComp>(parent);
+
+    const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
+    for (const auto& record : saved) {
+        const auto* buffRow = BuffTableManager::Instance().FindByIdSilent(record.buff_table_id()).first;
+        if (buffRow == nullptr) {
+            LOG_WARN << "[BuffRestore] Saved buff dropped: table row not found, entity=" << entt::to_integral(parent)
+                     << " buff_table=" << record.buff_table_id();
+            continue;
+        }
+        if (buffRow->keep_on_logout() == 0) {
+            LOG_INFO << "[BuffRestore] Saved buff dropped: table row is no longer kept on logout, entity="
+                     << entt::to_integral(parent) << " buff_table=" << record.buff_table_id();
+            continue;
+        }
+        std::optional<double> lifetimeSeconds; // 空 = 永久
+        if (!IsPermanentBuff(*buffRow)) {
+            const uint64_t remainingMs = SavedBuffRemainingMs(record.expire_at_ms(), nowMs, buffRow->duration());
+            if (remainingMs == 0) {
+                continue; // 离线期间到期
+            }
+            lifetimeSeconds = static_cast<double>(remainingMs) / 1000.0;
+        }
+        const uint32_t layer = std::clamp<uint32_t>(record.layer(), 1, std::max<uint32_t>(1, buffRow->max_layer()));
+        const uint64_t buffId = StartBuffEntry(parent, *buffRow, kNoBuffCaster, layer, lifetimeSeconds, UINT64_MAX);
+        if (auto* buffList = tlsEcs.actorRegistry.try_get<BuffListComp>(parent)) {
+            if (const auto it = buffList->find(buffId); it != buffList->end()) {
+                it->second.persistUnknown = unknown_field_carry::Capture(record);
+            }
         }
     }
 }

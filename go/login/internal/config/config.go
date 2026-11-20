@@ -9,6 +9,7 @@ import (
 
 	"shared/accountdirectory"
 	"shared/clusterredis"
+	"shared/contentguard"
 	"shared/idsegment"
 	"shared/placement"
 	"shared/playerredis"
@@ -20,12 +21,12 @@ import (
 type Config struct {
 	zrpc.RpcServerConf            // Embedded go-zero RPC config (ListenOn, Etcd, etc.)
 	Node               NodeConfig `json:"Node"`
-	// SharedRedisPasswordEnv 是 Node.RedisClient、Node.QueueRedis 与 ControlRedis 的口令所在的环境变量名(shared/redisauth)。
+	// SharedRedisPasswordEnv 是 Node.RedisClient 与 ControlRedis 的口令所在的环境变量名(shared/redisauth)。
 	// K8s 上口令只在 Secret 里,经 secretKeyRef 注入;ConfigMap 里各段的 Password 写空串。不写 = 照用 Password 字面量(本机)。
 	// 由 ResolveSharedRedisPassword 在任何外部连接之前填好,变量缺失或为空即拒启。
 	SharedRedisPasswordEnv string `json:",optional"`
 	// ControlRedis 是控制集群(docs/design/redis-cluster-all-domains-20261110.md §4.3、§4.4、§5.1;2026-11-12 起):
-	// gate 排空 / 已排空 / 停写标记(gm 族),以及没单独配 Node.QueueRedis 时的排队、准入与放行锁(q 族)。
+	// gate 排空 / 已排空 / 停写标记(gm 族),以及排队、准入与放行锁(q 族)。
 	// 键守卫是 clusterredis.ControlClusterKeys:多键命令的键必须是同一个登记过的族 tag;结果未知的命令不由客户端重发。
 	// 没写 Addrs 时指向 Node.RedisClient 那一个实例(EffectiveControlRedis),开发环境与还没渲染这一段的 ConfigMap 不用改;
 	// 上控制集群时写 Addrs(集群种子)+ Cluster: true。ControlRedis.PasswordEnv 不用:它在变量缺失时静默落成空口令,
@@ -51,6 +52,10 @@ type Config struct {
 	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 发不出 PlayerId,建角一律失败**:
 	// 没有回退号源(AGENTS §7 第 1 条),启动时只打一条 ERROR(svc/player_id_minter.go)。
 	IdSegment idsegment.Conf `json:"IdSegment,optional"`
+	// ContentGuard 是内容安全服务(go/content_guard)的调用端:建角时玩家自己起的名字先送检
+	// (docs/design/rename-and-content-safety.md §6.6)。没配目标时跳过送检,只剩 playername 的内置词,仅供本机开发;
+	// staging / prod 写 Required: true,没配就拒启。
+	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
 	// GateTokenSecret 已废弃:单个 string 无法不停服轮换,而且 gate token 与
 	// 排队 token 共用同一把密钥,信任域没拆。保留字段只为让 deploy/*.yaml 与
 	// tools/scripts/k8s_deploy.ps1 这些**仓外**部署产物在过渡期仍能起服
@@ -238,28 +243,14 @@ func (c *Config) EffectiveControlRedis() clusterredis.Config {
 	return c.ControlRedis.OrDefault(c.redisDomainFallback())
 }
 
-// EffectiveQueueRedis 返回排队单独所在实例的配置;没写 Node.QueueRedis 时回 nil,排队与 gate 标记共用控制集群句柄。
-// 没写的字段取与 Node.RedisClient 回落相同的缺省(redisConfAsDomain)。
-func (c *Config) EffectiveQueueRedis() *clusterredis.Config {
-	if c.Node.QueueRedis == nil {
-		return nil
-	}
-	conf := redisConfAsDomain(*c.Node.QueueRedis)
-	return &conf
-}
-
-// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Node.RedisClient、Node.QueueRedis(写了才有)与 ControlRedis 的口令,
+// ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Node.RedisClient 与 ControlRedis 的口令,
 // 规则见 redisauth.Apply。玩家域、登录域与控制集群没写 Addrs 时回落到 Node.RedisClient(redisDomainFallback),填完之后它们用的
 // 也是这个口令。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
-	targets := []redisauth.Target{
-		{Field: "Node.RedisClient.Password", Password: &c.Node.RedisClient.Password},
-		{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password},
-	}
-	if c.Node.QueueRedis != nil {
-		targets = append(targets, redisauth.Target{Field: "Node.QueueRedis.Password", Password: &c.Node.QueueRedis.Password})
-	}
-	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup, targets...)
+	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
+		redisauth.Target{Field: "Node.RedisClient.Password", Password: &c.Node.RedisClient.Password},
+		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password},
+	)
 }
 
 func (c *Config) redisDomainFallback() playerredis.Config {
@@ -667,19 +658,10 @@ type TokenConf struct {
 
 // NodeConfig holds node-level settings including login duration limits.
 type NodeConfig struct {
-	ZoneId           uint32    `json:"ZoneId"`
-	SessionExpireMin uint32    `json:"SessionExpireMin"` // Session idle timeout in minutes
-	MaxLoginDevices  uint32    `json:"MaxLoginDevices"`
-	RedisClient      RedisConf `json:"RedisClient"`
-	// QueueRedis 是排队、准入与放行锁单独所在的 Redis(shared-redis-split-by-purpose.md §3.2.1、§25.3 第 10 条:
-	// 按 zone 组分实例 redis-queue-g<N>)。整段不写 = 排队与 gate 标记共用控制集群句柄(顶层 ControlRedis),不多开连接池。
-	// gate 标记(gate:{gm:<zone>}:<id>:draining / drained / stale)**不在**这里,始终在 ControlRedis:
-	// k8s_gate_drain.ps1 与 scene_manager 的跨 zone 重定向读的是那一份。
-	// 这一段随 -RedisSplit queue 的部署形态保留到控制集群部署批(redis-cluster-all-domains-20261110.md §10 第 6 批):
-	// 那一批把排队并进 redis-control 之后,连同 -RedisSplit 一起删。
-	// 用指针 + optional:go-zero 不会为没出现的 optional 嵌套结构回填内层字段;段一旦出现,内层字段按 RedisConf
-	// 的规则全部必填,K8s ConfigMap 必须整段写出(含 PoolSize,连接总账按它记账)。
-	QueueRedis       *RedisConf    `json:"QueueRedis,optional"`
+	ZoneId           uint32        `json:"ZoneId"`
+	SessionExpireMin uint32        `json:"SessionExpireMin"` // Session idle timeout in minutes
+	MaxLoginDevices  uint32        `json:"MaxLoginDevices"`
+	RedisClient      RedisConf     `json:"RedisClient"`
 	LeaseTTL         int64         `json:"LeaseTTL"`         // Lease TTL in seconds
 	MaxLoginDuration time.Duration `json:"MaxLoginDuration"` // Max online duration per login (e.g. 24h, force logout on expiry)
 	LogoutGraceTime  time.Duration `json:"LogoutGraceTime"`  // Grace period before forced logout (e.g. 5m, for player warning)

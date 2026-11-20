@@ -1,0 +1,68 @@
+# Go 服务 etcd 节点注册的告警(2026-11-19;docs/design/infra-reconnect-overview.md §4.1 R4、R17)。
+#
+# 指标由 go/shared/noderegistry/metrics.go 注册在默认注册表上,全部 Go 服务共用同一组名字
+# (chat、friend、trade、player_inbox、db、rank、mail、match、scene_manager、data_service、client_rpc_router、
+# guild、player_locator、login 都经这个包注册):
+#   - noderegistry_registered{prefix}:本进程此刻是否持有一份续着租约的注册,正常为 1;失租到重注册成功之间、Close 之后为 0;
+#   - noderegistry_lease_lost_total{prefix}:失租次数(续租流结束或起不来);
+#   - noderegistry_reregister_failure_total{prefix,reason}:重注册失败,reason ∈ grant / reclaim / allocate / taken_over。
+# label 只有 prefix(节点类型枚举名 + ".rpc")与 reason,不带 node_id / uuid(AGENTS.md §9)。
+#
+# 为什么要报:注册丢了进程照样活着,gRPC 端口照样通、存活探针照样过,K8s 不会重启它;路由服与 C++ 节点却再也发现不到
+# 这个实例(R4 说的「从发现里消失而且没有告警」)。重注册由 shared 按 1s 起、封顶 30s 的退避一直重试,失租后正常恢复用不了
+# 一分钟;过了 for 还是 0,说明 etcd 不通或分配一直失败,要人看。
+#
+# 停机:Close 之后 gauge 归 0,直到进程退出、序列随 Pod 消失。各 Go 服务的停机强退时限都远小于 for 的 3 分钟,不会误报。
+# 原号被占且策略是 ExitProcess(login)时进程当场退出,计数随进程清零,这里看不到;那一次由 Pod 重启次数反映。
+#
+# 抓取前提:各 Go 服务的指标端口已有 ServiceMonitor / PodMonitor(或按注解抓取的 job),与各服务自己的告警文件相同。
+#
+# 契约测试:tools/scripts/tests/noderegistry_alerts_contract.tests.ps1(指标名、label、阈值与代码里的权威来源对照)。
+#
+# 安装(与其余告警文件相同,手工 apply):
+#   kubectl apply -n observability -f deploy/k8s/noderegistry-alerts.yaml
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: noderegistry-alerts
+  labels:
+    app: go-svc
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: go.noderegistry
+      interval: 30s
+      rules:
+        - alert: NodeRegistryInstanceUnregistered
+          expr: |
+            max by (namespace, pod, prefix) (noderegistry_registered) < 1
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 不在服务发现里({{ $labels.prefix }})"
+            description: >-
+              这个副本 3 分钟以上没有持有 {{ $labels.prefix }} 的注册:进程活着、端口在听,路由服与 C++ 节点却发现不到它,
+              它分担的流量全压在别的副本上。先按 noderegistry_reregister_failure_total 的 reason 看卡在哪一步:
+              grant / reclaim 是连不上 etcd 或 etcd 太慢(查 etcd-alerts.yaml 与这个 Pod 到 etcd 的网络),
+              allocate 是原号被别的实例接管后分不到新号。日志里搜 "[NodeRegistry {{ $labels.prefix }}]"。
+              etcd 恢复后会自己注册回来;一直回不来就重启这个 Pod。
+        - alert: NodeRegistryLeaseFlapping
+          expr: |
+            sum by (namespace, pod, prefix) (increase(noderegistry_lease_lost_total[30m])) >= 3
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 的 {{ $labels.prefix }} 注册反复失租"
+            description: >-
+              30 分钟内失租 {{ $value | printf "%.0f" }} 次。每次失租,这个副本都要在重注册成功之前从服务发现里消失一段,换号时发现键路径还会变。
+              反复失租通常是 etcd 响应慢、这个 Pod 到 etcd 的网络在抖,或者 LeaseTTL 配得太短(各服务现行 60 秒)。
+              对照 etcd-alerts.yaml 与同一时段其余服务是否也在失租:只有这一个 Pod 在抖,多半是它所在节点的网络。

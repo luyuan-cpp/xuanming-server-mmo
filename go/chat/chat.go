@@ -28,6 +28,7 @@ import (
 	base "proto/common/base"
 
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -76,6 +77,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("chat")
 
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0 core/conf LoadFromJsonBytes 末尾的

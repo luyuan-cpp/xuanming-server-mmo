@@ -117,11 +117,16 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	// login_session:* write happen when the client then runs Login with
 	// auth_type="access_token" on the gate (loginPathGateBind, below).
 	if path == loginPathHTTP {
-		userAccount, realNamePI, err := readAccountDirectoryWithRealName(l.ctx, l.svcCtx, account, true)
+		// 用 access token 登录不建账号行:令牌只会发给已有账号行的账号,行不在就是已注销(docs/design/account-deletion.md §7.3),
+		// 按凭证无效拒绝,不凭旧令牌把账号建回来。
+		userAccount, realNamePI, lifecycle, err := readAccountDirectoryWithRealName(l.ctx, l.svcCtx, account, in.AuthType != "access_token")
 		if err != nil {
-			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: accountDirectoryFailureTip(err)}
+			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: loginDirectoryFailureTip(err)}
 			return resp, nil
 		}
+		resp.AccountDeletionState = uint32(lifecycle.GetDeletionState())
+		resp.AccountDeletionExecuteAfter = int64(lifecycle.GetDeletionExecuteAfterMs() / 1000)
+		resp.PreviousAccountDeletedAt = int64(lifecycle.GetPreviousDeletedMs() / 1000)
 
 		authType := in.AuthType
 		if authType == "" {
@@ -152,9 +157,11 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 
 	// 先读账号目录:防沉迷的判定要早于写登录态,拒绝时什么都不写(docs/design/real-name-anti-addiction.md §5.3)。
 	// 读失败也在写登录态之前回失败,不留下一条能拿去 CreatePlayer / EnterGame 的登录态。
-	userAccount, realNamePI, err := readAccountDirectoryWithRealName(l.ctx, l.svcCtx, account, true)
+	// 注销状态不在这里拦:冷静期内照样能绑定会话(玩家要能撤销),建角与进游戏各自拒绝(docs/design/account-deletion.md §4.3)。
+	// access token 不建账号行,理由同 HTTP 路径。
+	userAccount, realNamePI, _, err := readAccountDirectoryWithRealName(l.ctx, l.svcCtx, account, in.AuthType != "access_token")
 	if err != nil {
-		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: accountDirectoryFailureTip(err)}
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: loginDirectoryFailureTip(err)}
 		return resp, nil
 	}
 	now := time.Now()

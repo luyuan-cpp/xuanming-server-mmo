@@ -163,4 +163,18 @@ PendingSpan PendingSpan::StartChildOf(const TraceContext& parent, SpanKind kind,
     return span;
 }
 
+PendingSpan PendingSpan::TakeCurrentServerSpan(SpanSystem system) noexcept
+{
+    PendingSpan span;
+    SpanRecorder* recorder = detail::tlsRecorder;
+    if (recorder == nullptr || !recorder->Active() || recorder->Kind() != SpanKind::kServer || recorder->System() != system) {
+        return span;
+    }
+    // 在录的最内层作用域装着的就是这个 span 的上下文:嵌套的作用域都会改写 tlsRecorder(不录的置空)。
+    span.context_ = detail::tlsTrace;
+    span.recorder_ = std::move(*recorder);   // 移走后作用域的记录器不再记录,退出时的 End 是空操作
+    detail::tlsRecorder = nullptr;
+    return span;
+}
+
 } // namespace tracing

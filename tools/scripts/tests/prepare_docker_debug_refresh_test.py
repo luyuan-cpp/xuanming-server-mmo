@@ -195,6 +195,9 @@ class RefreshTests(unittest.TestCase):
         self.assertFalse((self.state / "config").exists())
         self.assertTrue((self.run / "config/base_deploy_config.yaml").is_file())
         configs = self.run / "config"
+        # 这个栈不起 span 采集器：C++ 节点的配置里不留导出地址，否则节点一直去连容器自己的 4318、刷 ERROR 日志。
+        base = prepare.yaml.safe_load((configs / "base_deploy_config.yaml").read_text(encoding="utf-8"))
+        self.assertNotIn("Tracing", base)
         match = prepare.yaml.safe_load((configs / "match.yaml").read_text(encoding="utf-8"))
         self.assertEqual(match["GlobalMatch"]["RankEndpoint"], "rank:51100")
         rank = prepare.yaml.safe_load((configs / "rank.yaml").read_text(encoding="utf-8"))

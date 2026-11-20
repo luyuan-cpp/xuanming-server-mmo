@@ -29,11 +29,14 @@ import (
 // 永远不来 → 会话永久 ONLINE」的结构性缺口。
 //
 // 会话进入清理状态机的唯一入口是 SetDisconnecting(它的 Lua 才会 ZADD 租约
-// ZSET,LeaseMonitor 只消费该 ZSET),而会话键是无 TTL 写入的。断线通知链
-// 三处都可能整段蒸发:gate 崩溃(回调不执行)、断线瞬间无 login 节点
-// (gate 静默跳过)、login→locator RPC 穷尽重试仍失败。落到这里的会话没有
-// 别的自愈路径;gate 活着而通知丢失的那一类对账同样看不到,只能按
-// release-checklist F.B-1 的定向补救人工处理。
+// ZSET,LeaseMonitor 只消费该 ZSET),而会话键是无 TTL 写入的。gate 活着时断线通知
+// 至少送达一次:gate 持有这条通知,login 只在关栅栏与 SetDisconnecting 都成功后才回成功,
+// 没成就由 gate 退避重发(cpp/nodes/gate/handler/rpc/login_session_renewal.h),
+// 对账不必管这一类。gate 进程没了(崩溃、kill、停机时还没送达),它手里的通知随之消失,
+// 落到这里的会话没有别的自愈路径。gate 活着却仍会漏掉的只剩两类:gate 的待送达表满时拒收的通知
+// (gate 打带 player_id 的 ERROR,计 gate_login_disconnect_total{result="dropped"}),以及 login 的
+// EnterGame 后台链补挂断线租约穷尽重试(login 打 CRITICAL)。对账看不到它们,按 release-checklist
+// F.B-1 的定向补救人工处理。
 //
 // 对账原则(fail-closed,宁可漏扫不可误杀):
 //  1. 只动 State==ONLINE 且 GateInstanceId 指向死 gate 的会话;

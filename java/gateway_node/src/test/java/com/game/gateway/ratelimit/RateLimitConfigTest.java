@@ -205,6 +205,31 @@ class RateLimitConfigTest {
     }
 
     @Test
+    void requireValidLimits_rejectsQueueRetrySettingsThatReopenTightRetryLoops() {
+        // 下限 0 = 回到「区桶补到一个令牌只要 1ms」的紧循环重试;随机量不能为负;IP 扣的那一份在 0~1000 之间。
+        record Bad(String key, java.util.function.Consumer<RateLimitProperties> apply) {
+        }
+        for (Bad bad : List.of(
+                new Bad("queue-retry-min-ms", p -> p.setQueueRetryMinMs(0)),
+                new Bad("queue-retry-jitter-ms", p -> p.setQueueRetryJitterMs(-1)),
+                new Bad("queue-retry-ip-cost-milli", p -> p.setQueueRetryIpCostMilli(-1)),
+                new Bad("queue-retry-ip-cost-milli", p -> p.setQueueRetryIpCostMilli(1001)))) {
+            RateLimitProperties props = new RateLimitProperties();
+            bad.apply().accept(props);
+            IllegalStateException e = assertThrows(IllegalStateException.class,
+                    () -> RateLimitConfig.requireValidLimits(props), bad.key() + " 写错时必须拒启");
+            assertTrue(e.getMessage().contains(bad.key()), "报错要指出是哪个键:" + e.getMessage());
+        }
+
+        RateLimitProperties edges = new RateLimitProperties();
+        edges.setQueueRetryJitterMs(0);
+        edges.setQueueRetryIpCostMilli(0);
+        assertDoesNotThrow(() -> RateLimitConfig.requireValidLimits(edges), "不加随机量、全额退还都是合法取值");
+        edges.setQueueRetryIpCostMilli(1000);
+        assertDoesNotThrow(() -> RateLimitConfig.requireValidLimits(edges), "排队重试与放行一样扣一个也合法");
+    }
+
+    @Test
     void requireValidLimits_zoneOverrideZeroMeansDefaultButNegativeIsRejected() {
         RateLimitProperties props = new RateLimitProperties();
         RateLimitProperties.ZoneLimit useDefaults = new RateLimitProperties.ZoneLimit();

@@ -116,7 +116,7 @@ Set-Content -Path (Join-Path $snapDirForTest "t18m_db.txt") -Value $fakeDbSnapsh
 #     - denied 只出现在 claim 上:按 op 过滤写错就会串到 save 那张表。
 #     - row_bytes:LOCATION 100 行,sum 12800 → 128 字节,桶 le=256:100 → p99 插值到 253;CHARACTER 有 count 没有桶 → p99 n/a;
 #       其余组没有序列 → n/a。
-#     - sql_in_use 跨 pool 求和 3 + 1 = 4;open_err = error 6 + rejected 0;cooldown 跨 pool 求和 0 + 1 = 1。
+#     - sql_in_use 跨 pool 求和 3 + 1 = 4;open_err = error 6 + rejected 0。
 #       (go/db 2026-11-11 起只导出 pool="store" 一类;这里留两个类别名只为钉住汇总脚本「跨 pool 求和」的口径,名字本身没有含义。)
 $fakeDbSnapshotStore = @"
 # TYPE db_player_store_seconds histogram
@@ -161,8 +161,6 @@ db_placement_open_stores 2
 db_placement_store_open_total{result="error"} 6
 db_placement_store_open_total{result="ok"} 8
 db_placement_store_open_total{result="rejected"} 0
-db_store_cooldown_stores{pool="extra_zone"} 1
-db_store_cooldown_stores{pool="home"} 0
 "@
 Set-Content -Path (Join-Path $snapDirForTest "t20m_db.txt") -Value $fakeDbSnapshotStore -Encoding utf8
 
@@ -684,13 +682,13 @@ Assert-SectionRow -Lines $outputLines -SectionMarker 'P3 Player store row bytes'
 
 # P4 连接池与落点。
 Assert-HeaderMatches -Lines $outputLines `
-    -Pattern '\|\s+sql_in_use\s+sql_wait\s+sql_wait_s\s+\|\s+open_stores\s+open_err\s+cooldown\s*$' `
+    -Pattern '\|\s+sql_in_use\s+sql_wait\s+sql_wait_s\s+\|\s+open_stores\s+open_err\s*$' `
     -Reason "P4 DB pools table must keep its column order"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P4 DB pools' -SnapshotName 't20m_db' `
-    -Pattern '^\s*t20m_db\s+\|\s+4\s+9\s+1\.5\s+\|\s+2\s+6\s+1\s*$' `
+    -Pattern '^\s*t20m_db\s+\|\s+4\s+9\s+1\.5\s+\|\s+2\s+6\s*$' `
     -Reason "SQL pool sums across pools and placement counters must land in their own columns"
 Assert-SectionRow -Lines $outputLines -SectionMarker 'P4 DB pools' -SnapshotName 't18m_db' `
-    -Pattern '^\s*t18m_db\s+\|(\s+n/a){3}\s+\|\s+1\s+n/a\s+n/a\s*$' `
+    -Pattern '^\s*t18m_db\s+\|(\s+n/a){3}\s+\|\s+1\s+n/a\s*$' `
     -Reason "the gauge that is present prints its value, missing series print n/a"
 
 # ── L-18 观测批的新表(造数见 1e) ────────────────────────────────────────

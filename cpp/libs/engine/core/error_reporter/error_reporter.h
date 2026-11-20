@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "core/tracing/trace_context.h"
+#include "metrics/metrics_registry.h"
+#include "metrics/prometheus_text.h"
 #include "thread_context/trace_context_tls.h"
 
 // Error aggregation buffer (todo.md #250).
@@ -147,6 +149,37 @@ inline Buffer& Instance()
 inline void Record(uint32_t error_code, std::string_view tag, std::string_view message)
 {
     Instance().Record(error_code, tag, message, tracing::Current(), tracing::CurrentPlayerId());
+}
+
+// 切片 B:把一个缓冲的三项计数写成 Prometheus 指标(docs/design/error-reporting.md)。只读原子与一次加锁取长度,
+// 符合采集回调「只读、不阻塞」的约束(metrics_registry.h)。不带标签:节点类型与实例由抓取目标的标签给出。
+inline void WriteMetrics(const Buffer& buffer, prometheus_text::Writer& writer)
+{
+    if (writer.BeginFamily("error_reporter_events_total", "Error events recorded since process start.",
+                           prometheus_text::MetricType::kCounter)) {
+        writer.Sample({}, buffer.TotalCount());
+    }
+    if (writer.BeginFamily("error_reporter_dropped_events_total",
+                           "Error events pushed out of the full buffer (oldest first) before anyone drained them.",
+                           prometheus_text::MetricType::kCounter)) {
+        writer.Sample({}, buffer.DroppedCount());
+    }
+    if (writer.BeginFamily("error_reporter_buffered_events", "Error events currently held in the buffer.",
+                           prometheus_text::MetricType::kGauge)) {
+        writer.Sample({}, buffer.CurrentSize());
+    }
+}
+
+// 把进程缓冲的计数登记到 /metrics。Node 起指标出口时调一次;重复调用无副作用。
+inline void RegisterMetrics()
+{
+    static std::once_flag registered;
+    std::call_once(registered, [] {
+        if (!GlobalMetricsRegistry().Register("error_reporter",
+                                              [](prometheus_text::Writer& writer) { WriteMetrics(Instance(), writer); })) {
+            std::fprintf(stderr, "[error_reporter] metrics collector error_reporter is already registered\n");
+        }
+    });
 }
 
 // JSONL serialization of an event. One event per line so a downstream

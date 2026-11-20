@@ -176,6 +176,39 @@ TEST(AcceptRateGate, ResetAppliesTheNewLimitAndRefillsTheBucket)
 }
 
 // 0 不会除零,也不会变成「永远拒绝」:按 1 处理。
+// CanTake 只问不扣,判据与 TryTake 相同;Full 在空闲得够久、攒满一个突发之后为真(按来源分桶时据此清表)。
+TEST(AcceptRateGate, CanTakeAsksWithoutSpendingAndFullMeansTheBurstIsBack)
+{
+	AcceptRateGate gate(RateLimit{10, 2});
+	EXPECT_TRUE(gate.Full(kT0));
+	EXPECT_TRUE(gate.CanTake(kT0));
+	EXPECT_TRUE(gate.CanTake(kT0)) << "问两次也不扣";
+	EXPECT_TRUE(gate.TryTake(kT0));
+	EXPECT_FALSE(gate.Full(kT0));
+	EXPECT_TRUE(gate.TryTake(kT0));
+	EXPECT_FALSE(gate.CanTake(kT0));
+	EXPECT_FALSE(gate.TryTake(kT0));
+	EXPECT_TRUE(gate.CanTake(kT0 + milliseconds(100))) << "每秒 10 条:100ms 回一个";
+	EXPECT_FALSE(gate.Full(kT0 + milliseconds(100)));
+	EXPECT_TRUE(gate.Full(kT0 + milliseconds(200))) << "两个间隔之后桶回满";
+}
+
+// 未验签预算的覆盖变量:报错里点名的是调用方给的变量名;起点按新预算取一半;年龄必须短于握手期限。
+TEST(AcceptAdmissionPolicy, PreAuthBudgetResolvesFromTheCallersEnvNames)
+{
+	const PreAuthEnvNames names{"X_PREAUTH_BUDGET", "X_PREAUTH_START", "X_PREAUTH_AGE_MS"};
+	std::string error;
+	EXPECT_EQ(ResolvePreAuthBudget(names, nullptr, nullptr, nullptr, 4096, error), DefaultPreAuthBudget(4096));
+	EXPECT_EQ(DefaultPreAuthBudget(4096), (PreAuthBudget{500, 1000})) << "上限不到 1 万时跟着速率下限";
+	EXPECT_EQ(ResolvePreAuthBudget(names, "600", nullptr, nullptr, 4096, error), (PreAuthBudget{300, 600}));
+	EXPECT_TRUE(error.empty()) << error;
+	EXPECT_FALSE(ResolvePreAuthBudget(names, "600", "601", nullptr, 4096, error).has_value());
+	EXPECT_NE(error.find("X_PREAUTH_START"), std::string::npos) << error;
+	error.clear();
+	EXPECT_FALSE(ResolvePreAuthBudget(names, nullptr, nullptr, "abc", 4096, error).has_value());
+	EXPECT_NE(error.find("X_PREAUTH_AGE_MS"), std::string::npos) << error;
+}
+
 TEST(AcceptRateGate, ZeroParametersAreTreatedAsOne)
 {
 	AcceptRateGate gate(RateLimit{0, 0});

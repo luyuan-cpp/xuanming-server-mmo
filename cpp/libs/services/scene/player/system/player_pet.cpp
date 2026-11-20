@@ -24,7 +24,9 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/attribute_allocation_rules.h"
+#include "player/system/content_guard_client.h"
 #include "player/system/pet_rules.h"
+#include "player/system/player_tip.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_skill.h"
@@ -943,7 +945,15 @@ uint32_t PetSystem::AutoAllocate(entt::entity player, uint64_t petId,
 	return kSuccess;
 }
 
-uint32_t PetSystem::Rename(entt::entity player, uint64_t petId, const std::string& name) {
+namespace {
+enum class RenameStep {
+	kCheckOnly,  // 只检查,不扣钱、不改名
+	kApply,      // 检查通过后扣钱并改名
+};
+
+// 改名的全部检查与落地。送检之前的预检(kCheckOnly)和送检通过之后的落地(kApply)共用这一份,
+// 两处的检查口径不会分叉:预检过了、落地时条件变了(宝宝没了、钱不够了),落地这一次照样拦得住。
+uint32_t RenamePet(entt::entity player, uint64_t petId, const std::string& name, RenameStep step) {
 	if (const auto err = CheckWritable(player); err != kSuccess) {
 		return err;
 	}
@@ -975,13 +985,57 @@ uint32_t PetSystem::Rename(entt::entity player, uint64_t petId, const std::strin
 		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(cost))) {
 			return kPetGoldNotEnough;
 		}
-		if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(cost));
-			err != kSuccess) {
-			return err;
+		if (step == RenameStep::kApply) {
+			if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyGold, static_cast<int64_t>(cost));
+				err != kSuccess) {
+				return err;
+			}
 		}
 	}
-	pet->set_name(name);
+	if (step == RenameStep::kApply) {
+		pet->set_name(name);
+	}
 	return kSuccess;
+}
+}  // namespace
+
+uint32_t PetSystem::Rename(entt::entity player, uint64_t petId, const std::string& name) {
+	return RenamePet(player, petId, name, RenameStep::kApply);
+}
+
+uint32_t PetSystem::RequestRename(entt::entity player, uint64_t petId, const std::string& name) {
+	// 先做不依赖内容安全的全部检查:名字格式、宝宝在不在、名字变没变、钱够不够。不过的当场回错误,不送检。
+	if (const auto err = RenamePet(player, petId, name, RenameStep::kCheckOnly); err != kSuccess) {
+		return err;
+	}
+	// 宝宝名别的玩家看得到(战斗快照),送内容安全服务判定(docs/design/rename-and-content-safety.md §6.6)。
+	// 判定是异步的:这里只回「已受理」,改名在回调里落地并推送新列表;被拒绝或服务不可用时推一条提示。
+	// 回调到来时玩家可能已经下线或换了实体,所以按 player_id 重新找;找不到就什么都不做(钱还没扣,名字还没改)。
+	const Guid playerId = tlsEcs.GetPlayerId(player);
+	const bool sent = ContentGuardClient::Check(
+		content_guard::TEXT_SCENE_PET_NAME, playerId, name,
+		[playerId, petId, name](const ContentGuardClient::Result& result) {
+			const entt::entity current = tlsEcs.GetPlayer(playerId);
+			if (current == entt::null || !tlsEcs.actorRegistry.valid(current)) {
+				return;
+			}
+			if (!result.Passed()) {
+				const uint32_t tip = result.verdict == ContentGuardClient::Verdict::kUnavailable
+										 ? static_cast<uint32_t>(kServiceUnavailable)
+										 : static_cast<uint32_t>(kPetNameSensitive);
+				PlayerTipSystem::SendToPlayer(current, tip, {});
+				return;
+			}
+			// 落地时重新走一遍全部检查。连点时第二次落地会发现名字已经是这个了:那不是失败,照样把列表推给客户端。
+			const auto err = Rename(current, petId, name);
+			if (err != kSuccess && err != kPetNothingToChange) {
+				PlayerTipSystem::SendToPlayer(current, err, {});
+				return;
+			}
+			PushList(current);
+		});
+	// 没有就绪的内容安全节点:当场回不可用,不放行没检过的名字。
+	return sent ? kSuccess : kServiceUnavailable;
 }
 
 namespace {

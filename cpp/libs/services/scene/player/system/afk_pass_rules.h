@@ -1,0 +1,87 @@
+#pragma once
+
+// 挂机月卡的纯规则(docs/design/afk-monthly-card.md §4):不碰 ECS、不读时钟、不发命令,可单测(cpp/tests/bag_test/afk_pass_test.cpp)。
+// 粘合在 afk_pass.cpp(AfkPassSystem)。所有时间都是墙钟 Unix 秒,由调用方传入。
+
+#include <cstdint>
+#include <optional>
+
+#include "modules/currency/constants/currency.h" // IsKnownCurrencyType
+
+namespace afk_pass
+{
+	inline constexpr uint64_t kSecondsPerDay = 86400;
+
+	// 规则表 AfkPassRule 的取值范围(与 data/schema/afkpassrule_table.proto、tools/scripts/afk_pass_xlsx_patch.py 的自检一致)。
+	inline constexpr uint32_t kMaxPeriodDays = 366;
+	inline constexpr uint64_t kMaxPrice = 1'000'000'000;
+	inline constexpr uint32_t kMaxRemainingDaysCap = 3660;
+	inline constexpr uint32_t kMaxRemindBeforeHours = 720;
+
+	// GM 设定剩余时长的上限(GmSetAfkPassRequest.remaining_seconds):366 天。
+	inline constexpr uint32_t kGmMaxRemainingSeconds = 366u * 86400u;
+
+	// 规则表第一行里本功能用到的列,按值拷出来:表行指针不出函数(热更时旧快照当场析构,data/AGENTS.md)。
+	struct Rule
+	{
+		uint32_t periodDays{0};
+		uint32_t priceCurrencyType{0};
+		uint64_t price{0};
+		uint32_t maxRemainingDays{0};
+		uint32_t remindBeforeHours{0};
+	};
+
+	// 不合法时返回原因(只进日志),合法返回 nullptr。不合法的规则一律不能开通(kAfkPassUnavailable)。
+	constexpr const char *RuleProblem(const Rule &rule)
+	{
+		if (rule.periodDays == 0 || rule.periodDays > kMaxPeriodDays)
+		{
+			return "period_days is not in 1..366";
+		}
+		if (!IsKnownCurrencyType(rule.priceCurrencyType))
+		{
+			return "price_currency_type is not a known CurrencyType";
+		}
+		if (rule.price == 0 || rule.price > kMaxPrice)
+		{
+			return "price is not in 1..1000000000";
+		}
+		if (rule.maxRemainingDays < rule.periodDays || rule.maxRemainingDays > kMaxRemainingDaysCap)
+		{
+			return "max_remaining_days is not in period_days..3660";
+		}
+		if (rule.remindBeforeHours > kMaxRemindBeforeHours)
+		{
+			return "remind_before_hours is not in 0..720";
+		}
+		return nullptr;
+	}
+
+	// 开通 / 续费之后的到期:max(现在, 原到期) + period —— 已到期或从未开通的从现在起算,没到期的接着往后叠。
+	// 续费之后剩余超过 maxRemainingDays 天返回 nullopt(调用方回 kAfkPassStackLimit);恰好等于上限放行。
+	// 原到期本身已经超过上限(上限被调小,或坏数据)同样返回 nullopt:先比剩余再相加,不做会溢出的加法。
+	constexpr std::optional<uint64_t> RenewedExpiry(uint64_t currentExpiresAt, uint64_t nowUnixSec, uint32_t periodDays,
+													uint32_t maxRemainingDays)
+	{
+		const uint64_t remaining = currentExpiresAt > nowUnixSec ? currentExpiresAt - nowUnixSec : 0;
+		const uint64_t period = static_cast<uint64_t>(periodDays) * kSecondsPerDay;
+		const uint64_t cap = static_cast<uint64_t>(maxRemainingDays) * kSecondsPerDay;
+		if (remaining > cap || cap - remaining < period)
+		{
+			return std::nullopt;
+		}
+		return nowUnixSec + remaining + period;
+	}
+
+	// GM 设定:到期 = 现在 + remainingSeconds;0 = 清除(到期写 0,与「从未开通」同一个值)。
+	constexpr uint64_t GmExpiry(uint64_t nowUnixSec, uint32_t remainingSeconds)
+	{
+		return remainingSeconds == 0 ? 0 : nowUnixSec + remainingSeconds;
+	}
+
+	// Redis 投影怎么写(设计 §5.1):到期在将来 → SET … EXAT 到期(到点自动消失);0 或已过 → DEL。
+	constexpr bool ProjectionIsSet(uint64_t expiresAt, uint64_t nowUnixSec)
+	{
+		return expiresAt > nowUnixSec;
+	}
+} // namespace afk_pass

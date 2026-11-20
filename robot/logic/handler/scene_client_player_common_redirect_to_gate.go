@@ -55,6 +55,7 @@ func SceneClientPlayerCommonRedirectToGateHandler(player *gameobject.Player, not
 	target := pkg.RedirectTarget{
 		IP:        notify.GetTargetIp(),
 		Port:      int(notify.GetTargetPort()),
+		WsURL:     notify.GetTargetWsUrl(),
 		Payload:   notify.GetTokenPayload(),
 		Signature: notify.GetTokenSignature(),
 		Deadline:  notify.GetTokenDeadline(),

@@ -47,8 +47,8 @@
       [P3 Player store row bytes(db_player_store_row_bytes,已提交的行):每组 n / 均值 / p99,单位字节]
           when | location_* | character_* | wallet_* | bag_* | growth_* | profile_*
 
-      [P4 DB pools and placement(mmorpg_sql_pool_*、db_placement_*、db_store_cooldown_stores)]
-          when | sql_in_use sql_wait sql_wait_s | open_stores open_err cooldown
+      [P4 DB pools and placement(mmorpg_sql_pool_*、db_placement_*)]
+          when | sql_in_use sql_wait sql_wait_s | open_stores open_err
 
       [G1 Match pools(*_match,:9170,2026-11-05 起;global-match-hierarchical-pools.md §11 R0):按池撮合的总览,跨 mode / level 求和]
           when | owned units | rd_n rd_avg rd_p99 rd/int | committed conflict no_node no_slot id_err party_end | conflict% | imm_ok imm_n imm% | expired | bn_open bn_all
@@ -1460,16 +1460,16 @@ if ($dbSnapshots.Count -eq 0) {
 
 # P4:连接池与落点。sql_in_use = 此刻在用的 SQL 连接数,sql_wait / sql_wait_s = 等连接的累计次数与秒数(mmorpg_sql_pool_*{sql_client="db"},跨 pool 求和),
 #     存盘慢先看这两列。open_stores = 常驻的落点库个数,open_err = 按需打开失败或被拒的累计次数(db_placement_store_open_total 的
-#     error + rejected),cooldown = 此刻在库级冷却期内的库个数(db_store_cooldown_stores,跨 pool 求和)。
-$p4Fmt = "  {0,-30} | {1,-10} {2,-8} {3,-10} | {4,-11} {5,-8} {6}"
+#     error + rejected)。原来的 cooldown 列(db_store_cooldown_stores)随 go/db 的运行期冷却在 2026-11-19 删除。
+$p4Fmt = "  {0,-30} | {1,-10} {2,-8} {3,-10} | {4,-11} {5}"
 Write-Host ""
-Write-Host "=== P4 DB pools and placement (mmorpg_sql_pool_*, db_placement_*, db_store_cooldown_stores) ===" -ForegroundColor Yellow
+Write-Host "=== P4 DB pools and placement (mmorpg_sql_pool_*, db_placement_*) ===" -ForegroundColor Yellow
 Write-Host ""
 if ($dbSnapshots.Count -eq 0) {
     Write-NoData $dbNoSnapshot
 } else {
-    Write-Host ($p4Fmt -f @('snapshot', 'sql_in_use', 'sql_wait', 'sql_wait_s', 'open_stores', 'open_err', 'cooldown'))
-    Write-Host ($p4Fmt -f @('--------', '----------', '--------', '----------', '-----------', '--------', '--------'))
+    Write-Host ($p4Fmt -f @('snapshot', 'sql_in_use', 'sql_wait', 'sql_wait_s', 'open_stores', 'open_err'))
+    Write-Host ($p4Fmt -f @('--------', '----------', '--------', '----------', '-----------', '--------'))
     foreach ($snap in $dbSnapshots) {
         $m = Read-PromSnapshot $snap.FullName
         $sqlMatch = @{ sql_client = 'db' }
@@ -1481,8 +1481,7 @@ if ($dbSnapshots.Count -eq 0) {
             (Format-CountCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_wait_count_total' $sqlMatch)),
             (Format-DecimalCell (Get-SeriesSumOrNull $m 'mmorpg_sql_pool_wait_duration_seconds_total' $sqlMatch) 1),
             (Format-CountCell (Get-SeriesSumOrNull $m 'db_placement_open_stores')),
-            (Format-CountCell $openErr),
-            (Format-CountCell (Get-SeriesSumOrNull $m 'db_store_cooldown_stores'))))
+            (Format-CountCell $openErr)))
     }
 }
 

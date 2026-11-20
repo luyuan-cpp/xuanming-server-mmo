@@ -115,9 +115,7 @@ func tierOf(t *testing.T, svcCtx *svc.ServiceContext, battleId uint64) battlepb.
 
 func broadcastQuotaCount(t *testing.T, svcCtx *svc.ServiceContext) int {
 	t.Helper()
-	count, err := svcCtx.MatchRedis.Zcard(spectateBroadcastActiveKey)
-	require.NoError(t, err)
-	return count
+	return spectateIndexSize(t, svcCtx, spectateBroadcastIndex)
 }
 
 // lobbyResult 是一次 L1 / L2 准入的结论。
@@ -413,7 +411,7 @@ func TestLobbyAttachBroadcastReplySyncsTier(t *testing.T) {
 	require.Empty(t, mr.HGet(spectateRelayGatesKey(battleId), "3"), "没有挂上的 gate 不记账")
 	require.Empty(t, relay.promotes, "已是广播档,不再升")
 	require.Equal(t, base+1, metrics.SpectateTierValue(metrics.SpectateTierBroadcast))
-	score, err := mr.ZScore(spectateBroadcastActiveKey, strconv.FormatUint(battleId, 10))
+	score, err := mr.ZScore(spectateBroadcastIndex.keyFor(battleId), strconv.FormatUint(battleId, 10))
 	require.NoError(t, err, "battle 已在广播,配额账上必须有这场")
 	require.Equal(t, float64(testRelayDeadlineMs), score)
 }
@@ -430,7 +428,7 @@ func TestLobbyAttachBroadcastReplyRecordsQuotaOverLimit(t *testing.T) {
 	const watcher, battleId = uint64(7436), uint64(883036)
 	registerBattle(t, svcCtx, battleId, nowMs())
 	raiseTier(t, svcCtx, battleId, tierRelay)
-	_, err := mr.ZAdd(spectateBroadcastActiveKey, float64(testRelayDeadlineMs), "999999")
+	_, err := mr.ZAdd(spectateBroadcastIndex.keyFor(999999), float64(testRelayDeadlineMs), "999999")
 	require.NoError(t, err)
 
 	requireLobbyAdmitted(t, lobbyAdmitOnGate3(t, svcCtx, watcher, battleId), battleId, watcher)
@@ -462,7 +460,7 @@ func TestLobbyAutoPromotesAtGateThreshold(t *testing.T) {
 	require.Equal(t, testBattle7Instance, relay.promotes[0].GetTargetInstanceId())
 	require.Equal(t, tierBroadcast, tierOf(t, svcCtx, battleId))
 	require.Equal(t, okBase+1, metrics.SpectatePromoteValue(metrics.SpectatePromoteOK))
-	score, err := mr.ZScore(spectateBroadcastActiveKey, strconv.FormatUint(battleId, 10))
+	score, err := mr.ZScore(spectateBroadcastIndex.keyFor(battleId), strconv.FormatUint(battleId, 10))
 	require.NoError(t, err)
 	require.Equal(t, float64(testRelayDeadlineMs), score)
 
@@ -480,7 +478,7 @@ func TestLobbyPromoteQuotaFullStaysRelay(t *testing.T) {
 	const watcher, battleId = uint64(7445), uint64(883045)
 	registerBattle(t, svcCtx, battleId, nowMs())
 	raiseTier(t, svcCtx, battleId, tierRelay)
-	_, err := mr.ZAdd(spectateBroadcastActiveKey, float64(testRelayDeadlineMs), "999999")
+	_, err := mr.ZAdd(spectateBroadcastIndex.keyFor(999999), float64(testRelayDeadlineMs), "999999")
 	require.NoError(t, err)
 	fullBase := metrics.SpectatePromoteValue(metrics.SpectatePromoteQuotaFull)
 
@@ -490,7 +488,7 @@ func TestLobbyPromoteQuotaFullStaysRelay(t *testing.T) {
 	require.Equal(t, 1, broadcastQuotaCount(t, svcCtx))
 	require.Equal(t, fullBase+1, metrics.SpectatePromoteValue(metrics.SpectatePromoteQuotaFull))
 
-	_, err = svcCtx.MatchRedis.Zrem(spectateBroadcastActiveKey, "999999")
+	_, err = svcCtx.MatchRedis.Zrem(spectateBroadcastIndex.keyFor(999999), "999999")
 	require.NoError(t, err)
 	mr.FastForward(spectatePromoteLeaseSeconds * time.Second) // 上一次尝试的租约到期
 	requireLobbyAdmitted(t, lobbyAdmitOnGate3(t, svcCtx, watcher, battleId), battleId, watcher)
@@ -611,7 +609,7 @@ func TestPromoteFailureKeepsQuotaHeldByAnotherRequest(t *testing.T) {
 	const watcher, battleId = uint64(7455), uint64(883055)
 	registerBattle(t, svcCtx, battleId, nowMs())
 	raiseTier(t, svcCtx, battleId, tierRelay)
-	_, err := mr.ZAdd(spectateBroadcastActiveKey, float64(testRelayDeadlineMs), strconv.FormatUint(battleId, 10))
+	_, err := mr.ZAdd(spectateBroadcastIndex.keyFor(battleId), float64(testRelayDeadlineMs), strconv.FormatUint(battleId, 10))
 	require.NoError(t, err)
 
 	requireLobbyAdmitted(t, lobbyAdmitOnGate3(t, svcCtx, watcher, battleId), battleId, watcher)
@@ -634,7 +632,7 @@ func TestLobbyPromoteMissingRoomRejectsViewerAndEvicts(t *testing.T) {
 			registerBattle(t, svcCtx, battleId, nowMs())
 			raiseTier(t, svcCtx, battleId, tierRelay)
 			if heldByOther {
-				_, err := mr.ZAdd(spectateBroadcastActiveKey, float64(testRelayDeadlineMs), strconv.FormatUint(battleId, 10))
+				_, err := mr.ZAdd(spectateBroadcastIndex.keyFor(battleId), float64(testRelayDeadlineMs), strconv.FormatUint(battleId, 10))
 				require.NoError(t, err)
 			}
 
@@ -712,7 +710,8 @@ func TestLobbyBroadcastDisabledNeverPromotes(t *testing.T) {
 	require.Equal(t, tierRelay, tierOf(t, svcCtx, battleId))
 }
 
-// 配额 Lua:先清过期项;未满才占;已在集合里不重复占也不算满。
+// 抢配额:先清过期项;未满才占;已在集合里不重复占也不算满。1、2、3 号场各在不同的桶:判满看的是全服各桶之和,
+// 别的桶里到期的项也在抢配额时清掉。
 func TestClaimBroadcastQuotaExpiresStaleAndCaps(t *testing.T) {
 	svcCtx, _ := newRelaySvcCtx(t) // B = 2
 	ctx := context.Background()
@@ -805,8 +804,8 @@ func seedBattleSpectateKeys(t *testing.T, svcCtx *svc.ServiceContext, mr *minire
 	require.NoError(t, mr.Set(spectateFeaturedKey(battleId), "1"))
 	mr.HSet(spectateRelayGatesKey(battleId), "3", "gate-inst-3")
 	raiseTier(t, svcCtx, battleId, tierBroadcast)
-	for _, key := range []string{spectateBattlesActiveKey, spectateBroadcastActiveKey, spectateFeaturedActiveKey} {
-		_, err := mr.ZAdd(key, float64(testRelayDeadlineMs), member)
+	for _, ix := range []spectateIndex{spectateActiveIndex, spectateBroadcastIndex, spectateFeaturedIndex} {
+		_, err := mr.ZAdd(ix.keyFor(battleId), float64(testRelayDeadlineMs), member)
 		require.NoError(t, err)
 	}
 }
@@ -818,9 +817,9 @@ func requireBattleSpectateKeysGone(t *testing.T, svcCtx *svc.ServiceContext, mr 
 		require.False(t, mr.Exists(key), key)
 	}
 	member := strconv.FormatUint(battleId, 10)
-	for _, key := range []string{spectateBattlesActiveKey, spectateBroadcastActiveKey, spectateFeaturedActiveKey} {
-		_, err := svcCtx.MatchRedis.Zscore(key, member)
-		require.ErrorIs(t, err, redis.Nil, key)
+	for _, ix := range []spectateIndex{spectateActiveIndex, spectateBroadcastIndex, spectateFeaturedIndex} {
+		_, err := svcCtx.MatchRedis.Zscore(ix.keyFor(battleId), member)
+		require.ErrorIs(t, err, redis.Nil, ix.keyFor(battleId))
 	}
 }
 
@@ -842,7 +841,7 @@ func TestSpectateTTLCoversLongestBattle(t *testing.T) {
 	for _, key := range []string{spectateTierKey(battleId), spectateRelayGatesKey(battleId), spectateFeaturedKey(battleId)} {
 		require.Equal(t, ttl, mr.TTL(key), key)
 	}
-	score, err := mr.ZScore(spectateFeaturedActiveKey, strconv.FormatUint(battleId, 10))
+	score, err := mr.ZScore(spectateFeaturedIndex.keyFor(battleId), strconv.FormatUint(battleId, 10))
 	require.NoError(t, err)
 	require.Greater(t, score, float64(nowMs()+uint64(longest.Milliseconds())), "赛事局索引的到期时刻同样要盖住战斗期限")
 }
@@ -852,9 +851,9 @@ func TestLongBattleSurvivesSpectateIndexMaintenance(t *testing.T) {
 	svcCtx, mr := newRelaySvcCtx(t)
 	const battleId = uint64(883131)
 	member := strconv.FormatUint(battleId, 10)
-	_, err := mr.ZAdd(spectateBattlesActiveKey, float64(nowMs()-10*60*1000), member)
+	_, err := mr.ZAdd(spectateActiveIndex.keyFor(battleId), float64(nowMs()-10*60*1000), member)
 	require.NoError(t, err)
-	_, err = mr.ZAdd(spectateBroadcastActiveKey, float64(testRelayDeadlineMs), member)
+	_, err = mr.ZAdd(spectateBroadcastIndex.keyFor(battleId), float64(testRelayDeadlineMs), member)
 	require.NoError(t, err)
 	raiseTier(t, svcCtx, battleId, tierRelay)
 
@@ -908,14 +907,15 @@ func TestReleaseSpectateOnOutcomeSkipsWhenDraining(t *testing.T) {
 // 活跃集合与赛事局索引的过期成员靠这个低频循环回收。意图清理的节拍给一小时,这条用例里不会触发。
 func TestSpectateMaintenanceLoopPrunesIndexes(t *testing.T) {
 	svcCtx, mr := newRelaySvcCtx(t)
-	const stale, live = "883140", "883141"
-	_, err := mr.ZAdd(spectateBattlesActiveKey, float64(nowMs()-uint64(spectateTTLSeconds)*1000-1000), stale)
+	const stale, live = uint64(883140), uint64(883141) // 相邻两场落在不同的桶
+	staleMember, liveMember := strconv.FormatUint(stale, 10), strconv.FormatUint(live, 10)
+	_, err := mr.ZAdd(spectateActiveIndex.keyFor(stale), float64(nowMs()-uint64(spectateTTLSeconds)*1000-1000), staleMember)
 	require.NoError(t, err)
-	_, err = mr.ZAdd(spectateBattlesActiveKey, float64(nowMs()-10*60*1000), live)
+	_, err = mr.ZAdd(spectateActiveIndex.keyFor(live), float64(nowMs()-10*60*1000), liveMember)
 	require.NoError(t, err)
-	_, err = mr.ZAdd(spectateFeaturedActiveKey, float64(nowMs()-1000), stale)
+	_, err = mr.ZAdd(spectateFeaturedIndex.keyFor(stale), float64(nowMs()-1000), staleMember)
 	require.NoError(t, err)
-	_, err = mr.ZAdd(spectateFeaturedActiveKey, float64(testRelayDeadlineMs), live)
+	_, err = mr.ZAdd(spectateFeaturedIndex.keyFor(live), float64(testRelayDeadlineMs), liveMember)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -923,10 +923,12 @@ func TestSpectateMaintenanceLoopPrunesIndexes(t *testing.T) {
 	startGlobalSpectateMaintenance(ctx, svcCtx, 10*time.Millisecond, time.Hour)
 
 	require.Eventually(t, func() bool {
-		active, activeErr := mr.ZMembers(spectateBattlesActiveKey)
-		featured, featuredErr := mr.ZMembers(spectateFeaturedActiveKey)
+		// 循环在别的 goroutine 里写,这里只用 miniredis 的只读接口,不调 require。
+		active, activeErr := mr.ZMembers(spectateActiveIndex.keyFor(live))
+		featured, featuredErr := mr.ZMembers(spectateFeaturedIndex.keyFor(live))
 		return activeErr == nil && featuredErr == nil &&
-			len(active) == 1 && active[0] == live && len(featured) == 1 && featured[0] == live
+			len(active) == 1 && active[0] == liveMember && len(featured) == 1 && featured[0] == liveMember &&
+			!mr.Exists(spectateActiveIndex.keyFor(stale)) && !mr.Exists(spectateFeaturedIndex.keyFor(stale))
 	}, 5*time.Second, 10*time.Millisecond)
 }
 

@@ -262,21 +262,32 @@ func TestTicdcStillExists(t *testing.T) {
 	var mu sync.Mutex
 	var body string
 	code := http.StatusOK
+	health := http.StatusOK
 	requests := 0
 	respond := func(newCode int, newBody string) {
 		mu.Lock()
 		defer mu.Unlock()
 		code, body = newCode, newBody
 	}
+	setHealth := func(newHealth int) {
+		mu.Lock()
+		defer mu.Unlock()
+		health = newHealth
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2/changefeeds/feed-1" {
-			t.Errorf("路径: %s", r.URL.Path)
-		}
 		mu.Lock()
 		defer mu.Unlock()
 		requests++
-		w.WriteHeader(code)
-		_, _ = w.Write([]byte(body))
+		switch r.URL.Path {
+		case "/api/v2/health":
+			w.WriteHeader(health)
+			_, _ = w.Write([]byte("{}"))
+		case "/api/v2/changefeeds/feed-1":
+			w.WriteHeader(code)
+			_, _ = w.Write([]byte(body))
+		default:
+			t.Errorf("路径: %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 	// cleanup 只连 TiCDC,两侧的库都不连。
@@ -297,6 +308,12 @@ func TestTicdcStillExists(t *testing.T) {
 	if exists, _, err := repl.StillExists(ctx, feed); err != nil || exists {
 		t.Fatalf("明确回答没有才算撤掉: %v %v", exists, err)
 	}
+	// TiCDC 不健康时(owner 刚接任、版本不一致)它对还在的 changefeed 也答「没有」:这时的「没有」不算数,查不成。
+	setHealth(http.StatusInternalServerError)
+	if exists, _, err := repl.StillExists(ctx, feed); err == nil || exists || errors.Is(err, errRefused) || !strings.Contains(err.Error(), "does not report healthy") {
+		t.Fatalf("不健康时的「没有」不能算撤掉: %v %v", exists, err)
+	}
+	setHealth(http.StatusOK)
 	// 说不清的回答一律不算撤掉。
 	for name, answer := range map[string]struct {
 		code int

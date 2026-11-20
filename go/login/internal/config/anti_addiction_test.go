@@ -40,6 +40,49 @@ func TestResolveAntiAddictionReturnsTheSecret(t *testing.T) {
 	}
 }
 
+// K8s 上部署开了防沉迷就注入期望的 AppId / BizId:运维漏抄 AntiAddiction 段或抄成别的应用,login 拒启而不是带着关掉的防沉迷起来。
+func TestResolveAntiAddictionMatchesTheDeployment(t *testing.T) {
+	env := func(values map[string]string) func(string) (string, bool) {
+		return func(name string) (string, bool) {
+			value, ok := values[name]
+			return value, ok
+		}
+	}
+	deployed := func(appId, bizId string) map[string]string {
+		return map[string]string{"LOGIN_NPPA_SECRET_KEY": testNppaSecret, ExpectedNppaAppIdEnv: appId, ExpectedNppaBizIdEnv: bizId}
+	}
+
+	secret, err := resolveAntiAddiction(validAntiAddiction(), env(deployed("app", "biz")))
+	if err != nil || secret != testNppaSecret {
+		t.Fatalf("matching deployment = %q, %v; want the secret", secret, err)
+	}
+	if _, err := resolveAntiAddiction(AntiAddictionConf{}, env(map[string]string{})); err != nil {
+		t.Fatalf("no deployment expectation and anti-addiction off: %v", err)
+	}
+
+	cases := map[string]struct {
+		cfg    func() AntiAddictionConf
+		values map[string]string
+	}{
+		"section not copied":  {func() AntiAddictionConf { return AntiAddictionConf{} }, deployed("app", "biz")},
+		"turned off":          {func() AntiAddictionConf { c := validAntiAddiction(); c.Enabled = false; return c }, deployed("app", "biz")},
+		"other app id":        {validAntiAddiction, deployed("other", "biz")},
+		"other biz id":        {validAntiAddiction, deployed("app", "other")},
+		"only app id given":   {validAntiAddiction, map[string]string{"LOGIN_NPPA_SECRET_KEY": testNppaSecret, ExpectedNppaAppIdEnv: "app"}},
+		"app id with a space": {validAntiAddiction, deployed("app ", "biz")},
+	}
+	for name, c := range cases {
+		_, err := resolveAntiAddiction(c.cfg(), env(c.values))
+		if err == nil {
+			t.Errorf("%s: accepted", name)
+			continue
+		}
+		if strings.Contains(err.Error(), testNppaSecret) {
+			t.Errorf("%s: error leaks the secret value: %v", name, err)
+		}
+	}
+}
+
 func TestResolveAntiAddictionRejectsIncompleteConfig(t *testing.T) {
 	cases := map[string]struct {
 		mutate func(*AntiAddictionConf)

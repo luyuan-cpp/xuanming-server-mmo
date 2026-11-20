@@ -388,3 +388,45 @@ func TestCompensateFenceBind_CarriesChainGateInstance(t *testing.T) {
 		requireMarkOfflineInstances(t, locator, fenceWiringGate)
 	})
 }
+
+// ── 会话代次透传(docs/design/gate-online-identity.md §10.4「断线通知」) ─────────────────────────────
+//
+// player_locator 只有拿到发起断线的那条连接的会话代次,才能忽略同一 gate 进程里会话号回绕后同号旧连接迟到的断线。
+// Disconnect 取 SessionDetails.session_incarnation,栅栏绑定的玩家来自同一条连接,用同一个代次;绑定失败补偿取 state.fenceKey.Incarnation。
+
+func requireSetDisconnectingIncarnations(t *testing.T, f *fenceLocator, want uint64) {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	require.NotEmpty(t, f.disconnecting)
+	for _, r := range f.disconnecting {
+		require.Equal(t, want, r.GetSessionIncarnation(), "SetDisconnecting(player=%d) 必须带发起断线的连接的会话代次", r.GetPlayerId())
+	}
+}
+
+func TestDisconnectSettlement_CarriesSessionIncarnation(t *testing.T) {
+	t.Run("disconnect", func(t *testing.T) {
+		svcCtx, rdb, locator := newFenceWiring(t)
+		ctx := fenceWiringCtx(fenceWiringStalePlayerID)
+		bindNewRoleAfterLeave(t, ctx, rdb)
+
+		_, err := NewDisconnectLogic(ctx, svcCtx).Disconnect(&login_proto.LoginNodeDisconnectRequest{SessionId: fenceWiringSessionID})
+		require.NoError(t, err)
+		require.ElementsMatch(t, []uint64{fenceWiringStalePlayerID, fenceWiringPlayerID}, locator.disconnectingPlayers(),
+			"会话头的玩家与栅栏绑定的玩家都要收尾")
+		requireSetDisconnectingIncarnations(t, locator, fenceWiringIncarn)
+	})
+	t.Run("enter chain compensation", func(t *testing.T) {
+		ctx := context.Background()
+		svcCtx, rdb, locator := newFenceWiring(t)
+		_, gen, err := sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, sessionFenceTTL)
+		require.NoError(t, err)
+		_, err = sessionfence.Close(ctx, rdb, fenceWiringKey, sessionFenceTTL)
+		require.NoError(t, err)
+
+		err = NewEnterGameLogic(ctx, svcCtx).bindSessionFence(ctx, fenceWiringState(gen))
+		require.Error(t, err)
+		require.Equal(t, []uint64{fenceWiringPlayerID}, locator.disconnectingPlayers())
+		requireSetDisconnectingIncarnations(t, locator, fenceWiringIncarn)
+	})
+}

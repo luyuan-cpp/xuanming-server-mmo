@@ -78,7 +78,8 @@ inline bool IsLoginReplySuccess(const ::google::protobuf::Message &reply)
 }
 
 // 只能由 gate 合成、客户端不得发起的消息号(proto 都标 CLIENT_RPC_SERVER_ONLY),不经客户端入口发出:
-//   - Disconnect:gate 在连接关闭时自己合成(HandleConnectionDisconnection 直接发给 login 或路由服),login 据此关闭会话栅栏、
+//   - Disconnect:gate 在连接关闭时自己合成(HandleConnectionDisconnection 交给 login_session_renewal.cpp,经 SendLoginDisconnectNotice
+//     发给 login 或路由服,login 确认之前退避重发),login 据此关闭会话栅栏、
 //     清登录态、给绑定的角色挂断线租约。客户端自己发等于在连接还活着时把 login 侧的会话状态切成「已断线」,gate 却还当它在线。
 //   - RequestGateMigration:gate 排空时自己合成(drain_migration.cpp 经 SendGateMigrationRequest 发),应答只给 gate 用来推 124
 //     (docs/design/gate-drain-session-migration.md §4.3)。客户端自己发就能绕开 gate 的迁移限速与选人条件,直接拿到一张换 gate 的票。

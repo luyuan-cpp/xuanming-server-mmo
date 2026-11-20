@@ -1,4 +1,4 @@
--- 唯一控制身份权限叶；runtime/registrar/maintenance/schema主体必须四者不同。
+-- 唯一控制身份权限叶；runtime/registrar/maintenance/schema主体必须四者不同。维护身份不授业务表：数据修复工具用另一个修复身份，授权由maintenance_drain.ps1的render-repair-role生成，也与这四者不同(2026-11-19)。
 -- 账号创建由独立本地部署者完成；此文件不存任何秘密，也不对runtime授注册或DDL。
 -- 在迁移之后执行：下面都是表级GRANT，表不存在时MySQL、TiDB都报1146。schema账号的授权在迁移之前，由maintenance_drain.ps1的render-schema-role渲染，不在这里。
 GRANT SELECT,UPDATE ON {{AUTHORITY_SCHEMA}}.`route_meta` TO {{REGISTRAR_ACCOUNT}};

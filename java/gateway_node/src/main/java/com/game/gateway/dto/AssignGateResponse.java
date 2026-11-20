@@ -20,6 +20,9 @@ public class AssignGateResponse {
     private int code;
     private String gateIp;
     private int gatePort;
+    // 同一台 gate 给小游戏客户端(微信 / 抖音)的 WebSocket 地址;JSON 里是 gate_ws_url,gate 不接小游戏时不出现。
+    // 小游戏客户端连它,原生客户端仍连 gate_ip / gate_port。
+    private String gateWsUrl;
     private byte[] tokenPayload;
     private byte[] tokenSignature;
     private long tokenDeadline;
@@ -103,6 +106,9 @@ public class AssignGateResponse {
 
     public int getGatePort() { return gatePort; }
     public void setGatePort(int gatePort) { this.gatePort = gatePort; }
+
+    public String getGateWsUrl() { return gateWsUrl; }
+    public void setGateWsUrl(String gateWsUrl) { this.gateWsUrl = gateWsUrl; }
 
     public byte[] getTokenPayload() { return tokenPayload; }
     public void setTokenPayload(byte[] tokenPayload) { this.tokenPayload = tokenPayload; }

@@ -19,8 +19,12 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
+#include <ranges>
 #include <string>
 #include <system_error>
+
+#include <google/protobuf/unknown_field_set.h>
 
 #include "combat/buff/comp/buff_comp.h"
 #include "combat/buff/constants/buff.h"
@@ -38,6 +42,7 @@
 #include "table/code/buff_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
+#include "time/system/time.h"
 #include <node_config_manager.h>
 
 namespace
@@ -68,6 +73,13 @@ constexpr uint32_t kOtherNoCasterBonusOwner = 9021;
 constexpr uint32_t kNextAttackDispelledByChild = 9022;
 constexpr uint32_t kPermanentSilence = 9026;
 constexpr uint32_t kHealthRegenerationByLevel = 9027;  // 按已损气血回血(buff_type 42),每跳回已损气血的 level%
+// 下线保留(keep_on_logout=1)的夹具行,BuffKeepOnLogoutTest 用。
+constexpr uint32_t kKeptTimed = 9030;             // 600 秒、max_layer=3
+constexpr uint32_t kKeptPermanent = 9031;         // 永久
+constexpr uint32_t kIdleOwnerOfKeptChild = 9032;  // 不保留的脱战父,加成子项是 9031
+constexpr uint32_t kKeptImmuneToKeptTag = 9033;   // 免疫 kept_blocked 标签
+constexpr uint32_t kKeptWithBlockedTag = 9034;    // 带 kept_blocked 标签
+constexpr uint64_t kKeptTimedDurationMs = 600000;
 constexpr int kManySubBuffCount = 16;
 
 // buff_type 一律显式写:缺省 0 是 kBuffTypeMovementSpeedReduction,会顺带去标记属性重算。
@@ -107,6 +119,11 @@ std::string FixtureBuffTableJson()
 		R"({"id":9022,"buff_type":36,"duration":-1,"tag":{"combat_idle":true},"sub_buff":[9017]},)"
 		R"({"id":9026,"buff_type":31,"duration":-1,"max_layer":1},)"
 		R"({"id":9027,"buff_type":42,"duration":0,"infinite_duration":1,"interval":1,"health_regeneration":"level*health/100"},)"
+		R"({"id":9030,"buff_type":10,"duration":600,"max_layer":3,"keep_on_logout":1},)"
+		R"({"id":9031,"buff_type":10,"duration":-1,"keep_on_logout":1},)"
+		R"({"id":9032,"buff_type":43,"duration":-1,"interval":1,"combat_idle_seconds":5,"sub_buff":[9031]},)"
+		R"({"id":9033,"buff_type":10,"duration":-1,"keep_on_logout":1,"immune_tag":{"kept_blocked":true}},)"
+		R"({"id":9034,"buff_type":10,"duration":-1,"keep_on_logout":1,"tag":{"kept_blocked":true}},)"
 		R"({"id":9007,"buff_type":10,"duration":-1,"immune_tag":{"blocked":true}},)"
 		R"({"id":9008,"buff_type":10,"duration":-1,"tag":{"blocked":true}})"
 		R"(]})";
@@ -808,6 +825,196 @@ TEST_F(BuffHealthRegenerationLevelTest, PlayerWithoutLevelIsNotHealedWhileANonPl
 	EXPECT_EQ(0u, HealOnce(player)) << "玩家缺等级组件,这一跳不回血";
 	EXPECT_EQ(kHealth, tlsEcs.actorRegistry.get<BaseAttributesComp>(player).health());
 	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "读路径不补建持久组件";
+}
+
+// ---------------------------------------------------------------------------
+// 下线保留的 Buff(docs/design/realtime-cooldown-buff-persistence.md):存档写出、加载恢复、叠层不看施法者。
+// 时间只在调用前后各读一次 UTC 毫秒夹出区间,不等待真实时间。没有 EventLoop 时到期定时器不挂、条目照样在列表里;
+// expireAtMs 与定时器在同一处设置,不依赖定时器挂没挂上。
+// ---------------------------------------------------------------------------
+class BuffKeepOnLogoutTest : public BuffTableFixture
+{
+protected:
+	static SavedBuffComp Saved(uint32_t buffTableId, uint32_t layer, uint64_t expireAtMs)
+	{
+		SavedBuffComp saved;
+		saved.set_buff_table_id(buffTableId);
+		saved.set_layer(layer);
+		saved.set_expire_at_ms(expireAtMs);
+		return saved;
+	}
+
+	// 等同加载:存档条目挂成暂存组件,再走 InitPlayerFromAllData 里的恢复入口。
+	static void Restore(entt::entity actor, std::initializer_list<SavedBuffComp> records)
+	{
+		auto& pending = tlsEcs.actorRegistry.emplace<SavedBuffsPendingComp>(actor);
+		for (const auto& record : records)
+		{
+			*pending.buffs.Add() = record;
+		}
+		BuffSystem::RestoreSavedBuffs(actor);
+	}
+
+	static const BuffEntry* FindByTable(entt::entity actor, uint32_t buffTableId)
+	{
+		const auto* list = tlsEcs.actorRegistry.try_get<BuffListComp>(actor);
+		if (list == nullptr)
+		{
+			return nullptr;
+		}
+		for (const auto& entry : *list | std::views::values)
+		{
+			if (entry.buffPb.buff_table_id() == buffTableId)
+			{
+				return &entry;
+			}
+		}
+		return nullptr;
+	}
+};
+
+// 只写保留的行,按 buff_id 排序;有时限的写到期时刻,永久的写 0;存盘不改实体。
+TEST_F(BuffKeepOnLogoutTest, SaveWritesOnlyKeptBuffsInIdOrder)
+{
+	const auto actor = tlsEcs.actorRegistry.create();
+	AddBuffOrFail(actor, kFiniteDuration);
+	const uint64_t before = TimeSystem::NowMillisecondsUTC();
+	const auto timedId = AddBuffOrFail(actor, kKeptTimed);
+	const uint64_t after = TimeSystem::NowMillisecondsUTC();
+	const auto permanentId = AddBuffOrFail(actor, kKeptPermanent);
+	ASSERT_LT(timedId, permanentId) << "夹具前提:先挂的条目号小";
+
+	google::protobuf::RepeatedPtrField<SavedBuffComp> out;
+	ASSERT_TRUE(BuffSystem::SaveKeptBuffs(actor, out));
+	ASSERT_EQ(2, out.size()) << "不保留的行不写";
+	EXPECT_EQ(kKeptTimed, out[0].buff_table_id());
+	EXPECT_EQ(1u, out[0].layer());
+	EXPECT_GE(out[0].expire_at_ms(), before + kKeptTimedDurationMs);
+	EXPECT_LE(out[0].expire_at_ms(), after + kKeptTimedDurationMs);
+	EXPECT_EQ(kKeptPermanent, out[1].buff_table_id());
+	EXPECT_EQ(0u, out[1].expire_at_ms()) << "永久 Buff 不记到期时刻";
+	EXPECT_EQ(3u, tlsEcs.actorRegistry.get<BuffListComp>(actor).size()) << "存盘只读";
+}
+
+// 子项由父项负责:保留的行作为脱战加成挂上时不单独写,免得恢复出没人撤销的孤儿。
+TEST_F(BuffKeepOnLogoutTest, KeptSubBuffIsLeftToItsOwner)
+{
+	const auto actor = tlsEcs.actorRegistry.create();
+	const auto ownerId = AddBuffOrFail(actor, kIdleOwnerOfKeptChild);
+	GrantBonusOrFail(actor, ownerId);
+	ASSERT_NE(nullptr, FindByTable(actor, kKeptPermanent)) << "夹具前提:加成子项是保留的行";
+
+	google::protobuf::RepeatedPtrField<SavedBuffComp> out;
+	ASSERT_TRUE(BuffSystem::SaveKeptBuffs(actor, out));
+	EXPECT_EQ(0, out.size());
+}
+
+// 恢复按存档的到期时刻接着走(不是从头再算一个整时长),层数夹到 [1, max_layer],没有施法者,暂存组件摘掉;
+// 有 EventLoop 时有时限的挂到期定时器,永久的不挂。
+TEST_F(BuffKeepOnLogoutTest, RestoreContinuesFromSavedExpiryWithClampedLayer)
+{
+	muduo::net::EventLoop loop;
+	const auto actor = tlsEcs.actorRegistry.create();
+	const uint64_t before = TimeSystem::NowMillisecondsUTC();
+	const uint64_t expireAt = before + 120000;
+	Restore(actor, {Saved(kKeptTimed, 5, expireAt), Saved(kKeptPermanent, 0, 0)});
+	const uint64_t after = TimeSystem::NowMillisecondsUTC();
+
+	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<SavedBuffsPendingComp>(actor));
+	ASSERT_EQ(2u, tlsEcs.actorRegistry.get<BuffListComp>(actor).size());
+	const auto* timed = FindByTable(actor, kKeptTimed);
+	ASSERT_NE(nullptr, timed);
+	EXPECT_EQ(3u, timed->buffPb.layer());
+	EXPECT_EQ(kNoBuffCaster, timed->buffPb.caster());
+	EXPECT_GE(timed->expireAtMs, expireAt);
+	EXPECT_LE(timed->expireAtMs, expireAt + (after - before));
+	EXPECT_TRUE(timed->expireTimerTaskComp.IsActive());
+	const auto* permanent = FindByTable(actor, kKeptPermanent);
+	ASSERT_NE(nullptr, permanent);
+	EXPECT_EQ(1u, permanent->buffPb.layer());
+	EXPECT_EQ(0u, permanent->expireAtMs);
+	EXPECT_FALSE(permanent->expireTimerTaskComp.IsActive());
+	tlsEcs.actorRegistry.clear(); // 定时器要在 loop 析构之前取消
+}
+
+// 按加载时的表裁剪:到期的、表里没有的、表改成不保留的丢弃(全丢时不挂空表);
+// 剩余时长不超过表里的整时长;存档时永久、表改成有时限的从现在起算一个整时长。
+TEST_F(BuffKeepOnLogoutTest, RestoreTrimsByTheTableAtLoadTime)
+{
+	const auto dropped = tlsEcs.actorRegistry.create();
+	Restore(dropped, {Saved(kKeptTimed, 1, 1), Saved(123456, 1, 0), Saved(kFiniteDuration, 1, 0)});
+	EXPECT_FALSE((tlsEcs.actorRegistry.any_of<BuffListComp, SavedBuffsPendingComp>(dropped)));
+
+	const auto capped = tlsEcs.actorRegistry.create();
+	const auto wasPermanent = tlsEcs.actorRegistry.create();
+	const uint64_t before = TimeSystem::NowMillisecondsUTC();
+	Restore(capped, {Saved(kKeptTimed, 1, before + 36000000)}); // 写盘节点时钟超前:看上去还剩 10 小时
+	Restore(wasPermanent, {Saved(kKeptTimed, 1, 0)});
+	const uint64_t after = TimeSystem::NowMillisecondsUTC();
+	for (const auto actor : {capped, wasPermanent})
+	{
+		const auto* entry = FindByTable(actor, kKeptTimed);
+		ASSERT_NE(nullptr, entry);
+		EXPECT_GE(entry->expireAtMs, before + kKeptTimedDurationMs);
+		EXPECT_LE(entry->expireAtMs, after + kKeptTimedDurationMs);
+	}
+}
+
+// 恢复不重跑准入:正常施加会被免疫挡住的组合,存档里两条都活着,恢复后两条都在。
+TEST_F(BuffKeepOnLogoutTest, RestoreDoesNotRerunAdmissionChecks)
+{
+	const auto applied = tlsEcs.actorRegistry.create();
+	AddBuffOrFail(applied, kKeptImmuneToKeptTag);
+	EXPECT_NE(kSuccess, std::get<0>(BuffSystem::AddOrUpdateBuff(applied, kKeptWithBlockedTag))) << "夹具前提:免疫生效";
+
+	const auto restored = tlsEcs.actorRegistry.create();
+	Restore(restored, {Saved(kKeptImmuneToKeptTag, 1, 0), Saved(kKeptWithBlockedTag, 1, 0)});
+	EXPECT_NE(nullptr, FindByTable(restored, kKeptImmuneToKeptTag));
+	EXPECT_NE(nullptr, FindByTable(restored, kKeptWithBlockedTag));
+}
+
+// 保留的行不按施法者分条:别人再施加、系统再施加,都叠到恢复出来的那一条上。
+TEST_F(BuffKeepOnLogoutTest, KeptBuffStacksOntoRestoredEntryRegardlessOfCaster)
+{
+	const auto actor = tlsEcs.actorRegistry.create();
+	Restore(actor, {Saved(kKeptTimed, 1, TimeSystem::NowMillisecondsUTC() + 60000)});
+	const auto caster = tlsEcs.actorRegistry.create();
+
+	const auto [byCaster, casterEntryId] = BuffSystem::AddOrUpdateBuff(actor, kKeptTimed, ContextFromCaster(caster));
+	EXPECT_EQ(kSuccess, byCaster);
+	EXPECT_EQ(UINT64_MAX, casterEntryId) << "叠层,不另起一条";
+	const auto [bySystem, systemEntryId] = BuffSystem::AddOrUpdateBuff(actor, kKeptTimed);
+	EXPECT_EQ(kSuccess, bySystem);
+	EXPECT_EQ(UINT64_MAX, systemEntryId);
+
+	const auto& list = tlsEcs.actorRegistry.get<BuffListComp>(actor);
+	ASSERT_EQ(1u, list.size());
+	EXPECT_EQ(3u, list.begin()->second.buffPb.layer());
+}
+
+// 更新版本加的 SavedBuffComp 字段:恢复没跑到时原样写回;恢复之后随条目带回,存盘再并回去。
+TEST_F(BuffKeepOnLogoutTest, RecordsKeepNewerFieldsAcrossRestoreAndSave)
+{
+	constexpr int kNewerField = 412346;
+	auto record = Saved(kKeptPermanent, 1, 0);
+	record.GetReflection()->MutableUnknownFields(&record)->AddVarint(kNewerField, 77);
+
+	const auto pendingOnly = tlsEcs.actorRegistry.create();
+	*tlsEcs.actorRegistry.emplace<SavedBuffsPendingComp>(pendingOnly).buffs.Add() = record;
+	google::protobuf::RepeatedPtrField<SavedBuffComp> out;
+	ASSERT_TRUE(BuffSystem::SaveKeptBuffs(pendingOnly, out));
+	ASSERT_EQ(1, out.size());
+	EXPECT_EQ(record.SerializeAsString(), out[0].SerializeAsString());
+
+	const auto restored = tlsEcs.actorRegistry.create();
+	Restore(restored, {record});
+	out.Clear();
+	ASSERT_TRUE(BuffSystem::SaveKeptBuffs(restored, out));
+	ASSERT_EQ(1, out.size());
+	const auto& unknown = out[0].GetReflection()->GetUnknownFields(out[0]);
+	ASSERT_EQ(1, unknown.field_count());
+	EXPECT_EQ(kNewerField, unknown.field(0).number());
+	EXPECT_EQ(77u, unknown.field(0).varint());
 }
 
 int main(int argc, char **argv)

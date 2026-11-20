@@ -272,7 +272,12 @@ func changefeedBroken(state string) bool {
 
 // get 向 TiCDC 查一次这个 changefeed,回 HTTP 状态码和响应体。
 func (r *ticdcReplication) get(ctx context.Context) (int, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.api+"/api/v2/changefeeds/"+url.PathEscape(r.changefeed), nil)
+	return r.request(ctx, "/api/v2/changefeeds/"+url.PathEscape(r.changefeed))
+}
+
+// request 向 TiCDC 的 OpenAPI 发一次 GET,回 HTTP 状态码和响应体。
+func (r *ticdcReplication) request(ctx context.Context, path string) (int, []byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.api+path, nil)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -319,11 +324,29 @@ func (r *ticdcReplication) detail(ctx context.Context) (changefeedDetail, error)
 	return d, nil
 }
 
+// requireHealthy 核 TiCDC 这时候说「没有这个 changefeed」算不算数。查 changefeed 答的是 owner 内存里的那一份:
+// owner 刚接任、还没把 changefeed 装进去,或者集群里各节点版本不一致(滚动升级到一半)时,还在的 changefeed 它也答「没有」。
+// 这两种情况 /api/v2/health 都报不健康(tiflow owner 的 isHealthy)。
+func (r *ticdcReplication) requireHealthy(ctx context.Context) error {
+	status, _, err := r.request(ctx, "/api/v2/health")
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("TiCDC does not report healthy (GET /api/v2/health: HTTP %d): while its owner is starting or its nodes run mixed versions it answers \"not exists\" for changefeeds that are still there. Re-run when it is healthy", status)
+	}
+	return nil
+}
+
 // StillExists 见 feedPresence。只认 TiCDC 明确的回答:查到了就是还在,不看状态(暂停、出错的 changefeed 一恢复就接着复制);
 // 回「没有这个 changefeed」的错误码才是撤掉了。别的回答都算查不成,包括光秃秃的 404:地址写错碰到别的 HTTP 服务也是 404。
 func (r *ticdcReplication) StillExists(ctx context.Context, feed dbplacement.FeedIdentity) (bool, string, error) {
 	if feed.Changefeed != r.changefeed {
 		return false, "", refusedf("-sync names changefeed %s, but this move verified changefeed %q: pass the -sync that cutover used", r.changefeed, feed.Changefeed)
+	}
+	// 先问健康再问 changefeed,顺序不能反:要的是 owner 的视图完整之后给出的回答。
+	if err := r.requireHealthy(ctx); err != nil {
+		return false, "", err
 	}
 	status, body, err := r.get(ctx)
 	switch {

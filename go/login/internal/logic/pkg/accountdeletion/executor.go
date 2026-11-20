@@ -6,6 +6,7 @@ import (
 
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/generated/pb/table"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
@@ -15,8 +16,8 @@ import (
 // 或租约过期的执行中),对每个账号:吊销令牌 → 读角色 → 逐名踢线并走现有的删角(RemoveAccountRoles,两阶段、可重放)
 // → 角色全删完让目录收尾(删账号行、写回执)。哪一步没成就留到下一轮,不补偿:认领之后状态已不可撤销,只会前滚。
 //
-// 删角回挂起(ErrConflict)多半是在途的资产指令、组队、观战,会自己结束;一直结束不了(冷静期里被转成帮主等)由
-// data_service 的逾期 gauge 告警,运维按日志里的角色号处理。
+// 删角回挂起(ErrConflict)多半是角色还在场景里(踢线后按正常登出收尾,持有节点存盘释放要几秒)或在途的资产指令、组队、观战,
+// 会自己结束;一直结束不了由 data_service 的逾期 gauge 告警,运维按日志里的角色号处理。帮主不挡执行:删角收尾自动让位或解散。
 
 // ClaimBatch 是一轮认领的账号数。
 const ClaimBatch = 8
@@ -111,7 +112,7 @@ func (s *Service) execute(ctx context.Context, account string) stepResult {
 
 // removeRole 踢线并删一名角色,回这名角色是否已经删掉。
 func (s *Service) removeRole(ctx context.Context, account string, player uint64) bool {
-	if err := s.Sessions.KickPlayer(ctx, player); err != nil {
+	if err := s.Sessions.KickPlayer(ctx, player, uint32(table.LoginError_kLoginAccountDeletionInProgress)); err != nil {
 		logx.WithContext(ctx).Infof("[account-deletion] executor kick failed: player=%d err=%v", player, err)
 	}
 	owned, err := s.Dir.Lookup(ctx, player)

@@ -70,13 +70,14 @@ gate 持私钥，login 与在线域服务只持公钥，持公钥签不出名（
   - 入口准入（§9.2）四个 reason：`incomplete_identity` 是客户端驱动的（离场后仍发在线请求、绑定事件未到时抢发），稳态应接近 0；`client_without_session`（内部进程不带会话调客户端方法）、`internal_with_session`（带会话调内部方法）、`unverified_session`（会话头没有验签原件，即拦截器装配顺序错）都意味着代码缺陷或伪造，应恒 0。
   - 归属预检（§9.3，guild / match / trade）两个 reason：`ownership_changed` 是角色已不归这份原身份（过户、删角之后旧连接还在发请求；guild 还包括冻结），客户端驱动，稳态接近 0；`ownership_unverified` 是这一次判不了（目录读不到、库故障），持续非 0 先查 data_service 与本库。
 - `loginsession_renew_total{result}`（login）：gate 代发的续租（§10.4）。`renewed` 是续上了；`restored` 是登录态已经过期、这次按绑定记录重建的（续租曾连续失败超过一个寿命，只在故障恢复后出现，login 同时逐条打一行 INFO）；`gone` 是已没有可续的记录（离开游戏或断线清理之后迟到的续租），随玩家行为变化，不是故障；`error` 是登录域 Redis 故障。稳态下 `restored` 与 `error` 都应为 0。
-- gate 每分钟打一行 `[LoginRenewal] summary …`（排入、发出、续上、已无记录、失败、在途数）；失败数比上一分钟增加时另打一行 WARN。续租一直失败时，连接本身不受影响，只是登录态继续倒计时，过期后这条连接不再计入设备上限。
+- gate 每分钟打一行 `[LoginRenewal] summary …`（排入、发出、续上、已无记录、失败、在途数，以及断线通知的各项计数与待送达条数）；续租失败数比上一分钟增加时另打一行 WARN。续租一直失败时，连接本身不受影响，只是登录态继续倒计时，过期后这条连接不再计入设备上限。
+- 断线通知（§10.4，gate）：`gate_login_disconnect_pending` 是待送达（含在途）的条数，稳态接近 0，持续上涨说明 login、player_locator 或路由服一直失败；`gate_login_disconnect_total{result}` 的 result 取 queued / sent / retried / delivered / failed / not_sent / overdue / dropped，`overdue`（满一分钟没确认）与 `dropped`（表满拒收）稳态应为 0。日志前缀 `[LoginDisconnect]`：满一分钟没确认、表满拒收各打 ERROR（带 player_id），重发后送达打 INFO，拆除前还有没确认的打 WARN。
 - login 自己的 `login_caller_auth_total{result,mode}` 与 `login_caller_auth_nonce_overflow_total` 不变。
 
 ## 6. 水平扩展
 
 - 验签是本进程 CPU（一次 SHA-256 + 一次 Ed25519 验签，每次数十微秒量级，以 `BenchmarkPublicKeysVerify` 实测为准），不访问任何存储；在线服务加副本不增加 login Redis 的连接数，也不给登录域加读负载。入口的归属预检另算：guild、match、trade 每个带原身份的客户端请求按主键读一次本库护栏副本（不加锁、不开事务），副本缺行、落后或冻结时才读一次目录（§9.3）；friend 原先为每个客户端请求开一个写事务核原件后回滚，与业务事务里的核查重复，2026-11-06 删除，每个请求少一次写事务。
-- 续租（§10.4）的负载与在线连接数成正比、与请求量无关：每条连接每三分之一寿命一次，缺省 30 分钟寿命下 10 万在线约每秒 170 次。login 每次一段 Lua（登录态与会话栅栏按连接分布，同槽）加设备集的登记（按账号分布，另一个槽），都是单槽命令，上 Redis Cluster 不需要跨槽事务。每个 gate 进程每秒最多发 200 个、在途不超过 400 个，login 变慢时不会堆积。
+- 续租（§10.4）的负载与在线连接数成正比、与请求量无关：每条连接每三分之一寿命一次，缺省 30 分钟寿命下 10 万在线约每秒 170 次。login 每次一段 Lua（登录态与会话栅栏按连接分布，同槽）加设备集的登记（按账号分布，另一个槽），都是单槽命令，上 Redis Cluster 不需要跨槽事务。每个 gate 进程每秒最多发 200 个、在途不超过 400 个（与断线通知合计），login 变慢时不会堆积。
 - 路由服无状态透传；gate 只持本进程连接的身份，扩 gate 不需要共享会话存储。
 - 角色归属的强一致由各逻辑库自己的 `role_fence` 提交锁保证，不依赖跨库 SQL 或集中目录查询。
 
@@ -91,7 +92,7 @@ gate 持私钥，login 与在线域服务只持公钥，持公钥签不出名（
    - 两项是否真的生效，由集群实测脚本 `tools/scripts/k8s_netpol_probe.ps1` 在部署好的集群上直接连一遍确认：名单里的调用方连得上、名单之外的连不上，加密逐节点核对（§10.2、§10.3）。kind 上的实测配置是 `deploy/k8s/kind-netpol-config.yaml`（Calico）。
    - 还剩：dev 档与本机启动不强制这两项，只用公开的测试密钥，不承载真实玩家；白名单之内的进程（gate、路由服、登记的内部调用方）被攻破后仍能在窗口内跨副本重放自己经手的请求，这一面靠缩小白名单约束，不在签名上加层（§9.5）。
 2. **撤销不是跨服务原子的**：踢线 / 离场之前已经受理的请求按各业务契约完成或拒绝；冻结、过户的正确性由提交点护栏保证，不靠异步踢线消息。这是设计如此，不是待修的缺口（§10.5）。过户、删角之后旧连接的只读请求由入口归属预检拒绝（§9.3）。
-3. **设备上限按在线连接计数**（§10.4 已改）：原先 `login_session` 是绝对 TTL、没有在线续期，在线超过寿命的连接不再计入 `MaxDevicesPerAccount`。现在 gate 为活连接定期续租，连接在、登录态与设备集成员就在；连接断开或 gate 崩溃后不再续租，最长一个寿命后过期。续租连续失败超过一个寿命（登录域 Redis 或 login 长时间不可用）时登录态会过期；已经进了游戏的连接，恢复后的第一次续租按 login 自己在绑定时留的账号副本重建登录态并重新登记设备，又计入上限（§10.4）。重建只认 login 自己的记录，不信 gate 自报的账号（§1）。还剩：没进游戏（还在选角）的连接没有绑定记录，登录态过期后无从重建，这段时间它不计入上限，客户端下一步操作会被要求重新登录。只影响设备上限，不影响身份与资产。
+3. **设备上限按在线连接计数**（§10.4 已改）：原先 `login_session` 是绝对 TTL、没有在线续期，在线超过寿命的连接不再计入 `MaxDevicesPerAccount`。现在 gate 为活连接定期续租，连接在、登录态与设备集成员就在；连接断开后由断线通知删掉（gate 持有这条通知、login 确认之前一直重发，2026-11-19 起，§10.4）；gate 崩溃后没人续租也没人通知，最长一个寿命后过期。续租连续失败超过一个寿命（登录域 Redis 或 login 长时间不可用）时登录态会过期；已经进了游戏的连接，恢复后的第一次续租按 login 自己在绑定时留的账号副本重建登录态并重新登记设备，又计入上限（§10.4）。重建只认 login 自己的记录，不信 gate 自报的账号（§1）。还剩：没进游戏（还在选角）的连接没有绑定记录，登录态过期后无从重建，这段时间它不计入上限，客户端下一步操作会被要求重新登录。只影响设备上限，不影响身份与资产。
 4. **一把对称钥，持钥即可冒充 gate**（2026-11-11 批 1 已改，未编译，§10.1）：
    - 原问题：gate、login 与 7 个在线服务（chat / friend / guild / match / mail / trade / rank）共用同一把 HMAC 密钥 `MMORPG_INTERNAL_AUTH_SECRET`，任何持钥进程被攻破，都能以 gate 身份为任意玩家签名，去调其他在线服务。
    - 现在：gate 用 Ed25519 私钥签名，验证方只持公钥、签不出名，只剩 gate 本身被攻破这一面，这一面任何方案都绕不开。
@@ -332,9 +333,9 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
 
 ### 10.4 批 4：在线连接续租登录态（§7.3；2026-11-12 落码，未编译）
 
-寿命本来只是「连接断了、Disconnect 又没送到」时的回收兜底，不该比活着的连接先到期。做法是连接活着期间由 gate 定期替它续租；连接没了就没人续，记录按寿命过期。
+寿命本来只是「Disconnect 送不到」时的回收兜底，不该比活着的连接先到期。做法是连接活着期间由 gate 定期替它续租；连接关了由 gate 把 Disconnect 送到 login 确认为止（2026-11-19 起，见下面「断线通知」）；只有 gate 进程没了才既没人续、也没人通知，记录按寿命过期。
 
-- **协议**：`ClientPlayerLogin.RenewSession`（SERVER_ONLY，请求体为空）。只有 gate 合成：连接身份走签名的 `SessionDetails`，路由模式经路由服、直连模式直发 login，与 gate 代发的断线通知、迁移要票同一个出口（`SendGateSynthesizedLoginRequest`）。客户端发来这个消息号在 gate 入口就被拒（`login_admission::IsGateSynthesizedOnly`）。应答两个字段：`renewed`，以及 `renew_after_seconds`（下一次续租的间隔）。
+- **协议**：`ClientPlayerLogin.RenewSession`（SERVER_ONLY，请求体为空）。只有 gate 合成：连接身份走签名的 `SessionDetails`，路由模式经路由服、直连模式直发 login，与 gate 代发的断线通知、迁移要票同一个出口（`SendGateSynthesizedLoginRequestWithDetails`；连接还在的两类经 `SendGateSynthesizedLoginRequest` 按会话此刻的状态构造身份）。客户端发来这个消息号在 gate 入口就被拒（`login_admission::IsGateSynthesizedOnly`）。应答两个字段：`renewed`，以及 `renew_after_seconds`（下一次续租的间隔）。
 - **寿命只在 login 配**：间隔由 login 按 `SessionExpireMin` 的三分之一给出，gate 不另配寿命，两边不会配岔。三分之一意味着连续失败两次之后登录态仍在。
 - **login 做什么**（`loginsession.Renew`，两步都只动单槽的键）：
   1. 一段 Lua（`sessionfence.Renew`）：会话栅栏标了 `closed` 就什么都不写；否则给还在的 `login_session` 续期，栅栏已绑定角色时把它续到绑定寿命。「连接没关」的检查和续期在同一段脚本里，断线清理之后迟到的续租复活不了登录态。
@@ -346,15 +347,27 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
     - 副本是 login 自己写的，不取 gate 带来的账号，登录态仍然只来自一次真实的 Login。
     - 删登录态的只有断线与离开游戏两条路径，它们都先关掉重建的来源：断线先把栅栏标成 `closed`，离开游戏先解除绑定。所以重建只会把「按寿命过期、连接还在游戏里」的登录态原样恢复，复活不了被断线或离场清掉的。
     - 没绑定角色的连接（还在选角）没有副本，登录态过期就是没有可续的。
-- **gate 做什么**（`gate_login_renewal`，只在 gate 的事件循环线程上跑）：
+- **gate 做什么**（`gate_login_renewal`，只在 gate 的事件循环线程上跑；它负责 gate 这一侧「login 那条按连接记录」的整个生命周期，连接活着时续租，连接关了送达 Disconnect）：
   - 一条连接收到成功的 Login 回包时排一次续租，下一拍发出；第一次续租同时向 login 取间隔。
-  - 到期项放在一个按到期时刻排序的最小堆里，每秒一拍，没有到期项时只做一次堆顶比较。每拍最多发 200 个、在途不超过 400 个：login 故障恢复后所有连接同时到期时按这个速率摊开，5 万条连接约 4 分钟补完，远小于间隔留下的余量。
+  - 到期项放在一个按到期时刻排序的最小堆里，每秒一拍，没有到期项时只做一次堆顶比较。每拍最多发 200 个、在途不超过 400 个（续租与断线通知合计）：login 故障恢复后所有连接同时到期时按这个速率摊开，5 万条连接约 4 分钟补完，远小于间隔留下的余量。
   - 间隔夹在 5 秒到 24 小时之间，再按会话号提前至多五分之一，开服时成批登录的连接不会每个周期都在同一秒续租。
   - 应答 `renewed`：按间隔排下一次。应答 `renewed=false`：停止，直到这条连接再次登录成功；在途期间又登录成功过的，立刻再问一次。调用失败或没发出：30 秒后重试。
-  - 连接断开不用通知这个模块：到期项按会话号与会话代次核对，对不上就丢弃。回调只带会话号与代次，不持有连接（AGENTS.md §11.7）。
+  - 连接断开后续租随之作废：到期项按会话号与会话代次核对，对不上就丢弃。回调只带会话号与代次，不持有连接（AGENTS.md §11.7）。
+- **断线通知**（2026-11-19 落码，未编译、未测试，待 Codex 验证；至少送达一次，[断线重连原则](infra-reconnect-overview.md) §1.2、§1.3）：Disconnect 是 login 关会话栅栏、清登录态、给 player_locator 会话挂断线租约的唯一入口，player_locator 的会话键没有 TTL，以前 gate 只发一次、发完就删本地会话，丢一次玩家就一直停在 ONLINE。现在：
+  - 断开回调把这条连接转成一条待送达的通知交给本模块，带断线当下序列化好的 `SessionDetails`（含会话代次），按会话代次记一条；本拍预算有余量就当场发出，否则排到下一拍。
+  - login 回成功才移出。调用失败、login 回错误（路由模式下是带 tip 的信封）、没发出（直连模式挑不到 login、路由模式挑不到路由服或缺通道）、结果未知，都在退避之后原样重发，不限次数：1 秒起翻倍、封顶 30 秒，乘 0.8～1.2 的系数；系数由会话代次与次数算出，同一时刻失败的一批通知各退各的。每拍先发到期的断线通知、再发续租。
+  - login 只在关栅栏与每个要收尾的玩家的 `SetDisconnecting` 都成功之后才回成功，任何一步失败回 `Unavailable`，自己不重试（重试只有 gate 一层）。重放安全：栅栏 `Close` 重放返回同一个绑定的玩家，清登录态按连接身份删键，`SetDisconnecting` 对已是 DISCONNECTING 的会话不延长租约。
+  - 待送达表上限 131071 条（一个 gate 进程的会话号空间，也是连接数的硬上限，满表约 40 MB）。满了新来的不入表，打带 player_id 的 ERROR 并计数；待送达满一分钟仍没确认的打一次 ERROR（带 player_id）；重发后送达打一行 INFO。
+  - 停机关源时不停这一拍：排空期间照样重发；拆除前还没确认的随进程退出，由 player_locator 的死 gate 清扫补投 DISCONNECTING，拆除前 gate 打一行剩余条数。
+  - player_locator 按会话代次认断线（2026-11-19 落码，未生成协议、未编译、未测试，待 Codex 验证）：重发让旧连接的通知可以迟到任意久，同一个 gate 进程里会话号又每 131072 次建连回绕一圈。只按会话号与 gate 实例认会话时，玩家恰好在同号新连接上重新登录、旧连接的通知这时才送达，就会把新会话转成 DISCONNECTING，30 秒后被踢。现在：
+    - 会话记录 `PlayerSession.session_incarnation` 记写下它的那条连接的会话代次：首登、顶号经 `SetSession` 带上，短线重连经 `ReconnectRequest.session_incarnation` 带上，都按请求如实写，不从旧记录继承（请求为 0 就写 0）。
+    - `SetDisconnectingRequest.session_incarnation` 带发起断线的那条连接的代次：Disconnect 取会话头的；栅栏里绑定、会话头没有的玩家来自同一条连接，用同一个；入场链的补偿取本链连接的。
+    - 规则同实例号：请求与记录的代次都非 0 且不等，判为同号旧连接迟到的上报，忽略并回成功（gate 随之移出这条通知），记录一个字节都不改；任一方为 0（旧版 login 写入或发出）不比较，照旧按会话号与实例号处理。判定落在 GET 到的同一份字节上，与随后的整字节 CAS 之间没有窗口。
+    - 被忽略时 player_locator 打一行 Info（带两边的代次），不单设指标：要会话号回绕再加上同号重登才会出现。
+    - 混跑时 login 不能先于 player_locator 升级：旧版 player_locator 处理 Reconnect 时会把旧记录里它不认识的代次字段原样留下，记录就带着旧连接的代次，升级之后这条会话自己的断线会被忽略。项目未上线，两者同批上线，不留这个窗口。
 - **失败时的后果**：续租失败不影响在线玩家的任何请求。连续失败超过一个寿命时登录态过期，这段时间里这条连接不计入设备数；故障恢复后，已在游戏里的连接由下一次续租重建并重新计数，还在选角的连接要重新登录（§7.3）。
 - **水平扩展**：每个 gate 只续自己的连接，gate 之间没有共享状态；login 无状态，任何副本都能受理。负载估算见 §6。
-- **观测**：login 的 `loginsession_renew_total{result}`；gate 每分钟一行 `[LoginRenewal] summary`（§5）。
+- **观测**：login 的 `loginsession_renew_total{result}`；gate 每分钟一行 `[LoginRenewal] summary`，断线通知另有 `gate_login_disconnect_pending` 与 `gate_login_disconnect_total{result}`（§5）。
 - **与发布的关系**：login 的 goctl 包装（`clientplayerloginserver.go`）是生成物。协议生成之后要再跑 `go/build.ps1` 把 `RenewSession` 接到 `renewsessionlogic.go`，否则 login 回 `Unimplemented`，gate 每 30 秒重试、登录态照旧按寿命过期。项目未上线，gate 与 login 同批上线，不留混跑窗口。
 
 ### 10.5 §7.2 不改的理由

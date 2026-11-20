@@ -110,6 +110,22 @@ func LoadOperatorPermission(getenv func(string) string) (Permission, error) {
 	p := Operator(getenv("MMORPG_SQL_OPERATOR_PRINCIPAL"))
 	return p, p.validate()
 }
+
+// RepairPrincipalEnv 是修复身份所在的环境变量。修复身份只给直接改业务行的数据修复工具(data_service 的
+// cmd/create_residual、cmd/admission_recover)用,与 runtime / registrar / maintenance / schema 都不是同一个账号:
+// 维护身份能冻结、解冻、改闸门行,修复身份只能读写这两个工具要碰的业务表,闸门行只读(负责人 2026-11-19 定)。
+// 授权由 tools/scripts/maintenance_drain.ps1 的 render-repair-role 生成。
+const RepairPrincipalEnv = "MMORPG_SQL_REPAIR_PRINCIPAL"
+
+// LoadRepairPermission 读修复身份。权限形状与维护身份相同(Operator:连上之后核 CURRENT_USER 等于声明的主体),
+// 能写什么全看库里给它的 GRANT。
+func LoadRepairPermission(getenv func(string) string) (Permission, error) {
+	if getenv == nil {
+		return Permission{}, errors.New("缺少SQL repair主体装配")
+	}
+	p := Operator(getenv(RepairPrincipalEnv))
+	return p, p.validate()
+}
 func (c WriterConfig) AuthoritySchema() string {
 	if c.boot == nil {
 		return ""

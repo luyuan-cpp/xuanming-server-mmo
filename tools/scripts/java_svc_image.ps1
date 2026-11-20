@@ -105,6 +105,9 @@ $BuildTime = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH':'mm':'ss'Z'", [System
 # 列了只会在 mvn package 阶段炸,不如让 zone-up 在拉镜像时明确报 ImagePullBackOff。
 $Catalogue = [ordered]@{
     gateway = @{ Dir = "gateway_node"; ImageName = "mmorpg-gateway" }
+    # 官方商城 mall(java/mall_game):与 k8s_deploy.ps1 $JavaSvcCatalogue 的 mall 条目配对(ImageName 必须一致)。
+    # 同一个 reactor,`-pl mall_game -am` 连 authority_jdbc 一起构建;镜像入口与 gateway 相同(Dockerfile.java-svc)。
+    mall    = @{ Dir = "mall_game";    ImageName = "mmorpg-mall" }
 }
 
 function Get-ImageFullName {

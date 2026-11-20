@@ -12,6 +12,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	rankpb "proto/rank"
 	"rank/internal/metrics"
+	"shared/assetop"
+	"shared/authoritysql"
 	"shared/mailgrant"
 	"shared/serviceauth"
 )
@@ -57,40 +59,16 @@ func scanBoard(row scanner) (*rankpb.RankBoardRecord, error) {
 	return b, err
 }
 
+// tx 跑一笔可整笔重跑的排行榜事务。骨架是 assetop.WithTxRetry(READ COMMITTED、最多 3 次、指数退避带抖动、可取消;
+// R6 残余,原来这里退避不带抖动)。提交结果未知不自动重做业务。
 func (r *Repo) tx(ctx context.Context, fn func(*sql.Tx) error) error {
-	for attempt := 0; attempt < 3; attempt++ {
-		tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-		if err != nil {
-			return err
-		}
-		err = fn(tx)
-		if err == nil {
-			err = tx.Commit()
-			return err
-		} // 提交结果未知不自动重做业务。
-		_ = tx.Rollback()
-		if !retryableTxError(err) || attempt == 2 {
-			return err
-		}
-		timer := time.NewTimer(time.Duration(attempt+1) * 15 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
-		}
-	}
-	return ErrConflict
+	return assetop.WithTxRetry(ctx, r.db, 3, retryableTxError, fn)
 }
 
-// retryableTxError:整笔回滚之后原样重做是安全的失败。死锁(1213)与锁等待超时(1205)由库判;errScoreInsertRace 是
-// 别的片的批次抢先插入了同一个实体,重做时它已是已有行,会被锁住再合并。
+// retryableTxError:整笔回滚之后原样重做是安全的失败。库报的那几类(1213 / 1205 / 9007 与守卫判定的提交前中止)由全仓唯一的
+// authoritysql.IsRetryableTxError 判;errScoreInsertRace 是别的片的批次抢先插入了同一个实体,重做时它已是已有行,会被锁住再合并。
 func retryableTxError(err error) bool {
-	if errors.Is(err, errScoreInsertRace) {
-		return true
-	}
-	var mysqlErr *mysql.MySQLError
-	return errors.As(err, &mysqlErr) && (mysqlErr.Number == 1213 || mysqlErr.Number == 1205)
+	return errors.Is(err, errScoreInsertRace) || authoritysql.IsRetryableTxError(err)
 }
 
 func validBoard(b *rankpb.RankBoardKey) bool {

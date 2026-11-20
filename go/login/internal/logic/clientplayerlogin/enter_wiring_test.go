@@ -19,6 +19,7 @@ import (
 	"login/internal/logic/pkg/loginsession"
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/sessionfence"
+	"login/internal/logic/pkg/sessionmanager"
 	"login/internal/svc"
 	pbbase "proto/common/base"
 	dbpb "proto/common/database"
@@ -35,8 +36,9 @@ const (
 // 之后 SetSession 回错误,链停在 gate 绑定 / scene_manager 之前。
 
 const (
-	enterWiringAccount   = "acct-enter-wiring"
-	enterWiringSessionID = uint32(5151)
+	enterWiringAccount     = "acct-enter-wiring"
+	enterWiringSessionID   = uint32(5151)
+	enterWiringIncarnation = uint64(1)
 )
 
 // enterWiringLocator 是 player_locator 的假客户端,只实现入场链在这段路上会碰的 RPC(GetSession /
@@ -93,11 +95,14 @@ func newEnterWiringHarness(t *testing.T, players []*pbbase.AccountSimplePlayer, 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
+	// 用例结束时恢复,别的用例不得靠这里留下的全局配置(AGENTS.md §11.4)。
+	previous := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = previous })
 	config.AppConfig.Node.SessionExpireMin = 30
 	config.AppConfig.Locker.PlayerLockTTL = 120
 	config.AppConfig.Account.CacheExpire = time.Hour
 
-	details := &pbbase.SessionDetails{SessionId: enterWiringSessionID, GateInstanceId: "gate-enter-wiring", SessionIncarnation: 1}
+	details := &pbbase.SessionDetails{SessionId: enterWiringSessionID, GateInstanceId: "gate-enter-wiring", SessionIncarnation: enterWiringIncarnation}
 	ctx := ctxkeys.WithSessionDetails(context.Background(), details)
 	seedLoginSession(t, ctx, rdb, details, enterWiringAccount)
 	accountBlob, err := proto.Marshal(&dbpb.UserAccounts{
@@ -149,4 +154,25 @@ func (h *enterWiringHarness) waitChain(t *testing.T) {
 	if err := h.pool.ReleaseTimeout(5 * time.Second); err != nil {
 		t.Fatalf("async enter chain did not finish: %v", err)
 	}
+}
+
+// 写会话记录的两条路都要带本连接的会话代次(docs/design/gate-online-identity.md §10.4「断线通知」):首登 / 顶号走 SetSession,
+// 短线重连走 Reconnect。带丢了记录就是 0,player_locator 不再比代次,同号旧连接迟到的断线又能把新会话转成 DISCONNECTING。
+// wiringPlayers / wiringRecord / runEnterGame 见 entergame_login_generation_test.go。
+func TestEnterGame_SessionIncarnationReachesTheSessionRecord(t *testing.T) {
+	t.Run("set session", func(t *testing.T) {
+		h := newEnterWiringHarness(t, wiringPlayers(), nil)
+		h.runEnterGame(t)
+		if got := h.locator.lastSetSession.Load().GetSession().GetSessionIncarnation(); got != enterWiringIncarnation {
+			t.Fatalf("SetSession session_incarnation = %d, want the connection's %d", got, enterWiringIncarnation)
+		}
+	})
+	t.Run("reconnect", func(t *testing.T) {
+		h := newEnterWiringHarness(t, wiringPlayers(), nil)
+		h.locator.existing = wiringRecord(sessionmanager.StateDisconnecting)
+		h.runEnterGame(t)
+		if got := h.locator.lastReconnect.Load().GetSessionIncarnation(); got != enterWiringIncarnation {
+			t.Fatalf("ReconnectRequest.session_incarnation = %d, want the connection's %d", got, enterWiringIncarnation)
+		}
+	})
 }

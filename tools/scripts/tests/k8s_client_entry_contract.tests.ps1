@@ -676,6 +676,95 @@ Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共
     }
 }
 
+Test-Case '库:小游戏 WebSocket 基地址 —— PodCommon 给了才写 CLIENT_WS_BASE_URL,三个生成器都写;不给或空串时逐字不变;形状不对在渲染时 throw' {
+    # gate / battle 据它自报 NodeInfo.client_ws_url = <基地址>/<PodIP>/<端口>(docs/design/minigame-websocket-gate.md W7);不写 = 不接小游戏。
+    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; LogVolumeSizeLimit = '2Gi' }
+    $plain = New-ClientEntryPodCommon @commonArgs
+    $emptyUrl = New-ClientEntryPodCommon @commonArgs -ClientWsBaseUrl ''
+    $withUrl = New-ClientEntryPodCommon @commonArgs -ClientWsBaseUrl 'wss://ws.example.com/ws'
+    $renderers = @(
+        @{ Name = 'gate StatefulSet'; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
+        @{ Name = 'battle Fleet'; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode external -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
+        @{ Name = 'battle hostPort'; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
+    )
+    foreach ($r in $renderers) {
+        $plainDoc = ConvertTo-LfText (& $r.Render $plain)
+        $urlDoc = ConvertTo-LfText (& $r.Render $withUrl)
+        Assert-True -Condition ($plainDoc -ceq (ConvertTo-LfText (& $r.Render $emptyUrl))) -Because "$($r.Name):空串与不传逐字相同(没配边缘时生成物不变,不触发滚动)"
+        Assert-NotMatch -Text $plainDoc -Pattern 'CLIENT_WS_BASE_URL' -Because "$($r.Name):不传时不写"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($urlDoc, '(?m)^[ ]+- name: CLIENT_WS_BASE_URL\n[ ]+value: "wss://ws\.example\.com/ws"$').Count) -Because "$($r.Name):给了就原样写一份"
+    }
+    Assert-Equal -Expected 'CLIENT_WS_BASE_URL' -Actual (Get-ClientEntryContract).ClientWsBaseUrlEnv -Because 'env 名的唯一真相在库契约里'
+    $cppHeader = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'cpp' 'libs' 'engine' 'core' 'node' 'system' 'node' 'client_endpoint.h')
+    Assert-Match -Text $cppHeader -Pattern 'kEnvWsBaseUrl\[\] = "CLIENT_WS_BASE_URL"' -Because 'env 名与 C++ client_endpoint.h kEnvWsBaseUrl 一致(跨文件一致)'
+
+    # 形状与 C++ client_endpoint::ParseWsBaseUrl 同口径:那边不合法即拒绝启动,所以不能渲染出去。
+    foreach ($bad in @('https://ws.example.com/ws', 'ws.example.com/ws', 'wss://', 'wss://ws.example.com/ws?zone=1', 'wss://$(WS_EDGE_HOST)/ws', 'wss://ws example.com')) {
+        $err = $null
+        try { New-GateStatefulSetYaml -PodCommon (New-ClientEntryPodCommon @commonArgs -ClientWsBaseUrl $bad) -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys | Out-Null } catch { $err = $_.Exception.Message }
+        Assert-Match -Text $err -Pattern 'PodCommon\.ClientWsBaseUrl must look like wss://host' -Because "'$bad':渲染时 throw"
+    }
+}
+
+Test-Case '库:ws-edge —— nginx 终止 TLS,只按路径转到 Pod 网段里的 gate / battle 客户端口,其余拒绝;egress 只许连这两类 Pod;配置指纹进 Pod 模板' {
+    $edgeArgs = @{ EdgeHost = 'ws.example.com'; TlsSecretName = 'ws-edge-tls'; PodCidrs = @('10.244.0.0/16', '10.245.0.0/16'); TargetPorts = @(20000, 18000); TargetApps = @('gate', 'battle', 'battle-canary'); Image = 'registry.invalid/test/nginx:1.28.0' }
+    $edge = ConvertTo-LfText (New-WsEdgeYaml @edgeArgs)
+    $contract = Get-ClientEntryContract
+    Assert-Equal -Expected 'ConfigMap,Deployment,Service,NetworkPolicy' -Actual (([regex]::Matches($edge, '(?m)^kind: (\S+)$') | ForEach-Object { $_.Groups[1].Value }) -join ',') -Because '四份清单,ConfigMap 排在挂它的 Deployment 之前'
+    Assert-Equal -Expected '/ws' -Actual $contract.WsEdgePathPrefix -Because '路径前缀的唯一真相在库契约里,k8s_deploy.ps1 拼基地址用的是同一个'
+
+    # nginx.conf:TLS 在这里终止;路径里的地址要在 Pod 网段内、端口要是 gate / battle 的客户端口,否则 403 / 404(不是开放代理)。
+    foreach ($literal in @(
+        'listen 443 ssl;', 'server_name ws.example.com;', 'ssl_certificate /etc/nginx/tls/tls.crt;', 'ssl_certificate_key /etc/nginx/tls/tls.key;',
+        'location ~ ^/ws/(?<ws_target_ip>\d+\.\d+\.\d+\.\d+)/(?<ws_target_port>18000|20000)$ {',
+        'proxy_pass http://$ws_target_ip:$ws_target_port;', 'proxy_http_version 1.1;', 'proxy_set_header Upgrade $http_upgrade;', 'proxy_set_header Connection "upgrade";',
+        'proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;', 'proxy_read_timeout 120s;'
+    )) {
+        Assert-Match -Text $edge -Pattern ('(?m)^[ ]+' + [regex]::Escape($literal) + '$') -Because "nginx.conf 必须有这一行:$literal"
+    }
+    Assert-Match -Text $edge -Pattern 'geo \$ws_target_ip \$ws_target_allowed \{\s+default 0;\s+10\.244\.0\.0/16 1;\s+10\.245\.0\.0/16 1;\s+\}' -Because '只有 Pod 网段里的地址才放行,缺省拒绝'
+    Assert-Match -Text $edge -Pattern 'if \(\$ws_target_allowed = 0\) \{\s+return 403;\s+\}' -Because '网段外的目标回 403'
+    Assert-Match -Text $edge -Pattern 'location / \{\s+return 404;\s+\}' -Because '其余路径一律 404'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($edge, 'proxy_pass ').Count) -Because '只有这一条转发规则'
+
+    # Deployment:逐个替换;证书来自预置的 Secret;配置指纹进 Pod 模板注解,配置变了才滚动。
+    foreach ($pattern in @('(?m)^  replicas: 2$', 'maxSurge: 1\s+maxUnavailable: 0', '(?m)^          image: registry\.invalid/test/nginx:1\.28\.0$', 'secretName: ws-edge-tls', 'configMap:\s+name: ws-edge-config', 'subPath: nginx\.conf')) {
+        Assert-Match -Text $edge -Pattern $pattern -Because 'ws-edge Deployment 的形态'
+    }
+    $hashPattern = '(?m)^        mmorpg\.io/ws-edge-config-hash: "([0-9a-f]{64})"$'
+    Assert-Match -Text $edge -Pattern $hashPattern -Because 'nginx.conf 的 SHA-256 写进 Pod 模板注解'
+    $otherCidr = $edgeArgs.Clone()
+    $otherCidr.PodCidrs = @('10.246.0.0/16')
+    Assert-True -Condition ([regex]::Match($edge, $hashPattern).Groups[1].Value -cne [regex]::Match((ConvertTo-LfText (New-WsEdgeYaml @otherCidr)), $hashPattern).Groups[1].Value) -Because '配置变了指纹就变'
+    Assert-True -Condition ($edge -ceq (ConvertTo-LfText (New-WsEdgeYaml @edgeArgs))) -Because '同样的参数逐字相同(重复 apply 不触发滚动)'
+
+    # Service:缺省 LoadBalancer + Local;NodePort 形态可以钉端口。
+    Assert-Match -Text $edge -Pattern '(?m)^  type: LoadBalancer\n  externalTrafficPolicy: Local$' -Because '缺省 LoadBalancer,保留客户端源地址'
+    Assert-NotMatch -Text $edge -Pattern 'nodePort:' -Because 'LoadBalancer 形态不写 nodePort'
+    $nodePortEdge = ConvertTo-LfText (New-WsEdgeYaml @edgeArgs -ServiceType NodePort -NodePort 30443)
+    Assert-Match -Text $nodePortEdge -Pattern '(?m)^  type: NodePort$' -Because '自建集群用 NodePort 接在外部四层负载均衡后面'
+    Assert-Match -Text $nodePortEdge -Pattern 'targetPort: 443\n      nodePort: 30443' -Because 'NodePort 形态可以钉端口'
+
+    # NetworkPolicy:只选中 ws-edge 自己,只许连 gate / battle 的客户端口(scene 的节点口与 battle 同号,只靠端口分不开)。
+    Assert-Match -Text $edge -Pattern 'kind: NetworkPolicy\nmetadata:\n  name: ws-edge-egress\n(?s:.*)podSelector:\n    matchLabels:\n      app: ws-edge\n  policyTypes:\n    - Egress\n' -Because 'egress 策略只选中 ws-edge'
+    Assert-Match -Text $edge -Pattern 'values: \[gate, battle, battle-canary\]\n      ports:\n        - protocol: TCP\n          port: 18000\n        - protocol: TCP\n          port: 20000$' -Because '只许连这两类 Pod 的客户端口'
+
+    foreach ($bad in @(
+        @{ Why = '域名是 IP(小游戏平台不许连 IP)'; Override = @{ EdgeHost = '203.0.113.9' }; Pattern = '-EdgeHost 必须是 DNS 名' }
+        @{ Why = 'Secret 名不合法'; Override = @{ TlsSecretName = 'Bad_Name' }; Pattern = '-TlsSecretName' }
+        @{ Why = 'Pod 网段不带前缀位数'; Override = @{ PodCidrs = @('10.244.0.5') }; Pattern = '-PodCidrs' }
+        @{ Why = '端口越界'; Override = @{ TargetPorts = @(0) }; Pattern = '-TargetPorts' }
+        @{ Why = 'app 标签值不合法'; Override = @{ TargetApps = @('Gate') }; Pattern = '-TargetApps' }
+        @{ Why = 'LoadBalancer 形态给了 nodePort'; Override = @{ NodePort = 30443 }; Pattern = '-NodePort 只在 -ServiceType NodePort 下有效' }
+    )) {
+        $badArgs = $edgeArgs.Clone()
+        foreach ($key in $bad.Override.Keys) { $badArgs[$key] = $bad.Override[$key] }
+        $err = $null
+        try { New-WsEdgeYaml @badArgs | Out-Null } catch { $err = $_.Exception.Message }
+        Assert-Match -Text $err -Pattern $bad.Pattern -Because "$($bad.Why):生成时 throw,不渲染出坏清单"
+    }
+}
+
 Test-Case '库:gateway Ingress 只路由 /api(Prefix),{zone} 生成期渲染,TLS 可选;/admin 与 /actuator 不出集群' {
     $ing = ConvertTo-LfText (New-GatewayIngressYaml -IngressHost 'play.{zone}.example.com' -ZoneName 'z1' -TlsSecret 'gw-tls')
     Assert-Match -Text $ing -Pattern '(?m)^apiVersion: networking\.k8s\.io/v1$' -Because 'Ingress v1'
@@ -802,7 +891,14 @@ $PreflightCases = @(
     @{ Label = 'ClientPublicHost 带端口'; Args = @{ ClientEntryMode = 'external'; GateServiceType = 'NodePort'; ClientPublicHost = '1.2.3.4:30000' }; Errors = @('-ClientPublicHost 只能是裸主机名或 IPv4 字面量') },
     @{ Label = 'podip 下给了 ClientPublicHost'; Args = @{ ClientEntryMode = 'podip'; GateServiceType = 'NodePort'; ClientPublicHost = '127.0.0.1' }; Warnings = @('podip ignores -ClientPublicHost / -GateClientHostTemplate') },
     @{ Label = '非 dev 档开 -LoginDevPasswordAuth'; Args = @{ ClientEntryMode = 'podip'; GateServiceType = 'NodePort'; LoginDevPasswordAuth = $true; ReleaseProfile = 'staging' }; Errors = @('-LoginDevPasswordAuth 只允许 -ReleaseProfile dev\(当前 staging\)') },
-    @{ Label = 'dev 档开 -LoginDevPasswordAuth'; Args = @{ ClientEntryMode = 'podip'; GateServiceType = 'NodePort'; LoginDevPasswordAuth = $true; ReleaseProfile = 'dev' } }
+    @{ Label = 'dev 档开 -LoginDevPasswordAuth'; Args = @{ ClientEntryMode = 'podip'; GateServiceType = 'NodePort'; LoginDevPasswordAuth = $true; ReleaseProfile = 'dev' } },
+    # 小游戏 WebSocket 边缘(docs/design/minigame-websocket-gate.md W8):域名一给 gate / battle 就下发经它转发的地址,建不起来或转不过去的组合全部拦住。
+    @{ Label = 'WebSocket 边缘:external 配齐域名、TLS Secret 与 Pod 网段'; Args = @{ ClientEntryMode = 'external'; GateServiceType = 'NodePort'; WsEdgeHost = 'ws.example.com'; WsEdgeTlsSecret = 'ws-edge-tls'; WsEdgePodCidrs = '10.244.0.0/16, 10.245.0.0/16' } },
+    @{ Label = 'WebSocket 边缘配在 podip 上'; Args = @{ ClientEntryMode = 'podip'; GateServiceType = 'NodePort'; WsEdgeHost = 'ws.example.com'; WsEdgeTlsSecret = 'ws-edge-tls'; WsEdgePodCidrs = '10.244.0.0/16' }; Errors = @('-WsEdgeHost 要求 -ClientEntryMode external') },
+    @{ Label = 'WebSocket 边缘缺 TLS Secret 与 Pod 网段'; Args = @{ ClientEntryMode = 'external'; GateServiceType = 'NodePort'; WsEdgeHost = 'ws.example.com' }; Errors = @('却没有 -WsEdgeTlsSecret', '却没有 -WsEdgePodCidrs') },
+    @{ Label = 'WebSocket 边缘域名是 IP'; Args = @{ ClientEntryMode = 'external'; GateServiceType = 'NodePort'; WsEdgeHost = '203.0.113.9'; WsEdgeTlsSecret = 'ws-edge-tls'; WsEdgePodCidrs = '10.244.0.0/16' }; Errors = @('-WsEdgeHost 必须是 DNS 名') },
+    @{ Label = 'WebSocket 边缘的 Pod 网段不是带前缀位数的 IPv4 CIDR'; Args = @{ ClientEntryMode = 'external'; GateServiceType = 'NodePort'; WsEdgeHost = 'ws.example.com'; WsEdgeTlsSecret = 'ws-edge-tls'; WsEdgePodCidrs = '10.244.0.0/16,10.244.0.5,fd00::/64,10.300.0.0/16' }; Errors = @('-WsEdgePodCidrs 含不合法的项:10\.244\.0\.5, fd00::/64, 10\.300\.0\.0/16') },
+    @{ Label = '没给 WebSocket 边缘域名却给了它的 TLS Secret'; Args = @{ ClientEntryMode = 'external'; GateServiceType = 'NodePort'; WsEdgeTlsSecret = 'ws-edge-tls' }; Warnings = @('WebSocket edge is not deployed') }
 )
 
 foreach ($case in $PreflightCases) {
@@ -1334,6 +1430,47 @@ Test-Case '端到端 infra-up external + deployment:battle 是 hostPort Deployme
     Assert-Match -Text $out -Pattern "\[dry-run\] kubectl delete fleets\.agones\.dev battle -n $TestInfraNs --ignore-not-found" -Because '切回 Deployment 要删 Fleet 形态'
     Assert-Match -Text $out -Pattern "rollout status deployment/battle -n $TestInfraNs" -Because 'Deployment 形态照常等 rollout'
     Assert-NotMatch -Text $battle -Pattern $D92Pattern -Because 'D92:新生成器只写 RPC_PORT'
+}
+
+# 小游戏 WebSocket 边缘(-WsEdge*,docs/design/minigame-websocket-gate.md W7、W8):zone-up 的 gate 与 infra-up 的 battle 都带上基地址,
+# ws-edge 本身只由 infra-up 生成。
+$WsEdgeArgs = @('-WsEdgeHost', 'ws.example.com', '-WsEdgeTlsSecret', 'ws-edge-tls', '-WsEdgePodCidrs', '10.244.0.0/16')
+$WsEdgeZoneRun = Invoke-EntryDryRun -Arguments ($ZoneUpArgs + @('-SkipGoSvc', '-SkipJavaSvc') + $ExternalArgs + $WsEdgeArgs)
+$WsEdgeInfraRun = Invoke-EntryDryRun -Arguments ($InfraUpArgs + @('-BattleOrchestrator', 'agones', '-ClientEntryMode', 'external', '-ClientPublicHost', '127.0.0.1') + $WsEdgeArgs) -Env $BattleTestEnv
+
+Test-Case '端到端 -WsEdgeHost:gate 与 battle 带 CLIENT_WS_BASE_URL=wss://<域名>/ws;ws-edge 只由 infra-up 生成、排在 battle 之后,TLS Secret 在写操作之前核对' {
+    Assert-Equal -Expected 0 -Actual $WsEdgeZoneRun.ExitCode -Because "带 -WsEdgeHost 的 external zone-up 的 DryRun 必须成功。输出: $($WsEdgeZoneRun.Output)"
+    $sts = Select-ManifestDoc -Output $WsEdgeZoneRun.Output -Kind 'StatefulSet' -Name 'gate'
+    Assert-True -Condition ($null -ne $sts) -Because 'external 的 gate 是 StatefulSet'
+    Assert-Equal -Expected 'wss://ws.example.com/ws' -Actual (Get-EnvLiteral -Text (Get-MainContainerSection -Doc $sts) -Name 'CLIENT_WS_BASE_URL') -Because 'gate 据它自报 client_ws_url = <基地址>/<PodIP>/<端口>'
+    Assert-True -Condition ($null -eq (Select-ManifestDoc -Output $WsEdgeZoneRun.Output -Kind 'Deployment' -Name 'ws-edge')) -Because 'ws-edge 是全局的一份,zone-up 不生成'
+
+    Assert-Equal -Expected 0 -Actual $WsEdgeInfraRun.ExitCode -Because "带 -WsEdgeHost 的 infra-up 的 DryRun 必须成功。输出: $($WsEdgeInfraRun.Output)"
+    $out = $WsEdgeInfraRun.Output
+    $fleet = Select-ManifestDoc -Output $out -Kind 'Fleet' -Name 'battle'
+    Assert-True -Condition ($null -ne $fleet) -Because '-BattleOrchestrator agones 生成 battle Fleet'
+    Assert-Equal -Expected 'wss://ws.example.com/ws' -Actual (Get-EnvLiteral -Text (Get-MainContainerSection -Doc $fleet) -Name 'CLIENT_WS_BASE_URL') -Because 'battle 与 gate 用同一个基地址,边缘按同一条规则转发'
+    foreach ($doc in @(@('ConfigMap', 'ws-edge-config'), @('Deployment', 'ws-edge'), @('Service', 'ws-edge'), @('NetworkPolicy', 'ws-edge-egress'))) {
+        Assert-True -Condition ($null -ne (Select-ManifestDoc -Output $out -Kind $doc[0] -Name $doc[1])) -Because "infra-up 生成 $($doc[0]) $($doc[1])"
+    }
+    $edgeConfig = Select-ManifestDoc -Output $out -Kind 'ConfigMap' -Name 'ws-edge-config'
+    Assert-Match -Text $edgeConfig -Pattern ([regex]::Escape('location ~ ^/ws/(?<ws_target_ip>\d+\.\d+\.\d+\.\d+)/(?<ws_target_port>18000|20000)$ {')) -Because '转发路径的前缀与基地址相同;目标端口 = gate(18000)与 battle(20000)的客户端口'
+    Assert-Match -Text $edgeConfig -Pattern '(?m)^\s+10\.244\.0\.0/16 1;$' -Because '只转到 -WsEdgePodCidrs 里的地址'
+    Assert-Equal -Expected '18000' -Actual (Get-EnvLiteral -Text (Get-MainContainerSection -Doc $sts) -Name 'RPC_PORT') -Because 'gate 的客户端口与边缘放行的端口同源'
+    Assert-Equal -Expected '20000' -Actual (Get-EnvLiteral -Text (Get-MainContainerSection -Doc $fleet) -Name 'RPC_PORT') -Because 'battle 的客户端口与边缘放行的端口同源'
+    Assert-Match -Text (Select-ManifestDoc -Output $out -Kind 'NetworkPolicy' -Name 'ws-edge-egress') -Pattern 'values: \[gate, battle, battle-canary\]' -Because 'egress 只许连 gate 与 battle(含金丝雀池)'
+    Assert-Match -Text (Select-ManifestDoc -Output $out -Kind 'Deployment' -Name 'ws-edge') -Pattern 'secretName: ws-edge-tls' -Because '证书来自预置的 Secret,部署脚本不经手内容'
+    Assert-Match -Text $out -Pattern "\[dry-run\] would check that TLS Secret ws-edge-tls exists in namespace $TestInfraNs" -Because 'TLS Secret 缺了要在任何写操作之前拒绝(DryRun 只打说明)'
+    Assert-True -Condition ((Get-ManifestDocIndex -Output $out -Kind 'Fleet' -Name 'battle') -lt (Get-ManifestDocIndex -Output $out -Kind 'Deployment' -Name 'ws-edge')) -Because 'ws-edge 排在 battle 之后 apply'
+
+    foreach ($run in @($ExternalRun, $FleetExternalRun)) {
+        Assert-NotMatch -Text $run.Output -Pattern 'CLIENT_WS_BASE_URL|ws-edge' -Because '没给 -WsEdgeHost:gate / battle 不带基地址,也不生成 ws-edge(生成物与加这组参数之前相同)'
+    }
+}
+
+Test-Case '端到端负向 -WsEdgeHost:podip、缺 TLS Secret 与 Pod 网段,一次报全并在任何 kubectl 之前拒绝' {
+    $run = Invoke-EntryDryRun -Arguments ($InfraUpArgs + @('-WsEdgeHost', 'ws.example.com')) -Env $BattleTestEnv
+    Assert-RefusedBeforeAnyKubectl -Run $run -Label 'podip 上只给了域名' -Patterns @('集群外入口预检失败\(3 项\)', '-WsEdgeHost 要求 -ClientEntryMode external', '却没有 -WsEdgeTlsSecret', '却没有 -WsEdgePodCidrs')
 }
 
 Test-Case '全部 DryRun 输出:gRPC 口从不进 hostPort / nodePort / Agones ports,不开 hostNetwork;新生成器的工作负载不出现 D92 身份 env' {
@@ -1868,7 +2005,10 @@ function Invoke-Wrapper {
 # 三条包装链都必须透传的键。RequireClientEndpoint:k8s_image 链路只参与 k8s_deploy 的组合预检(k8s_image.ps1 对此告警);
 # AllowDisruptiveSwitch:会踢人的切换只能由调用方显式确认,包装层漏传 = 维护窗口里切不过去。钉进清单,删掉任一处透传即红。
 $ClientEntryWrapperKeys = @('ClientEntryMode', 'ClientPublicHost', 'GateClientHostTemplate', 'GateNodePortBase', 'GateExternalTrafficPolicy', 'BattleOrchestrator',
-    'RequireClientEndpoint', 'AllowDisruptiveSwitch')
+    'RequireClientEndpoint', 'AllowDisruptiveSwitch',
+    # 小游戏 WebSocket 边缘:不粘滞,包装层漏传 = 经它发布之后 gate / battle 不再自报 WebSocket 地址(k8s_deploy.ps1 按集群现状拒绝,
+    # 但包装入口得能把参数传下去才过得了那道闸);ws-edge 的副本数、Service 形态同理,漏传会被改回默认值。
+    'WsEdgeHost', 'WsEdgeTlsSecret', 'WsEdgePodCidrs', 'WsEdgeReplicas', 'WsEdgeServiceType', 'WsEdgeNodePort', 'WsEdgeImage')
 # 共享 Redis 按用途拆实例的 -RedisSplit 系列参数随 queue / ctl 单实例在缺口第 34 条第 6b 批退役(控制域上了 redis-control),包装链不再透传。
 # 玩家域与控制两套 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例(玩家域)或不建集群(控制)。
 $PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage',
@@ -1882,8 +2022,10 @@ $WrapperPairs = @(
             'LoginWeChatAppId', 'LoginWeChatEndpoint', 'LoginWeChatAllowOpenId', 'LoginQQAppId', 'LoginQQEndpoint', 'LoginQQAllowOpenId', 'ConfirmLoginAuthProviderChange',
             # 小游戏登录(微信小游戏 / 抖音小游戏)的六个参数,口径同上。
             'LoginWeChatMiniGameAppId', 'LoginWeChatMiniGameEndpoint', 'LoginWeChatMiniGameAllowOpenId', 'LoginDouyinMiniGameAppId', 'LoginDouyinMiniGameEndpoint', 'LoginDouyinMiniGameAllowOpenId',
-            # Apple / Google 登录的四个参数,口径同上。
-            'LoginAppleClientId', 'LoginAppleEndpoint', 'LoginGoogleClientId', 'LoginGoogleEndpoint',
+            # Apple / Google 登录的四个参数与注销时撤销 Apple 令牌的两个,口径同上。
+            'LoginAppleClientId', 'LoginAppleEndpoint', 'LoginGoogleClientId', 'LoginGoogleEndpoint', 'LoginAppleTeamId', 'LoginAppleKeyId',
+            # 实名与防沉迷的六个参数,口径同上(漏传 = 重新部署时关掉或改掉线上的防沉迷)。
+            'LoginNppaAppId', 'LoginNppaBizId', 'LoginAntiAddictionExtraPlayDays', 'LoginNppaCheckUrl', 'LoginNppaQueryUrl', 'LoginNppaLoginoutUrl',
             # B0-4 nofile 豁免开关:不粘滞,包装入口漏传 = 以 warn 运行的环境经包装入口重新部署时落回 enforce、硬限不够即拒启。
             # 其后 + 拼上 k8s-redis-wipe 的确认开关(只走这一条包装链)与两套 Redis Cluster、逻辑库的键。
             # 用 + 拼接而不写进本逗号列表:逗号比 + 结合得紧,会变成嵌套数组。
@@ -1920,6 +2062,11 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
         LoginWeChatMiniGameAppId = 'String'; LoginWeChatMiniGameEndpoint = 'String'; LoginWeChatMiniGameAllowOpenId = 'SwitchParameter'
         LoginDouyinMiniGameAppId = 'String'; LoginDouyinMiniGameEndpoint = 'String'; LoginDouyinMiniGameAllowOpenId = 'SwitchParameter'
         LoginAppleClientId = 'String'; LoginAppleEndpoint = 'String'; LoginGoogleClientId = 'String'; LoginGoogleEndpoint = 'String'
+        LoginAppleTeamId = 'String'; LoginAppleKeyId = 'String'
+        LoginNppaAppId = 'String'; LoginNppaBizId = 'String'; LoginAntiAddictionExtraPlayDays = 'String'; LoginNppaCheckUrl = 'String'
+        LoginNppaQueryUrl = 'String'; LoginNppaLoginoutUrl = 'String'
+        WsEdgeHost = 'String'; WsEdgeTlsSecret = 'String'; WsEdgePodCidrs = 'String'; WsEdgeReplicas = 'Int32'; WsEdgeServiceType = 'String'
+        WsEdgeNodePort = 'Int32'; WsEdgeImage = 'String'
     }
     foreach ($name in $expected.Keys) {
         Assert-Equal -Expected $expected[$name] -Actual $types[$name] -Because "k8s_deploy.ps1 -$name 的类型(GatewayTrustedProxies 为逗号分隔字符串,开关类为 switch)"

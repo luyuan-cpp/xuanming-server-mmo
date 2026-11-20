@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"shared/authoritysql"
 	"shared/drainproof"
 	"time"
 
@@ -380,7 +381,7 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 
 	var alloc assetop.Alloc
 	// 事务 B:业务写。它只对 seq 表做普通读确认 + 升序 FOR UPDATE,一行都不建。
-	txErr := assetop.WithTxRetry(ctx, p.ops.DB(), 2, data.IsRetryableTxError, func(tx *sql.Tx) error {
+	txErr := assetop.WithTxRetry(ctx, p.ops.DB(), 2, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		// 每次重试都重新分配:上一次尝试的 seq 随事务一起回滚了,复用会写出空洞。
 		allocs, err := p.ops.AllocateSeqsTx(ctx, tx, p.nowMs(), sellerKey)
 		if err != nil {

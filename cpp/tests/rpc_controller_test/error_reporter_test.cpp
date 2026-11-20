@@ -8,6 +8,8 @@
 
 #include "core/tracing/trace_context.h"
 #include "error_reporter/error_reporter.h"
+#include "metrics/metrics_registry.h"
+#include "metrics/prometheus_text.h"
 #include "thread_context/trace_context_tls.h"
 
 // error_reporter 的事件带日志上下文(docs/design/distributed-tracing.md §13 第 4 条,docs/design/error-reporting.md)。
@@ -114,4 +116,37 @@ TEST(ErrorReporterRecord, OutsideAnyScopeCarriesNoContext)
 	ASSERT_EQ(events.size(), 1u);
 	EXPECT_FALSE(events[0].trace.IsValid());
 	EXPECT_EQ(events[0].player_id, 0u);
+}
+
+// 切片 B:三项计数照原值写出。容量 2 的缓冲录 3 条:总数 3,挤掉最旧的 1 条,留 2 条。
+TEST(ErrorReporterMetrics, WritesTheThreeCounters)
+{
+	error_reporter::Buffer buffer(2);
+	buffer.Record(1, "a", "m", tracing::TraceContext{}, 0);
+	buffer.Record(2, "b", "m", tracing::TraceContext{}, 0);
+	buffer.Record(3, "c", "m", tracing::TraceContext{}, 0);
+
+	prometheus_text::Writer writer;
+	error_reporter::WriteMetrics(buffer, writer);
+	const std::string &text = writer.Text();
+	EXPECT_NE(text.find("# TYPE error_reporter_events_total counter\nerror_reporter_events_total 3\n"), std::string::npos)
+		<< text;
+	EXPECT_NE(text.find("# TYPE error_reporter_dropped_events_total counter\nerror_reporter_dropped_events_total 1\n"),
+			  std::string::npos)
+		<< text;
+	EXPECT_NE(text.find("# TYPE error_reporter_buffered_events gauge\nerror_reporter_buffered_events 2\n"), std::string::npos)
+		<< text;
+	EXPECT_EQ(writer.DroppedSamples(), 0u);
+}
+
+// 登记到进程的 /metrics 页上,重复调用不出第二份。
+TEST(ErrorReporterMetrics, RegistersOnceOnTheProcessPage)
+{
+	error_reporter::RegisterMetrics();
+	error_reporter::RegisterMetrics();
+	const std::string page = GlobalMetricsRegistry().Render();
+	const std::string type = "# TYPE error_reporter_events_total counter\n";
+	const size_t first = page.find(type);
+	ASSERT_NE(first, std::string::npos) << page;
+	EXPECT_EQ(page.find(type, first + 1), std::string::npos) << "重复调用不得登记第二份";
 }

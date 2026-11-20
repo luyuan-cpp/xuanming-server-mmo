@@ -140,7 +140,10 @@ void ScenePetClientPlayerHandler::RenamePet(entt::entity player,const ::RenamePe
 	::RenamePetResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	if (const auto err = PetSystem::Rename(player, request->pet_id(), request->name()); err != kSuccess)
+	// 名字要先送内容安全服务判定(异步),所以这里回的是「已受理」:回包里的列表是改名之前的,
+	// 判定通过后改名落地并推送新列表(NotifyPetListChanged);被拒绝或服务不可用时推一条提示(SendTipToClient)。
+	// 检查没过的(名字格式、宝宝不存在、金币不够、名字没变)仍在这里当场回错误。
+	if (const auto err = PetSystem::RequestRename(player, request->pet_id(), request->name()); err != kSuccess)
 	{
 		response->mutable_error_message()->set_id(err);
 		return;

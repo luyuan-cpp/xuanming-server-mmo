@@ -47,7 +47,8 @@ func (l *GetQueueStatusLogic) GetQueueStatus(in *matchpb.GetQueueStatusRequest) 
 			return nil, status.Error(codes.InvalidArgument, "匹配请求编号无效")
 		}
 	}
-	cancelled, e := l.svcCtx.Authority.RequestCancelled(l.ctx, playerId, in.RequestId)
+	// 撤销墓碑,或请求号的原件是角色过户前的主人留下的:都按「不会再入队」回(authority.QueueRequestClosed)。
+	cancelled, e := l.svcCtx.Authority.QueueRequestClosed(l.ctx, playerId, in.RequestId)
 	if e != nil {
 		return nil, e
 	}

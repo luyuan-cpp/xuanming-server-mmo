@@ -49,7 +49,7 @@ ECS 改造交接见 [总索引](handoff/ecs-refactor/README.md);当前修正与�
 
 跨 zone 的完整节点图、源端双表 SQL ACK 交接时序、目标重登入场时序、[抵达后存盘与 go/db 选库](design/cross-zone-scene-travel.md#1551-zone-2-scene-正常存盘的完整时序)及水平扩展边界见 [跨 zone 场景传送 §15](design/cross-zone-scene-travel.md#15-跨-zone-完整节点与数据流程2026-10-20源码核对)（2026-10-20 源码核对，非本轮运行验收）。
 
-Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域留原实例、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
+Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口与后续验收要求见 [Claude Code 接手文档](handoff/redis-horizontal-scaling-requirements-20261022.md)；选定方案（玩家域 Redis Cluster 按 `{player_id}` 分片、控制域另上控制集群 `redis-control`（见 [全部 Redis 上 Cluster](design/redis-cluster-all-domains-20261110.md)）、C++ 自研路由层同 slot 停等、补投索引按 slot、Redis ≥ 8.4 原子迁移）与分批计划见 [玩家态 Redis 集群化设计](design/redis-player-store-cluster.md)（2026-10-23 v2，第 1 批已落码未编译）。
 
 全类型节点的平滑停机／缩容、水平扩展、灰度与金丝雀发布需求，及 C++/Go、独立 Java 两版的现状差距与验收口径，见 [节点生命周期与发布需求](design/node-lifecycle-elasticity-release-20261023.md)（2026-10-23，尚未完成全类型验收；§3.7 是 11-11 的逐节点核对）。scene 重启、缩容、滚动升级时把玩家疏散到别的节点的做法见 [scene 节点计划排空](design/scene-node-planned-drain.md)（2026-11-11 落码未编译）。灰度与金丝雀的选定方案（两条轨道、zone 内按 zone 灰度、会话轨道跟随 gate、全局服务金丝雀只接金丝雀会话的客户端请求、战斗按整局）与分批实施计划见 [发布轨道设计](design/release-track-gray-canary.md)（2026-11-05；批 1、2、2b、3a、3b（战斗按整局）全部已落码未编译），操作步骤见 [灰度与金丝雀发布手册](ops/release-track-canary-runbook.md)。
 
@@ -92,13 +92,13 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [k8s_gate_exposure_guidance.md](design/k8s_gate_exposure_guidance.md) — K8s Gate Exposure Guidance / K8s gate 暴露方式指南 · [EN](design/k8s_gate_exposure_guidance_en.md) · [中文](design/k8s_gate_exposure_guidance_zh.md)
 - [login-node-stateless-no-affinity.md](design/login-node-stateless-no-affinity.md) — Login Node: Stateless, No Session Affinity
 - [login-queue-2026-05.md](design/login-queue-2026-05.md) — Login Queue (AssignGate Real Queue) — 2026-05
-- [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W10,设计稿,待负责人同意文件清单)
+- [minigame-websocket-gate.md](design/minigame-websocket-gate.md) — 小游戏客户端(微信 / 抖音)经 WebSocket 连接 gate 与 battle:同端口分流、边缘 nginx 终止 TLS、节点自报 ws 地址、robot 的 WebSocket 模式(W1–W11)
 - [open-server-rate-limit-design.md](design/open-server-rate-limit-design.md) — 开服登录削峰与排队入口
 - [player-locator-gate-session-index.md](design/player-locator-gate-session-index.md) — player_locator 会话对账:按 gate 实例建会话索引(2026-10-18)
 - [player_login_flow.md](design/player_login_flow.md) — 玩家登录/断线/重连/替换登录/超时清理 — 最终态事件流 · [EN](design/player_login_flow_en.md) · [中文](design/player_login_flow_zh.md)
 - [serverlist-static-publish-2026-05.md](design/serverlist-static-publish-2026-05.md) — 区服列表：现行 Gateway 接口与静态发布提案
 - [third-party-login-end-to-end-design.md](design/third-party-login-end-to-end-design.md) — QQ / 微信第三方登录端到端联调设计
-- [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷：国家系统接口、小游戏平台分工、App 形态的服务端方案（设计稿，未落码）
+- [real-name-anti-addiction.md](design/real-name-anti-addiction.md) — 实名认证与未成年人防沉迷：国家系统接口、小游戏平台分工、App 形态的服务端方案（11-19 落码未编译；K8s 参数与充值限额闸未做）
 
 #### 场景、AOI 与分线
 
@@ -151,6 +151,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [bag-service-srp-refactor.md](design/bag-service-srp-refactor.md) — Bag → BagService SRP Refactor (2026-03-26) · [EN](design/bag-service-srp-refactor_en.md) · [中文](design/bag-service-srp-refactor_zh.md)
 - [character-appearance-identity.md](design/character-appearance-identity.md) — 人物外观身份链
 - [chat-sensitive-word-filter.md](design/chat-sensitive-word-filter.md) — Chat Sensitive-Word Filter — Design (todo.md #68)
+- [rename-and-content-safety.md](design/rename-and-content-safety.md) — 改名(角色 / 帮会)与内容安全:旧名保护期、改名流程与提交点、统一的内容安全服务、分批(2026-11-19 设计稿,未落码)
 - [equipment-attributes.md](design/equipment-attributes.md) — 装备属性系统(问道式:基础属性 + 蓝/粉/黄随机属性)
 - [equipment-eight-slot-implementation.md](design/equipment-eight-slot-implementation.md) — 八部位装备：代码接入与验证
 - [equipment-eight-slot-planning.md](design/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
@@ -251,7 +252,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [muduo-timer-cancellation-hazards.md](design/muduo-timer-cancellation-hazards.md) — muduo 定时器取消语义与野引用
 - [no-single-node-horizontal-scaling-20261001.md](design/no-single-node-horizontal-scaling-20261001.md) — 消除单节点:所有服务都能水平扩展(2026-10-01)
 - [player-handler-deferred-reply.md](design/player-handler-deferred-reply.md) — 玩家级 handler 延后完成(PlayerCallContext)
-- [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)
+- [shared-redis-split-by-purpose.md](design/shared-redis-split-by-purpose.md) — 共享 Redis 按用途拆实例(G4a 设计稿)。**历史稿**:按用途拆单主实例的路线已被[全部 Redis 上 Cluster](design/redis-cluster-all-domains-20261110.md) 取代,仍可参考与作废的部分见文件开头说明
 - [thread-count-monitoring.md](design/thread-count-monitoring.md) — Thread Count Monitoring & Control per Process · [EN](design/thread-count-monitoring_en.md) · [中文](design/thread-count-monitoring_zh.md)
 - [traffic-statistics-design.md](design/traffic-statistics-design.md) — Traffic Statistics Design
 
@@ -296,7 +297,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [client-scene-request-handoff-hold.md](design/client-scene-request-handoff-hold.md) — 换场景节点期间的玩家消息：客户端请求在 gate 暂存并按序重投（场景 lane）
 - [configurable-templates.md](design/configurable-templates.md) — 战斗策略 / 活动 / 玩法模板可配置化（含玩家自定义模板）
 - [connection-fanout-subsetting-20261106.md](design/connection-fanout-subsetting-20261106.md) — 连接与发现扇出:路由服确定性子集、每类节点只发现自己用到的(2026-11-06)
-- [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化与控制域 Redis 按 zone 组分实例(2026-11-05)
+- [control-plane-zone-scoping-20261105.md](design/control-plane-zone-scoping-20261105.md) — 控制面按 zone 化与控制域 Redis 按 zone 分片(2026-11-05;控制域进控制集群 `redis-control`,每个 zone 的键共用 `{ctl:<z>}`)
 - [data-consistency-guarantee-map-20261020.md](design/data-consistency-guarantee-map-20261020.md) — 数据一致性等级核对（2026-10-20）
 - [data-overwrite-rollback-audit-20261018.md](design/data-overwrite-rollback-audit-20261018.md) — 全仓数据问题与覆盖回档审计（2026-10-18）
 - [data-overwrite-rollback-audit-r2-20261019.md](design/data-overwrite-rollback-audit-r2-20261019.md) — 全仓数据问题与覆盖回档审计·第二轮（2026-10-19）
@@ -312,6 +313,8 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [mmo-massive-world-cell-direction.md](design/mmo-massive-world-cell-direction.md) — 万人同屏与大世界：多进程 cell 方向（以后做成实时 MMO 时才实施）
 - [player-audit-outbox.md](design/player-audit-outbox.md) — 玩家审计发件箱:审计流水与快照随存盘提交(断线重连 R13)
 - [player-connection-lost-hold.md](design/player-connection-lost-hold.md) — 玩家断线保留与短重连回原处
+- [realtime-cooldown-buff-persistence.md](design/realtime-cooldown-buff-persistence.md) — 实时技能冷却与 Buff 跨重登保留:冷却全存、Buff 按表标记存,都按 UTC 绝对时刻(2026-11-19)
+- [afk-monthly-card.md](design/afk-monthly-card.md) — 挂机月卡:获得、开通与权益落库(灵石开通、存档为事实源、Redis 只作投影)
 - [player-data-tidb-scaling-plan.md](design/player-data-tidb-scaling-plan.md) — 玩家数据只存 TiDB 与全链路水平扩展:总体方案
 - [player-save-direct-commit.md](design/player-save-direct-commit.md) — 存盘直接提交 TiDB:落码规格
 - [published-contract-compatibility-20261017.md](design/published-contract-compatibility-20261017.md) — 两套已发布客户端契约的合并兼容方案
@@ -344,7 +347,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 #### 运维手册
 
 - [audit-topic-generation-bump-runbook.md](ops/audit-topic-generation-bump-runbook.md) — 审计 topic 加分区与离线换代 Runbook(player_snapshot / transaction_log)
-- [claude-code-plugins-setup.md](ops/claude-code-plugins-setup.md) — Claude Code 插件安装（ponytail 等，新电脑照做）
+- [clock-sync-runbook.md](ops/clock-sync-runbook.md) — 时钟运维手册:节点时钟告警、服务启动时钟核对、时钟被改错的处置
 - [cross-zone-failure-test-runbook.md](ops/cross-zone-failure-test-runbook.md) — 跨 Zone 传送 / 归属交接 失败场景测试 Runbook
 - [db-move-runbook.md](ops/db-move-runbook.md) — 不停服搬逻辑库操作手册
 - [etcd-maintenance-runbook.md](ops/etcd-maintenance-runbook.md) — etcd MVCC 压缩与空间维护 Runbook
@@ -364,6 +367,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [online-debug-data-fetch.md](ops/online-debug-data-fetch.md) — 线上玩家数据拉取与本地复现
 - [open-new-region-runbook.md](ops/open-new-region-runbook.md) — 开新地域手册
 - [player-inbox-runbook.md](ops/player-inbox-runbook.md) — 玩家持久收件箱(player_inbox)运维手册
+- [ponytail-setup.md](ops/ponytail-setup.md) — ponytail 安装：Claude Code / Codex / Gemini（CLI 与桌面版，新电脑照做）
 - [redis-player-cluster-runbook.md](ops/redis-player-cluster-runbook.md) — Redis Cluster 运维手册(玩家域 redis-player、控制 redis-control)
 - [release-checklist.md](ops/release-checklist.md) — 服务端发布清单
 - [release-track-canary-runbook.md](ops/release-track-canary-runbook.md) — 灰度与金丝雀发布手册（2026-11-06）

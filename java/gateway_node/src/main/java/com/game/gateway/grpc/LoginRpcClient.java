@@ -86,6 +86,8 @@ public class LoginRpcClient {
     /** 账号注销的申请与撤销(2026-11-19,docs/design/account-deletion.md §4.2、§4.4)。 */
     private static final String METHOD_REQUEST_ACCOUNT_DELETION = PREGATE_SERVICE + "/RequestAccountDeletion";
     private static final String METHOD_CANCEL_ACCOUNT_DELETION  = PREGATE_SERVICE + "/CancelAccountDeletion";
+    /** 实名提交(2026-11-19,docs/design/real-name-anti-addiction.md §5.2)。 */
+    private static final String METHOD_SUBMIT_REAL_NAME = PREGATE_SERVICE + "/SubmitRealName";
 
     private final LoginGrpcProperties props;
     /** 每个通道都挂的出站追踪拦截器(见类注释);注册表是 NOOP 时它原样放行,不做任何事。 */
@@ -130,6 +132,7 @@ public class LoginRpcClient {
     private final MethodDescriptor<ZoneRoleCountRequestProto, ZoneRoleCountResponseProto> zoneRoleCountMethod;
     private final MethodDescriptor<AccountDeletionRequestProto, AccountDeletionResponseProto> requestAccountDeletionMethod;
     private final MethodDescriptor<CancelAccountDeletionRequestProto, AccountDeletionResponseProto> cancelAccountDeletionMethod;
+    private final MethodDescriptor<SubmitRealNameRequestProto, SubmitRealNameResponseProto> submitRealNameMethod;
 
     public LoginRpcClient(LoginGrpcProperties props, ObservationRegistry observationRegistry) {
         this.props = props;
@@ -175,6 +178,12 @@ public class LoginRpcClient {
                 .setFullMethodName(METHOD_CANCEL_ACCOUNT_DELETION)
                 .setRequestMarshaller(new CancelAccountDeletionRequestMarshaller())
                 .setResponseMarshaller(new AccountDeletionResponseMarshaller())
+                .build();
+        this.submitRealNameMethod = MethodDescriptor.<SubmitRealNameRequestProto, SubmitRealNameResponseProto>newBuilder()
+                .setType(MethodDescriptor.MethodType.UNARY)
+                .setFullMethodName(METHOD_SUBMIT_REAL_NAME)
+                .setRequestMarshaller(new SubmitRealNameRequestMarshaller())
+                .setResponseMarshaller(new SubmitRealNameResponseMarshaller())
                 .build();
     }
 
@@ -403,6 +412,14 @@ public class LoginRpcClient {
         return unaryCall(cancelAccountDeletionMethod, req, zoneId, true, false);
     }
 
+    /**
+     * 实名提交({@code LoginPreGate.SubmitRealName}):选路同 Login。不自动重试:每次提交都占账号当天的一次名额,
+     * 客户端看到失败再决定是否重提。
+     */
+    public SubmitRealNameResponseProto submitRealName(SubmitRealNameRequestProto req, int zoneId) {
+        return unaryCall(submitRealNameMethod, req, zoneId, true, false);
+    }
+
     private <Q, R> R unaryCall(
             MethodDescriptor<Q, R> method,
             Q req,
@@ -535,6 +552,8 @@ public class LoginRpcClient {
         public int     accountDeletionState;
         public long    accountDeletionExecuteAfter;
         public long    previousAccountDeletedAt;
+        /** 字段 10 AntiAddictionStatus;null = 部署没开防沉迷。 */
+        public AntiAddictionProto antiAddiction;
 
         public boolean hasError() {
             return (errorCode != null && errorCode != 0)
@@ -741,10 +760,143 @@ public class LoginRpcClient {
                 case 7 -> resp.accountDeletionState = in.readUInt32();
                 case 8 -> resp.accountDeletionExecuteAfter = in.readInt64();
                 case 9 -> resp.previousAccountDeletedAt = in.readInt64();
+                case 10 -> resp.antiAddiction = parseAntiAddiction(in);
                 default -> in.skipField(tag);
             }
         }
         return resp;
+    }
+
+    // ── 实名与防沉迷(docs/design/real-name-anti-addiction.md §5.2、§5.3)──────────────
+
+    /**
+     * proto/login/login.proto AntiAddictionStatus:
+     *   bool   real_name_required = 1;
+     *   bool   minor = 2;
+     *   uint64 play_deadline_ms = 3;
+     */
+    public static final class AntiAddictionProto {
+        public boolean realNameRequired;
+        public boolean minor;
+        public long    playDeadlineMs;
+    }
+
+    /** 读一个长度前缀的 AntiAddictionStatus;调用方已读过它的 tag。 */
+    static AntiAddictionProto parseAntiAddiction(CodedInputStream in) throws IOException {
+        AntiAddictionProto status = new AntiAddictionProto();
+        int oldLimit = in.pushLimit(in.readRawVarint32());
+        while (!in.isAtEnd()) {
+            int tag = in.readTag();
+            switch (tag >>> 3) {
+                case 1 -> status.realNameRequired = in.readBool();
+                case 2 -> status.minor = in.readBool();
+                case 3 -> status.playDeadlineMs = in.readUInt64();
+                default -> in.skipField(tag);
+            }
+        }
+        in.popLimit(oldLimit);
+        return status;
+    }
+
+    /**
+     * proto/login/login.proto SubmitRealNameRequest:
+     *   string access_token = 1;
+     *   string name = 2;
+     *   string id_number = 3;
+     * 姓名和身份证号不进日志,toString 也不带它们。
+     */
+    public static final class SubmitRealNameRequestProto {
+        public final String accessToken;
+        public final String name;
+        public final String idNumber;
+
+        public SubmitRealNameRequestProto(String accessToken, String name, String idNumber) {
+            this.accessToken = nullToEmpty(accessToken);
+            this.name        = nullToEmpty(name);
+            this.idNumber    = nullToEmpty(idNumber);
+        }
+
+        byte[] toBytes() throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(96);
+            CodedOutputStream out = CodedOutputStream.newInstance(baos);
+            if (!accessToken.isEmpty()) out.writeString(1, accessToken);
+            if (!name.isEmpty())        out.writeString(2, name);
+            if (!idNumber.isEmpty())    out.writeString(3, idNumber);
+            out.flush();
+            return baos.toByteArray();
+        }
+
+        @Override
+        public String toString() {
+            return "SubmitRealNameRequestProto[redacted]";
+        }
+    }
+
+    /**
+     * proto/login/login.proto SubmitRealNameResponse:
+     *   TipInfoMessage error_message = 1;   (id = 1)
+     *   AntiAddictionStatus anti_addiction = 2;
+     */
+    public static final class SubmitRealNameResponseProto {
+        public Integer errorCode;   // null 或 0 = 成功
+        public AntiAddictionProto antiAddiction;
+    }
+
+    static SubmitRealNameResponseProto parseSubmitRealNameResponse(byte[] bytes) throws IOException {
+        SubmitRealNameResponseProto resp = new SubmitRealNameResponseProto();
+        CodedInputStream in = CodedInputStream.newInstance(bytes);
+        while (!in.isAtEnd()) {
+            int tag = in.readTag();
+            switch (tag >>> 3) {
+                case 1 -> {
+                    int oldLimit = in.pushLimit(in.readRawVarint32());
+                    while (!in.isAtEnd()) {
+                        int subTag = in.readTag();
+                        if ((subTag >>> 3) == 1 && (subTag & 0x7) == 0) {
+                            resp.errorCode = (int) in.readInt64();
+                        } else {
+                            in.skipField(subTag);
+                        }
+                    }
+                    in.popLimit(oldLimit);
+                }
+                case 2 -> resp.antiAddiction = parseAntiAddiction(in);
+                default -> in.skipField(tag);
+            }
+        }
+        return resp;
+    }
+
+    private static final class SubmitRealNameRequestMarshaller implements MethodDescriptor.Marshaller<SubmitRealNameRequestProto> {
+        @Override
+        public InputStream stream(SubmitRealNameRequestProto value) {
+            try {
+                return new java.io.ByteArrayInputStream(value.toBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public SubmitRealNameRequestProto parse(InputStream stream) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static final class SubmitRealNameResponseMarshaller implements MethodDescriptor.Marshaller<SubmitRealNameResponseProto> {
+        @Override
+        public InputStream stream(SubmitRealNameResponseProto value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public SubmitRealNameResponseProto parse(InputStream stream) {
+            try {
+                return parseSubmitRealNameResponse(stream.readAllBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     private static RefreshTokenResponseProto parseRefreshResponse(byte[] bytes) throws IOException {
@@ -834,6 +986,8 @@ public class LoginRpcClient {
         public int    queueRank;
         public int    queueTotal;
         public int    retryAfterMs;
+        // 同一台 gate 给小游戏客户端的 WebSocket 地址(proto 字段 12);没有时为 null。
+        public String wsUrl;
     }
 
     private static final class AssignGateRequestMarshaller implements MethodDescriptor.Marshaller<AssignGateRequestProto> {
@@ -886,6 +1040,7 @@ public class LoginRpcClient {
                 case 9 -> resp.queueRank      = in.readUInt32();
                 case 10 -> resp.queueTotal    = in.readUInt32();
                 case 11 -> resp.retryAfterMs  = in.readUInt32();
+                case 12 -> resp.wsUrl         = in.readString();
                 default -> in.skipField(tag);
             }
         }
@@ -919,6 +1074,8 @@ public class LoginRpcClient {
         public int    queueTotal;
         public int    retryAfterMs;
         public String error;
+        // 同 AssignGateResponseProto.wsUrl(proto 字段 11)。
+        public String wsUrl;
     }
 
     private static final class QueryQueueStatusRequestMarshaller implements MethodDescriptor.Marshaller<QueryQueueStatusRequestProto> {
@@ -970,6 +1127,7 @@ public class LoginRpcClient {
                 case 8 -> resp.queueTotal     = in.readUInt32();
                 case 9 -> resp.retryAfterMs   = in.readUInt32();
                 case 10 -> resp.error         = in.readString();
+                case 11 -> resp.wsUrl         = in.readString();
                 default -> in.skipField(tag);
             }
         }

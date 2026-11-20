@@ -127,9 +127,9 @@ python -X utf8 -B tools/scripts/start_docker_debug.py --execute
 
 默认客户端入口为 `http://127.0.0.1:8081`，同一网关另保留 `http://127.0.0.1:18081`；gate 为 `127.0.0.1:28000`，battle 为 `127.0.0.1:28010`。可用 `--gateway-port` 调整附加 HTTP 端口、用 `--gate-port` / `--battle-port` 调整对应入口；`8081` 保留给客户端默认网关。VS Code 附加到固定名称的三个调试容器。此栈只启用登录、建角、主世界进场、战斗与全球匹配结算所需服务，未启动域的请求按现有路由契约失败。校验配置时使用 `docker compose ... config --quiet`，不要把展开后的配置与 `.env` 打印或上传。
 
-### compose.redis-cluster.yml(玩家域 Redis Cluster 本机开发版)
+### compose.redis-cluster.yml(Redis Cluster 本机开发版:玩家域,也可接控制域)
 
-3 主 3 从,8.10.x,端口 7100-7105,与 K8s 清单同一个镜像摘要。真集群验证用(设计 `docs/design/redis-player-store-cluster.md` §14.2)。开发时不需要它:不写 `PlayerRedis` / `player_redis` 就是单实例。
+3 主 3 从,8.10.x,端口 7100-7105,与 K8s 清单同一个镜像摘要。真集群验证用(设计 `docs/design/redis-player-store-cluster.md` §14.2、`docs/design/redis-cluster-all-domains-20261110.md` §9)。开发时不需要它:不写 `PlayerRedis` / `player_redis`、`ControlRedis` 的地址 / `control_redis` 就是单实例。本机只有这一套开发集群,玩家域与控制域的句柄都可以指过来(K8s 上是 `redis-player`、`redis-control` 两套;两个域的 tag 形状不同,放在一套里键不会撞)。
 
 ```powershell
 docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml up -d
@@ -143,7 +143,7 @@ docker --context desktop-linux compose -f deploy/compose.redis-cluster.yml down 
 **把本机服务指过去**,只改跑在宿主机上的那几份配置,改完重启服务:
 
 ```yaml
-# go/<服务>/etc/*.yaml 的 PlayerRedis(login、player_locator、scene_manager、match、friend、guild、trade、player_inbox、mail)
+# go/<服务>/etc/*.yaml 的 PlayerRedis(login、player_locator、scene_manager、match、friend、guild、trade、player_inbox、mail、data_service)
 PlayerRedis:
   Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
   Cluster: true
@@ -163,7 +163,33 @@ player_redis:
 
 这些改动不要提交。连上之后 login 启动横幅有 `player redis: addrs=127.0.0.1:7100,... cluster=true`,scene 日志有 `Player Redis: mode=cluster`。
 
-清库:`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`,单实例加开发集群的每个主节点(`lib/redis_local_flush.ps1`)。`FLUSHALL` 在 Cluster 里只清本节点,不要只对一个节点执行。压测快照的 target 写 `docker-cluster:redis-player-cluster-0:7100`(`stress_snap.ps1`)。
+**控制域也指过去**(验证控制集群的键形、守卫与分片唤醒),在上面的基础上再改下面这些,改完一起重启。两条前提:
+
+- 玩家域先按上面指过去,与 K8s 的配对规则(`Assert-RedisClusterPairing`:开控制集群必须同时开玩家域集群)同理。scene_manager 在 `ControlRedis` 是集群、却没写 `PlayerRedis.Addrs` 时拒启;friend、guild、trade、player_inbox、player_locator、data_service 的 `PlayerRedis` 没写地址时回落到各自的 `ControlRedis`,login 回落到 `Node.RedisClient`,mail、match 回落到各自的单实例段,C++ scene 缺 `player_redis` 时整体沿用 `control_redis`。只改一部分,玩家域就分在两处。
+- 控制域的读写方一起改:分线目录、神秘商人与归属对账(scene_manager 写、scene 读),gate 标记(login 写、scene_manager 读),落点唤醒(scene `SPUBLISH`,guild、trade、data_service 订阅),都要求两边在同一套 Redis 上。只改一部分不报错,只是读不到。
+
+```yaml
+# go/<服务>/etc/*.yaml 的 ControlRedis(login、data_service、player_locator、scene_manager、friend、trade、guild、player_inbox)。
+# 只改 Addrs、加 Cluster,PoolSizePerNode 与超时保留原值。login.yaml 里没有这一段(不写时回落 Node.RedisClient),要在顶层新加。
+# 开发集群没有口令;带口令的环境口令变量名写顶层 SharedRedisPasswordEnv(scene_manager 拒绝 ControlRedis.PasswordEnv)。
+ControlRedis:
+  Addrs: [127.0.0.1:7100, 127.0.0.1:7101, 127.0.0.1:7102]
+  Cluster: true
+```
+
+```yaml
+# bin/etc/game_config.yaml:scene 的控制集群句柄(分线目录、神秘商人、归属对账、唤醒 SPUBLISH)。
+control_redis:
+  mode: cluster
+  seeds: ["127.0.0.1:7100", "127.0.0.1:7101", "127.0.0.1:7102"]
+  password: ""
+```
+
+Java 网关的限流(`gate.rate-limit.enabled` 缺省关)要连过来时,在 `java/gateway_node/src/main/resources/application.yaml` 的 `spring.data.redis` 下写 `cluster.nodes: 127.0.0.1:7100,127.0.0.1:7101,127.0.0.1:7102`:写了它就建集群客户端,否则按 `host` / `port` 连单实例。
+
+这些改动同样不要提交。连上之后 login 启动横幅有 `control redis: addrs=127.0.0.1:7100,... cluster=true`,scene 日志有 `Control Redis: mode=cluster`。
+
+清库:`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`,单实例加开发集群的每个主节点(`lib/redis_local_flush.ps1`);控制域指过来时也在这一套里。`FLUSHALL` 在 Cluster 里只清本节点,不要只对一个节点执行。压测快照的 target 写 `docker-cluster:redis-player-cluster-0:7100`(`stress_snap.ps1`);两个域都指过来时这一个 target 同时覆盖两个域,R1 / R2 分不出是哪个域的负载。K8s 上两套分开抓:`k8s-cluster:<ns>/redis-player`、`k8s-cluster:<ns>/redis-control`。
 
 压测抓本机 C++ 节点的 `/metrics`(2026-11-12 起):C++ 进程设了 `MMORPG_METRICS_PORT` 才开出口,本机缺省不开。起节点前设 `$env:MMORPG_METRICS_BASE_PORT = '19400'`(或 `cpp_nodes.ps1 -MetricsBasePort 19400`),每个实例按 `lib/cpp_metrics_ports.ps1` 拿一个端口(gate 19401…、scene 19501…、battle 19601…,`-Zone N` 再加 1000 × N);`stress_snap.ps1 -CppMetricsBasePort 19400` 按 `run/pids/cpp_nodes.pid.json` 逐个抓成 `t<N>m_cpp_<实例键>.txt`,`stress_summarize.ps1` 的 N1 表读它们。契约测试 `tests/stress_cpp_metrics.tests.ps1`。
 

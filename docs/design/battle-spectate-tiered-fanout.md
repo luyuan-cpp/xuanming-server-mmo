@@ -162,10 +162,10 @@ L1 的帧单独开 topic，不和 gate 命令 topic 混用：控制面已经很�
 - **Redis**（只有 match 读写）
   - `spectate:battle:{id}` 的记录加 `tier`、`battle_instance_id`、`direct_full`。
   - `spectate:relay_gates:{id}`（SET）。
-  - `spectate:bcast:active`（ZSET，score 为到期毫秒，用作全服 L2 配额；Lua 先清过期项，再判断 `ZCARD < B`）。
+  - `spectate:bcast:active:{sbc:<k>}`（16 个 ZSET，按 battle_id % 16 落桶，score 为到期毫秒，合起来是全服 L2 配额）。抢配额先清各桶过期项并数全服，本桶 Lua 判「本桶 + 别的桶 < B」再写，写入后复数超过 B 就退回（2026-11-19，[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md) §4.9）。
   - `spectate:featured:{id}`（运营标记）。
   - 同一场的 key 用同一个 hash tag。
-  - `spectate:battles:active` 现在就是单 key 热点（无 hash tag，生产也在用），P2 给热门列表加进程内缓存。
+  - 活跃集合 `spectate:battles:active:{sba:<k>}` 与赛事局索引 `spectate:featured:active:{sft:<k>}` 同样各拆 16 个桶，不再是单 key 热点；观战列表读跨桶合并，每个 match 副本进程内缓存 1 秒（同上 §4.9）。
 
 ### 6.3 Java 版
 
@@ -274,7 +274,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
     1. Codex 按 [CODEX.md](../handoff/spectate-tiered-fanout-20261030/CODEX.md) 编译和测试通过。robot 的 WatchBattle 已带 `request_id`。
     2. battle 节点在 etcd 的注册里要有 `nodeUuid`、`grpcEndpoint` 和机房号（`physicalRegion`），成局落点从注册表选。
     3. SQL 的时钟不能比 battle 快 5s 以上（MySQL 跑在 Docker / WSL、battle 跑在宿主机时要留意），否则 Add 会因截止过远被拒。
-    4. 跑之前按 AGENTS §6.2 清 Redis，让 `spectate:battles:active` 里只剩 A 这一场；随机选场挑到残留的场会在 `b-watch-battle-id` 失败。
+    4. 跑之前按 AGENTS §6.2 清 Redis，让活跃集合（`spectate:battles:active:{sba:<k>}` 的 16 个桶）里只剩 A 这一场；随机选场挑到残留的场会在 `b-watch-battle-id` 失败。
     5. 冒烟走 Java 服务端时，Java robot 的 `BattleScenario` 第 16 步仍走不通（见 `PARITY.md`）。
 
 ## 11. 分阶段落地
@@ -454,7 +454,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 - **Redis**（全部带本场 hash tag，TTL 同观战记录）：
   - `spectate:tier:{id}`：整数，只升不降，Lua 比较后设置；
   - `spectate:relay_gates:{id}`：HASH，field = gate_node_id，value = gate_instance_id；
-  - `spectate:bcast:active`：ZSET，全服 L2 配额，score 是到期毫秒；
+  - `spectate:bcast:active:{sbc:<k>}`：16 个 ZSET（battle_id % 16 落桶，桶自带 tag，不带本场的 tag），合起来是全服 L2 配额，score 是到期毫秒；
   - `spectate:featured:{id}`。
 - **WatchBattle**（本地与全局两条路径共用同一个档位判定函数）：
   1. 现有校验依次做：可见性闸、互斥、离线、清退旧观战。

@@ -118,6 +118,14 @@ namespace player_ownership
 		return "player:" + redis_slot::PlayerTag(playerId) + ":hosted_return";
 	}
 
+	// 挂机月卡的读投影:字符串,值 = 十进制到期 Unix 秒,SET 时带 EXAT 到期(docs/design/afk-monthly-card.md §5)。
+	// 事实源是存档里的 PlayerUint64Comp.afk_pass_expires_at;只有 AfkPassSystem 按已提交的值写(提交回调、加载、托管心跳)。
+	// 读方是 player_locator(续断线租约、托管归位);scene 自己读内存,不读它。与 Go shared/redisslot.AfkPassKey 逐字一致。
+	inline std::string AfkPassRedisKey(uint64_t playerId)
+	{
+		return "player:afk_pass:" + redis_slot::PlayerTag(playerId);
+	}
+
 	// 交接标记的值格式 "{epoch}:{saved_at_ms}"。scene_manager 只解析冒号前的 epoch 与当前
 	// owner_epoch 比对;saved_at_ms 仅供排障(看"落盘到放行"隔了多久)。
 	inline std::string HandoffRedisValue(uint64_t epoch, uint64_t savedAtMs)

@@ -57,7 +57,8 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 十分钟内过半场景被判不归本节点({{ $value | printf \"%.0f\" }} 个)"
             description: >-
-              先查本 zone 的控制域 Redis(redis-ctl-g<N>):DBSIZE 是否骤降、最近有没有主从切换或被清空,scene_manager 是否刚以空数据重建世界频道;
+              先查本 zone 的控制域 Redis(控制集群 redis-control;dev 没开控制集群时是核心 redis):本 zone 的键都带 {ctl:<z>}、在同一个槽上,
+              看 CLUSTER KEYSLOT '{ctl:<z>}' 那个槽所在主的 DBSIZE 是否骤降、最近有没有主从切换或被清空,scene_manager 是否刚以空数据重建世界频道;
               再查 scene_manager 是否同时判死了大量节点(scene_manager_node_view_released_total、dead_node_reconcile 指标)。
               排空按每节点每轮 200 名住户限速,玩家会分批改派到 scene_manager 重建的频道,不需要手工干预排空本身;要做的是找出控制域为什么丢了状态。
             runbook_url: docs/ops/scene-node-role-split.md

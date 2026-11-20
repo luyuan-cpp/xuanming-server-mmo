@@ -210,6 +210,13 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		return resp, nil
 	}
 
+	// 6a''. 内容送检:玩家自己起的名字送内容安全服务(词库与平台接口);上面的 VerdictSensitive 只是内置的几个防冒充词。
+	// 和名字预检一样排在发号之前:被拒是玩家侧的常态,不该为它烧掉一个 PlayerId。细节见 createplayer_content.go。
+	if tip := l.checkRoleNameContent(requested, account); tip != nil {
+		resp.ErrorMessage = tip
+		return resp, nil
+	}
+
 	// 6b. 铸 PlayerId:只走号段(设计稿 §6),没有回退号源。
 	// 发号失败建角整体失败。绝不能吞掉错误再用 0 或自造 id:自造的号不在发号器的预留里,唯一性无从保证。
 	// 从这里起持锁后的四跳(发号 / 名字 / player_route / SQL 账号目录提交)按 handler 截止分摊(createplayer_budget.go):

@@ -98,9 +98,9 @@
 | 调用期限 | `GrpcClient.CallDeadlineMs.MailNodeService: 6000`（mail 的 zrpc Timeout 3500 + 门禁要求的 2000 余量，再留 500）；`Assert-GrpcClientDeadlineBudget` 的目标表加 mail |
 | 密钥 | Secret `domain-service-secrets` 新增 key `mail-producer-battle`：infra namespace（mail）和每个 zone namespace（scene）都要有，同值，至少 32 字节。两边都是 `optional: false`，缺了 Pod 起不来。mail 的 `Producers` 加 `battle: MAIL_PRODUCER_SECRET_BATTLE` |
 | 本机 | `producer_dev_secret.ps1` 生成并复用同一把；`go_services.ps1` 起 mail、`cpp_nodes.ps1` 起 scene 时各自注入 |
-| 部署核对 | `k8s_deploy.ps1` 的写路径门禁 `Assert-MailProducerBattleSecretForRun`，早于任何写操作：`infra-up`（本次部署 mail）核对 infra 的键；`zone-up` 与 `all-up` 核对每个 zone 的键，并与 infra 比摘要（同值）。缺键、值为空、不足 32 字节、与 infra 不同，都拒绝部署，一个都不写。`-DryRun` 只打一行说明，不连集群。值只在内存里解码、取长度与摘要，不打印、不写文件；这是该脚本里唯一读取 `domain-service-secrets` 真实值的地方（`Assert-TlsSecretProvisioned` 只查键在不在） |
+| 部署核对 | `k8s_deploy.ps1` 的写路径门禁 `Assert-SharedDomainServiceSecretsForRun`（2026-11-19 起按共享键表 `$script:SharedDomainServiceSecrets` 一起核，`mail-producer-battle` 是其中一行），早于任何写操作：`infra-up`（本次部署全局 Go 服务）核对 infra 的键；`zone-up` 与 `all-up` 核对每个 zone 的键，并与 infra 比摘要（同值）。缺键、值为空、不足 32 字节、两把同值、与 infra 不同，都拒绝部署，一个都不写。`-DryRun` 每个 namespace 只打一行说明，不连集群。值只在内存里解码、取长度与摘要，不打印、不写文件；这是该脚本里唯一读取 `domain-service-secrets` 真实值的地方（`Assert-TlsSecretProvisioned` 只查键在不在） |
 
-**上线前要做**：先在各 namespace 的 `domain-service-secrets` 里加 `mail-producer-battle`，再发 mail 和 scene。清单在 [K8s 开服手册](../ops/k8s-open-server-runbook.md) §1，发布清单见 [release-checklist.md](../ops/release-checklist.md) §2.1 ⑦。部署脚本在任何写操作之前核对（`k8s_deploy.ps1` 的 `Assert-MailProducerBattleSecretForRun`：缺键、不足 32 字节、与 infra 不同都拒绝，见 §8 的「部署核对」）。两边值不同，或两边时钟相差超过 5 分钟，Pod 都能起来，但 mail 拒绝验签：scene 侧是 `reason=signature_rejected` 的 stuck（§5、§9），物品不丢，但寄不出去。
+**上线前要做**：先在各 namespace 的 `domain-service-secrets` 里加 `mail-producer-battle`，再发 mail 和 scene。清单在 [K8s 开服手册](../ops/k8s-open-server-runbook.md) §1，发布清单见 [release-checklist.md](../ops/release-checklist.md) §2.1 ⑦。部署脚本在任何写操作之前核对（`k8s_deploy.ps1` 的 `Assert-SharedDomainServiceSecretsForRun`：缺键、不足 32 字节、两把同值、与 infra 不同都拒绝，见 §8 的「部署核对」）。两边值不同，或两边时钟相差超过 5 分钟，Pod 都能起来，但 mail 拒绝验签：scene 侧是 `reason=signature_rejected` 的 stuck（§5、§9），物品不丢，但寄不出去。
 
 mail 是弱依赖：不进 scene 的启动闸，发现不到只让条目按退避留着。
 

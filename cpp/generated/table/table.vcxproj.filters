@@ -552,6 +552,12 @@
     <ClInclude Include="code\mysterymerchantrule_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\afkpassrule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\afkpassrule_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\mysterymerchantspot_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -564,6 +570,9 @@
     <ClInclude Include="proto\mysterymerchantrule_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\afkpassrule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\mysterymerchantspot_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -571,6 +580,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\payment_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\tip\afk_pass_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\equip_error_tip.pb.h">
@@ -970,6 +982,9 @@
     <ClCompile Include="code\mysterymerchantrule_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\afkpassrule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\mysterymerchantspot_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -979,6 +994,9 @@
     <ClCompile Include="proto\mysterymerchantrule_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\afkpassrule_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\mysterymerchantspot_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -986,6 +1004,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\payment_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\afk_pass_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\equip_error_tip.pb.cc">

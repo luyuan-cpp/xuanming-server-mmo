@@ -695,15 +695,15 @@ function Get-GateDrainHairpinHint {
     return "(若是连接失败 / 超时:本脚本 exec 进 svc/$($Target.Service) 后按 login 配置里的 $($Target.Endpoint) 连回同一 Service,集群的 CNI / kube-proxy 须支持 hairpin)"
 }
 
-# Redis 命令失败时附在错误后面的提示。两种形态的原因不同,静态写全,不为了选一句再多查一次集群(错误路径保持简单;RBAC 也不一定允许读 Deployment):
-# 单实例形态下 exec 落在 Service redis 背后的同一个 Pod,要 hairpin;高可用形态下 Service redis 指向 redis-proxy,不涉及 hairpin,
-# 连接被立即关闭多半是代理此刻没有可路由的主(切主中、哨兵没有多数)或代理没就绪。排查命令引用 README(带口令时要 REDISCLI_AUTH),不在这里内联。
+# Redis 命令失败时附在错误后面的提示。两种形态的原因不同,静态写全,不为了选一句再多查一次集群(错误路径保持简单):
+# 核心单实例(只有 dev)下 exec 落在 Service redis 背后的同一个 Pod,要 hairpin;控制集群下 exec 进种子同名的 Pod,redis-cli -c 按键跟随到主,
+# 失败多半是那几个槽此刻没有可用的主。排查命令引用手册(带口令时要 REDISCLI_AUTH),不在这里内联。
 function Get-GateDrainRedisFailureHint {
     param([Parameter(Mandatory = $true)]$Login)
     return ("(若是连接失败 / 被关闭 / 超时:本脚本 exec 进 $(Get-GateDrainRedisExecTarget -Login $Login) 的 redis 容器后按 login 配置里的 $($Login.Redis.Endpoint) 连。" +
-        "单实例形态下 Service redis 背后就是这个 Pod,集群的 CNI / kube-proxy 须支持 hairpin;" +
-        "高可用形态下 Service redis 指向 redis-proxy,不涉及 hairpin,连接被立即关闭多半是代理此刻没有可路由的主(切主中或哨兵没有多数)或代理没就绪," +
-        "按 deploy/k8s/README.md「共享 Redis:高可用形态 → 运维」查代理的 show servers state 与三个哨兵的 get-master-addr-by-name;exec 本身失败先看 statefulset/redis 的 Pod 状态)")
+        "核心单实例下 Service redis 背后就是这个 Pod,集群的 CNI / kube-proxy 须支持 hairpin;" +
+        "控制集群下 redis-cli -c 按键跟随到持有该槽的主,失败多半是那几个槽此刻没有可用的主,先跑 dev_tools.ps1 -Command k8s-redis-split-status," +
+        "再按 docs/ops/redis-player-cluster-runbook.md「节点故障」处理;exec 本身失败先看目标 Pod 的状态)")
 }
 
 # exec 进 login 所连 etcd 的 Service 背后的 Pod,用它自带的 etcdctl 按 login 配置里的同一地址读 gate 前缀。

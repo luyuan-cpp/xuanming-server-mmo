@@ -32,10 +32,6 @@ import (
 type GameDB struct {
 	SqlModel *proto2mysql.DB
 	DB       *sql.DB
-	// Connector 是建这个连接池用的连接器。探活(store_health.go)用它绕过连接池新建一条连接:
-	// 池里的空闲连接可能早已失效(Windows 上驱动不做空闲连接活性检查),池满时取连接还要排队,
-	// 两种情况都会把活着的库误判成不可达。为 nil(单测里只带库名的模型)时退回连接池的 PingContext。
-	Connector driver.Connector
 }
 
 // storeBoot 是本进程启动时装配一次的写资格与逻辑库映射(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c)。
@@ -145,8 +141,8 @@ func NewMysqlConfig() *mysql.Config { return newMysqlConfig() }
 // 拨号 / 读 / 写超时,以及会话级的锁等待上限(docs/design/db-task-store-unavailable-deferral.md §8)。
 //
 // 没有这组超时时,MySQL 卡住(排在一条 DDL 的元数据锁后面、进程被暂停、对端不回包)会让 SQL 既不返回也不报错:
-// 子分片协程永久阻塞,通道一路堵到全实例唯一的重试协程,Stop() 也挂住。超时之后驱动返回连接类错误,
-// 任务按 L-04 延后。
+// 这次调用一直挂着,占着连接与处理它的 RPC 协程,停机排空也等不到它。超时之后驱动返回连接类错误,
+// 调用按存储不可用失败,由调用方重试。
 //
 // 会话级锁等待要短于读超时:客户端读超时撤不回已经发出的语句,让服务端先以 1205 中止排队中的语句,
 // 超时之后才不会留下事后生效的在途写。这一层只是缩小窗口,不是栅栏;挡旧写要靠条件写。

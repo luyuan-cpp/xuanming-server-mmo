@@ -543,7 +543,7 @@ func frozenState(version uint64) *rfpb.RoleFenceState {
 
 func participantWith(t *testing.T, db *sql.DB, pending PendingFunc) *ParticipantServer {
 	t.Helper()
-	s, err := NewParticipantServer(db, pending, testCoordinatorSecret)
+	s, err := NewParticipantServer(db, pending, NoPurge, testCoordinatorSecret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,6 +666,32 @@ func TestPrepareDryRunNeverTouchesReplica(t *testing.T) {
 	}
 }
 
+// 挂起判定能分清试探和真正的冻结:只有 dry_run 带 Probing 标记(帮主只在申请注销的预检里拦,见 Probing)。
+func TestPendingSeesProbingOnlyOnDryRun(t *testing.T) {
+	_, db := newFakeFenceDB(t)
+	var probing []bool
+	s := participantWith(t, db, func(ctx context.Context, _ *sql.Tx, _ *rfpb.RoleFenceState) (string, error) {
+		probing = append(probing, Probing(ctx))
+		return "", nil
+	})
+	in := &rfpb.PrepareRoleFreezeRequest{State: frozenState(2), DryRun: true}
+	if err := serviceauth.Sign(rfpb.RoleFenceParticipant_PrepareRoleFreeze_FullMethodName, in, CoordinatorCaller, testCoordinatorSecret, uint64(time.Now().UnixMilli())); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := s.PrepareRoleFreeze(context.Background(), in); err != nil || !out.Clean {
+		t.Fatalf("dry run out %v err %v", out, err)
+	}
+	if out, err := s.PrepareRoleFreeze(context.Background(), signedPrepare(t, frozenState(2))); err != nil || !out.Clean {
+		t.Fatalf("prepare out %v err %v", out, err)
+	}
+	if len(probing) != 2 || !probing[0] || probing[1] {
+		t.Fatalf("试探带标记、真正冻结不带: %v", probing)
+	}
+	if Probing(context.Background()) || !Probing(WithProbing(context.Background())) {
+		t.Fatal("WithProbing / Probing 不对称")
+	}
+}
+
 func TestPrepareDryRunFailureIsRetry(t *testing.T) {
 	_, db := newFakeFenceDB(t)
 	s := participantWith(t, db, func(context.Context, *sql.Tx, *rfpb.RoleFenceState) (string, error) {
@@ -773,14 +799,124 @@ func TestApplyRoleFenceMergesByVersion(t *testing.T) {
 
 func TestNewParticipantServerRequiresEverything(t *testing.T) {
 	_, db := newFakeFenceDB(t)
-	if _, err := NewParticipantServer(nil, NoPending, testCoordinatorSecret); err == nil {
+	if _, err := NewParticipantServer(nil, NoPending, NoPurge, testCoordinatorSecret); err == nil {
 		t.Fatal("nil db")
 	}
-	if _, err := NewParticipantServer(db, nil, testCoordinatorSecret); err == nil {
+	if _, err := NewParticipantServer(db, nil, NoPurge, testCoordinatorSecret); err == nil {
 		t.Fatal("没注入挂起判定不能算没有挂起")
 	}
-	if _, err := NewParticipantServer(db, NoPending, "short"); err == nil {
+	if _, err := NewParticipantServer(db, NoPending, nil, testCoordinatorSecret); err == nil {
+		t.Fatal("没注入删角清理不能算没有要清的数据")
+	}
+	if _, err := NewParticipantServer(db, NoPending, NoPurge, "short"); err == nil {
 		t.Fatal("short secret")
+	}
+}
+
+func signedPurge(t *testing.T, state *rfpb.RoleFenceState) *rfpb.PurgeRemovedRoleRequest {
+	t.Helper()
+	in := &rfpb.PurgeRemovedRoleRequest{State: state}
+	if err := serviceauth.Sign(rfpb.RoleFenceParticipant_PurgeRemovedRole_FullMethodName, in, CoordinatorCaller, testCoordinatorSecret, uint64(time.Now().UnixMilli())); err != nil {
+		t.Fatal(err)
+	}
+	return in
+}
+
+// 删角收尾清数据(docs/design/account-deletion.md §6.1):只收墓碑;清理在副本行锁里、副本已合并成墓碑之后才跑;
+// 清理失败带内回 retry、事务回滚;不是墓碑的状态按非法参数拒绝,一个字都不写。
+func TestPurgeRemovedRoleOnlyForTombstones(t *testing.T) {
+	f, db := newFakeFenceDB(t)
+	var purged []uint64
+	var failPurge bool
+	s, err := NewParticipantServer(db, NoPending, func(ctx context.Context, tx *sql.Tx, player uint64) error {
+		if fence, err := Lock(ctx, tx, player); err != nil || fence.Account != "" {
+			t.Errorf("清理时副本应已是墓碑: %+v %v", fence, err)
+		}
+		if failPurge {
+			return errors.New("purge failed")
+		}
+		purged = append(purged, player)
+		return nil
+	}, testCoordinatorSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tombstone := &rfpb.RoleFenceState{PlayerId: 11, Account: "", OwnerRevision: 2, Version: 5, HomeZone: 1}
+
+	failPurge = true
+	out, err := s.PurgeRemovedRole(context.Background(), signedPurge(t, tombstone))
+	if err != nil || !out.GetRetry() {
+		t.Fatalf("清理失败应带内回 retry: out %v err %v", out, err)
+	}
+	if _, ok := f.rows[11]; ok {
+		t.Fatal("清理失败时副本也不该落盘(同一个事务)")
+	}
+
+	failPurge = false
+	out, err = s.PurgeRemovedRole(context.Background(), signedPurge(t, tombstone))
+	if err != nil || out.GetRetry() || len(purged) != 1 || purged[0] != 11 {
+		t.Fatalf("墓碑应清: out %v err %v purged %v", out, err, purged)
+	}
+	if f.rows[11].Account != "" || f.rows[11].Version != 5 {
+		t.Fatalf("副本应合并成墓碑: %+v", f.rows[11])
+	}
+
+	_, err = s.PurgeRemovedRole(context.Background(), signedPurge(t, frozenState(6)))
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("不是墓碑的状态应拒绝: %v", err)
+	}
+	if len(purged) != 1 {
+		t.Fatal("拒绝时不该调清理")
+	}
+}
+
+// 清理登记的提交后动作:提交成功之后按登记顺序跑,跑时 ctx 与调用方的取消脱钩;清理失败(回滚)不跑;
+// 在 PurgeRemovedRole 之外登记回错误。
+func TestPurgeCommitHooksRunOnlyAfterCommit(t *testing.T) {
+	f, db := newFakeFenceDB(t)
+	var ran []string
+	var failAfterHook bool
+	s, err := NewParticipantServer(db, NoPending, func(ctx context.Context, _ *sql.Tx, _ uint64) error {
+		for _, name := range []string{"invalidate", "rank"} {
+			if err := OnCommit(ctx, func(hookCtx context.Context) {
+				if hookCtx.Err() != nil {
+					t.Errorf("提交后动作的 ctx 不该随调用方取消: %v", hookCtx.Err())
+				}
+				ran = append(ran, name)
+			}); err != nil {
+				return err
+			}
+		}
+		if failAfterHook {
+			return errors.New("purge failed after registering hooks")
+		}
+		return nil
+	}, testCoordinatorSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tombstone := &rfpb.RoleFenceState{PlayerId: 11, Account: "", OwnerRevision: 2, Version: 5, HomeZone: 1}
+
+	failAfterHook = true
+	if out, err := s.PurgeRemovedRole(context.Background(), signedPurge(t, tombstone)); err != nil || !out.GetRetry() {
+		t.Fatalf("清理失败应带内回 retry: out %v err %v", out, err)
+	}
+	if len(ran) != 0 || f.commits != 0 {
+		t.Fatalf("回滚时不跑提交后动作: ran %v commits %d", ran, f.commits)
+	}
+
+	failAfterHook = false
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if out, err := s.PurgeRemovedRole(ctx, signedPurge(t, tombstone)); err != nil || out.GetRetry() {
+		t.Fatalf("out %v err %v", out, err)
+	}
+	if len(ran) != 2 || ran[0] != "invalidate" || ran[1] != "rank" || f.commits != 1 {
+		t.Fatalf("提交后按登记顺序跑: ran %v commits %d", ran, f.commits)
+	}
+
+	if err := OnCommit(context.Background(), func(context.Context) {}); err == nil {
+		t.Fatal("清理事务之外不能登记提交后动作")
 	}
 }
 

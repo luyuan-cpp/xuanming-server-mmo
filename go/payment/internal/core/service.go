@@ -7,6 +7,7 @@
 //     回调只等事实落库就应答,商城暂时不可达不会让渠道重发。
 //   - 渠道撤销(用户在渠道侧退款、作废)按修订号翻转事实,经商城与 trade 扣回;本服务自己执行的退款不算撤销。
 //   - 退款只执行商城列出的退款待办,退款单号由被退那笔付款确定性派生,重试不会多退;渠道退不了的转人工。
+//   - 合规闸开着时,建意图前按买家的实名判年龄(小游戏渠道上没有实名的账号由平台管);未成年人的意图同时是他的额度预占(minor.go)。
 package core
 
 import (
@@ -45,6 +46,8 @@ var (
 type Store interface {
 	Intent(ctx context.Context, hi, lo uint64) (*paymentpb.PaymentIntentRecord, error)
 	InsertIntent(ctx context.Context, rec *paymentpb.PaymentIntentRecord) (*paymentpb.PaymentIntentRecord, bool, error)
+	ReserveIntent(ctx context.Context, rec *paymentpb.PaymentIntentRecord, limit data.SpendLimit) (*paymentpb.PaymentIntentRecord, bool, error)
+	ReviveMinorIntent(ctx context.Context, intent *paymentpb.PaymentIntentRecord, limit data.SpendLimit, paidMs, now uint64, force bool) (bool, error)
 	SetChannelRef(ctx context.Context, hi, lo uint64, ref string, refMs uint64, payer string, now uint64) error
 	ClaimActiveQuery(ctx context.Context, rec *paymentpb.PaymentIntentRecord, now uint64) (bool, error)
 	DueIntents(ctx context.Context, now uint64, limit int) ([]*paymentpb.PaymentIntentRecord, error)
@@ -119,6 +122,11 @@ type Options struct {
 	RefundReason          string // 渠道退款单上给用户看的原因
 	Products              []Product
 	TestPolicies          map[string]TestPolicy // 渠道名 → 规则;没写的渠道不接受测试交易
+	// RealNames 非 nil 时执行未成年人充值限额(Compliance.MinorSpendingGate=realname,minor.go);nil = 不接实名。
+	RealNames RealNames
+	// 未成年人单日累计上限(分),按年龄段:8 周岁以上未满 16 周岁、16 周岁以上未满 18 周岁。0 = 不设。
+	DailyLimitFenAge8To16  uint64
+	DailyLimitFenAge16To18 uint64
 }
 
 func (o Options) withDefaults() Options {
@@ -340,7 +348,8 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateRequest) (Created, 
 	}
 }
 
-// openIntent 读商城订单的冻结条款,核对后新建意图。商城只读失败时本服务什么都没写,回 ErrBusy。
+// openIntent 读商城订单的冻结条款,核对后新建意图;合规闸开着时先判买家的实名与未成年人额度(minor.go)。
+// 商城或账号目录只读失败时本服务什么都没写,回 ErrBusy。
 func (s *Service) openIntent(ctx context.Context, player uint64, orderID string, hi, lo uint64, ch channel.Channel, now time.Time) (*paymentpb.PaymentIntentRecord, error) {
 	callCtx, cancel := context.WithTimeout(ctx, s.opts.RequestCallTimeout)
 	order, err := s.mall.OrderView(callCtx, orderID)
@@ -375,7 +384,10 @@ func (s *Service) openIntent(ctx context.Context, player uint64, orderID string,
 	rec := &paymentpb.PaymentIntentRecord{OrderHi: hi, OrderLo: lo, OrderId: orderID, PlayerId: player, Channel: uint32(ch.ID()),
 		AmountMinor: order.AmountMinor, Currency: order.Currency, State: data.IntentCreated, ExpireMs: expire,
 		NextCheckMs: uint64(now.Add(s.opts.FirstCheckDelay).UnixMilli()), CreatedMs: nowMs, UpdatedMs: nowMs, SkuId: order.SkuID}
-	stored, inserted, err := s.store.InsertIntent(ctx, rec)
+	if err := s.gateBuyer(ctx, rec, now); err != nil {
+		return nil, err
+	}
+	stored, inserted, err := s.insertIntent(ctx, rec, now)
 	if err != nil {
 		return nil, err
 	}
@@ -696,6 +708,11 @@ func (s *Service) record(ctx context.Context, ch channel.Channel, payment channe
 	if refundedOutside {
 		orphan("refunded at the channel before this service recorded it; not delivered")
 	}
+	if rec.MallState == data.MallPending && intent != nil && intent.State == data.IntentClosed && minorIntent(intent) {
+		if err := s.recheckLatePayment(ctx, rec, intent, now, orphan); err != nil {
+			return err
+		}
+	}
 	if payment.NeedsFinalize && rec.MallState == data.MallPending {
 		rec.FinalizeState, rec.FinalizeNextMs = data.FinalizePending, nowMs
 	}
@@ -721,8 +738,13 @@ func (s *Service) record(ctx context.Context, ch channel.Channel, payment channe
 			return err
 		}
 	} else if !inserted && stored.MallState != data.MallOrphan && !data.Revoked(stored.FactRevision) && (stored.OrderHi != 0 || stored.OrderLo != 0) {
-		// 重复报告:补做上一次可能没做完的第二步(幂等)。
-		if err := s.store.MarkIntentPaid(ctx, stored.OrderHi, stored.OrderLo, nowMs); err != nil {
+		// 重复报告:补做上一次可能没做完的第二步(幂等)。未成年人的意图在这期间到期关闭了(额度已释放)的,在额度行锁下重新计入。
+		if intent != nil && intent.State == data.IntentClosed && minorIntent(intent) {
+			err = s.recountMinor(ctx, intent, nowMs)
+		} else {
+			err = s.store.MarkIntentPaid(ctx, stored.OrderHi, stored.OrderLo, nowMs)
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -830,8 +852,8 @@ func (s *Service) revoke(ctx context.Context, ch channel.Channel, revocation cha
 		if !revocation.Revoked {
 			state = data.IntentPaid
 		}
-		if txn.OrderHi != 0 || txn.OrderLo != 0 {
-			if err := s.store.SetIntentState(ctx, txn.OrderHi, txn.OrderLo, state, nowMs); err != nil {
+		if (txn.OrderHi != 0 || txn.OrderLo != 0) && drivesIntent(txn) {
+			if err := s.applyFlip(ctx, txn.OrderHi, txn.OrderLo, state, nowMs); err != nil {
 				return err
 			}
 		}

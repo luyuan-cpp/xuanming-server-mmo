@@ -651,7 +651,7 @@ Test-Case 'TiDB 档(目录 64 片、存档库 64 个)峰值不超 TiDB 预算,My
     Assert-True -Condition ($sharded.Peak -le $plan.TidbConnectionBudget) -Because "TiDB 档规划峰值 $($sharded.Peak) 超过 TiDB 预算 $($plan.TidbConnectionBudget),要收窄每片、每库上限或加 tidb-server"
     Assert-Equal -Expected ([int][Math]::Floor(($plan.TidbServers - 1) * $plan.TidbMaxConnectionsPerServer / $plan.TidbImbalanceFactor)) -Actual $plan.TidbConnectionBudget -Because '预算 = (N−1) × 每台上限 / 不均衡系数'
 
-    foreach ($database in @('directory_shard', 'ledger', 'player_store', 'mmorpg', 'mmorpg_friend', 'mmorpg_trade', 'mmorpg_player_inbox', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_rank', 'mmorpg_chat', 'mmorpg_match')) {
+    foreach ($database in @('directory_shard', 'ledger', 'player_store', 'mmorpg', 'mmorpg_friend', 'mmorpg_trade', 'mmorpg_player_inbox', 'mmorpg_guild', 'mmorpg_mail', 'mmorpg_rank', 'mmorpg_chat', 'mmorpg_match', 'mmorpg_payment', 'mmorpg_mall')) {
         Assert-True -Condition ($sharded.PerLogicalDb.Contains($database) -and [int]$sharded.PerLogicalDb[$database] -gt 0) -Because "按逻辑库的账要有 $database"
     }
     Assert-True -Condition (-not $sharded.PerLogicalDb.Contains('zone_store')) -Because 'zone 库已退役(A17c),按逻辑库的账里没有 zone 主库'
@@ -745,7 +745,7 @@ Test-Case '包装入口:dev_tools 把逻辑库参数转到底,不粘滞' {
 # 8. 写者 Pod:私有目录、后端档位、地域码、回收
 # ──────────────────────────────────────────────
 $WriterConfigFiles = [ordered]@{ 'data-service' = 'data_service.yaml'; db = 'db.yaml'; login = 'login.yaml' }
-$GlobalWriterConfigFiles = [ordered]@{ chat = 'chat.yaml'; friend = 'friend.yaml'; guild = 'guild.yaml'; mail = 'mail.yaml'; match = 'match_service.yaml'; 'player-inbox' = 'player_inbox.yaml'; rank = 'rank.yaml'; trade = 'trade.yaml' }
+$GlobalWriterConfigFiles = [ordered]@{ chat = 'chat.yaml'; friend = 'friend.yaml'; guild = 'guild.yaml'; mail = 'mail.yaml'; match = 'match_service.yaml'; 'player-inbox' = 'player_inbox.yaml'; rank = 'rank.yaml'; payment = 'payment.yaml'; trade = 'trade.yaml' }
 
 function Assert-WriterPrivatePaths {
     param([Parameter(Mandatory = $true)][string]$Block, [Parameter(Mandatory = $true)][string]$Service, [Parameter(Mandatory = $true)][string]$ConfigFile)

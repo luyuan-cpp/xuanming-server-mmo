@@ -15,7 +15,8 @@ public interface RateLimitStore {
      * 先判 IP 桶、再判区桶:
      * <ul>
      *   <li>IP 桶不足一个令牌 → {@link Admission.Kind#IP_EMPTY},两个桶都不扣;</li>
-     *   <li>区桶不足一个令牌 → {@link Admission.Kind#ZONE_EMPTY},两个桶都不算扣(排队中的重试不吃 IP 桶);</li>
+     *   <li>区桶不足一个令牌 → {@link Admission.Kind#ZONE_EMPTY},区桶不扣,IP 桶只扣排队重试的那一小份
+     *       (实现构造时给定,{@code gate.rate-limit.queue-retry-ip-cost-milli},缺省 0.1 个令牌);</li>
      *   <li>都够 → {@link Admission.Kind#OK},两个桶各扣一个令牌。</li>
      * </ul>
      * 两个桶不必在同一个原子操作里判(2026-11-12 起 Redis 实现是每个桶一段单键脚本,区桶空时退还 IP 令牌,两键可以在
@@ -34,8 +35,8 @@ public interface RateLimitStore {
     }
 
     /**
-     * @param waitMs 只对 {@link Kind#ZONE_EMPTY} 有意义:区桶补到一个令牌还要等的毫秒(向上取整,至少 1),
-     *               即客户端收到的 retry_after_ms
+     * @param waitMs 只对 {@link Kind#ZONE_EMPTY} 有意义:区桶补到一个令牌还要等的毫秒(向上取整,至少 1)。
+     *               客户端收到的 retry_after_ms 由 {@link AssignGateRateLimiter} 在它上面加下限与随机量
      */
     record Admission(Kind kind, long waitMs) {
 

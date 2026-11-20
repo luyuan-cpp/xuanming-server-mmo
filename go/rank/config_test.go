@@ -52,6 +52,13 @@ func TestRewardMailTtlMatchesMailService(t *testing.T) {
 	}
 }
 
+// mail 没起来时 rank 也要能启动:MailRpc 不阻塞拨号(infra-reconnect-overview.md §1.6、R5)。K8s 的 ConfigMap 由这份 yaml 生成。
+func TestMailRpcDoesNotBlockStartup(t *testing.T) {
+	if !loadRankYaml(t).MailRpc.NonBlock {
+		t.Fatal("etc/rank.yaml 的 MailRpc 必须写 NonBlock: true,否则 mail 不可用时 rank 启动失败")
+	}
+}
+
 // 越出邮件允许范围的值在加载配置时就拒绝,进程起不来;1 天也拒:发件要剩 24 小时可领,截止点就是封榜时刻,一封都发不出。
 func TestConfigRejectsOutOfRangeRewardMailTtl(t *testing.T) {
 	rank := loadRankYaml(t)

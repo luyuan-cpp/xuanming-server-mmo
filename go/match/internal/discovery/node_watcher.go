@@ -34,6 +34,9 @@ type NodeEntry struct {
 	PhysicalRegion uint32
 	ClientHost     string
 	ClientPort     uint32
+	// ClientWsURL 是节点给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url);空串 = 不接小游戏。
+	// 只随地域测速计划下发(docs/design/minigame-websocket-gate.md W9),不参与选点。
+	ClientWsURL string
 	// Endpoint 是 gRPC 地址 "ip:port"。只认 grpcEndpoint,绝不回退
 	// endpoint(那是 raw TCP protobuf 口,用 gRPC 拨会协议错乱,
 	// 先例见 scene_manager resolveFromKnownNodes 的注释)。
@@ -289,6 +292,7 @@ func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {
 		PhysicalRegion: reg.GetPhysicalRegion(),
 		ClientHost:     reg.GetClientEndpoint().GetIp(),
 		ClientPort:     reg.GetClientEndpoint().GetPort(),
+		ClientWsURL:    reg.GetClientWsUrl(),
 		Endpoint:       fmt.Sprintf("%s:%d", grpcEndpoint.GetIp(), grpcEndpoint.GetPort()),
 		Admission:      reg.GetAdmission(),
 		Track:          track,

@@ -62,6 +62,9 @@ type GameClient struct {
 	client   *muduo.Client
 	gateIP   string
 	gatePort int
+	// closeTransport 收掉 client 这条连接在传输层占的东西(WebSocket 模式下的本机桥,见 transport.go),
+	// 在 client.Close() 之后调;TCP 模式为 nil。与 client 一起换。
+	closeTransport func()
 
 	PlayerId uint64
 	Account  string
@@ -161,14 +164,13 @@ func (gc *GameClient) SnapshotTokens() (access, refresh string, accessExpire, re
 	return gc.AccessToken, gc.RefreshToken, gc.AccessTokenExpire, gc.RefreshTokenExpire
 }
 
-// NewGameClient connects to the gate at ip:port.
+// NewGameClient connects to the gate at ip:port, over the process-wide transport (TCP or WebSocket, transport.go).
 func NewGameClient(ip string, port int) (*GameClient, error) {
-	codec := &muduo.TcpCodec{}
-	c, err := muduo.NewClient(ip, port, codec)
+	c, closeTransport, err := newMuduoClient(ip, port)
 	if err != nil {
 		return nil, fmt.Errorf("connect to gate %s:%d: %w", ip, port, err)
 	}
-	return &GameClient{client: c, gateIP: ip, gatePort: port}, nil
+	return &GameClient{client: c, closeTransport: closeTransport, gateIP: ip, gatePort: port}, nil
 }
 
 // SwapConn 把当前连接换成 ip:port 的新连接,并关掉旧连接。跟随 gate 重定向时用。
@@ -184,18 +186,20 @@ func NewGameClient(ip string, port int) (*GameClient, error) {
 // 旧连接上的在途 Call 在关旧连接之前就以 ErrRPCDisconnected 完成:它们的回包只会从旧连接回来,
 // 而旧连接从此没人读。换连接之后发出的 Call 登记在新连接上,不受影响(为什么没有漏网见 startCall 登记处的注释)。
 func (gc *GameClient) SwapConn(ip string, port int) error {
-	codec := &muduo.TcpCodec{}
-	c, err := muduo.NewClient(ip, port, codec)
+	c, closeTransport, err := newMuduoClient(ip, port)
 	if err != nil {
 		return fmt.Errorf("connect to gate %s:%d: %w", ip, port, err)
 	}
 	gc.connMu.Lock()
-	old := gc.client
-	gc.client, gc.gateIP, gc.gatePort = c, ip, port
+	old, closeOldTransport := gc.client, gc.closeTransport
+	gc.client, gc.closeTransport, gc.gateIP, gc.gatePort = c, closeTransport, ip, port
 	gc.connMu.Unlock()
 	if old != nil {
 		gc.failCallsOn(old, ErrRPCDisconnected)
 		old.Close()
+	}
+	if closeOldTransport != nil {
+		closeOldTransport()
 	}
 	return nil
 }
@@ -641,7 +645,13 @@ func (gc *GameClient) ReplayDeferred() {
 func (gc *GameClient) Close() {
 	gc.stopHeartbeat()
 	gc.failAllCalls(ErrRPCDisconnected)
-	if c := gc.conn(); c != nil {
+	gc.connMu.RLock()
+	c, closeTransport := gc.client, gc.closeTransport
+	gc.connMu.RUnlock()
+	if c != nil {
 		c.Close()
+	}
+	if closeTransport != nil {
+		closeTransport()
 	}
 }

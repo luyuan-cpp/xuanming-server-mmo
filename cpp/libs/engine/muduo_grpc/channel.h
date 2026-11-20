@@ -103,10 +103,25 @@ using UnaryCallback = std::function<void(UnaryCallResult &&result)>;
 // (docs/design/distributed-tracing.md §5.3,阶段三起用 method 给 client span 命名,§10.3)。双向流不经过它。
 using UnaryCallInterceptor = std::function<UnaryCallback(const std::string &method, Metadata &metadata, UnaryCallback done)>;
 
+// 连接层事件(断线重连 R17 的观测面)。传输层只报事件,怎么计数由持有通道的一方决定(engine 的 network/grpc_link_metrics.h)。
+// 在通道所在的 EventLoop 线程上同步调用(kClosed 在析构里调);回调不得重入通道、不得阻塞。每次 kReady 之后恰好跟一次
+// kLost / kRetired / kClosed。
+enum class ChannelLinkEvent : uint8_t
+{
+    kReady,         // 一条连接完成 HTTP/2 握手(收到对端 SETTINGS),进入 READY
+    kLost,          // READY 的连接断了:对端关闭、keepalive 没回、传输错误
+    kRetired,       // READY 的连接按 GOAWAY 退役:对端优雅停机,在途调用照常收尾,新调用走新连接
+    kConnectFailed, // 一次建连没成:连不上、建连超时、握手完成前被关,进入 TRANSIENT_FAILURE
+    kClosed,        // READY 时本端销毁通道
+};
+using ChannelLinkObserver = std::function<void(ChannelLinkEvent event)>;
+
 struct ChannelOptions
 {
     // 出站拦截;空 = 不拦截。见上面 UnaryCallInterceptor。
     UnaryCallInterceptor unaryInterceptor;
+    // 连接层事件观测;空 = 不观测。见上面 ChannelLinkEvent。
+    ChannelLinkObserver linkObserver;
     // 默认共用进程账本；测试可以注入独立域，不清空生产历史。
     std::shared_ptr<MaintenanceState> maintenance;
     std::string authority;                              // 空 = "ip:port"
@@ -301,6 +316,8 @@ private:
     void ArmDeadlineTimer();
     void OnDeadlineTimer();
     void SetState(ConnectivityState state);
+    // 调 options_.linkObserver(为空时什么都不做)。见 ChannelLinkEvent。
+    void NotifyLink(ChannelLinkEvent event);
     bool LoopIsCurrent() const;
 
     std::shared_ptr<MaintenanceState> maintenance_;

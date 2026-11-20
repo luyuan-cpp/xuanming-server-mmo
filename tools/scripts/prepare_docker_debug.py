@@ -672,6 +672,9 @@ def prepare(args: argparse.Namespace, stack: ExitStack, original: bytes | None =
     schema_inbox["MySQL"].update(User="root", Password=environment["MYSQL_ROOT_PASSWORD"])
     write_yaml(config_dir / "player_inbox.schema.yaml", schema_inbox)
     base = container_addresses(load_yaml("bin/etc/base_deploy_config.yaml"))
+    # 这个栈不起 span 采集器，容器里的 127.0.0.1:4318 指向容器自己：留着导出地址，每个 C++ 节点约每分钟连一次、
+    # 各记一条 ERROR 和一条 WARN。不配地址节点就不导出（core/tracing/otlp_http.h）；要看链路时给容器设 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT。
+    base.pop("Tracing", None)
     base.update(TableDataDirectory="/app/generated/generated_tables/", DataRootDirectory="/app/", GateTokenSecret=environment["GATE_TOKEN_SECRET"], BattleTokenSecret=environment["BATTLE_TOKEN_SECRET"], SpectateTokenSecret=environment["SPECTATE_TOKEN_SECRET"])
     write_yaml(config_dir / "base_deploy_config.yaml", base)
     game = load_yaml("bin/etc/game_config.yaml")

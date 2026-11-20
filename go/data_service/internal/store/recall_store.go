@@ -72,9 +72,6 @@ const (
 	recallManualSourceOpID uint64 = 0
 	// maxRecallReviewHandledSources 是一次人工处置登记的流水上限,和一批的同指令流水上限同值。
 	maxRecallReviewHandledSources = 10000
-
-	// mysqlErrTiDBWriteConflict 9007:TiDB 乐观写冲突。迁库之后它是最常见的一类,不判等于不重试。
-	mysqlErrTiDBWriteConflict = 9007
 )
 
 var (
@@ -247,22 +244,10 @@ func (s *RecallStore) Configure(auditIDs idsegment.Source, reader rolefence.Stat
 	return nil
 }
 
-// isRecallTxRetryable 判「事务已整体回滚,整笔重跑是安全的」:1213 死锁、1205 锁等待超时、9007 TiDB 写冲突,
-// 以及权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
-// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑。错误树里混有结局未知时它回假,照旧不重试。
-func isRecallTxRetryable(err error) bool {
-	if authoritysql.IsAbortedBeforeCommit(err) {
-		return true
-	}
-	var me *mysql.MySQLError
-	if !errors.As(err, &me) {
-		return false
-	}
-	return me.Number == mysqlErrDeadlock || me.Number == mysqlErrLockWaitTimeout || me.Number == mysqlErrTiDBWriteConflict
-}
-
+// tx 跑一笔可整笔重跑的召回事务;可重试判定是全仓唯一的 authoritysql.IsRetryableTxError
+// (1213 / 1205 / 9007 与守卫判定的提交前中止,结局未知不重试)。
 func (s *RecallStore) tx(ctx context.Context, fn func(*sql.Tx) error) error {
-	return assetop.WithTxRetry(ctx, s.db, 3, isRecallTxRetryable, fn)
+	return assetop.WithTxRetry(ctx, s.db, 3, authoritysql.IsRetryableTxError, fn)
 }
 
 func isDuplicateKey(err error) bool {
@@ -607,7 +592,7 @@ func (s *RecallStore) DeferPlanned(ctx context.Context, opID, until, nowMs uint6
 // 确定没写的情况都不回错误:角色冻结、这条流积压满、目录读不到回 RecallDeferred,行还在,稍后再来。
 func (s *RecallStore) Dispatch(ctx context.Context, op RecallPlanned, nowMs uint64) (RecallDispatchResult, error) {
 	stream := assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL
-	if err := assetop.EnsureSeqRowRetry(ctx, s.db, recallSeqTables, op.PlayerID, stream, nowMs, isRecallTxRetryable); err != nil {
+	if err := assetop.EnsureSeqRowRetry(ctx, s.db, recallSeqTables, op.PlayerID, stream, nowMs, authoritysql.IsRetryableTxError); err != nil {
 		return RecallDeferred, err
 	}
 	var roleDeleted bool

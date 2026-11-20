@@ -49,6 +49,7 @@ import (
 	"schemamigrate"
 
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -109,6 +110,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("friend")
 	if err := validateMigrationFlags(*migrateOnly, *allowModify); err != nil {
 		fmt.Fprintf(os.Stderr, "[friend] %v\n", err)
 		os.Exit(schemamigrate.ExitFailed)
@@ -225,8 +227,8 @@ func runFriend(c config.Config) (runErr error) {
 	if indexErr != nil {
 		return indexErr
 	}
-	// 好友没有挂起全集,只冻结。没配协调者密钥拒启:参与者不可达时过户和删角会一直被拒,不如在启动时暴露。
-	participant, err := rolefence.NewParticipantServer(svcCtx.DB, rolefence.NoPending, os.Getenv(rolefence.CoordinatorSecretEnv))
+	// 好友没有挂起全集,只冻结;删角收尾清两侧的关系行(data.RolePurge)。没配协调者密钥拒启:参与者不可达时过户和删角会一直被拒,不如在启动时暴露。
+	participant, err := rolefence.NewParticipantServer(svcCtx.DB, rolefence.NoPending, data.RolePurge, os.Getenv(rolefence.CoordinatorSecretEnv))
 	if err != nil {
 		return fmt.Errorf("[friend] 角色护栏参与者装配失败: %w", err)
 	}

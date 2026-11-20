@@ -33,6 +33,7 @@ GrpcCallOutcome MakeLocalFailureOutcome(uint32_t code, std::string message) {
 #pragma region {{ $svc.Service }}{{ $method.Method }}
 namespace {
 void QueueLocal{{ $svc.Service }}{{ $method.Method }}Failure(GrpcDone<{{ $method.CppResponse }}> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(k{{ $svc.Service }}{{ $method.Method }}GrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -100,6 +101,7 @@ void Send{{ $svc.Service }}{{ $method.Method }}Erased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC {{ $svc.Service }}.{{ $method.Method }}: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(k{{ $svc.Service }}{{ $method.Method }}GrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -109,6 +111,7 @@ void Send{{ $svc.Service }}{{ $method.Method }}Erased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const {{ $method.CppRequest }}*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC {{ $svc.Service }}.{{ $method.Method }}: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(k{{ $svc.Service }}{{ $method.Method }}GrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

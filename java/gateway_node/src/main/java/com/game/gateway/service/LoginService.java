@@ -1,7 +1,10 @@
 package com.game.gateway.service;
 
+import com.game.gateway.dto.AntiAddictionStatus;
 import com.game.gateway.dto.LoginRequest;
 import com.game.gateway.dto.LoginResponse;
+import com.game.gateway.dto.RealNameRequest;
+import com.game.gateway.dto.RealNameResponse;
 import com.game.gateway.grpc.LoginRpcClient;
 import com.game.table.tip.TipFaults;
 import io.grpc.Status;
@@ -64,6 +67,7 @@ public class LoginService {
             out.setAccountDeletionState(rsp.accountDeletionState);
             out.setAccountDeletionExecuteAfter(rsp.accountDeletionExecuteAfter);
             out.setPreviousAccountDeletedAt(rsp.previousAccountDeletedAt);
+            out.setAntiAddiction(AntiAddictionStatus.from(rsp.antiAddiction));
             return out;
         } catch (StatusRuntimeException e) {
             Status.Code c = e.getStatus().getCode();
@@ -72,6 +76,36 @@ public class LoginService {
         } catch (Exception e) {
             log.error("login.rpc unexpected error", e);
             return LoginResponse.error(LoginResponse.CODE_INTERNAL, "internal_error");
+        }
+    }
+
+    /**
+     * POST /api/real-name(docs/design/real-name-anti-addiction.md §5.2)。姓名和身份证号只转给 login,不进日志。
+     * code:0 成功;401 令牌不能用(login 回 UNAUTHENTICATED);422 实名没通过,tip 给原因;500 故障(tip 的 fault 列)。
+     */
+    public RealNameResponse submitRealName(RealNameRequest req) {
+        var rpcReq = new LoginRpcClient.SubmitRealNameRequestProto(req.getAccessToken(), req.getName(), req.getIdNumber());
+        try {
+            LoginRpcClient.SubmitRealNameResponseProto rsp = rpc.submitRealName(rpcReq, (int) req.getZoneId());
+            AntiAddictionStatus status = AntiAddictionStatus.from(rsp.antiAddiction);
+            if (rsp.errorCode == null || rsp.errorCode == 0) {
+                return RealNameResponse.of(RealNameResponse.CODE_OK, null, null, status);
+            }
+            if (TipFaults.isFault(rsp.errorCode)) {
+                log.warn("login.rpc SubmitRealName in-band fault tip={}", rsp.errorCode);
+                return RealNameResponse.of(LoginResponse.CODE_INTERNAL, "upstream_err=" + rsp.errorCode, rsp.errorCode, status);
+            }
+            return RealNameResponse.of(RealNameResponse.CODE_REJECTED, "upstream_err=" + rsp.errorCode, rsp.errorCode, status);
+        } catch (StatusRuntimeException e) {
+            Status.Code c = e.getStatus().getCode();
+            log.warn("login.rpc SubmitRealName failed: {}", c);
+            return RealNameResponse.of(httpCodeForRpcStatus(c), messageForRpcStatus(c), null, null);
+        } catch (IllegalArgumentException e) {
+            // zone_id 不合法(选不到 login 实例)
+            return RealNameResponse.of(LoginResponse.CODE_INTERNAL, "invalid_zone", null, null);
+        } catch (Exception e) {
+            log.error("login.rpc SubmitRealName unexpected error: {}", e.getClass().getSimpleName());
+            return RealNameResponse.of(LoginResponse.CODE_INTERNAL, "internal_error", null, null);
         }
     }
 

@@ -67,6 +67,9 @@ struct RedisClusterOptions
 	redis_cluster::QueueLimits limits;
 	redis_cluster::Duration topologyRefreshPeriod = std::chrono::seconds(30);
 	redis_cluster::Duration topologyRefreshMinInterval = std::chrono::seconds(1);
+	// CLUSTER SLOTS 在途的上限(断线重连 R19)。健康集群的应答是毫秒级;过了它按失败处理、另起一次,
+	// 不再等那条连接的存活探测(约 15+5s)把它断掉。只在 1s 的节拍上检查,实际作废时刻最多晚一拍。
+	redis_cluster::Duration topologyRefreshTimeout = std::chrono::seconds(5);
 	// 全部已知节点连不上持续这么久,就把种子连回来重新拿拓扑。不能一断就连:启动时种子退场之后,
 	// 主节点还在握手的那一小段同样是「一个都没连上」,不该把种子又招回来。
 	redis_cluster::Duration seedFallbackDelay = std::chrono::seconds(5);

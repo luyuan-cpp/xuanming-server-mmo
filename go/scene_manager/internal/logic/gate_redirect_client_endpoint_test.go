@@ -169,6 +169,25 @@ func TestSignRedirectToGate_TargetAddressIsSelectResult(t *testing.T) {
 	assert.Equal(t, signHMAC(testRedirectSecret, info.GetTokenPayload()), info.GetTokenSignature())
 }
 
+// 小游戏客户端的 WebSocket 地址取自挑中的那台 gate 自报的 client_ws_url(docs/design/minigame-websocket-gate.md W7),
+// 不是另一台的;没自报时为空串,原生客户端不读它。
+func TestSignRedirectToGate_WsUrlIsThePickedGatesOwn(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	busy := testGateNode(1, 100, 80, testEndpoint("10.0.0.1", 18000), testEndpoint("127.0.0.1", 30000))
+	busy.ClientWsUrl = "wss://ws.example.com/ws/10.0.0.1/18000"
+	idle := testGateNode(2, 100, 5, testEndpoint("10.0.0.2", 18000), testEndpoint("127.0.0.1", 30001))
+	idle.ClientWsUrl = "wss://ws.example.com/ws/10.0.0.2/18000"
+
+	info, err := signRedirectToGate([]*commonpb.NodeInfo{busy, idle}, gateMarks{}, true, testRedirectSecret, testRedirectZoneID, 9_000_001, now, firstDraws)
+	require.NoError(t, err)
+	assert.Equal(t, idle.GetClientWsUrl(), info.GetTargetGateWsUrl())
+
+	idle.ClientWsUrl = ""
+	info, err = signRedirectToGate([]*commonpb.NodeInfo{busy, idle}, gateMarks{}, true, testRedirectSecret, testRedirectZoneID, 9_000_001, now, firstDraws)
+	require.NoError(t, err)
+	assert.Empty(t, info.GetTargetGateWsUrl())
+}
+
 func TestSignRedirectToGate_FallbackAddressWhenNotRequired(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	n := testGateNode(1, 100, 0, testEndpoint("10.0.0.1", 18000), nil)

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"match/internal/metrics"
 	rankpb "proto/rank"
+	"shared/generated/pb/table"
 	"shared/grpckeepalive"
 	"shared/serviceauth"
 	"shared/tracing"
@@ -197,7 +198,74 @@ func (s *Store) PublishRankOnce(ctx context.Context, client rankpb.RankAdminClie
 			}
 		}
 	}
+	if e = s.publishRankRemovals(ctx, client, secret, boards); e != nil && first == nil {
+		first = e
+	}
 	return first
+}
+
+// rankRemovalPage 是一轮最多处理的待摘榜行数。只有删角会写这张表,量很小;各副本都处理、不按片分工:
+// rank 按 (榜, 代次, 请求号) 幂等,删行按主键,两个副本同摘一行只是多一次调用。
+const rankRemovalPage = 16
+
+// publishRankRemovals 把删角收尾记下的待摘榜行(match_rank_removal)投给 rank:RemoveRankEntry 删掉分数并在同一事务立墓碑,
+// 确认之后删行(docs/design/account-deletion.md §6.2)。请求号取 player_id:一名玩家在一张榜上只摘一次,重放同号同载荷,rank 回成功。
+// 代次固定 1(bindRankBoard 打开的是 Generation 1 的永久榜)。榜已封或已隐藏、榜不存在都没有可摘的了,同样删行;
+// 其余拒绝与调用失败留着行,下一轮重投,回第一个错误。本模式的榜这一轮没绑上(boards 里没有或是 0)就跳过。
+// 墓碑让行的先后无所谓:摘榜之前已经产出、还没投出去的旧批次里有他,迟到时被墓碑拒掉。
+func (s *Store) publishRankRemovals(ctx context.Context, client rankpb.RankAdminClient, secret string, boards map[uint32]uint64) error {
+	rows, e := s.DB.QueryContext(ctx, "SELECT mode,player_id FROM match_rank_removal ORDER BY mode,player_id LIMIT ?", rankRemovalPage)
+	if e != nil {
+		return e
+	}
+	type removal struct {
+		mode   uint32
+		player uint64
+	}
+	var pending []removal
+	for rows.Next() {
+		var r removal
+		if e = rows.Scan(&r.mode, &r.player); e != nil {
+			rows.Close()
+			return e
+		}
+		pending = append(pending, r)
+	}
+	if e = errors.Join(rows.Err(), rows.Close()); e != nil {
+		return e
+	}
+	var first error
+	for _, r := range pending {
+		if !rankPublishBudgetLeft(ctx) {
+			break
+		}
+		board := boards[r.mode]
+		if board == 0 {
+			continue
+		}
+		if e = s.removeFromRank(ctx, client, secret, board, r.mode, r.player); e != nil && first == nil {
+			first = e
+		}
+	}
+	return first
+}
+
+func (s *Store) removeFromRank(ctx context.Context, client rankpb.RankAdminClient, secret string, board uint64, mode uint32, player uint64) error {
+	request := &rankpb.RemoveRankEntryRequest{BoardId: board, Generation: 1, EntityId: player, RequestId: player}
+	if e := serviceauth.Sign(rankpb.RankAdmin_RemoveRankEntry_FullMethodName, request, "match", secret, uint64(time.Now().UnixMilli())); e != nil {
+		return e
+	}
+	response, e := client.RemoveRankEntry(ctx, request)
+	if e != nil {
+		return e
+	}
+	switch tip := response.GetErrorMessage().GetId(); tip {
+	case 0, uint32(table.RankError_kRankGenerationClosed), uint32(table.RankError_kRankBoardNotFound):
+	default:
+		return fmt.Errorf("rank refused to remove a deleted player from the board of mode %d: tip=%d", mode, tip)
+	}
+	_, e = s.DB.ExecContext(ctx, "DELETE FROM match_rank_removal WHERE mode=? AND player_id=?", mode, player)
+	return e
 }
 
 // bindRankBoard 找出一个计分模式的榜(还没有就向 rank 打开),并给本模式里还没记榜号的片补上。

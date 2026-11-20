@@ -1,12 +1,14 @@
 # 本机开发跨进程证明。只注入调用进程需要的键；部署环境必须由Secret提供，不调用本文件。
 function Get-AccountDirectoryDevSecretAllNames {
     # 末尾是玩家存盘接口的调用密钥:scene 签名、go/db 验签,两端同值。
-    @('LOGIN','TRADE','SCENE','SCENE_MANAGER' | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" }) + 'MMORPG_PLAYER_STORE_SECRET_SCENE'
+    @('LOGIN','TRADE','SCENE','SCENE_MANAGER','PAYMENT' | ForEach-Object { "MMORPG_ACCOUNT_DIRECTORY_SECRET_$_" }) + 'MMORPG_PLAYER_STORE_SECRET_SCENE'
 }
 function Get-AccountDirectoryDevSecretNames {
-    param([Parameter(Mandatory)][ValidateSet('scene','data-service','login','trade','match','scene-manager','db','player-inbox')][string]$Service)
+    param([Parameter(Mandatory)][ValidateSet('scene','data-service','login','trade','match','scene-manager','db','player-inbox','payment')][string]$Service)
     $names = switch ($Service) {
-        'data-service' { 'LOGIN'; 'TRADE'; 'SCENE'; 'SCENE_MANAGER' }
+        'data-service' { 'LOGIN'; 'TRADE'; 'SCENE'; 'SCENE_MANAGER'; 'PAYMENT' }
+        # payment 按玩家查实名(GetAccountRealName,未成年人充值限额)只用这一把;data_service 验同一把。
+        'payment' { 'PAYMENT' }
         'scene' { 'SCENE'; 'TRADE' }
         'login' { 'LOGIN' }
         'trade' { 'TRADE' }

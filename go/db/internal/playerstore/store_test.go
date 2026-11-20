@@ -78,6 +78,11 @@ func TestSave_RejectedBeforeTransaction(t *testing.T) {
 		// 本 go/db 不认识的正数行种只会来自比它新的 scene:回可重试的 TOO_NEW,不是 INVALID(数据覆写审计 r2-ps#11)。
 		{"kind 本 go/db 不认识:版本不一致,可重试", func(r *storepb.SavePlayerRequest) { r.Rows[0].Kind = storepb.PlayerStoreKind(99) }, storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW},
 		{"不认识的行种排在后面也一样", func(r *storepb.SavePlayerRequest) { r.Rows[1].Kind = storepb.PlayerStoreKind(99) }, storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW},
+		{"比已知最大号大一:已是更新版本的号", func(r *storepb.SavePlayerRequest) { r.Rows[0].Kind = storepb.PlayerStoreKind(newestKnownKind + 1) }, storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW},
+		// 退役号(旧布局的 1、2、5)哪个版本都不会再发,是请求坏了,不是版本不一致:与 C++ IsNewerKind 同口径(2026-11-20 独立评审)。
+		{"退役号 1", func(r *storepb.SavePlayerRequest) { r.Rows[0].Kind = storepb.PlayerStoreKind(1) }, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
+		{"退役号 2", func(r *storepb.SavePlayerRequest) { r.Rows[0].Kind = storepb.PlayerStoreKind(2) }, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
+		{"退役号 5 排在后面", func(r *storepb.SavePlayerRequest) { r.Rows[1].Kind = storepb.PlayerStoreKind(5) }, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
 		{"kind 重复", func(r *storepb.SavePlayerRequest) { r.Rows[1].Kind = r.Rows[0].Kind }, storepb.SavePlayerResult_SAVE_PLAYER_INVALID},
 		{"单行超预算", func(r *storepb.SavePlayerRequest) { r.Rows[0].Payload = big }, storepb.SavePlayerResult_SAVE_PLAYER_TOO_LARGE},
 		{"合计超预算", func(r *storepb.SavePlayerRequest) {

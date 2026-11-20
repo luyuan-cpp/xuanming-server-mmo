@@ -13,6 +13,7 @@ import (
 	"errors"
 	"testing"
 
+	"login/internal/config"
 	"login/internal/logic/pkg/ctxkeys"
 	"login/internal/logic/pkg/loginsession"
 	"login/internal/logic/pkg/sessionfence"
@@ -104,6 +105,10 @@ func loginSessionExists(t *testing.T, ctx context.Context, rdb *redis.Client) bo
 }
 
 func TestLeaveGame_FenceLeaveErrorFailsWithoutCleanup(t *testing.T) {
+	// seedLoginSession 按 Node.SessionExpireMin 算登录态寿命(为 0 时种不下):自己设好、用完恢复,不靠别的用例留下的全局配置。
+	previous := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = previous })
+	config.AppConfig.Node.SessionExpireMin = 30
 	svcCtx, rdb, locator := newFenceWiring(t)
 	counting := &countingLocator{fenceLocator: locator}
 	svcCtx.PlayerLocatorClient = counting

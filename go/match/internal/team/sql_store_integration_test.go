@@ -540,7 +540,7 @@ func TestTeamTiDBWholeUnitsCrossWaitUnknownAndRecovery(t *testing.T) {
 
 // 两个副本同时撮合同一个组队池(失联实例与接管实例,或跨机房段与机房段撞车),拿着同一份读页认领同一批整队:只成一局。
 // 后到的一方在入场守卫上看到整队原件已带别的 battle_id,整笔回滚,回 ErrMatchEntryOccupied(撮合侧按正常撞车处理,
-// 不记排空 HOLD,见 logic.expectedClaimRejection);票仍归先提交的那一局,后到的成局行不落库(global-match-hierarchical-pools.md §5.5)。
+// 不记排空 HOLD,见 logic.claimOutcomeUnknown);票仍归先提交的那一局,后到的成局行不落库(global-match-hierarchical-pools.md §5.5)。
 func TestTeamTiDBSecondClaimOfClaimedUnitsIsRejectedWholly(t *testing.T) {
 	f := newNativeTeamFixture(t)
 	f.create(t, 1, 101)

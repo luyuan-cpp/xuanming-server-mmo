@@ -1,0 +1,53 @@
+# mmorpg_mall 逻辑库(官方商城 java/mall_game)的建表 Job:写者闸门表 + 商城业务表。
+# k8s_deploy.ps1 的 New-MallSchemaJobManifest / Invoke-MallSchemaJob 渲染、apply,各档位都跑(tidb、外部 MySQL 主库、dev 的集群内 MySQL),
+# MMORPG_SQL_BACKEND 跟着档位。闸门表由 writer_authority -command prepare-schema 走与其余逻辑库同一份 authoritysql.EnsureCatalogSchema 建,重跑无害。
+#
+# 业务表与存储合同戳由同一次调用的 -ddl-file 装:java/mall_game/src/main/resources/db/schema.sql 由部署脚本原样渲染进
+# ConfigMap mall-schema-sql(做法同 gateway-schema)。-ddl-file 只认 CREATE TABLE IF NOT EXISTS 与 INSERT IGNORE INTO,重跑无害。
+# 重跑不升级已有的库:表已存在就跳过,戳也不改。结构对不上时商城启动核对失败、Pod 起不来,要清库重装(项目未上线)。
+#
+# 镜像是 boot 目录里 <infra>/mall 条目的 registrarImage(固定摘要,writer_authority 就在里面);DSN 与主体出自同一个 schemaPermissionSecret
+# (键 dsn、principal,dsn 必须指向 mmorpg_mall),是独立的 schema 身份,商城常驻账号不给 DDL 权限。名册定下来之前就能跑。
+# 占位由 New-MallSchemaJobManifest 替换,任何一个没替换都拒绝 apply。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mall-schema
+  labels: {app: mall-schema, tier: java-svc}
+spec:
+  # writer_authority 出错一律以 1 退出,连库失败这类暂时性错误也在其中,所以不按退出码直接判失败,留给 backoffLimit 重试。
+  backoffLimit: 4
+  podFailurePolicy:
+    rules:
+      - action: Ignore
+        onPodConditions:
+          - {type: DisruptionTarget}
+  template:
+    metadata:
+      labels: {app: mall-schema, tier: java-svc}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mall-schema
+          image: PLACEHOLDER_REGISTRAR_IMAGE
+          imagePullPolicy: IfNotPresent
+          args: ["-command", "prepare-schema", "-schema", "mmorpg_mall", "-ddl-file", "/app/mall-schema/schema.sql", "-timeout", "60s"]
+          env:
+            - name: MMORPG_SQL_SCHEMA_DSN
+              valueFrom: {secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false}}
+            - name: MMORPG_SQL_SCHEMA_PRINCIPAL
+              valueFrom: {secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: principal, optional: false}}
+            - name: MMORPG_SQL_BACKEND
+              value: "PLACEHOLDER_SQL_BACKEND"
+            - name: MMORPG_DB_PLACEMENT
+              value: 'PLACEHOLDER_DB_PLACEMENT_JSON'
+            - name: MMORPG_DB_PLACEMENT_REQUIRED
+              value: "PLACEHOLDER_DB_PLACEMENT_REQUIRED"
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - {name: mall-schema-sql, mountPath: /app/mall-schema, readOnly: true}
+      volumes:
+        - name: mall-schema-sql
+          configMap: {name: mall-schema-sql}

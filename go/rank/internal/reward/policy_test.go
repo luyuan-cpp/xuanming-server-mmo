@@ -31,6 +31,7 @@ func TestClassifyTreatsOnlyBusinessRejectionsAsRejected(t *testing.T) {
 		{"收件箱满", tipReply(uint32(table.MailError_kMailRecipientBoxFull)), nil, attemptRejected},
 		{"参数非法(含已过期、超出有效期)", tipReply(uint32(table.CommonError_kInvalidParameter)), nil, attemptRejected},
 		{"同请求号不同载荷", tipReply(uint32(table.MailError_kMailRequestConflict)), nil, attemptRejected},
+		{"收件人已注销", tipReply(uint32(table.MailError_kMailRecipientDeleted)), nil, attemptRecipientGone},
 		{"邮件故障码", tipReply(uint32(table.CommonError_kServiceUnavailable)), nil, attemptUnknown},
 		{"码表外的码", tipReply(999999), nil, attemptUnknown},
 	}
@@ -74,6 +75,7 @@ func TestNextStepBoundsRejectionRetriesByExpiryAndAttempts(t *testing.T) {
 		{"拒收且本次是第MaxAttempts次即放弃", attemptRejected, MaxAttempts - 1, now, expire, data.RewardAbandoned, now},
 		{"拒收差一次到上限仍重投", attemptRejected, MaxAttempts - 2, now, expire, data.RewardPending, now + 60*minute},
 		{"缺写定过期时刻的原件直接放弃", attemptRejected, 0, now, 0, data.RewardAbandoned, now},
+		{"收件人已注销即放弃,不等截止点", attemptRecipientGone, 0, now, expire, data.RewardAbandoned, now},
 	}
 	for _, c := range cases {
 		status, next := nextStep(c.result, c.attempts, c.nowMs, c.expireMs)

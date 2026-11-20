@@ -74,6 +74,9 @@ public:
     void Begin(const TraceContext& context, const SpanId& parent, bool parentIsRemote, SpanKind kind, SpanSystem system,
                SpanName name) noexcept;
     bool Active() const { return active_; }
+    // 在录时这个 span 的类型与来源(没在录时无意义)。
+    SpanKind Kind() const { return record_.kind; }
+    SpanSystem System() const { return record_.system; }
     // 标成错误;说明按字节截断。没在记录时什么都不做。
     void SetError(std::string_view description) noexcept;
     void SetGrpcStatusCode(uint32_t code) noexcept;
@@ -104,6 +107,13 @@ public:
     // parent 有效:开 parent 的子 span(新 span_id,沿用 trace_id 与 flags),装着导出去处且采样时记录。
     // parent 无效:返回空 span(Context() 无效、不记录)—— 不在 trace 里的调用不凭空开根(§3.3 后台任务不挂 trace)。
     static PendingSpan StartChildOf(const TraceContext& parent, SpanKind kind, SpanSystem system, SpanName name) noexcept;
+
+    // 把当前线程上最内层在录的 server span(kind 为 SERVER、来源是 system,即 ScopedIncoming 记的那个)接过来,
+    // 由调用方在回复发出时 End:OTel 的 server span 量到回复发出为止,而「派发返回后才回复」的调用(RPC0 的
+    // RpcDoneCallback::Adopt、gRPC 守护段异步之后的 Proceed)回复晚于派发作用域结束。只在派发的同步执行里调用。
+    // 作用域照旧装着这个上下文(日志不变),只是退出时不再结束它,MarkCurrentSpanError 也不再标它。
+    // 最内层没有在录的、或不是这一类的,返回空 span,作用域照旧在退出时结束它自己的。
+    static PendingSpan TakeCurrentServerSpan(SpanSystem system) noexcept;
 
     const TraceContext& Context() const { return context_; }
     bool Recording() const { return recorder_.Active(); }
@@ -205,8 +215,10 @@ private:
 // 作用域内接续收到的上下文:incoming 合法就在它下面建子 span,不合法就开新根;退出时恢复进入前的值。
 // 给带上下文的入站用(RPC0 派发、gRPC 派发、Kafka 消费,设计 §4.2 第 2 条):不接线程上碰巧在场的上下文;
 // 收到的上下文不合法也绝不拒绝请求。
-// 带 kind / 名字的构造另把这个子 span 记成 server(RPC0 / gRPC)或 consumer(Kafka)span,作用域结束时交给导出去处:
-// 只覆盖同步派发,handler Adopt 或守护段异步续跑之后的回复不延长它,完整耗时看调用方的 client span(§10.3)。
+// 带 kind / 名字的构造另把这个子 span 记成 server(RPC0 / gRPC)或 consumer(Kafka)span,作用域结束时交给导出去处;
+// 回复晚于派发结束的(handler Adopt、守护段异步之后再 Proceed),完成句柄用 PendingSpan::TakeCurrentServerSpan
+// 把 server span 接过去,量到回复发出为止(§10.3)。
+// 带名字的 ScopedRoot / ScopedIncoming 对象不要声明成 const:MarkCurrentSpanError 与接过 span 都经线程上下文改它的记录器。
 class ScopedIncoming {
 public:
     explicit ScopedIncoming(const TraceContext& incoming)

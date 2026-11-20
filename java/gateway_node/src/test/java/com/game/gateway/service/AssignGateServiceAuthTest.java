@@ -93,6 +93,22 @@ class AssignGateServiceAuthTest {
         assertEquals("unauthenticated", out.getError());
     }
 
+    /** 小游戏客户端的 WebSocket 地址原样透传(docs/design/minigame-websocket-gate.md W7);gate 没自报时不出现在应答里。 */
+    @Test
+    void gateWsUrlIsPassedThroughOnlyWhenTheGateAdvertisesOne() {
+        var admitted = new LoginRpcClient.AssignGateResponseProto();
+        admitted.status = 0;
+        admitted.ip = "10.0.0.8";
+        admitted.port = 18000;
+        admitted.wsUrl = "wss://ws.example.com/ws/10.244.0.8/18000";
+        when(rpc.assignGate(any(), anyInt())).thenReturn(admitted);
+
+        assertEquals("wss://ws.example.com/ws/10.244.0.8/18000", service.assignGate(request()).getGateWsUrl());
+
+        admitted.wsUrl = "";
+        assertNull(service.assignGate(request()).getGateWsUrl(), "空地址不下发,JSON 里不出现 gate_ws_url");
+    }
+
     private static AssignGateRequest request() {
         AssignGateRequest req = new AssignGateRequest();
         req.setZoneId(1);

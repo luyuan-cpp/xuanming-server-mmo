@@ -243,6 +243,13 @@ type fakeAdmin struct {
 	// noPrimaryKey 是这一侧没有主键的表。
 	noPrimaryKey    []string
 	noPrimaryKeyErr error
+	// ttlEnabled 是这一侧 TTL 开着的表。
+	ttlEnabled []string
+	ttlErr     error
+}
+
+func (a *fakeAdmin) TablesWithTTLEnabled(context.Context, string) ([]string, error) {
+	return a.ttlEnabled, a.ttlErr
 }
 
 func (a *fakeAdmin) ServerBackend(context.Context) (string, error) { return a.backend, nil }
@@ -813,6 +820,10 @@ func TestCutoverRefusesBeforeFreezing(t *testing.T) {
 		{"复制流的配置改过", func(h *harness) { h.repl.feed.ConfigDigest = "config-2" }, "the config of the replication stream changed"},
 		// 窗口里还要再比一次全量:verify 比了 5 秒,给比对的 2 秒装不下,不去白冻结一次。
 		{"给比对的时限装不下", func(h *harness) { h.store.records[testDB].Placement.Move.VerifyTookMs = 5000 }, "-compare-budget=2s cannot hold"},
+		// TTL 任务不过闸门:源库开着,冻结之后它照样删行;目标开着,两边各删各的。点名表和哪一侧。
+		{"源库有表开着 TTL", func(h *harness) { h.sourceAdmin.ttlEnabled = []string{"chat_send_authority"} }, "chat_send_authority. TTL jobs"},
+		{"目标有表开着 TTL", func(h *harness) { h.targetAdmin.ttlEnabled = []string{"chat_send_authority"} }, "have TTL enabled on the target"},
+		{"读不到 TTL 属性", func(h *harness) { h.sourceAdmin.ttlErr = errors.New("denied") }, "cannot read the TTL attribute of the tables on the source"},
 		{"读不到复制流", func(h *harness) { h.repl.identityErr = errReplicationBroken }, "replication is not ready"},
 		{"映射里没有复制流", func(h *harness) { h.store.records[testDB].Placement.Move.VerifiedFeed = nil }, "run verify again"},
 		{"名册里的账号目标上没有", func(h *harness) {

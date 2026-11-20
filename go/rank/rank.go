@@ -28,6 +28,7 @@ import (
 	"schemamigrate"
 	"shared/authoritysql"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/dbplacement"
 	"shared/domainhost"
 	tables "shared/generated/table"
@@ -73,6 +74,7 @@ func main() {
 	if *version {
 		return
 	}
+	clockcheck.MustPass("rank")
 	var c config
 	conf.MustLoad(*file, &c)
 	if err := run(c, *migrate); err != nil {

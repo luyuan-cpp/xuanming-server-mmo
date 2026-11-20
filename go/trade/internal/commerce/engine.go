@@ -545,8 +545,18 @@ func transferLeg(w *tradepb.TradeCommerceWorkflow, role string, to uint64, from 
 	if err != nil {
 		return err
 	}
-	addLeg(w, role, to, 4, b)
+	addEscrowLeg(w, role, to, from.PlayerId, b)
 	return nil
+}
+
+// addEscrowLeg 建一条付出 owner 托管资产的发放腿,记下 escrow_owner_id(legTxType 据它判退回是不是付回本人)。
+// 已有同名腿时什么都不改,同 addLeg:托管者只在建腿时记一次。
+func addEscrowLeg(w *tradepb.TradeCommerceWorkflow, role string, to, owner uint64, bundle *assetpb.AssetBundle) {
+	if leg(w, role) != nil {
+		return
+	}
+	addLeg(w, role, to, 4, bundle)
+	leg(w, role).EscrowOwnerId = owner
 }
 func done(l *tradepb.TradeCommerceLeg) bool    { return l != nil && l.Outcome != 0 }
 func applied(l *tradepb.TradeCommerceLeg) bool { return l != nil && l.Outcome == 2 }
@@ -759,7 +769,7 @@ func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWo
 		if err := transferLeg(w, "buyer_receive", w.HighestBidder, leg(w, "seller_debit")); err != nil {
 			return err
 		}
-		addLeg(w, "seller_receive", r.SellerPlayerId, 4, Bundle(w.BuyerAssets))
+		addLeg(w, "seller_receive", r.SellerPlayerId, 4, Bundle(w.BuyerAssets)) // 货款托管在赢家的出价合同里,本合同不记托管者
 	}
 	if (w.Stage == "open" || w.Stage == "lot_open") && r.ExpiresMs <= now {
 		w.CancelRequested = true
@@ -777,7 +787,7 @@ func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWo
 			}
 		}
 		if !emptyBundle(b) {
-			addLeg(w, "seller_return", r.SellerPlayerId, 4, b)
+			addEscrowLeg(w, "seller_return", r.SellerPlayerId, leg(w, "seller_debit").PlayerId, b)
 		}
 	}
 	if w.Stage == "deliver" {

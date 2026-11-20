@@ -114,6 +114,16 @@ public:
         BuffEntry& buffComp
     );
 
+    // 下线保留的 Buff(Buff 表 keep_on_logout = 1)写进存档,docs/design/realtime-cooldown-buff-persistence.md。
+    // 按 buff_id 排序写出;子 Buff、表里查不到的跳过;恢复还没跑到时,暂存的条目原样写在前面。
+    // 只读,不改变实体的组件集合。返回 false = 携带的未知字段损坏(只可能是内存被破坏),调用方拒绝这次存盘。
+    [[nodiscard]] static bool SaveKeptBuffs(entt::entity parent, google::protobuf::RepeatedPtrField<SavedBuffComp>& out);
+
+    // 消费 SavedBuffsPendingComp:把存档里的条目按加载时的表放回实体并生效,然后摘掉暂存组件。
+    // 不重跑免疫 / 驱散 / 叠层判断;已到期、表里没有、表改成不保留的丢弃;恢复后按系统施加(没有施法者)。
+    // 只在 InitPlayerFromAllData 里、实体初始化完之后调用。
+    static void RestoreSavedBuffs(entt::entity parent);
+
 private:
     // 有脱战父 id 时创建独立子项，并在启动回调前登记归属；UINT64_MAX 表示普通施加。
     static std::tuple<uint32_t, uint64_t> AddOrUpdateBuffWithOwner(

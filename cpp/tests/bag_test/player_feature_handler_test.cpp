@@ -24,7 +24,9 @@
 #include "services/scene/actor/action_state/system/actor_action_state.h"
 #include "services/scene/actor/attribute/comp/actor_attribute_comp.h"
 #include "services/scene/actor/attribute/system/actor_attribute_calculator.h"
+#include "services/scene/player/system/content_guard_client.h"
 #include "services/scene/player/system/player_pet.h"
+#include "proto/content_guard/content_guard.pb.h"
 #include "table/code/actoractionstate_table.h"
 #include "table/code/attributeautoplan_table.h"
 #include "table/code/attributedimension_table.h"
@@ -1168,6 +1170,163 @@ TEST_F(PetShopTest, CaptureCandidatesDoNotModifyPetsUntilCommit) {
     PetSystem::CommitCapturedPets(player, prepared);
     EXPECT_EQ(count + 1, Comp().pets_size());
     EXPECT_EQ(prepared.front().pet_id(), Comp().pets(count).pet_id());
+}
+
+// ── 宝宝改名先送内容安全(docs/design/rename-and-content-safety.md §6.6)──────────────
+// RequestRename 只在送检通过之后才扣钱、改名;被拒绝、服务不可用、玩家已下线时什么都不变。
+// 内容安全的传输换成记账的替身:请求先攒着,由用例决定什么时候、以什么结局回。
+
+// 替身的状态放静态成员:ContentGuardClient 的注入点是普通函数指针,带不了捕获。
+struct FakeContentGuard {
+    static inline bool available = true;
+    static inline std::vector<content_guard::CheckTextRequest> requests;
+    static inline std::vector<ContentGuardClient::Done> pending;
+
+    static bool Send(const content_guard::CheckTextRequest& request, ContentGuardClient::Done done) {
+        if (!available) return false;
+        requests.push_back(request);
+        pending.push_back(std::move(done));
+        return true;
+    }
+    static void Reset() {
+        available = true;
+        requests.clear();
+        pending.clear();
+    }
+    // 按先后顺序回最早的那一次送检。
+    static void Reply(ContentGuardClient::Verdict verdict) {
+        ASSERT_FALSE(pending.empty()) << "no content check is waiting for a reply";
+        auto done = std::move(pending.front());
+        pending.erase(pending.begin());
+        ContentGuardClient::Result result;
+        result.verdict = verdict;
+        done(result);
+    }
+};
+
+// 改名用例用的新名字。放在命名空间而不是夹具成员里:成员不放指针(含 const char*)。
+const std::string kPetNewName = "小白";
+
+class PetRenameReviewTest : public PetAllocationTest {
+protected:
+    void SetUp() override {
+        PetAllocationTest::SetUp();
+        if (HasFatalFailure()) return;
+        FakeContentGuard::Reset();
+        ContentGuardClient::SetTransportForTest(&FakeContentGuard::Send);
+        // 送检的回调按 player_id 重新找实体,所以玩家得在在线表里。
+        tlsEcs.playerList[kPlayerId] = player;
+    }
+    void TearDown() override {
+        ContentGuardClient::SetTransportForTest(nullptr);
+        FakeContentGuard::Reset();
+        tlsEcs.playerList.erase(kPlayerId);
+        PetAllocationTest::TearDown();
+    }
+    std::string PetName() { return Comp().pets(0).name(); }
+
+    static constexpr Guid kPlayerId = 565656; // 与 PetComponentOwnershipTest 给实体挂的 PlayerGuidComp 相同
+};
+
+TEST_F(PetRenameReviewTest, FailedPrecheckIsRejectedWithoutSendingForReview) {
+    EXPECT_EQ(kPetNameInvalid, PetSystem::RequestRename(player, kPetId, ""));
+    EXPECT_EQ(kPetNotFound, PetSystem::RequestRename(player, kPetId + 1, kPetNewName));
+    EXPECT_TRUE(FakeContentGuard::requests.empty()) << "a name that fails the local checks must not be sent for review";
+}
+
+TEST_F(PetRenameReviewTest, NoReadyGuardNodeRejectsOnTheSpotAndChangesNothing) {
+    FakeContentGuard::available = false;
+    const auto gold = Gold();
+    const auto before = Comp().SerializeAsString();
+    EXPECT_EQ(kServiceUnavailable, PetSystem::RequestRename(player, kPetId, kPetNewName));
+    EXPECT_EQ(gold, Gold());
+    EXPECT_EQ(before, Comp().SerializeAsString());
+}
+
+TEST_F(PetRenameReviewTest, NameAndGoldOnlyChangeAfterTheReviewPasses) {
+    const auto gold = Gold();
+    ASSERT_EQ(kSuccess, PetSystem::RequestRename(player, kPetId, kPetNewName));
+    ASSERT_EQ(1u, FakeContentGuard::requests.size());
+    EXPECT_EQ(content_guard::TEXT_SCENE_PET_NAME, FakeContentGuard::requests.front().scene());
+    EXPECT_EQ(kPetNewName, FakeContentGuard::requests.front().text());
+    EXPECT_EQ(kPlayerId, FakeContentGuard::requests.front().player_id());
+    // 已受理,但判定还没回来:名字和钱都没动。
+    EXPECT_NE(kPetNewName, PetName());
+    EXPECT_EQ(gold, Gold());
+
+    FakeContentGuard::Reply(ContentGuardClient::Verdict::kPass);
+    EXPECT_EQ(kPetNewName, PetName());
+    const auto* rule = &PetRuleTableManager::Instance().FindAll().data(0);
+    EXPECT_EQ(gold - rule->rename_cost_gold(), Gold());
+}
+
+TEST_F(PetRenameReviewTest, RejectedOrUnavailableReviewChangesNothing) {
+    const auto gold = Gold();
+    const auto before = Comp().SerializeAsString();
+    for (const auto verdict : {ContentGuardClient::Verdict::kReject, ContentGuardClient::Verdict::kUnavailable,
+                               ContentGuardClient::Verdict::kMasked}) {
+        ASSERT_EQ(kSuccess, PetSystem::RequestRename(player, kPetId, kPetNewName));
+        FakeContentGuard::Reply(verdict);
+        EXPECT_EQ(gold, Gold());
+        EXPECT_EQ(before, Comp().SerializeAsString());
+    }
+}
+
+TEST_F(PetRenameReviewTest, ReplyAfterThePlayerLeftIsDropped) {
+    const auto gold = Gold();
+    const auto before = Comp().SerializeAsString();
+    ASSERT_EQ(kSuccess, PetSystem::RequestRename(player, kPetId, kPetNewName));
+    tlsEcs.playerList.erase(kPlayerId);
+    FakeContentGuard::Reply(ContentGuardClient::Verdict::kPass);
+    EXPECT_EQ(gold, Gold());
+    EXPECT_EQ(before, Comp().SerializeAsString());
+}
+
+TEST_F(PetRenameReviewTest, DoubleSubmitChargesOnce) {
+    ASSERT_EQ(kSuccess, PetSystem::RequestRename(player, kPetId, kPetNewName));
+    ASSERT_EQ(kSuccess, PetSystem::RequestRename(player, kPetId, kPetNewName));
+    ASSERT_EQ(2u, FakeContentGuard::pending.size());
+    FakeContentGuard::Reply(ContentGuardClient::Verdict::kPass);
+    const auto goldAfterFirst = Gold();
+    FakeContentGuard::Reply(ContentGuardClient::Verdict::kPass);
+    EXPECT_EQ(kPetNewName, PetName());
+    EXPECT_EQ(goldAfterFirst, Gold()) << "the second landing finds the name already set and must not charge again";
+}
+
+TEST_F(PetRenameReviewTest, DirectRenameStillAppliesWithoutReview) {
+    // Rename 留给已经送检过的调用方:它不送检、当场落地。
+    EXPECT_EQ(kSuccess, PetSystem::Rename(player, kPetId, kPetNewName));
+    EXPECT_EQ(kPetNewName, PetName());
+    EXPECT_TRUE(FakeContentGuard::requests.empty());
+}
+
+TEST(ContentGuardClientTest, FromReplyOnlyTrustsPass) {
+    using Verdict = ContentGuardClient::Verdict;
+    content_guard::CheckTextResponse reply;
+
+    EXPECT_EQ(Verdict::kUnavailable, ContentGuardClient::FromReply(false, &reply).verdict) << "a failed call is never a pass";
+    EXPECT_EQ(Verdict::kUnavailable, ContentGuardClient::FromReply(true, nullptr).verdict);
+
+    EXPECT_EQ(Verdict::kReject, ContentGuardClient::FromReply(true, &reply).verdict) << "an unspecified verdict must not pass";
+
+    reply.set_verdict(content_guard::TEXT_VERDICT_PASS);
+    EXPECT_TRUE(ContentGuardClient::FromReply(true, &reply).Passed());
+
+    reply.set_verdict(content_guard::TEXT_VERDICT_MASKED);
+    EXPECT_EQ(Verdict::kReject, ContentGuardClient::FromReply(true, &reply).verdict) << "masked without text is a defect";
+    reply.set_masked_text("**");
+    reply.set_category(content_guard::TEXT_CATEGORY_ABUSE);
+    const auto masked = ContentGuardClient::FromReply(true, &reply);
+    EXPECT_EQ(Verdict::kMasked, masked.verdict);
+    EXPECT_EQ("**", masked.maskedText);
+    EXPECT_EQ(static_cast<uint32_t>(content_guard::TEXT_CATEGORY_ABUSE), masked.category);
+    EXPECT_FALSE(masked.Passed()) << "name scenes treat a masked verdict as unusable";
+
+    reply.set_verdict(content_guard::TEXT_VERDICT_REJECT);
+    EXPECT_EQ(Verdict::kReject, ContentGuardClient::FromReply(true, &reply).verdict);
+
+    reply.set_verdict(static_cast<content_guard::TextVerdict>(99));
+    EXPECT_EQ(Verdict::kReject, ContentGuardClient::FromReply(true, &reply).verdict) << "a verdict added later must not pass";
 }
 
 } // namespace

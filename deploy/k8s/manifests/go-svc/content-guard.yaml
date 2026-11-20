@@ -1,0 +1,131 @@
+# content-guard:内容安全服务(docs/design/rename-and-content-safety.md §6)。
+#
+# **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
+# 无状态:不连数据库 / Redis / Kafka,只连 etcd(读词库、注册、热关停)。
+# 调用方是收玩家文字的服务:login / guild / chat 按 go-zero 的发现键 contentguard.rpc 找,
+# scene 按 NodeInfo 前缀 ContentGuardNodeService.rpc 找;客户端到不了它(路由服的路由表里没有这个服务)。
+# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它。
+# ConfigMap go-svc-content-guard-config 由脚本生成。
+#
+# 词库在 etcd,用 go/content_guard/cmd/lexicon 发布。staging / prod 的 ConfigMap 里 RequireLexicon 为 true:
+# 没加载到词库的副本 /healthz 回 503,就绪探针不过、不接流量。所以**首次部署前要先发布词库**,否则滚动发布停在就绪检查上。
+# 对外地址:写进 NodeInfo 的 IP 优先取下面注入的 POD_IP(content_guard.go advertisedHost),不能原样写 ListenOn 的 0.0.0.0。
+apiVersion: v1
+kind: Service
+metadata:
+  name: content-guard
+  labels:
+    app: content-guard
+    tier: go-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: content-guard
+  ports:
+    - name: grpc
+      port: 50250
+      targetPort: 50250
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: content-guard
+  labels:
+    app: content-guard
+    tier: go-svc
+spec:
+  # 建角(自定义名字)和聊天都要过它,至少两个副本;每个副本内存里各有一份编译好的词库。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: content-guard
+  template:
+    metadata:
+      labels:
+        app: content-guard
+        tier: go-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9290"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于建角和聊天都不可用
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: content-guard
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: content-guard
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+            # 写进 NodeInfo 的对外 IP(content_guard.go advertisedHost 优先读它)
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args: ["-f", "/app/etc/content_guard.yaml"]
+          ports:
+            - containerPort: 50250
+              name: grpc
+            # 与 ConfigMap 的 MetricsListenAddr ":9290" 及上面 prometheus.io/port 注解一致(9290 = 内容安全)
+            - containerPort: 9290
+              name: metrics
+          # 就绪看 /healthz:要求词库(RequireLexicon)而还没加载到时回 503。这时进程也还没监听 gRPC 口、没注册进 etcd
+          # (调用方按 etcd 里的注册找实例,所以「没准备好」靠不注册来表达,见 content_guard.go waitForLexicon)。
+          # 新版本读不了线上词库(比如词库格式升了版本)时,滚动发布会停在这里,旧副本继续服务。
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9290
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          # 存活看 /livez(进程活着就回 200),不看 gRPC 口:等词库期间 gRPC 口还没监听,
+          # 没词库不是进程坏了,重启它也不会让词库出现。
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: 9290
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-content-guard-config
+---
+# PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: content-guard-pdb
+  labels:
+    app: content-guard
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: content-guard

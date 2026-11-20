@@ -47,7 +47,7 @@ function Get-FixtureTableRows {
         mmorpg_match = @('match_authority_ticket', 'match_battle_completion', 'team_launch', 'team_launch_role', 'schema_migrations')
         mmorpg_player_inbox = @('player_inbox_item', 'schema_migrations')
         mmorpg_rank = @('rank_score', 'schema_migrations')
-        mmorpg_payment = @('payment_intent', 'payment_txn', 'payment_channel_cursor', 'schema_migrations')
+        mmorpg_payment = @('payment_intent', 'payment_txn', 'payment_channel_cursor', 'payment_spend', 'schema_migrations')
         mmorpg_trade = @('trade_commerce', 'trade_asset_op', 'schema_migrations')
         # 存档库只有地域存档库(A17c):夹具仓库的 go/login 是 dev 地域 0、K=1,分片用例另造 K=2 的 login。
         player_store_1000000_db = @('player_store', 'player_centre_database', 'user_accounts', 'schema_migrations')
@@ -914,7 +914,13 @@ try {
     Test-Case 'player_inbox 拿到 scene 的入场验签密钥,否则常驻进程拒启' {
         . "$PSScriptRoot/../lib/account_directory_dev_secret.ps1"
         Assert-Equal 'MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE' ((Get-AccountDirectoryDevSecretNames -Service 'player-inbox') -join ',') '只给这一把'
-        Assert-Match ([IO.File]::ReadAllText((Join-Path $PSScriptRoot '../go_services.ps1'))) "@\('data-service','login','trade','match','scene-manager','db','player-inbox'\)" '启动器接线'
+        Assert-Match ([IO.File]::ReadAllText((Join-Path $PSScriptRoot '../go_services.ps1'))) "@\('data-service','login','trade','match','scene-manager','db','player-inbox','payment'\)" '启动器接线'
+    }
+    Test-Case 'payment 拿到查实名的调用密钥、只拿这一把;data_service 验同一把' {
+        . "$PSScriptRoot/../lib/account_directory_dev_secret.ps1"
+        Assert-Equal 'MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT' ((Get-AccountDirectoryDevSecretNames -Service 'payment') -join ',') '只给这一把:payment 不该拿到 login / trade / scene 的目录能力'
+        Assert-True (@(Get-AccountDirectoryDevSecretNames -Service 'data-service') -contains 'MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT') 'data_service 验 GetAccountRealName 用同一把'
+        Assert-True (@(Get-AccountDirectoryDevSecretAllNames) -contains 'MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT') '登记进本机证明文件,payment 与 data_service 两个进程读到同一个值'
     }
 }
 finally {

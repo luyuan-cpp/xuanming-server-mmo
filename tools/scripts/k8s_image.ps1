@@ -92,6 +92,21 @@ param(
     [string]$GateExternalTrafficPolicy = "",
     [ValidateSet("", "deployment", "agones")]
     [string]$BattleOrchestrator = "",
+    # 小游戏客户端(微信 / 抖音)的 WebSocket 边缘,透传给 k8s_deploy.ps1 同名参数(语义见那边的参数注释与
+    # docs/design/minigame-websocket-gate.md W8)。写法同上:字符串留空、数值取「未指定」时不透传。
+    # 每次发布都按本次参数重新生成 gate / battle 工作负载,以 -WsEdgeHost 运行的环境每次都要再传同一组参数;
+    # ws-edge 本身只在 release-all(不带 -SkipInfra)时重新 apply,release-zone 只影响 gate 自报的 WebSocket 地址。
+    [string]$WsEdgeHost = "",
+    [string]$WsEdgeTlsSecret = "",
+    # 逗号分隔的 IPv4 CIDR,原样透传。
+    [string]$WsEdgePodCidrs = "",
+    # 0 = 未指定。
+    [int]$WsEdgeReplicas = 0,
+    [ValidateSet("", "LoadBalancer", "NodePort")]
+    [string]$WsEdgeServiceType = "",
+    # -1 = 未指定。
+    [int]$WsEdgeNodePort = -1,
+    [string]$WsEdgeImage = "",
     # 确认本次就是要切换入口形态(-ClientEntryMode / -BattleOrchestrator 换值)或改 gate / battle 的客户端地址来源
     # (会踢人、在打的战斗作废),透传给 k8s_deploy.ps1 同名参数,语义见那边参数注释;switch 只在被指定时透传,
     # 只在维护窗口里显式加。release-zone 只重建 gate,release-all(不带 -SkipInfra)还有 battle。
@@ -469,6 +484,14 @@ function Invoke-K8sDeploy {
     if ($GateNodePortBase -ne -1) { $args.GateNodePortBase = $GateNodePortBase }
     if (-not [string]::IsNullOrWhiteSpace($GateExternalTrafficPolicy)) { $args.GateExternalTrafficPolicy = $GateExternalTrafficPolicy }
     if (-not [string]::IsNullOrWhiteSpace($BattleOrchestrator)) { $args.BattleOrchestrator = $BattleOrchestrator }
+    # 小游戏 WebSocket 边缘(-WsEdge*):字符串非空、数值给了才传。不粘滞:漏传由 k8s_deploy.ps1 按集群现状在写操作之前拒绝。
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeHost)) { $args.WsEdgeHost = $WsEdgeHost }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeTlsSecret)) { $args.WsEdgeTlsSecret = $WsEdgeTlsSecret }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgePodCidrs)) { $args.WsEdgePodCidrs = $WsEdgePodCidrs }
+    if ($WsEdgeReplicas -gt 0) { $args.WsEdgeReplicas = $WsEdgeReplicas }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeServiceType)) { $args.WsEdgeServiceType = $WsEdgeServiceType }
+    if ($WsEdgeNodePort -ne -1) { $args.WsEdgeNodePort = $WsEdgeNodePort }
+    if (-not [string]::IsNullOrWhiteSpace($WsEdgeImage)) { $args.WsEdgeImage = $WsEdgeImage }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 玩家域与控制两套 Redis Cluster:非 0 / 非空才传。

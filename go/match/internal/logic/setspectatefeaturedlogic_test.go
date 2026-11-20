@@ -154,7 +154,7 @@ func TestSetSpectateFeaturedQuotaFullThenPromotedByViewer(t *testing.T) {
 	const watcher, battleId = uint64(7501), uint64(884030)
 	registerBattle(t, svcCtx, battleId, nowMs())
 	raiseTier(t, svcCtx, battleId, tierRelay)
-	_, err := mr.ZAdd(spectateBroadcastActiveKey, float64(testRelayDeadlineMs), "999999")
+	_, err := mr.ZAdd(spectateBroadcastIndex.keyFor(999999), float64(testRelayDeadlineMs), "999999")
 	require.NoError(t, err)
 
 	resp := setFeatured(t, svcCtx, battleId, true)
@@ -163,7 +163,7 @@ func TestSetSpectateFeaturedQuotaFullThenPromotedByViewer(t *testing.T) {
 	require.True(t, mr.Exists(spectateFeaturedKey(battleId)))
 	require.Empty(t, relay.promotes)
 
-	_, err = svcCtx.MatchRedis.Zrem(spectateBroadcastActiveKey, "999999")
+	_, err = svcCtx.MatchRedis.Zrem(spectateBroadcastIndex.keyFor(999999), "999999")
 	require.NoError(t, err)
 	mr.FastForward(spectatePromoteLeaseSeconds * time.Second) // 上一次尝试的租约到期
 	requireLobbyAdmitted(t, lobbyAdmitOnGate3(t, svcCtx, watcher, battleId), battleId, watcher)
@@ -188,9 +188,7 @@ func TestSetSpectateFeaturedMissingRoomRejectsAndUnmarks(t *testing.T) {
 
 		require.Equal(t, pb.SpectateFeaturedReject_SPECTATE_FEATURED_REJECT_NOT_FOUND, setFeatured(t, svcCtx, battleId, true).GetReject())
 		require.False(t, mr.Exists(spectateFeaturedKey(battleId)))
-		count, err := svcCtx.MatchRedis.Zcard(spectateFeaturedActiveKey)
-		require.NoError(t, err)
-		require.Zero(t, count)
+		require.Zero(t, spectateIndexSize(t, svcCtx, spectateFeaturedIndex))
 		require.Zero(t, broadcastQuotaCount(t, svcCtx))
 	})
 	t.Run("其它拒绝", func(t *testing.T) {
@@ -272,27 +270,23 @@ func TestListWatchableBattlesDropsFeaturedWithoutRecord(t *testing.T) {
 	svcCtx, mr := newFeaturedSvcCtx(t)
 	const gone, live = uint64(884060), uint64(884061)
 	registerBattle(t, svcCtx, live, nowMs())
-	_, err := mr.ZAdd(spectateFeaturedActiveKey, float64(testRelayDeadlineMs), strconv.FormatUint(gone, 10))
+	_, err := mr.ZAdd(spectateFeaturedIndex.keyFor(gone), float64(testRelayDeadlineMs), strconv.FormatUint(gone, 10))
 	require.NoError(t, err)
 
 	ids, _ := listIds(t, svcCtx, 10)
 	require.Equal(t, []uint64{live}, ids)
-	count, err := svcCtx.MatchRedis.Zcard(spectateFeaturedActiveKey)
-	require.NoError(t, err)
-	require.Zero(t, count)
+	require.Zero(t, spectateIndexSize(t, svcCtx, spectateFeaturedIndex))
 }
 
 // 赛事局索引按到期清理:定期清理顺手清掉过期成员,未到期的保留(谁来调见 TestSpectateMaintenanceLoopPrunesIndexes)。
 func TestCleanupExpiredSpectateIndexPrunesFeaturedIndex(t *testing.T) {
 	svcCtx, mr := newFeaturedSvcCtx(t)
-	_, err := mr.ZAdd(spectateFeaturedActiveKey, float64(nowMs()-1000), "884070")
+	_, err := mr.ZAdd(spectateFeaturedIndex.keyFor(884070), float64(nowMs()-1000), "884070")
 	require.NoError(t, err)
-	_, err = mr.ZAdd(spectateFeaturedActiveKey, float64(testRelayDeadlineMs), "884071")
+	_, err = mr.ZAdd(spectateFeaturedIndex.keyFor(884071), float64(testRelayDeadlineMs), "884071")
 	require.NoError(t, err)
 
 	cleanupExpiredSpectateIndex(svcCtx)
 
-	members, err := mr.ZMembers(spectateFeaturedActiveKey)
-	require.NoError(t, err)
-	require.Equal(t, []string{"884071"}, members)
+	require.Equal(t, []string{"884071"}, spectateIndexMembers(t, mr, spectateFeaturedIndex))
 }

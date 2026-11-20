@@ -19,6 +19,7 @@ module**,各自有 `go.mod`,通过 `replace` 引用同目录下的公共库。
 | `friend/` | 50400 | 好友、黑名单、推荐 | MySQL、Redis、Kafka |
 | `trade/` | 50800 | 玩家寄售交易 | MySQL、Redis |
 | `player_inbox/` | 50950(指标 9270) | 玩家持久收件箱:GM 处置等 scene 待办的入箱、拉取、确认与对账([设计](../docs/design/player-inbox-service.md)、[运维](../docs/ops/player-inbox-runbook.md)) | MySQL、Redis、Kafka |
+| `content_guard/` | 50250(指标 9290) | 内容安全:名字、公告、聊天的文字送检,本地词库匹配;词库在 etcd,用 `cmd/lexicon` 发布([设计](../docs/design/rename-and-content-safety.md)) | 无(只连 etcd) |
 
 所有服务都注册到 etcd。端口是各自 `etc/*.yaml` 里的本地默认值。
 

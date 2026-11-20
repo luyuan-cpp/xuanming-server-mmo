@@ -11,6 +11,7 @@ import (
 
 	tradepb "proto/trade"
 	"shared/assetop"
+	"shared/authoritysql"
 )
 
 // ErrListingNotFound 表示 GetListing 查无此行。与存储故障区分:前者是业务拒绝,后者是 fault。
@@ -342,7 +343,7 @@ func (r *ListingRepo) DeleteFavorite(ctx context.Context, playerID, listingID ui
 // sql.ErrTxDone 而不是 ctx 错误,storeFault 的日志里就看不出是截止。ctx 错误不在 IsRetryableTxError 之列,
 // 不会触发重试;重试的每次尝试之前 WithTxRetry 也先看 ctx。
 func (r *ListingRepo) execFavoriteWriteTx(ctx context.Context, query string, args ...any) error {
-	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+	return assetop.WithTxRetry(ctx, r.db, txRetryAttempts, authoritysql.IsRetryableTxError, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
 			return err
 		}

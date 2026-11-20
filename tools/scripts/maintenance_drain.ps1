@@ -1,7 +1,7 @@
 #requires -Version 7
 [CmdletBinding()]
 param(
-    [ValidateSet('library','render-schema-role','render-roles','close-publication','activate-runtime','close-source','close-relay','retire-source-writers','retire-relay-writers','open-source','stop-and-collect','seed-redis-nonce','collect-redis','collect-kafka','manual-baseline','manual-sampling-request','normal-tool','verify-and-advance')]
+    [ValidateSet('library','render-schema-role','render-roles','render-repair-role','close-publication','activate-runtime','close-source','close-relay','retire-source-writers','retire-relay-writers','open-source','stop-and-collect','seed-redis-nonce','collect-redis','collect-kafka','manual-baseline','manual-sampling-request','normal-tool','verify-and-advance')]
     [string]$MaintenanceCommand = 'library',
     [string]$PlanPath = '',
     [string]$OutputPath = ''
@@ -527,6 +527,55 @@ function ConvertTo-AuthoritySchemaRoleSql {
     ) -join "`n"
 }
 
+# 修复身份(MMORPG_SQL_REPAIR_PRINCIPAL)的授权,只给 data_service 的 cmd/create_residual、cmd/admission_recover 用(负责人 2026-11-19 定)。
+# 维护身份不授业务表:它能冻结、解冻、改闸门行,再能改业务行就是一把钥匙既能关闸又能改数据。修复身份按两个工具实际执行的语句逐表授权,
+# 碰不到写者名册、排空、冻结票据这些权限真值表。闸门行只给 SELECT:工具每笔写在事务里 SELECT … FOR UPDATE 锁它、核它开着,
+# TiDB 上这只要 SELECT(同写者门的 SELECT_ONLY);不给 UPDATE,否则修复身份能把冻结的库解冻。mysql 档的 FOR UPDATE 另要
+# UPDATE / DELETE / LOCK TABLES 之一,这里不授,锁读被拒、写不进去(fail-closed),要在 mysql 档修复另行授权。
+# 在迁移之后执行:表级 GRANT 对不存在的表报 1146。账号由部署者另建,平时 ACCOUNT LOCK,修复窗口才解锁(docs/ops/mysql-backup-pitr-runbook.md §4.1a)。
+# 计划只要修复身份、另外三个控制主体(核互不相同)、各目录片与各存档库的库名;不读写者槽位、REGISTER,也不看 runtime 的 tables。
+function ConvertTo-AuthorityRepairRoleSql {
+    param([Parameter(Mandatory)][Collections.IDictionary]$Plan)
+    Assert-MaintenanceProperties -Value $Plan -Required @('repairPrincipal','maintenancePrincipal','registrarPrincipal','schemaPrincipal','directorySchemas','storeSchemas')
+    $principals=@($Plan.repairPrincipal,$Plan.maintenancePrincipal,$Plan.registrarPrincipal,$Plan.schemaPrincipal)
+    if (($principals | Select-Object -Unique).Count -ne 4) { throw 'repair必须与maintenance/registrar/schema是不同principal' }
+    $account=ConvertTo-AuthoritySqlAccount $Plan.repairPrincipal
+    # 目录各片(角色行、路由行在玩家片,ref 与目录行在账号片,名字行在名字片;K 片表结构相同,每片一样授):
+    $directoryGrants=[ordered]@{
+        route_meta='SELECT'                              # 闸门行:锁读判 writable
+        directory_shard='SELECT'                         # 打开目录时核片号
+        account_directory='SELECT,INSERT,UPDATE'         # 补 ref 时锁目录行,没有就建(INSERT … ON DUPLICATE KEY UPDATE);打开时的形状守卫
+        account_role='SELECT,INSERT'                     # 证明孤儿角色永远不会提交时插墓碑;不给 UPDATE / DELETE:墓碑不可改、不可删
+        account_role_removal='SELECT'                    # 打开目录时的形状守卫
+        account_role_ref='SELECT,INSERT,UPDATE'          # 补 ACTIVE ref(与建角第 4 步同一条 upsert)
+        player_route='SELECT'                            # 落点、路由行锁读
+        player_name='SELECT,INSERT,UPDATE,DELETE'        # 补登记与绑定、释放预留态与墓碑名下的名字
+        player_name_owner='SELECT,INSERT,UPDATE,DELETE'
+    }
+    # 各存档库:
+    $storeGrants=[ordered]@{
+        route_meta='SELECT'
+        player_store='SELECT,INSERT,UPDATE'              # 补初始行(upsert)、摘已死的持有者(owner_epoch / holder_instance / released)
+    }
+    $statements=[Collections.Generic.List[string]]::new()
+    $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach($group in @(@{schemas=$Plan.directorySchemas;grants=$directoryGrants},@{schemas=$Plan.storeSchemas;grants=$storeGrants})){
+        if(@($group.schemas).Count -eq 0){throw '修复身份授权要显式列出目录片与存档库'}
+        foreach($database in $group.schemas){
+            $identifier=ConvertTo-AuthoritySqlIdentifier $database
+            if(-not $seen.Add([string]$database)){throw '修复身份授权库重复,或同一个库既算目录片又算存档库'}
+            foreach($table in $group.grants.Keys){
+                $statements.Add("GRANT $($group.grants[$table]) ON $identifier.``$table`` TO $account;")
+            }
+        }
+    }
+    return @(
+        '-- 修复身份仅供 data_service 的 create_residual、admission_recover;迁移之后执行,按两个工具的语句逐表授权。'
+        '-- 闸门行只读;不授DDL、GRANT OPTION,不授写者名册与排空、冻结票据;墓碑不可改、不可删。'
+        $statements
+    ) -join "`n"
+}
+
 function ConvertTo-AuthorityRoleSql {
     param([Parameter(Mandatory)][Collections.IDictionary]$Plan,[Parameter(Mandatory)][string]$TemplateRoot)
     Assert-MaintenanceProperties -Value $Plan -Required @('authoritySchema','runtimePrincipal','registrarPrincipal','maintenancePrincipal','schemaPrincipal','registrationRequestFile','registrationRequestSha256','lockQualificationFile','tables','schemaDatabases') -Optional @('directorySchema','directoryShard')
@@ -1039,6 +1088,10 @@ if ($MyInvocation.InvocationName -ne '.' -and $MaintenanceCommand -ne 'library')
         'render-roles' {
             $roles=ConvertTo-AuthorityRoleSql -Plan $maintenancePlan -TemplateRoot (Join-Path $maintenanceRepo 'deploy/sql')
             $null=Write-MaintenanceImmutableJson -Path $OutputPath -Value $roles
+        }
+        'render-repair-role' {
+            # 迁移之后:修复身份的表级授权(表要已存在)。输出是一段 SQL,在各库所在的集群执行(手册 mysql-backup-pitr-runbook.md §4.1a)。
+            $null=Write-MaintenanceImmutableBytes -Path $OutputPath -Bytes ([Text.UTF8Encoding]::new($false).GetBytes((ConvertTo-AuthorityRepairRoleSql -Plan $maintenancePlan)+"`n"))
         }
         'close-publication' {
             $fence=Set-PermanentPublicationFence -Plan $maintenancePlan -RepoRoot $maintenanceRepo

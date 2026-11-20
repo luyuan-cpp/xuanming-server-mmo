@@ -578,7 +578,9 @@ func afkPassKey(playerID uint64) string {
 }
 
 // afkPassState checks whether the player has a valid AFK pass in Redis.
-// Key: player:afk_pass:{<player_id>} -> expiry unix timestamp (set by purchase/activation flow).
+// Key: player:afk_pass:{<player_id>} -> expiry unix timestamp. 这是读投影:事实源在存档(PlayerUint64Comp.afk_pass_expires_at),
+// scene 只按已提交的值写它(存盘提交回调、加载、托管心跳),SET 带 EXAT 到期(docs/design/afk-monthly-card.md §5)。
+// 本服务读不到存档(逻辑库自治),所以读这份投影;键不在 = 无月卡,读失败 = 查不出来。
 func afkPassState(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64) afkPassProbeResult {
 	val, err := svcCtx.PlayerRedis.Get(ctx, afkPassKey(playerID)).Result()
 	if errors.Is(err, redis.Nil) {

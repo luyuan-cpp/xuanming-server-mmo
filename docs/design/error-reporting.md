@@ -4,9 +4,9 @@
 > (`error_reporter.h`); shipping to a central server (Sentry-style)
 > is not done. This doc explains the split and what comes next.
 >
-> **2026-11-12 核对现状：** 切片 A 接了四处（`RpcChannel` 的 `rpc_error_in` / `rpc_error_out`，gate 的
-> `illegal_packet` 与 `router_lane_expired`），`HandleFatalSignal` 那一处没接；切片 D（SIGUSR2 转储）已在
-> `Node` 里接好；切片 B、C、E 没做。同日事件带上了日志上下文（见下文「日志上下文」），未编译。
+> **2026-11-19 现状：** 收集（切片 A 的四处接点）、计数（切片 B）、节点内转储（切片 D）都已接好，事件带日志上下文（2026-11-12）。
+> 集中推送（切片 C）、致命信号录入、Go 侧的同款缓冲（切片 E）定为不做，理由见文末「切片状态与定案」。
+> 切片 B 与日志上下文都未编译，待 Codex 验证。
 
 ---
 
@@ -94,7 +94,7 @@ destructor teardown" lifetime races.
 | `cpp/libs/engine/core/error_reporter/error_reporter.h` (new) | `Buffer { Record / Drain / Snapshot / TotalCount / DroppedCount / CurrentSize }` + namespace-level `Record(code, tag, msg)` convenience + `Instance()` singleton. Header-only, depends on `<mutex>` / `<deque>` / `<atomic>` only. |
 | `docs/design/error-reporting.md` (this file) | Decision record. |
 
-现在接了哪些调用点见文首的核对；还没接的列在下面的切片 A 里。
+现在接了哪些调用点、各切片做到哪，见文末「切片状态与定案」。
 
 ### 日志上下文（2026-11-12）
 
@@ -112,109 +112,41 @@ destructor teardown" lifetime races.
 
 ---
 
-## What's NOT done (slices to track)
+## 切片状态与定案（2026-11-19）
 
-### A. Wire the existing error sites into the buffer — **S, ~1 day**
+原计划的五片与三个开放问题，2026-11-19 按「不等以后、先按标准做法定」全部落码或定案（负责人要求）。
 
-Add a `Record()` call alongside every existing LOG_ERROR-on-error site:
+| 切片 | 状态 |
+|---|---|
+| A. 接上错误点 | 已接四处：`RpcChannel` 的 `rpc_error_in`（对端拒绝）与 `rpc_error_out`（本端拒绝请求），都按 `ShouldLogRpcEvent` 抽样录；gate 的 `illegal_packet`（带累计次数）与 `router_lane_expired`。原列表里的 `SendErrorToClient` 已随调用方删除（2026-10-16，`muduo-rpc-channel.md` §20.3）；`return_define.h` 的宏调用点太密，不接。`HandleFatalSignal` 定为不接，见下文。 |
+| B. Prometheus 计数 | 2026-11-19 已做，未编译。见下文。 |
+| C. 集中推送 | 定为不做，见下文。 |
+| D. SIGUSR2 转储 | 已做：Linux 上 `Node` 装 SIGUSR2，信号处理只置标志，主循环里写 `logs/error_reporter_dump_<时间>.jsonl`（`DumpSnapshotToDefaultPath`），首行是计数头。 |
+| E. Go 的同款缓冲 | 定为不做，见下文。 |
 
-- `error_handling_system.h::SendErrorToClient` — already logs context
-  via #70/#125; mirror that into the buffer with `tag="rpc_reject"`
-  and `error_code=err`. (2026-10-16: removed. Its only caller was the
-  retired `Scene.InvokePlayerService`, see `muduo-rpc-channel.md` §20.3.)
-- `game_channel.cpp::HandleResponseMessage` RPC_ERROR branch +
-  `SendErrorResponse` — `tag="rpc_error_in"` / `"rpc_error_out"`.
-- `return_define.h` macros — too noisy on every call site; SKIP. The
-  RPC boundary catches everything that escapes.
-- `client_message_processor.cpp::CheckMessageLimit` (#236 hook) —
-  `tag="illegal_packet"`, message includes the running count.
-- `HandleFatalSignal` (#105) — `tag="fatal_signal"`, error_code=signum.
-  Note: this MUST drain to file before re-raise, since the process is
-  about to die.
+**B. 三个指标**（`error_reporter.h` 的 `WriteMetrics` / `RegisterMetrics`）：
 
-### B. Prometheus exporter — **S, ~half day**
+- `error_reporter_events_total`（counter）：进程启动以来录入的事件数。
+- `error_reporter_dropped_events_total`（counter）：缓冲满了被挤掉的最旧事件数；它在涨，就说明转储之前已经丢了。
+- `error_reporter_buffered_events`（gauge）：缓冲里现有的条数。
+- 原方案带 `node_type` 标签，现在不带：节点类型与实例由抓取目标的标签给出，与其它 C++ 指标一致。
+- `Node::StartMetricsExporter` 起 `/metrics` 时调 `RegisterMetrics()`，重复调用无副作用。`WriteMetrics(buffer, writer)` 不读全局状态，单测直接构造缓冲；用例在 `error_reporter_test.cpp`。
 
-Three gauges in scrape_endpoint:
+**C. 集中推送不做。** 原方案要在节点里起一个推送循环，把事件发到 Sentry 一类的服务。现在已有统一的日志管道（Alloy → Loki → Grafana，`docs/design/distributed-tracing.md`）：四个接点录入的同时都打了 WARN / ERROR 日志，行尾带 `trace_id` / `player_id`，集中查看与按级别告警都在 Loki 上做。再加一条推送就是第二份管道：要另写重试、落盘与限流，丢了还要另外对账，和单一事实源的原则冲突。缓冲只服务节点本身：计数进 `/metrics`，现场用 SIGUSR2 转储。
 
-```
-error_reporter_total{node_type}        // monotonic since process start
-error_reporter_dropped_total{node_type}
-error_reporter_current_size{node_type}
-```
+**致命信号不录。** `HandleFatalSignal` 已经用 `LOG_ERROR` 写了信号号、线程数与调用栈，这几行带着崩溃线程的上下文进日志与 Loki，之后进程照常生成 core dump。录入缓冲要加锁、分配内存，在信号处理函数里不是异步信号安全的：崩溃若正好发生在持有缓冲锁或 malloc 锁的线程上，处理函数会死锁，连那几行日志都写不出去。缓冲也随进程一起消失，还得在处理函数里再做一次文件转储。处理函数里能少做就少做。
 
-Same wiring pattern as `login_auth_path_total` (see
-`docs/ops/grafana-login-path-deprecation.json` for the dashboard
-template).
+**E. Go 的同款缓冲不做。** Go 服务的错误已经有两条去处：带 ctx 打的日志进 Loki（带 trace 与 player_id），各服务的错误计数进 Prometheus。进程内事件缓冲在 Go 侧没有别的用处。
 
-### C. HTTP push loop — **M, 1–2 days; deployment-specific**
+### 开放问题的定案
 
-Pick the shipping target — recommendation: a thin self-hosted Loki +
-Grafana stack to start (no SaaS vendor lock-in, runs on the same K8s
-the rest does). Sentry SDK is fine if ops prefers managed.
-
-Pseudocode for the loop:
-
-```cpp
-loop.runEvery(10.0, [] {
-    auto events = error_reporter::Instance().Drain();
-    if (events.empty()) return;
-    SerializeAndPost(events);  // deployment-defined endpoint
-});
-```
-
-Failure mode: if the shipper can't reach its endpoint, events go to
-the FLOOR — they were already drained from the buffer. Options:
-- Drain into an on-disk WAL and let the shipper re-read on retry.
-- Accept the loss and bump the per-node alert (the shipper itself
-  should emit a failure metric).
-
-Don't pre-decide here; pick when slice C lands.
-
-### D. SIGUSR2 dump-to-file — **S, ~half day; optional**
-
-Useful for "the central shipper is down, but the on-call needs to see
-what's been failing on this node":
-
-```
-kill -USR2 <pid>
-# writes /tmp/error_reporter_<pid>_<timestamp>.jsonl
-```
-
-Same install pattern as the SIGUSR1 diagnostic handler from #216.
-
-### E. Cross-language coverage — **L, when needed**
-
-`error_reporter.h` is cpp-only. The Go nodes (login / scene_manager
-/ data_service / etc.) have their own logging chain; an equivalent
-`error_reporter` package + Prometheus counters is symmetric but
-non-trivial. Defer until a deployment actually needs unified
-cross-language error visibility — Prometheus + `go_login_errors_total`
-gauges may be enough for most ops needs.
-
----
-
-## Open questions
-
-1. **Where do errors from Go services land?** The Go side already
-   has `goerrors` returned out of every logic function but no
-   aggregator. Slice E above. Probably fine to keep them in
-   Prometheus counters and skip the per-event aggregator entirely
-   on the Go side.
-
-2. **PII in error messages.** A `ShortDebugString` of a proto
-   payload may contain account names, tokens, IP addresses. Before
-   slice C ships events off-node, decide:
-   - Strip known PII fields (account, token, ip) before recording?
-   - Or trust the aggregator to redact?
-   - Or only ship aggregate counts, not bodies?
-
-   Recommendation: strip at the recorder (`error_reporter::Record`
-   does the strip), so the buffer itself never holds PII. Conservative
-   default.
-
-3. **Sampling.** If error rate explodes (e.g. a config rollout
-   breaks every login), the buffer fills in milliseconds and
-   slice C might struggle. Add a per-tag rate cap in slice A?
+1. **Go 的错误去哪**：同切片 E，不另做缓冲。
+2. **消息里的敏感信息**：
+   - 录入的 `message` 只许写方法名、消息号、计数、内部 id 这类诊断字段；不写账号、token、IP，也不写 proto 正文（`ShortDebugString` 之类）。
+   - 转储只留在节点本地，不外发。
+   - 现有四处都符合；新增接点按同一口径评审。
+   - 不在 `Record` 里做自动脱敏：它不知道字段的语义，按名字猜着删既删不干净，又会误删。
+3. **抽样**：由接点负责，照 `RpcChannel` 的 `ShouldLogRpcEvent` 只录抽中的那些。缓冲本身有界，满了挤掉最旧的，丢了多少看 `error_reporter_dropped_events_total`。不加按 tag 的限速。
 
 ---
 

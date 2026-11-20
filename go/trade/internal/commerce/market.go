@@ -147,10 +147,8 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 		}
 		mw.SellerIdentity = proto.Clone(sellWorkflow.SellerIdentity).(*tradepb.TradeRoleIdentity)
 		mw.BuyerIdentity = proto.Clone(buyWorkflow.SellerIdentity).(*tradepb.TradeRoleIdentity)
-		addLeg(mw, "buyer_receive", buy.SellerPlayerId, 4, &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: buy.ItemConfigId, Count: qty}}})
-		addLeg(mw, "seller_receive", sell.SellerPlayerId, 4, &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: buy.CurrencyType, Amount: uint64(qty) * price}}})
-		if buy.UnitPrice > price {
-			addLeg(mw, "buyer_surplus", buy.SellerPlayerId, 4, &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: buy.CurrencyType, Amount: uint64(qty) * (buy.UnitPrice - price)}}})
+		if err := addFillLegs(mw, buy, sell, buyWorkflow, sellWorkflow, qty, price); err != nil {
+			return err
 		}
 		m.WorkflowProto, err = proto.MarshalOptions{Deterministic: true}.Marshal(mw)
 		if err != nil {
@@ -178,6 +176,24 @@ func (e *Engine) matchMarket(ctx context.Context, id uint64) error {
 			observedID, id, defectStage, defect)
 	}
 	return err
+}
+
+// addFillLegs 给撮合成交子单建三条交付腿:买家收货、卖家收款、买单按自己限价多冻的差价退回买家。
+// 货出自卖单的托管,钱(含多冻的差价)出自买单的托管。托管者按两张单各自的扣出腿记:单被人工改绑过时,
+// 下单人(SellerPlayerId)已是改绑后的角色,扣出腿上才是当初托管的那个(legTxType 据它判退回是不是付回本人,
+// 2026-11-20 独立评审)。母单缺扣出腿是坏数据。
+func addFillLegs(mw *tradepb.TradeCommerceWorkflow, buy, sell *tradepb.TradeCommerceRecord,
+	buyWorkflow, sellWorkflow *tradepb.TradeCommerceWorkflow, qty uint32, price uint64) error {
+	sellDebit, buyDebit := leg(sellWorkflow, "seller_debit"), leg(buyWorkflow, "seller_debit")
+	if sellDebit == nil || buyDebit == nil {
+		return corrupt(errors.New("撮合父合同缺少托管扣出腿"))
+	}
+	addEscrowLeg(mw, "buyer_receive", buy.SellerPlayerId, sellDebit.GetPlayerId(), &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: buy.ItemConfigId, Count: qty}}})
+	addEscrowLeg(mw, "seller_receive", sell.SellerPlayerId, buyDebit.GetPlayerId(), &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: buy.CurrencyType, Amount: uint64(qty) * price}}})
+	if buy.UnitPrice > price {
+		addEscrowLeg(mw, "buyer_surplus", buy.SellerPlayerId, buyDebit.GetPlayerId(), &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: buy.CurrencyType, Amount: uint64(qty) * (buy.UnitPrice - price)}}})
+	}
+	return nil
 }
 
 // counterpartyDefect 判断已锁住的对手单是否因它自己的持久数据而不可能再成交:workflow 解不开、缺原归属身份,

@@ -156,28 +156,48 @@ namespace
     }
 
     // 启动:客户端连接准入的参数(handler/rpc/connection_admission.h,docs/design/gate-connection-admission-control.md
-    // P1-1 ~ P1-3)。总量上限就是上面校验过的 gate_max_connections;新建连接速率闸缺省由它推导,
-    // GATE_ACCEPT_RATE_PER_SECOND / GATE_ACCEPT_BURST 可覆盖。两个变量写错就拒绝启动:带着一个没人知道的速率上限
-    // 跑起来,比起不来更难查。
+    // P0-2、P1-1 ~ P1-3、P2-2)。总量上限就是上面校验过的 gate_max_connections;新建连接速率闸与未验签预算缺省由它推导,
+    // 可用 GATE_ACCEPT_RATE_PER_SECOND / GATE_ACCEPT_BURST 与 GATE_PREAUTH_* 覆盖;按来源前缀限速缺省关闭,
+    // 设了 GATE_SOURCE_RATE_PER_SECOND 才开(只在 gate 看得到玩家真实源地址的部署形态里开,见设计稿 §4.2.1)。
+    // 任一变量写错就拒绝启动:带着一个没人知道的阈值跑起来,比起不来更难查。
     void ConfigureConnectionAdmissionOrDie()
     {
+        namespace admission = gate_connection_admission;
         const auto configuredMaxConnections = gNodeConfigManager.GetBaseDeployConfig().gate_max_connections();
-        const auto effectiveMaxConnections =
-            gate_connection_admission::EffectiveMaxConnections(configuredMaxConnections);
+        const auto effectiveMaxConnections = admission::EffectiveMaxConnections(configuredMaxConnections);
         std::string error;
-        const auto rateLimit = gate_connection_admission::ResolveRateLimit(
-            std::getenv(gate_connection_admission::kAcceptRateEnv),
-            std::getenv(gate_connection_admission::kAcceptBurstEnv), effectiveMaxConnections, error);
-        if (!rateLimit)
+        const auto rateLimit = admission::ResolveRateLimit(std::getenv(admission::kAcceptRateEnv),
+                                                           std::getenv(admission::kAcceptBurstEnv),
+                                                           effectiveMaxConnections, error);
+        const auto preAuthBudget =
+            rateLimit ? admission::ResolvePreAuthBudget(std::getenv(admission::kPreAuthBudgetEnv),
+                                                        std::getenv(admission::kPreAuthEarlyDropStartEnv),
+                                                        std::getenv(admission::kPreAuthEvictableAgeEnv),
+                                                        effectiveMaxConnections, error)
+                      : std::nullopt;
+        std::optional<admission::RateLimit> sourceRateLimit;
+        const bool sourceResolved =
+            preAuthBudget && admission::ResolveSourceRateLimit(std::getenv(admission::kSourceRateEnv),
+                                                               std::getenv(admission::kSourceBurstEnv),
+                                                               sourceRateLimit, error);
+        if (!rateLimit || !preAuthBudget || !sourceResolved)
         {
             LOG_FATAL << "Refusing to start: " << error;
             return;
         }
-        gate_connection_admission::Configure(configuredMaxConnections, *rateLimit);
+        admission::Configure(configuredMaxConnections, *rateLimit, *preAuthBudget, sourceRateLimit);
+        const auto suggestedSource = admission::DefaultSourceRateLimit(effectiveMaxConnections);
         LOG_INFO << "Client connection admission ENFORCED at accept, max_connections=" << effectiveMaxConnections
                  << " accept_rate_per_second=" << rateLimit->perSecond << " accept_burst=" << rateLimit->burst
-                 << " (override the rate gate with " << gate_connection_admission::kAcceptRateEnv << " / "
-                 << gate_connection_admission::kAcceptBurstEnv << ")";
+                 << " preauth_early_drop_start=" << preAuthBudget->earlyDropStart
+                 << " preauth_budget=" << preAuthBudget->full
+                 << " preauth_evictable_age_ms=" << preAuthBudget->minEvictableAge.count()
+                 << " source_rate_per_second=" << (sourceRateLimit ? sourceRateLimit->perSecond : 0)
+                 << " source_burst=" << (sourceRateLimit ? sourceRateLimit->burst : 0)
+                 << " (overrides: " << admission::kAcceptRateEnv << " / " << admission::kAcceptBurstEnv << ", "
+                 << admission::kPreAuthBudgetEnv << " / " << admission::kPreAuthEarlyDropStartEnv << " / "
+                 << admission::kPreAuthEvictableAgeEnv << "; per-source limiting is off unless "
+                 << admission::kSourceRateEnv << " is set, suggested " << suggestedSource.perSecond << ")";
     }
 
     // 启动门禁:观战凭证密钥(docs/design/battle-spectate-tiered-fanout.md §15.7,口径同 battle 令牌)。
@@ -259,7 +279,8 @@ namespace
         // 回调不捕获任何对象;没有迁移许可、也没有待关的滞留连接时每拍只做两次判空。
         TimerTaskComp drainMigrationTimer;
         // 登录态续租的每秒一拍(handler/rpc/login_session_renewal.cpp,docs/design/gate-online-identity.md §10.4):
-        // 为仍然连着的连接定期向 login 续租登录态。回调不捕获任何对象;没有到期的续租时每拍只做一次堆顶比较。
+        // 为仍然连着的连接定期向 login 续租登录态,并重发已关闭连接还没被 login 确认的断线通知。回调不捕获任何对象;
+        // 没有到期项时每拍只做两次堆顶比较。
         TimerTaskComp loginRenewalTimer;
         bool sourceClosed = false;
 
@@ -556,9 +577,9 @@ int main(int argc, char *argv[])
                 gate_connection_admission::CloseSource();
                 context.dependencyGate.probeTimer.Cancel();
                 context.playerCountReportTimer.Cancel();
-                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭;登录态由随后的断线通知清理,不再续租。
+                // 全部连接马上就要关:不再给它们要迁移票据,也不必再做滞留关闭。登录态续租的节拍不停:连接关了就不再续租,
+                // 但随后的断线通知没被 login 确认时要靠它重发,排空期间一直跑,拆除前(stopGateTimers)才停。
                 context.drainMigrationTimer.Cancel();
-                context.loginRenewalTimer.Cancel();
                 auto &sessions = tlsSessionManager.sessions();
                 LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
                 for (auto &[sessionId, info] : sessions)
@@ -576,6 +597,8 @@ int main(int argc, char *argv[])
             // 关掉的会话都走完断线处理、gRPC 通道上没有在途调用,再放行 Finalize;节点的 15s 排空预算兜底(gate 调用的
             // deadline 最长 12s,在途调用必然先结束)。只等 beforeShutdown 当时的那批会话被移除;但「通道无在途调用」
             // 不区分调用属于谁,关机期间新连进来的会话的请求同样会推迟放行,上限仍是 15s 预算。
+            // 断线通知受每拍预算约束(login_session_renewal.h kMaxRequestsPerTick):一次关掉的会话多于预算时,当场只发出预算内的
+            // 那些,其余排到后面几拍;排空期间节拍照跑,Finalize 之后没发出或没被确认的随进程退出,交给死 gate 清扫(见 stopGateTimers)。
             // 第 3 批(docs/design/grpc-muduo-transport.md §14)以前这道等待只在 GATE_ROUTER_TRANSPORT=muduo_h2 时装,
             // 官方客户端路径保持旧行为(Finalize 时封住 CQ 写入口,随后的通知同样发不出去)。传输只剩一种之后不再按
             // 模式区分:直连模式(默认,通知走 login 通道)与路由模式(走路由服通道)都等。
@@ -601,6 +624,13 @@ int main(int argc, char *argv[])
                     context.clientLivenessSweepTimer.Cancel();
                     context.drainMigrationTimer.Cancel();
                     context.loginRenewalTimer.Cancel();
+                    // 剩下的断线通知随进程一起没了:gate 的 etcd 键删掉之后,player_locator 的死 gate 清扫把这台 gate 上
+                    // 仍是 ONLINE 的会话转成 DISCONNECTING(gate_sweep.go)。打一行,复盘时知道有多少交给了清扫。
+                    if (const auto pending = gate_login_renewal::PendingDisconnects(); pending > 0)
+                    {
+                        LOG_WARN << "[LoginDisconnect] " << pending << " Disconnect notices were not confirmed by login before"
+                                 << " teardown; player_locator's dead gate sweep settles those sessions";
+                    }
                 };
                 node.SetMaintenanceRelayStop(stopGateTimers);
                 node.SetBeforeTeardown(stopGateTimers);
@@ -626,6 +656,8 @@ int main(int argc, char *argv[])
             gate_drain_migration::RegisterMetrics();
             // 连接类指标(会话数、未验签连接数、接纳 / 拒绝计数、握手耗时)同样挂到出口,见 handler/rpc/connection_admission.h。
             gate_connection_admission::RegisterMetrics();
+            // 断线通知的待送达条数与送达计数(handler/rpc/login_session_renewal.h)同样挂到出口。
+            gate_login_renewal::RegisterMetrics();
 
             // Post-startup: attach client TCP callbacks + initialize session ID generator.
             // Override connection/message callbacks BEFORE WaitAndRun so that any
@@ -708,8 +740,9 @@ int main(int argc, char *argv[])
                         context.drainMigrationTimer.RunEvery(gate_drain_migration::kTickIntervalSeconds, [] {
                             gate_drain_migration::Tick(std::chrono::steady_clock::now());
                         });
-                        // 登录态续租:登录成功的连接活着期间,按 login 给的间隔定期续租它的登录态、设备集成员与绑定栅栏
-                        // (docs/design/gate-online-identity.md §10.4)。同样紧跟客户端回调装上;关源时取消。
+                        // 登录态续租:登录成功的连接活着期间,按 login 给的间隔定期续租它的登录态、设备集成员与绑定栅栏;
+                        // 连接关闭后,重发 login 还没确认的断线通知(docs/design/gate-online-identity.md §10.4)。同样紧跟客户端
+                        // 回调装上;关源时不停(断线通知要靠它重发),拆除前(stopGateTimers)才取消。
                         context.loginRenewalTimer.RunEvery(gate_login_renewal::kTickIntervalSeconds, [] {
                             gate_login_renewal::Tick(std::chrono::steady_clock::now());
                         });

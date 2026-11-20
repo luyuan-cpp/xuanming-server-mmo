@@ -70,7 +70,9 @@ func (f *fakeDirectory) CancelDeletion(context.Context, string) (*dspb.AccountDe
 	return f.cancelOut, nil
 }
 
-func (f *fakeDirectory) ClaimDeletions(context.Context, uint32) ([]string, error) { return f.claimed, nil }
+func (f *fakeDirectory) ClaimDeletions(context.Context, uint32) ([]string, error) {
+	return f.claimed, nil
+}
 
 func (f *fakeDirectory) FinishDeletion(context.Context, string) (*dspb.FinishAccountDeletionResponse, error) {
 	f.finishCalls++
@@ -80,6 +82,7 @@ func (f *fakeDirectory) FinishDeletion(context.Context, string) (*dspb.FinishAcc
 type fakeSessions struct {
 	revoked []string
 	kicked  []uint64
+	reasons []uint32
 }
 
 func (f *fakeSessions) RevokeAll(_ context.Context, account string) error {
@@ -87,9 +90,20 @@ func (f *fakeSessions) RevokeAll(_ context.Context, account string) error {
 	return nil
 }
 
-func (f *fakeSessions) KickPlayer(_ context.Context, player uint64) error {
+func (f *fakeSessions) KickPlayer(_ context.Context, player uint64, reasonTip uint32) error {
 	f.kicked = append(f.kicked, player)
+	f.reasons = append(f.reasons, reasonTip)
 	return nil
+}
+
+// kickedWith 断言每一次踢线都带同一个下线原因。
+func (f *fakeSessions) kickedWith(t *testing.T, want table.LoginError) {
+	t.Helper()
+	for _, reason := range f.reasons {
+		if reason != uint32(want) {
+			t.Fatalf("踢线原因应是 %s: %v", want, f.reasons)
+		}
+	}
 }
 
 type fakeApple struct {
@@ -149,6 +163,7 @@ func TestRequestScheduledSignsOutAndRevokesApple(t *testing.T) {
 	if len(sessions.revoked) != 1 || len(sessions.kicked) != 2 {
 		t.Fatalf("应吊销令牌并踢掉两名角色: revoked=%v kicked=%v", sessions.revoked, sessions.kicked)
 	}
+	sessions.kickedWith(t, table.LoginError_kLoginAccountDeletionPending)
 }
 
 func TestRequestBlockedAndNotFoundLeaveSessionsAlone(t *testing.T) {
@@ -208,6 +223,7 @@ func TestExecutorRemovesAllRolesThenFinishes(t *testing.T) {
 	if len(sessions.revoked) != 1 || len(sessions.kicked) != 3 {
 		t.Fatalf("执行时应吊销令牌、逐名踢线: %v %v", sessions.revoked, sessions.kicked)
 	}
+	sessions.kickedWith(t, table.LoginError_kLoginAccountDeletionInProgress)
 }
 
 func TestExecutorWaitsWhileARoleIsBlocked(t *testing.T) {

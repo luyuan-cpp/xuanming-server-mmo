@@ -1,0 +1,126 @@
+# mall:官方商城(java/mall_game;订单、库存、付款回执、交付与扣回待办)。
+#
+# 全局服务,只部署到 infra namespace 一次,不进任何 zone namespace。k8s_deploy.ps1 的 $JavaSvcCatalogue 里该条目标了 Global = $true:
+# infra-up / all-up 带 -JavaSvcRegistry 且同时部署全局 Go 服务时才部署它。配置模板 java-svc-mall-config 与闸门表 Job mall-schema 在基础设施阶段,
+# 进程与其余全局写者同一步起(Apply-GlobalGoSvcWorkloads)。
+#
+# 调用方只有集群内的 trade(gateway、delivery 两个角色)与 payment(payment 角色),每个请求带 HMAC 签名;
+# -NetworkPolicies on 时 18120 只放行这两个工作负载。没有对集群外的入口,Service 是 ClusterIP。
+#
+# 它是 SQL 写者(独占库 mmorpg_mall),形状照 gateway.yaml:写者的 init 容器、控制卷、securityContext 与标签由
+# k8s_deploy.ps1 的 Add-SqlWriterBootManifest 注入,svc-config 换成选中配置的 emptyDir,本文件不要手写。
+# 四把调用密钥走工作负载密钥目录($script:WorkloadSecretCatalog),env 与指纹同样由脚本注入。
+#
+# 探针用 TCP:jar 里 actuator 的 web 端点全部关闭,业务接口都要 HMAC 签名,没有可供探针访问的 HTTP 路径。
+# 端口在 Spring 上下文刷新完成之后才监听,连得上就是启动完成(含启动期的存储结构核对)。
+# 没有指标端点:jar 没带 Prometheus registry,所以不写抓取注解。
+#
+# 连接数:Hikari 池上限 16(DatabaseConfiguration.poolConfig)× replicas 要算进 MySQL 连接总账(k8s_deploy.ps1 Get-MysqlConnectionLedger)。
+apiVersion: v1
+kind: Service
+metadata:
+  name: mall
+  labels:
+    app: mall
+    tier: java-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: mall
+  ports:
+    - name: http
+      port: 18120
+      targetPort: 18120
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mall
+  labels:
+    app: mall
+    tier: java-svc
+spec:
+  # 多副本安全:状态都在 mmorpg_mall,进程之间不需要协调(本机同样起两个副本)。
+  replicas: 2
+  # SQL 写者是 StatefulSet:Pod 序号就是写者名册的槽位,每次启动在同一槽位上换代,名册不随启动次数消耗
+  # (docs/design/writer-roster-exhaustion-20261106.md §5.5)。滚动一次换一个副本,不能 maxSurge。
+  serviceName: mall
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: mall
+  template:
+    metadata:
+      labels:
+        app: mall
+        tier: java-svc
+    spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点;用 preferred,单节点的 dev 集群仍能调度。
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: mall
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: mall
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          ports:
+            - containerPort: 18120
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
+            # 显式限制堆,与 gateway.yaml 同一取值:1Gi 容器预算里留 640Mi 给 metaspace、线程栈与其他 native 内存。
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms64m -Xmx384m"
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/config
+              readOnly: true
+          # 冷启动在资源受限时可能超过 liveness 的失败预算:startupProbe 成功前暂停 readiness / liveness。
+          startupProbe:
+            tcpSocket:
+              port: 18120
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: 18120
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 18120
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: svc-config
+          configMap:
+            name: java-svc-mall-config
+---
+# PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mall-pdb
+  labels:
+    app: mall
+    tier: java-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mall

@@ -133,16 +133,20 @@ int main(int argc, char *argv[])
         // MailNodeService:两包都放不下的战斗掉落改投邮件,以 battle 身份调 MailAdmin.SendPersonalMail
         // (全服一份、多副本,不限当前 zone;docs/design/battle-overflow-mail.md)。弱依赖:不进 DependencyGate,
         // 发现不到只让待寄条目按退避留着,不阻断进场。
+        // ContentGuardNodeService:玩家填写的名字(角色改名、宠物名)送内容安全服务判定
+        // (全服一份、多副本,不限当前 zone;docs/design/rename-and-content-safety.md §6.6)。弱依赖:不进 DependencyGate,
+        // 发现不到时这些入口回可重试的错误,不阻断进场。
         // 发现集合(docs/design/connection-fanout-subsetting-20261106.md §3.4)= 建连白名单 + Gate + 自身 Scene。
         // Gate:gate 主动连进来,入站登记(registration_manager.cpp)查快照里的 gate 登记,广播用 ResolveLocalZoneGateEntity;
         // Scene:本 zone 的同类,注册自检、劫持检测与选号要看。scene 不读 Battle、ClientRpcRouter、Login、Friend、Guild,不再看它们。
         Node node(&loop, SceneNodeService,
                   Node::CanConnectNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
                                                 PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
-                                                MatchNodeService, MailNodeService },
+                                                MatchNodeService, MailNodeService, ContentGuardNodeService },
                   Node::DiscoveryNodeTypeList{ SceneManagerNodeService, DataServiceNodeService,
                                                PlayerInboxNodeService, PlayerStoreNodeService, TeamNodeService,
-                                               MatchNodeService, MailNodeService, GateNodeService, SceneNodeService },
+                                               MatchNodeService, MailNodeService, ContentGuardNodeService,
+                                               GateNodeService, SceneNodeService },
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);

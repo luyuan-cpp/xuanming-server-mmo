@@ -304,8 +304,8 @@ func recordMatchFailure(takerID uint64, err error) {
 // settleHeldBid:拍品结案后把持有中的竞价结案;拍品没结案时把这一行推迟到拍品截止。
 //   - 拍品成交(Settled):冻结款已由拍品的卖家所得腿付给卖家,出价按成交结案。
 //   - 拍品按撤单结案(Cancelled):交付时赢家那条被拒、整单退回(delivery_order.go)。卖家所得没发,冻结款还在出价里,
-//     出价改 bid_refund,与被超价同一条路退回出价人(bid_return 带 TX_AUCTION_RETURN)。拍品发出过卖家所得却按撤单
-//     结案是自相矛盾,不自动退款,按坏数据隔离成人工(heldBidKeepsFunds)。
+//     出价改 bid_refund,与被超价同一条路退回出价人(bid_return 带 TX_AUCTION_RETURN)。拍品发出过卖家所得、
+//     或赢家那份货到过(在途、到账、部分到账)却按撤单结案是自相矛盾,不自动退款,按坏数据隔离成人工(heldBidKeepsFunds)。
 //
 // 拍品结案时 advance 会唤醒它引用的出价(finishedLotBid),不用等 bidHeldRecheck。
 // 以前未结算时原样跳过、updated_ms 不变,每个有出价的在拍拍品都有一行 bid_held 永远排在 Due 队头;
@@ -326,7 +326,7 @@ func (e *Engine) settleHeldBid(ctx context.Context, r *tradepb.TradeCommerceReco
 			return corrupt(fmt.Errorf("拍品 %d 的 workflow 解不开,判不了冻结款是否还在出价里: %w", parent.CommerceId, err))
 		}
 		if !heldBidKeepsFunds(lw, r.CommerceId) {
-			return corrupt(fmt.Errorf("拍品 %d 按撤单结案,卖家所得腿却发出过,出价 %d 的冻结款不能自动退回", parent.CommerceId, r.CommerceId))
+			return corrupt(fmt.Errorf("拍品 %d 按撤单结案,卖家所得腿却发出过或赢家那份货到过,出价 %d 的冻结款不能自动退回", parent.CommerceId, r.CommerceId))
 		}
 	default:
 		now := e.now()

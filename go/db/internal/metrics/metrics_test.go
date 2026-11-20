@@ -55,67 +55,6 @@ func TestSQLPoolCollectorDeclaresDbPools(t *testing.T) {
 	t.Fatal("mmorpg_sql_pool_pools was not emitted")
 }
 
-// gatherByLabel 从注册表收集 family 的序列,按 label 的值索引(值取仪表或计数器)。
-func gatherByLabel(t *testing.T, reg *prometheus.Registry, family, label string) map[string]float64 {
-	t.Helper()
-	families, err := reg.Gather()
-	if err != nil {
-		t.Fatalf("gather: %v", err)
-	}
-	out := map[string]float64{}
-	for _, mf := range families {
-		if mf.GetName() != family {
-			continue
-		}
-		for _, m := range mf.GetMetric() {
-			for _, l := range m.GetLabel() {
-				if l.GetName() != label {
-					continue
-				}
-				if g := m.GetGauge(); g != nil {
-					out[l.GetValue()] = g.GetValue()
-				} else if c := m.GetCounter(); c != nil {
-					out[l.GetValue()] = c.GetValue()
-				}
-			}
-		}
-	}
-	return out
-}
-
-// TestStoreCooldownCollector_EmitsAllPools(launch-todo §2.3 第 11 条):每个类别(只剩 store)每次都出一条序列,
-// 没有冷却记录时为 0;source 返回 nil map 时也为 0。告警按 pool 的取值写,少一条就会静默落空。
-func TestStoreCooldownCollector_EmitsAllPools(t *testing.T) {
-	cases := []struct {
-		name   string
-		source map[string]int
-		want   map[string]float64
-	}{
-		{name: "store cooling", source: map[string]int{PoolStore: 2},
-			want: map[string]float64{PoolStore: 2}},
-		{name: "nil map", source: nil,
-			want: map[string]float64{PoolStore: 0}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			reg := prometheus.NewPedanticRegistry()
-			source := tc.source
-			if err := reg.Register(NewStoreCooldownCollector(func() map[string]int { return source })); err != nil {
-				t.Fatalf("register: %v", err)
-			}
-			got := gatherByLabel(t, reg, "db_store_cooldown_stores", "pool")
-			if len(got) != len(tc.want) {
-				t.Fatalf("pools = %v, want %v", got, tc.want)
-			}
-			for pool, want := range tc.want {
-				if v, ok := got[pool]; !ok || v != want {
-					t.Fatalf("db_store_cooldown_stores{pool=%q} = %v (present=%v), want %v", pool, v, ok, want)
-				}
-			}
-		})
-	}
-}
-
 // seriesValues 从默认注册表取 family 的全部序列,键是按 labels 顺序取出的 label 值用 "|" 连接(无 label 时为 ""),
 // 值取计数器或仪表。family 不存在时 found=false。
 func seriesValues(t *testing.T, family string, labels ...string) (values map[string]float64, found bool) {

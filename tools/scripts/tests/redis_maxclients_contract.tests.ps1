@@ -16,10 +16,6 @@
       - T3 启动薄壳打印 fd 限值(redis fd limit: 一行,部署后核对与排查都靠它);
       - T4 deploy/docker-compose.yml 的 redis 带 --maxclients,数值与 T1 相同;
       - T5 硬限不足只打 ERROR 不拒启(薄壳里没有 exit),不设 timeout,不自己改 nofile。
-      - T6 高可用形态(redis-ha.yaml,2026-10-19 接进部署脚本):MAXCLIENTS 只在 StatefulSet redis 的 Pod 模板里定义一次、与 redis.yaml 同值,
-        启动脚本 redis-start.sh 的 `set -- redis-server` 参数表带 --maxclients "$MAXCLIENTS",exec 之前打印同格式的 fd 限值;
-      - T7 高可用形态的入口代理:PROXY_MAXCONN 只在 Deployment redis-proxy 的 Pod 模板里定义一次,haproxy 配置的 global / defaults
-        两处 maxconn 都由它生成,不留字面量(代理先到线的不等式在 k8s_deploy_contract.tests.ps1 的高可用一节核)。
       - T8 match 私有集群(redis-match-cluster.yaml,2026-11-11):MAXCLIENTS 只定义一次、与 redis.yaml 同值,
         唯一一条 exec redis-server 带 --maxclients "$MAXCLIENTS",exec 之前打印同格式的 fd 限值,硬限不足只打 ERROR。
     修复前(redis.yaml 没有 MAXCLIENTS)T1~T4 以「应当恰好出现 1 次,实际 0 次」一类文本失败,退出码非 0。
@@ -36,7 +32,6 @@ $ErrorActionPreference = 'Stop'
 # 路径一律正斜杠 + Join-Path:CI 在 ubuntu 上跑(.github/workflows/deploy-config-tests.yml)。
 $script:RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $script:RedisPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/redis.yaml'
-$script:RedisHaPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/redis-ha.yaml'
 $script:RedisMatchClusterPath = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra/redis-match-cluster.yaml'
 $script:ComposePath = Join-Path $script:RepoRoot 'deploy/docker-compose.yml'
 
@@ -117,54 +112,6 @@ function Get-RedisManifestMaxClients {
     return [long]$value
 }
 
-# redis-ha.yaml 里 ConfigMap redis-ha-scripts 某个键(如 redis-start.sh)的字面块正文,不含注释行:`  <键>: |` 之后、
-# 缩进回到它同级或更浅之前的全部行。只对该脚本断言(哨兵脚本里有合法的 exit,代理脚本另有 maxconn),不扫整份清单。
-function Get-RedisHaScriptBlock {
-    param([Parameter(Mandatory = $true)][string]$Key)
-    $lines = (Read-RepoText $script:RedisHaPath) -split "`n"
-    $start = -1
-    $indent = 0
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        $m = [regex]::Match($lines[$i], '^([ ]*)' + [regex]::Escape($Key) + ':[ \t]*\|[ \t]*$')
-        if ($m.Success) { $start = $i + 1; $indent = $m.Groups[1].Value.Length; break }
-    }
-    if ($start -lt 0) { throw "redis-ha.yaml 里找不到 ConfigMap 键 ${Key}: |" }
-    $body = [System.Collections.Generic.List[string]]::new()
-    for ($i = $start; $i -lt $lines.Count; $i++) {
-        $l = $lines[$i]
-        if ($l.Trim().Length -eq 0) { $body.Add(''); continue }
-        if (($l.Length - $l.TrimStart().Length) -le $indent) { break }
-        $body.Add($l)
-    }
-    $code = Get-NonCommentText ($body -join "`n")
-    if ([string]::IsNullOrWhiteSpace($code)) { throw "redis-ha.yaml 的 $Key 是空的" }
-    return $code
-}
-
-# redis-ha.yaml 里 `<Name>=<值>` 的生效定义:必须恰好 1 次、右边是不带前导 0 的正整数字面量,并且落在 kind 为 $Kind、名为 $ObjectName
-# 的那一份文档里(Pod 模板的 command;不在脚本 ConfigMap 里 —— 改它要改模板摘要,重启闸与滚动才看得见)。否则 throw。
-function Get-RedisHaTemplateLiteral {
-    param(
-        [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][string]$Kind,
-        [Parameter(Mandatory = $true)][string]$ObjectName
-    )
-    $code = Get-NonCommentText (Read-RepoText $script:RedisHaPath)
-    $definitions = [regex]::Matches($code, '(?m)^[ \t]*' + [regex]::Escape($Name) + '=(\S*)[ \t]*$')
-    if ($definitions.Count -ne 1) {
-        throw "redis-ha.yaml 里 $Name=<值> 的定义应当恰好出现 1 次,实际 $($definitions.Count) 次"
-    }
-    $value = $definitions[0].Groups[1].Value
-    if ($value -notmatch '^[1-9][0-9]*$') {
-        throw "redis-ha.yaml 的 $Name 必须是不带前导 0 的正整数字面量(实际 '$value'):部署脚本按字面量读它"
-    }
-    $docs = @(($code -split '(?m)^---[ \t]*$') | Where-Object { $_ -match ('(?m)^[ \t]*' + [regex]::Escape($Name) + '=') })
-    if ($docs.Count -ne 1 -or $docs[0] -notmatch ('(?m)^kind:[ \t]*' + $Kind + '[ \t]*$') -or $docs[0] -notmatch ('(?m)^  name:[ \t]*' + [regex]::Escape($ObjectName) + '[ \t]*$')) {
-        throw "redis-ha.yaml 的 $Name 必须定义在 $Kind $ObjectName 的 Pod 模板里(不在脚本 ConfigMap 里:改值要改模板摘要,重启闸与滚动才看得见)"
-    }
-    return [long]$value
-}
-
 Write-Host "== 共享 Redis maxclients 契约(P0-E 第 1 批)=="
 
 Test-Case 'T1:redis.yaml 的 MAXCLIENTS 恰好定义 1 次,且是正整数' {
@@ -204,31 +151,6 @@ Test-Case 'T5:硬限不足只打 ERROR 不拒启;不设 timeout;不自己改 nof
     Assert-NotMatch -Text $code -Pattern '\bexit\b' -Because '唯一的 Redis 起不来等于全服停:硬限不足是有意的 fail-open,只打 ERROR,启动薄壳里不能 exit'
     Assert-NotMatch -Text $code -Pattern '--timeout\b' -Because '设了 timeout 会不停踢掉常驻的空闲池连接与 C++ 每进程唯一的那条连接'
     Assert-NotMatch -Text $code -Pattern 'ulimit[ \t]+-[SH]?n[ \t]+(?!2>)\S' -Because 'redis-server 会自己把软限抬到硬限(待实测);薄壳只读不改,读数才是 Redis 启动时真正面对的限值'
-}
-
-Test-Case 'T6:redis-ha.yaml 的 MAXCLIENTS 在 StatefulSet redis 的 Pod 模板里定义一次、与 redis.yaml 同值;redis-start.sh 的参数表带 --maxclients,exec 之前打印 fd 限值' {
-    $haMax = Get-RedisHaTemplateLiteral -Name 'MAXCLIENTS' -Kind 'StatefulSet' -ObjectName 'redis'
-    Assert-Equal -Expected (Get-RedisManifestMaxClients) -Actual $haMax -Because '两种形态共用一份 Redis 连接总账(只从 redis.yaml 读),必须同值'
-    $code = Get-RedisHaScriptBlock -Key 'redis-start.sh'
-    Assert-Match -Text $code -Pattern ':[ \t]*"\$\{MAXCLIENTS:\?' -Because 'MAXCLIENTS 没注入时脚本必须当场失败,不能悄悄回到 Redis 缺省 10000'
-    $argTable = [regex]::Match($code, '(?ms)^[ \t]*set -- redis-server \\\n(?<args>(?:[^\n]*\\\n)*[^\n]*)$')
-    Assert-True -Condition $argTable.Success -Because 'redis-start.sh 里应当有 set -- redis-server \ 续行的参数表'
-    Assert-Match -Text $argTable.Groups['args'].Value -Pattern '--maxclients[ \t]+"\$MAXCLIENTS"[ \t]*\\' -Because '每个 redis-server 都要显式 --maxclients "$MAXCLIENTS"'
-    Assert-NotMatch -Text $code -Pattern '\bexec[ \t]+redis-server\b' -Because '不得有绕过参数表的 exec redis-server(那一条会漏掉 --maxclients)'
-    $printAt = $code.IndexOf('echo "redis fd limit: soft=$soft hard=$hard need=$need maxclients=$MAXCLIENTS"')
-    $execAt = $code.IndexOf('exec "$@"')
-    Assert-True -Condition ($printAt -ge 0 -and $execAt -gt $printAt) -Because 'fd 限值必须用与 redis.yaml 同格式的一行打印,且在 exec "$@" 之前'
-    Assert-Match -Text $code -Pattern 'if \[ "\$hard" -lt "\$need" \]; then echo "ERROR: nofile hard limit' -Because '硬限低于 maxclients + 32 时必须在日志里明说(只报错不拒启,与 redis.yaml 同口径)'
-    Assert-NotMatch -Text $code -Pattern 'ulimit[ \t]+-[SH]?n[ \t]+(?!2>)\S' -Because '只读不改 nofile'
-}
-
-Test-Case 'T7:redis-ha.yaml 的 PROXY_MAXCONN 在 Deployment redis-proxy 的 Pod 模板里定义一次;haproxy 的 global / defaults maxconn 都由它生成,不留字面量' {
-    $null = Get-RedisHaTemplateLiteral -Name 'PROXY_MAXCONN' -Kind 'Deployment' -ObjectName 'redis-proxy'
-    $code = Get-RedisHaScriptBlock -Key 'proxy-start.sh'
-    Assert-Match -Text $code -Pattern ':[ \t]*"\$\{PROXY_MAXCONN:\?' -Because 'PROXY_MAXCONN 没注入时代理必须当场失败'
-    Assert-Match -Text $code -Pattern 'echo "  maxconn \$\(\(PROXY_MAXCONN \+ 100\)\)"' -Because 'global 的上限比前端多留一点(诊断口与健康检查)'
-    Assert-Match -Text $code -Pattern 'echo "  maxconn \$\{PROXY_MAXCONN\}"' -Because 'defaults(前端业务连接)的上限就是 PROXY_MAXCONN,与 Redis 的 maxclients 对得上账'
-    Assert-NotMatch -Text $code -Pattern '(?m)^[ \t]*maxconn[ \t]+\d+' -Because '不得再有写死的 maxconn 数字(那一份不进连接上限不等式)'
 }
 
 Test-Case 'T8:redis-match-cluster.yaml 的 MAXCLIENTS 恰好定义 1 次、与 redis.yaml 同值;唯一一条 exec redis-server 带 --maxclients "$MAXCLIENTS",exec 之前打印 fd 限值,硬限不足只打 ERROR' {

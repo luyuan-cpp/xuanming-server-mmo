@@ -30,7 +30,7 @@ func TestNewNodeInfoCarriesReleaseTrack(t *testing.T) {
 			t.Errorf("newNodeInfo(track=%s).ReleaseTrack = %q, want %q", track, got, track.String())
 		}
 		if info.GetNodeType() != nodeType || info.GetZoneId() != 3 ||
-			info.GetEndpoint().GetPort() != 9180 || info.GetNodeUuid() == "" {
+			info.GetEndpoint().GetPort() != 9180 || info.GetGrpcEndpoint().GetPort() != 9180 || info.GetNodeUuid() == "" {
 			t.Errorf("newNodeInfo(track=%s) lost other fields: %v", track, info)
 		}
 	}

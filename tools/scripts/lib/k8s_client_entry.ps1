@@ -65,6 +65,9 @@
 	    ConvertFrom-LoginPasswordAuthYaml -LoginYaml                                      → { Present; Enabled; Errors }
 	    Get-LoginPasswordAuthDrift      -Live -Enabled                                    → { Drifts = string[]; KeepArgs }
 	                                    (login 口令登录防误关闸,见第 10 节)
+	    ConvertFrom-LoginAntiAddictionYaml -LoginYaml                                     → { Present; Enabled; AppId; BizId; Errors }
+	    Get-LoginAntiAddictionDrift     -Live [-AppId ''] [-BizId '']                     → { Drifts = string[]; KeepArgs }
+	                                    (login 实名与防沉迷防误关闸,见第 11 节)
 
 	  生成器(纯函数,返回 YAML 字符串)
 	    New-ClientEntryPodCommon        -Image -ImagePullPolicy -LogVolumeSizeLimit
@@ -119,6 +122,8 @@
 	                                    (只读,不支持 -DryRun:调用方在 DryRun 下不调用;kubectl 失败 throw)
 	    Get-LoginPasswordAuthLiveState  -Namespace -KubeContext -KubeConfig               → { ConfigMapPresent; Live }
 	                                    (同上:只读、不支持 -DryRun、kubectl 失败 throw;读同一份 login ConfigMap 的 PasswordAuth 段)
+	    Get-LoginAntiAddictionLiveState -Namespace -KubeContext -KubeConfig               → { ConfigMapPresent; Live }
+	                                    (同上;读同一份 login ConfigMap 的 AntiAddiction 段)
 
 	  内部辅助(接入方不要直接依赖,签名可能调整):ConvertFrom-ClientEntryYamlScalar、ConvertTo-ClientEntryLf、ConvertTo-ClientEntryYamlString、Add-ClientEntryIndent、
 	    Get-ClientEntryMember、Test-ClientEntryHostName、ConvertTo-ClientEntryCidrList、Get-ClientEntryInvalidCidrs、
@@ -199,6 +204,15 @@ function Get-ClientEntryContract {
 		ClientEndpointSourceAgones = 'agones'
 		ClientEndpointSourceStatic = 'static'
 		ClientEndpointSourceNone   = 'none'
+		# 小游戏客户端(微信 / 抖音)的 WebSocket 入口(docs/design/minigame-websocket-gate.md W7、W8)。
+		# C++ client_endpoint.h kEnvWsBaseUrl:gate / battle 据它自报 NodeInfo.client_ws_url = <基地址>/<PodIP>/<端口>。
+		ClientWsBaseUrlEnv         = 'CLIENT_WS_BASE_URL'
+		# 边缘 nginx 的对象名与路径前缀:基地址 = wss://<边缘域名><WsEdgePathPrefix>,边缘按 <前缀>/<PodIP>/<端口> 转发。
+		WsEdgeName                 = 'ws-edge'
+		WsEdgeConfigMapName        = 'ws-edge-config'
+		WsEdgeNetworkPolicyName    = 'ws-edge-egress'
+		WsEdgePathPrefix           = '/ws'
+		WsEdgeConfigHashAnnotation = 'mmorpg.io/ws-edge-config-hash'
 		# battle hostPort 形态没给 -ClientPublicHost 时 CLIENT_ENDPOINT_HOST 的值:交给 kubelet 做依赖展开的 $(HOST_IP)。
 		# Get-BattleEntryDrift 把它当作"没有主机覆盖"。
 		BattleHostPortDefaultClientHost = '$(HOST_IP)'
@@ -696,6 +710,9 @@ function New-ClientEntryPodCommon {
 		# 部署构建标识(k8s_deploy.ps1 Get-CppBuildLabelValue,与 Pod 标签 mmorpg.io/build 同值)。留空 = 不写 MMORPG_BUILD_LABEL
 		# (C++ 的 NodeInfo.build 为空 = 没上报,不参与构建偏好),生成物与不传时逐字相同。
 		[AllowEmptyString()][string]$BuildLabel = '',
+		# 小游戏 WebSocket 入口的基地址(k8s_deploy.ps1 -WsEdgeHost 推出的 wss://<域名>/ws)。留空 = 不写 CLIENT_WS_BASE_URL
+		# (节点不自报 client_ws_url,不接小游戏),生成物与不传时逐字相同。形状在渲染时(Get-ClientEntryNodeBaseEnv)校验。
+		[AllowEmptyString()][string]$ClientWsBaseUrl = '',
 		# 经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey },按给出的顺序接在公共 env 之后,渲染成 secretKeyRef(optional: false)。
 		# 留空 = 不加,生成物与不传时逐字相同。名字不是大写环境变量名、三项有空、或名字重复,在这里 throw。
 		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @()
@@ -748,6 +765,7 @@ function New-ClientEntryPodCommon {
 		MetricsPort          = $MetricsPort
 		ReleaseTrack         = $ReleaseTrack
 		BuildLabel           = $BuildLabel
+		ClientWsBaseUrl      = $ClientWsBaseUrl
 		SecretEnv            = $secretEnvCopy
 	}
 }
@@ -838,6 +856,15 @@ function Get-ClientEntryNodeBaseEnv {
 		if (-not [string]::IsNullOrEmpty($RevisionLabelKey)) {
 			$entries += @{ Name = $contract.PodRevisionEnv; FieldPath = "metadata.labels['$RevisionLabelKey']" }
 		}
+	}
+	# 小游戏 WebSocket 入口的基地址:同样经 Get-ClientEntryMember 读,缺成员或空串 = 不写(节点不自报 client_ws_url)。
+	# 形状与 C++ client_endpoint::ParseWsBaseUrl 同口径(那边不合法即拒绝启动):wss:// 或 ws:// 开头,其后只有主机、端口、路径用到的字符。
+	$clientWsBaseUrl = [string](Get-ClientEntryMember -Object $PodCommon -Path @('ClientWsBaseUrl'))
+	if (-not [string]::IsNullOrEmpty($clientWsBaseUrl)) {
+		if ($clientWsBaseUrl -cnotmatch '^wss?://[A-Za-z0-9][A-Za-z0-9._:/-]*$') {
+			throw "Get-ClientEntryNodeBaseEnv: PodCommon.ClientWsBaseUrl must look like wss://host[:port][/path] without query, fragment or whitespace (empty = do not write $($contract.ClientWsBaseUrlEnv)), got '$clientWsBaseUrl'."
+		}
+		$entries += @{ Name = $contract.ClientWsBaseUrlEnv; Value = $clientWsBaseUrl }
 	}
 	# 经 Secret 注入的附加 env(PodCommon.SecretEnv,New-ClientEntryPodCommon 打包时已校验):缺成员或空列表 = 不写。
 	foreach ($secretEntry in @(Get-ClientEntryMember -Object $PodCommon -Path @('SecretEnv'))) {
@@ -1541,6 +1568,237 @@ spec:$classLine$tlsBlock
 
 <#
 .SYNOPSIS
+	小游戏客户端(微信 / 抖音)的 WebSocket 边缘 ws-edge:ConfigMap(nginx.conf)、Deployment、Service 与 egress NetworkPolicy,
+	四份用 "---" 连接(docs/design/minigame-websocket-gate.md W2、W8)。
+
+.DESCRIPTION
+	小游戏平台只许连事先登记的 wss 域名,所以它们不直连 gate / battle:都连这个固定域名,nginx 终止 TLS 后按路径
+	<WsEdgePathPrefix>/<PodIP>/<端口> 把连接一对一转到那个 Pod(gate / battle 自报的 client_ws_url 就是这个形状)。
+	原生客户端不经过它。
+	nginx 不是开放代理:路径里的地址必须落在 -PodCidrs 里、端口必须是 -TargetPorts 之一,其余回 403 / 404。
+	scene 的节点口与 battle 同号,只靠网段加端口分不开,所以再加一条只选中 ws-edge 自己的 egress NetworkPolicy:
+	只许连 app 为 -TargetApps 的 Pod 的这几个端口。网络插件不执行 NetworkPolicy 时只剩 nginx 这一层。
+	证书不经本库:-TlsSecretName 是同一个 namespace 里预置的 kubernetes.io/tls Secret(tls.crt 要带完整证书链)。
+	nginx.conf 的指纹写进 Pod 模板注解,配置变了 Deployment 才滚动。滚动会断开经过旧 Pod 的连接(玩家走断线重连),
+	所以逐个替换(maxUnavailable 0),副本数建议至少 2。
+	-ServiceType 同 gate 的口径:托管云用 LoadBalancer,自建集群用 NodePort 接在外部四层负载均衡后面(-NodePort 0 = 由集群分配)。
+	纯函数,不打日志;参数形状不对即 throw。
+#>
+function New-WsEdgeYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$EdgeHost,
+		[Parameter(Mandatory = $true)][string]$TlsSecretName,
+		# 允许转发到的 Pod 网段(IPv4 CIDR,带前缀位数)。
+		[Parameter(Mandatory = $true)][string[]]$PodCidrs,
+		# gate / battle 的客户端口(容器端口)。
+		[Parameter(Mandatory = $true)][int[]]$TargetPorts,
+		# 这些端口所属 Pod 的 app 标签。
+		[Parameter(Mandatory = $true)][string[]]$TargetApps,
+		[Parameter(Mandatory = $true)][string]$Image,
+		[ValidateRange(1, 64)][int]$Replicas = 2,
+		[ValidateSet('LoadBalancer', 'NodePort')][string]$ServiceType = 'LoadBalancer',
+		[ValidateRange(0, 32767)][int]$NodePort = 0
+	)
+
+	$contract = Get-ClientEntryContract
+	$parsedIp = $null
+	if (-not (Test-ClientEntryHostName -Value $EdgeHost) -or [System.Net.IPAddress]::TryParse($EdgeHost, [ref]$parsedIp)) {
+		throw "New-WsEdgeYaml: -EdgeHost 必须是 DNS 名(小游戏平台不许连 IP),不能带 scheme / 端口 / 路径,实际 '$EdgeHost'。"
+	}
+	if ($TlsSecretName -cnotmatch '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$') {
+		throw "New-WsEdgeYaml: -TlsSecretName 必须是合法的 Secret 名,实际 '$TlsSecretName'。"
+	}
+	$cidrs = @($PodCidrs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
+	$badCidrs = @($cidrs | Where-Object { $_ -cnotmatch '^\d{1,3}(\.\d{1,3}){3}/\d{1,2}$' })
+	$badCidrs += @(Get-ClientEntryInvalidCidrs -CommaSeparated ($cidrs -join ','))
+	if ($cidrs.Count -eq 0 -or $badCidrs.Count -gt 0) {
+		throw "New-WsEdgeYaml: -PodCidrs 至少给一个带前缀位数的 IPv4 CIDR(如 10.244.0.0/16),不合法的项:'$(@($badCidrs | Select-Object -Unique) -join "', '")'。"
+	}
+	$ports = @($TargetPorts | Sort-Object -Unique)
+	if ($ports.Count -eq 0 -or @($ports | Where-Object { $_ -lt 1 -or $_ -gt 65535 }).Count -gt 0) {
+		throw "New-WsEdgeYaml: -TargetPorts 必须是 1..65535 的端口,实际 '$($TargetPorts -join ', ')'。"
+	}
+	$apps = @($TargetApps | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+	if ($apps.Count -eq 0 -or @($apps | Where-Object { $_ -cnotmatch '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$' }).Count -gt 0) {
+		throw "New-WsEdgeYaml: -TargetApps 必须是 app 标签值(小写字母、数字、'-'),实际 '$($TargetApps -join ', ')'。"
+	}
+	$serviceType = ConvertTo-ClientEntryCanonicalName -Value $ServiceType -Allowed @('LoadBalancer', 'NodePort')
+	if ($NodePort -ne 0 -and ($serviceType -cne 'NodePort' -or $NodePort -lt $contract.NodePortMin)) {
+		throw "New-WsEdgeYaml: -NodePort 只在 -ServiceType NodePort 下有效,且必须在 $($contract.NodePortMin)..$($contract.NodePortMax) 内,实际 $NodePort。"
+	}
+
+	# nginx.conf。模板用单引号 here-string:里面的 $ 都是 nginx 变量,不让 PowerShell 展开。
+	# geo 以路径里捕获的地址为键:不在 Pod 网段内的一律 0。proxy_pass 的目标是 IP 字面量,不需要 resolver;
+	# 带变量的 proxy_pass 每条客户端连接各开一条上游连接,不复用,gate / battle 的连接数口径不变。
+	# nginx 收全请求头才连上游,慢速发头的连接停在这里(client_header_timeout),到不了 gate / battle。
+	# 读写超时大于 gate / battle 自己的空闲超时:谁该断由它们说了算。
+	$geoLines = ($cidrs | ForEach-Object { "        $_ 1;" }) -join "`n"
+	$nginxConf = (@'
+worker_processes auto;
+worker_rlimit_nofile 131072;
+
+events {
+    worker_connections 65536;
+}
+
+http {
+    access_log off;
+    server_tokens off;
+
+    geo $ws_target_ip $ws_target_allowed {
+        default 0;
+__GEO_LINES__
+    }
+
+    server {
+        listen 443 ssl;
+        server_name __EDGE_HOST__;
+        ssl_certificate /etc/nginx/tls/tls.crt;
+        ssl_certificate_key /etc/nginx/tls/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        client_header_timeout 10s;
+
+        location ~ ^__PATH_PREFIX__/(?<ws_target_ip>\d+\.\d+\.\d+\.\d+)/(?<ws_target_port>__PORTS__)$ {
+            if ($ws_target_allowed = 0) {
+                return 403;
+            }
+            proxy_pass http://$ws_target_ip:$ws_target_port;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_connect_timeout 5s;
+            proxy_read_timeout 120s;
+            proxy_send_timeout 120s;
+            proxy_buffering off;
+        }
+
+        location / {
+            return 404;
+        }
+    }
+}
+'@).Replace('__GEO_LINES__', $geoLines).Replace('__EDGE_HOST__', $EdgeHost).Replace('__PATH_PREFIX__', $contract.WsEdgePathPrefix).Replace('__PORTS__', ($ports -join '|'))
+	$nginxConf = ConvertTo-ClientEntryLf -Text $nginxConf
+
+	$sha256 = [System.Security.Cryptography.SHA256]::Create()
+	try {
+		$configHash = ([System.BitConverter]::ToString($sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($nginxConf))) -replace '-', '').ToLowerInvariant()
+	}
+	finally {
+		$sha256.Dispose()
+	}
+
+	$name = $contract.WsEdgeName
+	$confBlock = Add-ClientEntryIndent -Text $nginxConf.TrimEnd("`n") -Indent '    '
+	$nodePortLine = if ($NodePort -ne 0) { "`n      nodePort: $NodePort" } else { '' }
+	$policyPortLines = ($ports | ForEach-Object { "        - protocol: TCP`n          port: $_" }) -join "`n"
+
+	return ConvertTo-ClientEntryLf -Text @"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $($contract.WsEdgeConfigMapName)
+  labels:
+    app: $name
+data:
+  nginx.conf: |
+$confBlock
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: $name
+  labels:
+    app: $name
+spec:
+  replicas: $Replicas
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: $name
+  template:
+    metadata:
+      labels:
+        app: $name
+      annotations:
+        $($contract.WsEdgeConfigHashAnnotation): $(ConvertTo-ClientEntryYamlString -Value $configHash)
+    spec:
+      containers:
+        - name: nginx
+          image: $Image
+          ports:
+            - containerPort: 443
+              name: wss
+          readinessProbe:
+            tcpSocket:
+              port: 443
+            periodSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: tls
+              mountPath: /etc/nginx/tls
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: $($contract.WsEdgeConfigMapName)
+        - name: tls
+          secret:
+            secretName: $TlsSecretName
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name
+  labels:
+    app: $name
+spec:
+  type: $serviceType
+  externalTrafficPolicy: Local
+  selector:
+    app: $name
+  ports:
+    - name: wss
+      port: 443
+      targetPort: 443$nodePortLine
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: $($contract.WsEdgeNetworkPolicyName)
+  labels:
+    app: $name
+spec:
+  podSelector:
+    matchLabels:
+      app: $name
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: [$($apps -join ', ')]
+      ports:
+$policyPortLines
+"@
+}
+
+<#
+.SYNOPSIS
 	gateway application.yaml 里 gate: 键**下面**的 rate-limit 片段(Spring 属性 gate.rate-limit.trusted-proxies,
 	以及可选的削峰阈值 gate.rate-limit.<键>,G4b)。
 
@@ -1668,7 +1926,11 @@ function Test-ClientEntryPreflight {
 		[AllowEmptyString()][string]$GatewayIngressTlsSecret = '',
 		[AllowEmptyString()][string]$GatewayTrustedProxies = '',
 		[bool]$LoginDevPasswordAuth = $false,
-		[ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile = 'dev'
+		[ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile = 'dev',
+		# 小游戏 WebSocket 边缘(docs/design/minigame-websocket-gate.md W8):域名留空 = 不启用,另两项被忽略。
+		[AllowEmptyString()][string]$WsEdgeHost = '',
+		[AllowEmptyString()][string]$WsEdgeTlsSecret = '',
+		[AllowEmptyString()][string]$WsEdgePodCidrs = ''
 	)
 
 	$contract = Get-ClientEntryContract
@@ -1801,6 +2063,33 @@ function Test-ClientEntryPreflight {
 	}
 	if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret) -and [string]::IsNullOrWhiteSpace($GatewayIngressHost)) {
 		$warnings.Add("-GatewayIngressTlsSecret supplied without -GatewayIngressHost; no Ingress will be generated and TLS settings are ignored.")
+	}
+
+	# ── 小游戏 WebSocket 边缘(W8)。域名一给,gate / battle 就自报经它转发的地址并下发给小游戏客户端,
+	#    所以这里把「边缘建不起来或转不过去」的组合全部拦在部署之前。
+	if (-not [string]::IsNullOrWhiteSpace($WsEdgeHost)) {
+		$parsedEdgeIp = $null
+		if (-not (Test-ClientEntryHostName -Value $WsEdgeHost) -or [System.Net.IPAddress]::TryParse($WsEdgeHost, [ref]$parsedEdgeIp)) {
+			$errors.Add("-WsEdgeHost 必须是 DNS 名,不能是 IP、不能带 scheme / 端口 / 路径(当前 '$WsEdgeHost'):小游戏平台只许连登记过的 wss 域名。")
+		}
+		if (-not $external) {
+			$errors.Add("-WsEdgeHost 要求 -ClientEntryMode external:podip 形态的 gate / battle 不带 $($contract.ClientWsBaseUrlEnv),不会自报 WebSocket 地址,小游戏客户端拿不到入口。")
+		}
+		if ([string]::IsNullOrWhiteSpace($WsEdgeTlsSecret)) {
+			$errors.Add("配置了 -WsEdgeHost 却没有 -WsEdgeTlsSecret:边缘要用它终止 wss(infra namespace 里预置的 TLS Secret,tls.crt 带完整证书链)。")
+		}
+		$edgeCidrs = ConvertTo-ClientEntryCidrList -CommaSeparated $WsEdgePodCidrs
+		$badEdgeCidrs = @($edgeCidrs | Where-Object { $_ -cnotmatch '^\d{1,3}(\.\d{1,3}){3}/\d{1,2}$' })
+		$badEdgeCidrs += @(Get-ClientEntryInvalidCidrs -CommaSeparated $WsEdgePodCidrs)
+		if ($edgeCidrs.Count -eq 0) {
+			$errors.Add("配置了 -WsEdgeHost 却没有 -WsEdgePodCidrs:边缘只把连接转到这些 Pod 网段里的 gate / battle,不给就没有可转的目标(填集群的 Pod CIDR,如 10.244.0.0/16)。")
+		}
+		elseif ($badEdgeCidrs.Count -gt 0) {
+			$errors.Add("-WsEdgePodCidrs 含不合法的项:$(@($badEdgeCidrs | Select-Object -Unique) -join ', ')(只收带前缀位数的 IPv4 CIDR)。")
+		}
+	}
+	elseif (-not [string]::IsNullOrWhiteSpace($WsEdgeTlsSecret) -or -not [string]::IsNullOrWhiteSpace($WsEdgePodCidrs)) {
+		$warnings.Add("-WsEdgeTlsSecret / -WsEdgePodCidrs supplied without -WsEdgeHost; the WebSocket edge is not deployed and these settings are ignored.")
 	}
 
 	# ── login 开发口令认证(2b §7;与 release_preflight.ps1 的 debug.login.devpassword 同一门禁)。
@@ -2939,4 +3228,189 @@ function Get-LoginPasswordAuthLiveState {
 		return [pscustomobject]@{ ConfigMapPresent = $true; Live = (& $unreadable "configmap/$($contract.LoginConfigMapName) has no data.$($contract.LoginConfigMapKey)") }
 	}
 	return [pscustomobject]@{ ConfigMapPresent = $true; Live = (ConvertFrom-LoginPasswordAuthYaml -LoginYaml ([string]$loginYaml)) }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 11. login 实名与防沉迷(AntiAddiction)的防误关闸:线上现状 vs 本次参数
+# ─────────────────────────────────────────────────────────────────
+#
+# k8s_deploy.ps1 的 -LoginNppaAppId / -LoginNppaBizId 不粘滞:漏传就按「没开」渲染 login 的配置模板,新 Pod 不再注入国家系统的 secretKey
+# (Secret login-nppa 也被删)。login 读的是运维预置的 runtimeConfigSecret,那里的 AntiAddiction 还开着,于是滚到的 Pod 因为变量缺失拒绝启动;
+# 换了 AppId / BizId,注入的 secretKey 与运行配置里的应用对不上。本节的判据由 k8s_deploy.ps1 Assert-LoginAntiAddictionClusterState 在写操作之前调用;
+# 与第 9、10 节各自独立:读的是同一份 ConfigMap 里互不相干的段。
+
+<#
+.SYNOPSIS
+	从 login.yaml 文本里读出顶层 AntiAddiction 段的开关与国家系统的应用标识(形状同 k8s_deploy.ps1 New-LoginAntiAddictionYaml),供防误关闸比对。纯函数。
+
+.DESCRIPTION
+	只认生成器写出的块映射:顶格 `AntiAddiction:`,两格缩进的 `键: 值`,其中 `Nppa:` 下是四格缩进的 `键: 值`;空行与整行注释跳过,遇到下一个顶格键结束。
+	login 读键名不区分大小写,所以顶格键按不区分大小写、可带引号找,写法不是生成器的记进 Errors(判不出),不当成没开。
+	返回 { Present; Enabled; AppId; BizId; Errors }:
+	  - Enabled:段里的 Enabled 是不是 true,没有这一行按 login 的缺省 false;
+	  - AppId / BizId:Nppa 下的双引号标量(生成器的字符集 [A-Za-z0-9_.-]),没有这一行是空串;
+	  - Errors:认不出的形状(顶格键写法不是生成器的、出现多次、同一行带值、制表符缩进、Enabled 不是裸 true / false、AppId / BizId 不是
+	    生成器写法的双引号标量、这三个键重复、四格缩进的行不在 Nppa 下、别的缩进)。非空时调用方必须当作「判不出」(fail-closed)。
+	Errors 只写行号与键名,不回显值。
+#>
+function ConvertFrom-LoginAntiAddictionYaml {
+	param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$LoginYaml)
+
+	$errors = [System.Collections.Generic.List[string]]::new()
+	$lines = @((ConvertTo-ClientEntryLf -Text $LoginYaml) -split "`n")
+	$headerIndexes = @(for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^["'']?AntiAddiction["'']?[ \t]*:') { $i } })
+	if ($headerIndexes.Count -eq 0) {
+		return [pscustomobject]@{ Present = $false; Enabled = $false; AppId = ''; BizId = ''; Errors = [string[]]@() }
+	}
+	if ($headerIndexes.Count -gt 1) {
+		$errors.Add("top-level AntiAddiction appears $($headerIndexes.Count) times")
+	}
+	foreach ($headerIndex in $headerIndexes) {
+		if ($lines[$headerIndex] -cnotmatch '^AntiAddiction[ \t]*:') {
+			$errors.Add("line $($headerIndex + 1): the top-level key AntiAddiction is not spelled the way the generator writes it (login reads keys case-insensitively, so it still takes effect)")
+		}
+	}
+	if ($lines[$headerIndexes[0]] -notmatch '^["'']?AntiAddiction["'']?[ \t]*:[ \t]*(#.*)?\z') {
+		$errors.Add("line $($headerIndexes[0] + 1): AntiAddiction is not a block mapping (it has a value on the same line)")
+	}
+
+	$values = @{}
+	$inNppa = $false
+	for ($i = $headerIndexes[0] + 1; $i -lt $lines.Count; $i++) {
+		$line = $lines[$i].TrimEnd("`r")
+		$lineNo = $i + 1
+		if ($line -cmatch '^[ \t]*(#.*)?\z') { continue }
+		if ($line -cmatch '^[^ \t]') { break }
+		if ($line -cmatch '^ *\t') {
+			$errors.Add("line ${lineNo}: tab indentation")
+			continue
+		}
+		# login 读键名不区分大小写:enabled / appid 同样生效,按同一个键处理。
+		if ($line -cmatch '^  (?<key>[A-Za-z0-9_]+)[ \t]*:(?<raw>.*)\z') {
+			$key = $Matches['key']
+			$raw = $Matches['raw']
+			$inNppa = ($key -ieq 'Nppa')
+			if ($inNppa) {
+				if ($raw -notmatch '^[ \t]*(#.*)?\z') { $errors.Add("line ${lineNo}: AntiAddiction.Nppa is not a block mapping") }
+				continue
+			}
+			if ($key -ine 'Enabled') { continue }
+			$name = 'Enabled'
+		}
+		elseif ($inNppa -and $line -cmatch '^    (?<key>[A-Za-z0-9_]+)[ \t]*:(?<raw>.*)\z') {
+			$key = $Matches['key']
+			$raw = $Matches['raw']
+			if ($key -ine 'AppId' -and $key -ine 'BizId') { continue }
+			$name = if ($key -ieq 'AppId') { 'AppId' } else { 'BizId' }
+		}
+		else {
+			$errors.Add("line ${lineNo}: unrecognised shape inside AntiAddiction (only two-space indented 'Key: value' lines, and four-space ones under Nppa, are understood)")
+			continue
+		}
+		if ($values.ContainsKey($name)) {
+			$errors.Add("line ${lineNo}: AntiAddiction $name appears more than once")
+			continue
+		}
+		$value = $raw.Trim()
+		if ($name -ceq 'Enabled') {
+			# 只认裸 true / false;带引号是字符串,login 解析 bool 时拒绝启动,这里判不出。
+			if ($value -cmatch '^(?<b>true|True|TRUE|false|False|FALSE)(?:[ \t]+#.*)?\z') { $values[$name] = ($Matches['b'] -ieq 'true') }
+			else { $errors.Add("line ${lineNo}: AntiAddiction.Enabled is not a bare true / false") }
+		}
+		elseif ($value -cmatch '^"(?<v>[A-Za-z0-9_.-]*)"(?:[ \t]+#.*)?\z') { $values[$name] = $Matches['v'] }
+		else { $errors.Add("line ${lineNo}: AntiAddiction.Nppa.$name is not a double-quoted [A-Za-z0-9_.-] scalar") }
+	}
+	return [pscustomobject]@{
+		Present = $true
+		Enabled = [bool]$values['Enabled']
+		AppId   = [string]$values['AppId']
+		BizId   = [string]$values['BizId']
+		Errors  = [string[]]$errors.ToArray()
+	}
+}
+
+<#
+.SYNOPSIS
+	login 实名与防沉迷「线上现状 vs 本次参数」的差异。纯函数,返回 { Drifts = string[]; KeepArgs = string }。
+
+.DESCRIPTION
+	-Live 是 ConvertFrom-LoginAntiAddictionYaml 的结果,-AppId / -BizId 是本次的 -LoginNppaAppId / -LoginNppaBizId。判据:
+	  - Live.Errors 非空:判不出,算一项差异(fail-closed;确认开关放行之后模板按生成器的形状整段重写)。
+	  - 线上没开:不算差异(开启是显式的)。
+	  - 线上开着、本次没给 AppId:关闭。新 Pod 不再有 secretKey、Secret login-nppa 被删,而运行配置里防沉迷还开着。
+	  - 线上开着、本次 AppId 或 BizId 与线上不同(按字节比):换了国家系统的应用。可玩日与三个地址不比:按年补可玩日是常规改动,
+	    地址只在接口测试阶段换,两者都不会让 Pod 起不来。
+	KeepArgs:有差异且线上读得懂时是 '-LoginNppaAppId <线上值> -LoginNppaBizId <线上值>'(值不是 [A-Za-z0-9_.-] 时写 <see ConfigMap>),否则空串。
+	「确认要改」的开关名由调用方拼在结尾。文本里没有密钥:本函数拿不到 secretKey。
+#>
+function Get-LoginAntiAddictionDrift {
+	param(
+		[Parameter(Mandatory = $true)]$Live,
+		[AllowEmptyString()][string]$AppId = '',
+		[AllowEmptyString()][string]$BizId = ''
+	)
+
+	$drifts = [System.Collections.Generic.List[string]]::new()
+	$liveErrors = @(@(Get-ClientEntryMember -Object $Live -Path 'Errors') | Where-Object { -not [string]::IsNullOrEmpty($_) })
+	if (@($liveErrors).Count -gt 0) {
+		$drifts.Add("the AntiAddiction section of the live login ConfigMap cannot be read ($(@($liveErrors) -join '; ')), so it is unknown whether this deployment turns anti-addiction off or switches its NPPA app")
+		return [pscustomobject]@{ Drifts = [string[]]$drifts.ToArray(); KeepArgs = '' }
+	}
+	if (-not [bool](Get-ClientEntryMember -Object $Live -Path 'Enabled')) {
+		return [pscustomobject]@{ Drifts = [string[]]@(); KeepArgs = '' }
+	}
+	$liveAppId = [string](Get-ClientEntryMember -Object $Live -Path 'AppId')
+	$liveBizId = [string](Get-ClientEntryMember -Object $Live -Path 'BizId')
+	if ([string]::IsNullOrEmpty($AppId)) {
+		$drifts.Add('anti-addiction is on in the live login ConfigMap and -LoginNppaAppId / -LoginNppaBizId were not given: new login Pods are rendered without the NPPA secretKey and the Secret login-nppa is deleted while the runtime config Secret still enables AntiAddiction, so every Pod the rollout replaces refuses to start (to turn it off, remove AntiAddiction from that Secret without restarting login, then run this deployment with the confirmation so that its rollout replaces login)')
+	}
+	else {
+		if ($AppId -cne $liveAppId) {
+			$drifts.Add('AntiAddiction.Nppa.AppId differs from the live one (-LoginNppaAppId changed): the injected secretKey must belong to the app named in the runtime config Secret of login, otherwise every real-name check fails, so update that Secret in the same change')
+		}
+		if ($BizId -cne $liveBizId) {
+			$drifts.Add('AntiAddiction.Nppa.BizId differs from the live one (-LoginNppaBizId changed): login keeps using the BizId in its runtime config Secret until that Secret is updated')
+		}
+	}
+	$shown = @($liveAppId, $liveBizId | ForEach-Object { if ($_ -cmatch '^[A-Za-z0-9_.-]+\z') { $_ } else { '<see ConfigMap>' } })
+	$keepArgs = if ($drifts.Count -gt 0) { "-LoginNppaAppId $($shown[0]) -LoginNppaBizId $($shown[1])" } else { '' }
+	return [pscustomobject]@{ Drifts = [string[]]$drifts.ToArray(); KeepArgs = $keepArgs }
+}
+
+<#
+.SYNOPSIS
+	读一个 zone namespace 里 login 配置模板的 AntiAddiction 段现状。只读,返回 { ConfigMapPresent; Live }。
+
+.DESCRIPTION
+	口径与第 10 节的 Get-LoginPasswordAuthLiveState 相同,读的是同一份 ConfigMap(名字取自 Get-ClientEntryContract):不存在 = Live.Present 为 $false;
+	在却没有配置键、或返回不是 JSON:记进 Live.Errors(判不出,调用方 fail-closed)。任何 kubectl 失败都 throw(查不到不等于没开)。
+	不支持 DryRun,调用方在 DryRun 下不调用。看的是部署脚本上次渲染的模板,不是 login 实际读的 runtimeConfigSecret,也不读 Secret login-nppa。
+#>
+function Get-LoginAntiAddictionLiveState {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$KubeContext,
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$KubeConfig
+	)
+
+	$contract = Get-ClientEntryContract
+	$configMap = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'configmap', $contract.LoginConfigMapName, '-n', $Namespace, '--ignore-not-found', '-o', 'json') `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput
+	if ([string]::IsNullOrWhiteSpace($configMap.Stdout)) {
+		return [pscustomobject]@{ ConfigMapPresent = $false; Live = (ConvertFrom-LoginAntiAddictionYaml -LoginYaml '') }
+	}
+	$unreadable = {
+		param([string]$Reason)
+		[pscustomobject]@{ Present = $true; Enabled = $false; AppId = ''; BizId = ''; Errors = [string[]]@($Reason) }
+	}
+	$document = $null
+	try { $document = $configMap.Stdout | ConvertFrom-Json -ErrorAction Stop }
+	catch {
+		return [pscustomobject]@{ ConfigMapPresent = $true; Live = (& $unreadable "configmap/$($contract.LoginConfigMapName) did not come back as JSON") }
+	}
+	$loginYaml = Get-ClientEntryMember -Object $document -Path 'data', $contract.LoginConfigMapKey
+	if ($null -eq $loginYaml) {
+		return [pscustomobject]@{ ConfigMapPresent = $true; Live = (& $unreadable "configmap/$($contract.LoginConfigMapName) has no data.$($contract.LoginConfigMapKey)") }
+	}
+	return [pscustomobject]@{ ConfigMapPresent = $true; Live = (ConvertFrom-LoginAntiAddictionYaml -LoginYaml ([string]$loginYaml)) }
 }

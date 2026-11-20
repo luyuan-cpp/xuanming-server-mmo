@@ -217,14 +217,15 @@ func clampFetchItems(requested uint32, def, maxItems int) int {
 //     范围内却查无此 seq;或环里同 seq 记的是另一条 / 另一个结局 —— 后两种是丢掉的结局被之后的条目掩盖(评审 M6)。
 //
 // 管理员终结的行(finalized_by=ADMIN:从未投递直接作废,或经账本证明强制终结)不是消费方的结局,不比对。
-func reconcileDiff(row *inboxpb.PlayerInboxItemRow, cursor *componentpb.PlayerInboxDomainCursor) inboxpb.PlayerInboxReconcileDiffKind {
-	if inboxpb.PlayerInboxItemState(row.GetState()) == inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_PENDING {
-		if row.GetSeq() <= cursor.GetDecidedThroughSeq() {
+// 只看对账要用的那几列(FinalizedRef),ReconcilePlayer 翻页时也只读这几列。
+func reconcileDiff(ref FinalizedRef, cursor *componentpb.PlayerInboxDomainCursor) inboxpb.PlayerInboxReconcileDiffKind {
+	if ref.State == inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_PENDING {
+		if ref.Seq <= cursor.GetDecidedThroughSeq() {
 			return inboxpb.PlayerInboxReconcileDiffKind_PLAYER_INBOX_RECONCILE_PENDING_BUT_DECIDED
 		}
 		return inboxpb.PlayerInboxReconcileDiffKind_PLAYER_INBOX_RECONCILE_DIFF_UNSPECIFIED
 	}
-	if finalizedLedgerGap(finalizedRefOfRow(row), cursor) != gapNone {
+	if finalizedLedgerGap(ref, cursor) != gapNone {
 		return inboxpb.PlayerInboxReconcileDiffKind_PLAYER_INBOX_RECONCILE_FINAL_NOT_IN_LEDGER
 	}
 	return inboxpb.PlayerInboxReconcileDiffKind_PLAYER_INBOX_RECONCILE_DIFF_UNSPECIFIED
@@ -744,21 +745,6 @@ func finalizedLedgerGap(f FinalizedRef, cursor *componentpb.PlayerInboxDomainCur
 	return gapMissingInRing
 }
 
-// finalizedRefOfRow 取一条条目行里对账要用的列(ReconcilePlayer 读整行,定时对账只读这几列)。
-func finalizedRefOfRow(row *inboxpb.PlayerInboxItemRow) FinalizedRef {
-	return FinalizedRef{
-		PlayerID:      row.GetPlayerId(),
-		Domain:        inboxpb.PlayerInboxDomain(row.GetDomain()),
-		Seq:           row.GetSeq(),
-		State:         inboxpb.PlayerInboxItemState(row.GetState()),
-		RequestID:     row.GetRequestId(),
-		MsgType:       inboxpb.PlayerInboxMessageType(row.GetMsgType()),
-		OutcomeReason: row.GetOutcomeReason(),
-		FinalizedBy:   inboxpb.PlayerInboxFinalizer(row.GetFinalizedBy()),
-		UpdatedMs:     row.GetUpdatedMs(),
-	}
-}
-
 // reconcileCursors 是 ReconcilePlayer 回包里的游标部分(设计 §9.3):按 domains 的顺序逐域列出账本水位与收件箱 next_seq;
 // 收件箱没有流、账本也没有水位的域不列。streams 按域给出流行(没有流的域不在 map 里);
 // ledger 是已落盘账本(非 nil,调用方已确认 validLedger)。
@@ -779,22 +765,21 @@ func reconcileCursors(domains []inboxpb.PlayerInboxDomain, streams map[inboxpb.P
 }
 
 // appendReconcileDiffs 是 ReconcilePlayer 回包里的差异部分(设计 §9.3):逐行按 reconcileDiff 与账本里该域的游标
-// (含最近结局环)比对,把有差异的行追加到 diffs 后面,顺序同 rows。每行只看自己和账本,所以 ReconcilePlayer
+// (含最近结局环)比对,把有差异的行追加到 diffs 后面,顺序同 refs。每行只看自己和账本,所以 ReconcilePlayer
 // 按 (domain, seq) 升序一页一页追加,结果与一次读完相同。ledger 同 reconcileCursors。
 func appendReconcileDiffs(diffs []*inboxpb.PlayerInboxReconcileDiff, ledger *componentpb.PlayerInboxLedgerComp,
-	rows []*inboxpb.PlayerInboxItemRow) []*inboxpb.PlayerInboxReconcileDiff {
-	for _, row := range rows {
-		d := inboxpb.PlayerInboxDomain(row.GetDomain())
-		kind := reconcileDiff(row, findCursor(ledger, row.GetDomain()))
+	refs []FinalizedRef) []*inboxpb.PlayerInboxReconcileDiff {
+	for _, ref := range refs {
+		kind := reconcileDiff(ref, findCursor(ledger, uint32(ref.Domain)))
 		if kind == inboxpb.PlayerInboxReconcileDiffKind_PLAYER_INBOX_RECONCILE_DIFF_UNSPECIFIED {
 			continue
 		}
 		diffs = append(diffs, &inboxpb.PlayerInboxReconcileDiff{
-			Domain:    d,
-			Seq:       row.GetSeq(),
+			Domain:    ref.Domain,
+			Seq:       ref.Seq,
 			Kind:      kind,
-			State:     inboxpb.PlayerInboxItemState(row.GetState()),
-			RequestId: row.GetRequestId(),
+			State:     ref.State,
+			RequestId: ref.RequestID,
 		})
 	}
 	return diffs

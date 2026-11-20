@@ -137,8 +137,12 @@ func (w *Worker) process(ctx context.Context, id uint64) (err error) {
 		if err := w.Repo.AbandonReward(ctx, p, stamp); err != nil {
 			return err
 		}
-		logx.Errorf("[rank] mail reward abandoned, needs manual follow-up: reward_id=%d settlement_id=%d attempts=%d expire_ms=%d last_outcome=%s",
-			p.RewardId, p.SettlementId, p.Attempts+1, p.ExpireMs, outcome)
+		if result == attemptRecipientGone {
+			logx.Infof("[rank] mail reward dropped, the recipient role has been deleted: reward_id=%d settlement_id=%d", p.RewardId, p.SettlementId)
+		} else {
+			logx.Errorf("[rank] mail reward abandoned, needs manual follow-up: reward_id=%d settlement_id=%d attempts=%d expire_ms=%d last_outcome=%s",
+				p.RewardId, p.SettlementId, p.Attempts+1, p.ExpireMs, outcome)
+		}
 		outcome = metrics.RewardAbandoned
 		return nil
 	}
@@ -174,7 +178,7 @@ func (w *Worker) process(ctx context.Context, id uint64) (err error) {
 	case attemptDelivered:
 		outcome = metrics.RewardDelivered
 		mailID = response.GetMailId()
-	case attemptRejected:
+	case attemptRejected, attemptRecipientGone:
 		outcome = metrics.RewardRejected
 	default:
 		outcome = metrics.RewardUnknown

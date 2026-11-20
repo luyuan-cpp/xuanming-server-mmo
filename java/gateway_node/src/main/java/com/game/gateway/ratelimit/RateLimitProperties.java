@@ -42,6 +42,27 @@ public class RateLimitProperties {
      */
     private long accountCooldownMs = 5000;
 
+    /**
+     * 排队提示(波次未开、区桶空)里 retry_after_ms 的下限(ms),必须为正。区桶补到一个令牌往往只要 1~2ms
+     * (2000 rps 时 0.5ms),原样下发等于让排队的人每个往返重试一次,全都打在同一个 {@code rl:zone:<id>} 键上;
+     * 有了下限,一个守规矩的客户端排队时每秒最多 1 / 下限 次。与登录排队的基础轮询间隔(2 秒)一致。
+     */
+    private long queueRetryMinMs = 2000;
+
+    /**
+     * 排队提示在下限之上再加的均匀随机量的上界(ms,取 [0, 这个值)),0 = 不加。同一时刻被拒的一批人(波次开放那一刻、
+     * 区桶刚被抽空时)会在同一时刻回来,随机量把他们摊到这么宽的时间窗里。
+     */
+    private long queueRetryJitterMs = 2000;
+
+    /**
+     * 区桶空(排队)时 IP 桶扣多少,以千分之一令牌为单位(100 = 0.1 个),取 0~1000。区桶空时以前把 IP 令牌全额退还,
+     * 排队中的重试不受 IP 桶约束,不守 retry_after 的单个 IP 可以无限速地打区桶热键;扣一小份之后,一个 IP 排队时
+     * 最多每秒 ip-rps × 1000 / 这个值 次(缺省 5 × 10 = 50 次),守规矩的客户端每 2~4 秒一次,同一出口 IP 后面
+     * 约 150 人同时排队才会碰到 IP 桶。0 = 回到全额退还;1000 = 与放行一样扣一个。
+     */
+    private long queueRetryIpCostMilli = 100;
+
     /** Hard queue timeout (ms). After this the client gets QUEUE_TIMEOUT. */
     private long queueTimeoutMs = 300_000;
 
@@ -116,6 +137,12 @@ public class RateLimitProperties {
     public void setIpBurst(long ipBurst) { this.ipBurst = ipBurst; }
     public long getAccountCooldownMs() { return accountCooldownMs; }
     public void setAccountCooldownMs(long accountCooldownMs) { this.accountCooldownMs = accountCooldownMs; }
+    public long getQueueRetryMinMs() { return queueRetryMinMs; }
+    public void setQueueRetryMinMs(long queueRetryMinMs) { this.queueRetryMinMs = queueRetryMinMs; }
+    public long getQueueRetryJitterMs() { return queueRetryJitterMs; }
+    public void setQueueRetryJitterMs(long queueRetryJitterMs) { this.queueRetryJitterMs = queueRetryJitterMs; }
+    public long getQueueRetryIpCostMilli() { return queueRetryIpCostMilli; }
+    public void setQueueRetryIpCostMilli(long queueRetryIpCostMilli) { this.queueRetryIpCostMilli = queueRetryIpCostMilli; }
     public long getQueueTimeoutMs() { return queueTimeoutMs; }
     public void setQueueTimeoutMs(long queueTimeoutMs) { this.queueTimeoutMs = queueTimeoutMs; }
 

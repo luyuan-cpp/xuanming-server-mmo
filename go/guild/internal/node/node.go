@@ -1,78 +1,54 @@
+// Package node 按 C++ 约定把 guild 注册进 etcd:C++ 节点与路由服 watch
+// "GuildNodeService.rpc/zone/{zoneId}/node_type/{nodeType}/node_id/{nodeId}",值是 protojson 序列化的 NodeInfo。
+//
+// 本包是 shared/noderegistry 的薄适配层(docs/design/infra-reconnect-overview.md R3、R4,2026-11-19 迁移):
+// node_id 的 CAS 分配、租约、keepalive、失租重注册(退避带抖动、可被 Close 打断)、按 uuid 条件注销与注册层指标
+// 全部由 shared 实现,语义以 shared 为准(见其包注释「与既有副本的关系」)。这里只做三件事:
+//   - 保留 guild 的调用面(NewNode / KeepAlive / Close / Info),并持有注册用的 etcd 客户端,Close 时一并关闭;
+//   - 按 guild 的字段填法生成 NodeInfo(BuildValue 回调);
+//   - 在碰 etcd 之前读发布轨道,取值非法就返回带环境变量名的错误。
+//
+// 失租后原 node_id 已归别的实例时换新号继续服务(ReallocateNewID),与迁移前的副本同一语义:node_id 只是发现路径里的
+// 编号,guild_id 等永久 ID 由 data_service 发号器发,guild 不以 node_id 派生任何持久身份或 per-node topic。
 package node
-
-// 本文件的 allocator 与 go/player_locator/internal/node/node.go 是同源副本,改 allocator 行为时两份同步改。
-// 语义以 shared/noderegistry 为准(唯一实现,见其包注释「与既有副本的关系」):friend 原来那份已删、直接用它,
-// scene_manager 等服务的 internal/noderegistry 已是它的薄适配层;guild 与 player_locator 这两份尚未迁移。
-//
-// 2026-10-18 登记:player_locator 的副本在 tryClaimNodeID / allocateNodeID 末尾多一个可选 extraOps 钩子
-// (缺省为空,用来把能力键放进同一个注册事务),详见该文件头「有意的差异」;同步修改时保留它即可。
-//
-// 2026-11-05 登记(发布轨道,docs/design/release-track-gray-canary.md §2.1):各副本都在注册入口第一步读
-// releasetrack.FromEnv,取值非法就在碰 etcd 之前返回错误;合法的轨道经 newNodeInfo 写进 NodeInfo.release_track,
-// 重注册沿用同一个 Info。与 shared/noderegistry 同一做法,同步修改时保留。
 
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"guild/internal/config"
 	base "proto/common/base"
-	"shared/nodeinfo"
+	"shared/etcdwatch"
+	sharedregistry "shared/noderegistry"
 	"shared/releasetrack"
 )
 
-// nodeIDMin 是合法 node_id 的下界。0 永远作为 "未分配 / 非法值" 保留,
-// 不会被 allocator 分配出来。这样上游 `if info.NodeId == 0` 这种哨兵判定才有意义。
-const nodeIDMin uint32 = 1
-
-// nodeIDMax 是 node_id 的上界(含),分配时从 nodeIDMin 顺序扫到它为止。node_id 只是服务发现路径
-// 和 NodeInfo 里的编号,不喂给任何发号器:永久 ID 由 data_service 发号器发,scene_manager 的 scene_id
-// 由 shared/snowflakealloc 另行申领槽位,都与 node_id 无关。取值 1<<17-1 与 C++ NodeAllocator 的
-// kMaxNodeId 相同,各语言的分配器用同一个上界;它远大于任何一种节点的实例数。
-const nodeIDMax uint32 = 1<<17 - 1
-
+// Node 是一次成功注册的句柄,只能由 NewNode 构造。
 type Node struct {
-	Info       *base.NodeInfo
-	client     *clientv3.Client
-	leaseID    clientv3.LeaseID
-	cancelFunc context.CancelFunc
+	// Info 是注册成功那一刻写进 etcd 的 NodeInfo 快照,NodeId / NodeUuid 已回填 shared 分到的值,供启动日志与
+	// killswitch 认实例用。换号后不更新(shared 会记一行 node_id changed);NodeUuid 进程内不变。调用方只读。
+	Info *base.NodeInfo
+
+	client *clientv3.Client
+	reg    *sharedregistry.Registration
 }
 
-// rpcPrefix 是该 node_type 在 etcd 里的根前缀,例如 "GuildNodeService.rpc"。
+// rpcPrefix 是该 node_type 在 etcd 里的根前缀,例如 "GuildNodeService.rpc"(由枚举名派生,不手写)。
 func rpcPrefix(nodeType uint32) string {
-	return fmt.Sprintf("%s.rpc", base.ENodeType_name[int32(nodeType)])
+	return base.ENodeType_name[int32(nodeType)] + ".rpc"
 }
 
-// rpcPath 是 per-zone 服务发现 key,C++ 端按这个路径 watch NodeInfo。
-// 路径里保留 zone 段是为了兼容现有 C++ watcher,以及保留 "按 zone 列出 NodeInfo" 的能力。
-func rpcPath(prefix string, zoneId, nodeType, nodeId uint32) string {
-	return fmt.Sprintf("%s/zone/%d/node_type/%d/node_id/%d", prefix, zoneId, nodeType, nodeId)
-}
-
-// allocationKey 是跨 zone 的全局占位 key。
-// 它的存在性(version != 0)就是 (node_type, node_id) 这对资源被占用的真相;
-// 同一个 lease 同时挂在 allocationKey 和 rpcPath 上,进程退出 / lease 过期时一起消失。
-// 关键点:这个 key 路径里**不带 zone**,所以两个不同 zone 的实例不可能同时拿到同一个 (node_type, node_id)
-// (与 shared/noderegistry 的 AllocationKey 同一约定)。
-func allocationKey(prefix string, nodeType, nodeID uint32) string {
-	return fmt.Sprintf("%s/allocated/node_type/%d/node_id/%d", prefix, nodeType, nodeID)
-}
-
-// allocationKeyPrefix 用于一次性 Get 出所有 (node_type) 已占 node_id。
-func allocationKeyPrefix(prefix string, nodeType uint32) string {
-	return fmt.Sprintf("%s/allocated/node_type/%d/node_id/", prefix, nodeType)
-}
-
-// NewNode 注册本进程并返回句柄。发布轨道在第一步读,不靠入口传参:取值非法时在碰 etcd 之前就返回错误,
-// 进程随之拒启;漏写轨道的 canary 进程会被当成 stable,接到 stable 的流量(与 shared/noderegistry 同一理由)。
+// NewNode 注册本进程并返回句柄;返回的句柄尚未续租,调用方随后必须 KeepAlive()。
+//
+// 发布轨道在第一步读,不靠入口传参:取值非法时在碰 etcd 之前就返回错误,进程随之拒启;漏写轨道的 canary 进程会被
+// 当成 stable,接到 stable 的流量(与 shared/noderegistry 同一理由)。其余校验以 shared 为准:ZoneId、port 为 0
+// 或 LeaseTTL ≤ 0 都拒注册,etcd 里不留任何东西。
 func NewNode(nodeType uint32, ip string, port uint32) (*Node, error) {
 	track, err := releasetrack.FromEnv()
 	if err != nil {
@@ -80,43 +56,36 @@ func NewNode(nodeType uint32, ip string, port uint32) (*Node, error) {
 	}
 
 	cfg := config.AppConfig
-
-	client, err := clientv3.New(clientv3.Config{
+	// keepalive:续租流与重注册不会卡在半开连接上(etcdwatch 包注释,R1)。
+	client, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{
 		Endpoints:   cfg.Registry.Etcd.Hosts,
 		DialTimeout: cfg.Registry.Etcd.DialTimeout,
-	})
+	}))
 	if err != nil {
 		return nil, fmt.Errorf("etcd connect failed: %w", err)
 	}
 
-	grant, err := client.Grant(context.Background(), cfg.Node.LeaseTTL)
+	template := newNodeInfo(nodeType, cfg.Node.ZoneId, ip, port, track)
+	reg, err := sharedregistry.Register(context.Background(), client, sharedregistry.Spec{
+		Prefix:          rpcPrefix(nodeType),
+		NodeType:        nodeType,
+		ZoneId:          cfg.Node.ZoneId,
+		LeaseTTL:        cfg.Node.LeaseTTL,
+		BuildValue:      nodeInfoValueBuilder(template),
+		OnReclaimFailed: sharedregistry.ReallocateNewID,
+	})
 	if err != nil {
-		client.Close()
-		return nil, fmt.Errorf("etcd grant failed: %w", err)
-	}
-
-	info := newNodeInfo(nodeType, cfg.Node.ZoneId, ip, port, track)
-
-	prefix := rpcPrefix(nodeType)
-	nodeID, err := allocateNodeID(context.Background(), client, prefix, info, grant.ID)
-	if err != nil {
-		_, _ = client.Revoke(context.Background(), grant.ID)
-		client.Close()
+		_ = client.Close()
 		return nil, err
 	}
-	info.NodeId = nodeID
-	logx.Infof("guild node registered: zone=%d node_type=%d node_id=%d uuid=%s release_track=%s",
-		info.ZoneId, nodeType, nodeID, info.NodeUuid, track)
-
-	return &Node{
-		Info:    info,
-		client:  client,
-		leaseID: grant.ID,
-	}, nil
+	info := proto.Clone(template).(*base.NodeInfo)
+	info.NodeId = reg.NodeID()
+	info.NodeUuid = reg.NodeUUID
+	return &Node{Info: info, client: client, reg: reg}, nil
 }
 
-// newNodeInfo 构造本进程写进 etcd 的 NodeInfo,node_id 由随后的分配步骤填。
-// 抽成函数是为了单测不连 etcd 就能核对轨道;重注册沿用同一个 Info,轨道不会丢。
+// newNodeInfo 构造本进程写进 etcd 的 NodeInfo 模板,node_id 与 node_uuid 由 shared 分配后经 BuildValue 写入。
+// 抽成函数是为了单测不连 etcd 就能核对轨道;换号重注册时以同一个模板重建注册值,轨道不会丢。
 func newNodeInfo(nodeType, zoneId uint32, ip string, port uint32, track releasetrack.Track) *base.NodeInfo {
 	return &base.NodeInfo{
 		NodeType: nodeType,
@@ -134,265 +103,27 @@ func newNodeInfo(nodeType, zoneId uint32, ip string, port uint32, track releaset
 	}
 }
 
-// allocateNodeID 在 (node_type) 下找一个空闲 node_id 并通过 etcd Txn CAS 占住。
-//
-// 设计要点:
-//  1. 同时扫两个前缀构建 used 集合:
-//     - 新 schema 的 allocation 前缀(跨 zone 全局占位)
-//     - 旧 schema 的 rpcPrefix(跨所有 zone 的 per-zone rpcPath)
-//     第二个前缀是为了滚动升级 —— 升级期间老实例只写 rpcPath、没有 allocation key,
-//     新启动的实例必须把它们的 node_id 也算成 "已占",否则会重复分配。
-//  2. node_id 从 1 开始,0 保留为非法值。
-//  3. Txn 同时 Put allocationKey 和 rpcPath,同一个 lease,保证 "占位" 和 "服务发现" 原子地一起生效。
-//  4. CAS 条件仅检查 allocationKey 不存在;如果它已存在(无论 value 是谁的 uuid),都不能强占。
-//  5. CAS 失败继续尝试下一个 ID,直到 nodeIDMax。
-func allocateNodeID(ctx context.Context, client *clientv3.Client, prefix string, info *base.NodeInfo, leaseID clientv3.LeaseID) (uint32, error) {
-	usedIDs, err := scanUsedNodeIDs(ctx, client, prefix, info.NodeType)
-	if err != nil {
-		return 0, err
-	}
-
-	for id := nodeIDMin; id <= nodeIDMax; id++ {
-		if usedIDs[id] {
-			continue
-		}
-		ok, err := tryClaimNodeID(ctx, client, prefix, id, info, leaseID)
-		if err != nil {
-			// 单次 Txn 失败(网络抖动等)不影响其它候选,记日志后继续。
-			logx.Errorf("guild allocator: txn failed for node_id=%d: %v", id, err)
-			continue
-		}
-		if ok {
-			return id, nil
-		}
-		// CAS 没成功:被并发抢走,标记成 used 后继续往后找。
-		usedIDs[id] = true
-	}
-	return 0, fmt.Errorf("no available node_id in [%d, %d]", nodeIDMin, nodeIDMax)
-}
-
-// scanUsedNodeIDs 扫描"新 schema 的 allocation key"和"旧 schema 的跨 zone rpcPath",
-// 合并出该 (node_type) 下所有已占用的 node_id。
-func scanUsedNodeIDs(ctx context.Context, client *clientv3.Client, prefix string, nodeType uint32) (map[uint32]bool, error) {
-	used := make(map[uint32]bool)
-
-	// 1) 新 schema:<prefix>/allocated/node_type/<type>/node_id/<id>
-	allocPrefix := allocationKeyPrefix(prefix, nodeType)
-	allocResp, err := client.Get(ctx, allocPrefix, clientv3.WithPrefix())
-	if err != nil {
-		return nil, fmt.Errorf("etcd get alloc prefix: %w", err)
-	}
-	for _, kv := range allocResp.Kvs {
-		tail := strings.TrimPrefix(string(kv.Key), allocPrefix)
-		if id, err := strconv.ParseUint(tail, 10, 32); err == nil {
-			used[uint32(id)] = true
-		}
-	}
-
-	// 2) 旧 schema 兼容:<prefix>/zone/*/node_type/<type>/node_id/<id>
-	// 滚动升级期间老实例只写 rpcPath,这一步把它们也纳入 used。
-	// 全量升级完成后,所有实例都会双写,这步会变成 allocation 集合的子集 — 留着无害。
-	rpcResp, err := client.Get(ctx, prefix, clientv3.WithPrefix())
-	if err != nil {
-		return nil, fmt.Errorf("etcd get rpc prefix: %w", err)
-	}
-	for _, kv := range rpcResp.Kvs {
-		// 只解析 rpcPath(含 "/node_id/"),跳过新 schema 的 allocation key(它在同一个 rpcPrefix 下,会被一并扫到)。
-		key := string(kv.Key)
-		if strings.Contains(key, "/allocated/") {
-			continue
-		}
-		var ni base.NodeInfo
-		// 宽松解析(忽略未知字段,D77):新版本实例写入的新字段不能让它的 node_id 漏出 used 集合。
-		if err := nodeinfo.Unmarshal(kv.Value, &ni); err != nil {
-			continue
-		}
-		if ni.NodeId >= nodeIDMin {
-			used[ni.NodeId] = true
-		}
-	}
-
-	return used, nil
-}
-
-// tryClaimNodeID 在一个 Txn 里同时占住 allocationKey 和 rpcPath,挂同一个 lease。
-// CAS 条件: allocationKey 当前不存在。
-// 成功后,info.NodeId 会被写入,protojson 序列化进 rpcPath value(C++ 端 watch 读到的格式不变)。
-func tryClaimNodeID(ctx context.Context, client *clientv3.Client, prefix string, nodeID uint32, info *base.NodeInfo, leaseID clientv3.LeaseID) (bool, error) {
-	allocKey := allocationKey(prefix, info.NodeType, nodeID)
-	rpcKey := rpcPath(prefix, info.ZoneId, info.NodeType, nodeID)
-
-	info.NodeId = nodeID
-	value, err := protojson.Marshal(info)
-	if err != nil {
-		return false, fmt.Errorf("marshal node info: %w", err)
-	}
-
-	txnResp, err := client.Txn(ctx).
-		If(clientv3.Compare(clientv3.Version(allocKey), "=", 0)).
-		Then(
-			clientv3.OpPut(allocKey, info.NodeUuid, clientv3.WithLease(leaseID)),
-			clientv3.OpPut(rpcKey, string(value), clientv3.WithLease(leaseID)),
-		).
-		Commit()
-	if err != nil {
-		return false, err
-	}
-	return txnResp.Succeeded, nil
-}
-
-func (n *Node) KeepAlive() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	n.cancelFunc = cancel
-
-	ch, err := n.client.KeepAlive(ctx, n.leaseID)
-	if err != nil {
-		cancel()
-		return fmt.Errorf("keep alive failed: %w", err)
-	}
-
-	go n.watchKeepAlive(ctx, ch)
-	return nil
-}
-
-// watchKeepAlive 消费 keep-alive 应答;channel 关闭(= lease 终态丢失,etcd
-// 不可达超过 TTL 或 lease 被撤销)时进入重注册,而不是旧实现那样只打一条日志
-// 就永远放弃 —— 那会让进程活着但注册已蒸发:服务发现再也看不到本实例,
-// 且无任何自愈或告警路径。与 scene_manager(noderegistry/registry.go)、
-// player_locator(internal/node/node.go)的同源副本对齐。
-func (n *Node) watchKeepAlive(ctx context.Context, ch <-chan *clientv3.LeaseKeepAliveResponse) {
-	for {
-		select {
-		case ka := <-ch:
-			if ka == nil {
-				logx.Error("guild node lease lost, attempting re-registration")
-				n.reRegister(ctx)
-				return
-			}
-		case <-ctx.Done():
-			return
-		}
+// nodeInfoValueBuilder 返回 shared 的 BuildValue 回调:克隆模板,写入 shared 给的 nodeId / nodeUuid,
+// 按 protojson 默认的 lowerCamelCase 字段名序列化(与 C++ MessageToJsonString 一致)。
+// 注册时在调用方 goroutine、换号时在 keepalive goroutine 上调用;模板构造后只读,不与 Info 共用对象。
+func nodeInfoValueBuilder(template *base.NodeInfo) func(nodeID uint32, nodeUUID string) ([]byte, error) {
+	return func(nodeID uint32, nodeUUID string) ([]byte, error) {
+		info := proto.Clone(template).(*base.NodeInfo)
+		info.NodeId = nodeID
+		info.NodeUuid = nodeUUID
+		return protojson.Marshal(info)
 	}
 }
 
-// reRegister 在 lease 丢失后重新注册。安全点与 scene_manager 版一致:
-//
-//	lease 丢失 → 老 allocationKey/rpcKey 已被 etcd 自动清掉 → 期间别的实例
-//	可能已抢占同一个 node_id。绝不能盲 Put 老 key(会覆盖别人的 NodeInfo,
-//	把流量路由到错误节点);只能 CAS "allocationKey 仍不存在" 重夺,
-//	失败就换一个全新 node_id —— guild 没有"我必须是 node N"的持久化语义,
-//	换 ID 安全(node_id 只是发现路径里的编号;guild_id 等永久 ID 由 data_service
-//	发号器发,guild 不申领 snowflake 槽位,见 guild.go 启动注释)。
-func (n *Node) reRegister(ctx context.Context) {
-	prefix := rpcPrefix(n.Info.NodeType)
-	backoff := time.Second
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		grant, err := n.client.Grant(ctx, config.AppConfig.Node.LeaseTTL)
-		if err != nil {
-			logx.Errorf("guild re-grant lease failed: %v, retrying in %v", err, backoff)
-			time.Sleep(backoff)
-			backoff = min(backoff*2, 30*time.Second)
-			continue
-		}
-		n.leaseID = grant.ID
-
-		allocKey := allocationKey(prefix, n.Info.NodeType, n.Info.NodeId)
-		rpcKey := rpcPath(prefix, n.Info.ZoneId, n.Info.NodeType, n.Info.NodeId)
-		value, merr := protojson.Marshal(n.Info)
-		if merr != nil {
-			logx.Errorf("guild re-register marshal node info failed: %v", merr)
-			return
-		}
-
-		// 步骤 1:CAS 重夺原 node_id —— 只有 allocationKey 仍不存在才能写。
-		txnResp, err := n.client.Txn(ctx).
-			If(clientv3.Compare(clientv3.Version(allocKey), "=", 0)).
-			Then(
-				clientv3.OpPut(allocKey, n.Info.NodeUuid, clientv3.WithLease(n.leaseID)),
-				clientv3.OpPut(rpcKey, string(value), clientv3.WithLease(n.leaseID)),
-			).
-			Commit()
-		if err != nil {
-			logx.Errorf("guild re-claim txn failed: %v, retrying in %v", err, backoff)
-			_, _ = n.client.Revoke(context.Background(), n.leaseID)
-			time.Sleep(backoff)
-			backoff = min(backoff*2, 30*time.Second)
-			continue
-		}
-
-		if !txnResp.Succeeded {
-			// 步骤 2:原 node_id 已被别的实例占用,分配全新 id。
-			logx.Errorf("guild original node_id=%d taken by another instance, allocating new one",
-				n.Info.NodeId)
-			newID, err := allocateNodeID(ctx, n.client, prefix, n.Info, n.leaseID)
-			if err != nil {
-				logx.Errorf("guild re-allocate node_id failed: %v, retrying in %v", err, backoff)
-				_, _ = n.client.Revoke(context.Background(), n.leaseID)
-				time.Sleep(backoff)
-				backoff = min(backoff*2, 30*time.Second)
-				continue
-			}
-			n.Info.NodeId = newID
-			logx.Infof("guild re-registered with new node_id=%d", newID)
-		} else {
-			logx.Infof("guild re-claimed original node_id=%d", n.Info.NodeId)
-		}
-
-		// 步骤 3:重启 keep-alive 看护(channel 再断会再次走 reRegister)。
-		ch, err := n.client.KeepAlive(ctx, n.leaseID)
-		if err != nil {
-			logx.Errorf("guild restart keepalive failed: %v", err)
-			return
-		}
-		go n.watchKeepAlive(ctx, ch)
-		logx.Info("guild re-registration completed")
-		return
-	}
+// KeepAlive 启动后台续租;失租后按 shared 的语义重注册:先 CAS 重夺原 node_id,原号已归别的实例就换新号。
+// 幂等,Close 之后调用无效果。
+func (n *Node) KeepAlive() {
+	n.reg.KeepAlive()
 }
 
-// Close 释放该 node 占用的 etcd 资源:
-//  1. 在一个 Txn 里同时删除 rpcPath(per-zone)和 allocationKey(跨 zone 占位),
-//     避免出现"占位还在 / 服务发现已下线"的短暂错配。
-//  2. 无论 Delete 是否成功,都 Revoke lease 作为兜底 ——
-//     lease revoke 后两个 key 都会被 etcd 立刻清掉,不会出现幽灵占位。
+// Close 停止续租,分配键仍归本实例(uuid 相同)时删除双 key,再撤销租约(shared 自带时限,停机不会被 etcd 卡住),
+// 最后关闭注册用的 etcd 客户端。必须先于 gRPC Stop 调用:先从发现里消失,在途请求还能处理完。
 func (n *Node) Close() error {
-	if n.cancelFunc != nil {
-		n.cancelFunc()
-	}
-	if n.client == nil {
-		return nil
-	}
-
-	prefix := rpcPrefix(n.Info.NodeType)
-	rpcKey := rpcPath(prefix, n.Info.ZoneId, n.Info.NodeType, n.Info.NodeId)
-	allocKey := allocationKey(prefix, n.Info.NodeType, n.Info.NodeId)
-
-	// 停机不能被 etcd 卡住:删键与撤销共用一个有界预算。
-	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
-	defer cancel()
-	// 只删本实例的键:失租后原 node_id 可能已被别的实例接管、本进程还没换号就停机,无条件删会把对方的发现键删掉,
-	// 而对方不 watch 自己的键,会一直不可见(docs/design/infra-reconnect-overview.md §4 R3,与 shared/noderegistry 同一做法)。
-	resp, err := n.client.Txn(ctx).
-		If(clientv3.Compare(clientv3.Value(allocKey), "=", n.Info.NodeUuid)).
-		Then(clientv3.OpDelete(rpcKey), clientv3.OpDelete(allocKey)).
-		Commit()
-	if err != nil {
-		logx.Errorf("guild node close: delete keys failed: %v", err)
-	} else if !resp.Succeeded {
-		logx.Infof("guild node close: keys of node_id=%d no longer belong to this instance; left in place", n.Info.NodeId)
-	}
-
-	if _, err := n.client.Revoke(ctx, n.leaseID); err != nil {
-		logx.Errorf("guild node close: revoke lease failed: %v", err)
-	}
+	n.reg.Close()
 	return n.client.Close()
 }
-
-// closeTimeout 是 Close 里删键与撤销租约的总预算。
-const closeTimeout = 5 * time.Second

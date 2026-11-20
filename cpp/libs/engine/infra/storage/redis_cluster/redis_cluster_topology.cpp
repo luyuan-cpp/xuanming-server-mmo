@@ -152,9 +152,10 @@ namespace redis_cluster
 		return static_cast<uint32_t>(endpoints_.size() - 1);
 	}
 
-	TopologyRefreshPolicy::TopologyRefreshPolicy(Duration period, Duration minInterval)
+	TopologyRefreshPolicy::TopologyRefreshPolicy(Duration period, Duration minInterval, Duration inFlightTimeout)
 		: period_(period)
 		, minInterval_(minInterval)
+		, inFlightTimeout_(inFlightTimeout)
 	{
 	}
 
@@ -176,19 +177,36 @@ namespace redis_cluster
 		return requested_ || sinceLast >= period_;
 	}
 
-	void TopologyRefreshPolicy::OnStarted(TimePoint now)
+	uint64_t TopologyRefreshPolicy::OnStarted(TimePoint now)
 	{
 		inFlight_ = true;
 		requested_ = false;
 		lastStart_ = now;
+		return ++generation_;
 	}
 
-	void TopologyRefreshPolicy::OnFinished(bool success)
+	bool TopologyRefreshPolicy::OnFinished(uint64_t generation, bool success)
 	{
+		if (!inFlight_ || generation != generation_)
+		{
+			return false;
+		}
 		inFlight_ = false;
 		if (!success)
 		{
 			requested_ = true;
 		}
+		return true;
+	}
+
+	bool TopologyRefreshPolicy::ExpireInFlight(TimePoint now)
+	{
+		if (!inFlight_ || !lastStart_ || now - *lastStart_ < inFlightTimeout_)
+		{
+			return false;
+		}
+		inFlight_ = false;
+		requested_ = true;
+		return true;
 	}
 }

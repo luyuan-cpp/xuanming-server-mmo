@@ -1,0 +1,65 @@
+# Prometheus alert rules for node clocks(机器时钟偏差)。
+#
+# 来源:2026-11-19。负责人反映过一次事故:线上运维把机器时间调回一年前又调回来,没有任何告警。服务启动时会核对时钟,
+#       偏差超过 30 秒就拒启(go/shared/clockcheck、C++ 的 clock_check.h、Java 的 server_startup);已经在跑的进程只有这里看得见。
+#       运维说明见 docs/ops/clock-sync-runbook.md。
+#
+# 为什么不只靠 kube-prometheus 自带的 NodeClockSkewDetected:它读内核 timex 的 offset 字段,chrony 不经内核 PLL 调时的时候
+# 这个字段一直接近 0,手工调错的时钟它可能看不见。这里比的是「节点自己报的时间」和「Prometheus 抓取那一刻的时间」:
+# node_time_seconds 是 node_exporter 在节点上读到的墙钟,timestamp() 是 Prometheus 服务器记下的抓取时刻,两者之差就是
+# 节点和 Prometheus 之间的时钟差(另含毫秒级的抓取耗时)。kube-prometheus 自带的 NodeClockNotSynchronising(NTP 没同步)
+# 照旧保留,这里不重写,免得同一件事响两次。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 etcd-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/clock-alerts.yaml
+#
+# Scrape prerequisites:
+#   - 每个节点跑 node_exporter 并被抓取(kube-prometheus 默认就有,time collector 默认开启)。没有 node_time_seconds 时
+#     规则不报错,只是永远不响。
+#   - Prometheus 自己所在节点的时钟错了,所有节点会一起响:先看 Prometheus 那一台。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: clock-alerts
+  labels:
+    app: node-clock
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: node.clock
+      interval: 30s
+      rules:
+        # 节点时钟和 Prometheus 差 1 秒以上:NTP 没在正常工作。还没到拒启的程度,但令牌过期、租约、按时间排序都开始不准。
+        - alert: NodeClockOffsetDrifting
+          expr: |
+            abs(node_time_seconds - timestamp(node_time_seconds)) > 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "节点 {{ $labels.instance }} 的时钟和 Prometheus 差 {{ $value | printf \"%.1f\" }} 秒"
+            description: >-
+              在这个节点上看 chronyc tracking(System time 一行)和 chronyc sources:时间源是否可达、是否被选中。
+              差距持续变大说明 NTP 没在调;突然跳变说明有人或有程序改过时间,按运维手册查是谁改的。
+            runbook_url: docs/ops/clock-sync-runbook.md
+
+        # 节点时钟和 Prometheus 差 30 秒以上,和服务启动时的拒启门槛相同:这个节点上的 Pod 重启后起不来,
+        # 已经在跑的进程在算错令牌过期、活动开关、每日重置。
+        - alert: NodeClockOffsetTooLarge
+          expr: |
+            abs(node_time_seconds - timestamp(node_time_seconds)) > 30
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "节点 {{ $labels.instance }} 的时钟和 Prometheus 差 {{ $value | printf \"%.0f\" }} 秒"
+            description: >-
+              先隔离这个节点(kubectl cordon、kubectl drain),按运维手册把时钟改回来,再放回调度。时钟改回来之前,
+              不要用 MMORPG_CLOCK_CHECK_MODE=warn 把上面的服务硬拉起来。改回来之后按手册核对按时间计算的业务数据。
+            runbook_url: docs/ops/clock-sync-runbook.md

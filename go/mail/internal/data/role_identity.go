@@ -48,6 +48,24 @@ func (r *Repo) lockActor(ctx context.Context, tx *sql.Tx) error {
 	return err
 }
 
+// lockLiveRecipient 在个人邮件的发件事务里锁收件人的护栏副本并复核他没被删除(docs/design/account-deletion.md §6.2)。
+// 锁序:副本 → mail_box,与领取(lockActor)、删角收尾(RolePurge)同序。删角收尾持同一把锁删他的邮件:收尾先提交,这里读到墓碑拒收;
+// 这里先提交,收尾随后把这封一起删掉。没有副本行(从没经过护栏的角色)照常投:收尾先把墓碑写进副本再删邮件,之后的发件都会读到它。
+// 发件方都是系统服务(sender_kind 映射),没有原会话,所以事务里只锁这一行副本,不与 lockActor 的另一行形成两行锁。
+func lockLiveRecipient(ctx context.Context, tx *sql.Tx, player uint64) error {
+	fence, err := rolefence.Lock(ctx, tx, player)
+	if errors.Is(err, rolefence.ErrMissing) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if fence.Account == "" {
+		return ErrRecipientDeleted
+	}
+	return nil
+}
+
 // roleBlockerAssetOp 是低基数枚举,进协调者的指标 label。
 const roleBlockerAssetOp = "mail_asset_op"
 

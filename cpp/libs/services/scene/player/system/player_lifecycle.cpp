@@ -11,6 +11,7 @@
 #include "engine/core/type_define/player_guid_comp.h"
 #include "actor/actor_net_id.h"
 #include "actor/attribute/system/actor_attribute_calculator.h"
+#include "combat/buff/system/buff.h"  // RestoreSavedBuffs:存档里下线保留的 Buff 在建实体时生效
 
 #include <cstdlib>
 
@@ -48,6 +49,7 @@
 #include "player/system/player_inbox_system.h" // FinishExitAfterPersist:销毁前尽力补发收件箱 Ack(评审 M4)
 #include "player/system/release_fence.h" // HandleReleaseFromSceneManager 的纯判定与计数
 #include "player/system/afk_hosting.h" // 断线保留期间查挂机月卡:开通挂机的玩家离线托管、照常跟随
+#include "player/system/afk_pass.h" // 挂机月卡投影:加载、存盘提交、托管心跳三处写出(docs/design/afk-monthly-card.md §5.2)
 #include "player/system/hosted_presence.h" // 托管在场心跳与托管归位信息(RefreshHostedPresence)
 #include "engine/core/type_define/type_define.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -3052,7 +3054,8 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 	//
 	//    Pre-register session so that client messages arriving during async load
 	//    hit the "player not loaded" guard instead of "session id not found".
-	//    insert_or_assign defends against unlikely session_id reuse (snowflake collision).
+	//    insert_or_assign 防会话号复用:会话号是 gate 的 [node][seq] 临时号(SessionIdGenerator),
+	//    seq 回绕或 gate 重启后都可能再发出旧号。
 	//    托管落点不登记:会话早已断开,不会有它的客户端消息;登记了反而会让死会话号映射到这名玩家。
 	if (sessionId != 0 && !ctx.hostedPlacement)
 	{
@@ -5430,6 +5433,9 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 	PlayerAllDataMessageFieldsUnmarshal(player, playerAllData);
 	// 必需派生投影由加载链直接创建,不依赖事件订阅。
 	ActorAttributeCalculatorSystem::InitializeOnCreate(player);
+	// 下线保留的 Buff 在实体初始化完之后、进场景之前生效:生效回调(战斗状态、隐身标签)要用到上面的派生投影。
+	// 所有从存档重建实体的路径(重登、跨节点交接、跨 zone 传送)都经过这里(docs/design/realtime-cooldown-buff-persistence.md §4)。
+	BuffSystem::RestoreSavedBuffs(player);
 
 	// First-time registration: initialize defaults
 	if (playerAllData.player_database_data().uint64_pb_component().registration_timestamp() <= 0)
@@ -5483,6 +5489,9 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 	{
 		RequestKeyProgressSave(player, "audit_snapshot_login");
 	}
+
+	// 挂机月卡投影按刚从库里读出的值重建一次(docs/design/afk-monthly-card.md §5.2):回档、投影写丢、Redis 丢键都在这里改正。
+	AfkPassSystem::OnPlayerLoaded(player, TimeSystem::NowSecondsUTC());
 
 	return player;
 }
@@ -5834,6 +5843,8 @@ void PlayerLifecycleSystem::OnPlayerStoreSaveDone(Guid playerId, const std::shar
 	}
 	if (result.status != PlayerStoreSaveStatus::kRejected)
 	{
+		// 挂机月卡投影只写已提交的值(docs/design/afk-monthly-card.md §5.2)。排在下面可能销毁实体的退出收尾之前。
+		AfkPassSystem::OnSaveCommitted(playerId, *message, TimeSystem::NowSecondsUTC());
 		if (result.saveSeq != 0)
 		{
 			// 提交证据只记给这一笔的原对象,HandlePlayerAsyncSaved 里的 Replace 才能对上。
@@ -8185,6 +8196,9 @@ void PlayerLifecycleSystem::RefreshHostedPresence(uint64_t nowUnixSec)
 		{
 			continue;
 		}
+		// 挂机月卡投影随心跳补写一次(只读组件、只发 SET):Redis 丢了键,player_locator 下一次续租前就补回来了
+		// (docs/design/afk-monthly-card.md §5.2 第 3 条)。
+		AfkPassSystem::RefreshProjection(entity, nowUnixSec);
 		HostedPresenceWrite write;
 		write.playerId = guid->value;
 		// 归属修订取本节点入场登记的那一份(托管落点、改派请求填的也是它,SendCorrelatedEnterScene)。缺了只续心跳:

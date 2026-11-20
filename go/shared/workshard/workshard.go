@@ -9,6 +9,7 @@
 //
 // Owner 是后台分工的唯一 HRW 打分入口:SHA-256(成员 + 0 字节 + 键)的前 8 字节按大端序取 uint64。
 // match 的 poolowner 和 player_inbox 的 shardowner 复用此入口,各服务继续维护自己的成员表与未同步语义。
+// match 的探测计划(logic/network_probe.go)也用它在同机房的 battle 之间按玩家选探测目标,成员是 battle 实例 UUID。
 package workshard
 
 import (

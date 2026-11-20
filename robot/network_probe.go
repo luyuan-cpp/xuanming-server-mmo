@@ -193,7 +193,9 @@ func sampleNetworkProbeTarget(target *match.NetworkProbeTarget, timeout time.Dur
 		return nil, nil, errors.New("plan target has an invalid endpoint")
 	}
 	deadline := time.Now().Add(timeout)
-	conn, err := (&net.Dialer{Deadline: deadline}).Dial("tcp", networkProbeEndpoint(target))
+	// 按当前传输方式连(pkg/transport.go):小游戏走目标自带的 ws_url,原生客户端走 TCP。
+	pkg.AdvertiseWsURL(target.GetHost(), int(target.GetPort()), target.GetWsUrl())
+	conn, err := pkg.DialStream(target.GetHost(), int(target.GetPort()), timeout)
 	if err != nil {
 		return nil, nil, fmt.Errorf("dial: %w", err)
 	}

@@ -48,10 +48,11 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 
 | 按需组件 | 第一次创建的时机与入口 | 结束 / 消费 |
 |---|---|---|
-| `CooldownTimeListComp` | `SkillSystem::StartCooldown`,真正启动冷却时 | 冷却查询按时间判定;无表表示无冷却 |
+| `CooldownTimeListComp` | `SkillSystem::StartCooldown`,真正启动冷却时;另随玩家存档保留,加载时存档里有冷却记录由 `SkillSystem::RestoreCooldowns` 挂上(2026-11-19,[冷却与 Buff 跨重登](realtime-cooldown-buff-persistence.md)) | 冷却查询按时间判定;无表表示无冷却。到点的记录不删,同组下次施法覆盖;存盘只读,缺组件写空、不补建 |
 | `SkillContextCompMap` | `SkillSystem::AddSkillContext`,登记合法施法的施法者上下文时 | `HandleSkillFinish` 删除本次上下文;目标不保存镜像 |
 | `ActorStateComp` | `ActorActionStateSystem::AddState`,首次激活合法状态时 | 状态移除;无表表示无激活状态 |
-| `BuffListComp` | `BuffSystem::AddOrUpdateBuff`,完成驱散 / 免疫等判断后首次真正插入时 | 帧末摘除空列表 |
+| `BuffListComp` | `BuffSystem::AddOrUpdateBuff`,完成驱散 / 免疫等判断后首次真正插入时;施加与存档恢复(`RestoreSavedBuffs`)共用 `buff.cpp` 的 `StartBuffEntry` 这一处创建 | 帧末摘除空列表。Buff 表 `keep_on_logout = 1` 的条目随玩家存档保留,其余实体重建即清(2026-11-19,[冷却与 Buff 跨重登](realtime-cooldown-buff-persistence.md)) |
+| `SavedBuffsPendingComp`(`buff_comp.h`) | `PlayerDatabaseMessageFieldsUnmarshal`,存档里有下线保留的 Buff 时(2026-11-19,同上 §6) | `InitPlayerFromAllData` 在派生投影初始化之后经 `BuffSystem::RestoreSavedBuffs` 消费并摘掉;存盘时还挂着就把条目原样写回。缺失 = 没有待恢复的 Buff |
 | `AoiListComp` | `InterestSystem::AddAoiEntity`(空间来源被接纳)或 `InterestSystem::Follow`(显式关注登记),完成实体 / 容量 / 同场景校验后首次建立关系时 | 移除观察关系;无表表示无观察对象 |
 | `AoiWatchersComp` | `InterestSystem` 第一次登记以该实体为目标的关系时;与观察者的 `AoiListComp` 条目一一对应 | 关系删除时同步摘除;无表表示没有观察者 |
 | `SceneGridListComp` | `AoiSystem::UpdateGridMembership`,首次写入场景格子时 | 场景销毁时随实体销毁;空场景可无表 |

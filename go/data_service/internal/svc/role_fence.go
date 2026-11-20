@@ -70,8 +70,8 @@ type AccountRealNameStore interface {
 }
 
 // AccountDeletionStore 是账号注销在目录上的动作与读(docs/design/account-deletion.md §4、§5.1)。*store.AccountDirectoryStore 满足它。
+// 读目录列表连同注销状态走 AccountDirectory(store 的 ReadWithLifecycle),不在这里。
 type AccountDeletionStore interface {
-	ReadWithLifecycle(ctx context.Context, account string, create bool) (*dspb.AccountDirectoryResponse, error)
 	AccountDeletionState(ctx context.Context, account string) (dspb.AccountDeletionState, error)
 	RequestDeletion(ctx context.Context, account string, source uint32, coolingOff time.Duration) (*dspb.AccountDeletionResponse, error)
 	CancelDeletion(ctx context.Context, account string) (*dspb.AccountDeletionResponse, error)

@@ -75,7 +75,7 @@ func (f *fakePlayerLocatorClient) Reconnect(context.Context, *plpb.ReconnectRequ
 // docs/design/player_login_flow.md §2 Disconnect: "30s reconnect window").
 func TestSetSessionDisconnecting_PassesPlayerIdAndSessionId(t *testing.T) {
 	mock := &fakePlayerLocatorClient{}
-	if err := SetSessionDisconnecting(context.Background(), mock, 12345, 678, "gate-I2"); err != nil {
+	if err := SetSessionDisconnecting(context.Background(), mock, 12345, 678, "gate-I2", 9); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 	if mock.setDisconnectCalls != 1 {
@@ -92,6 +92,10 @@ func TestSetSessionDisconnecting_PassesPlayerIdAndSessionId(t *testing.T) {
 	if got.GateInstanceId != "gate-I2" {
 		t.Errorf("GateInstanceId mismatch: got %q, want gate-I2", got.GateInstanceId)
 	}
+	// 会话代次同理:player_locator 据此忽略同一 gate 进程里同号旧连接迟到的断线(gate-online-identity.md §10.4)。
+	if got.SessionIncarnation != 9 {
+		t.Errorf("SessionIncarnation mismatch: got %d, want 9", got.SessionIncarnation)
+	}
 	if got.LeaseTtlSeconds != 30 {
 		t.Errorf("LeaseTtlSeconds: got %d, want 30 (matches disconnect-window doc)", got.LeaseTtlSeconds)
 	}
@@ -106,7 +110,7 @@ func TestSetSessionDisconnecting_WrapsRpcError(t *testing.T) {
 	mock := &fakePlayerLocatorClient{
 		setDisconnectErr: errors.New("locator unavailable"),
 	}
-	err := SetSessionDisconnecting(context.Background(), mock, 1, 2, "")
+	err := SetSessionDisconnecting(context.Background(), mock, 1, 2, "", 0)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

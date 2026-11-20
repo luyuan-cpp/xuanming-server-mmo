@@ -20,6 +20,7 @@ import (
 
 	pb "proto/match"
 	teampb "proto/team"
+	"shared/authoritysql"
 	"shared/safego"
 
 	"github.com/google/uuid"
@@ -409,7 +410,7 @@ func claimGroup(ctx context.Context, s *svc.ServiceContext, claim poolClaim, nod
 		err = s.Authority.Claim(ctx, f, tickets)
 	}
 	if err != nil {
-		if !expectedClaimRejection(err) {
+		if claimOutcomeUnknown(err) {
 			s.HoldRelay(err)
 		}
 		if errors.Is(err, authority.ErrRatingSpread) {
@@ -575,18 +576,13 @@ func reserveGatherSlot(s *svc.ServiceContext) bool {
 	}
 }
 
-// expectedClaimRejection 报告提交失败是不是撮合与提交之间的正常变化（不影响排空判定）：
-// 票被取消或已被别的撮合段、别的副本先提交（ErrClaimStale，拆写者之后跨机房段与机房段撞车是常态）、整队名单变化、
-// 范围、入口或评分规则在提交点不满足、home 迁移。这些都在提交之前回滚，结局已知，不记排空 HOLD。
-// 组队池里整队已被别的成局先提交时，后到的一方先在入场守卫上被拒（ErrMatchEntryOccupied：整队原件已带别的 battle_id），
-// 走不到票行复核，同样是撞车。
-func expectedClaimRejection(err error) bool {
-	for _, expected := range []error{authority.ErrClaimStale, authority.ErrScopeWait, authority.ErrTemplateClosed, authority.ErrDirectConflict, authority.ErrTeamLaunchActive, authority.ErrOriginalPlayer, authority.ErrTeamRoute, authority.ErrRatingSpread, authority.ErrMatchEntryOccupied} {
-		if errors.Is(err, expected) {
-			return true
-		}
-	}
-	return false
+// claimOutcomeUnknown 报告成局提交失败之后这一局可能已经写进去，要记排空 HOLD（docs/design/infra-reconnect-overview.md §1.2）。
+// 成局提交是 SQL 守卫上的一笔纯 DML 事务：只有守卫判成结局未知的（COMMIT 发出去没拿到结果等）才可能已经写入。其余失败都已
+// 整笔回滚、结局已知，不记 HOLD：撮合与提交之间的正常变化（票被别的撮合段或副本先提交 ErrClaimStale、整队已被先成的局占住
+// ErrMatchEntryOccupied、范围 / 入口 / 评分规则在提交点不满足、home 迁移等），以及提交之前就失败的库故障。
+// 2026-11-19 之前按白名单列「正常变化」，漏一个就多记一次要人工处理的永久 HOLD（global-match-hierarchical-pools.md §5.2.1 第 7 条）。
+func claimOutcomeUnknown(err error) bool {
+	return errors.Is(err, authoritysql.ErrOutcomeUnknown)
 }
 
 func passLabel(cross bool) string {

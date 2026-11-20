@@ -128,6 +128,8 @@ type adminSide interface {
 	SchemaExists(ctx context.Context, schema string) (bool, error)
 	// TablesWithoutPrimaryKey 列这个库里没有主键的表。
 	TablesWithoutPrimaryKey(ctx context.Context, schema string) ([]string, error)
+	// TablesWithTTLEnabled 列这个库里 TTL 开着的表(TiDB 的表属性 TTL_ENABLE='ON')。MySQL 没有这个属性,回空。
+	TablesWithTTLEnabled(ctx context.Context, schema string) ([]string, error)
 	CreateSchema(ctx context.Context, schema, charset, collation string) error
 	DropSchema(ctx context.Context, schema string) error
 	AccountExists(ctx context.Context, principal string) (bool, error)
@@ -878,6 +880,26 @@ func (m *mover) checkProcessesKnowCluster(ctx context.Context, cluster string) e
 	return nil
 }
 
+// requireTTLOff 核两侧这个库的表都没有开着 TTL。TTL 任务是库自己发起的删除,不过闸门:源库冻结之后它照样删行,
+// 窗口里的静止比对、翻转之后的 audit(读冻结的源库的当前数据)都会因此对不上;目标上开着的话,两边各删各的。
+// 目标的 TTL 在 audit 通过之后由运维打开(手册 §4 第 8 步)。
+func (m *mover) requireTTLOff(ctx context.Context) error {
+	for _, side := range []struct {
+		role  string
+		admin adminSide
+	}{{roleSource, m.sourceAdmin}, {roleTarget, m.targetAdmin}} {
+		tables, err := side.admin.TablesWithTTLEnabled(ctx, m.o.db)
+		if err != nil {
+			return refusedf("cannot read the TTL attribute of the tables on the %s, nothing was changed: %v", side.role, err)
+		}
+		if len(tables) != 0 {
+			return refusedf("these tables of %s have TTL enabled on the %s: %s. TTL jobs delete rows without passing the gate, so the frozen source and the target would stop matching (the comparison inside the window, and audit afterwards). Nothing was changed: run ALTER TABLE ... TTL_ENABLE='OFF' on each, wait until no TTL job is running on them, then re-run cutover, see docs/ops/db-move-runbook.md §4 step 5",
+				m.o.db, side.role, strings.Join(tables, ", "))
+		}
+	}
+	return nil
+}
+
 // cutoverPreflight 在冻结之前做完能提前做的检查:一条不过就什么都没变。
 func (m *mover) cutoverPreflight(ctx context.Context, move *dbplacement.Move) error {
 	meta, err := m.source.CurrentMeta(ctx)
@@ -896,6 +918,9 @@ func (m *mover) cutoverPreflight(ctx context.Context, move *dbplacement.Move) er
 	}
 	if err := m.targetAdmin.CheckSeesAllConnections(ctx); err != nil {
 		return refusedf("the target admin account is not enough, nothing was changed: %v", err)
+	}
+	if err := m.requireTTLOff(ctx); err != nil {
+		return err
 	}
 	if err := m.checkFeedUnchanged(ctx, move); err != nil {
 		return err
@@ -1022,7 +1047,7 @@ func (m *mover) finalCompare(parent context.Context) error {
 	case err != nil:
 		return fmt.Errorf("compare the frozen source with the target: %v", err)
 	case len(mismatches) != 0:
-		return fmt.Errorf("%w: %d table(s) differ: %s. Writes that replication skipped after the last verify, or writes made on the target, would look like this", errTargetDiverged, len(mismatches), strings.Join(mismatches, "; "))
+		return fmt.Errorf("%w: %d table(s) differ: %s. Writes that replication skipped after the last verify, writes made on the target, or a TTL job that was still deleting rows on the source would look like this", errTargetDiverged, len(mismatches), strings.Join(mismatches, "; "))
 	}
 	m.logf("cutover", "the frozen source and the target match, compared in %s", max(m.now().Sub(started), 0).Round(time.Millisecond))
 	return nil

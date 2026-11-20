@@ -92,6 +92,15 @@ func (l *SetDisconnectingLogic) SetDisconnecting(in *pb.SetDisconnectingRequest)
 		return &common.Empty{}, nil
 	}
 
+	// 同一 gate 进程里会话号回绕:同号旧连接迟到的断线(gate 持有通知、送达前一直重发)不得把同号新连接上的会话
+	// 转成 DISCONNECTING。规则同实例号:两边都非 0 且不等即忽略,0 = 旧版 login 或旧记录,不比较
+	// (docs/design/gate-online-identity.md §10.4「断线通知」)。同样判在 GET 到的这份字节上。
+	if session.SessionIncarnation != 0 && in.SessionIncarnation != 0 && session.SessionIncarnation != in.SessionIncarnation {
+		l.Infof("SetDisconnecting: stale session incarnation player=%d session=%d record_incarnation=%d request_incarnation=%d, ignoring",
+			in.PlayerId, in.SessionId, session.SessionIncarnation, in.SessionIncarnation)
+		return &common.Empty{}, nil
+	}
+
 	// Calculate TTL
 	ttl := time.Duration(in.LeaseTtlSeconds) * time.Second
 	if ttl == 0 {

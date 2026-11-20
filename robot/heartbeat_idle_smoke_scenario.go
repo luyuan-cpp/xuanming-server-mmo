@@ -258,7 +258,12 @@ func heartbeatIdleWireCheck(cfg *config.Config) (time.Duration, error) {
 		return 0, errHeartbeatIdleNoToken
 	}
 	addr := net.JoinHostPort(host, portStr)
-	conn, err := (&net.Dialer{Timeout: heartbeatIdleWireHandshakeTimeout}).Dial("tcp", addr)
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return 0, fmt.Errorf("gate port %q: %w", portStr, err)
+	}
+	// 按当前传输方式连(pkg/transport.go);WebSocket 下 gate 的空闲超时口径不变,量到的时长可以直接比。
+	conn, err := pkg.DialStream(host, port, heartbeatIdleWireHandshakeTimeout)
 	if err != nil {
 		return 0, fmt.Errorf("dial %s: %w", addr, err)
 	}

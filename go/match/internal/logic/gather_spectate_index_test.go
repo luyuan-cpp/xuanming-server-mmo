@@ -1,11 +1,12 @@
 package logic
 
-// 观战活跃集合 spectate:battles:active 的写入:
+// 观战活跃集合(spectate:battles:active:{sba:<k>},16 个桶)的写入:
 //   - 开局成功后入活跃集合(addSpectateActive,best-effort);落点已在 SQL,写不进去不影响开局;
 //   - 可见性随建房原件冻结(§10 第 6 条):只收公开局。
 // Redis 故障用 miniredis 前置钩子按命令 + key 精确注入。
 
 import (
+	"strings"
 	"testing"
 
 	"match/internal/svc"
@@ -29,7 +30,7 @@ func registerSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64, mode ma
 func installSpectateZaddFault(t *testing.T, mr *miniredis.Miniredis) {
 	t.Helper()
 	mr.Server().SetPreHook(func(c *server.Peer, cmd string, args ...string) bool {
-		if cmd != "ZADD" || len(args) == 0 || args[0] != spectateBattlesActiveKey {
+		if cmd != "ZADD" || len(args) == 0 || !strings.HasPrefix(args[0], spectateActiveIndex.prefix+":") {
 			return false
 		}
 		c.WriteError("ERR injected spectate active zadd failure")

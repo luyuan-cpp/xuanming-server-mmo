@@ -49,6 +49,16 @@ func tip(err error) *base.TipInfoMessage {
 		code = constants.ErrBusy
 	case errors.Is(err, core.ErrLoginRequired):
 		code = constants.ErrLoginRequired
+	case errors.Is(err, core.ErrRealNameRequired):
+		code = constants.ErrRealNameRequired
+	case errors.Is(err, core.ErrMinorNotAllowed):
+		code = constants.ErrMinorNotAllowed
+	case errors.Is(err, core.ErrMinorSingleLimit):
+		code = constants.ErrMinorSingleLimit
+	case errors.Is(err, core.ErrMinorDailyLimit):
+		code = constants.ErrMinorDailyLimit
+	case errors.Is(err, core.ErrMinorMonthlyLimit):
+		code = constants.ErrMinorMonthlyLimit
 	}
 	return &base.TipInfoMessage{Id: code}
 }

@@ -1,0 +1,100 @@
+# 内容安全服务 content-guard 的告警(2026-11-20;docs/design/rename-and-content-safety.md §6.4、§6.7)。
+#
+# 指标由 go/content_guard/internal/metrics/metrics.go 注册:
+#   - content_guard_lexicon_version:生效中的词库版本;0 = 只有内置的几个防冒充词,没有从 etcd 加载到词库;
+#   - content_guard_lexicon_load_failures_total{reason}:从 etcd 加载词库失败,reason ∈ etcd / corrupt / apply / watch;失败时继续用旧词库;
+#   - content_guard_checks_total{scene,verdict,category}:判定次数;verdict=unavailable 是「要求词库而没有词库,一律回不可用」。
+# label 只有场景、结局、类别、失败原因这几个固定集合,不带 player_id,也不带被检文字(AGENTS.md §9)。
+#
+# 为什么要报:建角(自定义名字)、改名、帮会名、聊天都要过它。没有词库的副本在 staging / prod 不监听、不注册、不就绪;
+# 全部副本都没有词库时调用方找不到任何实例,这些入口全部回可重试的错误,玩家看到的是「起不了名字、发不出聊天」。
+# 词库加载失败不影响已加载的词库,但新发布的词(运营临时加的引流话术)不会生效,不报就没人知道。
+#
+# dev 档不要求词库(RequireLexicon: false),版本长期为 0 是正常的:这份规则只装在 staging / prod 的观测栈上。
+#
+# 抓取前提:content-guard 的指标端口 9290 已按 Pod 注解(prometheus.io/*)抓取,与其它 Go 服务相同。
+#
+# 契约测试:tools/scripts/tests/content_guard_alerts_contract.tests.ps1(指标名、label 取值与代码对照)。
+#
+# 安装(与其余告警文件相同,手工 apply):
+#   kubectl apply -n observability -f deploy/k8s/content-guard-alerts.yaml
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: content-guard-alerts
+  labels:
+    app: go-svc
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: go.content-guard
+      interval: 30s
+      rules:
+        - alert: ContentGuardNoLexiconAnywhere
+          expr: |
+            max by (namespace) (content_guard_lexicon_version) == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的内容安全服务没有任何副本加载到词库"
+            description: >-
+              全部 content-guard 副本的词库版本都是 0 已超过 5 分钟。要求词库的环境里它们都不就绪:建角(自定义名字)、改名、
+              帮会名、聊天全部回可重试的错误。先看 etcd 里有没有词库:
+              `lexicon show -etcd <etcd 地址>`(go/content_guard/cmd/lexicon)。没有就发布一份;有的话看副本日志里的
+              "[lexicon] load failed" 与 content_guard_lexicon_load_failures_total 的 reason。
+        - alert: ContentGuardReplicaWithoutLexicon
+          expr: |
+            max by (namespace, pod) (content_guard_lexicon_version) == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 没有加载到词库"
+            description: >-
+              这个副本 10 分钟以上词库版本为 0,别的副本可能已经加载到。它不就绪、不接流量,负载压在其余副本上。
+              看它的日志里 "[lexicon] load failed" 的 reason:etcd 是连不上 etcd,corrupt 是指针或分块对不上,
+              apply 是这个版本的程序读不了线上的词库格式(新旧版本混跑时会出现)。
+        - alert: ContentGuardLexiconLoadFailing
+          expr: |
+            sum by (namespace, pod, reason) (increase(content_guard_lexicon_load_failures_total[15m])) >= 3
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 加载词库反复失败({{ $labels.reason }})"
+            description: >-
+              15 分钟内加载词库失败 3 次以上。已加载的词库继续生效,但新发布的版本换不上去:运营刚加的词不会拦。
+              reason=etcd / watch 查这个 Pod 到 etcd 的网络与 etcd-alerts.yaml;corrupt 说明发布中断或有人手改了键,
+              重新发布一次(`lexicon publish` 或 `lexicon rollback`);apply 说明正文解析不过,用 `lexicon show` 核对。
+        - alert: ContentGuardLexiconVersionSkew
+          expr: |
+            max by (namespace) (content_guard_lexicon_version) != min by (namespace) (content_guard_lexicon_version)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的内容安全副本用着不同版本的词库"
+            description: >-
+              各副本的词库版本不一致已超过 10 分钟。正常发布后几秒内全部副本会换上同一版;一直不一致说明有副本没跟上
+              (watch 停住,或它加载新版本失败)。同一段文字打到不同副本会得到不同结果。找出版本落后的 Pod
+              (content_guard_lexicon_version 最小的那个),看它的加载失败计数与日志;重启它会重新全量读一次。
+        - alert: ContentGuardRefusingChecks
+          expr: |
+            sum by (namespace) (rate(content_guard_checks_total{verdict="unavailable"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的内容安全服务在拒绝判定"
+            description: >-
+              有请求打到了没有词库的副本上并被回了不可用,已持续 5 分钟:调用方按拒绝处理,玩家起不了名字、发不出聊天。
+              正常不会出现:要求词库的副本在加载到词库之前不监听、不注册(content_guard.go waitForLexicon)。
+              出现说明这条保护被绕过了,先让词库加载上(同 ContentGuardNoLexiconAnywhere),再查这个副本为什么没有词库却在接请求。

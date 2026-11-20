@@ -25,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * 限流在 Redis Cluster 上(2026-11-12,docs/design/redis-cluster-all-domains-20261110.md §4.5):IP 桶与区桶落在不同槽时,
- * 每个桶一段单键脚本照样判得对,区桶空时退还 IP 令牌。以前两个桶在同一段 Lua 里,这种形状会收到 CROSSSLOT。
+ * 每个桶一段单键脚本照样判得对,区桶空时退还 IP 令牌(2026-11-19 起只退还一个令牌减去排队重试的 0.1 个)。
+ * 以前两个桶在同一段 Lua 里,这种形状会收到 CROSSSLOT。
  *
  * <p>只在设置了 {@code GATEWAY_RATE_LIMIT_REDIS_CLUSTER_NODES}(集群种子,逗号分隔,如
  * {@code 127.0.0.1:7100,127.0.0.1:7101,127.0.0.1:7102},即 deploy/compose.redis-cluster.yml)时运行。客户端按生产的装配建
@@ -65,7 +66,8 @@ class RedisRateLimitStoreClusterIntegrationTest {
     @BeforeEach
     void setUp() {
         redis = inspect.sync();
-        store = new RedisRateLimitStore(rateLimitRedis.commands());
+        // 区桶空时 IP 桶扣 0.1 个令牌(queue-retry-ip-cost-milli 的缺省值)。
+        store = new RedisRateLimitStore(rateLimitRedis.commands(), 100);
     }
 
     @AfterEach
@@ -106,16 +108,20 @@ class RedisRateLimitStoreClusterIntegrationTest {
     }
 
     @Test
-    void zoneEmpty_refundsTheIpTokenOnItsOwnNode() {
+    void zoneEmpty_refundsMostOfTheIpTokenOnItsOwnNode() {
         Bucket[] b = bucketsOnDifferentSlots(1, 2, 1, 1);
         // 先把区桶扣空(只判这一个桶的入口没有,借一个满的 IP 桶扣一次)。
         assertEquals(Admission.ok(), store.admitAt(T, new Bucket(b[0].key() + ":warm", 1, 5), b[1]));
         used.add(b[0].key() + ":warm");
         // 区桶键按补满时刻设了真实 TTL(1 秒),慢机器上可能先过期、变回满桶;拉长到一分钟。
         redis.pexpire(utf8(b[1].key()), HOLD_MS);
+        // IP 桶先用掉一个(剩 1 个):退还之后离补满还差 1.1 个,键的 TTL 有一秒多,来得及读。
+        assertEquals(Admission.ok(), store.admitAt(T, b[0], null));
+        redis.pexpire(utf8(b[0].key()), HOLD_MS);
 
         assertEquals(Admission.zoneEmpty(1000), store.admitAt(T, b[0], b[1]), "区桶空:等补到一个令牌");
-        assertEquals(0L, redis.exists(utf8(b[0].key())), "满的 IP 桶扣一个再还回去还是满桶,键已删");
+        assertEquals("900", new String(redis.hget(utf8(b[0].key()), utf8("t")), StandardCharsets.UTF_8),
+                "IP 桶在它自己的节点上扣一个、还 0.9 个:排队重试只花 0.1 个");
     }
 
     @Test

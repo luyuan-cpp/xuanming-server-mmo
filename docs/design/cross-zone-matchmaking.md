@@ -156,7 +156,7 @@ JoinQueue(任一 zone 玩家)→ 票据(含 zone)→ Lua 原子入队 → matche
 | `match:rating:<player_id>` | hash | 玩家评分 `rating/games/updated_at_ms`,无 TTL,默认 1500(§11) | 按玩家 |
 | `match:rating:applied:<battle_id>` | string | 对局结果已入账标记,TTL 7d(§11 幂等) | 按对局 |
 | `challenge:<id>` / `challenge:target:<pid>` | hash / string | 切磋记录 / 目标互斥 | 各自 |
-| `spectate:battles:active` / `spectate:battle:<bid>` / `spectate:watching:<pid>` | zset / string / string | 观战索引 | 各自 |
+| `spectate:battles:active:{sba:<battle_id % 16>}`(16 桶) / `spectate:battle:<bid>` / `spectate:watching:<pid>` | zset / string / string | 观战索引(分桶见 [redis-cluster-all-domains-20261110.md](redis-cluster-all-domains-20261110.md) §4.9) | 各自 |
 
 入队 Lua(KEYS=[index, queue, rank],ARGV=[queueKey, playerId, rating]):`SADD KEYS[1] ARGV[1]; ZADD KEYS[3] ARGV[3] ARGV[2]; RPUSH KEYS[2] ARGV[2]`。
 注册集剔除:matcher 发现 `LLEN==0 && !EXISTS queue` 时先 `DEL rank`(镜像孤儿)再 `SREM`(懒清理,幂等)。
@@ -472,7 +472,7 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
 2. **滚动升级**:旧实例只写 list 不写 ZSET,新 matcher 对镜像缺失的成员按票据评分(旧票据无该字段 → 1500)补写 ZADD,
    两边混跑期间凑组照常;`migrateLegacyQueues` 搬旧格式队列时也写镜像。**不需要排空队列**。
    **2026-10-20 更正**:`migrateLegacyQueues` 已删除,"搬旧格式队列时也写镜像"一句作废;matcher 对镜像缺失成员的补写仍在,原先挂在迁移用例后半段的断言改为单列的 `TestMatcherBackfillsMissingRankMirror`。§11.8 列的 `review_fix_test.go`「迁移后成组」用例同批删除。
-3. **Kafka**:`match-results` 分区数一旦创建不可改(`EnsureTopics` 契约);改分区要换 topic 名并同步 C++ `kMatchResultsTopic`。
+3. **Kafka**:`match-results` 分区数一旦创建不可改(`EnsureTopics` 契约);改分区要换 topic 名,并同步 match 的 `ResultTopic` 与 guild 的 `TrialResult.Topic`(生产者是 match 的终局发件箱,battle 不再直接发,C++ 已没有 `kMatchResultsTopic`)。
 4. **回滚**:回退到无评分版本后 ZSET 成为无人维护的孤儿 —— 旧 `pruneQueueScript` 不删它,需手工 `DEL match:{mq}:rank:*`(2026-10-09 起还有人数档的 `match:{mq}:size*:rank:*`);
    评分 hash 与 applied 标记留着无害。
 
@@ -521,6 +521,9 @@ B 胜、PVE / 未结束 / 空队伍忽略不写标记不计局数、`applied` TT
   - 查不到原件时不带回执，查询失败回故障，两种情况客户端都保留原意图。客户端只在恢复查询或重发原请求时显示「原……」确认用语，首发请求的回包沿用开战提示。2026-11-19 起按此口径（未编译、未测试，待 Codex 验证；Java 待做）。
 - 活动：原持久 guild lobby_id 作为 `StartActivityBattle.request_id`，同 guild/同 lobby 重试返回原 formation；不能在后台才发号建票。
 - 切磋：原 challenge_id 与应战者组成稳定业务键，同一 SQL 决策锁中争抢接受/拒绝。接受包含全员占用和成局，拒绝写永久决策墓碑；迟到另一决定不能反转。邀请 Redis 投影在 SQL 决定之后清理，投影故障不能改写 SQL 结局。
+- 角色换主人之后的本机原请求（2026-11-19，未生成、未编译、未测试，待 Codex 验证；Java 待做）：过户、删角之前护栏要求这名角色在各参与域的在途操作全部了结（`authority.RoleFencePending` 是 match 的那一份），所以换主人之前留在设备上的待确认记录都已作废，新主人既不该恢复也不该重发。分两层保证：
+  - 客户端：受理的 `EnterGameResponse.owner_revision` 把角色的归属修订号交给客户端（与角色编号同时记下）。本机待确认记录（单人排队、整队开局、组队操作、活动领奖、装备打造、材料选择、帮会经济、商城）在首行记写入时的修订号；记录与当前修订号都已知且不同，就按不存在处理：不恢复、不重发、不占槽位。任一方未知（旧服务端、沿用上一发在途进场而没拿到应答、旧格式文件）时照旧保留，宁可退回原行为，也不把本人的记录藏起来。
+  - 服务端：客户端判断不了时（修订号未知、旧客户端），match 的恢复入口对「原件属于前主人」给确定结论，不当故障回：整队开局回 `TeamMatchIntent.state=6`；排队查询回 `request_cancelled=true`（`authority.QueueRequestClosed`），撤销回成功且原件不动（`authority.CancelIntent`、CancelQueue）。会话本身已不归角色现主人时不给这些结论，仍按原会话失效处理。组队操作的回执本来就按业务拒绝回（`errTeamIntentConflict` → `kInvalidParameter`），客户端收到即作废记录。
 
 上述直接入口的规范原始请求保留在 `match_direct_intent.payload`（Java 为 native 同义表），重复键但不同参数拒绝。SQL 多行锁按玩家 ID 排序；任何成员已被占用时整组回滚。成功回包先于后台执行只表示同一 formation 已提交，不表示 battle 已完成创建。
 

@@ -22,7 +22,9 @@ func validateGlobalCallerSecrets(getenv func(string) string) error {
 		seen[secret] = true
 	}
 	// 角色护栏的密钥缺了只关闭对应能力(见 configureRoleFence),不拒启;配了就同样不能跨用途复用。
-	guarded := map[string]string{rolefence.CoordinatorCaller: rolefence.CoordinatorSecretEnv, accountdirectory.RouteCaller: accountdirectory.RouteSecretEnv}
+	// payment 查实名(GetAccountRealName)同一规矩:缺了只停用这个接口,配了就不能和别的调用方共用,否则持那一把的服务能读全体玩家的实名。
+	guarded := map[string]string{rolefence.CoordinatorCaller: rolefence.CoordinatorSecretEnv, accountdirectory.RouteCaller: accountdirectory.RouteSecretEnv,
+		accountdirectory.PaymentCaller: accountdirectory.PaymentSecretEnv}
 	for _, caller := range rolefence.Callers {
 		guarded[caller] = rolefence.SecretEnv(caller)
 	}

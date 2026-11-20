@@ -2,8 +2,10 @@
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
 
+#include <atomic>
 #include <chrono>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <map>
 #include <algorithm>
@@ -27,12 +29,17 @@ namespace
 	// promptly when the consumer is being shut down.
 	constexpr int kBackgroundConsumeTimeoutMs = 200;
 
-	// 分区契约核对的重试参数。刚起的 broker 在选 controller 期间会先返回
-	// "topic 存在但 0 分区" 或直接查不到,重试几次再判失败,别把正常的
-	// 冷启动竞态当成契约违反。
-	constexpr int kPartitionContractQueryAttempts = 5;
-	constexpr int kPartitionContractQueryTimeoutMs = 5000;
-	constexpr int kPartitionContractRetryDelayMs = 1000;
+	// 分区契约核对的时间预算(断线重连 R19)。核对跑在节点主 EventLoop 上(KafkaManager::Subscribe ← RegisterKafkaHandlers),
+	// 这段时间里 etcd 续约、Redis 存活探测、节点链路心跳都停着,而链路 15s 没有帧就会被对端判死,所以每个消费者的核对
+	// 都要远短于它。刚起的 broker 在选 controller 期间会先返回 "topic 存在但 0 分区" 或直接查不到,预算内重试几次再判,
+	// 别把正常的冷启动竞态当成契约违反;broker 整个不可达时预算用完照常按契约 assign(见 init)。
+	// 原来是 5 次 × (5s 查询 + 1s 等待),一个消费者最多卡 30s,gate 一次起 4 个就是两分钟。
+	constexpr int kPartitionContractBudgetMs = 3000;
+	constexpr int kPartitionContractQueryTimeoutMs = 1000;
+	constexpr int kPartitionContractRetryDelayMs = 500;
+	// 本进程上一个消费者用完预算也没查到分区数时,后面的消费者只查一次、不再重试:broker 多半整个不可达,
+	// 再逐个等满预算只会把主循环卡上 N 倍。查到一次就清掉。init 在主 EventLoop 上串行调用,原子只为不留数据竞争。
+	std::atomic<bool> gPartitionContractUnsettled{false};
 }
 
 int32_t KafkaConsumer::queryTopicPartitionCount(const std::string &topic)
@@ -213,18 +220,27 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 		if (assignPolicy.expectedTopicPartitions > 0)
 		{
 			int32_t actual = -1;
-			for (int attempt = 1; attempt <= kPartitionContractQueryAttempts; ++attempt)
+			const bool singleAttempt = gPartitionContractUnsettled.load(std::memory_order_relaxed);
+			const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(kPartitionContractBudgetMs);
+			for (int attempt = 1;; ++attempt)
 			{
 				actual = queryTopicPartitionCount(topics[0]);
 				if (actual > 0)
 				{
 					break;
 				}
+				// 下一轮要等一次再查一次:预算里放不下就停,不在最后一次失败之后再白等。
+				const auto nextAttemptEnds = std::chrono::steady_clock::now() +
+											 std::chrono::milliseconds(kPartitionContractRetryDelayMs + kPartitionContractQueryTimeoutMs);
+				if (singleAttempt || nextAttemptEnds > deadline)
+				{
+					break;
+				}
 				LOG_WARN << "KafkaConsumer: partition contract query not settled yet. topic="
-						 << topics[0] << ", attempt=" << attempt << "/"
-						 << kPartitionContractQueryAttempts;
+						 << topics[0] << ", attempt=" << attempt;
 				std::this_thread::sleep_for(std::chrono::milliseconds(kPartitionContractRetryDelayMs));
 			}
+			gPartitionContractUnsettled.store(actual <= 0, std::memory_order_relaxed);
 
 			if (actual > 0 && actual != assignPolicy.expectedTopicPartitions)
 			{
@@ -411,7 +427,7 @@ void KafkaConsumer::dispatch(const std::string& topic, std::string payload, cons
     // 不论在 poll 线程上就地执行还是投递到 loop 线程,都不接执行线程上碰巧在场的上下文。
     // 这个子 span 就是本条消息的 consumer span(§10.3),名字是 topic,覆盖回调的执行,父是生产端的 producer span。
     struct Work { std::shared_ptr<Ticket> ticket; MessageCallback callback; std::string topic,payload; tracing::TraceContext trace;
-        void Run(){ const tracing::ScopedIncoming incoming(trace, tracing::SpanKind::kConsumer, tracing::SpanSystem::kKafka, tracing::SpanName{topic}); callback(topic,payload); callback={}; ticket->returned=true; } };
+        void Run(){ tracing::ScopedIncoming incoming(trace, tracing::SpanKind::kConsumer, tracing::SpanSystem::kKafka, tracing::SpanName{topic}); callback(topic,payload); callback={}; ticket->returned=true; } };
     const auto work=std::make_shared<Work>(); work->ticket=std::make_shared<Ticket>();work->ticket->ledger=ledger;
     work->callback=msgCallback_;work->topic=topic;work->payload=std::move(payload);work->trace=trace;
     if(dispatchLoop_) dispatchLoop_->get().queueInLoop([work]{work->Run();}); else work->Run();

@@ -67,6 +67,19 @@ func TestParseSkipsNonRegistrationsAndUnusableValues(t *testing.T) {
 	require.False(t, ok, "已知字段类型不符仍按解析失败处理")
 }
 
+// 小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url)照实解析,没自报为空串。它只随地域测速计划下发
+// (docs/design/minigame-websocket-gate.md W9),不参与选点。
+func TestParseReadsClientWsUrl(t *testing.T) {
+	w := NewNodeWatcher("battle", testBattlePrefix, nil, nil)
+	entry, ok := w.parse(battleRegistrationKey, []byte(battleRegistrationHead+`,"clientWsUrl":"wss://ws.example.com/ws/10.0.0.7/20000"}`))
+	require.True(t, ok)
+	require.Equal(t, "wss://ws.example.com/ws/10.0.0.7/20000", entry.ClientWsURL)
+
+	entry, ok = w.parse(battleRegistrationKey, []byte(battleRegistrationHead+`}`))
+	require.True(t, ok)
+	require.Empty(t, entry.ClientWsURL)
+}
+
 // 发布轨道(docs/design/release-track-gray-canary.md §2.5):轨道照实解析;认不出的整条跳过;
 // StableOnly 的镜像不收 canary,没写轨道的节点按 stable 收。
 func TestParseReleaseTrackAndStableOnly(t *testing.T) {

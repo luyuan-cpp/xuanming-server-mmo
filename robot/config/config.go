@@ -16,6 +16,7 @@ import (
 
 	"proto/match"
 	"robot/logic/ai"
+	"robot/pkg"
 	"shared/generated/table"
 )
 
@@ -30,6 +31,10 @@ type Config struct {
 	ActionInterval int      `yaml:"action_interval"` // seconds between AI actions
 	ReportInterval int      `yaml:"report_interval"` // seconds between stats reports
 	TableDir       string   `yaml:"table_dir"`       // path to generated/tables dir for reading Skill/Class tables
+
+	// Transport 是连 gate / battle 的传输方式:缺省 TCP(原生客户端);kind: websocket 走小游戏的 WebSocket 入口。
+	// 对所有模式生效。字段说明见 pkg.TransportConfig,设计见 docs/design/minigame-websocket-gate.md。
+	Transport pkg.TransportConfig `yaml:"transport"`
 
 	// Mode: "stress" (default) — mass concurrent bots; "login-test" — scenario
 	// suite with login/skill/scene tests; "currency-crash-snapshot" —
@@ -1081,11 +1086,14 @@ func (c *Config) validate() error {
 	if c.AccountFmt == "" {
 		return fmt.Errorf("account_fmt must be set")
 	}
+	if err := c.Transport.Validate(); err != nil {
+		return err
+	}
 	switch c.Mode {
-	case "", "stress", "login-test", "currency-crash-snapshot", "currency-topup", "battle-smoke", "attribute-smoke", "pet-smoke", "pet-acquisition-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "team-backfill-smoke", "pvp-team-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "heartbeat-idle-smoke", "gate-migrate-smoke", "equip-forge-topup", "asset-arrival-prepare":
+	case "", "stress", "login-test", "currency-crash-snapshot", "currency-topup", "battle-smoke", "attribute-smoke", "pet-smoke", "pet-acquisition-smoke", "equip-smoke", "equip-forge-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "team-follow-smoke", "afk-pass-follow-smoke", "team-backfill-smoke", "pvp-team-smoke", "travel-smoke", "friend-smoke", "mail-smoke", "rank-smoke", "channel-smoke", "ordering-smoke", "sync-smoke", "features-smoke", "merchant-smoke", "mall-arrival-smoke", "heartbeat-idle-smoke", "gate-migrate-smoke", "equip-forge-topup", "asset-arrival-prepare":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, currency-crash-snapshot, currency-topup, battle-smoke, attribute-smoke, pet-smoke, pet-acquisition-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, team-backfill-smoke, pvp-team-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, heartbeat-idle-smoke, gate-migrate-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, currency-crash-snapshot, currency-topup, battle-smoke, attribute-smoke, pet-smoke, pet-acquisition-smoke, equip-smoke, equip-forge-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, team-follow-smoke, afk-pass-follow-smoke, team-backfill-smoke, pvp-team-smoke, travel-smoke, friend-smoke, mail-smoke, rank-smoke, channel-smoke, ordering-smoke, sync-smoke, features-smoke, merchant-smoke, mall-arrival-smoke, heartbeat-idle-smoke, gate-migrate-smoke, equip-forge-topup, or asset-arrival-prepare)", c.Mode)
 	}
 	if c.Mode == "asset-arrival-prepare" {
 		return c.ValidateAssetArrivalPrepare()

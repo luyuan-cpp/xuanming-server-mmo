@@ -46,7 +46,7 @@ function New-SqlWriterCatalogFixture {
     $rosterSha = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $catalog = @{}
     foreach ($namespace in $Namespaces) {
-        foreach ($service in @('login', 'gateway', 'data-service', 'db', 'chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade')) {
+        foreach ($service in @('login', 'gateway', 'data-service', 'db', 'chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade', 'payment', 'mall')) {
             $catalog["$namespace/$service"] = @{
                 requestSecret = 'fixture-request'; registrarSecret = 'fixture-registrar'; registrarImage = ('fixture.invalid/registrar@sha256:' + ('a' * 64))
                 physicalAuthoritySha256 = ('b' * 64); runtimeConfigSecret = 'fixture-runtime'; replicas = 2; rosterFile = $rosterPath; rosterSha256 = $rosterSha
@@ -148,6 +148,41 @@ function Add-LokiObjectStoreFixture {
     return $result
 }
 
+<#
+.SYNOPSIS
+    给跑 k8s_deploy.ps1 的子进程补官方商城调用角色的密钥,返回新的 Env。
+
+.DESCRIPTION
+    staging / prod 部署全局 Go 服务(infra-up,或不带 -SkipInfra 的 all-up;给了 -GoSvcRegistry、没带 -SkipGoSvc)时,
+    trade、payment 与商城要 MMORPG_COMMERCE_<角色>_SECRET(k8s_deploy.ps1 Resolve-CommerceSecrets;dev 档有回落值,不用补)。
+    绝大多数用例测的不是这道闸,不补的话这些档位带全局 Go 服务的 infra-up、all-up 全部停在这里。
+    四把各一个互不相同的夹具值;用例自己写了某一把(含空串,测闸本身)就不动那一把。不部署全局 Go 服务的命令原样不动。
+#>
+function Add-CommerceSecretFixture {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][hashtable]$Env
+    )
+
+    $valueOf = {
+        param([string]$Name)
+        $at = [array]::IndexOf($Arguments, $Name)
+        if ($at -ge 0 -and ($at + 1) -lt $Arguments.Count) { return [string]$Arguments[$at + 1] }
+        return ''
+    }
+    if ((& $valueOf '-ReleaseProfile') -notin @('staging', 'prod')) { return $Env }
+    $command = & $valueOf '-Command'
+    $deploysInfra = ($command -eq 'infra-up') -or ($command -eq 'all-up' -and $Arguments -notcontains '-SkipInfra')
+    if (-not $deploysInfra -or $Arguments -contains '-SkipGoSvc' -or [string]::IsNullOrWhiteSpace((& $valueOf '-GoSvcRegistry'))) { return $Env }
+
+    $result = @{} + $Env
+    foreach ($role in @('gateway', 'payment', 'delivery', 'admin')) {
+        $name = 'MMORPG_COMMERCE_' + $role.ToUpperInvariant() + '_SECRET'
+        if (-not $result.ContainsKey($name)) { $result[$name] = "contract-commerce-$role-fixture-secret-00000001" }
+    }
+    return $result
+}
+
 # 存档库清单夹具的占位值:MMORPG_DB_ALLOWED_DATABASES 写它,Invoke-CapturedPwsh 按本次的地域码和 K 换成真实库名
 # (Add-PlayerStoreAllowlistFixture)。它不是合法库名:没经过换值就交给部署脚本,会被 Get-RoleProofStorageIds 当场拒绝。
 $PlayerStoreAllowlistFixture = 'fixture-player-stores-of-this-region'
@@ -233,6 +268,8 @@ function Invoke-CapturedPwsh {
         $lokiFixture = Add-LokiObjectStoreFixture -Arguments $Arguments -Env $Env
         $Arguments = $lokiFixture.Arguments
         $Env = $lokiFixture.Env
+        # 官方商城调用角色的密钥(staging / prod 部署全局 Go 服务时),见 Add-CommerceSecretFixture。
+        $Env = Add-CommerceSecretFixture -Arguments $Arguments -Env $Env
     }
 
     $savedEnv = @{}

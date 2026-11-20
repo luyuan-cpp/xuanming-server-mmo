@@ -72,7 +72,7 @@ function Invoke-DeployDryRun {
             try{$zoneNames+=@((Get-Content -LiteralPath $zonesPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop).zones | ForEach-Object {[string]$_.name})}catch{}
             $catalog=@{}
             foreach($ns in @(@($zoneNames | Sort-Object -Unique | ForEach-Object {$prefix+'-'+$_})+$infra)){
-                foreach($svc in @('login','gateway','data-service','db','chat','friend','guild','mail','match','player-inbox','rank','trade')){
+                foreach($svc in @('login','gateway','data-service','db','chat','friend','guild','mail','match','player-inbox','rank','trade','payment','mall')){
                     $catalog[$ns+'/'+$svc]=@{requestSecret='fixture-request';registrarSecret='fixture-registrar';registrarImage=('fixture.invalid/registrar@sha256:'+('a'*64));physicalAuthoritySha256=('b'*64);runtimeConfigSecret='fixture-runtime';replicas=2;rosterFile=$(if($svc -ceq 'data-service'){$dataServiceRosterPath}else{$rosterPath});rosterSha256=$(if($svc -ceq 'data-service'){$dataServiceRosterSha}else{$rosterSha});schemaConfigSecret='fixture-schema-config';schemaPermissionSecret='fixture-schema-permission'}
                 }
             }
@@ -114,9 +114,17 @@ $WorkloadSecretSpecs = [ordered]@{
     'spectate-token'    = @{ Env = 'MMORPG_SPECTATE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('cpp:gate', 'match') }
     'battle-token'      = @{ Env = 'MMORPG_BATTLE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('cpp:battle') }
     'match-ops-caller'  = @{ Env = 'MMORPG_MATCH_OPS_CALLER_SECRET'; Key = 'secret'; Consumers = @('match') }
+    # 官方商城四个调用角色的密钥与 devpay 联调密钥(用例在 k8s_mall_payment_deploy_contract.tests.ps1)。
+    'commerce-gateway'  = @{ Env = 'MMORPG_COMMERCE_GATEWAY_SECRET'; Key = 'secret'; Consumers = @('mall', 'trade') }
+    'commerce-payment'  = @{ Env = 'MMORPG_COMMERCE_PAYMENT_SECRET'; Key = 'secret'; Consumers = @('mall', 'payment') }
+    'commerce-delivery' = @{ Env = 'MMORPG_COMMERCE_DELIVERY_SECRET'; Key = 'secret'; Consumers = @('mall', 'trade') }
+    'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; Key = 'secret'; Consumers = @('mall') }
+    'payment-devpay'    = @{ Env = 'MMORPG_PAYMENT_DEVPAY_SECRET'; Key = 'secret'; Consumers = @('payment') }
     'login-queue-token' = @{ Env = 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('login') }
     'login-wechat-minigame' =@{ Env = 'MMORPG_LOGIN_WECHAT_MINIGAME_APP_SECRET'; Key = 'secret'; Consumers = @('login') }
     'login-douyin-minigame' = @{ Env = 'MMORPG_LOGIN_DOUYIN_MINIGAME_APP_SECRET'; Key = 'secret'; Consumers = @('login') }
+    'login-apple-signin'    = @{ Env = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY'; Key = 'private-key'; Consumers = @('login') }
+    'login-nppa'            = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; Key = 'secret'; Consumers = @('login') }
 }
 
 # C++ 节点角色读的工作负载密钥,按契约表顺序(= 目录表顺序 = Pod 模板上指纹的先后,见 k8s_deploy.ps1 的 New-CppPodAnnotationBlock)。
@@ -494,7 +502,7 @@ function Invoke-CanaryCatalogDryRun {
         $rosterSha = (Get-FileHash -LiteralPath $rosterPath -Algorithm SHA256).Hash.ToLowerInvariant()
         $pinned = @{ registrarImage = ('fixture.invalid/registrar@sha256:' + ('a' * 64)); physicalAuthoritySha256 = ('b' * 64); rosterFile = $rosterPath; rosterSha256 = $rosterSha }
         $catalog = @{}
-        foreach ($svc in @('chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade')) {
+        foreach ($svc in @('chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade', 'payment')) {
             $catalog["$canaryInfraNamespace/$svc"] = $pinned + @{ requestSecret = 'fixture-request'; registrarSecret = 'fixture-registrar'; runtimeConfigSecret = 'fixture-runtime'
                 replicas = 2; schemaConfigSecret = 'fixture-schema-config'; schemaPermissionSecret = 'fixture-schema-permission' }
         }
@@ -561,6 +569,7 @@ Test-Case '发布轨道:可金丝雀却没列出的服务,删掉以前留下的 
         Assert-NotMatch -Text $canaryGlobalRun.Output -Pattern "kubectl delete deployment,statefulset $([regex]::Escape($svc))-canary\b" -Because "$svc 这次列出了,不能删"
     }
     Assert-NotMatch -Text $canaryGlobalRun.Output -Pattern 'player-inbox-canary' -Because 'player-inbox 不提供金丝雀,不起也不删'
+    Assert-NotMatch -Text $canaryGlobalRun.Output -Pattern 'payment-canary|mall-canary' -Because 'payment 与官方商城 mall 不提供金丝雀,不起也不删'
 }
 
 Test-Case '发布轨道:金丝雀写者缺 <ns>/<svc>-canary 条目或副本数对不上,在任何写操作之前拒绝' {
@@ -1989,26 +1998,34 @@ Test-Case 'C++ Redis 口令(dev 档注入核心口令):external gate StatefulSet
     }
 }
 
-Test-Case '负向:prod 缺 MMORPG_REDIS_PASSWORD 在任何写操作之前拒绝并点名变量(核心单实例照旧部署,第 6b 批第二半退役之前仍要口令)' {
+Test-Case 'prod 不读 MMORPG_REDIS_PASSWORD(核心单实例不部署,缺口第 34 条第 6b-2 批):为空照样出产物;控制集群口令为空仍在任何写操作之前拒绝' {
     $env2 = @{} + $ProdEnv
     $env2['MMORPG_REDIS_PASSWORD'] = ''
     $run = Invoke-DeployDryRun -Arguments $ProdArgs -Env $env2
-    Assert-True -Condition ($run.ExitCode -ne 0) -Because "非 dev 档空口令必须阻断。输出: $($run.Output)"
-    Assert-Match -Text $run.Output -Pattern 'ReleaseProfile=prod 要求从环境变量 MMORPG_REDIS_PASSWORD' -Because '错误必须点名缺哪个环境变量,且说清是注入缺失'
-    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '密钥解析(Initialize-InjectedSecrets)先于任何写操作,不留半截部署'
-    Assert-NotMatch -Text $run.Output -Pattern ([regex]::Escape($ControlRedisHashKey)) -Because '被拒时不该渲染出任何 C++ 工作负载'
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "staging / prod 的两个域都在 Redis Cluster 上,不要求核心口令。输出: $($run.Output)"
+    Assert-NotMatch -Text $run.Output -Pattern '要求从环境变量 MMORPG_REDIS_PASSWORD' -Because '不读这个变量'
+    $env3 = @{} + $ProdEnv
+    $env3['MMORPG_CONTROL_REDIS_PASSWORD'] = ''
+    $denied = Invoke-DeployDryRun -Arguments $ProdArgs -Env $env3
+    Assert-True -Condition ($denied.ExitCode -ne 0) -Because "控制集群开着,空口令必须阻断。输出: $($denied.Output)"
+    Assert-Match -Text $denied.Output -Pattern 'ReleaseProfile=prod 要求从环境变量 MMORPG_CONTROL_REDIS_PASSWORD' -Because '错误必须点名缺哪个环境变量,且说清是注入缺失'
+    Assert-NotMatch -Text $denied.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '密钥解析(Initialize-InjectedSecrets)先于任何写操作,不留半截部署'
+    Assert-NotMatch -Text $denied.Output -Pattern ([regex]::Escape($ControlRedisHashKey)) -Because '被拒时不该渲染出任何 C++ 工作负载'
 }
 
-Test-Case '负向:MMORPG_REDIS_PASSWORD 含双引号时在任何写操作之前拒绝,只点变量名不回显值' {
+Test-Case '负向:Redis 口令含双引号时在任何写操作之前拒绝,只点变量名不回显值(dev 的核心口令、prod 的控制集群口令)' {
     $badPassword = 'contract-test-zone"redis-05'
-    $env2 = @{} + $ProdEnv
-    $env2['MMORPG_REDIS_PASSWORD'] = $badPassword
-    $run = Invoke-DeployDryRun -Arguments $ProdArgs -Env $env2
-    Assert-True -Condition ($run.ExitCode -ne 0) -Because '口令含双引号必须阻断:高可用哨兵会把口令原样写进自己的配置文件'
-    Assert-Match -Text $run.Output -Pattern '含双引号、反斜杠、换行或其它控制字符' -Because '错误要说清是字符集问题'
-    Assert-Match -Text $run.Output -Pattern 'MMORPG_REDIS_PASSWORD' -Because '错误要点名变量'
-    Assert-True -Condition (-not ([string]$run.Output).Contains($badPassword)) -Because '拒绝路径不回显口令值'
-    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '字符集检查在 Initialize-InjectedSecrets 里,先于任何写操作'
+    foreach ($case in @(
+            @{ Label = 'dev 核心'; Args = $BaseArgs; Env = @{ MMORPG_REDIS_PASSWORD = $badPassword }; EnvName = 'MMORPG_REDIS_PASSWORD' }
+            @{ Label = 'prod 控制集群'; Args = $ProdArgs; Env = (@{} + $ProdEnv + @{ MMORPG_CONTROL_REDIS_PASSWORD = $badPassword }); EnvName = 'MMORPG_CONTROL_REDIS_PASSWORD' }
+        )) {
+        $run = Invoke-DeployDryRun -Arguments $case.Args -Env $case.Env
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "$($case.Label):口令含双引号必须阻断:口令要原样交给 redis-server 与各语言的客户端配置,会被转义改写"
+        Assert-Match -Text $run.Output -Pattern '含双引号、反斜杠、换行或其它控制字符' -Because "$($case.Label):错误要说清是字符集问题"
+        Assert-Match -Text $run.Output -Pattern $case.EnvName -Because "$($case.Label):错误要点名变量"
+        Assert-True -Condition (-not ([string]$run.Output).Contains($badPassword)) -Because "$($case.Label):拒绝路径不回显口令值"
+        Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because "$($case.Label):字符集检查在 Initialize-InjectedSecrets 里,先于任何写操作"
+    }
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -2698,12 +2715,13 @@ Test-Case "负向:prod 档位缺 MMORPG_GATE_TOKEN_SECRET 必须 fail-closed 并
 Test-Case "负向:prod 档位环境变量仍是占位串时必须拒绝" {
     $env2 = @{}
     foreach ($k in $ProdEnv.Keys) { $env2[$k] = $ProdEnv[$k] }
-    $env2['MMORPG_REDIS_PASSWORD'] = 'change-me-in-production'
+    # prod 不读核心口令(不部署核心),改用控制集群的口令验占位拒绝。
+    $env2['MMORPG_CONTROL_REDIS_PASSWORD'] = 'change-me-in-production'
     $run = Invoke-DeployDryRun -Arguments $ProdArgs -Env $env2
 
     Assert-True -Condition ($run.ExitCode -ne 0) -Because "占位串必须阻断"
     Assert-Match -Text $run.Output -Pattern '仍是占位串' -Because "错误文本要指出是占位串问题"
-    Assert-Match -Text $run.Output -Pattern 'MMORPG_REDIS_PASSWORD' -Because "要点名是哪个变量"
+    Assert-Match -Text $run.Output -Pattern 'MMORPG_CONTROL_REDIS_PASSWORD' -Because "要点名是哪个变量"
 }
 
 Test-Case "负向:prod 档位密钥长度不达标时必须拒绝" {
@@ -2932,6 +2950,19 @@ Test-Case '待寄邮件:node-config 与 bin/etc 都含 MailNodeService.rpc,deadl
     $scene = Select-ManifestByName -Output $devOut -Name 'scene'
     Assert-Match -Text $scene -Pattern 'name: MAIL_PRODUCER_SECRET_BATTLE\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: mail-producer-battle, optional: false\}' -Because 'scene 签名用的 battle 发件密钥只经 Secret 注入,缺键时 Pod 起不来,而不是带着空密钥让欠玩家的物品寄不出去'
     Assert-NotMatch -Text (Select-ManifestByName -Output $devOut -Name 'gate') -Pattern 'MAIL_PRODUCER_SECRET_BATTLE' -Because '只有 scene 寄信,gate 不该拿到这把密钥(最小权限)'
+}
+
+Test-Case '内容安全:node-config 与 bin/etc 都含 ContentGuardNodeService.rpc,deadline 门禁核对了 ContentGuardNodeService' {
+    # scene 按这个前缀发现内容安全服务,把玩家填写的名字(角色改名、宠物名)送它判定(docs/design/rename-and-content-safety.md §6.6)。
+    # 前缀漏写不报错:scene 发现不到它,这些入口一直回「服务不可用」。
+    Assert-Match -Text (Select-ManifestByName -Output $devOut -Name 'node-config') -Pattern '- "ContentGuardNodeService\.rpc"' -Because 'K8s 的 node ConfigMap 遮蔽镜像里的 bin/etc,前缀必须在生成器里也写出来'
+    $authoritativeDeploy = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'bin/etc/base_deploy_config.yaml') -Raw
+    Assert-Match -Text $authoritativeDeploy -Pattern '(?m)^\s*-\s*"ContentGuardNodeService\.rpc"' -Because '本地栈读 bin/etc/base_deploy_config.yaml 的前缀表'
+    $okLine = [string]($devOut -split "`r?`n" | Where-Object { $_ -match 'GrpcClient deadline budget OK' } | Select-Object -First 1)
+    Assert-Match -Text $okLine -Pattern 'ContentGuardNodeService' -Because 'Assert-GrpcClientDeadlineBudget 的目标表必须含 ContentGuardNodeService(scene → content-guard 的 deadline ≥ zrpc Timeout + 2000)'
+    $deadline = [int](Get-EtcValue -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'GrpcClient.CallDeadlineMs.ContentGuardNodeService')
+    $timeout = [int](Get-EtcValue -RelativePath 'go/content_guard/etc/content_guard.yaml' -KeyPath 'Timeout')
+    Assert-True -Condition ($deadline -ge $timeout + 2000) -Because "scene 的 deadline($deadline)要不小于内容安全服务的 zrpc Timeout($timeout)+ 2000:下游先超时,scene 才收得到带真实错误码的应答"
 }
 
 Test-Case '玩家收件箱:-PlayerInboxConsumer 只核对、不改值 —— 与 yaml 一致时放行且渲染值仍取 yaml;不一致时在任何写操作之前拒绝并指向 yaml' {
@@ -3780,7 +3811,7 @@ function Get-MysqlClientConfigMapNames {
         foreach ($doc in ($block -split '(?m)^---[ \t]*\r?$')) {
             if ($doc -notmatch '(?m)^kind:[ \t]*ConfigMap\s*$') { continue }
             $effective = @($doc -split "`n" | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
-            if ($effective -notmatch 'mysql(?:\.[^\s:/]+)?:3306|tidb\.invalid:4000|jdbc:mysql://|DSNEnv: MMORPG_(MAIL|RANK)_SQL_DSN|DSNEnv: CHAT_AUTHORITY_DSN|DataSourceEnv: MMORPG_GUILD_SQL_DSN') { continue }
+            if ($effective -notmatch 'mysql(?:\.[^\s:/]+)?:3306|tidb\.invalid:4000|jdbc:mysql://|DSNEnv: MMORPG_(MAIL|RANK|PAYMENT)_SQL_DSN|DSNEnv: CHAT_AUTHORITY_DSN|DataSourceEnv: MMORPG_GUILD_SQL_DSN') { continue }
             # name 紧跟在 metadata: 之下(中间只允许注释行);生成器的 ConfigMap 都是这个形状。
             $name = [regex]::Match($doc, '(?m)^metadata:[ \t]*\r?\n(?:[ \t]*#[^\n]*\n)*[ ]{2}name:[ \t]*"?(?<name>[^\s"]+)"?\s*$')
             if (-not $name.Success) { throw "DryRun 输出里有一份连 MySQL 的 ConfigMap 读不出 metadata.name(形状变了?),无法核对它是否在连接总账里" }
@@ -3828,15 +3859,17 @@ Test-Case '自检:总账公式逐项可复算(E=1 的名义值、滚动余量、
             RankReplicas = 2; RankMaxOpen = 20
             ChatReplicas = 2; ChatMaxOpen = 16
             MatchReplicas = 2; MatchMaxOpen = 16
+            PaymentReplicas = 2; PaymentMaxOpen = 16
+            MallReplicas = 2; MallMaxPool = 16
         }
     }
 
     # E = 1(地域只有一个存档库,池就是 K=1 的预算)、不含滚动余量与运维余量时:
     #   db 每实例 = 1 × 60;ds 每实例 = 审计 3 × 5 + 名字 20 + 目录 + 路由 20 + 存档库 8;gateway 每实例 10
-    #   每 zone = 2 × (db + ds + gateway);全局 = friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 2 × 20 + chat / match 各 2 × 16 = 304
+    #   每 zone = 2 × (db + ds + gateway);全局 = friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 2 × 20 + chat / match / payment / mall 各 2 × 16 = 368
     $dsPerInstance = 3 * 5 + 20 + $directoryPool + 20 + 8
     $perZone = 2 * (60 + $dsPerInstance + 10)
-    $globalPools = 6 * 2 * 20 + 2 * 2 * 16
+    $globalPools = 6 * 2 * 20 + 4 * 2 * 16
     $nominalShape = @{ PlayerStoreShards = 1; RolloutExtraPodsPerDeployment = 0; OpsReserve = 0 }
     foreach ($zones in @(4, 2)) {
         $ledger = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -ZoneCount $zones @nominalShape
@@ -3861,9 +3894,9 @@ Test-Case '自检:总账公式逐项可复算(E=1 的名义值、滚动余量、
     $rolloutShape = @{ ZoneCount = 4; PlayerStoreShards = 1; OpsReserve = 0 }
     $withoutRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 0 @rolloutShape
     $withRollout = Get-MysqlConnectionLedger -Inputs (& $newLegacyInputs) -RolloutExtraPodsPerDeployment 2 @rolloutShape
-    # 每实例之和 = db 60 + ds + gateway 10 + friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 20 + chat 16 + match 16。
-    $perInstanceSum = 60 + $dsPerInstance + 10 + 6 * 20 + 2 * 16
-    Assert-Equal -Expected (2 * $perInstanceSum) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 + 排行 + chat + match 每实例之和)'
+    # 每实例之和 = db 60 + ds + gateway 10 + friend / trade / 收件箱 / 帮会 / 邮件 / 排行 各 20 + chat、match、payment、mall 各 16。
+    $perInstanceSum = 60 + $dsPerInstance + 10 + 6 * 20 + 4 * 16
+    Assert-Equal -Expected (2 * $perInstanceSum) -Actual ($withRollout.Peak - $withoutRollout.Peak) -Because 'R=2 与 R=0 的峰值之差必须是 2 × (db + ds + gateway + friend + trade + 收件箱 + 帮会 + 邮件 + 排行 + chat + match + payment + mall 每实例之和)'
     Assert-Equal -Expected (2 * $perInstanceSum) -Actual $withRollout.RolloutSurge -Because '这个差值就是分项里的 RolloutSurge'
     Assert-Equal -Expected $withoutRollout.Steady -Actual $withRollout.Steady -Because '滚动余量不进稳态'
 
@@ -3871,8 +3904,8 @@ Test-Case '自检:总账公式逐项可复算(E=1 的名义值、滚动余量、
     #   每库存档池(E = 3,Get-PlayerStorePoolLimit):go/db max(2, ceil(11 / 3)) = 4,data_service max(2, ceil(3 / 3)) = 2(每库至少 2 条)
     #   db 每实例 = 3 × 4 = 12
     #   ds 每实例 = 3 × 5 + 20 + 13(独立目录池)+ 30(route store)+ 3 × 2(地域存档库)= 84
-    #   每 zone = 2 × 12 + 3 × 84 + 4 × 10 = 316;全局 610(含 rank / chat / match);稳态 3 × 316 + 610 = 1558。
-    #   滚动 12 + 84 + 10 + 20 + 40 + 3 + 2 + 4 + 6 + 7 + 5 = 193;峰值 1558 + 193 + 7 = 1758;余量 5000 − 1758 = 3242。
+    #   每 zone = 2 × 12 + 3 × 84 + 4 × 10 = 316;全局 840(含 rank / chat / match,以及 payment 13 × 8、mall 14 × 9);稳态 3 × 316 + 840 = 1788。
+    #   滚动 12 + 84 + 10 + 20 + 40 + 3 + 2 + 4 + 6 + 7 + 5 + 8 + 9 = 210;峰值 1788 + 210 + 7 = 2005;余量 5000 − 2005 = 2995。
     #   按逻辑库:地域存档库 = (3×2+1) × 4 + (3×3+1) × 2 = 48。
     $distinctInputs = [ordered]@{
         MaxConnections = 5000
@@ -3887,9 +3920,11 @@ Test-Case '自检:总账公式逐项可复算(E=1 的名义值、滚动余量、
         RankReplicas = 10; RankMaxOpen = 6
         ChatReplicas = 11; ChatMaxOpen = 7
         MatchReplicas = 12; MatchMaxOpen = 5
+        PaymentReplicas = 13; PaymentMaxOpen = 8
+        MallReplicas = 14; MallMaxPool = 9
     }
     $distinct = Get-MysqlConnectionLedger -Inputs $distinctInputs -ZoneCount 3 -PlayerStoreShards 3 -RolloutExtraPodsPerDeployment 1 -OpsReserve 7
-    Assert-Equal -Expected '12/84/10/316/610/1558/193/7/1758/5000/3242' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}/{7}/{8}/{9}/{10}' -f $distinct.DbPerInstance, $distinct.DsPerInstance, $distinct.GatewayPerInstance, $distinct.PerZone, $distinct.Global, $distinct.Steady, $distinct.RolloutSurge, $distinct.OpsReserve, $distinct.Peak, $distinct.MaxConnections, $distinct.Headroom) -Because '分项依次是 db / ds / gateway 每实例、每 zone、全局、稳态、滚动余量、运维余量、峰值、上限、余量'
+    Assert-Equal -Expected '12/84/10/316/840/1788/210/7/2005/5000/2995' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}/{6}/{7}/{8}/{9}/{10}' -f $distinct.DbPerInstance, $distinct.DsPerInstance, $distinct.GatewayPerInstance, $distinct.PerZone, $distinct.Global, $distinct.Steady, $distinct.RolloutSurge, $distinct.OpsReserve, $distinct.Peak, $distinct.MaxConnections, $distinct.Headroom) -Because '分项依次是 db / ds / gateway 每实例、每 zone、全局、稳态、滚动余量、运维余量、峰值、上限、余量'
     Assert-Equal -Expected '4/2/48' -Actual ('{0}/{1}/{2}' -f $distinct.DbStorePool, $distinct.DsStorePool, $distinct.PerLogicalDb['player_store']) -Because '每库存档池按 E 摊开(go/db、data_service 各一条规则),按逻辑库的账分得出地域存档库'
 
     # 输入非法一律 throw 并点名是哪个键(fail-closed:不能拿一个猜出来的连接数去和上限比)。
@@ -3947,7 +3982,7 @@ Test-Case '连 MySQL 的 ConfigMap 只有总账认识的那些(zone-up 三个、
             Assert-Equal -Expected 0 -Actual @(Get-FlatSubtreeKeys -Flat $authorityFlat -Path ($authorityPrefix + $removed)).Count -Because "$authorityService 只认 gate 签名的会话身份原件,不读 login 的 Redis,ConfigMap 不再渲染 $removed"
         }
     }
-    $infraExpected = @('go-svc-friend-config', 'go-svc-trade-config', 'go-svc-player-inbox-config', 'go-svc-guild-config', 'go-svc-mail-config', 'go-svc-rank-config', 'go-svc-chat-config', 'go-svc-match-config' | Sort-Object) -join ','
+    $infraExpected = @('go-svc-friend-config', 'go-svc-trade-config', 'go-svc-player-inbox-config', 'go-svc-guild-config', 'go-svc-mail-config', 'go-svc-rank-config', 'go-svc-payment-config', 'go-svc-chat-config', 'go-svc-match-config' | Sort-Object) -join ','
     Assert-Equal -Expected $infraExpected -Actual (@(Get-MysqlClientConfigMapNames -Output $infraRun.Output) -join ',') -Because 'infra-up 产物里连 MySQL 的 ConfigMap 必须恰好是 friend / trade / player-inbox / guild / mail 五个(总账的全局部分只算了它们)'
     $friendConfig = Select-ManifestByName -Output $infraRun.Output -Name 'go-svc-friend-config'
     Assert-Match -Text $friendConfig -Pattern '(?m)^\s*Backend: tidb\s*$' -Because '显式入口缺省 tidb 档，dev 也不回落区域 MySQL'
@@ -4881,26 +4916,6 @@ Test-Case '负向:重启闸按服务端预演判定:Pod 模板与线上不同就
     Assert-Equal -Expected 4 -Actual $dryRuns.Value -Because 'DryRun 不做服务端预演'
 }
 
-Test-Case '重启闸 -StatefulSetRecreated(1 → 3):不做预演,直接按重启要求确认,拒绝文本里线上摘要写 <recreate>;给了开关只告警放行' {
-    $InfraNamespace = 'contract-redis-gate-upgrade'
-    $DryRun = $false
-    $stubLive = [pscustomobject]@{ Exists = $true; Digest = 'abcdef0123456789'; Json = (New-RedisStsJson); LegacyDeployment = $false }
-    function Get-LiveRedisCoreTemplateDigest { param([string]$Namespace) return $stubLive }
-    function Invoke-RedisStatefulSetServerDryRun { throw '1 → 3 时不该预演:线上单实例 sts 的 podManagementPolicy 创建后不可改,预演必然被拒' }
-
-    $ConfirmRedisCoreRestart = $false
-    $message = ''
-    try { Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' -StatefulSetYaml 'kind: StatefulSet' -StatefulSetRecreated } catch { $message = $_.Exception.Message }
-    Assert-Match -Text $message -Pattern '<recreate>' -Because '线上一侧没有可比的模板,拒绝文本写明是重建'
-    Assert-Match -Text $message -Pattern '1 → 3 切换会先删再建 StatefulSet' -Because '拒绝文本说明为什么不做预演'
-    Assert-Match -Text $message -Pattern 'apply 会重启 redis-0,全服登录中断并重放 AOF' -Because '1 → 3 是 redis-0 带着全服重启'
-    Assert-Match -Text $message -Pattern '-ConfirmRedisCoreRestart' -Because '拒绝文本必须点名确认开关'
-
-    $ConfirmRedisCoreRestart = $true
-    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest 'abcdef0123456789' -StatefulSetYaml 'kind: StatefulSet' -StatefulSetRecreated 3>&1 | Out-String)
-    Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*<recreate>' -Because '给了开关放行,告警写明是重建'
-}
-
 Test-Case '负向:线上只剩旧 Deployment redis(2026-09-19 之前的形态)时重启闸拒绝,写明停机切换、数据不迁移并点名 -ConfirmRedisCoreRestart;给了开关只告警放行' {
     # 以前这种集群被判成「全新集群」放行,随后 Apply-Infra 无确认地 delete deployment redis(emptyDir,数据清空)。
     $InfraNamespace = 'contract-redis-gate'
@@ -5067,7 +5082,7 @@ Test-Case 'Apply-Infra 只读一次 redis.yaml:过闸算摘要、循环里 apply
     $loopUsesRendered = $applyInfra.Body.Find({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$manifestContent' -and $a.Right.Extent.Text.Trim() -eq '$redisManifestRendered' }, $true)
     Assert-True -Condition ($null -ne $loopUsesRendered) -Because '循环里 redis.yaml 分支必须直接用过闸那一份($manifestContent = $redisManifestRendered),不重读文件'
     # 修复前的第二次读就是循环里的 `Get-Content -Path $path`。只数 $redisManifestPath 看不见它,所以再钉住:循环里每一处读 $path 的
-    # Get-Content 都必须落在「redis.yaml 且已有 $redisManifestRendered」那个 if 的 else 分支里,redis.yaml 走不到它。
+    # Get-Content 都必须落在「是 redis.yaml」那个 if 的 else 分支里,redis.yaml 走不到它(redis.yaml 只在部署核心时进列表,那时一定已读过)。
     $loopReads = @($commands | Where-Object { $_.GetCommandName() -eq 'Get-Content' -and $_.Extent.Text -match '\$path\b' })
     Assert-True -Condition ($loopReads.Count -ge 1) -Because '夹具前提:循环里其余 infra 清单仍按 $path 读文件'
     foreach ($read in $loopReads) {
@@ -5076,10 +5091,9 @@ Test-Case 'Apply-Infra 只读一次 redis.yaml:过闸算摘要、循环里 apply
             if ($node -isnot [System.Management.Automation.Language.IfStatementAst] -or $null -eq $node.ElseClause) { continue }
             $condition = $node.Clauses[0].Item1.Extent.Text
             $inElse = $read.Extent.StartOffset -ge $node.ElseClause.Extent.StartOffset -and $read.Extent.EndOffset -le $node.ElseClause.Extent.EndOffset
-            # 2026-10-19 起分支条件是「所选 Redis 清单」($manifest -eq $redisTopology.Manifest,redis.yaml 或 redis-ha.yaml)。
-            if ($inElse -and ($condition -match 'redis\.yaml' -or $condition -match '\$redisTopology\.Manifest') -and $condition -match '\$redisManifestRendered') { $guarded = $true; break }
+            if ($inElse -and $condition -match '^\$manifest -eq ''redis\.yaml''$') { $guarded = $true; break }
         }
-        Assert-True -Condition $guarded -Because "循环里的 $($read.Extent.Text) 必须只在「不是 redis.yaml 或开头没读到它」的 else 分支里执行,否则 redis.yaml 会被重读"
+        Assert-True -Condition $guarded -Because "循环里的 $($read.Extent.Text) 必须只在「不是 redis.yaml」的 else 分支里执行,否则 redis.yaml 会被重读"
     }
     $digestFromRendered = @($commands | Where-Object { $_.GetCommandName() -eq 'Get-RedisPodTemplateDigest' -and $_.Extent.Text -match '-ManifestContent\s+\$redisManifestRendered\b' })
     Assert-Equal -Expected 1 -Actual $digestFromRendered.Count -Because '重启闸的摘要必须对同一份 $redisManifestRendered 计算'
@@ -5132,265 +5146,10 @@ Test-Case 'dev_tools / k8s_image 的 -ConfirmRedisCoreRestart:不给不透传,�
 }
 
 # ─────────────────────────────────────────────────────────────────
-# 共享 Redis 的高可用形态(-RedisReplicas;docs/design/no-single-node-horizontal-scaling-20261001.md §5)
+# 核心单实例只在 dev 部署(缺口第 34 条第 6b-2 批;docs/design/redis-cluster-all-domains-20261110.md §10.8)
 # ─────────────────────────────────────────────────────────────────
-# redis-ha.yaml = 1 主 2 从 + 每个 redis Pod 一个哨兵 + 2 个 haproxy 入口代理,Service redis 指向代理。2026-10-08 在本机 kind 上
-# 实测过故障转移 / 滚动 / 冷启动 / 原地切换,实测里踩到的坑(haproxy 3.0.29 的僵尸会话、expect 不带 min-recv 每次否定结论等 2 秒、
-# 哨兵不加引号回写口令)这里逐条钉住。纯函数按 AST 抽出直接调用;DryRun 产物用 $BattleInfraArgs 起的 infra-up 核对,不碰任何集群。
-$redisHaFunctionNames = @(
-    'Get-RedisTopologyFor', 'Get-RedisTopologyChangeVerdict', 'Get-RedisHaLimits', 'Get-RedisHaScriptsDigest', 'Assert-RedisPasswordSentinelSafe',
-    # 2026-10-19 接入补齐:zone 写路径跟随线上、WAITAOF 副本份数与拓扑同源(读脚本参数的几个按动态作用域在用例里给值)。
-    'Get-OwnerEpochMintWaitAOFNumReplicas', 'Get-RedisZoneTopologyDecision', 'Get-RedisTopology',
-    'Resolve-RedisTopologyFromLive', 'Get-RedisReplicasFromOrphanOrdinals',
-    # 拒绝文本按线上读数的来源写(sts / 孤儿 Pod),副本数不是 1 / 3 时不给传不进去的参数建议。
-    'Format-RedisLiveShape', 'Get-RedisLiveShapeManualFix', 'Assert-RedisTopologyChangeIsSafe'
-)
-foreach ($redisHaFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
-    if ($redisHaFunctionNames -contains $redisHaFnAst.Name) {
-        Set-Item -Path "Function:script:$($redisHaFnAst.Name)" -Value $redisHaFnAst.Body.GetScriptBlock()
-    }
-}
-foreach ($redisHaFnName in $redisHaFunctionNames) {
-    if (-not (Test-Path "Function:$redisHaFnName")) { throw "k8s_deploy.ps1 缺少函数 $redisHaFnName(共享 Redis 高可用接入被删了?后续断言无意义)" }
-}
-$redisHaManifestPath = Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis-ha.yaml'
-$redisHaManifestText = [IO.File]::ReadAllText($redisHaManifestPath) -replace "`r`n", "`n"
-$redisHaRun = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-RedisReplicas', '3')) -Env $BattleTestEnv
-
-Test-Case 'Redis 拓扑:只认 1 / 3;线上 1 → 目标 3 是 upgrade,3 → 1 与线上 0 / 2 一律拒绝' {
-    $single = Get-RedisTopologyFor -Replicas 1
-    Assert-Equal -Expected 'redis.yaml' -Actual $single.Manifest -Because '1 = 单实例清单'
-    Assert-True -Condition (-not $single.HighAvailability) -Because '1 不是高可用'
-    $ha = Get-RedisTopologyFor -Replicas 3
-    Assert-Equal -Expected 'redis-ha.yaml' -Actual $ha.Manifest -Because '3 = 高可用清单'
-    Assert-Equal -Expected 'Parallel' -Actual $ha.PodManagementPolicy -Because '冷启动时上一任主可能不是 redis-0,按序创建会互相等死'
-    foreach ($bad in @(0, 2, 4, 5)) {
-        $threw = $false
-        try { $null = Get-RedisTopologyFor -Replicas $bad } catch { $threw = $true }
-        Assert-True -Condition $threw -Because "副本数 $bad 必须拒绝(两个节点的哨兵多数派挂一个就没了;更多副本没有收益)"
-    }
-    $cases = @(
-        @{ Live = $null; Desired = 3; Expected = 'absent' },
-        @{ Live = 1; Desired = 1; Expected = 'unchanged' },
-        @{ Live = 3; Desired = 3; Expected = 'unchanged' },
-        @{ Live = 1; Desired = 3; Expected = 'upgrade' },
-        @{ Live = 3; Desired = 1; Expected = 'refuse' },
-        @{ Live = 0; Desired = 1; Expected = 'refuse' },
-        @{ Live = 2; Desired = 3; Expected = 'refuse' }
-    )
-    foreach ($c in $cases) {
-        Assert-Equal -Expected $c.Expected -Actual (Get-RedisTopologyChangeVerdict -LiveReplicas $c.Live -DesiredReplicas $c.Desired) -Because "线上 $($c.Live) → 目标 $($c.Desired)"
-    }
-}
-
-Test-Case 'redis-ha.yaml 连接上限:MAXCLIENTS 与 redis.yaml 同值;代理全部副本(含 maxSurge)+ 预留 ≤ MAXCLIENTS;规划档峰值 ≤ 80% × 单个代理的 maxconn' {
-    $RepoRoot = Get-RepoRoot
-    $limits = Get-RedisHaLimits -ManifestContent $redisHaManifestText -SingleInstanceMaxClients (Get-RedisMaxClientsFromManifest)
-    Assert-True -Condition ($limits.ProxyTotal + $limits.Reserved -le $limits.MaxClients) -Because '代理必须比 Redis 先到线:Redis 到线时代理的健康检查连接也被拒,判下线后会踢掉全部会话'
-    # 一个代理重启时,它的客户端全部重连到另一个代理:单个代理要能独自扛住峰值。
-    $ledger = Get-RepoRedisPlanLedger
-    $line80 = [Math]::Floor(0.8 * $limits.ProxyMaxConn)
-    Assert-True -Condition ($ledger.Peak -le $line80) -Because ("规划档峰值 {0} 超过 80% × PROXY_MAXCONN = {1}:另一个代理重启期间,剩下的那个会先到线" -f $ledger.Peak, $line80)
-    $threw = $false
-    try { $null = Get-RedisHaLimits -ManifestContent $redisHaManifestText -SingleInstanceMaxClients ($limits.MaxClients + 1) } catch { $threw = $true }
-    Assert-True -Condition $threw -Because '两份清单的 MAXCLIENTS 不同时必须拒绝:Redis 连接总账只从 redis.yaml 读'
-    $tooMany = [regex]::Replace($redisHaManifestText, '(?m)^([ \t]*PROXY_MAXCONN=)\d+', { param($m) $m.Groups[1].Value + [string]($limits.MaxClients) })
-    $threw = $false
-    try { $null = Get-RedisHaLimits -ManifestContent $tooMany -SingleInstanceMaxClients $limits.MaxClients } catch { $threw = $true }
-    Assert-True -Condition $threw -Because '代理上限加起来超过 MAXCLIENTS 必须拒绝'
-}
-
-Test-Case 'redis-ha.yaml 钉住实测教训:haproxy 用 3.2(3.0.29 有僵尸会话)、每条 tcp-check expect 带 min-recv、redis-server 带 --maxclients、StatefulSet 是 Parallel' {
-    Assert-Match -Text $redisHaManifestText -Pattern '(?m)^\s+image: haproxy:3\.2-' -Because 'haproxy 3.0.29 在后端被判下线时留下客户端侧不关闭的会话(长连接客户端卡死),3.2 没有'
-    Assert-NotMatch -Text $redisHaManifestText -Pattern 'haproxy:3\.0' -Because '不得退回 3.0'
-    $expects = [regex]::Matches($redisHaManifestText, 'tcp-check expect[^\n"]*')
-    Assert-True -Condition ($expects.Count -ge 4) -Because '夹具前提:代理脚本里有认证 / PONG / 哨兵答主 / role:master 四类 expect'
-    foreach ($e in $expects) {
-        Assert-Match -Text $e.Value -Pattern 'min-recv \d+' -Because "「$($e.Value)」不带 min-recv 时不匹配要等到检查超时(2 秒)才下结论,切主后代理晚 2 秒才改道"
-    }
-    Assert-Match -Text $redisHaManifestText -Pattern '--maxclients "\$MAXCLIENTS"' -Because '每个 redis-server 都要显式 --maxclients'
-    Assert-Match -Text $redisHaManifestText -Pattern '(?m)^  podManagementPolicy: Parallel\s*$' -Because '冷启动时上一任主可能不是 redis-0'
-    Assert-Match -Text $redisHaManifestText -Pattern '\*\[\[:space:\]\\"\\''\\\\\]\*\)' -Because '哨兵启动脚本要拒绝含空白 / 引号 / 反斜杠的口令(否则下次重启读不回自己的配置)'
-}
-
-Test-Case '口令字符集(高可用形态):空白与单引号拒绝且不回显;dev 空口令与常规口令放行' {
-    foreach ($ok in @('', 'contract-test-redis-pw-01', 'p@%^:,~#$!&*()=+.')) {
-        $threw = $false
-        try { Assert-RedisPasswordSentinelSafe -Password $ok } catch { $threw = $true }
-        Assert-True -Condition (-not $threw) -Because "「$ok」应当放行"
-    }
-    foreach ($bad in @('with space-0123456', "quote'pw-0123456", "tab`tpw-0123456")) {
-        $message = ''
-        try { Assert-RedisPasswordSentinelSafe -Password $bad } catch { $message = $_.Exception.Message }
-        Assert-True -Condition ($message.Length -gt 0) -Because '含空白 / 单引号必须拒绝'
-        Assert-True -Condition (-not $message.Contains($bad)) -Because '报错不得回显口令'
-    }
-    $env2 = @{} + $BattleTestEnv
-    $env2['MMORPG_REDIS_PASSWORD'] = "contract'pw-0123456"
-    $run = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-RedisReplicas', '3')) -Env $env2
-    Assert-True -Condition ($run.ExitCode -ne 0) -Because '高可用形态下含单引号的口令必须拒绝部署'
-    Assert-Match -Text $run.Output -Pattern 'MMORPG_REDIS_PASSWORD' -Because '报错要点名变量'
-    Assert-True -Condition (-not $run.Output.Contains("contract'pw-0123456")) -Because '报错不得回显口令'
-    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl apply' -Because '必须在任何写操作之前拒绝'
-}
-
-Test-Case 'infra-up DryRun(-RedisReplicas 3):apply redis-ha.yaml;sts/redis 3 副本、摘要注解 == 按仓库文件重算;代理带脚本摘要、Service 指向代理、等代理就绪' {
-    Assert-Equal -Expected 0 -Actual $redisHaRun.ExitCode -Because "高可用形态的 infra-up DryRun 必须成功。输出: $($redisHaRun.Output)"
-    Assert-Match -Text $redisHaRun.Output -Pattern 'Redis topology: replicas=3 manifest=redis-ha\.yaml high_availability=true' -Because '入口要打出本次的 Redis 形态'
-    Assert-Match -Text $redisHaRun.Output -Pattern 'Redis HA limits: maxclients=\d+ proxy_maxconn=\d+ proxies=\d+\+\d+ reserved=\d+' -Because '写路径要打出连接上限核对'
-    $sts = Select-RedisStatefulSetDocument -Output $redisHaRun.Output
-    Assert-Match -Text $sts -Pattern '(?m)^  replicas: 3\s*$' -Because '高可用形态是 3 个 redis Pod'
-    $rendered = $redisHaManifestText.Replace('__INFRA_NAMESPACE__', 'contract-battle-infra')
-    $expectedDigest = Get-RedisPodTemplateDigest -ManifestContent $rendered
-    Assert-Match -Text $sts -Pattern ('mmorpg\.io/redis-pod-template-digest: "' + $expectedDigest + '"') -Because '重启闸摘要必须按高可用清单算,并写进 sts/redis 自己的注解'
-    $scriptsDigest = Get-RedisHaScriptsDigest -ManifestContent $rendered
-    Assert-Match -Text $redisHaRun.Output -Pattern ('mmorpg\.io/redis-ha-scripts-digest: "' + $scriptsDigest + '"') -Because '脚本一改代理就要滚动'
-    Assert-Match -Text $redisHaRun.Output -Pattern '(?s)name: redis\r?\n(?:(?!\n---).)*?selector:\s+app: redis-proxy' -Because 'Service redis 必须指向代理'
-    Assert-Match -Text $redisHaRun.Output -Pattern 'rollout status deployment/redis-proxy -n contract-battle-infra' -Because '客户端连的是代理:代理没就绪等于 Redis 没就绪'
-    Assert-NotMatch -Text $redisHaRun.Output -Pattern '(?-i)__REDIS_[A-Z_]+__' -Because '占位必须全部替换'
-}
-
-Test-Case 'dev 基线(不传 -RedisReplicas)仍是单实例;prod 档缺省就是高可用' {
-    Assert-Match -Text $battleInfraRun.Output -Pattern 'Redis topology: replicas=1 manifest=redis\.yaml high_availability=false' -Because 'dev 档缺省单实例'
-    Assert-NotMatch -Text $battleInfraRun.Output -Pattern 'redis-proxy' -Because '单实例形态不出现代理'
-    $run = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-ReleaseProfile', 'prod', '-BattleReplicas', '0')) -Env $ProdEnv
-    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "prod 档 infra-up DryRun 必须成功。输出: $($run.Output)"
-    Assert-Match -Text $run.Output -Pattern 'Redis topology: replicas=3 manifest=redis-ha\.yaml high_availability=true' -Because '非 dev 档缺省高可用(与 Kafka 同一判据)'
-    $explicit = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-ReleaseProfile', 'prod', '-BattleReplicas', '0', '-RedisReplicas', '1')) -Env $ProdEnv
-    Assert-Match -Text $explicit.Output -Pattern 'Redis topology: replicas=1 manifest=redis\.yaml' -Because '显式 -RedisReplicas 1 覆盖档位缺省'
-    $bad = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-RedisReplicas', '2')) -Env $BattleTestEnv
-    Assert-True -Condition ($bad.ExitCode -ne 0) -Because '-RedisReplicas 2 必须拒绝'
-    Assert-NotMatch -Text $bad.Output -Pattern '\[dry-run\] kubectl apply' -Because '参数错误必须先于任何写操作'
-}
-
-Test-Case 'zone 写路径的 Redis 拓扑判定:没给 -RedisReplicas 跟随线上 1 / 3;显式值与线上不同、线上 0 / 2 拒绝;线上没有 sts 照本次解析' {
-    Assert-Equal -Expected 0 -Actual (Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopologyFor -Replicas 1)) -Because '1 = 单实例(WAITAOF 不等副本)'
-    Assert-Equal -Expected 1 -Actual (Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopologyFor -Replicas 3)) -Because '3 = 高可用(WAITAOF 等 1 个副本)'
-    $cases = @(
-        @{ Live = $null; Requested = 0; Resolved = 3; Expected = 'resolved'; Why = 'infra 还没部署,不替 infra-up 判断' },
-        @{ Live = 3; Requested = 0; Resolved = 3; Expected = 'resolved'; Why = '线上与档位缺省一致' },
-        @{ Live = 1; Requested = 1; Resolved = 1; Expected = 'resolved'; Why = '显式值与线上一致' },
-        @{ Live = 1; Requested = 0; Resolved = 3; Expected = 'live'; Why = 'staging / prod 还在单实例上:没给参数就跟随线上,zone-up 照常可用' },
-        @{ Live = 3; Requested = 0; Resolved = 1; Expected = 'live'; Why = 'dev 档上手工切过高可用:跟随线上,不把 WAITAOF 降回 0' },
-        @{ Live = 1; Requested = 3; Resolved = 3; Expected = 'refuse'; Why = '显式 3 而线上 1:WAITAOF 写 1 没有副本可等,scene-manager 拒启' },
-        @{ Live = 3; Requested = 1; Resolved = 1; Expected = 'refuse'; Why = '显式 1 而线上 3:WAITAOF 写 0,切主时静默丢已确认写入' },
-        @{ Live = 2; Requested = 0; Resolved = 3; Expected = 'refuse'; Why = '线上 2 个副本不是本脚本产生的形态,不猜' },
-        @{ Live = 0; Requested = 0; Resolved = 1; Expected = 'refuse'; Why = '线上 0 个副本不是本脚本产生的形态,不猜' }
-    )
-    foreach ($c in $cases) {
-        Assert-Equal -Expected $c.Expected -Actual (Get-RedisZoneTopologyDecision -LiveReplicas $c.Live -RequestedReplicas $c.Requested -ResolvedReplicas $c.Resolved) -Because "线上 $($c.Live) / 参数 $($c.Requested) / 解析 $($c.Resolved):$($c.Why)"
-    }
-}
-
-Test-Case 'Resolve-RedisTopologyFromLive:prod 档没给参数遇到线上单实例 → 改按单实例渲染 WAITAOF 0 并打一行;显式 3 → 拒绝且不改状态;线上没有 sts → 不变' {
-    # 读集群那一步(Get-LiveStatefulSetReplicas)在这里给替身,其余按动态作用域读本用例里的同名变量。不起 kubectl。
-    $InfraNamespace = 'contract-redis-follow'
-    $Command = 'zone-up'
-    $ReleaseProfile = 'prod'
-    $OpsProfile = 'custom'
-    $stubLive = [pscustomobject]@{ Replicas = 1; Source = 'sts'; Ordinals = @() }
-    # 读集群的 Get-LiveRedisReplicas(一次读数:sts 副本数,sts 不在时按孤儿 Pod 推算)给替身。
-    function Get-LiveRedisReplicas { return $stubLive }
-    try {
-        $script:RedisReplicasFollowedLive = $null
-        $RedisReplicas = 0
-        Assert-Equal -Expected 3 -Actual (Get-RedisTopology).Replicas -Because '夹具前提:prod 档缺省高可用'
-        $out = (Resolve-RedisTopologyFromLive 6>&1 | Out-String)
-        Assert-Match -Text $out -Pattern 'Redis topology: following live statefulset/redis replicas=1 \(profile default was 3; -RedisReplicas not given\)[^\r\n]*waitaof_replicas=0' -Because '跟随线上要打一行,带上档位缺省与 WAITAOF 副本份数'
-        Assert-Equal -Expected 1 -Actual $script:RedisReplicasFollowedLive -Because '跟随的线上值记在脚本级变量里,供随后的渲染使用'
-        Assert-Equal -Expected 1 -Actual (Get-RedisTopology).Replicas -Because '跟随线上之后 scene-manager 的 WAITAOF 按单实例渲染'
-        Assert-Equal -Expected 0 -Actual (Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopology)) -Because '单实例没有副本可等'
-
-        $script:RedisReplicasFollowedLive = $null
-        $RedisReplicas = 3
-        $message = ''
-        try { Resolve-RedisTopologyFromLive 6>$null } catch { $message = $_.Exception.Message }
-        Assert-Match -Text $message -Pattern '形态与线上不一致' -Because '显式值与线上不同必须拒绝'
-        Assert-Match -Text $message -Pattern '本次未做任何写操作' -Because '拒绝发生在写路径入口,早于任何写操作'
-        Assert-True -Condition ($null -eq $script:RedisReplicasFollowedLive) -Because '拒绝时不得记下跟随值'
-
-        Assert-Match -Text $message -Pattern '去掉 -RedisReplicas\(跟随线上\)或传 -RedisReplicas 1' -Because '线上是 1 / 3 时给出能执行的处置'
-
-        $RedisReplicas = 0
-        $stubLive = [pscustomobject]@{ Replicas = $null; Source = 'none'; Ordinals = @() }
-        Resolve-RedisTopologyFromLive 6>$null
-        Assert-True -Condition ($null -eq $script:RedisReplicasFollowedLive) -Because '线上没有 sts/redis 也没有孤儿 Pod 时照本次解析,不跟随'
-        Assert-Equal -Expected 3 -Actual (Get-RedisTopology).Replicas -Because '没有跟随时仍按档位缺省'
-
-        # 孤儿 Pod 读数:序号连续(只剩 redis-0)时跟随并写明来源;缺号时拒绝,不说「sts/redis 有 N 个副本」,不建议传不进去的 -RedisReplicas。
-        $stubLive = [pscustomobject]@{ Replicas = 1; Source = 'orphan-pods'; Ordinals = @(0) }
-        $out = (Resolve-RedisTopologyFromLive 6>&1 | Out-String)
-        Assert-Match -Text $out -Pattern 'following live orphan redis pods redis-0 \(statefulset/redis absent\) replicas=1' -Because '跟随孤儿 Pod 时写明来源'
-        $script:RedisReplicasFollowedLive = $null
-        $stubLive = [pscustomobject]@{ Replicas = -1; Source = 'orphan-pods'; Ordinals = @(1, 2) }
-        $message = ''
-        try { Resolve-RedisTopologyFromLive 6>$null } catch { $message = $_.Exception.Message }
-        Assert-Match -Text $message -Pattern '没有 statefulset/redis,但带 app=redis 的孤儿 Pod redis-1, redis-2 仍在' -Because '点名孤儿 Pod'
-        Assert-Match -Text $message -Pattern '序号不连续' -Because '说明推算不出形态'
-        Assert-NotMatch -Text $message -Pattern '-RedisReplicas -1|传 -RedisReplicas|sts/redis 有' -Because '参数只认 0 / 1 / 3,不能建议传线上值;sts 不在时不说它有几个副本'
-        Assert-Match -Text $message -Pattern '只剩 redis-0\(单实例\)或 redis-0\.\.2 齐全' -Because '给出人工整理的处置'
-    }
-    finally {
-        $script:RedisReplicasFollowedLive = $null
-    }
-}
-
-Test-Case '拓扑变更闸(Assert-RedisTopologyChangeIsSafe)的拒绝文本按读数来源写:sts 3 → 1 建议传 -RedisReplicas 3;3 个孤儿 → 1 提示回退第 2 步没删干净;孤儿缺号与 sts 2 个副本只给人工整理;孤儿 redis-0 → 3 判 upgrade' {
-    $InfraNamespace = 'contract-redis-topology'
-    $single = Get-RedisTopologyFor -Replicas 1
-    $ha = Get-RedisTopologyFor -Replicas 3
-    function Get-LiveRedisReplicas { return $stubLive }
-    $refusal = {
-        param($Topology)
-        $m = ''
-        try { $null = Assert-RedisTopologyChangeIsSafe -Topology $Topology 3>$null } catch { $m = $_.Exception.Message }
-        return $m
-    }
-
-    $stubLive = [pscustomobject]@{ Replicas = 3; Source = 'sts'; Ordinals = @() }
-    $message = & $refusal $single
-    Assert-Match -Text $message -Pattern '线上statefulset/redis 有 3 个副本 → 目标 1 个' -Because 'sts 在时照实写副本数'
-    Assert-Match -Text $message -Pattern '显式传 -RedisReplicas 3' -Because '线上是合法形态时给出「不改形态」的参数'
-
-    $stubLive = [pscustomobject]@{ Replicas = 3; Source = 'orphan-pods'; Ordinals = @(0, 1, 2) }
-    $message = & $refusal $single
-    Assert-Match -Text $message -Pattern '孤儿 Pod redis-0, redis-1, redis-2 仍在' -Because '点名孤儿 Pod'
-    Assert-Match -Text $message -Pattern '第 2 步还没删干净 pod/redis-1、pod/redis-2' -Because '3 个孤儿而目标 1 多半是回退做到一半'
-    Assert-NotMatch -Text $message -Pattern '传 -RedisReplicas 3' -Because '照这个参数重跑会把高可用对象建回来,与回退目标相反'
-
-    foreach ($stub in @(
-            [pscustomobject]@{ Replicas = -1; Source = 'orphan-pods'; Ordinals = @(0, 2) },
-            [pscustomobject]@{ Replicas = 2; Source = 'orphan-pods'; Ordinals = @(0, 1) },
-            [pscustomobject]@{ Replicas = 2; Source = 'sts'; Ordinals = @() }
-        )) {
-        $stubLive = $stub
-        $message = & $refusal $ha
-        Assert-True -Condition ($message.Length -gt 0) -Because "线上 $($stub.Source) $($stub.Replicas) 必须拒绝"
-        Assert-NotMatch -Text $message -Pattern '传 -RedisReplicas' -Because "线上 $($stub.Source) $($stub.Replicas):-RedisReplicas 只认 0 / 1 / 3,不能建议传线上值"
-        Assert-Match -Text $message -Pattern 'kubectl scale 回 1 或 3' -Because '只给人工整理的处置'
-    }
-
-    $stubLive = [pscustomobject]@{ Replicas = 1; Source = 'orphan-pods'; Ordinals = @(0) }
-    Assert-Equal -Expected 'upgrade' -Actual (Assert-RedisTopologyChangeIsSafe -Topology $ha 3>$null) -Because '1 → 3 在 orphan 删除之后失败,重跑仍按 upgrade'
-}
-
-Test-Case '孤儿 redis Pod 推算线上副本数:0..n-1 连续 → n;缺号 → -1(拒绝);没有 → $null;配上变更判定:半截 1 → 3 重跑仍是 upgrade,只剩 redis-0 回到单实例是 unchanged,3 个孤儿回到单实例照样拒绝' {
-    Assert-True -Condition ($null -eq (Get-RedisReplicasFromOrphanOrdinals -Ordinals @())) -Because '没有孤儿 Pod = 真的不存在'
-    Assert-Equal -Expected 1 -Actual (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(0)) -Because '只剩 redis-0'
-    Assert-Equal -Expected 3 -Actual (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(2, 0, 1)) -Because '序号连续,顺序无关'
-    Assert-Equal -Expected -1 -Actual (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(1)) -Because '只剩 redis-1:不是本脚本产生的形态'
-    Assert-Equal -Expected -1 -Actual (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(0, 2)) -Because '中间缺号:不猜'
-    Assert-Equal -Expected 'upgrade' -Actual (Get-RedisTopologyChangeVerdict -LiveReplicas (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(0)) -DesiredReplicas 3) -Because '1 → 3 在 orphan 删除之后失败,重跑仍按 upgrade(orphan 删除带 --ignore-not-found,再做一次是空操作)'
-    Assert-Equal -Expected 'unchanged' -Actual (Get-RedisTopologyChangeVerdict -LiveReplicas (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(0)) -DesiredReplicas 1) -Because 'README 高可用 → 单实例回退的第 3 步:只剩 redis-0'
-    Assert-Equal -Expected 'refuse' -Actual (Get-RedisTopologyChangeVerdict -LiveReplicas (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(0, 1, 2)) -DesiredReplicas 1) -Because '先 orphan 再 apply 单实例,不能绕过 3 → 1 的拒绝'
-    Assert-Equal -Expected 'refuse' -Actual (Get-RedisTopologyChangeVerdict -LiveReplicas (Get-RedisReplicasFromOrphanOrdinals -Ordinals @(0, 2)) -DesiredReplicas 3) -Because '序号认不出时拒绝'
-    $live = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Get-LiveRedisReplicas' }, $true)
-    Assert-True -Condition ($null -ne $live -and $live.Body.Extent.Text -match 'Get-LiveRedisOrphanPodOrdinals' -and $live.Body.Extent.Text -match 'Get-RedisReplicasFromOrphanOrdinals') -Because 'sts 不在时按孤儿 Pod 推算'
-    foreach ($caller in @('Assert-RedisTopologyChangeIsSafe', 'Resolve-RedisTopologyFromLive')) {
-        $fn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq $caller }, $true)
-        Assert-True -Condition ($null -ne $fn -and $fn.Body.Extent.Text -match '\bGet-LiveRedisReplicas\b' -and $fn.Body.Extent.Text -notmatch 'Get-LiveStatefulSetReplicas') -Because "$caller 必须经 Get-LiveRedisReplicas 读线上(半截切换不能当成全新集群)"
-    }
-}
+# 核心 redis.yaml 只在控制端点是它时部署(Test-CoreRedisDeployed:dev 没开控制集群);staging / prod 两个域都在 Redis Cluster 上,不部署核心,
+# 也不要求 MMORPG_REDIS_PASSWORD。高可用形态 redis-ha.yaml 与 -RedisReplicas 同批退役(它只给 staging / prod 用)。重启闸仍守 dev 的核心。
 
 Test-Case '重启闸 orphan-pods:没有 sts 与旧 Deployment 但孤儿 redis Pod 仍在服务时拒绝、点名 Pod 与 -ConfirmRedisCoreRestart;给了开关只告警放行' {
     $InfraNamespace = 'contract-redis-gate-orphan'
@@ -5412,135 +5171,84 @@ Test-Case '重启闸 orphan-pods:没有 sts 与旧 Deployment 但孤儿 redis Po
     Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*orphan pods redis-0' -Because '给了开关放行,告警写明收养孤儿 Pod'
 }
 
-Test-Case '重启闸 -RollingHandover(线上与本次都是高可用):拒绝文本写「逐个滚动重启 3 个 redis Pod」并点名 -ConfirmRedisCoreRestart;给了开关只告警放行;不传时仍是单实例文本' {
-    $InfraNamespace = 'contract-redis-gate-ha'
-    $desired = 'abcdef0123456789'
-    $stubLive = [pscustomobject]@{ Exists = $true; Digest = $desired; Json = (New-RedisStsJson -Image 'redis:7.2'); LegacyDeployment = $false }
-    function Get-LiveRedisCoreTemplateDigest {
-        param([string]$Namespace)
-        return $stubLive
-    }
-    # 预演结果换了镜像:高可用形态下 = 逐个滚动 3 个 redis Pod。
-    function Invoke-RedisStatefulSetServerDryRun { param([string]$Namespace, [string]$StatefulSetYaml) return (New-RedisStsJson -Image 'redis:7.4') }
-    $DryRun = $false
-    $ConfirmRedisCoreRestart = $false
-    $message = ''
-    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' -RollingHandover } catch { $message = $_.Exception.Message }
-    Assert-Match -Text $message -Pattern '逐个滚动重启 3 个 redis Pod' -Because '高可用形态下模板变化 = 逐个滚动,每个先交接主,不是「重启 redis-0、重放 AOF」'
-    Assert-NotMatch -Text $message -Pattern '重放 AOF' -Because '高可用形态的拒绝文本不能沿用单实例的后果描述'
-    Assert-Match -Text $message -Pattern '-ConfirmRedisCoreRestart' -Because '拒绝文本必须点名确认开关'
-    Assert-Match -Text $message -Pattern '本次未做任何写操作' -Because '闸在 Apply-Infra 的任何写操作之前'
-    $message = ''
-    try { Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' } catch { $message = $_.Exception.Message }
-    Assert-Match -Text $message -Pattern 'apply 会重启 redis-0,全服登录中断并重放 AOF' -Because '不传 -RollingHandover(单实例、1 → 3 切换)仍是 redis-0 带着全服重启'
-    $ConfirmRedisCoreRestart = $true
-    $warning = (Assert-RedisCoreRestartConfirmed -DesiredDigest $desired -StatefulSetYaml 'kind: StatefulSet' -RollingHandover 3>&1 | Out-String)
-    Assert-Match -Text $warning -Pattern '\[RedisCoreRestart\]Confirmed:[^\n]*rolls the 3 redis pods one at a time' -Because '给了开关放行,告警写明是逐个滚动'
-}
-
-Test-Case 'Apply-Infra 的共享 Redis 顺序(AST):拓扑变更闸 → 高可用前置 → 重启闸(高可用且线上不变时 -RollingHandover)→ 第一个写操作;orphan 删除只在 upgrade 分支;部署后核对 -Nodes 取拓扑副本数' {
+Test-Case 'Apply-Infra 的核心 Redis(AST):部不部署只由 Test-CoreRedisDeployed 定;重启闸、redis.yaml 的 apply、就绪等待与 maxclients 核对都只在部署时做;重启闸先于第一个写操作' {
     $applyInfra = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-Infra' }, $true)
+    $body = $applyInfra.Body.Extent.Text
+    Assert-Match -Text $body -Pattern '\$coreRedisDeployed\s*=\s*Test-CoreRedisDeployed\b' -Because '部不部署核心只有一个判据'
     $commands = @($applyInfra.Body.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] }, $true))
-    $firstOf = {
-        param([string]$Name)
-        $found = @($commands | Where-Object { $_.GetCommandName() -eq $Name } | Sort-Object { $_.Extent.StartOffset })
-        if ($found.Count -eq 0) { throw "Apply-Infra 里找不到 $Name" }
-        return $found[0]
+    $ifOf = {
+        param($Node)
+        for ($n = $Node.Parent; $null -ne $n; $n = $n.Parent) {
+            if ($n -is [System.Management.Automation.Language.IfStatementAst]) { return $n.Clauses[0].Item1.Extent.Text }
+        }
+        return ''
     }
-    $topologyGate = & $firstOf 'Assert-RedisTopologyChangeIsSafe'
-    $sentinelSafe = & $firstOf 'Assert-RedisPasswordSentinelSafe'
-    $haLimits = & $firstOf 'Get-RedisHaLimits'
-    $restartGate = & $firstOf 'Assert-RedisCoreRestartConfirmed'
-    $ensureNs = & $firstOf 'Ensure-Namespace'
-    Assert-True -Condition ($topologyGate.Extent.StartOffset -lt $sentinelSafe.Extent.StartOffset -and $sentinelSafe.Extent.StartOffset -lt $restartGate.Extent.StartOffset -and $haLimits.Extent.StartOffset -lt $restartGate.Extent.StartOffset) -Because '拓扑变更闸、口令字符集、连接上限不等式都要先于重启闸'
-    Assert-True -Condition ($restartGate.Extent.StartOffset -lt $ensureNs.Extent.StartOffset) -Because '三道检查都要先于第一个写操作(Ensure-Namespace)'
-    Assert-Match -Text $restartGate.Extent.Text -Pattern '-RollingHandover:\(\$redisTopology\.HighAvailability -and \$redisTopologyVerdict -eq ''unchanged''\)' -Because '只有线上与本次都是高可用时才换成滚动交接的说法;1 → 3 仍是 redis-0 重启'
-    Assert-Match -Text $restartGate.Extent.Text -Pattern '-StatefulSetRecreated:\(\$redisTopologyVerdict -eq ''upgrade''\)' -Because '1 → 3 要先删再建 StatefulSet,拿线上对象预演必然被拒,闸直接按重启处理'
+    foreach ($name in @('Assert-RedisCoreRestartConfirmed', 'Test-RedisLiveMaxClients')) {
+        $found = @($commands | Where-Object { $_.GetCommandName() -eq $name })
+        Assert-Equal -Expected 1 -Actual $found.Count -Because "Apply-Infra 里 $name 恰好一处"
+        Assert-Match -Text (& $ifOf $found[0]) -Pattern '^\$coreRedisDeployed$' -Because "$name 只在部署核心时做"
+    }
+    $statefulSetWait = @($commands | Where-Object { $_.GetCommandName() -eq 'Wait-ForStatefulSetReady' -and $_.Extent.Text -match '-StatefulSetName "redis"' })
+    Assert-Equal -Expected 1 -Actual $statefulSetWait.Count -Because '等 sts/redis 就绪恰好一处'
+    Assert-Match -Text (& $ifOf $statefulSetWait[0]) -Pattern '^\$coreRedisDeployed$' -Because '不部署核心就不等它'
+    Assert-Match -Text $body -Pattern 'if \(\$coreRedisDeployed\) \{ \$infraManifests \+= "redis\.yaml" \}' -Because 'redis.yaml 只在部署核心时进 infra 清单列表'
+    $restartGate = @($commands | Where-Object { $_.GetCommandName() -eq 'Assert-RedisCoreRestartConfirmed' })[0]
+    $ensureNs = @($commands | Where-Object { $_.GetCommandName() -eq 'Ensure-Namespace' } | Sort-Object { $_.Extent.StartOffset })[0]
+    Assert-True -Condition ($restartGate.Extent.StartOffset -lt $ensureNs.Extent.StartOffset) -Because '重启闸先于第一个写操作(Ensure-Namespace)'
     Assert-Match -Text $restartGate.Extent.Text -Pattern '-StatefulSetYaml \$redisStatefulSetForGate\b' -Because '预演提交的 sts 是专门取出的那一份'
     $gateDoc = @($applyInfra.Body.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$redisStatefulSetForGate' }, $true))
     Assert-Equal -Expected 1 -Actual $gateDoc.Count -Because '预演用的 sts 只取一次'
     Assert-Match -Text $gateDoc[0].Right.Extent.Text -Pattern '^Get-RedisStatefulSetDocument -ManifestContent \$redisManifestRendered\.Replace\(\$script:RedisPodTemplateDigestPlaceholder, \$redisPodTemplateDigest\)$' -Because '预演的是循环里真正 apply 的同一份内容(同一次读盘,摘要占位已换成同一个值)'
-    $orphan = @($commands | Where-Object { $_.GetCommandName() -eq 'Invoke-Kubectl' -and $_.Extent.Text -match '--cascade=orphan' })
-    Assert-Equal -Expected 1 -Actual $orphan.Count -Because 'Apply-Infra 里只有一处 orphan 删除'
-    $guarded = $false
-    for ($node = $orphan[0].Parent; $null -ne $node; $node = $node.Parent) {
-        if ($node -is [System.Management.Automation.Language.IfStatementAst] -and $node.Clauses[0].Item1.Extent.Text -match '\$redisTopologyVerdict -eq ''upgrade''') { $guarded = $true; break }
-    }
-    Assert-True -Condition $guarded -Because 'orphan 删除 sts/redis 只能在 1 → 3(upgrade)分支里'
-    Assert-True -Condition ($orphan[0].Extent.StartOffset -gt $restartGate.Extent.StartOffset) -Because '重启闸必须在 orphan 删除之前读线上摘要,否则切换会落进「全新集群」的放行分支'
-    $liveChecks = @($commands | Where-Object { $_.GetCommandName() -eq 'Test-RedisLiveMaxClients' })
-    Assert-True -Condition ($liveChecks.Count -ge 1) -Because '夹具前提:-WaitReady 时有部署后核对'
-    foreach ($check in $liveChecks) {
-        Assert-Match -Text $check.Extent.Text -Pattern '-Nodes \$redisTopology\.Replicas' -Because '高可用形态每个节点都要核 maxclients(任何一个从都可能变成主)'
-    }
+    Assert-Equal -Expected 0 -Actual @($commands | Where-Object { $_.Extent.Text -match '--cascade=orphan' }).Count -Because '不再有 1 → 3 切换,Apply-Infra 不 orphan 删除 sts/redis'
+    $sync = @($commands | Where-Object { $_.GetCommandName() -eq 'Sync-RedisAuthSecret' })
+    Assert-Equal -Expected 2 -Actual $sync.Count -Because 'Secret redis-auth 两处同步:部署核心时在 redis.yaml 那一支(先于 apply),不部署时在循环之前(删掉残留)'
 }
 
-Test-Case '写路径门禁(AST):zone 写路径部署 zone Go 服务时先 Resolve-RedisTopologyFromLive,再打 Redis 总账;不经 Get-RedisTopology 之外的地方定拓扑' {
-    $gates = @($deadlineDeployAst.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.IfStatementAst] -and $_.Clauses[0].Item1.Extent.Text -match '^\$Command\s+-in\s+@\(\s*"zone-up"\s*,\s*"all-up"\s*,\s*"infra-up"\s*\)$' })
-    Assert-Equal -Expected 1 -Actual $gates.Count -Because '夹具前提:恰好一个写路径门禁块'
-    $gate = $gates[0]
-    $calls = @($gate.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] }, $true))
-    $resolve = @($calls | Where-Object { $_.GetCommandName() -eq 'Resolve-RedisTopologyFromLive' })
-    Assert-Equal -Expected 1 -Actual $resolve.Count -Because '写路径门禁里恰好一次 Resolve-RedisTopologyFromLive'
-    $parentIf = $resolve[0].Parent
-    while ($null -ne $parentIf -and $parentIf -isnot [System.Management.Automation.Language.IfStatementAst]) { $parentIf = $parentIf.Parent }
-    Assert-True -Condition ($null -ne $parentIf -and $parentIf.Clauses[0].Item1.Extent.Text -match 'Test-ZoneDbDeployed' -and $parentIf.Clauses[0].Item1.Extent.Text -match 'SkipInfra') -Because '只在 zone-up / all-up -SkipInfra 且部署 zone Go 服务(渲染 WAITAOF)时查线上'
-    $ledgerCalls = @($calls | Where-Object { $_.GetCommandName() -eq 'Write-RedisConnectionLedger' })
-    Assert-True -Condition ($ledgerCalls.Count -ge 1 -and $resolve[0].Extent.StartOffset -lt $ledgerCalls[0].Extent.StartOffset) -Because '跟随线上必须先于 Write-RedisConnectionLedger(它计算的拓扑要是跟随之后的)'
-    $topologyFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Get-RedisTopology' }, $true)
-    Assert-Match -Text $topologyFn.Body.Extent.Text -Pattern '\$script:RedisReplicasFollowedLive' -Because 'Get-RedisTopology 要认跟随线上记下的值'
+$coreProdInfraRun = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-ReleaseProfile', 'prod', '-BattleReplicas', '0')) -Env $ProdEnv
+$coreProdNoPasswordEnv = @{} + $ProdEnv
+$coreProdNoPasswordEnv.Remove('MMORPG_REDIS_PASSWORD')
+$coreProdNoPasswordRun = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-ReleaseProfile', 'prod', '-BattleReplicas', '0')) -Env $coreProdNoPasswordEnv
+
+Test-Case 'staging / prod 不部署核心单实例:infra-up DryRun 不 apply redis.yaml、不过重启闸、删掉残留的 Secret redis-auth,不要求 MMORPG_REDIS_PASSWORD;dev 缺省照常部署' {
+    foreach ($case in @(@{ Label = 'prod(给了 MMORPG_REDIS_PASSWORD)'; Run = $coreProdInfraRun }, @{ Label = 'prod(没给 MMORPG_REDIS_PASSWORD)'; Run = $coreProdNoPasswordRun })) {
+        Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label):infra-up DryRun 必须成功(prod 不读核心口令)。输出: $($case.Run.Output)"
+        $out = [string]$case.Run.Output
+        Assert-Match -Text $out -Pattern 'Redis core: not deployed \(the control and player domains are on their Redis Clusters\)' -Because "$($case.Label):入口一行说明不部署核心"
+        $coreDocs = @(foreach ($block in (Get-ManifestBlocks -Output $out)) {
+                foreach ($doc in (($block -replace "`r`n", "`n") -split '(?m)^---[ \t]*$')) {
+                    if ($doc -cmatch '(?m)^kind:[ \t]*StatefulSet[ \t]*$' -and $doc -cmatch '(?m)^  name:[ \t]*redis[ \t]*$') { $doc }
+                }
+            })
+        Assert-Equal -Expected 0 -Actual $coreDocs.Count -Because "$($case.Label):不渲染 sts/redis"
+        Assert-NotMatch -Text $out -Pattern 'Redis restart gate:' -Because "$($case.Label):不部署核心就不过重启闸"
+        Assert-Match -Text $out -Pattern '\[dry-run\] kubectl (?:\S+ )*delete secret redis-auth -n contract-battle-infra --ignore-not-found' -Because "$($case.Label):口令是空串,删掉残留的 Secret redis-auth"
+        Assert-NotMatch -Text $out -Pattern '# Secret redis-auth \(key password' -Because "$($case.Label):不建 Secret redis-auth"
+        Assert-True -Condition (-not $out.Contains([string]$ProdEnv.MMORPG_REDIS_PASSWORD)) -Because "$($case.Label):输出里不得出现口令明文"
+    }
+    Assert-Match -Text $battleInfraRun.Output -Pattern 'Redis core: deployed \(manifests/infra/redis\.yaml, single instance' -Because 'dev 缺省没开控制集群,部署核心'
+    $null = Select-RedisStatefulSetDocument -Output $battleInfraRun.Output
+    Assert-Match -Text $battleInfraRun.Output -Pattern 'Redis restart gate: skipped in DryRun' -Because 'dev 部署核心时照常过重启闸(DryRun 只打一行)'
 }
 
-Test-Case 'prod 档 zone-up DryRun(缺省高可用):打 Redis proxy ledger 一行(单个代理扛全部客户端的水位),不越线不告警;dev 档单实例不打' {
-    $RepoRoot = Get-RepoRoot
-    $limits = Get-RedisHaLimits -ManifestContent $redisHaManifestText -SingleInstanceMaxClients (Get-RedisMaxClientsFromManifest)
-    $warnAt = [int][Math]::Floor($limits.ProxyMaxConn * (Get-RedisConnectionPlan).WarnRatio)
-    Assert-Match -Text $prodRun.Output -Pattern ('Redis proxy ledger: proxy_maxconn=' + $limits.ProxyMaxConn + ' proxies=' + $limits.ProxyReplicas + '\+' + $limits.ProxyMaxSurge + ' warn_at=' + $warnAt + ' ') -Because '高可用形态的总账要再按单个代理的 PROXY_MAXCONN 算一次水位'
-    Assert-NotMatch -Text $prodRun.Output -Pattern '\[RedisConnectionLedger\]OverProxyWarnRatio:' -Because '规划档与本次部署都在单个代理的 80% 水位以内'
-    Assert-NotMatch -Text $devOut -Pattern 'Redis proxy ledger:' -Because 'dev 档缺省单实例,没有代理'
-    Assert-Match -Text $prodRun.Output -Pattern 'Redis topology: replicas=3 manifest=redis-ha\.yaml high_availability=true waitaof_replicas=1' -Because '入口一行带上 WAITAOF 副本份数'
-}
-
-# 包装入口透传 -RedisReplicas:做法同上面 -ConfirmRedisCoreRestart 的透传用例,只从 AST 取出透传函数,下游换成只打印参数的假脚本。
-function Invoke-RedisReplicasPassthrough {
-    param(
-        [Parameter(Mandatory = $true)][string]$SourceScript,
-        [Parameter(Mandatory = $true)][string]$WrapperFunction,
-        [Parameter(Mandatory = $true)][hashtable]$WrapperArgs,
-        [Parameter(Mandatory = $true)][int]$Replicas
-    )
-    $fakeDir = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-redis-replicas-passthrough-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $fakeDir | Out-Null
-    try {
-        $fakeBody = 'param([int]$RedisReplicas = -1) "RedisReplicas=$RedisReplicas"'
-        foreach ($downstream in @('k8s_deploy.ps1', 'k8s_image.ps1')) {
-            Set-Content -LiteralPath (Join-Path $fakeDir $downstream) -Value $fakeBody -Encoding utf8
-        }
-        $ScriptDir = $fakeDir
-        $RedisReplicas = $Replicas
-        function Get-ImageRef { return 'registry.invalid/test/mmorpg-node:0123456789ab' }
-        . ([scriptblock]::Create((Get-ToolScriptFunctionText -ScriptName $SourceScript -FunctionName $WrapperFunction)))
-        return (& $WrapperFunction @WrapperArgs | Out-String)
+Test-Case '核心高可用形态退役:-RedisReplicas 在三个入口脚本里都没有,给了就在参数绑定处失败;redis-ha.yaml 与拓扑 / 代理函数都删了' {
+    foreach ($scriptName in @('k8s_deploy.ps1', 'k8s_image.ps1', 'dev_tools.ps1')) {
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) $scriptName), [ref]$null, [ref]$null)
+        $params = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+        Assert-True -Condition ($params -notcontains 'RedisReplicas') -Because "$scriptName 的参数块不该再有 -RedisReplicas"
+        $reads = @($ast.FindAll({ param($a) $a -is [System.Management.Automation.Language.VariableExpressionAst] -and $a.VariablePath.UnqualifiedPath -eq 'RedisReplicas' }, $true))
+        Assert-Equal -Expected 0 -Actual $reads.Count -Because "$scriptName 不再读、不再透传 -RedisReplicas"
     }
-    finally {
-        Remove-Item -LiteralPath $fakeDir -Recurse -Force -ErrorAction SilentlyContinue
+    $run = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-RedisReplicas', '3')) -Env $BattleTestEnv
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "已删的参数不能被静默接受。输出: $($run.Output)"
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '参数绑定失败先于任何写操作'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis-ha.yaml'))) -Because 'redis-ha.yaml 已删'
+    $functionNames = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true) | ForEach-Object { $_.Name })
+    foreach ($retired in @('Get-RedisTopologyFor', 'Get-RedisTopology', 'Get-OwnerEpochMintWaitAOFNumReplicas', 'Get-RedisReplicasFromOrphanOrdinals', 'Get-LiveRedisReplicas',
+            'Get-RedisTopologyChangeVerdict', 'Assert-RedisTopologyChangeIsSafe', 'Get-RedisZoneTopologyDecision', 'Resolve-RedisTopologyFromLive',
+            'Assert-RedisPasswordSentinelSafe', 'Get-RedisHaLimits', 'Get-RedisHaScriptsDigest', 'Format-RedisLiveShape', 'Get-RedisLiveShapeManualFix')) {
+        Assert-True -Condition ($functionNames -notcontains $retired) -Because "$retired 随高可用形态退役"
     }
-}
-
-Test-Case 'dev_tools / k8s_image 的 -RedisReplicas:0 不透传(下游按档位 / 跟随线上),非 0 原样透传' {
-    $wrappers = @(
-        @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sDeploy'; Args = @{ K8sCommand = 'infra-up' } },
-        @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sDeploy'; Args = @{ K8sCommand = 'zone-up' } },
-        @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sImage'; Args = @{ ImageCommand = 'release-all' } },
-        @{ Source = 'k8s_image.ps1'; Function = 'Invoke-K8sDeploy'; Args = @{ DeployCommand = 'all-up' } }
-    )
-    foreach ($w in $wrappers) {
-        $label = "$($w.Source) $($w.Function) $(@($w.Args.Values) -join ' ')"
-        $absent = Invoke-RedisReplicasPassthrough -SourceScript $w.Source -WrapperFunction $w.Function -WrapperArgs $w.Args -Replicas 0
-        Assert-Match -Text $absent -Pattern 'RedisReplicas=-1' -Because "$label 没给时不得替运维定形态(0 也不传,下游按档位或跟随线上)"
-        $present = Invoke-RedisReplicasPassthrough -SourceScript $w.Source -WrapperFunction $w.Function -WrapperArgs $w.Args -Replicas 3
-        Assert-Match -Text $present -Pattern 'RedisReplicas=3' -Because "$label 必须把 -RedisReplicas 透传下去,否则从文档入口无法在 dev 档试高可用或做 1 → 3 切换"
-    }
+    Assert-NotMatch -Text $deadlineDeployAst.Extent.Text -Pattern 'Redis proxy ledger|OverProxyWarnRatio|redis-proxy' -Because '总账不再有代理那一行'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -6684,7 +6392,7 @@ Test-Case '资产通道默认关:scene / guild / trade 不带签名密钥与指�
         Assert-Match -Text $devOut -Pattern ('kubectl delete secret ' + $secretName + ' -n mmorpg-zone-contract-test --ignore-not-found') -Because 'zone 里的验签密钥同样不粘滞'
         Assert-Match -Text $guildInfraRun.Output -Pattern ('kubectl delete secret ' + $secretName + ' -n contract-battle-infra --ignore-not-found') -Because 'infra 里的签名密钥同样不粘滞'
     }
-    foreach ($policy in @('guild-grpc-allowlist', 'match-grpc-allowlist', 'chat-grpc-allowlist', 'friend-grpc-allowlist', 'trade-grpc-allowlist', 'mail-grpc-allowlist', 'rank-grpc-allowlist')) {
+    foreach ($policy in @('guild-grpc-allowlist', 'match-grpc-allowlist', 'chat-grpc-allowlist', 'friend-grpc-allowlist', 'trade-grpc-allowlist', 'mail-grpc-allowlist', 'rank-grpc-allowlist', 'payment-grpc-allowlist')) {
         Assert-Match -Text $guildInfraRun.Output -Pattern ('kubectl delete networkpolicy ' + $policy + ' -n contract-battle-infra --ignore-not-found') -Because 'infra 的准入策略同样不粘滞'
     }
     Assert-Match -Text $devOut -Pattern 'kubectl delete networkpolicy login-grpc-allowlist -n mmorpg-zone-contract-test --ignore-not-found' -Because 'zone 里 login 的准入策略同样不粘滞'
@@ -6881,12 +6589,16 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         @{ Name = 'trade-grpc-allowlist'; Svc = 'trade'; Allowed = 'client-rpc-router,data-service,client-rpc-router-canary'; Port = 50800 }
         @{ Name = 'mail-grpc-allowlist'; Svc = 'mail'; Allowed = 'client-rpc-router,data-service,rank,scene,scene-world,scene-instance,client-rpc-router-canary,rank-canary'; Port = 50900 }
         @{ Name = 'rank-grpc-allowlist'; Svc = 'rank'; Allowed = 'client-rpc-router,match,client-rpc-router-canary,match-canary'; Port = 51100 }
+        # payment 只收客户端请求(gate → 路由服)。渠道回调口与指标口算「清单里声明的其它端口」,对所有来源开放:回调来自集群外的负载均衡。
+        # 它不提供金丝雀副本(不在 $script:CanaryReadyGoSvcs 里),策略只选中它自己。
+        @{ Name = 'payment-grpc-allowlist'; Svc = 'payment'; Allowed = 'client-rpc-router,client-rpc-router-canary'; Port = 51200; NoCanary = $true }
     )
     foreach ($p in $policies) {
         $policy = Select-ManifestByName -Output $out -Name $p.Name
         Assert-True -Condition ($null -ne $policy) -Because "打开时 infra 里要有 $($p.Name)"
         $shape = Get-GrpcAllowListShape -Block $policy
-        Assert-Equal -Expected "$($p.Svc),$($p.Svc)-canary" -Actual ($shape.TargetApps -join ',') -Because '策略只选中本服务和它的金丝雀副本'
+        $expectedTargets = if ($p.NoCanary) { $p.Svc } else { "$($p.Svc),$($p.Svc)-canary" }
+        Assert-Equal -Expected $expectedTargets -Actual ($shape.TargetApps -join ',') -Because '策略只选中本服务和它的金丝雀副本(能起金丝雀的才有)'
         Assert-Equal -Expected $p.Allowed -Actual ($shape.AllowedApps -join ',') -Because "$($p.Svc) 的 gRPC 调用方名单;增删要同时改这里"
         Assert-Equal -Expected $p.Port -Actual $shape.GrpcPort -Because 'gRPC 口取 $GoSvcCatalogue 的 Port'
         $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) "deploy/k8s/manifests/go-svc/$($p.Svc).yaml"))
@@ -6897,6 +6609,57 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         $deployAt = Get-WorkloadOffset -Output $out -Kind 'StatefulSet' -Name $p.Svc
         Assert-True -Condition ($policyAt -ge 0 -and $deployAt -ge 0 -and $policyAt -lt $deployAt) -Because '策略先于 StatefulSet'
     }
+}
+
+# ── 内容安全 content-guard(docs/design/rename-and-content-safety.md §6)──
+Test-Case 'content-guard:目录、镜像名、清单端口对得上;dev 档 ConfigMap 镜像服务 yaml、不要求词库;非 dev 档缺省要求词库' {
+    Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
+    $deployScript = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'tools/scripts/k8s_deploy.ps1'))
+    $imageScript = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'tools/scripts/go_svc_image.ps1'))
+    $entryPattern = '(?m)^\s*"content-guard"\s*=\s*@\{[^}]*ImageName\s*=\s*"(?<n>[^"]+)"'
+    $deployName = [regex]::Match($deployScript, $entryPattern)
+    $imageName = [regex]::Match($imageScript, $entryPattern)
+    Assert-True -Condition ($deployName.Success -and $imageName.Success) -Because '部署目录与镜像目录都要有 content-guard 条目'
+    Assert-Equal -Expected $deployName.Groups['n'].Value -Actual $imageName.Groups['n'].Value -Because 'ImageName 必须一致,否则 infra-up 拉不到镜像'
+
+    $config = Select-ManifestByName -Output $guildInfraRun.Output -Name 'go-svc-content-guard-config'
+    Assert-True -Condition ($null -ne $config) -Because 'infra-up 产物里应当有 go-svc-content-guard-config'
+    $embedded = Get-ConfigMapEmbeddedText -Block $config -FileName 'content_guard.yaml'
+    $serviceYaml = 'go/content_guard/etc/content_guard.yaml'
+    foreach ($key in @('Name', 'Timeout', 'LeaseTTL', 'MaxTextBytes', 'Mode', 'RequireLexicon')) {
+        $value = Get-EtcValue -RelativePath $serviceYaml -KeyPath $key
+        Assert-Match -Text $embedded -Pattern ("(?m)^{0}: {1}\s*$" -f $key, [regex]::Escape($value)) -Because "dev 档的 $key 只从服务 yaml 取,不在部署脚本里另写一份"
+    }
+    Assert-Match -Text $embedded -Pattern ("(?m)^  Key: {0}\s*$" -f [regex]::Escape((Get-EtcValue -RelativePath $serviceYaml -KeyPath 'Etcd.Key'))) -Because 'Go 调用方按这个发现键找它,K8s 上不能留空'
+    Assert-Match -Text $embedded -Pattern '(?m)^ListenOn: 0\.0\.0\.0:50250\s*$' -Because '端口与目录、清单、服务 yaml 一致'
+    Assert-Match -Text $embedded -Pattern '(?m)^MetricsListenAddr: ":9290"\s*$' -Because '指标口与清单的 metrics 端口、就绪探针一致'
+    Assert-Match -Text $embedded -Pattern '(?m)^      - /content_guard\.ContentGuard/CheckText\s*$' -Because 'Stat 内容屏蔽必带:缺了服务拒启,带错了玩家的聊天原文会进日志'
+
+    $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/content-guard.yaml'))
+    Assert-Equal -Expected '9290,50250' -Actual ((Get-ManifestContainerPorts -ManifestContent $manifest | Sort-Object) -join ',') -Because '清单声明的端口 = gRPC 口 + 指标口'
+    Assert-Match -Text $manifest -Pattern 'readinessProbe:\s+httpGet:\s+path: /healthz\s+port: 9290' -Because '就绪看 /healthz:没加载到必需的词库的副本不接流量'
+    Assert-Match -Text $manifest -Pattern 'name: go-svc-content-guard-config' -Because '挂的是脚本生成的那份 ConfigMap'
+
+    # 非 dev 档:Mode 固定 pro、必须有词库。两个变量的缺省值就是非 dev 档的值,只有 dev 档才改成服务 yaml 的值。
+    Assert-Match -Text $deployScript -Pattern "(?m)^\s*\`$contentGuardMode\s*=\s*'pro'\s*$" -Because '非 dev 档 Mode 固定 pro'
+    Assert-Match -Text $deployScript -Pattern "(?m)^\s*\`$contentGuardRequireLexicon\s*=\s*'true'\s*$" -Because '非 dev 档必须要求词库:只凭内置的几个词对外判定等于没有屏蔽字'
+}
+
+Test-Case 'content-guard 的 gRPC 口准入(infra namespace):只放行收玩家文字的服务,开放端口覆盖清单声明的其它端口' {
+    # login(建角名)、guild(帮会名与公告)、chat(聊天)、scene(角色改名、宠物名)。它没有调用方签名,来源只靠这张名单限制。
+    $policy = Select-ManifestByName -Output $assetInfraRun.Output -Name 'content-guard-grpc-allowlist'
+    Assert-True -Condition ($null -ne $policy) -Because '打开时 infra 里要有 content-guard-grpc-allowlist'
+    $shape = Get-GrpcAllowListShape -Block $policy
+    Assert-Equal -Expected 'content-guard' -Actual ($shape.TargetApps -join ',') -Because '它不提供金丝雀副本,策略只选中它自己'
+    Assert-Equal -Expected 'login,guild,chat,scene,scene-world,scene-instance,guild-canary,chat-canary' -Actual ($shape.AllowedApps -join ',') -Because 'content-guard 的 gRPC 调用方名单;增删要同时改这里。客户端经路由服到不了它,名单里没有 client-rpc-router'
+    Assert-Equal -Expected 50250 -Actual $shape.GrpcPort -Because 'gRPC 口取 $GoSvcCatalogue 的 Port'
+    $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/content-guard.yaml'))
+    $declared = @(Get-ManifestContainerPorts -ManifestContent $manifest | Where-Object { $_ -ne 50250 })
+    Assert-Equal -Expected ($declared -join ',') -Actual ($shape.OpenPorts -join ',') -Because '清单里声明的其它端口(metrics / healthz)要对所有来源开放:kubelet 的就绪探针与 Prometheus 都连它'
+    $out = $assetInfraRun.Output -replace "`r`n", "`n"
+    $policyAt = $out.IndexOf('name: content-guard-grpc-allowlist')
+    $deployAt = Get-WorkloadOffset -Output $out -Kind 'Deployment' -Name 'content-guard'
+    Assert-True -Condition ($policyAt -ge 0 -and $deployAt -ge 0 -and $policyAt -lt $deployAt) -Because '策略先于 Deployment'
 }
 
 Test-Case 'login 的 gRPC 口准入(zone namespace):只放行 gate、路由服与 Java 网关,开放端口覆盖清单声明的其它端口' {
@@ -6973,7 +6736,7 @@ Test-Case 'gRPC 准入名单里的每个 app 标签都对应一个真实工作�
     # C++ 节点的清单由生成器渲染,没有静态 manifest;battle 的 Pod 标签在 lib/k8s_client_entry.ps1 的模板里,下面单独核对。
     $knownCpp = @('gate', 'battle', 'scene', 'scene-world', 'scene-instance')
     # Java 网关的清单在 java-svc 目录。
-    $javaSvc = @('gateway')
+    $javaSvc = @('gateway', 'mall')
     $deployScript = [IO.File]::ReadAllText((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'))
     $tableText = [regex]::Match($deployScript, '(?s)\$script:GrpcAllowLists = \[ordered\]@\{(?<t>.*?)\r?\n\}').Groups['t'].Value
     Assert-True -Condition ($tableText.Length -gt 0) -Because '夹具前提:找得到 $script:GrpcAllowLists'
@@ -7465,23 +7228,32 @@ Test-Case 'Add-SharedRedisAuthToManifest:口令为空原样返回;有口令注�
     $hashOnly = Invoke-SharedRedisAuthRender -Password $password -ReleaseProfileValue 'prod' -Manifest $lf -HashOnly
     Assert-True -Condition (-not $hashOnly.Contains("name: $SharedRedisEnvName")) -Because '-HashOnly(mail)不注入 SHARED_REDIS_PASSWORD'
     Assert-Equal -Expected $hash -Actual (Get-SharedRedisAuthHash -Doc $hashOnly -Label '-HashOnly') -Because '-HashOnly 写同一个指纹'
-    # 生成期保护(纵深防御,写路径入口的 Resolve-InjectedSecret 已先拒):未解析、非 dev 档为空、字符集不合格一律 throw,报错点名、不回显值。
+    # 生成期保护(纵深防御,写路径入口的 Resolve-InjectedSecret 已先拒):未解析、非 dev 档的集群来源为空、字符集不合格一律 throw,报错点名、不回显值。
+    # 核心来源(缺省 -SvcName 不在控制域名单里)在 prod 为空是合法的:核心单实例在非 dev 档不部署,口令恒为空串,空串 = 不注入。
+    $controlSource = { param($Value) [pscustomobject]@{ SecretName = 'redis-control-auth'; SecretKey = 'password'; Password = $Value; InputEnv = 'MMORPG_CONTROL_REDIS_PASSWORD'; Cluster = $true } }
     foreach ($bad in @(
-            @{ Why = '未解析'; Value = $null; Profile = 'dev'; Pattern = '未解析' }
-            @{ Why = 'prod 空口令'; Value = ''; Profile = 'prod'; Pattern = 'MMORPG_REDIS_PASSWORD' }
-            @{ Why = '含双引号'; Value = 'contract"shared-redis-03'; Profile = 'prod'; Pattern = 'MMORPG_REDIS_PASSWORD' }
+            @{ Why = '未解析'; Value = $null; Profile = 'dev'; Control = $false; Pattern = '未解析' }
+            @{ Why = 'prod 控制集群空口令'; Value = ''; Profile = 'prod'; Control = $true; Pattern = 'MMORPG_CONTROL_REDIS_PASSWORD' }
+            @{ Why = '核心口令含双引号'; Value = 'contract"shared-redis-03'; Profile = 'prod'; Control = $false; Pattern = 'MMORPG_REDIS_PASSWORD' }
+            @{ Why = '控制集群口令含双引号'; Value = 'contract"shared-redis-03'; Profile = 'prod'; Control = $true; Pattern = 'MMORPG_CONTROL_REDIS_PASSWORD' }
         )) {
         $message = $null
         try {
             $script:RedisPassword = $bad.Value
             $ReleaseProfile = $bad.Profile
-            Get-SharedRedisClientPassword | Out-Null
+            if ($bad.Control) { Get-SharedRedisClientPassword -Source (& $controlSource $bad.Value) | Out-Null } else { Get-SharedRedisClientPassword | Out-Null }
         }
         catch { $message = $_.Exception.Message }
         finally { Remove-Variable -Name RedisPassword -Scope Script -ErrorAction SilentlyContinue }
         Assert-True -Condition ($null -ne $message -and $message.Contains($bad.Pattern)) -Because "$($bad.Why):必须 throw 并点名($($bad.Pattern))"
         Assert-True -Condition ($null -eq $message -or -not $message.Contains('shared-redis-03')) -Because "$($bad.Why):报错不回显口令"
     }
+    try {
+        $script:RedisPassword = ''
+        $ReleaseProfile = 'prod'
+        Assert-Equal -Expected '' -Actual (Get-SharedRedisClientPassword) -Because 'prod 的核心来源为空串放行(核心不部署;match、mail 的回落段不注入)'
+    }
+    finally { Remove-Variable -Name RedisPassword -Scope Script -ErrorAction SilentlyContinue }
 }
 
 Test-Case '共享 Redis 口令(prod zone-up):整份 DryRun 输出不含口令;zone 级 Go 服务 ConfigMap 口令为空串并指名变量,Deployment 经控制集群的 Secret 注入、带只哈希口令的指纹;gateway 只写引用;db 不连' {
@@ -7732,9 +7504,12 @@ Test-Case '纯函数 Assert-SpringPlaceholderSafe:经 Spring 占位交给 gatewa
     $init = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Initialize-InjectedSecrets' }, $true)
     $loop = [regex]::Match($init.Extent.Text, 'foreach \(\$springSecret in @\((?<list>[\s\S]*?)\)\) \{\s*Assert-SpringPlaceholderSafe')
     Assert-True -Condition $loop.Success -Because 'Initialize-InjectedSecrets 里要有对 gateway 密钥逐个调用 Assert-SpringPlaceholderSafe 的循环'
-    foreach ($envName in @('MMORPG_GATE_TOKEN_SECRET', 'MMORPG_REDIS_PASSWORD', 'MMORPG_GATEWAY_ADMIN_API_KEY')) {
+    foreach ($envName in @('MMORPG_GATE_TOKEN_SECRET', 'MMORPG_GATEWAY_ADMIN_API_KEY')) {
         Assert-True -Condition ($loop.Groups['list'].Value.Contains("'$envName'")) -Because "$envName 经 Spring 占位交给 gateway,必须在检查清单里"
     }
+    # Redis 口令按 gateway 实际的来源查(控制端点:staging / prod 是控制集群的口令),不写死核心的变量名。
+    Assert-True -Condition ($loop.Groups['list'].Value.Contains('@{ Env = $gatewayRedisSource.InputEnv; Value = [string]$gatewayRedisSource.Password }')) -Because 'gateway 的 Redis 口令经 Spring 占位交给 gateway,必须在检查清单里'
+    Assert-True -Condition ($init.Extent.Text.Contains('$gatewayRedisSource = Get-SharedRedisClientSource -SvcName ''gateway''')) -Because 'Redis 口令的来源与注入同一处(Get-SharedRedisClientSource)'
     # 数据源口令不经 Spring 占位:gateway 是写者,口令写在 runtimeConfigSecret 的配置里,部署脚本既不解析也不注入它。
     Assert-True -Condition (-not $init.Extent.Text.Contains('MMORPG_GATEWAY_DB_PASSWORD')) -Because 'Initialize-InjectedSecrets 不再解析 gateway 数据源口令(它没有读者)'
 }
@@ -8358,6 +8133,431 @@ Test-Case '端到端 dev 档配 Apple(沙箱 Endpoint)+ Google:ConfigMap 只写 
     Assert-Equal -Expected ($expected.Keys -join ',') -Actual ($leafKeys -join ',') -Because 'AuthProviders 下只有这三个值:没开的渠道不写,Google 没给 Endpoint 就不写'
     Assert-NotMatch -Text $out -Pattern '# Secret login-(apple|google)' -Because '身份令牌渠道没有密钥,不建 Secret'
     Assert-Match -Text $out -Pattern 'login_apple=True login_google=True' -Because '写路径入口的摘要行要写明两个渠道都开了'
+}
+
+# ─────────────────────────────────────────────────────────────────
+# login 注销账号时撤销 Apple 令牌(docs/design/account-deletion.md §8.2):TeamId / KeyId 渲染与私钥注入
+# ─────────────────────────────────────────────────────────────────
+# 链路:-LoginAppleTeamId / -LoginAppleKeyId(只能与 -LoginAppleClientId 一起给)→ AuthProviders.Apple 的 TeamId、KeyId 与
+# PrivateKeyEnv(只写变量名);环境变量 MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY(.p8 文件原文)→ zone namespace 的单键 Secret
+# login-apple-signin(键 private-key)→ login 容器的同名变量(secretKeyRef)+ 指纹注解。走工作负载密钥目录,断言复用文件开头的工具。
+# Go 侧契约见 go/login/internal/config/config.go IdTokenAuthConf 与 auth_providers.go resolveAppleRevokeKey(三项都写或都不写)。
+# 纯函数沿用前几节抽出的那几个,另抽 Resolve-LoginAppleSignInPrivateKey;端到端另起 3 个 DryRun 子进程(都带 -SkipJavaSvc)。
+$loginAppleRevokeResolverAst = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Resolve-LoginAppleSignInPrivateKey' }, $false)
+if ($null -eq $loginAppleRevokeResolverAst) { throw 'k8s_deploy.ps1 缺少函数 Resolve-LoginAppleSignInPrivateKey(撤销 Apple 令牌的私钥解析被删了?后续断言无意义)' }
+Set-Item -Path 'Function:script:Resolve-LoginAppleSignInPrivateKey' -Value $loginAppleRevokeResolverAst.Body.GetScriptBlock()
+
+$LoginAppleTestTeamId = 'ABCDE12345'
+$LoginAppleTestKeyId = 'KEY0123456'
+# 外形同 .p8 文件(BEGIN / END PRIVATE KEY 之间只有 base64,结尾带换行),不是能用的私钥;用来断言它不出现在任何输出里。
+$LoginAppleTestPrivateKeyBody = 'MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgContractFixture0123456789abcdefghij'
+$LoginAppleTestPrivateKey = "-----BEGIN PRIVATE KEY-----`n$LoginAppleTestPrivateKeyBody`n-----END PRIVATE KEY-----`n"
+$LoginAppleRevokeArgs = @('-LoginAppleClientId', $LoginAppleTestClientId, '-LoginAppleTeamId', $LoginAppleTestTeamId, '-LoginAppleKeyId', $LoginAppleTestKeyId)
+# dev:Apple 登录 + 撤销令牌。
+$loginAppleRevokeDevRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + $LoginAppleRevokeArgs) -Env @{ MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY = $LoginAppleTestPrivateKey }
+# 负向:给了两项却没设私钥(dev 也没有回落值)。
+$loginAppleRevokeNoKeyRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + $LoginAppleRevokeArgs) -Env @{ MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY = '' }
+# 负向:只给 -LoginAppleTeamId。私钥给齐,拒绝只能来自参数门禁。
+$loginAppleRevokeHalfRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + @('-LoginAppleClientId', $LoginAppleTestClientId, '-LoginAppleTeamId', $LoginAppleTestTeamId)) `
+    -Env @{ MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY = $LoginAppleTestPrivateKey }
+
+Test-Case '纯函数 Get-LoginAuthProviderParamErrors(Apple 撤销令牌):TeamId / KeyId 不是 10 位大写字母或数字、只给一个、没给 -LoginAppleClientId 都报错并点名参数,不回显值;两个都给且带 ClientId 放行' {
+    $rejects = @(
+        @{ Why = 'TeamId 小写'; Args = @{ AppleClientId = $LoginAppleTestClientId; AppleTeamId = 'abcde12345'; AppleKeyId = $LoginAppleTestKeyId; ReleaseProfile = 'prod' }; Pattern = '-LoginAppleTeamId 须是 Apple 开发者账号里的 Team ID'; NoEcho = 'abcde12345' }
+        @{ Why = 'TeamId 只有 9 位'; Args = @{ AppleClientId = $LoginAppleTestClientId; AppleTeamId = 'ABCDE1234'; AppleKeyId = $LoginAppleTestKeyId; ReleaseProfile = 'dev' }; Pattern = '-LoginAppleTeamId 须是' }
+        @{ Why = 'KeyId 结尾带换行($ 会放过,必须 \z)'; Args = @{ AppleClientId = $LoginAppleTestClientId; AppleTeamId = $LoginAppleTestTeamId; AppleKeyId = "$LoginAppleTestKeyId`n"; ReleaseProfile = 'dev' }; Pattern = '-LoginAppleKeyId 须是 Apple 开发者账号里的私钥的 Key ID' }
+        @{ Why = 'KeyId 填成了文件名'; Args = @{ AppleClientId = $LoginAppleTestClientId; AppleTeamId = $LoginAppleTestTeamId; AppleKeyId = "AuthKey_$LoginAppleTestKeyId.p8"; ReleaseProfile = 'staging' }; Pattern = '-LoginAppleKeyId 须是'; NoEcho = 'AuthKey_' }
+        @{ Why = '只给 TeamId'; Args = @{ AppleClientId = $LoginAppleTestClientId; AppleTeamId = $LoginAppleTestTeamId; ReleaseProfile = 'prod' }; Pattern = '-LoginAppleTeamId 与 -LoginAppleKeyId 要么都给要么都不给' }
+        @{ Why = '只给 KeyId'; Args = @{ AppleClientId = $LoginAppleTestClientId; AppleKeyId = $LoginAppleTestKeyId; ReleaseProfile = 'dev' }; Pattern = '-LoginAppleTeamId 与 -LoginAppleKeyId 要么都给要么都不给' }
+        @{ Why = '两个都给却没给 ClientId'; Args = @{ AppleTeamId = $LoginAppleTestTeamId; AppleKeyId = $LoginAppleTestKeyId; ReleaseProfile = 'prod' }; Pattern = '给了 -LoginAppleTeamId / -LoginAppleKeyId 却没给 -LoginAppleClientId' }
+    )
+    foreach ($case in $rejects) {
+        $fnArgs = $case.Args
+        $errors = @(Get-LoginAuthProviderParamErrors @fnArgs)
+        Assert-True -Condition ($errors.Count -ge 1) -Because "$($case.Why):必须报错(fail-closed),不能放行"
+        Assert-Match -Text ($errors -join "`n") -Pattern $case.Pattern -Because "$($case.Why):错误文本必须点名参数与原因"
+        $message = ''
+        try { New-LoginAuthProvidersYaml @fnArgs -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET' | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern '^生成 login ConfigMap 的 AuthProviders 段失败:' -Because "$($case.Why):生成器用同一份规则纵深防御,必须 throw"
+        if ($case.NoEcho) {
+            Assert-NotMatch -Text (($errors -join "`n") + "`n" + $message) -Pattern ([regex]::Escape($case.NoEcho)) -Because "$($case.Why):报错只点参数名,不回显值"
+        }
+    }
+    $passes = @(
+        @{ Why = '两个都给且带 ClientId'; Args = @{ AppleClientId = $LoginAppleTestClientId; AppleTeamId = $LoginAppleTestTeamId; AppleKeyId = $LoginAppleTestKeyId; ReleaseProfile = 'prod' } }
+        @{ Why = '两个都不给(不开撤销)'; Args = @{ AppleClientId = $LoginAppleTestClientId; ReleaseProfile = 'prod' } }
+    )
+    foreach ($case in $passes) {
+        $fnArgs = $case.Args
+        $errors = @(Get-LoginAuthProviderParamErrors @fnArgs)
+        Assert-Equal -Expected 0 -Actual $errors.Count -Because "$($case.Why):合法组合必须放行(实际报错:$($errors -join ' | '))"
+    }
+}
+
+Test-Case '纯函数 New-LoginAuthProvidersYaml(Apple 撤销令牌):给了两项才写 TeamId / KeyId / PrivateKeyEnv,PrivateKeyEnv 是目录表 login-apple-signin 的变量名;没给时 Apple 段与之前逐字相同' {
+    $flat = ConvertFrom-YamlToFlatMap -Text (New-LoginAuthProvidersYaml -AppleClientId $LoginAppleTestClientId -AppleTeamId $LoginAppleTestTeamId -AppleKeyId $LoginAppleTestKeyId `
+            -ReleaseProfile 'prod' -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET')
+    Assert-Equal -Expected 'AuthProviders,AuthProviders.Apple,AuthProviders.Apple.ClientId,AuthProviders.Apple.TeamId,AuthProviders.Apple.KeyId,AuthProviders.Apple.PrivateKeyEnv' `
+        -Actual ((Get-FlatSubtreeKeys -Flat $flat -Path 'AuthProviders') -join ',') -Because '开撤销:Apple 段多 TeamId、KeyId、PrivateKeyEnv 三项,私钥本身不进配置'
+    Assert-True -Condition ($flat.Scalars['AuthProviders.Apple.TeamId'] -ceq $LoginAppleTestTeamId -and $flat.Scalars['AuthProviders.Apple.KeyId'] -ceq $LoginAppleTestKeyId) -Because 'TeamId / KeyId 原样写出'
+    # 生成器里的 PrivateKeyEnv 是字面量(它会被按 AST 单独抽出来跑,不读目录表):核对它与目录表的变量名逐字相同,否则 login 读的变量没人注入。
+    $catalogAssign = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:WorkloadSecretCatalog' }, $true)
+    $catalog = & ([scriptblock]::Create($catalogAssign.Right.Extent.Text))
+    Assert-True -Condition ($catalog.Contains('login-apple-signin')) -Because '工作负载密钥目录里要有 login-apple-signin'
+    Assert-Equal -Expected ([string]$catalog['login-apple-signin'].Env) -Actual $flat.Scalars['AuthProviders.Apple.PrivateKeyEnv'] -Because 'AuthProviders.Apple.PrivateKeyEnv 必须是目录表给 login-apple-signin 注入的那个变量'
+
+    $plain = New-LoginAuthProvidersYaml -AppleClientId $LoginAppleTestClientId -ReleaseProfile 'prod' -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET'
+    Assert-NotMatch -Text $plain -Pattern 'TeamId|KeyId|PrivateKeyEnv|APPLE_SIGNIN' -Because '不开撤销时 Apple 段只有 ClientId(与接入撤销之前逐字相同)'
+}
+
+Test-Case '纯函数 Resolve-LoginAppleSignInPrivateKey:任何档位缺失即 throw(dev 也没有回落值)并点名参数与环境变量;prod 占位串、不是 .p8 的 PEM 原文(文件路径、Key ID、${)都拒绝且不回显值;结尾带换行(LF / CRLF)的合法 PEM 原样返回' {
+    $envName = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY'
+    $saved = [System.Environment]::GetEnvironmentVariable($envName)
+    try {
+        $cases = @(
+            @{ Why = 'dev 未设置'; Profile = 'dev'; Value = ''; Pattern = '-LoginAppleTeamId / -LoginAppleKeyId 需要环境变量 MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY' }
+            @{ Why = 'staging 未设置'; Profile = 'staging'; Value = ''; Pattern = 'ReleaseProfile=staging 要求从环境变量 MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY' }
+            @{ Why = 'prod 占位串'; Profile = 'prod'; Value = 'change-me-in-production'; Pattern = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY.*仍是占位串' }
+            @{ Why = 'dev 填成文件路径'; Profile = 'dev'; Value = "C:/secrets/AuthKey_$LoginAppleTestKeyId.p8"; Pattern = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY 不是 \.p8 私钥的 PEM 原文'; NoEcho = $true }
+            @{ Why = 'prod 填成 Key ID'; Profile = 'prod'; Value = "$LoginAppleTestKeyId-$LoginAppleTestTeamId"; Pattern = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY 不是 \.p8 私钥的 PEM 原文'; NoEcho = $true }
+            @{ Why = 'dev PEM 中间是 ${'; Profile = 'dev'; Value = "-----BEGIN PRIVATE KEY-----`n`${APPLE_SIGNIN_KEY}`n-----END PRIVATE KEY-----`n"; Pattern = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY 不是 \.p8 私钥的 PEM 原文' }
+        )
+        foreach ($case in $cases) {
+            [System.Environment]::SetEnvironmentVariable($envName, $case.Value)
+            $message = ''
+            try { Resolve-LoginAppleSignInPrivateKey -ReleaseProfile $case.Profile | Out-Null } catch { $message = $_.Exception.Message }
+            Assert-Match -Text $message -Pattern $case.Pattern -Because "$($case.Why):必须在写操作之前 throw 并点名环境变量"
+            if ($case.NoEcho) {
+                Assert-NotMatch -Text $message -Pattern ([regex]::Escape($case.Value.Trim())) -Because "$($case.Why):报错不回显值"
+            }
+        }
+        foreach ($profileName in @('dev', 'staging', 'prod')) {
+            foreach ($pem in @($LoginAppleTestPrivateKey, ($LoginAppleTestPrivateKey -replace "`n", "`r`n"), $LoginAppleTestPrivateKey.TrimEnd("`n"))) {
+                [System.Environment]::SetEnvironmentVariable($envName, $pem)
+                $got = Resolve-LoginAppleSignInPrivateKey -ReleaseProfile $profileName
+                Assert-True -Condition ($got -ceq $pem) -Because "$profileName 档合法 PEM 必须原样返回(结尾的换行照收,不 trim、不改写)"
+            }
+        }
+    }
+    finally {
+        [System.Environment]::SetEnvironmentVariable($envName, $saved)
+    }
+}
+
+Test-Case 'login Apple 撤销令牌不配(基线):login 不注入私钥、不带它的指纹、不建 Secret login-apple-signin,残留的 Secret 照删;摘要行写明没开' {
+    $doc = Select-WorkloadSecretDoc -Output $devOut -Name 'login' -Label 'dev 基线 login'
+    Assert-NoWorkloadSecret -Doc $doc -SecretName 'login-apple-signin' -Label 'dev 基线 login'
+    Assert-NotMatch -Text $devOut -Pattern '# Secret login-apple-signin ' -Because '没给 -LoginAppleTeamId 就不建 Secret'
+    Assert-Match -Text $devOut -Pattern '(?m)^\[dry-run\] kubectl delete secret login-apple-signin -n \S+ --ignore-not-found\s*$' -Because '不粘滞:上次开过、这次没给,要删掉残留的私钥 Secret'
+    Assert-Match -Text $devOut -Pattern 'login_apple_revoke=False' -Because '写路径入口的摘要行要写明撤销没开'
+}
+
+Test-Case '端到端 dev 档配 Apple 与撤销令牌:Apple 段多 TeamId / KeyId / PrivateKeyEnv,私钥原文不进输出,经单键 Secret login-apple-signin 注入并带指纹,Secret 先于引用、开着时不删;摘要行写明开了' {
+    $run = $loginAppleRevokeDevRun
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dev 档配 Apple 撤销并给了私钥必须成功。输出: $($run.Output)"
+    $out = $run.Output
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-login-config')
+    $expected = [ordered]@{
+        'data.login.yaml.AuthProviders.Apple.ClientId'      = $LoginAppleTestClientId
+        'data.login.yaml.AuthProviders.Apple.TeamId'        = $LoginAppleTestTeamId
+        'data.login.yaml.AuthProviders.Apple.KeyId'         = $LoginAppleTestKeyId
+        'data.login.yaml.AuthProviders.Apple.PrivateKeyEnv' = $WorkloadSecretSpecs['login-apple-signin'].Env
+    }
+    foreach ($key in $expected.Keys) {
+        $actual = Get-FlatValue -Flat $flat -KeyPath $key
+        Assert-True -Condition ($actual -ceq $expected[$key]) -Because "$key 期望 '$($expected[$key])',实际 '$actual'"
+    }
+    $leafKeys = @(Get-FlatSubtreeKeys -Flat $flat -Path 'data.login.yaml.AuthProviders' | Where-Object { $flat.Scalars[$_] -ne '' })
+    Assert-Equal -Expected ($expected.Keys -join ',') -Actual ($leafKeys -join ',') -Because 'AuthProviders 下只有这四个值:私钥不进 ConfigMap,只写变量名'
+    Assert-True -Condition (-not $out.Contains($LoginAppleTestPrivateKeyBody)) -Because '私钥只经 Secret 进容器:ConfigMap、Secret 意图行、指纹注解、日志里都不得有原文'
+
+    $doc = Select-WorkloadSecretDoc -Output $out -Name 'login' -Label 'dev Apple 撤销 login'
+    Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'login-apple-signin' -Label 'dev Apple 撤销 login'
+    Assert-WorkloadSecretHash -Doc $doc -SecretName 'login-apple-signin' -Value $LoginAppleTestPrivateKey -Label 'dev Apple 撤销 login'
+    $pattern = '(?m)^\[dry-run\] kubectl apply -n \S+ -f -   # Secret login-apple-signin \(key private-key; value hidden\)'
+    $line = [regex]::Match($out, $pattern)
+    $firstRef = $out.IndexOf("- name: $($WorkloadSecretSpecs['login-apple-signin'].Env)")
+    Assert-True -Condition ($line.Success -and $firstRef -gt $line.Index) -Because 'Secret login-apple-signin 必须先于引用它的 login 落地(secretKeyRef 不是 optional)'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, $pattern).Count) -Because '同一次运行里 Secret login-apple-signin 只写一次'
+    Assert-NotMatch -Text $out -Pattern 'kubectl delete secret login-apple-signin ' -Because '开着撤销时不删自己要用的 Secret'
+    Assert-Match -Text $out -Pattern 'login_apple=True login_google=False login_apple_revoke=True' -Because '写路径入口的摘要行要写明 Apple 登录与撤销都开了(只展示是否启用,不展示密钥)'
+}
+
+Test-Case '端到端负向:dev 档给了 -LoginAppleTeamId / -LoginAppleKeyId 却没设 MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY,在任何 kubectl 写操作之前拒绝(没有回落值)' {
+    $run = $loginAppleRevokeNoKeyRun
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "缺私钥必须阻断:login 对缺失的 PrivateKeyEnv 拒启。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern '-LoginAppleTeamId / -LoginAppleKeyId 需要环境变量 MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY' -Because '错误必须点名参数与缺哪个环境变量'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '密钥解析(Initialize-InjectedSecrets)先于任何写操作,不留半截部署'
+}
+
+Test-Case '端到端负向:只给 -LoginAppleTeamId,在密钥解析与任何 kubectl 写操作之前拒绝,报的是参数原因(两个参数都传进了参数门禁)' {
+    $run = $loginAppleRevokeHalfRun
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "只给一项必须拒绝:login 对只写一项的配置拒启。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern 'login 第三方登录参数校验失败' -Because '拒绝来自写路径入口的参数门禁(Assert-LoginAuthProviderParams)'
+    Assert-Match -Text $run.Output -Pattern '-LoginAppleTeamId 与 -LoginAppleKeyId 要么都给要么都不给' -Because '错误必须点名两个参数与原因'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '参数门禁先于任何写操作'
+    Assert-NotMatch -Text $run.Output -Pattern 'Client entry: mode=' -Because '参数门禁排在入口摘要行之前,拒绝后不再往下走'
+}
+
+Test-Case 'Apple 撤销令牌源码形状:私钥只在 Initialize-InjectedSecrets 解析、只在部署 login 且给了 -LoginAppleTeamId 时;删残留用的 Secret 名就是工作负载密钥目录的键' {
+    $initFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Initialize-InjectedSecrets' }, $false)
+    Assert-True -Condition ($null -ne $initFn) -Because '要有 Initialize-InjectedSecrets'
+    $resolveCalls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Resolve-LoginAppleSignInPrivateKey' }, $true))
+    Assert-Equal -Expected 1 -Actual $resolveCalls.Count -Because '私钥只在一处解析'
+    Assert-True -Condition ($resolveCalls[0].Extent.StartOffset -gt $initFn.Extent.StartOffset -and $resolveCalls[0].Extent.EndOffset -lt $initFn.Extent.EndOffset) -Because '解析在 Initialize-InjectedSecrets 里(写路径入口懒解析,*-down / *-status 不被它挡住)'
+    $guard = $resolveCalls[0].Parent
+    while ($null -ne $guard -and $guard -isnot [System.Management.Automation.Language.IfStatementAst]) { $guard = $guard.Parent }
+    Assert-True -Condition ($null -ne $guard) -Because '解析必须包在 if 里'
+    $condition = $guard.Clauses[0].Item1.Extent.Text
+    Assert-True -Condition ($condition.Contains('$LoginAppleTeamId') -and $condition.Contains('Test-ZoneLoginDeployed')) -Because "只在部署 login 且给了 -LoginAppleTeamId 时解析(实际条件:$condition)"
+    $applyOne = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-OneGoSvc' }, $false)
+    Assert-True -Condition ($null -ne $applyOne) -Because '要有 Apply-OneGoSvc'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($applyOne.Extent.Text, '"delete", "secret", "login-apple-signin"').Count) -Because 'Apply-OneGoSvc 删残留的 Secret 名必须是目录表的键 login-apple-signin(名字不一致就删不到)'
+}
+
+# ─────────────────────────────────────────────────────────────────
+# login 实名与未成年人防沉迷(docs/design/real-name-anti-addiction.md §5.8):AntiAddiction 段渲染与国家系统 secretKey 注入
+# ─────────────────────────────────────────────────────────────────
+# 链路:-LoginNppaAppId / -LoginNppaBizId(要么都给要么都不给)+ 可选的 -LoginAntiAddictionExtraPlayDays 与三个地址 → login ConfigMap 顶层的
+# AntiAddiction 段(Enabled: true、两个小游戏渠道、Nppa.SecretKeyEnv 只写变量名);环境变量 MMORPG_LOGIN_NPPA_SECRET_KEY(32 位十六进制)→
+# zone namespace 的单键 Secret login-nppa(键 secret)→ login 容器的同名变量(secretKeyRef)+ 指纹注解。走工作负载密钥目录,断言复用文件开头的工具。
+# Go 侧契约见 go/login/internal/config/anti_addiction.go(AntiAddictionConf / NppaConf / resolveAntiAddiction)。
+# 另核 data-service 与 payment 两份清单都注入账号目录查实名的调用密钥(变量名取自 go/shared/accountdirectory/real_name.go)。
+# 防误关闸(线上现状 vs 本次参数)的用例在 k8s_login_auth_provider_guard.tests.ps1。
+# 纯函数按 AST 抽出来直接调;端到端另起 3 个 DryRun 子进程(都带 -SkipJavaSvc)。
+$LoginAntiAddictionFunctionNames = @('Get-LoginAntiAddictionParamErrors', 'New-LoginAntiAddictionYaml', 'Resolve-LoginNppaSecretKey')
+foreach ($loginAntiAddictionFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+    if ($LoginAntiAddictionFunctionNames -contains $loginAntiAddictionFnAst.Name) {
+        Set-Item -Path "Function:script:$($loginAntiAddictionFnAst.Name)" -Value $loginAntiAddictionFnAst.Body.GetScriptBlock()
+    }
+}
+foreach ($loginAntiAddictionFnName in $LoginAntiAddictionFunctionNames) {
+    if (-not (Test-Path "Function:$loginAntiAddictionFnName")) { throw "k8s_deploy.ps1 缺少函数 $loginAntiAddictionFnName(实名与防沉迷的渲染 / 校验 / 密钥解析被删了?后续断言无意义)" }
+}
+
+$LoginNppaTestAppId = 'nppa-contract-app-0123456789abcd'
+$LoginNppaTestBizId = '1101999999'
+# 32 位十六进制,大小写混写(login 的 hex.DecodeString 两种都认);与其它测试密钥都不同,用来断言它不出现在任何输出里。
+$LoginNppaTestSecretKey = '0f1e2d3c4b5a69788796a5b4c3d2e1F0'
+$LoginNppaTestCheckUrl = 'https://nppa-mock.contract:18443/idcard/authentication/check'
+$LoginNppaArgs = @('-LoginNppaAppId', $LoginNppaTestAppId, '-LoginNppaBizId', $LoginNppaTestBizId)
+# dev:开防沉迷,带两个可玩日与接口测试用的 CheckUrl(另两个地址不给 = 官方地址)。
+$loginAntiAddictionDevRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + $LoginNppaArgs + @(
+        '-LoginAntiAddictionExtraPlayDays', '2026-10-01,2026-10-08', '-LoginNppaCheckUrl', $LoginNppaTestCheckUrl)) -Env @{ MMORPG_LOGIN_NPPA_SECRET_KEY = $LoginNppaTestSecretKey }
+# 负向:给了 AppId / BizId 却没设 secretKey(dev 也没有回落值)。
+$loginAntiAddictionNoKeyRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + $LoginNppaArgs) -Env @{ MMORPG_LOGIN_NPPA_SECRET_KEY = '' }
+# 负向:只给 -LoginNppaAppId。secretKey 给齐,拒绝只能来自参数门禁。
+$loginAntiAddictionHalfRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + @('-LoginNppaAppId', $LoginNppaTestAppId)) -Env @{ MMORPG_LOGIN_NPPA_SECRET_KEY = $LoginNppaTestSecretKey }
+
+Test-Case '纯函数 New-LoginAntiAddictionYaml:不给 AppId 返回空串;给了写 Enabled / 两个小游戏渠道 / Nppa 三项,SecretKeyEnv 是目录表 login-nppa 的变量名;可玩日与地址只在给了时写;不写 DailySubmitLimit' {
+    Assert-Equal -Expected '' -Actual (New-LoginAntiAddictionYaml) -Because '不开防沉迷:login 模板不写 AntiAddiction(与接入前逐字相同)'
+
+    $plainText = New-LoginAntiAddictionYaml -AppId $LoginNppaTestAppId -BizId $LoginNppaTestBizId
+    $plain = ConvertFrom-YamlToFlatMap -Text $plainText
+    Assert-Equal -Expected 'AntiAddiction,AntiAddiction.Enabled,AntiAddiction.PlatformManagedAuthTypes,AntiAddiction.Nppa,AntiAddiction.Nppa.AppId,AntiAddiction.Nppa.BizId,AntiAddiction.Nppa.SecretKeyEnv' `
+        -Actual ((Get-FlatSubtreeKeys -Flat $plain -Path 'AntiAddiction') -join ',') -Because '只给 AppId / BizId:不写可玩日、地址与 DailySubmitLimit(login 的缺省是不加可玩日、官方地址、每日 5 次)'
+    Assert-Equal -Expected 'true' -Actual $plain.Scalars['AntiAddiction.Enabled'] -Because '开着'
+    Assert-Equal -Expected '[wechat_minigame, douyin_minigame]' -Actual $plain.Scalars['AntiAddiction.PlatformManagedAuthTypes'] -Because '两个小游戏渠道由平台实名并执行限制(login 没有缺省值,必须显式写)'
+    Assert-True -Condition ($plain.Scalars['AntiAddiction.Nppa.AppId'] -ceq $LoginNppaTestAppId -and $plain.Scalars['AntiAddiction.Nppa.BizId'] -ceq $LoginNppaTestBizId) -Because 'AppId / BizId 原样写出'
+    # 生成器里的 SecretKeyEnv 是字面量(它会被按 AST 单独抽出来跑,不读目录表):核对它与目录表的变量名逐字相同,否则 login 读的变量没人注入。
+    $catalogAssign = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:WorkloadSecretCatalog' }, $true)
+    $catalog = & ([scriptblock]::Create($catalogAssign.Right.Extent.Text))
+    Assert-True -Condition ($catalog.Contains('login-nppa')) -Because '工作负载密钥目录里要有 login-nppa'
+    Assert-Equal -Expected ([string]$catalog['login-nppa'].Env) -Actual $plain.Scalars['AntiAddiction.Nppa.SecretKeyEnv'] -Because 'AntiAddiction.Nppa.SecretKeyEnv 必须是目录表给 login-nppa 注入的那个变量'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($plainText, '(?m)^AntiAddiction:[ ]*$').Count) -Because '片段里顶层 AntiAddiction: 恰好一个'
+
+    $full = ConvertFrom-YamlToFlatMap -Text (New-LoginAntiAddictionYaml -AppId $LoginNppaTestAppId -BizId $LoginNppaTestBizId -ExtraPlayDays ' 2026-10-01 ,2026-10-08' `
+            -CheckUrl $LoginNppaTestCheckUrl -QueryUrl 'http://nppa-mock.contract:18080/idcard/authentication/query' -LoginoutUrl 'http://nppa-mock.contract:18080/behavior/collection/loginout')
+    Assert-Equal -Expected '["2026-10-01", "2026-10-08"]' -Actual $full.Scalars['AntiAddiction.ExtraPlayDays'] -Because '可玩日去掉两边空白,写成双引号的流式序列'
+    Assert-Equal -Expected $LoginNppaTestCheckUrl -Actual $full.Scalars['AntiAddiction.Nppa.CheckUrl'] -Because 'CheckUrl 原样写出'
+    Assert-Equal -Expected 'http://nppa-mock.contract:18080/idcard/authentication/query' -Actual $full.Scalars['AntiAddiction.Nppa.QueryUrl'] -Because 'QueryUrl 原样写出(http 也收:官方查询地址就是 http)'
+    Assert-Equal -Expected 'http://nppa-mock.contract:18080/behavior/collection/loginout' -Actual $full.Scalars['AntiAddiction.Nppa.LoginoutUrl'] -Because 'LoginoutUrl 原样写出'
+    Assert-True -Condition (-not $full.Scalars.Contains('AntiAddiction.DailySubmitLimit')) -Because '每日提交上限不写 = login 缺省 5'
+}
+
+Test-Case '纯函数 Get-LoginAntiAddictionParamErrors:AppId / BizId 只给一个、非法字符、不存在或写法不对的可玩日、带用户信息 / 查询串 / ${ / 越界端口的地址、没给 AppId 却给了可玩日或地址都报错并点名参数,不回显值;合法组合放行;New-LoginAntiAddictionYaml 对同样输入 throw' {
+    $ids = @{ AppId = $LoginNppaTestAppId; BizId = $LoginNppaTestBizId }
+    $rejects = @(
+        @{ Why = '只给 AppId'; Args = @{ AppId = $LoginNppaTestAppId }; Pattern = '-LoginNppaAppId and -LoginNppaBizId go together' }
+        @{ Why = '只给 BizId'; Args = @{ BizId = $LoginNppaTestBizId }; Pattern = '-LoginNppaAppId and -LoginNppaBizId go together' }
+        @{ Why = 'AppId 含双引号'; Args = @{ AppId = 'nppa"app'; BizId = $LoginNppaTestBizId }; Pattern = '-LoginNppaAppId only allows'; NoEcho = 'nppa"app' }
+        @{ Why = 'BizId 结尾带换行($ 会放过,必须 \z)'; Args = @{ AppId = $LoginNppaTestAppId; BizId = "$LoginNppaTestBizId`n" }; Pattern = '-LoginNppaBizId only allows' }
+        @{ Why = '可玩日不存在(2 月 30 日)'; Args = ($ids + @{ ExtraPlayDays = '2026-02-30' }); Pattern = '-LoginAntiAddictionExtraPlayDays must be' }
+        @{ Why = '可玩日月日没补零'; Args = ($ids + @{ ExtraPlayDays = '2026-10-01,2026-1-5' }); Pattern = '-LoginAntiAddictionExtraPlayDays must be' }
+        @{ Why = '可玩日多写了逗号(空项)'; Args = ($ids + @{ ExtraPlayDays = '2026-10-01,' }); Pattern = '-LoginAntiAddictionExtraPlayDays must be' }
+        @{ Why = '可玩日用了斜杠'; Args = ($ids + @{ ExtraPlayDays = '2026/10/01' }); Pattern = '-LoginAntiAddictionExtraPlayDays must be' }
+        @{ Why = '地址带用户信息'; Args = ($ids + @{ CheckUrl = 'https://ops:hunter2pw@nppa-mock.contract/check' }); Pattern = '-LoginNppaCheckUrl must be http\(s\)://host'; NoEcho = 'hunter2pw' }
+        @{ Why = '地址带查询串'; Args = ($ids + @{ QueryUrl = 'http://nppa-mock.contract/query?debug=1' }); Pattern = '-LoginNppaQueryUrl must be http\(s\)://host' }
+        @{ Why = '地址含 ${'; Args = ($ids + @{ LoginoutUrl = 'http://${NPPA_HOST}/loginout' }); Pattern = '-LoginNppaLoginoutUrl must be http\(s\)://host' }
+        @{ Why = '地址 scheme 大写'; Args = ($ids + @{ CheckUrl = 'HTTPS://nppa-mock.contract/check' }); Pattern = '-LoginNppaCheckUrl must be http\(s\)://host' }
+        @{ Why = '地址端口越界'; Args = ($ids + @{ QueryUrl = 'http://nppa-mock.contract:70000/query' }); Pattern = '-LoginNppaQueryUrl must be http\(s\)://host' }
+        @{ Why = '地址结尾带换行'; Args = ($ids + @{ LoginoutUrl = "http://nppa-mock.contract/loginout`n" }); Pattern = '-LoginNppaLoginoutUrl must be http\(s\)://host' }
+        @{ Why = '没给 AppId 却给了可玩日'; Args = @{ ExtraPlayDays = '2026-10-01' }; Pattern = '-LoginAntiAddictionExtraPlayDays was given without -LoginNppaAppId' }
+        @{ Why = '没给 AppId 却给了地址'; Args = @{ LoginoutUrl = 'http://nppa-mock.contract/loginout' }; Pattern = '-LoginNppaLoginoutUrl was given without -LoginNppaAppId' }
+    )
+    foreach ($case in $rejects) {
+        $fnArgs = $case.Args
+        $errors = @(Get-LoginAntiAddictionParamErrors @fnArgs)
+        Assert-True -Condition ($errors.Count -ge 1) -Because "$($case.Why):必须报错(fail-closed),不能放行"
+        Assert-Match -Text ($errors -join "`n") -Pattern $case.Pattern -Because "$($case.Why):错误文本必须点名参数与原因"
+        $message = ''
+        try { New-LoginAntiAddictionYaml @fnArgs | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern '^Cannot render the AntiAddiction section of the login ConfigMap: ' -Because "$($case.Why):生成器用同一份规则纵深防御,必须 throw"
+        if ($case.NoEcho) {
+            Assert-NotMatch -Text (($errors -join "`n") + "`n" + $message) -Pattern ([regex]::Escape($case.NoEcho)) -Because "$($case.Why):报错只点参数名,不回显值"
+        }
+    }
+    $passes = @(
+        @{ Why = '全空(不开防沉迷)'; Args = @{} }
+        @{ Why = '只给 AppId / BizId'; Args = $ids }
+        @{ Why = '可玩日带空白、含闰日;官方的三个地址(查询与上报是 http)'; Args = ($ids + @{ ExtraPlayDays = '2028-02-29, 2026-10-01'
+                    CheckUrl = 'https://api.wlc.nppa.gov.cn/idcard/authentication/check'; QueryUrl = 'http://api2.wlc.nppa.gov.cn/idcard/authentication/query'
+                    LoginoutUrl = 'http://api2.wlc.nppa.gov.cn/behavior/collection/loginout' }) }
+        @{ Why = '测试地址带端口'; Args = ($ids + @{ QueryUrl = 'http://127.0.0.1:18080/idcard/authentication/query' }) }
+    )
+    foreach ($case in $passes) {
+        $fnArgs = $case.Args
+        $errors = @(Get-LoginAntiAddictionParamErrors @fnArgs)
+        Assert-Equal -Expected 0 -Actual $errors.Count -Because "$($case.Why):合法组合必须放行(实际报错:$($errors -join ' | '))"
+    }
+}
+
+Test-Case '纯函数 Resolve-LoginNppaSecretKey:任何档位缺失即 throw(dev 也没有回落值)并点名参数与环境变量;prod 占位串、长度不是 32、不是十六进制、带结尾换行都拒绝且不回显值;合法值(大小写都认)原样返回' {
+    $envName = 'MMORPG_LOGIN_NPPA_SECRET_KEY'
+    $saved = [System.Environment]::GetEnvironmentVariable($envName)
+    try {
+        $cases = @(
+            @{ Why = 'dev 未设置'; Profile = 'dev'; Value = ''; Pattern = '-LoginNppaAppId needs the environment variable MMORPG_LOGIN_NPPA_SECRET_KEY' }
+            @{ Why = 'staging 未设置'; Profile = 'staging'; Value = ''; Pattern = 'ReleaseProfile=staging 要求从环境变量 MMORPG_LOGIN_NPPA_SECRET_KEY' }
+            @{ Why = 'prod 占位串'; Profile = 'prod'; Value = 'change-me-in-production'; Pattern = 'MMORPG_LOGIN_NPPA_SECRET_KEY.*仍是占位串' }
+            @{ Why = 'prod 只有 31 位'; Profile = 'prod'; Value = $LoginNppaTestSecretKey.Substring(1); Pattern = 'MMORPG_LOGIN_NPPA_SECRET_KEY.*长度 31 < 要求的 32'; NoEcho = $true }
+            @{ Why = 'dev 只有 31 位'; Profile = 'dev'; Value = $LoginNppaTestSecretKey.Substring(1); Pattern = 'MMORPG_LOGIN_NPPA_SECRET_KEY must be the 32-hex-character NPPA secretKey'; NoEcho = $true }
+            @{ Why = 'prod 33 位'; Profile = 'prod'; Value = "${LoginNppaTestSecretKey}0"; Pattern = 'MMORPG_LOGIN_NPPA_SECRET_KEY must be the 32-hex-character NPPA secretKey'; NoEcho = $true }
+            @{ Why = 'dev 不是十六进制'; Profile = 'dev'; Value = ('g' * 32); Pattern = 'MMORPG_LOGIN_NPPA_SECRET_KEY must be the 32-hex-character NPPA secretKey'; NoEcho = $true }
+            @{ Why = 'staging 结尾带换行(常见于从文件带进来)'; Profile = 'staging'; Value = "$LoginNppaTestSecretKey`n"; Pattern = 'MMORPG_LOGIN_NPPA_SECRET_KEY must be the 32-hex-character NPPA secretKey'; NoEcho = $true }
+        )
+        foreach ($case in $cases) {
+            [System.Environment]::SetEnvironmentVariable($envName, $case.Value)
+            $message = ''
+            try { Resolve-LoginNppaSecretKey -ReleaseProfile $case.Profile | Out-Null } catch { $message = $_.Exception.Message }
+            Assert-Match -Text $message -Pattern $case.Pattern -Because "$($case.Why):必须在写操作之前 throw 并点名环境变量"
+            if ($case.NoEcho) {
+                Assert-NotMatch -Text $message -Pattern ([regex]::Escape($case.Value.Trim())) -Because "$($case.Why):报错不回显值"
+            }
+        }
+        foreach ($profileName in @('dev', 'staging', 'prod')) {
+            foreach ($key in @($LoginNppaTestSecretKey, $LoginNppaTestSecretKey.ToLowerInvariant(), $LoginNppaTestSecretKey.ToUpperInvariant())) {
+                [System.Environment]::SetEnvironmentVariable($envName, $key)
+                Assert-True -Condition ((Resolve-LoginNppaSecretKey -ReleaseProfile $profileName) -ceq $key) -Because "$profileName 档合法的 secretKey 必须原样返回(不 trim、不改大小写)"
+            }
+        }
+    }
+    finally {
+        [System.Environment]::SetEnvironmentVariable($envName, $saved)
+    }
+}
+
+Test-Case 'login 实名与防沉迷不配(基线):ConfigMap 没有 AntiAddiction 段,login 不注入 secretKey、不带它的指纹、不建 Secret login-nppa,残留的照删;摘要行写明没开' {
+    $loginFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name 'go-svc-login-config')
+    $keys = @(Get-FlatSubtreeKeys -Flat $loginFlat -Path 'data.login.yaml.AntiAddiction')
+    Assert-Equal -Expected 0 -Actual $keys.Count -Because "不给 -LoginNppaAppId = 不写 AntiAddiction,产物与接入前逐字相同(实际出现:$($keys -join ', '))"
+    $doc = Select-WorkloadSecretDoc -Output $devOut -Name 'login' -Label 'dev 基线 login'
+    Assert-NoWorkloadSecret -Doc $doc -SecretName 'login-nppa' -Label 'dev 基线 login'
+    Assert-NotMatch -Text $doc -Pattern 'MMORPG_LOGIN_NPPA_EXPECTED_' -Because '不开防沉迷就不注入期望值:login 不比,本机与没开的部署照旧'
+    Assert-NotMatch -Text $devOut -Pattern '# Secret login-nppa ' -Because '没给 -LoginNppaAppId 就不建 Secret'
+    Assert-Match -Text $devOut -Pattern '(?m)^\[dry-run\] kubectl delete secret login-nppa -n \S+ --ignore-not-found\s*$' -Because '不粘滞:上次开过、这次没给,要删掉残留的 secretKey Secret'
+    Assert-Match -Text $devOut -Pattern 'login_anti_addiction=False' -Because '写路径入口的摘要行要写明没开'
+    Assert-NotMatch -Text $devOut -Pattern 'Login anti-addiction: on' -Because '没开时不打「要把 AntiAddiction 段抄进运行配置」的提示'
+}
+
+Test-Case '端到端 dev 档开实名与防沉迷:ConfigMap 写 AntiAddiction 段(可玩日、给了的地址),secretKey 不进输出,经单键 Secret login-nppa 注入并带指纹,Secret 先于引用、开着时不删;主容器明文注入期望的 AppId / BizId;摘要行与提示行写明开了' {
+    $run = $loginAntiAddictionDevRun
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dev 档开防沉迷并给了 secretKey 必须成功。输出: $($run.Output)"
+    $out = $run.Output
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-login-config')
+    $expected = [ordered]@{
+        'data.login.yaml.AntiAddiction.Enabled'                  = 'true'
+        'data.login.yaml.AntiAddiction.PlatformManagedAuthTypes' = '[wechat_minigame, douyin_minigame]'
+        'data.login.yaml.AntiAddiction.ExtraPlayDays'            = '["2026-10-01", "2026-10-08"]'
+        'data.login.yaml.AntiAddiction.Nppa.AppId'               = $LoginNppaTestAppId
+        'data.login.yaml.AntiAddiction.Nppa.BizId'               = $LoginNppaTestBizId
+        'data.login.yaml.AntiAddiction.Nppa.SecretKeyEnv'        = $WorkloadSecretSpecs['login-nppa'].Env
+        'data.login.yaml.AntiAddiction.Nppa.CheckUrl'            = $LoginNppaTestCheckUrl
+    }
+    foreach ($key in $expected.Keys) {
+        $actual = Get-FlatValue -Flat $flat -KeyPath $key
+        Assert-True -Condition ($actual -ceq $expected[$key]) -Because "$key 期望 '$($expected[$key])',实际 '$actual'"
+    }
+    $leafKeys = @(Get-FlatSubtreeKeys -Flat $flat -Path 'data.login.yaml.AntiAddiction' | Where-Object { $flat.Scalars[$_] -ne '' })
+    Assert-Equal -Expected ($expected.Keys -join ',') -Actual ($leafKeys -join ',') -Because 'AntiAddiction 下只有这些值:secretKey 不进 ConfigMap,只写变量名;没给的两个地址不写'
+    Assert-True -Condition (-not $out.Contains($LoginNppaTestSecretKey)) -Because 'secretKey 只经 Secret 进容器:ConfigMap、Secret 意图行、指纹注解、日志里都不得有原文'
+
+    $doc = Select-WorkloadSecretDoc -Output $out -Name 'login' -Label 'dev 防沉迷 login'
+    Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'login-nppa' -Label 'dev 防沉迷 login'
+    Assert-WorkloadSecretHash -Doc $doc -SecretName 'login-nppa' -Value $LoginNppaTestSecretKey -Label 'dev 防沉迷 login'
+    $docText = $doc -replace "`r`n", "`n"
+    foreach ($expected in @(@('MMORPG_LOGIN_NPPA_EXPECTED_APP_ID', $LoginNppaTestAppId), @('MMORPG_LOGIN_NPPA_EXPECTED_BIZ_ID', $LoginNppaTestBizId))) {
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($docText, '(?m)^[ ]+- name: ' + $expected[0] + '[ ]*\n[ ]+value: "' + [regex]::Escape($expected[1]) + '"[ ]*$').Count) `
+            -Because "login 主容器明文注入一份 $($expected[0]):运行配置漏抄或抄错 AntiAddiction 时 login 拒启,而不是带着关掉的防沉迷起来"
+    }
+    $pattern = '(?m)^\[dry-run\] kubectl apply -n \S+ -f -   # Secret login-nppa \(key secret; value hidden\)'
+    $line = [regex]::Match($out, $pattern)
+    $firstRef = $out.IndexOf("- name: $($WorkloadSecretSpecs['login-nppa'].Env)")
+    Assert-True -Condition ($line.Success -and $firstRef -gt $line.Index) -Because 'Secret login-nppa 必须先于引用它的 login 落地(secretKeyRef 不是 optional)'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, $pattern).Count) -Because '同一次运行里 Secret login-nppa 只写一次'
+    Assert-NotMatch -Text $out -Pattern 'kubectl delete secret login-nppa ' -Because '开着时不删自己要用的 Secret'
+    Assert-Match -Text $out -Pattern 'login_apple_revoke=False login_anti_addiction=True' -Because '写路径入口的摘要行要写明防沉迷开了(只展示是否启用,不展示密钥)'
+    Assert-Match -Text $out -Pattern 'Login anti-addiction: on \([^\r\n]*copy the AntiAddiction section of go-svc-login-config into it' -Because 'login 读 runtimeConfigSecret:开着时提醒运维把这一段抄进去,否则防沉迷是关的'
+    Assert-Match -Text $out -Pattern '\[dry-run\] Skipping login anti-addiction \(AntiAddiction\) cluster-state preflight' -Because 'DryRun 要写明跳过了防误关闸'
+}
+
+Test-Case '端到端负向:dev 档给了 -LoginNppaAppId / -LoginNppaBizId 却没设 MMORPG_LOGIN_NPPA_SECRET_KEY,在任何 kubectl 写操作之前拒绝(没有回落值)' {
+    $run = $loginAntiAddictionNoKeyRun
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "缺 secretKey 必须阻断:login 对缺失的 SecretKeyEnv 拒启。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern '-LoginNppaAppId needs the environment variable MMORPG_LOGIN_NPPA_SECRET_KEY' -Because '错误必须点名参数与缺哪个环境变量'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '密钥解析(Initialize-InjectedSecrets)先于任何写操作,不留半截部署'
+}
+
+Test-Case '端到端负向:只给 -LoginNppaAppId,在密钥解析与任何 kubectl 写操作之前拒绝,报的是参数原因' {
+    $run = $loginAntiAddictionHalfRun
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "只给 AppId 必须拒绝:login 对只写一项的配置拒启。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern 'login anti-addiction parameter check failed' -Because '拒绝来自写路径入口的参数门禁'
+    Assert-Match -Text $run.Output -Pattern '-LoginNppaAppId and -LoginNppaBizId go together' -Because '错误必须点名两个参数与原因'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '参数门禁先于任何写操作'
+    Assert-NotMatch -Text $run.Output -Pattern 'Client entry: mode=' -Because '参数门禁排在入口摘要行之前,拒绝后不再往下走'
+}
+
+Test-Case '实名与防沉迷源码形状:secretKey 只在 Initialize-InjectedSecrets 解析、只在部署 login 且给了 -LoginNppaAppId 时;删残留用的 Secret 名就是工作负载密钥目录的键;期望值的变量名与 login 读的 Go 常量逐字相同' {
+    $initFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Initialize-InjectedSecrets' }, $false)
+    Assert-True -Condition ($null -ne $initFn) -Because '要有 Initialize-InjectedSecrets'
+    $resolveCalls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Resolve-LoginNppaSecretKey' }, $true))
+    Assert-Equal -Expected 1 -Actual $resolveCalls.Count -Because 'secretKey 只在一处解析'
+    Assert-True -Condition ($resolveCalls[0].Extent.StartOffset -gt $initFn.Extent.StartOffset -and $resolveCalls[0].Extent.EndOffset -lt $initFn.Extent.EndOffset) -Because '解析在 Initialize-InjectedSecrets 里(写路径入口懒解析,*-down / *-status 不被它挡住)'
+    $guard = $resolveCalls[0].Parent
+    while ($null -ne $guard -and $guard -isnot [System.Management.Automation.Language.IfStatementAst]) { $guard = $guard.Parent }
+    Assert-True -Condition ($null -ne $guard) -Because '解析必须包在 if 里'
+    $condition = $guard.Clauses[0].Item1.Extent.Text
+    Assert-True -Condition ($condition.Contains('$LoginNppaAppId') -and $condition.Contains('Test-ZoneLoginDeployed')) -Because "只在部署 login 且给了 -LoginNppaAppId 时解析(实际条件:$condition)"
+    $applyOne = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-OneGoSvc' }, $false)
+    Assert-True -Condition ($null -ne $applyOne) -Because '要有 Apply-OneGoSvc'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($applyOne.Extent.Text, '"delete", "secret", "login-nppa"').Count) -Because 'Apply-OneGoSvc 删残留的 Secret 名必须是目录表的键 login-nppa(名字不一致就删不到)'
+    # 期望值的变量名两边各写一份字面量:login 读的(Go 常量)与 Apply-OneGoSvc 注入的必须逐字相同,否则 login 一直不比。
+    $goText = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/login/internal/config/anti_addiction.go'))
+    foreach ($pair in @(@('ExpectedNppaAppIdEnv', 'MMORPG_LOGIN_NPPA_EXPECTED_APP_ID'), @('ExpectedNppaBizIdEnv', 'MMORPG_LOGIN_NPPA_EXPECTED_BIZ_ID'))) {
+        Assert-Match -Text $goText -Pattern ('(?m)^\s*' + $pair[0] + '\s*=\s*"' + $pair[1] + '"') -Because "login 读的变量 $($pair[0]) 必须是部署注入的 $($pair[1])"
+        Assert-True -Condition ($applyOne.Extent.Text.Contains($pair[1] + ' = ')) -Because "Apply-OneGoSvc 要注入 $($pair[1])"
+    }
+}
+
+Test-Case '账号目录查实名的调用密钥:data-service 与 payment 两份清单都从 domain-service-secrets 的 account-directory-payment 注入(不是 optional),变量名与 Go 的 accountdirectory.PaymentSecretEnv 一致' {
+    $goText = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/shared/accountdirectory/real_name.go'))
+    $goEnv = [regex]::Match($goText, '(?m)^\s*PaymentSecretEnv\s*=\s*"(?<v>[A-Z0-9_]+)"')
+    Assert-True -Condition $goEnv.Success -Because 'go/shared/accountdirectory/real_name.go 里要有 PaymentSecretEnv 常量'
+    foreach ($file in @('data-service.yaml', 'payment.yaml')) {
+        $text = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) "deploy/k8s/manifests/go-svc/$file")) -replace "`r`n", "`n"
+        $pattern = '(?m)^[ ]+- name: ' + [regex]::Escape($goEnv.Groups['v'].Value) + '\n[ ]+valueFrom:\n[ ]+secretKeyRef: \{name: domain-service-secrets, key: account-directory-payment, optional: false\}$'
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($text, $pattern).Count) -Because "${file}:与 trade 那把同一写法、只注入一次;缺键时 Pod 起不来,而不是带着空密钥把查实名停掉"
+    }
 }
 # ─────────────────────────────────────────────────────────────────
 # 路由服预算链(docs/design/client-request-ordering.md §5.2 不变式 I1)
@@ -9010,16 +9210,13 @@ Test-Case '路由开关已删:参数块里没有,给了就在参数绑定处失�
     }
 }
 
-Test-Case '共享 Redis 拓扑:Apply-Infra 选清单与 scene-manager 的 WAITAOF 同一个来源(Get-RedisTopology),不另存常量' {
-    # 只看 `=` 赋值(初值表);`+=` 追加的是 loki.yaml 这类条件项,与 Redis 拓扑无关。
+Test-Case '核心 Redis 与 WAITAOF:Apply-Infra 的清单列表只在部署核心时加 redis.yaml;scene-manager 的 WaitAOFNumReplicas 按玩家域所在的 Redis 取(集群 1,核心 0),不另存常量' {
+    # 只看 `=` 赋值(初值表):核心清单只能以 `+=` 条件追加,初值表里不能有它。
     $infraAssign = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$infraManifests' -and $a.Operator -eq [System.Management.Automation.Language.TokenKind]::Equals }, $true))
     Assert-Equal -Expected 1 -Actual $infraAssign.Count -Because 'Apply-Infra 里 $infraManifests 的初值表只能有一处'
-    $manifests = $infraAssign[0].Right.Extent.Text
-    Assert-True -Condition ($manifests -match '\$redisTopology\.Manifest' -and $manifests -notmatch 'redis(-ha)?\.yaml') -Because "Apply-Infra 的共享 Redis 清单只能取自 `$redisTopology.Manifest(实际 $manifests)"
-    $applyInfra = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-Infra' }, $true)
-    Assert-Match -Text $applyInfra.Body.Extent.Text -Pattern '\$redisTopology\s*=\s*Get-RedisTopology\b' -Because 'Apply-Infra 的拓扑只从 Get-RedisTopology 取'
+    Assert-NotMatch -Text $infraAssign[0].Right.Extent.Text -Pattern 'redis(-ha)?\.yaml' -Because '核心清单不在初值表里,只在 $coreRedisDeployed 时追加'
     $generator = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'New-GoSvcConfigMapYaml' }, $true)
-    Assert-Match -Text $generator.Body.Extent.Text -Pattern ([regex]::Escape('Get-OwnerEpochMintWaitAOFNumReplicas -Topology (Get-RedisTopology)')) -Because 'scene-manager 的 WAITAOF 副本份数每次现取,zone 写路径跟随线上之后的渲染才跟着变'
+    Assert-Match -Text $generator.Body.Extent.Text -Pattern ([regex]::Escape("`$sceneManagerWaitAOFNumReplicas = if ((Get-PlayerRedisTopology).Enabled) { '1' } else { '0' }")) -Because '铸造的键在玩家域:建了玩家域集群取 1,没建(只有 dev,在核心单实例上)取 0'
 }
 
 Test-Case 'guild:go/guild 已删合服标记段,ConfigMap 不再写 MergeMarkerRedis / RequireRouteReady' {
@@ -9046,7 +9243,7 @@ function Get-OutputIndex {
     return $at
 }
 
-$GlobalSvcAfterDataService = @('chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade')
+$GlobalSvcAfterDataService = @('chat', 'friend', 'guild', 'mail', 'match', 'player-inbox', 'rank', 'trade', 'payment')
 $GlobalOrderArgs = @('-Command', 'all-up', '-DryRun', '-SkipPreflight', '-SkipJavaSvc', '-WaitReady', '-KafkaBrokers', '3', '-InfraNamespace', 'contract-order-infra', '-BattleReplicas', '0',
     '-ZonesConfigPath', (Join-Path (Get-RepoRoot) 'deploy/k8s/zones.sample.json'), '-GoSvcRegistry', 'registry.invalid/test', '-NodeImage', 'registry.invalid/test/mmorpg-node:0123456789ab')
 $globalOrderAllUp = Invoke-DeployDryRun -Arguments $GlobalOrderArgs -Env $BattleTestEnv
@@ -9214,17 +9411,13 @@ Test-Case 'guild / trade 的 startupProbe 预算盖住 shared/mergedzone.Startup
     }
 }
 
-Test-Case '共享 Redis 启动参数:redis.yaml 的两条 exec、redis-ha.yaml 的 redis-server、docker-compose 的 redis 都显式 --enable-debug-command no' {
+Test-Case '核心 Redis 启动参数:redis.yaml 的两条 exec、docker-compose 的 redis 都显式 --enable-debug-command no' {
     $redisYaml = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis.yaml')) -replace "`r`n", "`n"
     $execLines = @([regex]::Matches($redisYaml, '(?m)^[ \t]*exec redis-server [^\n]*$') | ForEach-Object { $_.Value })
     Assert-True -Condition ($execLines.Count -ge 2) -Because "redis.yaml 有口令、无口令两条 exec redis-server(实际 $($execLines.Count) 条)"
     foreach ($line in $execLines) {
         Assert-Match -Text $line -Pattern '--enable-debug-command[ \t]+no(?:[ \t]|$)' -Because "每一条 exec 都要关掉 DEBUG(DEBUG RELOAD 在进程内替换数据而 run_id / replid 不变):$($line.Trim())"
     }
-    $haYaml = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis-ha.yaml')) -replace "`r`n", "`n"
-    $haStart = [regex]::Match($haYaml, '(?ms)^[ \t]*set -- redis-server \\\n(?<args>(?:[^\n]*\\\n)*[^\n]*)$')
-    Assert-True -Condition $haStart.Success -Because 'redis-ha.yaml 的启动脚本里应当有 set -- redis-server \ 续行的参数表'
-    Assert-Match -Text $haStart.Groups['args'].Value -Pattern '--enable-debug-command no' -Because 'redis-ha 的每个节点同样关掉 DEBUG(被提升的副本也会成为主)'
     $compose = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/docker-compose.yml')) -replace "`r`n", "`n"
     $redisService = [regex]::Match($compose, '(?ms)^  redis:\n(?<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\z)')
     Assert-True -Condition $redisService.Success -Because 'docker-compose.yml 里应当有 redis 服务'

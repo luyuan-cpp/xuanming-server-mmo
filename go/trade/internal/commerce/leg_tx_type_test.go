@@ -50,3 +50,29 @@ func TestLegTxType(t *testing.T) {
 		})
 	}
 }
+
+// 退回腿只有付回给托管它的那个角色(escrow_owner_id)才算退回:人工改绑把收件人换成同账号的另一名角色之后,
+// 那名角色拿到的不是自己托管的东西,按成交所得判,照常过获取封禁(2026-11-20 独立评审)。交付腿不看托管者。
+func TestLegTxTypeReturnsOnlyToTheEscrowOwner(t *testing.T) {
+	ret := uint32(rollbackpb.TransactionType_TX_AUCTION_RETURN)
+	buy := uint32(rollbackpb.TransactionType_TX_AUCTION_BUY)
+	cases := []struct {
+		name string
+		leg  *tradepb.TradeCommerceLeg
+		want uint32
+	}{
+		{"付回本人", &tradepb.TradeCommerceLeg{Role: "seller_return", Stream: 4, PlayerId: 7, EscrowOwnerId: 7}, ret},
+		{"改绑后付给另一名角色", &tradepb.TradeCommerceLeg{Role: "seller_return", Stream: 4, PlayerId: 9, EscrowOwnerId: 7}, buy},
+		{"改绑后的补发腿", &tradepb.TradeCommerceLeg{Role: "buyer_debit/refund#2", Stream: 4, PlayerId: 9, EscrowOwnerId: 7}, buy},
+		{"差价退回付回买家本人", &tradepb.TradeCommerceLeg{Role: "buyer_surplus", Stream: 4, PlayerId: 3, EscrowOwnerId: 3}, ret},
+		{"没记托管者的旧腿按角色名判", &tradepb.TradeCommerceLeg{Role: "bid_return", Stream: 4, PlayerId: 9}, ret},
+		{"交付腿不看托管者", &tradepb.TradeCommerceLeg{Role: "buyer_receive", Stream: 4, PlayerId: 2, EscrowOwnerId: 2}, buy},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := legTxType(tc.leg); got != tc.want {
+				t.Fatalf("legTxType(%v) = %d, want %d", tc.leg, got, tc.want)
+			}
+		})
+	}
+}

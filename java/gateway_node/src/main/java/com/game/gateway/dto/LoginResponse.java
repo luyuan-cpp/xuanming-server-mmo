@@ -47,6 +47,11 @@ public class LoginResponse {
     private Integer accountDeletionState;         // 0 正常、1 冷静期、2 执行中
     private Long accountDeletionExecuteAfter;     // 冷静期满的时刻,Unix 秒;状态 0 时为 0
     private Long previousAccountDeletedAt;        // 这次建了新账号、而同一身份以前注销完成过:完成时刻,Unix 秒;其余 0
+    // 防沉迷状态(docs/design/real-name-anti-addiction.md §5.3);部署没开防沉迷时省略。
+    private AntiAddictionStatus antiAddiction;
+
+    public AntiAddictionStatus getAntiAddiction() { return antiAddiction; }
+    public void setAntiAddiction(AntiAddictionStatus antiAddiction) { this.antiAddiction = antiAddiction; }
 
     public static LoginResponse ok(List<PlayerInfo> players,
                                    String accessToken, String refreshToken,

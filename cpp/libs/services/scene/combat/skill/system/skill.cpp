@@ -182,7 +182,7 @@ void SkillSystem::StartCooldown(entt::entity caster, const SkillTable* skillTabl
 	if (skillTable->cooldown_id() == 0) {
 		return;  // 0 = 无冷却组，Cooldown 表 id 从 1 起。
 	}
-	// 冷却表的唯一写入口,第一次启动冷却时延迟创建。
+	// 运行时冷却表的唯一写入口,第一次启动冷却时延迟创建(加载时按存档挂上的是 RestoreCooldowns)。
 	auto& coolDownComp = tlsEcs.actorRegistry.get_or_emplace<CooldownTimeListComp>(caster);
 	CooldownTimeComp comp;
 	comp.set_start(TimeSystem::NowMilliseconds());
@@ -190,6 +190,24 @@ void SkillSystem::StartCooldown(entt::entity caster, const SkillTable* skillTabl
 
 	const auto coolDownList = coolDownComp.mutable_cooldown_list();
 	(*coolDownList)[skillTable->cooldown_id()] = comp;
+}
+
+void SkillSystem::RestoreCooldowns(const entt::entity caster, const CooldownTimeListComp& saved) {
+	if (saved.cooldown_list().empty()) {
+		return;  // 没有记录 = 没有冷却,按需状态不挂空表
+	}
+	if (!tlsEcs.actorRegistry.valid(caster)) {
+		LOG_ERROR << "RestoreCooldowns: invalid caster, entity=" << entt::to_integral(caster);
+		return;
+	}
+	// 加载链上的创建点:整份拷贝,未知字段(更新版本加的)随记录带回、存盘原样写出。
+	auto& cooldowns = tlsEcs.actorRegistry.emplace<CooldownTimeListComp>(caster, saved);
+	const uint64_t nowMs = TimeSystem::NowMilliseconds();
+	for (auto& [cooldownId, cooldown] : *cooldowns.mutable_cooldown_list()) {
+		if (cooldown.start() > nowMs) {
+			cooldown.set_start(nowMs);
+		}
+	}
 }
 
 void LookAtTargetPosition(entt::entity caster, const ReleaseSkillRequest* request, entt::entity target) {

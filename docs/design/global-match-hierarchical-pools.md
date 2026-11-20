@@ -137,6 +137,7 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
 - 池归属：`internal/poolowner`，成员表 = etcd 里注册的 `MatchNodeService` 实例（`svc.MatchNodes` watcher）；
 - 撮合循环：`logic/global_pool_matcher.go`（`StartGlobalPoolMatcher`、`claimImmediately`）；读池：`authority/pool_scan.go`；
 - 机房内选点：`internal/battleplace`（随机两选一取负载较低者；节点自报 CLOSED 不选；节点准入拒绝后 30 秒本地熔断。负载与可分配状态的来源见下文 R6）；
+- 探测目标：`logic/network_probe.go` 的 `probeTargets`（每个机房在可探测节点上按玩家做最高随机权重哈希，自报 CLOSED 的不探，见下文「探测目标」）；
 - 模板目录：`internal/catalog`（§7）。
 
 原设计的 `match_pool_shard` / `match_replica_heartbeat` 租约表**不做**。理由：归属只管分工、不承担正确性（§5.5），而 etcd 注册表已是全部副本看到的同一份成员表；在它上面做 HRW 不新增心跳写入，副本增减只迁移原本落在该副本上的池。代价：成员表变化的瞬间可能两个副本同时撮合同一池（只多几次提交冲突），或短暂无人负责（单人档仍有入队即时成局兜底）。
@@ -148,6 +149,19 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
 - **match 选点**：CLOSED 不可选（`Regions`、`Pick` 都排除）。UNSPECIFIED 视为可选，这是有意的 fail-open：新版 battle 首发前就填 CLOSED，UNSPECIFIED 只来自旧版本；滚动升级时把旧节点判成不可选会让整个机房没有节点、排队成局全部失败；误选的代价有界（battle 在任何副作用之前以 `battle_not_allocatable` 拒绝，本副本熔断它）。负载 = 60 秒内的上报房间数 + 本副本在途；读数过期按未知处理、只看在途，否则一次旧的高读数会让节点一直被避开、读数永远等不到刷新。代价：没有读数的节点显得更闲，会先被多选几次（选中即刷新读数）；混版本期间不上报的旧节点一直显得更闲。
 - **指标** `match_battle_nodes{state}`（open / unspecified / closed / cooldown / invalid），每个撮合轮刷新，不负责任何池的副本也报。
 - **「可分配」判定全仓一份**：`battle_admission::AcceptsNewRooms`（准入闸为 kOpen 且 `BattleNodeImpl::LifecycleGrantsPermits()`）。§5.5 落库前预检 `rejects_new_battles` 的 battle 侧填值复用它，不另写一份：`BattleNodeImpl::HandleQueryBattleCreation`（`cpp/nodes/battle/handler/grpc/battle_node.cpp` 守护段）读每秒对账写进内存 `NodeInfo.admission` 的期望值，`admission != OPEN` 即为真。这个函数是静态的、拿不到准入闸，所以读已算好的值，代价是最多晚一个对账周期（1 秒）。
+
+**探测目标（2026-11-19 落码，未编译）。** 探测计划（`GetNetworkProbePlan`）给每个机房发一个目标，玩家直连那台 battle 的客户端端口测 RTT、拿签名回执。
+
+- **原来的问题**：每个机房只取 NodeId 最小的一台，全服玩家对这个机房的探测都连到它。这台的新建连接速率 ≈ 全服有探测计划的玩家数 ÷ 重探周期，与它的连接上限无关。battle 直连在 accept 处有新建速率闸（[gate-connection-admission-control.md](gate-connection-admission-control.md)「P1-1 ~ P1-4 · battle 直连面」，`BattleMaxConnections` 4096 时缺省 100 条/秒）：1 万人排队、按 robot 的口径约 80 秒重探一次（有效期 `ProbeTTLSeconds` 120 秒减去提前量 40 秒）就是 125 条/秒，超出的探测被 RST，这个机房的探测失败。
+- **现在**：机房内在可探测节点上做最高随机权重哈希，`shared/workshard.Owner`（§5.2 的同一个打分入口），键 = `player_id`，成员 = 实例 UUID。各台分到的玩家大致相等；节点集合不变时同一玩家每次重探都落同一台；节点增减只挪动落在增减节点上的玩家；各副本看同一份 etcd 注册，结果与快照顺序、处理请求的副本无关。不用 `player_id` 取模：节点数一变（Agones 扩缩时常变）几乎所有玩家都换一台，还要依赖排序。同一实例重复登记两条时取节点号小的那条。
+- **换哪台都不影响正确性**：回执提交（`CommitNetworkProbe`）只核计划、玩家、会话绑定、机房与时效，不看是哪一台；授权里的 `target_node_id` / `target_instance_id` 照旧填被选中的那台，battle 侧校验不变。同一机房哪一台测出的 RTT 都代表这个机房。
+- **可探测**：原有条件（机房非 0、有客户端地址、端口 1~65535、有实例 UUID）之外，自报可分配状态是 CLOSED 的不探。依据是 battle 侧现状：battle 在三种时候自报 CLOSED——启动未完成（etcd 首发就带 CLOSED，早于 `AfterStart` 里装上直连面，`cpp/nodes/battle/main.cpp`）、停机或维护关源（`closeSource` 同一刻关掉 accept 准入，之后的新直连被 RST）、计划排空（不关源，打着的房间还要接重连）。前两种探测必然失败：Unity 客户端跳过失败的机房、提交其余回执，这一轮就缺这个机房（按不可用处理）；robot 一个机房失败整轮不提交（`robot/network_probe.go` 的 `runNetworkProbe`，冒烟有意从严，`TestRunNetworkProbeFailsClosed` 钉住）。计划排空的节点能测，但马上要走。CLOSED 节点本来就不参与成局选点（R6），机房里还有别的节点时换一台测不丢任何信息。
+- **机房里只剩 CLOSED 节点时整个机房不进计划**：这时它本来就不可放置（`Placement.Regions` 不含它）。代价：它重新开放后，期间拿到计划的玩家要到下一次重探才有它的回执，最长一个探测有效期。没选「全是 CLOSED 时退回去探 CLOSED 节点」：启动与停机两种情形探测必然失败、robot 整轮作废，比暂时少一个不可放置的机房更糟。
+- **一个目标都没有时回哪个码**：battle 镜像从 etcd 同步过、确实没有可探测节点（都没注册、缺客户端地址，或全部 CLOSED，比如维护、整机房排空），回 `MatchNoRegionWithinLatency`（16023，业务拒绝，不计故障）；镜像还没同步过时不知道有没有节点，是 match 自己没就绪，回 `MatchInternal`（16004，fault）。原来一律回 16004。D8 把 16004 收窄到服务端内部错误（`constants.ErrInternal`：Redis、发号器、权威库等），「此刻没有可用的 battle」不属于这一类；排除 CLOSED 之后维护、排空也会走到这里，不能计成服务端故障。实现是 `noProbeTargetCode`。客户端对计划里任何非 0 码都提示同一句「地域探测暂不可用，请重试。」（`RegionProbeClient`），不用改（§9）。
+- **UNSPECIFIED 照常可探测**，与 R6 同一个 fail-open 理由。本副本的本地熔断不看：它记的是建房 gRPC 被拒或连不上，与客户端端口无关，而且各副本不同，看它会让不同副本给同一玩家选不同的台。
+- **机房的先后与上限不变**：按机房里最小的可探测节点号排，取前 `authority.MaxProbeRegions`（16）个；每个机房只有一台时，计划与改动前完全相同。
+- **速率闸仍可能要调**：每台的探测建连速率 ≈ N ÷（k × T），N = 全服有探测计划的玩家数，k = 这个机房的可探测节点数，T = 重探周期；只有一台的机房与原来一样。估算与调法见 [运维手册](../ops/gate-kernel-tuning-runbook.md) §3.3。
+- 单测：`logic/network_probe_target_test.go`（§12.9）。
 
 ### 5.2 池归属（取代原"租约"）
 
@@ -188,7 +202,7 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
 
 - 各副本 watch 同一个前缀，看到的是同一份注册信息，与成员表同口径；watch 延迟期间短暂不一致，只会让某一段这一拍没人做或两个副本都做。
 - 不用可分配机房（`Placement.Regions`）枚举：它扣掉了本副本的本地熔断，各副本不同；负责某机房段的副本恰好熔断了那个机房的节点，就会整段跳过。成组时照旧只往可分配机房放（`poolgroup.Form` 的 regions 参数）。
-- 探测计划（`GetNetworkProbePlan`）从同一份镜像取目标机房，所以票上的首选机房都在列表里。例外是那个机房的节点之后全部下线：它的单位本来就成不了本机房组（本机房阶段要求首选机房可分配，§4 第 3 条），等满跨机房阈值后由跨机房段放到别的机房，与拆分前相同。整队成员首选机房不一致时首选机房列是 0，同理只有跨机房段读它（这样的单位本来也只能参加跨机房阶段，见 `poolgroup.Unit.Preferred`）。
+- 探测计划（`GetNetworkProbePlan`）从同一份镜像取目标机房，只用其中可探测的节点（自报 CLOSED 的不探，§5.1「探测目标」），计划里的机房是这份列表的子集，所以票上的首选机房都在列表里。例外是那个机房的节点之后全部下线：它的单位本来就成不了本机房组（本机房阶段要求首选机房可分配，§4 第 3 条），等满跨机房阈值后由跨机房段放到别的机房，与拆分前相同。整队成员首选机房不一致时首选机房列是 0，同理只有跨机房段读它（这样的单位本来也只能参加跨机房阶段，见 `poolgroup.Unit.Preferred`）。
 - 列表为空（还没有 battle 节点注册）时只剩跨机房段；这时本来就无处放置。
 
 **3. 两个阶段的切分**：记 W = `CrossRegionWaitSeconds`，M = `SubPoolMergeSeconds`，K = 模板的子池数，now = 本轮读一次的数据库时钟。
@@ -228,9 +242,11 @@ match 副本形态不变（RPC 前端 + 写者 + formation 执行者），共连
 
 **7. 提交点**：不变。`claimTx` 的玩家锁、票行锁与代次 / 状态 CAS，跨机房等待复核（`allPreferred`），`ClaimTeamUnits` 的机房与跨区等待校验，都按加锁读出的原票和数据库时钟现算，不读 `pool_region`。§5.5 的论证照旧成立：撮合段只决定谁读哪段票，两个段（或两个副本）同时选中同一张票时，只有一方的票行复核成功。
 
-唯一的配套改动在错误分类：票行复核失败（票已被别的段认领、撤单、回队退避、过期、探测原件刷新，或放置机房已不在硬延迟内）原来回一个普通错误，撮合侧当成结局未知，记一次排空 HOLD（`HoldRelay`）。拆分后跨机房段和机房段撞车是常态，这样每次排空都会停在 HOLD。改为哨兵 `authority.ErrClaimStale`（文案不变），归进 `expectedClaimRejection`：事务在提交之前就回滚了，什么都没写，结局是已知的。
+唯一的配套改动在错误分类：票行复核失败（票已被别的段认领、撤单、回队退避、过期、探测原件刷新，或放置机房已不在硬延迟内）原来回一个普通错误，撮合侧当成结局未知，记一次排空 HOLD（`HoldRelay`）。拆分后跨机房段和机房段撞车是常态，这样每次排空都会停在 HOLD。改为哨兵 `authority.ErrClaimStale`（文案不变）：事务在提交之前就回滚了，什么都没写，结局是已知的。
 
-组队池（PVE_TEAM / PVP_TEAM）里撞的是整队时，后到的一方走不到票行复核：`ClaimTeamUnits` 先过入场守卫，守卫看到整队原件已经带着别的 `battle_id`（先提交的那一局写的），回 `authority.ErrMatchEntryOccupied`。2026-11-19 核实它原先不在 `expectedClaimRejection` 里，组队池每撞一次整队就记一次排空 HOLD，同样在提交之前回滚、结局已知，现已归进去。钉住的用例：team 包 `TestTeamTiDBSecondClaimOfClaimedUnitsIsRejectedWholly`（第二次认领同一批整队回这个错误、整笔回滚、票仍归先成的那一局），logic 包 `TestExpectedClaimRejectionCoversClaimedTeamUnits`。
+组队池（PVE_TEAM / PVP_TEAM）里撞的是整队时，后到的一方走不到票行复核：`ClaimTeamUnits` 先过入场守卫，守卫看到整队原件已经带着别的 `battle_id`（先提交的那一局写的），回 `authority.ErrMatchEntryOccupied`。2026-11-19 核实它原先不在撮合侧的「正常变化」白名单里，组队池每撞一次整队就记一次排空 HOLD。
+
+**2026-11-19 起不再用白名单**：撮合侧只在守卫判成结局未知（`authoritysql.ErrOutcomeUnknown`，COMMIT 发出去没拿到结果等）时记 HOLD（`logic.claimOutcomeUnknown`）。成局提交是一笔纯 DML 事务，其余失败都已整笔回滚、结局已知：段与段、副本与副本之间的撞车，跨区等待在提交点不满足、观战占用这类原先漏在白名单外的拒绝，以及提交之前就失败的库故障。白名单漏一个就多一次要人工处理的永久 HOLD，按结局判之后这一类不会再出现，与 trade 的后台循环同一口径。钉住的用例：team 包 `TestTeamTiDBSecondClaimOfClaimedUnitsIsRejectedWholly`（第二次认领同一批整队回这个错误、整笔回滚、票仍归先成的那一局），logic 包 `TestClaimHoldsOnlyWhenOutcomeUnknown`、`TestRatingSpreadAtCommitDoesNotHold`。
 
 **8. 指标**
 
@@ -357,6 +373,7 @@ D10 定的是原位改造、不做内存撮合，只在压测到顶时再评估�
 - 16002 新增拒绝场景：模板不在白名单 / 未开放。
 - 新增两个 tip 码（导表器发号，`data/tip/Tip.xlsx`）："需要重新探测"、"没有机房满足延迟"；16004 标 fault。
 - 不新增消息号与字段。逐级放宽、单人即时成局对客户端是行为变化，不是协议变化。
+- 2026-11-19（探测目标，§5.1）：探测计划一个目标都没有、而 battle 镜像已同步时，回码从 16004 改为 16023（不新增码）；镜像没同步过时仍回 16004。客户端 `RegionProbeClient` 对计划里任何非 0 码都提示「地域探测暂不可用，请重试。」，界面不变，不用改客户端。同一机房的探测目标按玩家分到不同的 battle，对客户端是不同的 host / port，协议不变。
 - 2026-11-05（R7）：`//team_error` 组新增 `TeamPvpPartySizeNotAllowed`（每侧 5 人的 PVP_TEAM 不收 4 人队）与 `TeamRatingGapTooLarge`（组队成员评分差超过上限），StartTeamMatch 开 PVP_TEAM 时回这两个业务拒绝。车队对等让大车队多等，对客户端是行为变化，不是协议变化。
 - 客户端（`../mmorpg-client`，2026-11-11 Claude 写完，未编译）：
   - `TeamClient.DescribeTip` 给这两个码各配一句中文提示，不再落到「组队服务暂未完成请求（4031）」这类兜底文案。
@@ -617,6 +634,10 @@ Claude 只跑过 `gofmt -l`（改动与新增的 Go 文件都无输出），没�
    - 给 PVE_TEAM 模板 1 配 `SubPools: [{Mode: 5, ConfigId: 1, Count: 2}]` 后重启：`match_pool_owned{role="sub"}` 之和 = 多人 PVE_TEAM 池数 × 机房数 × 2；两人档两人同 zone 入队照常成局（计在 sub 或 region）；日志里没有 `has no effect`。
    - 停掉一个副本，约一个 etcd 租约周期后另一个副本的各 role 段数涨到全部。
    通过标准：以上各项成立，冒烟期间没有 `Failed to read pool tickets segment=`；优雅停机的排空报告不因成局冲突停在 HOLD。
+
+### 12.9 探测目标在机房内分散（2026-11-19）
+
+只改 Go，不动 proto 与 battle 逻辑。纯单测 `logic/network_probe_target_test.go` 五条：四条 `TestProbeTargets*`（不同玩家分散到同机房各台、同一玩家稳定且节点增减只挪动相关玩家、每个机房一台时计划与改动前相同、过滤条件含 CLOSED），以及 `TestNoProbeTargetCodeSeparatesUnavailableFromNotReady`（没有目标时的回码，镜像同步过不算故障）。命令与通过标准见 `docs/PROGRESS.md` 2026-11-19「全服匹配网络探测目标在机房内分散」及其补充条目。
 
 ## 13. Java 版（AGENTS.md §12）
 

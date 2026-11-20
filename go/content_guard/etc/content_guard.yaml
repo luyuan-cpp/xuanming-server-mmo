@@ -1,0 +1,49 @@
+# 内容安全服务的本机默认配置(docs/design/rename-and-content-safety.md §6)。
+# 全服一份、无状态、可多开;调用方是 login / guild / chat(按下面的 Etcd.Key 发现)与 C++ scene
+# (按 NodeInfo 前缀 ContentGuardNodeService.rpc 发现)。客户端到不了它:路由服的路由表里没有这个服务。
+Name: content_guard.rpc
+# 端口 50250 / 指标 9290 与 tools/scripts/go_services.ps1 的目录一致;-Zone 2 位移后是 51250 / 10290,
+# 都不在已观测的 Windows 保留区间(49728-49927、50000-50171、51573-51872)里。
+ListenOn: 127.0.0.1:50250
+# 本机用 dev。不写 Mode 时 go-zero 取 pro,而 pro / pre 下 RequireLexicon 必须为 true(config.Validate)。
+Mode: dev
+# 判定是纯内存计算,正常在 1 毫秒内;1 秒只是兜底。
+Timeout: 1000
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  # go-zero 的发布键:Go 调用方的 ContentGuardRpc.Etcd.Key 填它。
+  Key: contentguard.rpc
+
+# 必配,由 config.Validate 强制:CheckText 的请求里是玩家的聊天原文和名字,
+# 不屏蔽的话 go-zero 的 Stat 拦截器会把它打进日志。只屏蔽内容,不关 Stat,慢调用告警仍然保留。
+Middlewares:
+  StatConf:
+    IgnoreContentMethods:
+      - /content_guard.ContentGuard/CheckText
+
+# etcd 注册路径用的 zone id。本服务全服一份,zone 只影响自己的注册路径。
+ZoneId: 1
+
+# etcd 节点注册的租约 TTL(秒)。
+LeaseTTL: 60
+
+# Prometheus /metrics 与 /healthz。没加载到必需的词库时 /healthz 回 503。
+MetricsListenAddr: ":9290"
+
+# 词库在 etcd 里的前缀,留空用缺省值 /mmorpg/content_guard/lexicon/。发布工具(cmd/lexicon)的 -prefix 要与它相同。
+LexiconPrefix: ""
+
+# 为 false 时没有词库也照常判定,只有内置的几个防冒充词生效,仅供本机开发。
+# staging / prod 必须为 true:没加载到词库的副本不接流量,而不是放行一切。
+RequireLexicon: false
+
+# 单次送检文字的字节上限。
+MaxTextBytes: 4096
+
+# 链路追踪(docs/design/distributed-tracing.md §10.3):写法与其它 Go 服务相同,本机 Alloy 没起时导出器在后台重连,不影响业务。
+Telemetry:
+  Name: content_guard
+  Endpoint: 127.0.0.1:4317
+  Sampler: 1.0
+  Batcher: otlpgrpc

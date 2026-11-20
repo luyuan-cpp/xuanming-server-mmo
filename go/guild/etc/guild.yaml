@@ -92,6 +92,24 @@ DataServiceRpc:
   Middlewares:
     Breaker: false
 
+# 内容安全(go/content_guard;docs/design/rename-and-content-safety.md §6.6):帮会名(建帮、改名)与帮会公告先送它判定,
+# 命中回 kGuildNameSensitive / kGuildAnnouncementSensitive,它不可达回 kGuildTextCheckUnavailable(可重试),
+# 不放行没检过的文字。送检排在铸号和写事务之前。
+# 整段不写 = 不送检,只允许本机;Required: true 时没配目标拒启(staging / prod 由部署脚本写 true)。
+# NonBlock:内容安全晚起不挡 guild 启动。熔断:它整体不可用时快速失败。TimeoutMs 是单次送检的时限。
+ContentGuard:
+  Rpc:
+    Etcd:
+      Hosts:
+        - 127.0.0.1:2379
+      Key: contentguard.rpc
+    Timeout: 500
+    NonBlock: true
+    Middlewares:
+      Breaker: true
+  Required: false
+  TimeoutMs: 300
+
 # guild_id 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
 # Enabled:**只有显式写 true 才开**;整块不写 = 关 = 发不出 id,建帮一律失败。
 # Step:**初始**领段长度;之后按 Leaf 口径动态调整 —— 一段不到 15 分钟用完则下次翻倍,

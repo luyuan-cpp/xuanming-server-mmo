@@ -8,7 +8,7 @@ import "testing"
 // `increase(...) > 0` 恰好漏掉第一次(同 TestPrimeRouteCreatesAllSeries)。
 func TestPrimeAccountDirectoryCreatesAllSeries(t *testing.T) {
 	reasons := []string{"error", "taken", "conflict", "role_mismatch", "role_removed", "rules_changed"}
-	steps := []string{"release_name", "drop_removal_row"}
+	steps := []string{"release_name", "purge_data", "drop_removal_row"}
 	PrimeAccountDirectory(reasons, steps)
 
 	for _, spec := range []struct {

@@ -60,8 +60,9 @@ void DispatchUnderIncomingTrace(const std::string &methodPath, const muduo_grpc:
         // 解析失败时 incoming 保持无效,下面开新根。
         (void)tracing::ParseTraceparent(*header, incoming);
     }
-    const tracing::ScopedIncoming dispatchTrace(incoming, tracing::SpanKind::kServer, tracing::SpanSystem::kGrpc,
-                                                tracing::SpanName{GrpcSpanNameOf(methodPath)});
+    // 不声明成 const:GrpcUnaryCall 接过 server span、MarkCurrentSpanError 标错,都要经线程上下文改它的记录器。
+    tracing::ScopedIncoming dispatchTrace(incoming, tracing::SpanKind::kServer, tracing::SpanSystem::kGrpc,
+                                          tracing::SpanName{GrpcSpanNameOf(methodPath)});
     invoke();
 }
 

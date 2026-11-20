@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+// AfkPassRule 表的权威 schema。源表 data/AfkPassRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 导表报"这些权威 schema 没有对应的源表:AfkPassRule"= 源表还没生成(schema 与 xlsx 必须成对):
+// 先跑 python tools/scripts/afk_pass_xlsx_patch.py new-tables。
+//
+// 挂机月卡的单行全局规则(与 PetRule / MysteryMerchantRule 同套路:只取第一行)。
+// 设计文档 docs/design/afk-monthly-card.md §4.4。只有 C++ scene 读;客户端经 AfkPassInfo 拿到这些值,不读表。
+// 取值不在下面的范围里时 scene 打 ERROR、开通一律回 kAfkPassUnavailable(GM 与离线托管不受影响),修表热更即恢复。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AfkPassRuleTable {
+  option (cfg_sheet)       = "AfkPassRule";
+  option (cfg_source_file) = "AfkPassRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 开通一次加多少天(1..366)
+  uint32 period_days = 2;
+  // 开通扣的货币(CurrencyType:0 银两 / 1 灵石 / 2 绑定灵石)
+  uint32 price_currency_type = 3;
+  // 开通一次的价格(1..1000000000)
+  uint64 price = 4;
+  // 剩余时长上限天数(period_days..3660):续费后超过它就拒绝
+  uint32 max_remaining_days = 5;
+  // 剩余不超过这么多小时时客户端提醒快到期(0..720;0 = 不提醒)
+  uint32 remind_before_hours = 6;
+  // 说明
+  string desc = 7;
+}

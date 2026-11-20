@@ -1,0 +1,39 @@
+# payment-migrate:支付库 mmorpg_payment 的建表 Job(形状与门禁照 rank-migrate.yaml,port-decisions D-14 第 4 条)。
+# 只迁结构,不读渠道密钥。DSN 的账号是 schema 主体,和 Add-SchemaPermissionManifest 注入的 MMORPG_SQL_SCHEMA_PRINCIPAL 出自同一个 schemaPermissionSecret(键 dsn、principal),占位由它替换。
+# 配置同样过 config.Validate:schemaConfigSecret 里要有完整的 Payment 段,照抄 ConfigMap go-svc-payment-config。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payment-migrate
+  labels: {app: payment-migrate, tier: go-svc}
+spec:
+  backoffLimit: 4
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes: {containerName: payment-migrate, operator: In, values: [1, 4]}
+      - action: Ignore
+        onPodConditions:
+          - {type: DisruptionTarget}
+  template:
+    metadata:
+      labels: {app: payment-migrate, tier: go-svc}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: payment-migrate
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          args: ["-f", "/app/etc/payment.yaml", "-migrate"]
+          env:
+            - name: MMORPG_PAYMENT_SQL_DSN
+              valueFrom:
+                secretKeyRef: {name: PLACEHOLDER_SCHEMA_PERMISSION_SECRET, key: dsn, optional: false}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 1000m, memory: 512Mi}
+          volumeMounts:
+            - {name: svc-config, mountPath: /app/etc, readOnly: true}
+      volumes:
+        - name: svc-config
+          configMap: {name: go-svc-payment-config}

@@ -228,13 +228,17 @@ func TestIssuedWithinWindow(t *testing.T) {
 // assetop 的 IsRetryable 为 nil 时一次都不重试)。守卫判定的提交前中止(R6,COMMIT 没发、确定没写)也可整笔重跑,
 // 结局未知不行。
 func TestRetryClassifierCoversRequiredCodes(t *testing.T) {
+	cfg := TxRetryConfig()
+	if cfg.IsRetryable == nil {
+		t.Fatal("TxRetryConfig 必须注入 IsRetryable,否则 WithTxRetryConfig 一次都不重试")
+	}
 	for _, code := range []uint16{1213, 1205, 9007} {
 		err := fmt.Errorf("wrapped: %w", &mysql.MySQLError{Number: code})
-		if !IsRetryableTxError(err) {
+		if !cfg.IsRetryable(err) {
 			t.Errorf("MySQL %d 应可重试", code)
 		}
 	}
-	if !IsRetryableTxError(fmt.Errorf("wrapped: %w", authoritysql.ErrTxAbortedBeforeCommit)) {
+	if !cfg.IsRetryable(fmt.Errorf("wrapped: %w", authoritysql.ErrTxAbortedBeforeCommit)) {
 		t.Error("aborted-before-commit must be retryable")
 	}
 	for _, err := range []error{
@@ -244,16 +248,9 @@ func TestRetryClassifierCoversRequiredCodes(t *testing.T) {
 		errors.New("plain"),
 		nil,
 	} {
-		if IsRetryableTxError(err) {
+		if cfg.IsRetryable(err) {
 			t.Errorf("%v 不应判可重试", err)
 		}
-	}
-	cfg := TxRetryConfig()
-	if cfg.IsRetryable == nil {
-		t.Fatal("TxRetryConfig 必须注入 IsRetryable,否则 WithTxRetryConfig 一次都不重试")
-	}
-	if !cfg.IsRetryable(&mysql.MySQLError{Number: 9007}) {
-		t.Fatal("注入的判定必须覆盖 9007(TiDB 写冲突)")
 	}
 	if cfg.Attempts < 2 {
 		t.Fatalf("Attempts = %d,至少要重试一次", cfg.Attempts)
@@ -290,23 +287,23 @@ func TestReconcileDiff(t *testing.T) {
 	cursor := rcCursor(gmDomain, rcDecision(10, 1, outApplied, 0), rcDecision(20, 2, outApplied, 0))
 	cases := []struct {
 		name   string
-		row    *inboxpb.PlayerInboxItemRow
+		ref    FinalizedRef
 		cursor *componentpb.PlayerInboxDomainCursor
 		want   inboxpb.PlayerInboxReconcileDiffKind
 	}{
-		{"终态且在环里", rcRow(10, 1, stateApplied, byConsumer), cursor, none},
-		{"终态但账本没到:回档或丢数据", rcRow(21, 3, stateApplied, byConsumer), cursor, final},
-		{"终态、水位已过、环里查无此 seq:丢掉的结局被之后的条目掩盖", rcRow(15, 4, stateApplied, byConsumer), cursor, final},
-		{"终态、环里同 seq 是另一条", rcRow(20, 9, stateApplied, byConsumer), cursor, final},
-		{"PENDING 且账本没到:正常", rcRow(21, 3, statePending, 0), cursor, none},
-		{"PENDING 但账本已过:确认丢了", rcRow(20, 2, statePending, 0), cursor, decide},
-		{"管理员作废:不比对", rcRow(15, 4, stateVoided, byAdmin), cursor, none},
-		{"消费方 SKIPPED 的 VOIDED 也比对", rcRow(21, 3, stateVoided, byConsumer), cursor, final},
-		{"账本没有该域:终态按水位 0 报", rcRow(10, 1, stateApplied, byConsumer), nil, final},
-		{"账本没有该域:PENDING 不报", rcRow(10, 1, statePending, 0), nil, none},
+		{"终态且在环里", rcRef(10, 1, stateApplied, byConsumer), cursor, none},
+		{"终态但账本没到:回档或丢数据", rcRef(21, 3, stateApplied, byConsumer), cursor, final},
+		{"终态、水位已过、环里查无此 seq:丢掉的结局被之后的条目掩盖", rcRef(15, 4, stateApplied, byConsumer), cursor, final},
+		{"终态、环里同 seq 是另一条", rcRef(20, 9, stateApplied, byConsumer), cursor, final},
+		{"PENDING 且账本没到:正常", rcRef(21, 3, statePending, 0), cursor, none},
+		{"PENDING 但账本已过:确认丢了", rcRef(20, 2, statePending, 0), cursor, decide},
+		{"管理员作废:不比对", rcRef(15, 4, stateVoided, byAdmin), cursor, none},
+		{"消费方 SKIPPED 的 VOIDED 也比对", rcRef(21, 3, stateVoided, byConsumer), cursor, final},
+		{"账本没有该域:终态按水位 0 报", rcRef(10, 1, stateApplied, byConsumer), nil, final},
+		{"账本没有该域:PENDING 不报", rcRef(10, 1, statePending, 0), nil, none},
 	}
 	for _, tc := range cases {
-		if got := reconcileDiff(tc.row, tc.cursor); got != tc.want {
+		if got := reconcileDiff(tc.ref, tc.cursor); got != tc.want {
 			t.Errorf("%s: reconcileDiff = %v, want %v", tc.name, got, tc.want)
 		}
 	}

@@ -45,6 +45,10 @@
 // 否则「结算落了、待寄没落」物品就没了,「待寄落了、结算没落」结算重做时会再发一份。
 #include "proto/common/component/player_mail_outbox_comp.pb.h"
 #include "mail_outbox_rules.h"
+// 实时技能冷却与下线保留的 Buff(docs/design/realtime-cooldown-buff-persistence.md):按需状态,随存档保留。
+#include "proto/common/component/time_comp.pb.h"
+#include "combat/skill/system/skill.h"
+#include "combat/buff/system/buff.h"
 #include "asset_op_ledger.h"
 #include "asset_op_system.h"
 #include "player/comp/player_inbox_runtime_comp.h" // PlayerInboxLedgerInvalidComp
@@ -248,6 +252,13 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 				  << " reason=" << err << " entries=" << mailOutbox.entries_size()
 				  << "; entries carried as-is and still retried, repair needs a human";
 	}
+	// 技能冷却(字段 28)与下线保留的 Buff(字段 29)跟着同一条记录回来;旧存档没有这两个字段 = 没有冷却、
+	// 没有要恢复的 Buff,合法。两者是按需状态,存档里有内容才挂组件。冷却当场挂上;Buff 的生效回调要用到
+	// 派生投影,先暂存,由 InitPlayerFromAllData 在实体初始化完之后恢复(BuffSystem::RestoreSavedBuffs)。
+	SkillSystem::RestoreCooldowns(player, message.skill_cooldowns());
+	if (message.saved_buffs_size() > 0) {
+		tlsEcs.actorRegistry.emplace<SavedBuffsPendingComp>(player).buffs = message.saved_buffs();
+	}
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -373,6 +384,23 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_item_holds()->CopyFrom(*itemHolds);
 	// 待寄邮件:与扣消耗、入账同一次 Marshal、同一次提交;位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
 	message.mutable_mail_outbox()->CopyFrom(*mailOutbox);
+	// 技能冷却与下线保留的 Buff:按需状态,缺组件 = 没有,写空、不补建。输出可能是上一次的快照,所以缺组件时要清掉。
+	// 位置同样在下面那对 currency CopyFrom / SaveToProto 之外。
+	if (const auto* cooldowns = tlsEcs.actorRegistry.try_get<CooldownTimeListComp>(player))
+	{
+		message.mutable_skill_cooldowns()->CopyFrom(*cooldowns);
+	}
+	else
+	{
+		message.clear_skill_cooldowns();
+	}
+	if (!BuffSystem::SaveKeptBuffs(player, *message.mutable_saved_buffs()))
+	{
+		// 恢复的 Buff 携带的未知字段坏了(只可能是内存被破坏)。调用方在副本上写,返回 false 时原输出不动。
+		LOG_ERROR << "[PlayerSave] carried unknown fields of a saved buff are corrupt; refusing to marshal: entity="
+				  << entt::to_integral(player);
+		return false;
+	}
 	message.mutable_currency()->CopyFrom(*currency);
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

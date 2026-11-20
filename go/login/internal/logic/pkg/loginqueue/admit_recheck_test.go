@@ -8,6 +8,7 @@ package loginqueue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -215,6 +216,51 @@ func TestNewAdmitSigner_UncheckedSignsOriginal(t *testing.T) {
 func TestNewAdmitSigner_NilSlotIsAnError(t *testing.T) {
 	if _, err := NewAdmitSigner(context.Background(), nil, recheckSecret, time.Minute)(nil); err == nil {
 		t.Fatal("signing a nil admit slot must fail")
+	}
+}
+
+// 小游戏客户端的 WebSocket 地址跟签出的那台 gate 走(docs/design/minigame-websocket-gate.md W7):
+//   - dispatcher 选中 gate 时把它记进放行槽;
+//   - 复核后签的是此刻候选里的另一台,就带那一台的地址;
+//   - 读不到候选、照签放行槽里的 gate 时,带放行槽里记的那份,所以它必须过得了存 Redis 的 JSON。
+func TestAdmit_WsURLFollowsTheSignedGate(t *testing.T) {
+	const gate1Ws = "wss://ws.example.com/ws/10.0.0.1/9000"
+	const gate2Ws = "wss://ws.example.com/ws/10.0.0.2/9100"
+
+	slot, err := newBatchPickFn([]GateCandidate{{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, WsURL: gate1Ws}})(3, "queue-id")
+	if err != nil {
+		t.Fatalf("pick admit slot: %v", err)
+	}
+	if slot.WsURL != gate1Ws {
+		t.Fatalf("admit slot ws url %q, want the picked gate's %q", slot.WsURL, gate1Ws)
+	}
+
+	src := &recheckSource{cands: []GateCandidate{
+		{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, WsURL: gate1Ws, Stale: true},
+		{NodeID: 2, IP: "10.0.0.2", Port: 9100, ZoneID: 3, WsURL: gate2Ws},
+	}}
+	repicked, err := NewAdmitSigner(context.Background(), src, recheckSecret, time.Minute)(slot)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if repicked.WsURL != gate2Ws {
+		t.Fatalf("ws url %q, want the repicked gate 2's %q", repicked.WsURL, gate2Ws)
+	}
+
+	raw, err := json.Marshal(slot)
+	if err != nil {
+		t.Fatalf("marshal admit slot: %v", err)
+	}
+	stored := &AdmitSlot{}
+	if err := json.Unmarshal(raw, stored); err != nil {
+		t.Fatalf("unmarshal admit slot: %v", err)
+	}
+	unchecked, err := NewAdmitSigner(context.Background(), nil, recheckSecret, time.Minute)(stored)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if unchecked.WsURL != gate1Ws {
+		t.Fatalf("ws url %q after the Redis round trip, want the admit slot's %q", unchecked.WsURL, gate1Ws)
 	}
 }
 

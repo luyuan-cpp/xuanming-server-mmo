@@ -2,25 +2,17 @@
 
 #include <string>
 
-#include <hiredis/hiredis.h>
-
 #include "muduo/base/Logging.h"
+#include "muduo/net/EventLoop.h"
 
 #include "engine/core/type_define/player_guid_comp.h"
-#include "infra/storage/redis_cluster/redis_cluster_client.h" // tlsPlayerRedis:月卡键属于玩家域
-#include "infra/storage/redis_cluster/redis_slot.h"           // PlayerTag:与 go/shared/redisslot 同一键形
-#include "player/system/player_team.h"                        // OnOfflineHostingStarted:托管开始时由服务器开启跟随
+#include "player/system/afk_pass.h"    // ExpiresAt:月卡的事实源就是本实体内存里的那一份
+#include "player/system/player_team.h" // OnOfflineHostingStarted:托管开始时由服务器开启跟随
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
 
 namespace
 {
-	// 与 go/shared/redisslot.AfkPassKey 同形:player:afk_pass:{<player_id>}。
-	std::string AfkPassKey(uint64_t playerId)
-	{
-		return "player:afk_pass:" + redis_slot::PlayerTag(playerId);
-	}
-
 	// 本线程的事件累计,随每条 [AfkHosting] 日志打出(C++ 节点没有 Prometheus 出口,口径同断线保留的计数)。
 	struct AfkHostingCounters
 	{
@@ -57,33 +49,33 @@ void AfkHostingSystem::Probe(entt::entity player)
 	{
 		return;
 	}
-	// 没连上:command 直接返回 REDIS_ERR,不如不发;状态不变,判定要再查时下一次扫描会再来。
-	if (!tlsPlayerRedis.connected())
+	// 没有 EventLoop(单测宿主):状态不变,判定要再查时下一次扫描会再来。
+	auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+	if (loop == nullptr)
 	{
 		return;
 	}
 	const uint64_t playerId = guid->value;
 	const auto lostAt = held->lostAt;
-	const std::string key = AfkPassKey(playerId);
-	// 只按值捕获玩家号与这次保留的开始时刻:回调里重新找实体并核对,不把实体句柄带进异步回调。
-	const int status = tlsPlayerRedis.command(
-		[playerId, lostAt](hiredis::Hiredis *, redisReply *reply) {
-			const bool failed = reply == nullptr || reply->type == REDIS_REPLY_ERROR ||
-								(reply->type != REDIS_REPLY_NIL && reply->type != REDIS_REPLY_STRING);
-			const bool found = !failed && reply->type == REDIS_REPLY_STRING;
-			const std::string_view value = found && reply->str != nullptr
-											   ? std::string_view(reply->str, static_cast<std::size_t>(reply->len))
-											   : std::string_view{};
-			ApplyProbeResult(playerId, lostAt, failed, found, value, TimeSystem::NowSecondsUTC());
-		},
-		"GET %b", key.data(), key.size());
-	if (status != REDIS_OK)
-	{
-		// 没被收下:回调不会来,不算在途。command 不会同步回调,held 此刻仍有效、也没被改过。
-		return;
-	}
+	// 月卡的事实源是本实体内存里的 PlayerUint64Comp.afk_pass_expires_at(加载时从存档来,此后只由 AfkPassSystem 改),
+	// 不再读自己写的 Redis 投影:投影一丢就会把有月卡的人当成没有(docs/design/afk-monthly-card.md §5.3)。
+	// 读这一下本身是同步的,但判定排到本轮之后执行,与原来等 Redis 回包同一个时序:调用方(断线保留、托管落点入场的
+	// EnterScene 第 3.0 步)这一步走完之后才判、才开启跟随,不在进场中途去走跟随检查。
+	// 只按值捕获玩家号与这次保留的开始时刻,不捕获实体句柄与 this;执行时重新找实体并核对。
 	held->afkProbeInFlight = true;
 	++tlsAfkHostingCounters.probes;
+	loop->queueInLoop([playerId, lostAt]() {
+		const auto entity = FindSamePlayer(playerId);
+		const auto *current = entity != entt::null ? tlsEcs.actorRegistry.try_get<PlayerConnectionLostComp>(entity) : nullptr;
+		if (current == nullptr || current->lostAt != lostAt || !current->afkProbeInFlight)
+		{
+			return; // 这一次保留已经结束,或这次查询已经有了结果(单测直接喂 ApplyProbeResult):不再覆盖
+		}
+		// 与原 Redis 值同一个格式(十进制到期 Unix 秒),判定走同一个入口;0 = 从未开通或已清除,按键不存在处理。
+		const uint64_t expiresAt = AfkPassSystem::ExpiresAt(entity);
+		ApplyProbeResult(playerId, lostAt, /*failed=*/false, /*found=*/expiresAt != 0, std::to_string(expiresAt),
+						 TimeSystem::NowSecondsUTC());
+	});
 }
 
 void AfkHostingSystem::ApplyProbeResult(uint64_t playerId, connection_lost_hold::Clock::time_point lostAt, bool failed,

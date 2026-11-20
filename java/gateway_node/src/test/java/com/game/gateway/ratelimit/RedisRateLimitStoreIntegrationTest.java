@@ -26,7 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 令牌桶 Lua({@link RedisRateLimitStore#TAKE_SCRIPT}、{@link RedisRateLimitStore#REFUND_SCRIPT})对真实 Redis 的行为
- * (2026-11-05,服务器缺口清单第 29 条;2026-11-12 起每个桶一段单键脚本,区桶空时退还 IP 令牌)。
+ * (2026-11-05,服务器缺口清单第 29 条;2026-11-12 起每个桶一段单键脚本,区桶空时退还 IP 令牌;2026-11-19 起只退还
+ * 一个令牌减去排队重试的那一小份,用例按缺省 0.1 个)。
  * 集群形态(两个桶在不同槽)见 {@link RedisRateLimitStoreClusterIntegrationTest}。
  *
  * <p>只在设置了 {@code GATEWAY_RATE_LIMIT_REDIS_URL}(如 {@code redis://127.0.0.1:6390})时运行,指向一个一次性的
@@ -41,6 +42,8 @@ class RedisRateLimitStoreIntegrationTest {
 
     private static final long T = 1_800_000_000_123L;
     private static final long HOLD_MS = 60_000;
+    /** 区桶空时 IP 桶扣的那一份:0.1 个令牌(queue-retry-ip-cost-milli 的缺省值)。 */
+    private static final long QUEUED_IP_COST_MILLI = 100;
 
     private static RedisClient client;
     private static StatefulRedisConnection<byte[], byte[]> connection;
@@ -64,7 +67,7 @@ class RedisRateLimitStoreIntegrationTest {
     @BeforeEach
     void setUp() {
         redis = connection.sync();
-        store = new RedisRateLimitStore(redis);
+        store = new RedisRateLimitStore(redis, QUEUED_IP_COST_MILLI);
         prefix = "rl:it:" + UUID.randomUUID() + ":";
     }
 
@@ -147,7 +150,7 @@ class RedisRateLimitStoreIntegrationTest {
     }
 
     @Test
-    void zoneEmpty_returnsCeilWait_andDoesNotSpendIpToken() {
+    void zoneEmpty_returnsCeilWait_andSpendsOnlyTheQueuedShareOfAnIpToken() {
         Bucket ip = bucket("ip", 1, 2);
         Bucket zone = bucket("zone", 3, 1);
         seed(ip, 1000, T);
@@ -157,31 +160,64 @@ class RedisRateLimitStoreIntegrationTest {
         assertEquals(Admission.zoneEmpty(234), store.admitAt(T + 100, ip, zone));
         // 退还时按补满时刻设了真实 TTL(这里不到一秒),后面还要用这个桶,先拉长。
         holdTtl(ip);
-        // IP 桶先扣后还:状态记到这一次的时刻,余量与从没扣过时相同(1 + 0.1 个)。
-        assertEquals(Arrays.asList(1100L, T + 100), state(ip), "区桶空时 IP 令牌已退还,余量不变");
+        // IP 桶先扣一个、再还 0.9 个:状态记到这一次的时刻,余量比从没扣过时少 0.1 个(1 + 0.1 − 0.1)。
+        assertEquals(Arrays.asList(1000L, T + 100), state(ip), "区桶空时 IP 桶只扣排队重试的 0.1 个");
 
-        // 此刻 IP 余量 1 + 0.1 = 1.1 个:只判 IP 还能放一个,之后才空。
+        // 此刻 IP 余量正好 1 个:只判 IP 还能放一个,之后才空。
         assertEquals(Admission.ok(), store.admitAt(T + 100, ip, null));
         holdTtl(ip);
         assertEquals(Admission.ipEmpty(), store.admitAt(T + 100, ip, null));
     }
 
     @Test
-    void zoneEmpty_onAFullIpBucket_leavesNoIpKey() {
+    void queuedRetriesFromOneIp_drainItsBucketByTheQueuedShare() {
+        // 不守 retry_after、同一毫秒狂发的单个 IP:每次排队重试扣 0.1 个,满桶 2 个能撑 11 次(第 11 次扣前正好剩 1 个),
+        // 第 12 次被 IP 桶挡下、不再碰区桶。以前全额退还时这个 IP 可以无限次打区桶。
         Bucket ip = bucket("ip", 1, 2);
         Bucket zone = bucket("zone", 1, 1);
         seed(zone, 0, T);
 
+        for (int i = 1; i <= 11; i++) {
+            assertEquals(Admission.zoneEmpty(1000), store.admitAt(T, ip, zone), "第 " + i + " 次排队重试仍走到区桶");
+            holdTtl(ip);
+        }
+        assertEquals(Arrays.asList(900L, T), state(ip), "11 次各扣 0.1 个:2 − 1.1 = 0.9 个");
+        assertEquals(Admission.ipEmpty(), store.admitAt(T, ip, zone), "不足一个令牌:429,区桶不读不写");
+    }
+
+    @Test
+    void zoneEmpty_partialRefund_expiresWhenTheIpBucketWouldBeFull() {
+        Bucket ip = bucket("ip", 1, 2);
+        Bucket zone = bucket("zone", 1, 1);
+        seed(ip, 1000, T);
+        seed(zone, 0, T);
+
         assertEquals(Admission.zoneEmpty(1000), store.admitAt(T, ip, zone), "区桶差一个令牌、每秒补 1 个:等 1000ms");
+        // 扣一个剩 0,还 0.9 个:差 1.1 个补满、每秒补 1 个 → 1100ms 后过期(键不存在 = 满桶),不留永久键。
+        long ttl = redis.pttl(utf8(ip.key()));
+        assertTrue(ttl > 0 && ttl <= 1100, "退还后按补满时刻设过期;实际 PTTL " + ttl);
+        holdTtl(ip);
+        assertEquals(Arrays.asList(900L, T), state(ip), "扣一个、还 0.9 个");
+    }
+
+    @Test
+    void zoneEmpty_onAFullIpBucket_withFullRefund_leavesNoIpKey() {
+        // queue-retry-ip-cost-milli = 0(全额退还):满桶扣一个再还回去还是满桶,走脚本里「满了就删键」那一支。
+        RedisRateLimitStore fullRefund = new RedisRateLimitStore(redis, 0);
+        Bucket ip = bucket("ip", 1, 2);
+        Bucket zone = bucket("zone", 1, 1);
+        seed(zone, 0, T);
+
+        assertEquals(Admission.zoneEmpty(1000), fullRefund.admitAt(T, ip, zone));
         assertEquals(0L, redis.exists(utf8(ip.key())),
-                "满桶扣一个再还回去还是满桶:键删掉(键不存在 = 满桶),不留一个按补满时刻才过期的键");
+                "满桶扣一个再全额还回去还是满桶:键删掉(键不存在 = 满桶),不留一个按补满时刻才过期的键");
     }
 
     @Test
     void refund_ofAMissingKeyDoesNothing() {
         Bucket ip = bucket("ip", 1, 2);
         Long reply = redis.eval(RedisRateLimitStore.REFUND_SCRIPT, ScriptOutputType.INTEGER,
-                new byte[][] {utf8(ip.key())}, utf8(Long.toString(T)), utf8("1"), utf8("2"));
+                new byte[][] {utf8(ip.key())}, utf8(Long.toString(T)), utf8("1"), utf8("2"), utf8("900"));
 
         assertEquals(0L, reply, "键不存在 = 已是满桶,没有可还的");
         assertEquals(0L, redis.exists(utf8(ip.key())), "退还不凭空建出桶键");

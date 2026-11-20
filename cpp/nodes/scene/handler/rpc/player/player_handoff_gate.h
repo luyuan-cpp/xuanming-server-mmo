@@ -27,6 +27,7 @@
 #include "player/comp/player_ownership_comp.h"
 #include "proto/common/base/empty.pb.h"
 #include "proto/scene/player_activity.pb.h"
+#include "proto/scene/player_afk_pass.pb.h"
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_battle_result.pb.h"
@@ -44,7 +45,8 @@ namespace scene_handoff_gate
 	// 这个方法的消息能不能换一个场景节点(或换一个场景)再执行。
 	//
 	// 能:只读写玩家自己的状态,不引用当前场景里的东西。玩家落到哪个节点、哪张图,这些消息的含义都不变。
-	//   - 整个服务都是这一类的:背包与装备、属性、宝宝、任务、货币、活跃度、战斗结果;
+	//   - 整个服务都是这一类的:背包与装备、属性、宝宝、任务、货币、活跃度、战斗结果、挂机月卡(查询、开通、GM 设定只读写
+	//     角色自己的到期时刻与灵石;开通带幂等键,重投也只生效一次,docs/design/afk-monthly-card.md §4.1);
 	//   - 技能服务里的看技能、升技能(同一服务里的放技能绑在场景上,所以这个服务按方法列);
 	//   - 场景服务里的取版本摘要(读玩家自己的各域版本)与查场景信息(答的就是此刻所在的场景,落地后答新场景正是客户端要的),
 	//     两者都是单向消息,不会被扣住重投,登记在这里只为不被当成旧场景的消息丢掉(IsStaleForThisScene)。
@@ -69,7 +71,8 @@ namespace scene_handoff_gate
 			service == SceneMissionClientPlayer::descriptor() ||
 			service == SceneCurrencyClientPlayer::descriptor() ||
 			service == SceneActivityClientPlayer::descriptor() ||
-			service == SceneBattleResultClientPlayer::descriptor())
+			service == SceneBattleResultClientPlayer::descriptor() ||
+			service == SceneAfkPassClientPlayer::descriptor())
 		{
 			return true;
 		}

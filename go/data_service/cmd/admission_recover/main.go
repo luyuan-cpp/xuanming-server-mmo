@@ -5,6 +5,9 @@
 // 摘掉之后,交易的 Begin / Confirm / Cancel 重试时会把它判为排空(store.fenceDeadTradeHolders)。
 //
 // 运维必须先确认实例已经死了:活着的实例被摘掉之后,它内存里没落盘的进度就丢了。
+//
+// 连接用修复身份(MMORPG_SQL_REPAIR_PRINCIPAL,授权由 tools/scripts/maintenance_drain.ps1 的 render-repair-role 生成,
+// plan 与 apply 同一个身份),不是维护身份:维护身份不授业务表(负责人 2026-11-19 定)。
 package main
 
 import (
@@ -81,9 +84,9 @@ func runRecovery(ctx context.Context, o recoveryOptions, out, errOut io.Writer, 
 			fmt.Fprintln(errOut, "invalid "+authoritysql.BackendEnv)
 			return 2
 		}
-		permission, err := authoritysql.LoadOperatorPermission(os.Getenv)
+		permission, err := authoritysql.LoadRepairPermission(os.Getenv)
 		if err != nil {
-			fmt.Fprintln(errOut, "missing SQL operator identity")
+			fmt.Fprintln(errOut, "missing SQL repair identity ("+authoritysql.RepairPrincipalEnv+")")
 			return 2
 		}
 		// 从环境读 DSN 后只取连接配置,错误里不回显原 DSN 或密码。

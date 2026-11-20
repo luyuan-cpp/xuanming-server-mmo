@@ -37,6 +37,8 @@ class RedisRateLimitStoreTest {
 
     private static final Bucket IP = new Bucket("rl:ip:1.2.3.4", 5, 20);
     private static final Bucket ZONE = new Bucket("rl:zone:7", 2000, 5000);
+    /** 区桶空时 IP 桶扣的那一份:0.1 个令牌(与 queue-retry-ip-cost-milli 缺省值相同)。 */
+    private static final long QUEUED_IP_COST_MILLI = 100;
 
     private RedisScriptingCommands<byte[], byte[]> redis;
     private RedisRateLimitStore store;
@@ -47,7 +49,7 @@ class RedisRateLimitStoreTest {
         redis = mock(RedisScriptingCommands.class);
         when(redis.digest(RedisRateLimitStore.TAKE_SCRIPT)).thenReturn(TAKE_SHA);
         when(redis.digest(RedisRateLimitStore.REFUND_SCRIPT)).thenReturn(REFUND_SHA);
-        store = new RedisRateLimitStore(redis);
+        store = new RedisRateLimitStore(redis, QUEUED_IP_COST_MILLI);
     }
 
     /** 每个桶的扣令牌结果:按调用顺序依次返回。 */
@@ -117,7 +119,23 @@ class RedisRateLimitStoreTest {
         ArgumentCaptor<byte[][]> args = ArgumentCaptor.forClass(byte[][].class);
         verify(redis).evalsha(eq(REFUND_SHA), eq(ScriptOutputType.INTEGER), keys.capture(), args.capture());
         assertArrayEquals(new String[] {"rl:ip:1.2.3.4"}, texts(keys.getValue()), "退还的是 IP 桶");
-        assertArrayEquals(new String[] {"1700000000123", "5", "20"}, texts(args.getValue()), "退还按同一时刻与 IP 桶的阈值算");
+        assertArrayEquals(new String[] {"1700000000123", "5", "20", "900"}, texts(args.getValue()),
+                "退还按同一时刻与 IP 桶的阈值算,还 1 个令牌减去排队重试的 0.1 个(千分之一令牌为单位)");
+    }
+
+    @Test
+    void zoneEmpty_withFullQueuedCost_skipsTheRefund() {
+        store = new RedisRateLimitStore(redis, 1000);
+        takeReplies(List.of(0L, 0L), List.of(1L, 250L));
+
+        assertEquals(Admission.zoneEmpty(250), store.admit(IP, ZONE));
+        verify(redis, never()).evalsha(eq(REFUND_SHA), any(ScriptOutputType.class), any(byte[][].class), any(byte[][].class));
+    }
+
+    @Test
+    void queuedIpCostOutsideOneToken_isRejected() {
+        assertThrows(IllegalArgumentException.class, () -> new RedisRateLimitStore(redis, -1));
+        assertThrows(IllegalArgumentException.class, () -> new RedisRateLimitStore(redis, 1001));
     }
 
     @Test

@@ -23,6 +23,7 @@ import (
 	proto_common "proto/common/base"
 	pb "proto/player_locator"
 	"shared/buildinfo"
+	"shared/clockcheck"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/safego"
@@ -44,6 +45,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	clockcheck.MustPass("player_locator")
 	conf.MustLoad(*configFile, &config.AppConfig)
 	// 停机强退时限要盖住最长的在途请求(Timeout 10s 比 go-zero 缺省的 4.5s 长):滚动重启时在途的会话 / 位置请求
 	// 要么做完、要么自己超时,不被强杀砍断。
@@ -71,9 +73,7 @@ func main() {
 	}
 	defer n.Close()
 
-	if err := n.KeepAlive(); err != nil {
-		logx.Must(fmt.Errorf("keep alive: %w", err))
-	}
+	n.KeepAlive()
 	logx.Infof("Node registered: id=%d uuid=%s", n.Info.NodeId, n.Info.NodeUuid)
 
 	// Start background lease monitor

@@ -241,9 +241,9 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 `bin/etc/base_deploy_config.yaml` 的 `GateMaxConnections` 限制单个 gate 同时持有的
 客户端 TCP 会话。
 
-**(2026-11-12,未编译)闸门在 accept 处**:muduo `Acceptor` 的准入回调(`handler/rpc/connection_admission.h`,
+**(2026-11-12,未编译;2026-11-19 补未验签预算,未编译)闸门在 accept 处**:muduo `Acceptor` 的准入回调(`handler/rpc/connection_admission.h`,
 `main.cpp` 经 `TcpServer::setAdmissionCallback` 装上)在 accept 成功之后、`TcpConnection` 建出来之前依次判
-关源、总量、新建速率;被拒的连接当场以 RST 关闭,gate 不为它建任何对象,内核不留 TIME_WAIT,也不会有断开回调。
+关源、总量、未验签预算、新建速率;被拒的连接当场以 RST 关闭,gate 不为它建任何对象,内核不留 TIME_WAIT,也不会有断开回调。
 新建速率是一个全局令牌桶:缺省桶深等于连接上限、持续速率是上限的 1%/秒(下限 100),
 用 `GATE_ACCEPT_RATE_PER_SECOND` / `GATE_ACCEPT_BURST` 覆盖,写错拒绝启动。
 连接回调里原来那道总量判定(分配 session id / `SessionInfo` 之前)留作第二道;走到它的连接直接关闭,
@@ -264,11 +264,22 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 
 **(2026-11-06,未编译)握手期限已加**:建连 10 秒内不验签就关,判据是距建连的时长,不看期间有没有发字节;
 验签之后 30 秒收不到任何一帧也关(客户端心跳,见 `docs/design/gate-client-heartbeat.md`)。所以未认证连接每条最多占
-10 秒,不再能长期占槽;但持续高速建连仍能占满全部槽位,未认证连接的独立预算与 LRU 淘汰还没做。
+10 秒,不再能长期占槽。
 
-**(2026-11-12,未编译)新建速率闸给「持续高速建连」加了上界**:只建连不验签的来源第一次能在 10 秒内占满全部槽位
-(桶深等于上限),之后稳态最多占住上限的 10%(速率 × 握手期限)。这段时间里合法新连接与它抢同一个速率桶,
-所以独立预算与 LRU 淘汰仍然要做;已连上的玩家不受影响。
+**(2026-11-12,未编译)新建速率闸给「持续高速建连」加了上界**:稳态下只建连不验签的来源最多占住上限的 10%(速率 × 握手期限)。
+
+**(2026-11-19,未编译)未认证连接有了独立预算**(设计文档 P0-2):未认证连接最多占到上限的 10%,突发也占不满全部槽位,
+已验签的会话总有九成位置。未认证连接过了上限的 5% 就算承压:建连满 3 秒还没验签的最老一条给新连接让位
+(经会话里的 weak 连接 `forceClose`,会话由断开回调删);池里全是刚建的连接时,新连接按 sshd `MaxStartups` 的方式按概率拒,
+到预算全拒(`gate_rejected_total{reason="preauth_early_drop|preauth_budget"}`,淘汰记在 `gate_preauth_evicted_total`)。
+正常客户端毫秒级验签,不会被淘汰;gate 自己的 loop 刚卡过时也不淘汰(验签请求可能还在接收缓冲里没读)。
+预算、起点与可淘汰年龄可用 `GATE_PREAUTH_BUDGET` / `GATE_PREAUTH_EARLY_DROP_START` / `GATE_PREAUTH_EVICTABLE_AGE_MS` 覆盖,写错拒启。
+
+**(2026-11-19,未编译)按来源前缀限速**(设计文档 P2-2):缺省关闭,设了 `GATE_SOURCE_RATE_PER_SECOND` 才开,开了也只在承压时生效
+(未验签池过了早拒起点,或全局速率闸最近 10 秒内拒过连接)。按 IPv4 /24、IPv6 /64 聚合,每个前缀一个小令牌桶,
+承压期间单个前缀最多拿到全局速率的一成(`gate_rejected_total{reason="source_rate"}`)。限速率不限总量、不封来源。
+只在 gate 看得到玩家真实源地址的部署形态里开(external 入口 + `externalTrafficPolicy: Local`);podip 形态与代理型 LB 后面开了,
+会把所有人当成同一个来源。前缀表满(65536)时新前缀不登记、直接放行(fail-open,计数并告警),全局各道照常生效。
 
 > **这最后一句是一个已知的、成建制的缺口，不是措辞上的保留。** 它的完整分析、业界对照
 > （nginx / HAProxy / Envoy / sshd / Redis / PostgreSQL 的对应机制）、两条拒绝路线的取舍，
@@ -291,4 +302,5 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 > 这两行连接日志两个平台都已降为 `LOG_TRACE`：Windows 构建自 `52ebf9e5d`，Linux 构建（`third_party/muduo-linux`，即 K8s）经
 > `tools/archived/muduo_linux_overlay/muduo/net/TcpServer.cc`，2026-11-10 落码、未编译。② 所说的抵消随之消除，详见设计文档 P0-3。）
 > ③ 补上「未认证连接独立预算 + 死线」约 20 行、不需要改 muduo，是投入产出比最高的一条。
-> **（2026-11-06）** 死线一半已落码(10 秒,见上);独立预算一半未做,要先按重连风暴实测定预算大小,见设计文档 P0-2。
+> **（2026-11-19）** 两半都已落码、未编译:死线 10 秒(2026-11-06);独立预算、LRU 淘汰与按概率早拒(2026-11-19,在 accept 处的准入回调里)。
+> 预算没有等重连风暴实测,按推导先定:起点高于合法洪峰估计的两倍,只淘汰建连满 3 秒的连接,推导见设计文档 P0-2。

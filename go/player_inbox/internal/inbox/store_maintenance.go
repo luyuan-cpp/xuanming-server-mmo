@@ -150,8 +150,9 @@ func (s *Store) ScanGauges(ctx context.Context, nowMs uint64, cut GaugeCutoffs) 
 	return foldScanGauges(nowMs, shards), nil
 }
 
-// FinalizedRef 是对账要核对的一条终态行:对账谓词 finalizedLedgerGap 用到的列,外加翻页游标要的 updated_ms。
-// 定时对账由 RecentlyFinalized 读出(只读消费方终结的行);ReconcilePlayer 由 finalizedRefOfRow 从整行取。
+// FinalizedRef 是对账要核对的一条条目行:对账谓词 reconcileDiff / finalizedLedgerGap 用到的列,外加翻页游标要的 updated_ms。
+// 定时对账由 RecentlyFinalized 读出(只读消费方终结的行);ReconcilePlayer 由 forEachPlayerItemsPage 读出(这名玩家的全部行,
+// 含 PENDING)。两处都只读这几列(queryFinalizedRefs)。
 type FinalizedRef struct {
 	PlayerID      uint64
 	Domain        inboxpb.PlayerInboxDomain
@@ -190,9 +191,19 @@ func (s *Store) RecentlyFinalized(ctx context.Context, shard uint32, sinceMs uin
 	query += " ORDER BY `updated_ms` DESC, `player_id` DESC, `domain` DESC, `seq` DESC LIMIT ?"
 	args = append(args, limit)
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	refs, err := s.queryFinalizedRefs(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("inbox: scan finalized shard=%d: %w", shard, err)
+	}
+	return refs, nil
+}
+
+// queryFinalizedRefs 执行一条按 finalizedRefColumns 选列的查询,把每行扫成 FinalizedRef。
+// 定时对账(RecentlyFinalized)与单人对账(forEachPlayerItemsPage)共用:对账只判这几列,不读载荷与摘要。
+func (s *Store) queryFinalizedRefs(ctx context.Context, query string, args ...any) ([]FinalizedRef, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 	var out []FinalizedRef
@@ -218,10 +229,12 @@ const playerItemsPageSize = 1000
 
 // forEachPlayerItemsPage 按 (domain, seq) 升序键集翻页读一名玩家(可选一个域)的全部条目行,每读到一页交给 visit。
 // 翻页条件落在主键 (shard, player_id, domain, seq) 上,每页是一段主键范围扫描,不随翻到第几页变慢。
+// 只读对账判定要用的列(finalizedRefColumns),不读载荷(单行最大 16KiB)与摘要:整次对账共用一份调用预算,
+// 读整行时战斗行多的老玩家每次都读不完、只能回错误,而他们正是翻页要照顾的人(2026-11-20 独立评审)。
 // 读失败或 visit 返回错误时停下并返回错误:对账结果要么完整,要么是错误,不回半份。
 // 各页是各自的读快照:翻页期间新入箱的行,排在游标之后的会读到;已读过的行之后再变,不回头重读。
 func (s *Store) forEachPlayerItemsPage(ctx context.Context, playerID uint64, domain inboxpb.PlayerInboxDomain, pageSize int,
-	visit func(rows []*inboxpb.PlayerInboxItemRow) error) error {
+	visit func(refs []FinalizedRef) error) error {
 	if pageSize <= 0 {
 		return fmt.Errorf("inbox: player items page size must be positive, got %d", pageSize)
 	}
@@ -229,7 +242,7 @@ func (s *Store) forEachPlayerItemsPage(ctx context.Context, playerID uint64, dom
 	var afterSeq uint64
 	first := true
 	for {
-		query := "SELECT " + itemColumns + " FROM " + itemTable + " WHERE `shard` = ? AND `player_id` = ?"
+		query := "SELECT " + finalizedRefColumns + " FROM " + itemTable + " WHERE `shard` = ? AND `player_id` = ?"
 		args := []any{RowShard(playerID), playerID}
 		if domain != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_UNSPECIFIED {
 			query += " AND `domain` = ?"
@@ -241,18 +254,18 @@ func (s *Store) forEachPlayerItemsPage(ctx context.Context, playerID uint64, dom
 		}
 		query += " ORDER BY `domain` ASC, `seq` ASC LIMIT ?"
 		args = append(args, pageSize)
-		rows, err := queryItems(ctx, s.db, query, args...)
+		refs, err := s.queryFinalizedRefs(ctx, query, args...)
 		if err != nil {
 			return fmt.Errorf("inbox: read player items player=%d after domain=%d seq=%d: %w", playerID, afterDomain, afterSeq, err)
 		}
-		if len(rows) > 0 {
-			if err := visit(rows); err != nil {
+		if len(refs) > 0 {
+			if err := visit(refs); err != nil {
 				return err
 			}
-			last := rows[len(rows)-1]
-			afterDomain, afterSeq, first = last.GetDomain(), last.GetSeq(), false
+			last := refs[len(refs)-1]
+			afterDomain, afterSeq, first = uint32(last.Domain), last.Seq, false
 		}
-		if len(rows) < pageSize {
+		if len(refs) < pageSize {
 			return nil
 		}
 	}

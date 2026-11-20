@@ -77,12 +77,12 @@ KafkaWriteTimeoutSeconds: 5
 # 实际等待 = min(WaitAOFTimeoutMs, 请求剩余 − KafkaWriteTimeoutSeconds − 0.3s − 0.1s):铸造之后的同步推路由与回滚
 # 必须仍在上面的 Timeout 之内。文件头的 Timeout 已把本项算进去:角色目录强读与归属查询都在各自上限之内时总能等满;
 # 不足 1ms 时一条都不发、回 3。调大它必须同步调大文件头的 Timeout(不等式见那里,契约测试守)。
-# 取上限 2000 而不是 go/db 的 1500:高可用下 numreplicas=1 要等副本自己 everysec 刷盘,副本只在每秒一次的 cron 或主节点
+# 取上限 2000 而不是 go/db 的 1500:集群上 numreplicas=1 要等副本自己 everysec 刷盘,副本只在每秒一次的 cron 或主节点
 # GETACK(每次 WAITAOF 发一次)时上报已刷盘偏移,低负载下平均约 1s、最坏近 2s,1500 会让约 1/8 的铸造回 7(推算,设计 §4.3.3)。
 # 单实例只等本地刷盘(≤ 约 1s),上限调高不影响它。
 # NumLocal 1 要求 appendonly yes(compose 与 K8s 的 redis 都开着);开启时启动先探一次,失败拒启。两项都写 0 = 关闭(启动打 ERROR)。
-# NumReplicas 这里写 0 给本机 compose 单实例;K8s ConfigMap 不镜像它,按共享 Redis 拓扑渲染(单实例 0、高可用 1,
-# tools/scripts/k8s_deploy.ps1 Get-OwnerEpochMintWaitAOFNumReplicas)。NumLocal / TimeoutMs 原样镜像。
+# NumReplicas 这里写 0 给本机 compose 单实例;K8s ConfigMap 不镜像它,按玩家域所在的 Redis 渲染(玩家域集群 1、核心单实例 0,
+# tools/scripts/k8s_deploy.ps1 渲染 OwnerEpochMint 的那一段)。NumLocal / TimeoutMs 原样镜像。
 OwnerEpochMint:
   WaitAOFNumLocal: 1
   WaitAOFNumReplicas: 0

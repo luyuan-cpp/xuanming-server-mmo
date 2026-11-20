@@ -31,13 +31,15 @@ import java.util.List;
  *   <li>扣 IP 桶({@link #TAKE_SCRIPT}):不足一个令牌 → IP_EMPTY,什么都没写,区桶不碰;</li>
  *   <li>没有区桶(zone_id = 0)→ OK;</li>
  *   <li>扣区桶:够 → OK;</li>
- *   <li>区桶不足一个令牌 → 把第 1 步扣的那个 IP 令牌还回去({@link #REFUND_SCRIPT}),回 ZONE_EMPTY 与区桶的等待毫秒。</li>
+ *   <li>区桶不足一个令牌 → 把第 1 步扣的那个 IP 令牌还回去,只留下排队重试的那一小份({@link #REFUND_SCRIPT};
+ *       扣多少由构造参数给定,缺省 0.1 个,为什么要扣见 {@link AssignGateRateLimiter} 类注释「排队提示」;
+ *       整个都扣时不退还、省一个往返),回 ZONE_EMPTY 与区桶的等待毫秒。</li>
  * </ol>
- * 判定的顺序与结局和以前相同(先 IP 后区,区桶空时 IP 令牌不算扣),差别只在「不再是一个原子操作」:
+ * 判定的顺序与结局和以前相同(先 IP 后区,区桶空时 IP 桶只算扣那一小份),差别只在「不再是一个原子操作」:
  * <ul>
  *   <li>第 1 步到第 4 步之间,别的请求看到的 IP 桶少一个令牌,偏严;</li>
  *   <li>还回去的余量不超过「从没扣过」时的余量(两者只在补满封顶时有差,而且是还回去的那一边少),不会因为退还而多放;</li>
- *   <li>退还这一条失败(超时、断线)时 IP 桶多扣了一个令牌,偏严;这次判定照样回 ZONE_EMPTY(区桶确实空了),只打 WARN,
+ *   <li>退还这一条失败(超时、断线)时 IP 桶多扣了不到一个令牌,偏严;这次判定照样回 ZONE_EMPTY(区桶确实空了),只打 WARN,
  *       不抛给限流器 —— 抛出去会被当成 Redis 故障、放行这个请求并熔断五秒;</li>
  *   <li>第 3 步出错时异常照常抛给限流器,按 fail-open 放行;IP 令牌已扣,与「放行」的结局一致。</li>
  * </ul>
@@ -87,8 +89,9 @@ public final class RedisRateLimitStore implements RateLimitStore {
             """;
 
     /**
-     * 还回一个令牌(扣过 IP 桶、区桶却空了时)。KEYS:桶;ARGV 同 {@link #TAKE_SCRIPT}。
-     * 键不存在 = 已是满桶,什么都不做,返回 0;还回去之后满了就删键(键不存在 = 满桶),否则写回并按补满时刻设过期,返回 1。
+     * 还回一部分令牌(扣过 IP 桶、区桶却空了时)。KEYS:桶;ARGV:同 {@link #TAKE_SCRIPT} 的三个,外加 ARGV[4] = 还回多少
+     * (千分之一令牌,1~1000)。键不存在 = 已是满桶,什么都不做,返回 0;还回去之后满了就删键(键不存在 = 满桶),
+     * 否则写回并按补满时刻设过期,返回 1。
      */
     static final String REFUND_SCRIPT = """
             local now
@@ -104,7 +107,7 @@ public final class RedisRateLimitStore implements RateLimitStore {
             if t == nil or last == nil then
               return 0
             end
-            local level = math.min(burst, t + math.max(0, now - last) * rps) + 1000
+            local level = math.min(burst, t + math.max(0, now - last) * rps) + tonumber(ARGV[4])
             if level >= burst then
               redis.call('DEL', KEYS[1])
               return 1
@@ -121,18 +124,28 @@ public final class RedisRateLimitStore implements RateLimitStore {
     private static final long TAKEN = 0;
     private static final long EMPTY = 1;
 
+    /** 一个令牌,以千分之一令牌为单位(桶里的余量都按这个单位存)。 */
+    static final long ONE_TOKEN_MILLI = 1000;
+
     private final RedisScriptingCommands<byte[], byte[]> redis;
     /** 两段脚本的 SHA1,本地算出(不走网络),EVALSHA 用。 */
     private final String takeSha;
     private final String refundSha;
+    /** 区桶空时还回 IP 桶的千分之一令牌数 = 一个令牌减去排队重试的那一小份;0 = 不退还。 */
+    private final long refundMilli;
 
     /**
-     * @param redis 单实例或集群连接的同步接口(只用到脚本命令)。集群连接按第一个键路由 EVALSHA / EVAL。
+     * @param redis             单实例或集群连接的同步接口(只用到脚本命令)。集群连接按第一个键路由 EVALSHA / EVAL。
+     * @param queuedIpCostMilli 区桶空时 IP 桶扣多少,千分之一令牌,0~1000({@code gate.rate-limit.queue-retry-ip-cost-milli})
      */
-    public RedisRateLimitStore(RedisScriptingCommands<byte[], byte[]> redis) {
+    public RedisRateLimitStore(RedisScriptingCommands<byte[], byte[]> redis, long queuedIpCostMilli) {
+        if (queuedIpCostMilli < 0 || queuedIpCostMilli > ONE_TOKEN_MILLI) {
+            throw new IllegalArgumentException("queued ip cost must be within [0, 1000] milli-tokens: " + queuedIpCostMilli);
+        }
         this.redis = redis;
         this.takeSha = redis.digest(TAKE_SCRIPT);
         this.refundSha = redis.digest(REFUND_SCRIPT);
+        this.refundMilli = ONE_TOKEN_MILLI - queuedIpCostMilli;
     }
 
     @Override
@@ -156,13 +169,16 @@ public final class RedisRateLimitStore implements RateLimitStore {
         if (zoneTake[0] == TAKEN) {
             return Admission.ok();
         }
-        refund(now, ip);
+        if (refundMilli > 0) {
+            refund(now, ip);
+        }
         return Admission.zoneEmpty(zoneTake[1]);
     }
 
     /** 跑一次 {@link #TAKE_SCRIPT},返回 {结果码, 等待毫秒}。 */
     private long[] take(byte[] now, Bucket bucket) {
-        List<Object> reply = eval(takeSha, TAKE_SCRIPT, ScriptOutputType.MULTI, bucket, now);
+        List<Object> reply = eval(takeSha, TAKE_SCRIPT, ScriptOutputType.MULTI, bucket,
+                now, number(bucket.rps()), number(bucket.burst()));
         if (reply == null || reply.size() != 2 || !(reply.get(0) instanceof Long kind) || !(reply.get(1) instanceof Long waitMs)
                 || (kind != TAKEN && kind != EMPTY)) {
             throw new IllegalStateException("rate-limit take script returned an unknown reply: " + reply);
@@ -170,19 +186,20 @@ public final class RedisRateLimitStore implements RateLimitStore {
         return new long[] {kind, waitMs};
     }
 
-    /** 还回一个 IP 令牌;失败只打 WARN(偏严,见类注释),不抛。 */
+    /** 还回 {@link #refundMilli} 给 IP 桶;失败只打 WARN(偏严,见类注释),不抛。 */
     private void refund(byte[] now, Bucket bucket) {
         try {
-            eval(refundSha, REFUND_SCRIPT, ScriptOutputType.INTEGER, bucket, now);
+            eval(refundSha, REFUND_SCRIPT, ScriptOutputType.INTEGER, bucket,
+                    now, number(bucket.rps()), number(bucket.burst()), number(refundMilli));
         } catch (RuntimeException e) {
-            log.warn("rate-limit refund of one ip token failed; the ip bucket keeps one extra token spent until it refills: {}",
-                    e.toString());
+            log.warn("rate-limit refund to the ip bucket failed; it stays {} milli-tokens lower until it refills: {}",
+                    refundMilli, e.toString());
         }
     }
 
-    private <T> T eval(String sha, String script, ScriptOutputType type, Bucket bucket, byte[] now) {
+    /** 对一个桶键跑脚本;{@code args} 是 ARGV,按脚本注释的顺序。 */
+    private <T> T eval(String sha, String script, ScriptOutputType type, Bucket bucket, byte[]... args) {
         byte[][] keys = {utf8(bucket.key())};
-        byte[][] args = {now, number(bucket.rps()), number(bucket.burst())};
         try {
             return redis.evalsha(sha, type, keys, args);
         } catch (RedisNoScriptException e) {

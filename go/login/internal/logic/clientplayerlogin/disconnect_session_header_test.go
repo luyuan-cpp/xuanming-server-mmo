@@ -3,7 +3,7 @@ package clientplayerloginlogic
 // Disconnect 的会话号以会话头为准(docs/design/client-request-ordering.md §6.2,2026-11-12)。
 // 会话头(SessionDetails)由 gate 签名、callerauth 验过才进 ctx;请求体的 session_id 不在签名范围内。
 // 改之前断线租约按请求体的 session_id 挂,改之后只用会话头的值;请求体填了且不一致时记 CRITICAL、照常按会话头收尾
-// (2026-11-20 评审改:原先整条拒绝,一次性的断线通知被拒就让玩家永久停在 ONLINE)。
+// (2026-11-19 评审改:原先整条拒绝。不一致是发送方的确定缺陷,gate 会原样重发同一条通知、次次被拒,玩家永远停在 ONLINE)。
 // 夹具沿用 session_fence_wiring_test.go 的 newFenceWiring(miniredis + 假 player_locator)。
 
 import (
@@ -42,8 +42,8 @@ func TestDisconnect_BodySessionIDThatDiffersFromTheHeaderStillSettlesByTheHeader
 	svcCtx, rdb, locator := newFenceWiring(t)
 	ctx := fenceWiringCtx(fenceWiringPlayerID)
 
-	// 这条连接已登录、已绑定角色。请求体与会话头不一致时若整条拒绝(2026-11-12 的做法),没人重发这条通知,
-	// 栅栏不关、登录态不清、角色永远等不到断线租约;现在必须照常按会话头收尾。
+	// 这条连接已登录、已绑定角色。请求体与会话头不一致时若整条拒绝(2026-11-12 的做法),gate 重发的还是同一条通知、
+	// 次次被拒,栅栏不关、登录态不清、角色永远等不到断线租约;现在必须照常按会话头收尾、回成功。
 	_, gen, err := sessionfence.CheckEnterGame(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, sessionFenceTTL)
 	require.NoError(t, err)
 	outcome, err := sessionfence.BindPlayer(ctx, rdb, fenceWiringKey, fenceWiringPlayerID, gen)

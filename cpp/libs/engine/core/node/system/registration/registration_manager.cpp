@@ -80,6 +80,8 @@ std::string DescribeIdentity(const NodeInfo& node)
 void CloseFailedHandshake(const RpcClientPtr& client, const TcpConnectionPtr& conn, const std::string& reason)
 {
     const uint32_t failures = client->RecordHandshakeFailure();
+    dependency_link_metrics::OnConnectFailed(dependency_link_metrics::Dependency::kNodeLink,
+                                             dependency_link_metrics::FailureReason::kHandshake);
     const double delaySeconds = NodeHandshakeManager::FailedHandshakeCloseDelaySeconds(failures);
     LOG_WARN << "Node handshake failed: " << reason << ", peer=" << conn->peerAddress().toIpPort()
              << ", consecutive_failures=" << failures << ", close_in_seconds=" << delaySeconds;

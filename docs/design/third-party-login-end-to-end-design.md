@@ -148,7 +148,8 @@ POST /api/bind   { bind_type: "wechat", auth_token: <code> }
 
 ### Apple（iOS）
 - `ASAuthorizationAppleIDProvider` 发起授权，取 `ASAuthorizationAppleIDCredential.identityToken`（UTF-8 的 JWT，10 分钟有效）→ POST `/api/login {auth_type:"apple", auth_token:令牌}`
-- 登录不需要把 `authorizationCode` 发给服务端；注销账号时要不要送、怎么撤销 Apple 令牌见 [账号注销](./account-deletion.md) §8（2026-11-19 待拍板）
+- 登录不需要把 `authorizationCode` 发给服务端；申请注销时重新授权，把这次的 `authorizationCode` 随申请送上，login 换票后立刻撤销（2026-11-19 负责人定，[账号注销](./account-deletion.md) §8）
+- 身份令牌一次性：登录失败或超时后重新拉起 SDK 取新令牌，不重发旧的（§12.1）
 
 ### Google（安卓）
 - Google 登录 SDK 请求 ID token 时填**服务端**的 OAuth 客户端 ID（Web 应用类型，与 `AuthProviders.Google.ClientId` 相同），取 `idToken`（1 小时有效）→ POST `/api/login {auth_type:"google", auth_token:令牌}`
@@ -173,7 +174,7 @@ Unity 客户端里这几种第三方登录都用 `LoginCredential.ForThirdParty(
 | OAuth code 重放 | 微信 code 只能用一次,服务端验过即作废;额外加 device_id 绑定 |
 | OpenId 跨应用不一致 | 账号只用 `unionid`（`RequireUnionId` 缺省 true，拿不到即拒绝），需在微信开放平台绑定主体 / QQ 互联申请 unionid 权限 |
 | 账号被盗(他人拿走 access_token) | 双 token 一次性 rotation + 异常 IP/设备触发踢号 |
-| 未成年防沉迷 | 后续按渠道接入实名认证(从 `auth_type` 派生策略) |
+| 未成年防沉迷 | 按渠道分工，见[实名认证与未成年人防沉迷](./real-name-anti-addiction.md)：`wechat_minigame` / `douyin_minigame` 由平台实名并执行限制；其余渠道由 login 接国家系统实名，gate 上的 Login 拦截，到点踢线（2026-11-19 落码未编译） |
 | 苹果审核 | 用了第三方登录的 iOS App 要同时提供注重隐私的等价登录方式（App Store 审核指南 4.8），通行做法是 Sign in with Apple：服务端 2026-11-13 已落码（§十二），iOS 端按钮待做；账号删除时的 Apple 令牌撤销归账号注销任务 |
 
 ---
@@ -354,8 +355,8 @@ message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/Ente
 |---|---|
 | K8s 部署 | 2026-11-12 已落码，未运行。`k8s_deploy.ps1` 新增六个参数，两把 AppSecret 经工作负载密钥目录的单键 Secret `login-wechat-minigame` / `login-douyin-minigame` 注入；防误关与包装入口和微信 / QQ 同一套。用法见[沙盒手册](../ops/wechat-qq-sandbox-runbook.md) §H.5 |
 | QQ 小游戏 | 未做，没有接入计划。要做时照 `WeChatMiniGameProvider` 加一个 provider |
-| 客户端 | 未做。小游戏端调 `wx.login` / `tt.login`，并在 `/api/login` 里送新的 auth_type，归客户端任务 |
-| 传输层 | 未定。gate 只有 TCP 入口，没有 WebSocket。小游戏平台的长连接接口以 WebSocket 为主（微信、抖音都有 connectSocket）；微信小游戏另有 TCP 接口，但有合法域名与端口限制，能不能直连 gate 没有核实。小游戏客户端怎么连 gate 还没定，充值设计把「客户端改 WebSocket」列为非目标，没有别的文档接手 |
+| 客户端 | 2026-11-19 已落码，未编译。`MiniGameLogin`（`Assets/Plugins/WebGL/MmorpgMiniGame.jslib`）向宿主要 `wx.login` / `tt.login` 的 code，登录界面点「进入」时在小游戏里直接走它，见[小游戏 WebSocket 入口](minigame-websocket-gate.md) W10。把客户端真正转成小游戏包（转换工具、构建配置）还没做 |
+| 传输层 | 2026-11-19 已落码，未编译。小游戏走 WebSocket：gate / battle 的客户端端口同时接 TCP 与 WebSocket，wss 由边缘 nginx 终止，节点自报 ws 地址随登录分配、重定向、战斗分配下发。抖音只有 `connectSocket`；微信另有 TCP 接口但限制多，不用。设计与验证见[小游戏 WebSocket 入口](minigame-websocket-gate.md) |
 | 真渠道联调 | 未做，没有小游戏的开发者账号。现有证据只能来自 mock |
 | Java 版 | 待做，已在 Java 仓 `PARITY.md` 登记 |
 
@@ -379,7 +380,7 @@ message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/Ente
 | `apple` | `ASAuthorizationAppleIDCredential.identityToken` | 公钥 `https://appleid.apple.com/auth/keys`；`iss` = `https://appleid.apple.com`；`aud` 含 `AuthProviders.Apple.ClientId`（Bundle ID） | `apple_<sub>` |
 | `google` | Google 登录 SDK 的 `idToken`（用服务端 OAuth 客户端 ID 请求） | 公钥 `https://www.googleapis.com/oauth2/v3/certs`；`iss` 为 `https://accounts.google.com` 或 `accounts.google.com`；`aud` 含 `AuthProviders.Google.ClientId` | `google_<sub>` |
 
-- **校验**（`go/login/internal/logic/pkg/auth/idtoken.go`）：只接受 RS256，不信令牌头部声明的算法（拒绝 `none`、`HS256` 等算法混淆）；先按 `kid` 取公钥验签名，签名对了才解析声明；核 `iss`、`aud`、`exp`、`iat`、`nbf`（容忍 1 分钟时钟偏差）与非空的 `sub`；不足 2048 位的公钥不用；令牌原文超过 16 KiB 不解析。只用标准库，没有引入 JWT 依赖。
+- **校验**（`go/login/internal/logic/pkg/auth/idtoken.go`）：只接受 RS256，不信令牌头部声明的算法（拒绝 `none`、`HS256` 等算法混淆）；先按 `kid` 取公钥验签名，签名对了才解析声明；核 `iss`、`aud`、`exp`、`iat`、`nbf`（容忍 1 分钟时钟偏差）与非空的 `sub`；不足 2048 位的公钥不用；令牌原文超过 16 KiB 不解析。只用标准库，没有引入 JWT 依赖。2026-11-19 起令牌一次性消费（负责人定，[账号注销](./account-deletion.md) §3.4）：验签通过后在登录域 Redis 记令牌摘要（`login:idtoken:used:v1:<渠道>:<SHA-256>`，TTL 到 `exp` 加偏差），同一枚第二次来按凭证无效拒绝，登记读写失败按渠道故障；网关把已成功的登录因超时重发时也会被拒，客户端重新拉起 SDK（同微信 code）。
 - **账号**：`sub` 是渠道内稳定的用户标识。Apple 的 `sub` 对同一开发者团队下的所有 App 相同，Google 的 `sub` 是 Google 账号的全局标识，不像微信 openid 那样按应用分裂，所以没有 `RequireUnionId`。邮箱不进账号（Apple 可能给的是转发邮箱，用户还能随时停用）。
 - **公钥缓存**：每个 login 副本各缓存一份，不需要跨副本协调。新鲜期 1 小时；过期后认识的 `kid` 先用旧公钥、后台换新，登录不等这次拉取。不认识的 `kid`（渠道轮换了密钥）等一次重拉；离上次拉取不足 1 分钟就不拉、按凭证无效拒绝，免得随手编 `kid` 的请求把渠道接口刷爆。渠道公钥接口故障时，24 小时内的旧公钥照用。同一时刻最多一个拉取在跑，并发请求共用它，等待时各看自己的期限；拉取有自己的 5 秒时限，不挂在某个请求上。
 - **配置**：`AuthProviders.Apple` / `Google`，字段 `ClientId`（必填）与 `Endpoint`（取公钥的地址，只给沙箱 mock）。启动门禁（`go/login/internal/config/auth_providers.go` `checkIdTokenProvider`）：`ClientId` 非空、无首尾空白、不是未展开的 `${...}`；Google 的 `ClientId` 必须以 `.apps.googleusercontent.com` 结尾；`Endpoint` 生产只接受 https，因为公钥被换掉就能伪造任意玩家的令牌。签发方 `iss` 固定是两家的生产值，不随 `Endpoint` 变。
@@ -402,7 +403,7 @@ message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/Ente
 
 | 项 | 状态 |
 |---|---|
-| nonce | 不校验。渠道的 nonce 机制要服务端先发挑战、客户端带进 SDK 请求，当前登录流程没有这一步。现有防线：令牌有效期短、只走 HTTPS、网关与服务端不记录原文、`aud` 限定本应用（别家应用拿到的令牌用不了）。要防截获后的重放，就加「服务端发 nonce → 客户端带进 SDK 请求 → login 核对并一次性消费」一整套，服务端两版与客户端同批改。2026-11-19 另提了更省的「身份令牌一次性消费」，取舍见 [账号注销](./account-deletion.md) §3.4、§9，待拍板 |
+| nonce | 不校验。渠道的 nonce 机制要服务端先发挑战、客户端带进 SDK 请求，当前登录流程没有这一步。现有防线：令牌有效期短、只走 HTTPS、网关与服务端不记录原文、`aud` 限定本应用（别家应用拿到的令牌用不了）。要防截获后的重放，就加「服务端发 nonce → 客户端带进 SDK 请求 → login 核对并一次性消费」一整套，服务端两版与客户端同批改。**2026-11-19 负责人定不做挑战式 nonce，改做身份令牌一次性消费**（见 §12.1 校验一条，取舍见 [账号注销](./account-deletion.md) §3.4、§9） |
 | 多个 ClientId | 只认一个。Apple 在安卓 / 网页上登录时 `aud` 是 Services ID，不是 Bundle ID；要同时支持就把 `ClientId` 改成列表，部署参数与防误关同批改 |
 | 账号注销与 Apple 令牌撤销 | 未做。设计见 [账号注销](./account-deletion.md)（2026-11-19 设计稿，待拍板与同意动码） |
 | 客户端 | 未做。iOS 接 AuthenticationServices，安卓接 Credential Manager 的 Sign in with Google，拿到令牌后调 `LoginCredential.ForThirdParty("apple" / "google", 令牌)`；常量已在客户端 `LoginAuthTypes` 里。接入设计见 [账号注销](./account-deletion.md) §3 |

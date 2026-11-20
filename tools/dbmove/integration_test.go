@@ -630,3 +630,29 @@ func TestITReplicaSettingsOnRealMySQL(t *testing.T) {
 		t.Fatalf("没有配置过的通道: %v %v", exists, err)
 	}
 }
+
+// TTL 开着的表在真实 TiDB 上认得出来(SHOW CREATE TABLE 里的 TTL_ENABLE='ON'),关掉之后不再点名;注释里写着同样的字不算。
+// cutover 的预检靠它:TiDB 换了这段文字的写法,这里先红。mysql 档没有这个属性,恒为空。
+func TestITTTLAttributeOnRealDatabases(t *testing.T) {
+	requireIT(t)
+	ctx, source, _, m, _ := itSetup(t)
+	admin := &sqlAdmin{db: source.admin}
+	source.exec(ctx, t, "CREATE TABLE {db}.it_plain(id BIGINT PRIMARY KEY,note VARCHAR(32) COMMENT 'TTL_ENABLE=''ON''') COMMENT='TTL_ENABLE=''ON'''")
+	if tables, err := admin.TablesWithTTLEnabled(ctx, source.schema); err != nil || len(tables) != 0 {
+		t.Fatalf("没有 TTL 属性的表不算,注释里的字也不算: %v %v", tables, err)
+	}
+	if source.backend != authoritysql.BackendTiDB {
+		return
+	}
+	source.exec(ctx, t, "CREATE TABLE {db}.it_expiring(id BIGINT PRIMARY KEY,created_at DATETIME NOT NULL) TTL=created_at + INTERVAL 30 DAY")
+	if tables, err := admin.TablesWithTTLEnabled(ctx, source.schema); err != nil || strings.Join(tables, ",") != "it_expiring" {
+		t.Fatalf("TTL 开着的表要点名: %v %v", tables, err)
+	}
+	if err := m.requireTTLOff(ctx); !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "it_expiring") || !strings.Contains(err.Error(), "on the source") {
+		t.Fatalf("源库有表开着 TTL,冻结之前就要拒绝: %v", err)
+	}
+	source.exec(ctx, t, "ALTER TABLE {db}.it_expiring TTL_ENABLE='OFF'")
+	if err := m.requireTTLOff(ctx); err != nil {
+		t.Fatalf("关掉之后放行: %v", err)
+	}
+}

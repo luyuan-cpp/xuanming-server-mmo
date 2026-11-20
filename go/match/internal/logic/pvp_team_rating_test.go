@@ -59,7 +59,7 @@ func TestRatedModeIncludesPvpTeam(t *testing.T) {
 	require.False(t, isRatedMode(pb.MatchMode_MATCH_MODE_PVE_TEAM))
 }
 
-func TestRatingSpreadIsExpectedClaimRejection(t *testing.T) {
-	require.True(t, expectedClaimRejection(authority.ErrRatingSpread), "评分在提交点不满足是撮合与提交之间的正常变化")
-	require.True(t, expectedClaimRejection(fmt.Errorf("claim: %w", authority.ErrRatingSpread)))
+func TestRatingSpreadAtCommitDoesNotHold(t *testing.T) {
+	require.False(t, claimOutcomeUnknown(authority.ErrRatingSpread), "评分在提交点不满足是撮合与提交之间的正常变化")
+	require.False(t, claimOutcomeUnknown(fmt.Errorf("claim: %w", authority.ErrRatingSpread)))
 }

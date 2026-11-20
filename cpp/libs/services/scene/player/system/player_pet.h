@@ -98,7 +98,13 @@ public:
 	static uint32_t AutoAllocate(entt::entity player, uint64_t petId,
 								 std::map<uint32_t, uint32_t>& suggested);
 
+	// 直接改名:做全部检查、扣钱、落名字。不做内容送检,只给已经送检过的调用方(RequestRename 的回调)和测试用。
 	static uint32_t Rename(entt::entity player, uint64_t petId, const std::string& name);
+
+	// 客户端改名入口:先做全部检查(不落地),再把名字送内容安全服务;通过后才扣钱、改名并推送新列表(PushList),
+	// 被拒绝或服务不可用时推一条提示。返回 kSuccess 只表示「已受理」,名字此刻还没变;
+	// 检查没过或没有就绪的内容安全节点时返回对应的错误码,什么都没发生。
+	static uint32_t RequestRename(entt::entity player, uint64_t petId, const std::string& name);
 
 	// GM / 未来的捕捉与购买共用的发放入口:铸 pet_id、掷资质、落 PlayerPetComp。
 	// petIdOut 仅在返回 kSuccess 时有效。

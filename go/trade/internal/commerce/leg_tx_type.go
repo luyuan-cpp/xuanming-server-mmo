@@ -13,6 +13,8 @@ import (
 //   - 退回腿:TX_AUCTION_RETURN。把玩家自己托管的资产还给他,不算新增获得,scene 不按获取封禁拒绝
 //     (C++ GainBlockService::CountsAsGain,数据覆写审计 r2-trade#1)。原先退回腿也带 TX_AUCTION_BUY,
 //     被 GM 封禁获取的卖家取不回自己托管的物品,买家的退款也进不了账,合同只能转人工。
+//     只有付回给托管它的那个角色(escrow_owner_id)才算;人工改绑把收件人换成同账号的另一名角色之后,
+//     那名角色拿到的不是自己托管的东西,按成交所得判(2026-11-20 独立评审)。escrow_owner_id 为 0 的旧腿按角色名判。
 //   - 交付腿(成交所得、官方发货、人民币交付):TX_AUCTION_BUY,照常判获取封禁。
 //
 // scene 那边 TX_AUCTION_RETURN 要在交易发放流的允许表里(asset_op_system.cpp 的 kAssetOpStreamRules)。
@@ -23,7 +25,7 @@ func legTxType(l *tradepb.TradeCommerceLeg) uint32 {
 		return uint32(rollbackpb.TransactionType_TX_PAYMENT_REVERSAL)
 	case l.GetStream() == 3:
 		return uint32(rollbackpb.TransactionType_TX_AUCTION_SELL)
-	case isReturnLeg(l.GetRole()):
+	case isReturnLeg(l.GetRole()) && (l.GetEscrowOwnerId() == 0 || l.GetEscrowOwnerId() == l.GetPlayerId()):
 		return uint32(rollbackpb.TransactionType_TX_AUCTION_RETURN)
 	default:
 		return uint32(rollbackpb.TransactionType_TX_AUCTION_BUY)

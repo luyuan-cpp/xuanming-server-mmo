@@ -374,7 +374,7 @@ free         = max(0, capacity - online - admitted_inflight)
 的 `capByGates`,规则在 `go/shared/gatepick/capacity.go`。快速通道的 `FreeSlots` 与 dispatcher 的 `freeSlotsFromCandidates` 走同一处,
 快速通道的占位预算 `capacity − online` 也用封顶之后的值。
 
-- **区容量只有一个来源(2026-11-10 起)**:网关区服目录 `zone_config.capacity`(运维经 `PUT /admin/zones/<id>` 改,缺省 45000)。
+- **区容量只有一个来源(2026-11-10 起)**:网关区服目录 `zone_config.capacity`(运维经 `PUT /admin/zones/<id>` 改,缺省 45000;2026-11-12 起先 `GET` 取 `ETag`、`PUT` 带 `If-Match`,不带回 428、有人改过回 412,见 `java/README.md`「并发与错误约定」)。
   本区网关把它写到 etcd `/mmorpg/zone_policy/zone/<id>`,本区 login 每 2 秒读一次(`go/login/internal/logic/pkg/zonepolicy`),区服列表的
   负载档用的也是这一行。此前 login 另有 `Queue.ZoneCapacityOverride`(K8s 由 `k8s_deploy.ps1` 的 `LoginQueueZoneCapacity` 渲染),
   与区服目录各写一份,已删。读不到区服策略时(网关还没发布、etcd 读失败且起服后一次都没读到)退回软上限,仍按 gate 承载封顶。
@@ -816,7 +816,7 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
 10. **放行速率约等于 1 / Redis 往返,轮询每次三次往返**(2026-11-05 全链路水平扩展盘点第 14 条)。**2026-11-06 已落码,未编译、未测试,待 Codex 验证**,做法见 §5 决策树后 2026-10-18 更正里「一、出队」的「按块发」与「二、查询」的判定顺序:
    - 放行:第一条单发探路,之后每块至多 128 条放进一个 pipeline,一块一次往返;每条仍是独立的一段 `admitEntryScript`,写满与部分写入的语义逐条不变。
    - 轮询:token 核对、取放行槽、读状态与续期合成一段 `lookupScript`,排队中一次轮询从三次往返降到一次。
-   - 排队实例按 zone 组分开:G4a 第 1a 批已有(`k8s_deploy.ps1 -RedisSplit queue`,每组一个 `redis-queue-g<N>`),首次上线显式带上(`shared-redis-split-by-purpose.md` §25.3),本条没有改部署脚本。
+   - 排队所在的 Redis:2026-11-12 起排队进控制集群 `redis-control`,同一 zone 的排队键共用 `{q:<z>}`(全部 Redis 上 Cluster 第 4 批)。原来的 `-RedisSplit queue` 与按 zone 组的 `redis-queue-g<N>` 已随第 6b 批退役。单 zone 排队的容量边界与定案(不拆分片、按名次拉长 `RetryAfterMs`)见 [redis-cluster-all-domains-20261110.md](redis-cluster-all-domains-20261110.md) §6.2。
    - **名次改用「入队序号差加进程内缓存」:不做(2026-11-11 定案,缺口清单第 14 条残余)。** 原文记作「等压测证明扛不住再做」,负责人 11-11 要求不等压测、现在定案:
      - 它省不了往返:轮询已是一段 `lookupScript` 一次往返,ZRANK 就在这段脚本里,O(log N),10 万人排队时十几次比较;改序号差只省这一条命令的 CPU。
      - 代价是客户端可见语义:名次从精确值变成上界(中途离队的人仍被算在前面),名次会停住、跳变;空闲续期的触发方式也要跟着改,两版客户端要同批改。

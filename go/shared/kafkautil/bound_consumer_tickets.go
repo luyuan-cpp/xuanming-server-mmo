@@ -22,12 +22,18 @@ import (
 // 位点越过了它、且组在该分区确实提交过(位点 >= 0,同 R5 的 groupCommitted 判据:-1 说明组在这个分区从没提交过,
 // 越过它的只可能是保留期),就是别的属主处理并提交了它 —— 结清,计入同一次排空的收据;预算内核不到的才 HOLD
 // (先记 HOLD 再结束票据)。读位点只走 coordinator 的 OffsetFetch,不碰消费与提交。
+// 另外要求票据产生时组在该分区已有真实的已提交位点(boundPartition.hasCommitFrontier,2026-11-19 评审修正):没有时新属主从日志起点读起,
+// 起点若已被保留期推过票据,它提交的位点照样 >= 0 且越过票据,却从没处理过它;这种票据核不出结局,只能 HOLD。
 
 // boundTicketConfirmPolls / boundTicketConfirmInterval:收尾核对最多读几轮、两轮之间隔多久(经 sleep 接缝,单测不等墙钟)。
 // 约 30 秒:新属主要等一次再均衡(kafka-go 默认 JoinGroupBackoff 5s)、拉取、处理、提交,正常远在这之内;调用方的 ctx 先到期就以它为准。
 const (
 	boundTicketConfirmPolls    = 30
 	boundTicketConfirmInterval = time.Second
+	// boundTicketConfirmBudget:收尾核对的整体时间上限,按单调时钟截止(AGENTS §11.3,2026-11-19 评审补)。正常 30 轮
+	// (间隔带抖动,约 15–30 秒)先到;broker 不通时每轮新建探针、读位点要几十秒,只靠轮数会拖到十几分钟才 HOLD,
+	// 调用方的 ctx 也可能不带期限(data_service 关停时)。到点仍核不到就 HOLD。
+	boundTicketConfirmBudget = 45 * time.Second
 )
 
 var errBoundTicketUnconfirmed = errors.New("Kafka 交还 / 恢复票据在收尾核对里没核到组内已提交位点越过它们")
@@ -38,7 +44,9 @@ type boundHandoff struct {
 	partition  int
 	offset     int64
 	generation int32
-	finish     func()
+	// frontier:交还时组在该分区已有真实的已提交位点(hasCommitFrontier);false 时组内位点越过它也不能结清。
+	frontier bool
+	finish   func()
 }
 
 // boundHandoffObservation 是收尾核对结清的一条交还记录原件(只记 Kafka API 实际返回值)。
@@ -53,6 +61,12 @@ type boundHandoffObservation struct {
 // confirmOutstandingTickets 在 owner 离组(Run 已返回)之后核交还与恢复票据,见文件头。
 // owner 已记 HOLD 时不再核(收据反正是 HOLD),只结束票据;预算用完或 ctx 先到期,还没核到的记 HOLD 再结束票据。
 func (c *BoundConsumerGroup) confirmOutstandingTickets(ctx context.Context) {
+	budget := c.ticketConfirmBudget
+	if budget <= 0 {
+		budget = boundTicketConfirmBudget
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
 	for poll := 1; ; poll++ {
 		c.mu.Lock()
 		failed := c.failure != nil
@@ -140,7 +154,7 @@ func (c *BoundConsumerGroup) resolvePassedTicketsLocked(committed map[string]map
 	kept := c.handoffs[:0]
 	for _, handoff := range c.handoffs {
 		position, ok := passed(handoff.topic, handoff.partition, handoff.offset)
-		if !ok {
+		if !ok || !handoff.frontier {
 			kept = append(kept, handoff)
 			continue
 		}
@@ -150,7 +164,8 @@ func (c *BoundConsumerGroup) resolvePassedTicketsLocked(committed map[string]map
 	clear(c.handoffs[len(kept):])
 	c.handoffs = kept
 	for key, delivery := range c.replay {
-		if _, ok := passed(delivery.message.Topic, delivery.message.Partition, delivery.message.Offset); !ok {
+		// delivery.partition 是交回这条时的代次分区:那时组若还没有真实的已提交位点,越过它的位点同样证明不了它被处理过。
+		if _, ok := passed(delivery.message.Topic, delivery.message.Partition, delivery.message.Offset); !ok || !delivery.partition.hasCommitFrontier() {
 			continue
 		}
 		delete(c.replay, key)

@@ -5,12 +5,18 @@
 
 class ReleaseSkillRequest;
 class SkillTable;
+class CooldownTimeListComp;
 
 class SkillSystem
 {
 public:
 	// 冷却列表唯一写入口:有效实体第一次启动冷却时创建;失效实体不创建。
 	static void StartCooldown(const entt::entity casterEntity, const SkillTable* skillTable);
+
+	// 冷却列表的另一个创建点:加载玩家时存档里有冷却记录才挂(docs/design/realtime-cooldown-buff-persistence.md §2.2)。
+	// 记录原样挂上,到点的不删(按时间判定,同组下次施法覆盖);开始时刻晚于本机当前时刻的(写盘节点时钟超前)
+	// 压到当前时刻,剩余最多一个整冷却。只在加载链上调用。
+	static void RestoreCooldowns(entt::entity casterEntity, const CooldownTimeListComp& saved);
 
 	static uint32_t ReleaseSkill(entt::entity casterEntity, const ::ReleaseSkillRequest* request);
 	// 最先确认实体、持久数据与玩家派生属性;缺失时拒绝且不打断/加状态。

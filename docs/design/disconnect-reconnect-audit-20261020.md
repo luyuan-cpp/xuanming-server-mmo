@@ -207,6 +207,8 @@ Java 全球模式的 `BattleCompletionStore` 已将完成原件和个人结算�
 
 ### 9.2 实时场景持续状态缺少基线，CD/Buff 生命周期也未明确
 
+> 2026-11-19 「规则需确定」一段已定案并落码(未生成、未导表、未编译、未测试,待 Codex 验证),规则与验证步骤见 [实时技能冷却与 Buff 跨重登保留](realtime-cooldown-buff-persistence.md):冷却全部随玩家存档保留,按 UTC 毫秒的绝对时刻存;Buff 表 `keep_on_logout = 1` 的 Buff 按到期时刻保留,其余是战斗类短效状态,实体重建即清;离线期间时间照常走。实体复用与重建两条路径对冷却完全等价。本节第一段的实时场景基线 / 消费链问题不在其中,仍按原判定。Java 版待做,`PARITY.md` 已记。
+
 **已确认**：ActorCreate 只有 §3.2 所列内容；`ActorBaseAttributesS2C` 的 transform/velocity/combat flags 由实体全局 dirty mask 驱动，广播前即移除该 mask，没有为新观察者保留确认或生成完整初始状态。目标的沉默等 flags 已向旧观察者发过且之后不变时，新观察者缺当前 flags。共享客户端目前也未找到生产代码对 `SyncBaseAttribute` 及 2/5/10/30/60 属性档位的消费，actor 世界主要消费创建、移动和技能表现通知。[脏位消费](../../cpp/libs/services/scene/generated/attribute/actorbaseattributess2c_attribute_sync.cpp#L24)、[协议内容](../../proto/scene/player_state_attribute_sync.proto#L14)、[客户端生产注册](../../../mmorpg-client/Assets/Scripts/Game/GameClient.cs#L1744)
 
 这是一条实时场景基线/消费链不完整的问题，不要求补播旧技能动画，也不能把回合战斗的完整快照拿来证明该链已覆盖。

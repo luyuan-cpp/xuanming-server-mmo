@@ -324,9 +324,9 @@ SCAN 遍历的是整个共享库,开服规模(数十亿键,推算未实测)下�
 | 陈旧负载集成员清扫(`sweepStaleLoadSetMembers`) | `SCAN scene_nodes:zone:*:load`(旧键形) | 只扫本进程的 zone,本 zone 一个节点都没有时照样扫 |
 
 - **2026-11-05 起按 zone 选主**(docs/design/control-plane-zone-scoping-20261105.md §3.3、§4.3):每个 scene_manager 进程只编排
-  配置的 `ZoneId`,选主锁是 `scene_manager:leader:lock:{ctl:<z>}`。原来的 zone 登记集合 `scene_manager:zones` 删除:控制域按
-  zone 组分实例(`redis-ctl-g<N>`)之后,同组几个 zone 的键在同一个实例里、各自有领导者,从 Redis 发现 zone 会让一个 zone 的领导者
-  去清扫同组别的 zone 的活节点。现在不需要发现:本 zone 的领导者每拍都扫本 zone。
+  配置的 `ZoneId`,选主锁是 `scene_manager:leader:lock:{ctl:<z>}`。原来的 zone 登记集合 `scene_manager:zones` 删除:几个 zone 的
+  控制域键在同一套 Redis 里(当时按 zone 组分实例,2026-11-19 起都在控制集群 `redis-control`)、各自有领导者,从 Redis 发现 zone
+  会让一个 zone 的领导者去清扫别的 zone 的活节点。现在不需要发现:本 zone 的领导者每拍都扫本 zone。
 - **删除顺序**:期望数字段是孤儿频道的发现索引,所以 `deleteOrphanChannel` 最后才删它;中途失败时下一次 fullSync
   还能重新发现这组孤儿,对已空的集合重跑是幂等的。
 - **覆盖不到的情形**(只会残留垃圾键,不影响路由):`DesiredWorldChannelCount` 的 `HSETNX` 出错兜底路径建出来的
@@ -384,7 +384,7 @@ ratio against your observed steady-state failure rate.
 | Alert | Severity | Trigger 与处置 |
 |-------|----------|---------|
 | `SceneOwnershipUnownedScenesReleased` | warning | 某个 scene Pod 15 分钟内开始排空过场景。看它的 `[SceneOwnership] ... is no longer owned by this process` 日志里的 observed:`other_node` / `no_mapping` 多半是它与 etcd 失联后被判死(对照 `SceneManagerNodeViewReleased`、death_at 与 dead_node_reconcile 指标);一两个且不反复出现多是个别 DestroyScene 丢失,不用处置 |
-| `SceneOwnershipMassRelease` | critical | 一个 namespace 10 分钟内开始排空的场景超过它场景总数的一半(至少 10 个)。不像个别节点被判死,先查本 zone 的控制域 Redis(`redis-ctl-g<N>`):DBSIZE 是否骤降、有没有主从切换或被清空,scene_manager 是否刚以空数据重建世界频道;再查是不是整 zone 的节点同时被判死。排空本身按预算分批进行,不用手工干预 |
+| `SceneOwnershipMassRelease` | critical | 一个 namespace 10 分钟内开始排空的场景超过它场景总数的一半(至少 10 个)。不像个别节点被判死,先查本 zone 的控制域 Redis(控制集群 `redis-control`,dev 没开控制集群时是核心 `redis`):本 zone 的键都带 `{ctl:<z>}`、在同一个槽上,`CLUSTER KEYSLOT '{ctl:<z>}'` 找到槽,看那个槽所在主的 DBSIZE 是否骤降、有没有主从切换或被清空,scene_manager 是否刚以空数据重建世界频道;再查是不是整 zone 的节点同时被判死。排空本身按预算分批进行,不用手工干预 |
 | `SceneOwnershipNodeIdTakenOver` | critical | 某个 scene Pod 读到自己的节点号已被更新的登记(别的进程)接走,正在把本地场景全部排空。查这个 Pod 到 etcd 的网络;`scene_ownership_releasing_scenes` 回到 0 之后重启它。它重连 etcd 时也会因分配键冲突自行疏散退出 |
 | `SceneOwnershipOwnHolderUnknown` | warning | (2026-11-11 落码,代码与规则未编译、未实测)某个 Pod 托管着场景,`scene_ownership_own_holder_known` 却持续 10 分钟是 0:它一直没读到自己的节点号持有者记录,这期间号要是被新进程接走,它认不出来。同时亮着 `SceneOwnershipReconcileBlind` 就按那条修节点到控制域的读;没有就查 scene_manager 的 `[NodeHolder] publishing the holder ... failed` 日志与它到控制域 Redis 的写入,修好之后约一分钟内恢复为 1。修不好、而这个 Pod 又与 etcd 失联(日志里续租失败)时,`etcdctl get SceneNodeService.rpc/ --prefix` 找到这个节点号现在的登记,`nodeUuid` 不是这个 Pod 的就重启它(它名下的场景已经改派,重启只断开还连在它上面的玩家)。设计稿 §9 第 1 条 |
 | `SceneOwnershipReleaseBacklog` | warning | 某个 Pod 排空中与等预算的场景数持续 15 分钟大于 0。`release_deferred_scenes` 高 = 住户预算不够(按压测余量调大 `kMaxRelocationsPerSweep`);`releasing_scenes` 高 = 住户改派不收敛,看 `[RelocateConfirm]` / `[SceneDrain]` 日志与 scene_manager 是否可达 |

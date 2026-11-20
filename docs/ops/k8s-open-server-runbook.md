@@ -16,6 +16,7 @@
 - **授权分两步,顺序不能反**。表级 `GRANT` 对不存在的表报 1146(MySQL、TiDB 都是),空库上只有 schema 账号的授权执行得了:
   1. 迁移之前,每个逻辑库跑一次 `maintenance_drain.ps1 -MaintenanceCommand render-schema-role -PlanPath <计划> -OutputPath <输出>`,把输出的 SQL 执行掉。计划只要 `authoritySchema`、`schemaPrincipal`、`schemaDatabases`,目录片再加 `directoryShard: true`。这时还没有 generation,也就没有 REGISTER 原件,所以不用 `render-roles`。`mmorpg` 同样要跑:2026-11-10 起它和其余逻辑库一样在全球权威入口上,表由 `gateway-schema` Job 建(§5);只有 dev 用集群内 MySQL 时由 `gateway_tables.sql` 建、不走这一步。
   2. 迁移之后(§5),`render-roles` 输出的 JSON 里 `operator`、`runtime` 两段再执行,它们都是表级授权。`schema` 段和第 1 步是同一份,不用再执行。
+  3. 迁移之后,再跑一次 `maintenance_drain.ps1 -MaintenanceCommand render-repair-role`,执行输出的 SQL:给数据修复工具(data_service 的 `create_residual`、`admission_recover`)用的**修复身份**授权(2026-11-19 负责人定,维护身份不授业务表)。计划写 `repairPrincipal`、`maintenancePrincipal`、`registrarPrincipal`、`schemaPrincipal`(四者互不相同)和全部目录片 `directorySchemas`、全部存档库 `storeSchemas`;授权内容与理由见 [PITR 手册](mysql-backup-pitr-runbook.md) §4.1a。修复账号由部署者另建,建好就 `ACCOUNT LOCK`,修复窗口才解锁;口令只在运维机,不进集群。新开目录片或存档库之后要重跑这一步。
 - 写者名册(`rosterFile`,格式 `SQL_WRITER_BOOT_ROSTER_V2`)的每条 entry 是一个**槽位**,下标就是 StatefulSet 序号(Pod 名 `<服务>-<序号>`,写者服务都是 StatefulSet):`requests` 里每个要写的逻辑库一份 REGISTER 模板,`authoritySchema` 是这个库,`protectedSchemas` 只有这个库,`writer` 里只写这个槽位的账号(`sqlPrincipal`)、`generation` 和 `state: ACTIVE`;`generation` 取这个库 `route_meta` 的值,由 `-migrate` 随机生成,所以要先跑迁移 Job 才能定名册,顺序见 §5。模板**不写身份**:`requestId`、`deploymentId`、`writerKey`、`instanceId`、`registrationDigest`、`registeredMs`、`bootSeq` 由 init 里的 `writer_authority` 每次启动现场生成,模板里写了就整份拒绝。也不带 `expectedEpoch`、`expectedCatalogRevision`:每次搬库或回滚 epoch 都变,收据记落地时的实际值。go/db 要写几个落点库就几份,`gateway` 写 `mmorpg`。注册账号的连接串指哪个库都行,`writer_authority` 按 REGISTER 的库名切换;所有库要在这个连接串的集群上。
 - **每个槽位一个专用 SQL 账号**。同一名册的槽位之间、不同工作负载(含 `<svc>-canary`)之间、不同 zone 的名册之间都不许重复:同一账号上的两个 Pod 会互相换代,谁都写不稳。`k8s_deploy.ps1` 在 apply 之前核全部名册,有重复就拒绝。账号按上面的第 2 步授权,一个槽位授权一次,之后不随启动变。
 - **槽位数就是副本数上限**。每次启动(滚动发布、写过之后崩溃被回收 CronJob 删掉、节点驱逐)都是这个槽位的下一代:新一代在每个库的注册事务里把上一代退休,名册不消耗,不用留余量([写者名册换代](../design/writer-roster-exhaustion-20261106.md) §5)。
@@ -47,6 +48,10 @@
   - 换口令:先在 SQL 上给这个账号设新口令,改 Secret 的 `dsn`,再 `kubectl -n <zone-ns> rollout restart statefulset/login`,滚完再废掉旧口令。部署脚本读不到连接串,不会自动滚动。
   - 关掉:先从运行配置里删掉 `PasswordAuth` 段并滚动 login,再不带 `-LoginPasswordAuth`、加 `-ConfirmLoginAuthProviderChange` 部署;这个 Secret 是你的,部署脚本不删,不用了自己删。顺序反了,还在读 `PasswordAuth` 的 Pod 拿不到连接串会拒绝启动。
   - 开着时每个 login Pod 的内存请求与上限各多 `KDFConcurrency × 64Mi`(缺省 2 × 64Mi),节点容量按这个算。
+- **login 的实名与防沉迷**(国内 App 形态,2026-11-19,`k8s_deploy.ps1 -LoginNppaAppId / -LoginNppaBizId`,未运行;设计见 [real-name-anti-addiction.md](../design/real-name-anti-addiction.md) §5.8、§8)。不开就跳过这一条。要开时:
+  1. 部署机设环境变量 `MMORPG_LOGIN_NPPA_SECRET_KEY`(企业端给的 32 位十六进制 secretKey,不进命令行与仓库);部署带上 `-LoginNppaAppId` 与 `-LoginNppaBizId`(两个要么都给要么都不给),每年按国务院放假通知给 `-LoginAntiAddictionExtraPlayDays`(逗号分隔的北京日期,如 `2026-10-01,2026-10-08`),只在企业端接口测试阶段给 `-LoginNppaCheckUrl` / `-LoginNppaQueryUrl` / `-LoginNppaLoginoutUrl`。包装入口 `dev_tools.ps1 -Command k8s-zone-up` / `k8s-all-up` 同样给。secretKey 由部署脚本写成 zone namespace 的单键 Secret `login-nppa`,不要手工建。
+  2. 用 `-DryRun` 渲染一次,把 `go-svc-login-config` 里整段 `AntiAddiction` 原样抄进 login 每个槽位的运行配置(`runtimeConfigSecret`;`SecretKeyEnv` 是变量名,照抄),**不要单独滚动 login**,紧接着真跑部署,由部署滚动 login。部署把这次的 AppId / BizId 明文注入 login 主容器(`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`),login 启动时与运行配置比:漏抄、开关是 false、AppId 或 BizId 抄错,都拒绝启动(滚动停在第一个 Pod,旧 Pod 照常服务),不会带着关掉的防沉迷起来。
+  3. 以后每次部署都要照传:漏传或换了 AppId / BizId,会在写操作之前被拒绝。换应用与关掉都是「先改运行配置、不单独滚动 login,紧接着部署并加 `-ConfirmLoginAuthProviderChange`」:换应用时运行配置改成新的 `AntiAddiction` 段,带新参数与新 secretKey 部署;关掉时从运行配置删掉这一段,不带参数部署。两步之间不能有 login 重启:这时 Pod 模板还注入着旧的期望值与 secretKey,与改过的运行配置对不上,重启的 Pod 会拒绝启动。
 - **预置 Secret `domain-service-secrets` 的角色护栏密钥**。值由运维生成,不进仓库、不进日志;每把至少 32 字节,互不相同(data_service 拒绝跨用途复用),同名 key 在各 namespace 同值。manifest 都是 `optional: false`,缺一个 key 对应的 Pod 卡在 `CreateContainerConfigError`:
 
   | key | 环境变量 | 放在哪 | 谁用 |
@@ -64,6 +69,7 @@
   | `role-fence-db` | `MMORPG_ROLE_FENCE_SECRET_DB` | 每个 zone namespace | go/db 调 `GetPlayerRoute`,data-service 验 |
   | `match-internal-guild` | `MMORPG_MATCH_INTERNAL_SECRET_GUILD` | infra namespace | guild 和 match 同值:开局、占用、读终局都验它 |
   | `mail-producer-battle` | `MAIL_PRODUCER_SECRET_BATTLE` | infra namespace(mail)、每个 zone namespace(scene) | scene 签、mail 验,两边同值:两包都放不下的战斗掉落改投邮件([battle-overflow-mail.md](../design/battle-overflow-mail.md))。缺它 mail 与 scene 都起不来 |
+  | `account-directory-payment` | `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT` | 每个 zone namespace(data-service)、infra namespace(payment) | payment 签、data-service 验,各处同值:go/payment 按玩家查实名(`GetAccountRealName`,未成年人充值限额用,[real-name-anti-addiction.md](../design/real-name-anti-addiction.md) §5.6)。2026-11-19 新增,不开防沉迷的部署也要有;缺它 data-service 与 payment 都起不来。与别的 key 同值时 data_service 拒启 |
 
   **2026-11-12 增补：首次发布之前必须补上 `mail-producer-battle`。** 它是两包都放不下的战斗掉落改投邮件（[battle-overflow-mail.md](../design/battle-overflow-mail.md)）的发件签名密钥，scene 签、mail 验。顺序如下：
 
@@ -74,6 +80,8 @@
   值不同，或两边时钟相差超过 5 分钟时，Pod 都能起来，但 mail 会拒绝验签：scene 侧是 ERROR `metric=mail_outbox_stuck reason=signature_rejected`（值班查询见 `deploy/k8s/asset-channel-alerts.yaml` 头注释），物品留在玩家存档的待寄队列里，不丢，但寄不出去。改成同一个值（或修好时钟）之后，按退避自动寄出。
 
   部署脚本（`k8s_deploy.ps1`）在任何写操作之前核对这一项：键缺失、不足 32 字节、或与 infra 不同，都会拒绝部署，一个都不写。`-DryRun` 只打一行说明。发布预检（`release_preflight.ps1`）只查配置与制品、不连集群，不查这一项。
+
+  **2026-11-19 起这道核对覆盖表里全部跨 namespace 的键**(`k8s_deploy.ps1` 的共享键表 `$script:SharedDomainServiceSecrets` 与门禁 `Assert-SharedDomainServiceSecretsForRun`):`mail-producer-battle`、`account-directory-trade`、`account-directory-scene`、`account-directory-payment` 与八把 `role-fence-*`(`role-fence-db` 只在 zone,不在内)。`infra-up` / `all-up` 部署全局 Go 服务时核 infra 的全表;`zone-up` / `all-up` 核每个 zone 的键并与 infra 逐键比(只发 C++ 节点、不带 Go 服务时只核 scene 读的前三把)。每个 namespace 只读一次 `domain-service-secrets`;缺键、去掉首尾空白后不足 32 字节、两把同值、与 infra 不同都拒绝,报错只点键名、不带值。表与各清单的 `secretKeyRef` 一致由契约测试(`k8s_migrate_gate.tests.ps1`)反查。
 
 - 参与者经 infra namespace 的 K8s Service 直连(`guild.<infra>:50300`、`trade.<infra>:50800`、`mail.<infra>:50900`、`match.<infra>:50500`、`player-inbox.<infra>:50950`、`friend.<infra>:50400`),`k8s_deploy.ps1` 按 `-InfraNamespace` 渲染。`-NetworkPolicies on` 时 guild、match 的放行名单已含 data-service。任何一个参与者不可达,过户和删角一律拒绝,其余功能不受影响。
 - 告警装 `deploy/k8s/logical-db-alerts.yaml`,安装方式和抓取前提写在文件头。闸门冻结时长没有指标,要查库。

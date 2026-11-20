@@ -120,6 +120,11 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("/oauth2/v3/certs", issuer.handleJWKS)
 	mux.HandleFunc("/mock/apple/id_token", issuer.mintHandler(sandboxAppleIssuer, sandboxAppleTokenTTL, "apple-sub"))
 	mux.HandleFunc("/mock/google/id_token", issuer.mintHandler(sandboxGoogleIssuer, sandboxGoogleTokenTTL, "google-sub"))
+	// Apple 的换票与撤销(账号注销用,apple_revoke.go)。
+	apple := newAppleTokenStub()
+	mux.HandleFunc("/auth/token", apple.handleToken)
+	mux.HandleFunc("/auth/revoke", apple.handleRevoke)
+	mux.HandleFunc("/mock/apple/revocations", apple.handleRevocations)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})

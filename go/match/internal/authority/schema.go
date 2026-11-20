@@ -29,6 +29,7 @@ func Tables() []proto.Message {
 		&pb.MatchChallengeInvitationRecord{}, &pb.MatchGlobalPolicyRecord{}, &pb.MatchJoinIntentRecord{},
 		&pb.MatchDirectIntentRecord{}, &pb.MatchFormationRecord{}, &pb.MatchRatingRecord{},
 		&pb.MatchRatingAppliedRecord{}, &pb.MatchRankSourceRecord{}, &pb.MatchRankOutboxRecord{},
+		&pb.MatchRankRemovalRecord{}, // 删角后待摘榜(role_fence_purge.go 写,rank_publisher.go 投)
 		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
 		&pb.MatchManualResolutionRecord{},                                  // 人工处置审计(2026-11-05,manual_abort.go)
 		&pb.MatchBattleReportRecord{}, &pb.MatchPlayerBattleReportRecord{}, // 战报回放(battle_report.go)

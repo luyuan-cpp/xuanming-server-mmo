@@ -6,7 +6,8 @@ const ShardCount = 64
 
 func RowShard(playerID uint64) uint32 { return uint32(Mix64(playerID) % ShardCount) }
 
-// Mix64 是splitmix64终结函数；保持全部存量SnowFlake及号段玩家的原分布。
+// Mix64 是 splitmix64 终结函数:分片只靠它摊匀,不依赖 player_id 的位布局(发号器的号没有位布局,
+// AGENTS.md §7 第 1 条)。改它和改 ShardCount 一样要迁移全部收件箱主键。
 func Mix64(x uint64) uint64 {
 	x ^= x >> 30
 	x *= 0xbf58476d1ce4e5b9

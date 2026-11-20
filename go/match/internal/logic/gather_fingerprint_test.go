@@ -5,6 +5,7 @@ package logic
 
 import (
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	"match/internal/discovery"
@@ -15,7 +16,7 @@ import (
 
 	"shared/generated/pb/table"
 	"shared/generated/tip"
-	"shared/snowflake"
+	"shared/idsegment"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
@@ -24,12 +25,18 @@ import (
 // testBattle7Instance 是 newGatherSvcCtx 灌的 battle 节点 7 的实例 uuid。
 const testBattle7Instance = "5b0f3c1e-7a42-4d0e-9a51-2f6c8d9e0b17"
 
+// issuerShapedBattleIDs 发与生产 segmentBattleIDs 同形的号:计数器值经 MixID 打散,没有位布局、不单调,
+// 不会撞上用例里手写的小号。battle_id 只由发号器发(AGENTS.md §7 第 1 条),替身不能用 snowflake。
+type issuerShapedBattleIDs struct{ counter atomic.Uint64 }
+
+func (g *issuerShapedBattleIDs) Generate() (uint64, error) { return idsegment.MixID(g.counter.Add(1)), nil }
+
 // newGatherSvcCtx 在 newTestSvcCtx 之上补齐发号器与节点镜像:
 // zone1 / zone2 各一个 node_id=1 的 scene(与 setPlayerLocation 写的 NodeId "1" 对齐),battle 池一个节点。
 func newGatherSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	t.Helper()
 	svcCtx, mr := newTestSvcCtx(t)
-	svcCtx.BattleIDGen = snowflake.NewNode(1)
+	svcCtx.BattleIDGen = &issuerShapedBattleIDs{}
 	svcCtx.SceneNodes = discovery.NewNodeWatcher("scene", svc.SceneNodeRpcPrefix, nil, nil)
 	svcCtx.SceneNodes.Upsert(svc.SceneNodeRpcPrefix+"zone/1/1", discovery.NodeEntry{NodeId: 1, ZoneId: 1, Endpoint: "scene-z1"})
 	svcCtx.SceneNodes.Upsert(svc.SceneNodeRpcPrefix+"zone/2/1", discovery.NodeEntry{NodeId: 1, ZoneId: 2, Endpoint: "scene-z2"})

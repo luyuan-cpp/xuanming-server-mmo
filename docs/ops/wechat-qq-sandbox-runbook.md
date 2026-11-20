@@ -530,7 +530,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up -ZoneName test1 -Zon
 ## I. Apple / Google 登录(2026-11-13 起,已落码,未编译、未运行)
 
 auth_type 是 `apple` / `google`。客户端用平台 SDK 拿到渠道签名的身份令牌(OIDC ID token),原样发 `/api/login`;login 去渠道取公钥验签,
-**不需要任何密钥**,也就没有 Secret。设计与错误语义见[第三方登录](../design/third-party-login-end-to-end-design.md) §十二。
+登录**不需要任何密钥**。注销账号时撤销 Apple 令牌另要一把 .p8 私钥(§I.4)。设计与错误语义见[第三方登录](../design/third-party-login-end-to-end-design.md) §十二。
 
 ### I.1 凭证
 
@@ -582,7 +582,7 @@ TOKEN=$(curl -s 'http://127.0.0.1:18090/mock/google/id_token?user=EXPIRED&aud=sa
 `k8s_deploy.ps1` 加了四个参数:`-LoginAppleClientId` / `-LoginAppleEndpoint` 渲染 `AuthProviders.Apple`,`-LoginGoogleClientId` / `-LoginGoogleEndpoint`
 渲染 `AuthProviders.Google`。ClientId 只允许 `[A-Za-z0-9_.-]`,Google 的还必须以 `.apps.googleusercontent.com` 结尾;Endpoint 规则、不粘滞、
 防误关(线上开着而本次漏传或换了 ClientId,在写操作之前拒绝)、`dev_tools.ps1` 照传与 `k8s-image-*` / `k8s-release-*` 拒绝,都与 §H.5 相同。
-没有密钥,不建 Secret,也没有要设的环境变量。
+登录没有密钥,不建 Secret,也没有要设的环境变量;注销时撤销 Apple 令牌要的私钥见 §I.4。
 
 ```powershell
 # 例:staging zone 开 Apple 与 Google
@@ -590,7 +590,71 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up -ZoneName test1 -Zon
     -LoginAppleClientId com.example.mmorpg -LoginGoogleClientId 123456789012-abc.apps.googleusercontent.com
 ```
 
+### I.4 K8s 部署:注销账号时撤销 Apple 令牌(2026-11-19 接入,未运行)
+
+注销账号时 login 用 Sign in with Apple 私钥签 `client_secret`,换票后撤销 Apple 令牌([账号注销](../design/account-deletion.md) §8)。
+`k8s_deploy.ps1` 为此加两个参数,只能与 `-LoginAppleClientId` 一起给:
+
+| 参数 | 渲染到 | 取值 |
+|---|---|---|
+| `-LoginAppleTeamId` | `AuthProviders.Apple.TeamId` | 开发者账号 Membership 页里的 Team ID(10 位大写字母或数字) |
+| `-LoginAppleKeyId` | `AuthProviders.Apple.KeyId` | 开了 Sign in with Apple 的那把私钥的 Key ID(10 位;下载的文件名是 `AuthKey_<Key ID>.p8`) |
+
+- 两个要么都给要么都不给;都不给 = Apple 登录照常,注销的 Apple 账号只提示玩家到 Apple 设置里手动撤销(login 启动日志写明)。
+- 给了时 `AuthProviders.Apple` 多写一行 `PrivateKeyEnv: "MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY"`(只写变量名)。私钥从部署机同名环境变量读入,
+  部署脚本把它写成 zone namespace 的单键 Secret `login-apple-signin`(键 `private-key`,值是 .p8 文件原文),经 `secretKeyRef` 注入 login 容器的同名变量;
+  Pod 模板带 `mmorpg.io/login-apple-signin-hash`,只换私钥也会滚动 login。不要手工建这个 Secret:每次部署按环境变量重写,没给参数就删掉。
+- 任何档位都没有回落值:给了参数却没设环境变量,或值不是 .p8 的 PEM 原文(`BEGIN` / `END PRIVATE KEY` 之间只有 base64;常见错法是填了文件路径或 Key ID),
+  在任何写操作之前拒绝。文件结尾的换行照收。
+- 不粘滞、防误关同 §I.3:线上开着撤销而本次漏传这两个参数(会关掉撤销、删掉 Secret)或换了值,在写操作之前拒绝,报错给出照传串;
+  换私钥(Apple 后台建新 key、吊销旧 key)时新的 Key ID 与新的 .p8 同一次部署一起换,加 `-ConfirmLoginAuthProviderChange`。
+- login 是 SQL 写者,常驻进程读运维预置的运行配置(`runtimeConfigSecret`):把 `go-svc-login-config` 里 `AuthProviders.Apple` 的这三行
+  与其余 AuthProviders 一起照抄进去(`PrivateKeyEnv` 是变量名,照抄),见[开服手册](k8s-open-server-runbook.md) §1。
+
+```powershell
+# 例:staging zone 开 Apple 登录与注销时撤销
+$env:MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY = Get-Content -Raw -LiteralPath '<从密钥管理取出的 AuthKey_XXXXXXXXXX.p8,不要放进仓库>'
+pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up -ZoneName test1 -ZoneId 101 -ReleaseProfile staging `
+    -LoginAppleClientId com.example.mmorpg -LoginAppleTeamId ABCDE12345 -LoginAppleKeyId KEY0123456
+```
+
 ---
+
+### I.5 注销账号的沙箱联调(2026-11-19 起,已落码,未编译、未运行)
+
+设计见 `docs/design/account-deletion.md`。2026-11-19 起 Apple / Google 身份令牌一次性:同一枚第二次登录回 `code:401`、`tip:2000`,每次登录都现签一枚(mock 签出的令牌带随机 `jti`,同一种子也各不相同)。
+
+准备:data_service 的开发配置 `AccountDirectory.DeletionCoolingOffSeconds: 0`(只给本地,冷静期满即执行);login 的 Apple 段加撤销三项,私钥用本地生成的 P-256(mock 只核 client_secret 的形状、不验签名):
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt > /tmp/apple-sandbox.p8
+export MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY="$(cat /tmp/apple-sandbox.p8)"
+# login.yaml 的 Apple 段加:TeamId: "SANDBOX001"、KeyId: "SANDBOXKEY"、PrivateKeyEnv: "MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY"(变量名与 K8s 部署同名,§I.4)
+# 重启 login,期望日志 "Sign in with Apple token revocation enabled"
+```
+
+```bash
+# 1. 按 I.2 用 user=alice 登录一次,账号建好
+# 2. 重新授权:签一枚新令牌,同时拿到授权码
+OUT=$(curl -s 'http://127.0.0.1:18090/mock/apple/id_token?user=alice&aud=com.example.sandbox')
+TOKEN=$(echo "$OUT" | sed 's/.*"id_token":"\([^"]*\)".*/\1/'); CODE=$(echo "$OUT" | sed 's/.*"authorization_code":"\([^"]*\)".*/\1/')
+# 3. 申请注销:期望 code:0、state:1,execute_after 约为当前时刻
+curl -s -X POST http://127.0.0.1:8081/api/account/delete -H 'Content-Type: application/json' \
+  -d "{\"zone_id\":1,\"auth_type\":\"apple\",\"auth_token\":\"$TOKEN\",\"authorization_code\":\"$CODE\"}"
+# 4. Apple 授权已撤销:期望 {"revoked":1}
+curl -s http://127.0.0.1:18090/mock/apple/revocations
+# 5. 同一授权码再申请一次(换一枚新令牌):期望 tip:2041(授权码一次性,需要重新授权)
+# 6. 30 秒内(执行者一轮):login 日志 "[account-deletion] account deleted",data_service 日志 "account record deleted, receipt written"
+# 7. 再签一枚令牌登录:期望 code:0、players 为空、previous_account_deleted_at 非 0
+```
+
+撤销注销:把冷静期改成 3600 秒重启 data_service,按上面第 2、3 步申请,再登录一次(期望 `account_deletion_state:1`),拿这次的 access_token:
+
+```bash
+curl -s -X POST http://127.0.0.1:8081/api/account/delete/cancel -H 'Content-Type: application/json' \
+  -d "{\"zone_id\":1,\"access_token\":\"$ACCESS\"}"
+# 期望 code:0、state:0;之后建角、进游戏照常。冷静期内不撤销直接进游戏:EnterGame 回 tip 2038
+```
 
 ## 关联文档
 - [auth-provider-framework.md](../design/auth-provider-framework.md) §How to Add — 加新 provider 的 4 步骤(Apple Sign-in / Google Play Games 都按这个加)

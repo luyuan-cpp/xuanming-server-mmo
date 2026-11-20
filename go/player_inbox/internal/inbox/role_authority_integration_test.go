@@ -302,7 +302,7 @@ const inboxFenceCoordinatorSecret = "role-fence-inbox-test-only-coordinator-secr
 
 func (e *itEnv) prepareFreeze(t *testing.T, player, token uint64) *rfpb.PrepareRoleFreezeResponse {
 	t.Helper()
-	server, err := rolefence.NewParticipantServer(e.db, RolePending, inboxFenceCoordinatorSecret)
+	server, err := rolefence.NewParticipantServer(e.db, RolePending, RolePurge, inboxFenceCoordinatorSecret)
 	if err != nil {
 		t.Fatal(err)
 	}

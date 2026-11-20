@@ -52,9 +52,9 @@ const (
 	RemovalSettleDropRow = "drop_removal_row"
 )
 
-// RemovalSettleSteps 是 RemovalSettleFailed 的全部取值,装配层按它预置指标序列。
+// RemovalSettleSteps 是 RemovalSettleFailed 的全部取值,装配层按它预置指标序列。RemovalSettlePurge 在 player_purge.go。
 func RemovalSettleSteps() []string {
-	return []string{RemovalSettleReleaseName, RemovalSettleDropRow}
+	return []string{RemovalSettleReleaseName, RemovalSettlePurge, RemovalSettleDropRow}
 }
 
 // NameCacheInvalidator 删掉一名玩家的名字缓存(正、负缓存是同一个键)。*routing.PlayerNameCache 满足它。
@@ -94,6 +94,9 @@ const (
 	// 走到这里库已经改好,缓存只是展示用的读缓存,不值得为它拖长请求。
 	nameCacheInvalidateAttempts = 3
 	nameCacheInvalidateBackoff  = 50 * time.Millisecond
+	// nameCacheInvalidateBudget:服务里删一次名字缓存(含重试)的总上限。它跑在调用方的预算里(删角收尾一共
+	// removedRoleSettleTimeout),Redis 被黑洞时不能把后面删小表那一行的库操作也拖到超时(2026-11-19 评审补)。
+	nameCacheInvalidateBudget = 300 * time.Millisecond
 )
 
 // invalidateNameCache 在库里补回或删掉一名玩家的名字之后删它的名字缓存。没接缓存时什么都不做;失败只记日志,
@@ -102,6 +105,8 @@ func (s *AccountDirectoryStore) invalidateNameCache(ctx context.Context, player 
 	if s.nameCache == nil {
 		return
 	}
+	ctx, cancel := context.WithTimeout(ctx, nameCacheInvalidateBudget)
+	defer cancel()
 	if err := delNameCacheWithRetry(ctx, s.nameCache, player); err != nil {
 		logx.Errorf("[player-name] name cache not invalidated after the name row changed, it stays stale until its TTL: player=%d: %v", player, err)
 	}

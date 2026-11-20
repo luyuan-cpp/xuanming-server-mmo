@@ -1,4 +1,4 @@
-# gate 客户端连接准入的告警(docs/design/gate-connection-admission-control.md P1-1 ~ P1-4)。
+# gate 客户端连接准入的告警(docs/design/gate-connection-admission-control.md P0-2、P1-1 ~ P1-4)。
 #
 # 指标由 gate 的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400),
 # 定义在 cpp/nodes/gate/handler/rpc/connection_admission.cpp 的 CollectMetrics:
@@ -6,9 +6,15 @@
 #   - gate_unauthenticated_connections:还没验签的连接数。握手期限是 10 秒,正常客户端毫秒级验签,
 #     这个数「高且不周转」就是有连接占着位置不验签;「低但 gate_accepted_total 涨得快」是正常洪峰;
 #   - gate_accepted_total:接纳的连接,rate() 就是新建连接速率;
-#   - gate_rejected_total{reason}:被拒的连接,reason ∈ capacity / accept_rate / shutting_down / not_ready / no_token_secret;
+#   - gate_rejected_total{reason}:被拒的连接,reason ∈ capacity / accept_rate / shutting_down / not_ready / no_token_secret /
+#     preauth_budget / preauth_early_drop / source_rate;
 #   - gate_handshake_duration_ms:建连到验签成功的耗时直方图;
-#   - gate_preauth_reaped_total:建连满握手期限仍未验签、被关掉的连接。
+#   - gate_preauth_reaped_total:建连满握手期限仍未验签、被关掉的连接;
+#   - gate_preauth_evicted_total:未验签池承压时,建连满 3 秒还没验签、被淘汰给新连接让位的连接;
+#   - gate_preauth_budget / gate_preauth_early_drop_start / gate_preauth_evictable_age_ms:未验签预算、早拒起点与可淘汰年龄
+#     (上限 2 万时 2000 / 1000 / 3000ms;GATE_PREAUTH_* 可覆盖);
+#   - gate_source_rate_limit_per_second / gate_source_burst / gate_source_rate_active / gate_source_tracked /
+#     gate_source_untracked_total:按来源前缀限速(缺省关闭,设了 GATE_SOURCE_RATE_PER_SECOND 才开,开了也只在承压时生效)。
 # 规则引用的指标名与 reason 取值由 tools/scripts/tests/gate_connection_alerts_contract.tests.ps1 对照 C++ 源码钉住。
 # 处置见 docs/ops/gate-kernel-tuning-runbook.md §3.2。
 #
@@ -58,8 +64,9 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 因满员拒绝了新连接({{ $value | printf \"%.0f\" }} 条 / 5 分钟)"
             description: >-
-              这台 gate 的会话数到了上限。gate_unauthenticated_connections 占比高说明位置被不验签的连接占着
-              (它们最多活 10 秒,看 gate_preauth_reaped_total 是否同步上涨);占比低说明是真实玩家满了,加台数。
+              这台 gate 的会话数到了上限。未验签连接最多占到 gate_preauth_budget(上限的 10%),所以满员时至少九成
+              是验签过的会话:多半是真实玩家满了,加台数;同时 gate_unauthenticated_connections 贴着预算,
+              说明还有一批只建连不验签的流量,按 GateUnauthenticatedConnectionsHigh 处置。
             runbook_url: docs/ops/gate-kernel-tuning-runbook.md
 
         # 新建连接速率闸在拒绝。缺省桶深等于连接上限、持续速率是上限的 1%/秒:一台 gate 从零接满不会碰到它,
@@ -78,21 +85,72 @@ spec:
               未验签连接数高、gate_preauth_reaped_total 上涨,说明是只建连不验签的流量,速率闸在按设计工作,去上游(L4 / 防火墙)处置来源。
             runbook_url: docs/ops/gate-kernel-tuning-runbook.md
 
-        # 未验签连接长期占着位置。正常客户端建连后毫秒级验签,未验签连接数平时接近 0;
-        # 速率闸把只建连不验签的来源稳态下压在上限的 10% 以内,持续高于 5% 就是有这样的来源在持续建连。
+        # 未验签池在承压。正常客户端建连后毫秒级验签,未验签连接数平时接近 0,合法洪峰估计也只到早拒起点的一半;
+        # 到起点的八成并持续 2 分钟,就是有来源在持续只建连不验签。到了起点 gate 开始淘汰建连满 3 秒的未验签连接
+        # (gate_preauth_evicted_total 上涨),池会停在起点附近,所以阈值取起点的 0.8,不取 1。
         - alert: GateUnauthenticatedConnectionsHigh
           expr: |
-            max by (namespace, instance) (gate_unauthenticated_connections / gate_connections_max) > 0.05
+            max by (namespace, instance) (gate_unauthenticated_connections / gate_preauth_early_drop_start) > 0.8
           for: 2m
           labels:
             severity: warning
           annotations:
-            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 未验签连接占连接上限的 {{ $value | printf \"%.2f\" }},已持续 2 分钟"
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 未验签连接已到早拒起点的 {{ $value | printf \"%.2f\" }} 倍,已持续 2 分钟"
             description: >-
-              有连接建连后不发验签请求、占着会话位置直到 10 秒握手期限。看 gate 日志里采样的
+              有连接建连后不发验签请求、占着未验签名额。gate_preauth_evicted_total 在涨说明 gate 正按设计让最老的先让位,
+              已验签的会话与能验签的新连接不受影响;看 gate 日志里采样的
+              `Evicting the oldest unauthenticated connection to admit a new one (sampled)`、
               `[ClientHeartbeat] connection rejected (sampled), reason=handshake_timeout` 与
-              `Client connections accepted (sampled)` 行里的 latest_peer 找来源;login / 路由服故障导致客户端拿不到票据时
-              不会出现这种形态(那时客户端根本不会来连 gate)。
+              `Client connections accepted (sampled)` 行里的 latest_peer 找来源,去上游处置;login / 路由服故障导致客户端
+              拿不到票据时不会出现这种形态(那时客户端根本不会来连 gate)。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 未验签预算在拒绝新连接:池承压,而池里还没有建连满 3 秒、可以让位的连接(一次只建连不验签的突发),
+        # 新连接按概率被拒(preauth_early_drop)或到预算被拒(preauth_budget)。这期间赶上的合法玩家会被 RST、退避后重连。
+        - alert: GatePreauthBudgetRejecting
+          expr: |
+            sum by (namespace, instance) (increase(gate_rejected_total{reason=~"preauth_budget|preauth_early_drop"}[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 因未验签预算拒绝了新连接({{ $value | printf \"%.0f\" }} 条 / 5 分钟)"
+            description: >-
+              未验签连接在几秒内涨过了早拒起点(gate_preauth_early_drop_start)。看 gate_handshake_duration_ms:
+              P99 正常说明涌进来的连接大多不验签,是突发攻击,预算在按设计挡,去上游(L4 / 防火墙 / 云清洗)处置来源;
+              P99 也在变慢说明是 gate 自己卡顿或网络变差,让正常客户端来不及验签(看 loop 延迟与 CPU),
+              这时拒掉的多半是真实玩家,先处理卡顿;反复出现再按运维手册 §3.2 用 GATE_PREAUTH_BUDGET /
+              GATE_PREAUTH_EARLY_DROP_START 调大预算与起点(kubectl set env,不用重新发版)。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 按来源前缀限速在拒绝:开了 GATE_SOURCE_RATE_PER_SECOND,gate 正在承压,有前缀(IPv4 /24、IPv6 /64)建连超过了它的桶。
+        - alert: GateSourceRateLimited
+          expr: |
+            sum by (namespace, instance) (increase(gate_rejected_total{reason="source_rate"}[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 承压期间按来源前缀拒绝了新连接({{ $value | printf \"%.0f\" }} 条 / 5 分钟)"
+            description: >-
+              有来源前缀在 gate 承压时建连太快,超出它那一份(缺省是全局持续速率的十分之一)。看 gate 日志里采样的
+              `Per-source accept rate exceeded while the gate is under pressure` 一行的 latest_peer 找前缀,去上游处置。
+              CGNAT / 网吧出口后面的大批真玩家同时重连也会碰到它:同一时段 gate_handshake_duration_ms 正常、被拒的前缀
+              是已知的运营商出口时,按运维手册 §3.2 调高 GATE_SOURCE_RATE_PER_SECOND / GATE_SOURCE_BURST。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 前缀表满:按来源限速开着,承压期间同时活跃的来源前缀超过上限(65536),新前缀没登记就放行(fail-open)。
+        - alert: GateSourceTableFull
+          expr: |
+            sum by (namespace, instance) (increase(gate_source_untracked_total[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 来源前缀表已满,{{ $value | printf \"%.0f\" }} 条连接没按来源限速就放行了"
+            description: >-
+              来源极分散(上万个 /24 或 /64 同时在建连),按来源限速帮不上忙,全局速率闸与未验签预算照常生效。
+              这是分布式的连接洪水的形状,去上游(L4 / 云清洗)处置;gate 这一侧不用调参。
             runbook_url: docs/ops/gate-kernel-tuning-runbook.md
 
         # 握手期限在持续收割连接:每秒超过 1 条、持续 5 分钟。偶发的收割(客户端建连后网络断了)是常态,持续的不是。
@@ -107,6 +165,7 @@ spec:
             description: >-
               建连满 10 秒仍未验签的连接在被持续关闭。对照 gate_handshake_duration_ms:P99 也在变慢说明是网络或 gate 自身卡顿
               让正常客户端来不及验签(看 loop 延迟与 CPU);P99 正常说明这些连接本来就不打算验签,按 GateUnauthenticatedConnectionsHigh 处置。
+              未验签池承压时这类连接多半在 3 秒左右就被淘汰,记在 gate_preauth_evicted_total,不进这里。
             runbook_url: docs/ops/gate-kernel-tuning-runbook.md
 
         # 握手变慢:验签成功的连接里 P99 超过 3 秒。握手期限是 10 秒,P99 到 3 秒说明正常客户端离被误关已经不远。

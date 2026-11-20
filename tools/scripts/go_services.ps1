@@ -267,6 +267,15 @@ $ServiceCatalogue = [ordered]@{
     # Windows 保留区间内。player_inbox.yaml 形状须满足本脚本 -Zone 改写:顶层单行 ListenOn / MetricsListenAddr、顶层 ZoneId
     # 写在所有嵌套段之前;自己的 Etcd.Key 是空串(D-13),DataServiceRpc.Etcd.Key: dataservice.rpc 会被加 .z<N>(照 trade)。
     player_inbox      = @{ Dir = "player_inbox"; Entry = "player_inbox.go"; Port = 50950; Desc = "Player Inbox (persistent player inbox, direct from scene)"; ConfigFlag = "-f"; ConfigFile = "etc/player_inbox.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    # 内容安全 content_guard(docs/design/rename-and-content-safety.md §6):全服一份(ContentGuardNodeService)、无状态、可多开。
+    # 调用方是收玩家文字的服务:login / guild / chat(按 go-zero 的 Etcd.Key contentguard.rpc 发现)与 C++ scene
+    # (按 etcd 前缀 ContentGuardNodeService.rpc 直连);**不经路由服**,客户端到不了它。
+    # Tier 1:只连 etcd(读词库、注册、热关停),不连数据库 / Redis / Kafka,也不拨任何 Go 服务。
+    # 词库在 etcd(缺省前缀 /mmorpg/content_guard/lexicon/),用 go/content_guard/cmd/lexicon 发布;本机不发布也能起,
+    # 这时只有内置的几个防冒充词生效(etc 里 RequireLexicon: false)。
+    # 端口 50250 / metrics 9290 与 go/content_guard/etc/content_guard.yaml 的 ListenOn / MetricsListenAddr 一致;
+    # -Zone 2 位移后 51250 / 10290,均不在已观测的 Windows 保留区间内。
+    content_guard     = @{ Dir = "content_guard"; Entry = "content_guard.go"; Port = 50250; Desc = "Content Guard (text moderation for names and chat)"; ConfigFlag = "-f"; ConfigFile = "etc/content_guard.yaml"; AllowMultiInstance = $true; Tier = 1 }
     # mail/rank 已按上面的现役条目登记：SQL/TiDB DSN、分用途生产者签名及全局语义；不恢复M1运行时。
 }
 
@@ -276,6 +285,9 @@ $BuildToolCatalogue = [ordered]@{
     writer_authority     = @{ Dir = "data_service"; Entry = "cmd/writer_authority" }
     db_migrate           = @{ Dir = "db";           Entry = "cmd/migrate" }
     private_control_file = @{ Dir = "shared";       Entry = "cmd/private_control_file" }
+    # 内容安全的词库发布工具(go/content_guard/cmd/lexicon):对着 etcd 发布 / 查看 / 回滚词库。本机启动不依赖它,
+    # 放这里只是让整批构建顺手编出 bin\go_services\content_guard_lexicon.exe。
+    content_guard_lexicon = @{ Dir = "content_guard"; Entry = "cmd/lexicon" }
 }
 
 # Derived per-instance config files live here so the source tree stays clean.
@@ -1149,7 +1161,7 @@ function Start-ServiceInstance {
         # 聊天SQL账号仅交给chat；其它本机服务不得顺带继承此能力。
         if ($Name -ne 'chat') { [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN', $null, 'Process') }
         $accountDirectoryService = $Name.Replace('_','-')
-        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager','db','player-inbox')) {
+        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager','db','player-inbox','payment')) {
             $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service $accountDirectoryService
             Initialize-AccountDirectoryDevSecrets -RepoRoot $RepoRoot -Service $accountDirectoryService
         }

@@ -9,11 +9,13 @@ import (
 	"time"
 
 	dspb "proto/data_service"
+	rfpb "proto/role_fence"
 	"shared/accountdirectory"
 	"shared/rolefence"
 	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"google.golang.org/protobuf/proto"
 )
 
 // 账号注销的目录一侧(docs/design/account-deletion.md §4、§7)。
@@ -101,6 +103,9 @@ func (s *AccountDirectoryStore) RequestDeletion(ctx context.Context, account str
 	if !ok {
 		return deletionOutcome(dspb.AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_RETRY, nil), nil
 	}
+	if source == DeletionSourceAdmin {
+		blockers = withoutSelfServiceBlockers(blockers)
+	}
 	if len(blockers) > 0 {
 		out := deletionOutcome(dspb.AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_BLOCKED, &dspb.AccountLifecycle{})
 		out.Blockers = blockers
@@ -168,6 +173,21 @@ func (s *AccountDirectoryStore) deletionBlockers(ctx context.Context, account st
 	return out, true
 }
 
+// selfServiceBlockers 是只要本人先处理、执行时由删角收尾代为处理的挂起(参与者只在试探里回,rolefence.Probing):
+// 帮主(guild 收尾自动让位或解散,docs/design/account-deletion.md §6.3)。本人申请照拦,让他自己决定交给谁;
+// 运维代办(客服核实身份后提交)没有玩家可以去处理,不拦。其余挂起是在途的业务,两种来源一律拦。
+var selfServiceBlockers = map[string]bool{"guild_leader": true}
+
+func withoutSelfServiceBlockers(blockers []*dspb.AccountDeletionBlocker) []*dspb.AccountDeletionBlocker {
+	kept := blockers[:0:0]
+	for _, b := range blockers {
+		if !selfServiceBlockers[b.GetReason()] {
+			kept = append(kept, b)
+		}
+	}
+	return kept
+}
+
 // roleBlockers 判一名角色有没有挂起:有冻结令牌直接算,否则试探全部参与者(不写副本)。墓碑没有挂起。
 func (s *AccountDirectoryStore) roleBlockers(ctx context.Context, player uint64) ([]string, bool) {
 	state, err := s.steps.readFence(ctx, player)
@@ -186,7 +206,12 @@ func (s *AccountDirectoryStore) roleBlockers(ctx context.Context, player uint64)
 	case state.FreezeToken != 0:
 		return []string{blockerRolePreparing}, true
 	}
-	outcome, reasons := s.fences.DryRunBlockers(ctx, state)
+	// 试探要带删角的准备令牌:参与者只认带令牌的 PrepareRoleFreeze(没有令牌按非法参数拒),而且按令牌种类选判据——
+	// 删角令牌走删角的挂起全集,过户令牌走过户的(要求先离帮)。只是试探,目录行一个字都不写。
+	probe := proto.Clone(state).(*rfpb.RoleFenceState)
+	probe.FreezeToken = rolefence.RemovalToken(player)
+	probe.FreezeFinal = false
+	outcome, reasons := s.fences.DryRunBlockers(ctx, probe)
 	switch outcome {
 	case rolefence.PrepareClean:
 		return nil, true

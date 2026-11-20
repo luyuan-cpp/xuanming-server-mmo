@@ -245,7 +245,7 @@
 - 持有进程活着期间,它名下的玩家换不到别的节点(18 / 17 暂拒),顶号要等旧连接断开:scene_manager 叫不到一个不在注册表里的节点。数据不丢;告警提示去修那台节点到 etcd 的网络,或重启它。
 - 进程被整体暂停(虚拟机冻结、SIGSTOP)超过租约加屏障的时间,等同崩溃:恢复之前已被接管的玩家,丢暂停那一刻还没存的进度。写回式存档的固有上限,与节点崩溃相同。
 - Java 版:只读核对后,只有流水早于提交一项适用,已在 Java `PARITY.md` 登记待做;人工终结由 R2 交接会话登记;补存与回滚两项 Java 已有等价做法。独立的 xuanming-server 仓不在这次范围内。
-- 11-05 四路都没读到的几处(match 的 direct_admission、challenge、spectator、global_pool_matcher;C++ 回合引擎;trade 的 rmb_mall、role_authority;tools/dbmove 的 replication、checksum)11-12 已补审,见 6.5。仍没读的:`tools/dbmove/journal.go`、match 侧 `CommitBattleOutcome` 的提交实现(第二轮已审)。
+- 11-05 四路都没读到的几处(match 的 direct_admission、challenge、spectator、global_pool_matcher;C++ 回合引擎;trade 的 rmb_mall、role_authority;tools/dbmove 的 replication、checksum)11-12 已补审,见 6.5;`tools/dbmove/journal.go` 11-19 读过(见 6.6),没有问题。仍没读的:match 侧 `CommitBattleOutcome` 的提交实现(第二轮已审)。
 
 ### 6.5 2026-11-12 补审
 
@@ -260,3 +260,14 @@
 | 15 | low | 买卖同账号的已付款意图在 trade 交付环节只拒绝、不退款。商城下单入口已按账号拒绝,正常不可达 | 并入已有的退款分支;权威判定仍只在商城下单事务 |
 
 核过没问题的:搬库冻结先锁全部写者槽位再抬 epoch,翻转是 etcd CAS,回滚结局未知时不解冻;真钱发货靠 `DeliveryDigest` 加合同行锁只生效一次,退款决定先提交再通知商城;回合终局只算一次并冻结,按 battle_id 加请求摘要重放,COMPLETE / ABORT 只由 match SQL 决定;匹配每名玩家一行票,准入与成局都在 `FOR UPDATE` 下复核;观战只写 `match_spectator*`,没有资产、评分、发件箱路径。
+
+### 6.6 2026-11-19 搬库改动复核
+
+第 11、12、14 条的修复是后台代理写的,11-12 只确认了关键函数在。11-19 把 `tools/dbmove` 逐行读了一遍,这三处的逻辑没有发现错误;它凭记忆写的 `information_schema` 列名、MySQL 的 `replica_*` 变量与复制通道表在真库上核过(TiDB v8.5.2、MySQL 8.4.13),都对。复核中补了两处,细节与 Codex 命令见 `docs/PROGRESS.md` 11-19「搬库工具三处改动逐行复核」,未编译:
+
+| # | 严重度 | 问题 | 处置 |
+|---|---|---|---|
+| 16 | low(不丢数据;只有带 TTL 的表,现在是 `mmorpg_chat.chat_send_authority`) | TiDB 的 TTL 任务是库自己发起的删除,不过闸门。源库的 TTL 不关,翻转之后它接着删冻结的源库里的过期行:`audit` 读的是源库的当前数据,必然报不一致,冻结的源库也不再是翻转那一刻的原样;撞上冻结窗口里的比对则回滚并清掉 verify 记录 | `cutover` 冻结之前核两侧这个库的表都关着 TTL,开着就拒绝并点名;手册写明在源集群逐表关掉,audit 通过之后在目标打开 |
+| 17 | high(前提同第 11 条,再加 TiCDC 正在换 owner 或滚动升级) | 第 11 条把「TiCDC 说没有这个 changefeed」当成已撤掉。TiCDC 查 changefeed 答的是 owner 内存里的那一份,owner 刚接任、各节点版本不一致时,还在的 changefeed 它也这样答 | 先核 TiCDC 健康(`/api/v2/health`)再问,不健康按查不成拒绝 |
+
+没核到的:TiCDC 的应答(本机没有镜像,只从 tiflow `release-8.5` 的源码核到 `ErrChangeFeedNotExists` 属于按 400 回的那一组)。第 17 条依据的是对 tiflow owner 实现的记忆,判断错了的后果是 cleanup 多问一次或者一直拒绝,不会多删;搬库手册 §10 列了用真实 TiCDC 核的办法。

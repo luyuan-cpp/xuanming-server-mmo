@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+
+	"github.com/zeromicro/go-zero/zrpc"
 
 	"payment/internal/channel"
 	"payment/internal/config"
 	"payment/internal/core"
+	dspb "proto/data_service"
 	paymentpb "proto/payment"
+	"shared/accountdirectory"
 )
 
 // buildChannels 按配置装配开启的渠道。密钥只从配置点名的环境变量读;缺了、太短、带首尾空白都拒启,报错只点变量名。
@@ -225,7 +230,24 @@ func testPolicy(t config.TestConf) core.TestPolicy {
 	return policy
 }
 
-func serviceOptions(c config.Config) core.Options {
+// realNameClient 在 Compliance.MinorSpendingGate=realname 时连 data_service 读买家的实名,none 时回 nil(不接实名)。
+// 缺密钥拒启;不在启动时读一次:data_service 可能还没起来,建意图时读不到回「支付服务繁忙」,玩家稍后重试。
+func realNameClient(c config.Config) (core.RealNames, error) {
+	if c.Payment.Compliance.MinorSpendingGate != config.MinorSpendingGateRealName {
+		return nil, nil
+	}
+	client, err := zrpc.NewClient(c.DataServiceRpc)
+	if err != nil {
+		return nil, fmt.Errorf("connect data_service: %w", err)
+	}
+	names, err := accountdirectory.NewRealNameClient(dspb.NewDataServiceClient(client.Conn()), os.Getenv(accountdirectory.PaymentSecretEnv))
+	if err != nil {
+		return nil, fmt.Errorf("real-name client (%s): %w", accountdirectory.PaymentSecretEnv, err)
+	}
+	return names, nil
+}
+
+func serviceOptions(c config.Config, realNames core.RealNames) core.Options {
 	var products []core.Product
 	for _, product := range c.Payment.Products {
 		byChannel := map[string]string{}
@@ -240,9 +262,10 @@ func serviceOptions(c config.Config) core.Options {
 		}
 		products = append(products, core.Product{SkuID: product.SkuId, Title: product.Title, ByChannel: byChannel})
 	}
+	compliance := c.Payment.Compliance
 	return core.Options{Products: products, TestPolicies: map[string]core.TestPolicy{
 		channel.NameApple:          testPolicy(c.Payment.Apple.Test),
 		channel.NameGoogle:         testPolicy(c.Payment.Google.Test),
 		channel.NameWechatMinigame: testPolicy(c.Payment.WechatMinigame.Test),
-	}}
+	}, RealNames: realNames, DailyLimitFenAge8To16: compliance.DailyLimitFenAge8To16, DailyLimitFenAge16To18: compliance.DailyLimitFenAge16To18}
 }

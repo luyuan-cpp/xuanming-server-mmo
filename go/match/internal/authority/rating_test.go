@@ -8,9 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	base "proto/common/base"
 	kafkapb "proto/contracts/kafka"
 	pb "proto/match"
 	rankpb "proto/rank"
+	"shared/generated/pb/table"
 
 	"match/internal/metrics"
 	"match/internal/ratingrule"
@@ -35,6 +37,16 @@ type rankReceiver struct {
 	opened      map[uint32]*rankpb.OpenRankGenerationRequest // board_type → 打开请求
 	unknownOnce bool
 	aheadBy     uint64 // 非 0:模拟别的副本已经投得更远,回「重复」和更大的游标
+	removals    []*rankpb.RemoveRankEntryRequest
+	removeTip   uint32 // 非 0:摘榜回这个拒绝码
+}
+
+func (r *rankReceiver) RemoveRankEntry(_ context.Context, request *rankpb.RemoveRankEntryRequest, _ ...grpc.CallOption) (*rankpb.RankAdminResponse, error) {
+	r.removals = append(r.removals, proto.Clone(request).(*rankpb.RemoveRankEntryRequest))
+	if r.removeTip != 0 {
+		return &rankpb.RankAdminResponse{ErrorMessage: &base.TipInfoMessage{Id: r.removeTip}}, nil
+	}
+	return &rankpb.RankAdminResponse{}, nil
 }
 
 // boardIDFor 是替身榜给一种 board_type 发的 board_id:1V1 是 10,5V5 是 20,PVP_TEAM 是 30。
@@ -134,6 +146,46 @@ func TestRatingTiDBShardedSourceCursorsVersionsAndStopTotal(t *testing.T) {
 	require.Zero(t, count, "停写之后的局不写投榜批次")
 	require.NoError(t, s.DB.QueryRow("SELECT COUNT(*) FROM match_rank_source WHERE source_epoch=1 AND mode=?", mode1v1).Scan(&count))
 	require.Equal(t, rankSourceShards, count, "停写把本模式所有片都建出来了")
+}
+
+// 删角收尾记下的待摘榜行(docs/design/account-deletion.md §6.2):投榜循环向本模式的榜摘人,请求号是 player_id、代次 1;
+// 榜回成功删行;回别的拒绝留行、回错误,下一轮重投;榜已封按摘完删行。本模式没有榜的行不动。
+func TestRatingTiDBRankRemovalsOfDeletedPlayers(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	const key = "fixture-only-rank-producer-key-0000"
+	_, e := s.ApplyRating(ctx, 6600, &kafkapb.BattleResultEvent{BattleId: 6600, MatchMode: 3}, 3, []uint64{1}, []uint64{2}, 1)
+	require.NoError(t, e)
+	removalRows := func(mode uint32) int {
+		t.Helper()
+		var n int
+		require.NoError(t, s.DB.QueryRow("SELECT COUNT(*) FROM match_rank_removal WHERE mode=?", mode).Scan(&n))
+		return n
+	}
+	for _, row := range []struct {
+		mode   uint32
+		player uint64
+	}{{mode1v1, 1}, {mode5v5, 1}} {
+		_, e = s.DB.Exec("INSERT INTO match_rank_removal (mode,player_id,created_ms) VALUES (?,?,1)", row.mode, row.player)
+		require.NoError(t, e)
+	}
+
+	receiver := &rankReceiver{batches: map[rankBatchKey]*rankpb.SubmitRankScoresRequest{}, removeTip: uint32(table.RankError_kRankRequestConflict)}
+	require.Error(t, s.PublishRankOnce(ctx, receiver, key), "被拒的摘榜要报出来")
+	require.Len(t, receiver.removals, 1, "只摘有榜的模式:5V5 这一轮没有来源片,也就没绑榜")
+	require.True(t, proto.Equal(&rankpb.RemoveRankEntryRequest{BoardId: 10, Generation: 1, EntityId: 1, RequestId: 1, Auth: receiver.removals[0].Auth}, receiver.removals[0]))
+	require.Equal(t, 1, removalRows(mode1v1), "被拒留行")
+
+	receiver.removeTip = 0
+	require.NoError(t, s.PublishRankOnce(ctx, receiver, key))
+	require.Zero(t, removalRows(mode1v1), "榜确认之后删行")
+	require.Equal(t, 1, removalRows(mode5v5), "没有榜的模式不动")
+
+	_, e = s.DB.Exec("INSERT INTO match_rank_removal (mode,player_id,created_ms) VALUES (?,?,1)", mode1v1, 2)
+	require.NoError(t, e)
+	receiver.removeTip = uint32(table.RankError_kRankGenerationClosed)
+	require.NoError(t, s.PublishRankOnce(ctx, receiver, key))
+	require.Zero(t, removalRows(mode1v1), "榜已封就没有可摘的了,按摘完删行")
 }
 
 // 一片的批次投失败不拦别的片,这一片下一轮从原游标接着投。

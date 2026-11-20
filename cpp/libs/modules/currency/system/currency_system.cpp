@@ -29,7 +29,7 @@
 // 若让冻结先命中,会拿到 RETRY 类的 kAssetFrozen,对一个注定失败的请求无限重投
 // (04-asset-channel.md §4.10 的 RETRY / REJECTED 分类)。
 // 外部载荷的不认识币种不会走到这里:收件箱执行器与资产通道在原语之前先判,按版本错位处理。
-// 这与背包侧"纯预检必须全部跑在 ReserveOrEvict 之前"是同一条纪律。
+// 这与背包侧"所有纯预检排在唯一会改状态的那一步之前"(bag-rule-policy-layering.md §7 红线 7)是同一条纪律。
 
 namespace
 {

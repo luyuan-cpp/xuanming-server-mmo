@@ -209,7 +209,7 @@ func TestListWatchableBattlesFiltersByViewerTrack(t *testing.T) {
 	formations := stubSpectateFormations(t).formations
 	formations[canaryFeatured].ReleaseTrack = "canary"
 	formations[canaryNew].ReleaseTrack = "canary"
-	_, err := svcCtx.MatchRedis.Zadd(spectateFeaturedActiveKey, int64(testRelayDeadlineMs), strconv.FormatUint(canaryFeatured, 10))
+	_, err := svcCtx.MatchRedis.Zadd(spectateFeaturedIndex.keyFor(canaryFeatured), int64(testRelayDeadlineMs), strconv.FormatUint(canaryFeatured, 10))
 	require.NoError(t, err)
 
 	ids, flags := listIdsAs(t, svcCtx, "", 2)
@@ -223,9 +223,7 @@ func TestListWatchableBattlesFiltersByViewerTrack(t *testing.T) {
 	require.Equal(t, []bool{true, false, false}, flags)
 
 	require.Equal(t, 3, activeIndexSize(t, svcCtx), "按轨道滤掉的场不摘索引")
-	featured, err := svcCtx.MatchRedis.Zcard(spectateFeaturedActiveKey)
-	require.NoError(t, err)
-	require.Equal(t, 1, featured, "赛事局索引也不动")
+	require.Equal(t, 1, spectateIndexSize(t, svcCtx, spectateFeaturedIndex), "赛事局索引也不动")
 
 	beta := metadata.NewIncomingContext(context.Background(), metadata.Pairs(releasetrack.MetadataKey, "beta"))
 	_, err = NewListWatchableBattlesLogic(beta, svcCtx).ListWatchableBattles(&pb.ListWatchableBattlesRequest{})

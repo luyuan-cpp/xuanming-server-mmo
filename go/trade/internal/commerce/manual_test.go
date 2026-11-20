@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	assetpb "proto/common/asset"
+	rollbackpb "proto/common/rollback"
 	dspb "proto/data_service"
 	tradepb "proto/trade"
 	"trade/internal/data"
@@ -219,6 +220,25 @@ func TestRefundReturnsEveryAppliedDebitAndCancels(t *testing.T) {
 	require.NoError(t, (&Engine{}).plan(r, w, 2000))
 	require.Equal(t, Cancelled, r.Status)
 	require.Equal(t, "done", w.Stage)
+}
+
+// 改绑之后整单退回:退款发给合同上这一方现在的角色(改绑目标),不是扣出时那个已经换主的角色 —— 发给后者,
+// 资产就落到别的账号手里。托管者仍记扣出时的角色,这笔退款按成交所得判、照常过获取封禁;没改绑的一方照旧付回本人
+// (2026-11-20 独立评审)。
+func TestRefundAfterRedirectGoesToTheCurrentParty(t *testing.T) {
+	r, w := pendingConsignment()
+	r.SellerPlayerId = 11 // 卖家已从 1 改绑到 11;已发出的 seller_debit 仍记 1
+	markManual(r, w, manualReasonCorrupt, "坏数据", 1)
+
+	_, err := planAction(r, w, ManualRefund)
+	require.NoError(t, err)
+	sellerBack := leg(w, "seller_debit/refund")
+	require.Equal(t, uint64(11), sellerBack.PlayerId, "发给改绑后的角色")
+	require.Equal(t, uint64(1), sellerBack.EscrowOwnerId, "托管者仍是扣出时的角色")
+	require.Equal(t, uint32(rollbackpb.TransactionType_TX_AUCTION_BUY), legTxType(sellerBack), "不是付回本人,照常过获取封禁")
+	buyerBack := leg(w, "buyer_debit_1_k/refund")
+	require.Equal(t, uint64(2), buyerBack.PlayerId)
+	require.Equal(t, uint32(rollbackpb.TransactionType_TX_AUCTION_RETURN), legTxType(buyerBack), "没改绑的一方照旧付回本人")
 }
 
 // 2026-11-11 修的缺陷:退回没到账转人工之后再跑一次 refund,旧代码把没到账的退回腿标「被退回取代」、同名的新退回腿又

@@ -771,7 +771,7 @@ Agones 段 7000–7009 → 7100–7109;前置条件新增端口预检、「先�
 - Deployment 形态下 battle 的 SIGTERM 优雅排空。
 - 排空**到期之后**再对剩余会话强制迁移:到期后仍直接删 Pod,剩下的玩家断线重连。排空**期间**的限速迁移另有设计并已落码(2026-11-10 未编译,开关默认关),见上文「gate 排空」一节。
 - scene 的 Health 改绑心跳(后续项)。
-- gate / battle TCP 上加 TLS、票据绑定 IP。
+- gate / battle TCP 上加 TLS、票据绑定 IP。小游戏(微信 / 抖音)要求的 wss 不在这两个进程里做:TLS 在前面的边缘 nginx(ws-edge)终止,见 [minigame-websocket-gate.md](minigame-websocket-gate.md) W2、W8(2026-11-19)。
 - 客户端仓改动(Unity 已支持 DNS 名)。
 - 触碰 pandora 的 minikube,或用户默认 kubeconfig 的 current-context。
 - 已登记为独立任务、本批不做:

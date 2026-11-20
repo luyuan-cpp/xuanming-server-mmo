@@ -1,8 +1,6 @@
 package authority
 
 import (
-	"context"
-	"database/sql"
 	"strings"
 	"testing"
 
@@ -106,18 +104,17 @@ func TestTeamMatchIntentPredecessorOriginalIsDefinitive(t *testing.T) {
 			launch, _, _ := sqlTraceTeamLaunch(t, pb.MatchMode_MATCH_MODE_PVP_TEAM)
 			data, err := DecodeTeamLaunch(launch)
 			require.NoError(t, err)
-			const previousAccount = "previous-owner"
 			previousRevision := launch.OwnerRevision - 1
 			recorder.query = func(statement string) *sqlTraceRows {
 				switch {
 				case source == "team launch" && strings.HasPrefix(statement, "SELECT "+teamLaunchColumns+" FROM team_launch"):
 					previous := proto.Clone(launch).(*team.TeamLaunchRecord)
-					previous.OwnerAccount, previous.OwnerRevision = previousAccount, previousRevision
+					previous.OwnerAccount, previous.OwnerRevision = predecessorAccount, previousRevision
 					return sqlTraceLaunchRow(previous)
 				case source == "legacy direct" && strings.HasPrefix(statement, "SELECT battle_id,payload,cancelled,owner_account,owner_revision FROM match_direct_intent"):
-					return sqlTraceRow(uint64(9001), []byte{}, false, previousAccount, previousRevision)
+					return sqlTraceRow(uint64(9001), []byte{}, false, predecessorAccount, previousRevision)
 				case source == "cancel tombstone" && strings.HasPrefix(statement, "SELECT cancelled,owner_account,owner_revision FROM match_join_intent"):
-					return sqlTraceRow(true, previousAccount, previousRevision)
+					return sqlTraceRow(true, predecessorAccount, previousRevision)
 				}
 				return nil
 			}
@@ -135,7 +132,7 @@ func TestTeamMatchIntentPredecessorOriginalIsDefinitive(t *testing.T) {
 func TestTeamMatchIntentStaleSessionIsNotPredecessorOriginal(t *testing.T) {
 	recorder := newSQLTraceRecorder()
 	s := sqlTraceStore(t, recorder)
-	s.roleGuard = func(context.Context, *sql.Tx, []*pb.MatchAuthorityTicketRecord) error { return ErrOriginalPlayer }
+	s.roleGuard = rejectingRoleGuard
 	launch, _, _ := sqlTraceTeamLaunch(t, pb.MatchMode_MATCH_MODE_PVP_TEAM)
 	data, err := DecodeTeamLaunch(launch)
 	require.NoError(t, err)

@@ -112,28 +112,86 @@ void BattleClientEdge::Install(muduo::net::TcpServer &server)
                                      muduo::Timestamp ts)
                               { if(auto self=weak.lock()) self->codec_.onMessage(conn, buf, ts); });
     RegisterMetrics();
+    // loop 卡顿的节拍(未验签淘汰用):只绑 weak 自己(AGENTS.md §11.7),在主 loop 上跑,不起线程。
+    const double tickSeconds = std::chrono::duration<double>(client_liveness::kClientLiveness.checkPeriod).count();
+    loopStallTimer_.RunEvery(tickSeconds, [weak]
+                             {
+        if (const auto self = weak.lock())
+        {
+            self->loopStall_.Tick(std::chrono::steady_clock::now());
+        } });
 }
 
 bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
                                        const battle_connection_admission::SteadyTime now)
 {
-    const auto rejected = admission_.Admit(sessions_.size(), EffectiveMaxConnections(), now);
-    if (!rejected)
+    // 未认证直连池:没完成票据握手、也没出示探测授权,且还连着(正在关闭的马上就走,不必再挑它,也不占池)。
+    battle_connection_admission::UnauthenticatedScan scan;
+    for (const auto &[connId, session] : sessions_)
     {
+        if (session.verified || session.probeGrant.has_value())
+        {
+            continue;
+        }
+        if (const auto conn = session.conn.lock(); conn && conn->connected())
+        {
+            scan.Add(connId, session.openedAt);
+        }
+    }
+    // 本端 loop 刚卡过就不给最老一条的年龄:那时「建连多久还没握手」不可信,不该据此淘汰。
+    std::optional<battle_connection_admission::SteadyTime::duration> oldestAge;
+    if (scan.oldestConnId && !loopStall_.RecentlyStalled(now))
+    {
+        oldestAge = now - scan.oldestOpenedAt;
+    }
+    const auto verdict = admission_.Admit(sessions_.size(), EffectiveMaxConnections(), scan.count, oldestAge, now);
+    if (!verdict.rejected)
+    {
+        if (verdict.evictOldestUnauthenticated && scan.oldestConnId)
+        {
+            EvictUnauthenticated(*scan.oldestConnId, now);
+        }
         return true;
     }
     // 关源期间的拒绝是预期行为,只进指标。原因名都是字面量,data() 以 0 结尾。
-    if (*rejected != battle_connection_admission::RejectReason::kShuttingDown)
+    if (*verdict.rejected != battle_connection_admission::RejectReason::kShuttingDown)
     {
-        LogRejectionSampled(battle_connection_admission::RejectReasonName(*rejected).data(), peer);
+        LogRejectionSampled(battle_connection_admission::RejectReasonName(*verdict.rejected).data(), peer);
     }
     return false;
 }
 
+void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_connection_admission::SteadyTime now)
+{
+    const auto it = sessions_.find(connId);
+    if (it == sessions_.end())
+    {
+        return;
+    }
+    const auto conn = it->second.conn.lock();
+    if (!conn)
+    {
+        return;
+    }
+    admission_.NotePreAuthEvicted();
+    // 淘汰的量与只建连不握手的流量同一量级:按原因采样(与其余拒绝同一个限流表)。对端地址只进日志。
+    uint64_t total = 0;
+    if (SampleRejection("preauth_evicted", total))
+    {
+        LOG_WARN << "battle evicting the oldest unauthenticated direct connection to admit a new one(sampled): age_ms="
+                 << std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.openedAt).count()
+                 << " latest_conn_id=" << connId << " latest_peer=" << conn->peerAddress().toIpPort()
+                 << " evicted_total=" << admission_.GetCounters().preAuthEvicted;
+    }
+    // forceClose 只把连接置成关闭中、真正的关闭排到之后的 loop 轮次,随后照常走 HandleClosed 删会话;不在准入回调里摘。
+    // 连接一进关闭中,codec 就不再分发它的帧,被选中之后不会再握手成功。
+    conn->forceClose();
+}
+
 size_t BattleClientEdge::UnauthenticatedConnectionCount() const
 {
-    // 探测连接从不握手(全服匹配按机房只探一台 battle,所有玩家的探测都落在那一台),但出示过 match 签发的授权,
-    // 不算未认证;否则那台的未认证连接数会随探测量涨,和「建连不认证」的流量分不开。
+    // 探测连接从不握手(全服匹配的探测按玩家均摊在本机房每台可探测的 battle 上),但出示过 match 签发的授权,
+    // 不算未认证;否则每台的未认证连接数都会随探测量涨,和「建连不认证」的流量分不开。
     return static_cast<size_t>(std::count_if(sessions_.begin(), sessions_.end(), [](const auto &entry)
                                              { return !entry.second.verified && !entry.second.probeGrant.has_value(); }));
 }

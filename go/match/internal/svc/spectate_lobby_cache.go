@@ -21,7 +21,8 @@ type SpectateLobbySnapshot struct {
 
 // SpectateLobbyCache 是观战列表读的进程内短缓存(docs/design/redis-cluster-all-domains-20261110.md §4.9)。列表读要跨 16 个桶,
 // 每个请求都回源的话 Redis 读量跟着玩家请求量涨。这里把合并结果留 SpectateLobbyCacheTTL;过期后同一时刻只有一个请求回源
-// (singleflight),其余等它的结果,所以每个副本每秒最多回源一次,与请求量无关。回源失败不缓存。
+// (singleflight),其余等它的结果,所以每个副本每秒最多成功回源一次,与请求量无关。回源失败不缓存,下一个请求接着重试
+// (同一时刻仍只有一个在回源)。
 // 只有列表读用它:写路径、随机选场与抢配额都直接读 Redis。nil 缓存 = 不缓存,每次回源(手工构造的单测 ServiceContext)。
 type SpectateLobbyCache struct {
 	now    func() time.Time

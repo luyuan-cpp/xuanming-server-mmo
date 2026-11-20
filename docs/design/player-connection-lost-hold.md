@@ -113,19 +113,22 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
 
 ### 4.1 开通挂机的玩家:离线托管(2026-11-06,用户要求「队员客户端离线,但是开通挂机应该照样跟」)
 
-"开通挂机"在代码里就是挂机月卡:玩家域 Redis 键 `player:afk_pass:{<player_id>}`,值为到期的 Unix 秒,由购买 / 开通流程写入
-(与 `go/shared/redisslot.AfkPassKey` 同形)。player_locator 的租约监视在月卡有效期间每 5 分钟给断线中的会话续一次租约
-(`go/player_locator/internal/logic/leasemonitor.go` 的 `afkPassState`,查不出来时推迟 10 秒再判);以前 scene 不看月卡,
+"开通挂机"在代码里就是挂机月卡。2026-11-19 起它有了开通入口与落库方式([挂机月卡](afk-monthly-card.md)):事实源是存档里的到期时刻
+`PlayerUint64Comp.afk_pass_expires_at`(Unix 秒),玩家花灵石开通;玩家域 Redis 键 `player:afk_pass:{<player_id>}`(与
+`go/shared/redisslot.AfkPassKey` 同形)只是 scene 按已提交的值写的读投影。player_locator 读这份投影,在月卡有效期间每 5 分钟给断线中的会话
+续一次租约(`go/player_locator/internal/logic/leasemonitor.go` 的 `afkPassState`,查不出来时推迟 10 秒再判);以前 scene 不看月卡,
 角色照样 25 秒后退出,只保住了重连资格。现在:
 
-- **进入保留时查一次月卡**(`AfkHostingSystem::Probe`,`player/system/afk_hosting.{h,cpp}`):异步 GET,回调按玩家号重新找实体,
-  只认同一次保留(`lostAt` 相同)的结果;接回、退出之后或下一次断线到达的迟到结果直接丢弃。
+- **进入保留时查一次月卡**(`AfkHostingSystem::Probe`,`player/system/afk_hosting.{h,cpp}`):读本实体内存里的到期时刻(scene 就是这份数据的
+  持有者,不读自己写的投影,afk-monthly-card.md §5.3),判定排到本轮之后执行(与原来等 Redis 回包同一时序),执行时按玩家号重新找实体,
+  只认同一次保留(`lostAt` 相同)、而且查询仍在途的那一次;接回、退出之后或下一次断线到达的迟到结果直接丢弃。
 - **判定**(纯函数 `connection_lost_hold::JudgeHold` / `ParseAfkPass`,`ExpireConnectionLostHolds` 每秒调一次):
   - 月卡有效且离到期还超过 `kHostingExitLead`(扫描周期 1 秒 + 退出存盘余量 4 秒)→ 继续保留,不受 25 秒窗口约束。
-  - 快到期 → 再查一次:续了就按新的到期时刻继续托管;没续(键没了、到期了、剩下不到余量)→ 下一次扫描按客户端断线退出,
-    与普通保留到期同一条收尾(存盘、写断线释放标记、销毁)。
+  - 快到期 → 再查一次:续了就按新的到期时刻继续托管(离线期间只有 GM 能续);没续(到期时刻是 0、已到期、剩下不到余量)→ 下一次扫描
+    按客户端断线退出,与普通保留到期同一条收尾(存盘、写断线释放标记、销毁)。
   - 查询失败 → 状态不变。还不知道有没有月卡的,25 秒窗口照常计、窗口内每次扫描重查,窗口到了仍查不出来就照原来退出(不丢数据);
     托管中的,快到期时查不出来先继续托管,已知的到期时刻过去 `kHostingUnconfirmedGrace`(30 秒)仍确认不了续费,按到期退出。
+    2026-11-19 起改读内存,查询不会失败;这一支与下一条是纯函数的完整定义,单测照跑。
   - 值解析不了(不是十进制非负整数)按没有月卡,与 player_locator 同口径,并打一行日志。
 - **托管开始**(第一次确认月卡有效):调 `PlayerTeamSystem::OnOfflineHostingStarted`,在队伍里就由服务器开启组队跟随,
   不等客户端声明;下线前点过暂离的也照样跟,重连后客户端按自己当前的选择重新声明([team-follow-server-trail.md](team-follow-server-trail.md) §3.6、§5)。
@@ -493,7 +496,7 @@ EnterScene 直接丢下这条落点),被"打断"的退出照常收尾,所以进�
 3. 保留期间战斗结束:结算照常应用到实体上,终局推送发不出去。重连后的结果面板由另一批「近期战斗结果」恢复([battle-result-recovery.md](battle-result-recovery.md),11-05 落码、未编译),本批不重复做。
 4. 按 player_id 移动玩家、又不看活会话的入口:11-06 核对时没有。客户端换图要有客户端;镜像自动进场在进入保留时已撤掉;队伍跟随与跨节点交接都先看活会话;GM 传送(`TeleportRequest`)回 1006。以后新增这类入口要先看 `HasLiveGateSession`。漏看的后果是路由在 gate 被丢弃、location 指向新场景,重连按新 location 落地;不重连时与 gate 崩溃同一残余,由租约到期的会话结束释放和 `location-release-binding.md` §17 的撤销兜底。
    2026-11-10 起唯一的例外是托管落点(§4.2):只替离线托管中的角色发、不带 gate,提交点是直接推给目标 scene 节点的事件,不会落进"路由在 gate 被丢弃"这条残余。
-5. 实时场景 CD 与 Buff:保留内重连沿用实体,运行时状态还在;保留到期之后才重连仍会丢。规则未定,见审计 §9.2。
+5. 实时场景 CD 与 Buff:保留内重连沿用实体,运行时状态还在;保留到期之后才重连原来会丢。2026-11-19 定案并落码(未编译):冷却全部随存档保留,Buff 表 `keep_on_logout = 1` 的 Buff 按到期时刻保留,其余实体重建即清,见 [实时技能冷却与 Buff 跨重登保留](realtime-cooldown-buff-persistence.md)。
 6. 保留中的实体仍被 AOI 当作观察者计算,发给它的推送在 scene 侧因为没有会话直接丢弃。量级等于断线未归的玩家数,不处理。
 7. 月卡离线托管:2026-11-06 已做(§4.1),挂机月卡有效的玩家断线后角色常驻到重连或月卡到期。ExitGame handler 里原来那条"月卡改 AI 控制"的 TODO 指的就是这件事,2026-11-19 已删,换成指向 §4.1 的说明;托管中的角色还不会自己活动(§4.1 末段)。2026-11-10 起能跟着队长换场景、搬到本 zone 的别的节点(§4.2)。
 8. 节点排空 / 疏散时托管中的角色:2026-11-12 起按托管落点改派到别的节点、接着托管(§4.3),走与在线玩家同一条改派链与待确认表。

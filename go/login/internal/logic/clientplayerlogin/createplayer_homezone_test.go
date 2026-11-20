@@ -131,6 +131,9 @@ func newCreatePlayerHarnessWithNames(t *testing.T, resolver *homezone.Resolver, 
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
+	// 用例结束时恢复,别的用例不得靠这里留下的全局配置(AGENTS.md §11.4)。
+	previous := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = previous })
 	config.AppConfig.Node.ZoneId = hzZoneID
 	// 建角选库必填(总体方案 §7.2):本机口径,地域 0、一个存档库。
 	config.AppConfig.Placement = config.PlacementConf{Region: 0, StorageShards: 1}

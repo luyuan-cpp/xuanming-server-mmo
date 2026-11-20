@@ -34,8 +34,10 @@ type Directory interface {
 type Sessions interface {
 	// RevokeAll 吊销账号的全部令牌家族:已签的 access / refresh 立即失效。
 	RevokeAll(ctx context.Context, account string) error
-	// KickPlayer 踢掉这名角色当前绑定的在线会话;没有在线会话直接成功。
-	KickPlayer(ctx context.Context, player uint64) error
+	// KickPlayer 让这名角色彻底下线:踢掉在线设备(客户端收到 reasonTip 作为下线原因),再按正常登出结束会话,
+	// 离线托管中的角色也随之离开世界;没有会话直接成功。
+	// 本地域所有区的会话都踢得到:会话记录在地域共用的玩家域 Redis 上,gate 命令走地域共用的 Kafka(§7.2)。
+	KickPlayer(ctx context.Context, player uint64, reasonTip uint32) error
 }
 
 // AppleRevoker 撤销一次 Sign in with Apple 授权(*auth.AppleRevoker)。
@@ -131,7 +133,7 @@ func (s *Service) signOut(ctx context.Context, account string) {
 		return
 	}
 	for _, role := range dir.GetPlayers().GetPlayers() {
-		if err := s.Sessions.KickPlayer(ctx, role.GetPlayerId()); err != nil {
+		if err := s.Sessions.KickPlayer(ctx, role.GetPlayerId(), uint32(table.LoginError_kLoginAccountDeletionPending)); err != nil {
 			logx.WithContext(ctx).Infof("[account-deletion] kick failed: player=%d err=%v", role.GetPlayerId(), err)
 		}
 	}

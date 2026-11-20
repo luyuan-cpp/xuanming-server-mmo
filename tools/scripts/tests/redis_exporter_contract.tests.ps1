@@ -1,16 +1,16 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-    控制域 Redis 监控(2026-10-23)的静态契约:每个控制域 Redis Pod 带钉了版本的 redis-exporter sidecar,
+    核心单实例与 match 私有集群 Redis 监控(2026-10-23)的静态契约:每个 Redis Pod 带钉了版本的 redis-exporter sidecar,
     口令只走环境变量,抓取注解与告警规则齐全;redis-match-cluster 为 noeviction。
 
 .DESCRIPTION
     只读仓库里的静态文件:不调用 k8s_deploy.ps1,不访问集群、容器或网络。
     设计与拍板:docs/design/shared-redis-split-by-purpose.md §25.3(原 §13 第 6 条、第 11 条)。
-    玩家域 Redis Cluster 的监控归 docs/design/redis-player-store-cluster.md,不在本文件。
+    玩家域与控制两套 Redis Cluster(redis-cluster.yaml)的监控由 redis_player_cluster_contract.tests.ps1 钉住,不在本文件。
 
     守住的东西:
-      - E1 redis.yaml、redis-ha.yaml、redis-match-cluster.yaml 各有一个名为 redis-exporter 的容器,镜像钉到 vX.Y.Z,三份同一版本;
+      - E1 redis.yaml、redis-match-cluster.yaml 各有一个名为 redis-exporter 的容器,镜像钉到 vX.Y.Z,两份同一版本;
       - E2 exporter 连本 Pod 的 127.0.0.1:6379,指标端口 9121;口令只经 secretKeyRef 注入 REDIS_PASSWORD,命令行不出现口令参数;
       - E3 Pod 模板带 kubectl.kubernetes.io/default-container: redis 与 prometheus.io/port: "9121";
       - E4 deploy/k8s/redis-alerts.yaml 是 PrometheusRule,含约定的 8 条告警,描述里不引用玩家维度 label;
@@ -25,8 +25,8 @@ $ErrorActionPreference = 'Stop'
 
 $script:RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))
 $script:InfraDir = Join-Path $script:RepoRoot 'deploy/k8s/manifests/infra'
-# 按用途拆出的 queue / ctl 实例模板(redis-purpose*.yaml)随缺口第 34 条第 6b 批退役,不在名单里。
-$script:ManifestNames = @('redis.yaml', 'redis-ha.yaml', 'redis-match-cluster.yaml')
+# 按用途拆出的 queue / ctl 实例模板(redis-purpose*.yaml)与核心的高可用形态 redis-ha.yaml 随缺口第 34 条第 6b 批退役,不在名单里。
+$script:ManifestNames = @('redis.yaml', 'redis-match-cluster.yaml')
 $script:AlertsPath = Join-Path $script:RepoRoot 'deploy/k8s/redis-alerts.yaml'
 
 function Read-RepoText {
@@ -69,7 +69,7 @@ function Get-NonCommentText {
     return ((($Text -split "`n") | Where-Object { -not $_.TrimStart().StartsWith('#') }) -join "`n")
 }
 
-Test-Case 'E1:三份控制域 Redis 清单各有一个 redis-exporter 容器,镜像钉到 vX.Y.Z 且三份同版本' {
+Test-Case 'E1:核心与 match 集群两份 Redis 清单各有一个 redis-exporter 容器,镜像钉到 vX.Y.Z 且同版本' {
     $images = @{}
     foreach ($name in $script:ManifestNames) {
         $text = Get-NonCommentText (Read-RepoText (Join-Path $script:InfraDir $name))
@@ -80,7 +80,7 @@ Test-Case 'E1:三份控制域 Redis 清单各有一个 redis-exporter 容器,镜
         Assert-Match -Text $image.Groups['ref'].Value -Pattern '^oliver006/redis_exporter:v\d+\.\d+\.\d+$' -Because "$name 的 exporter 镜像必须钉到具体版本,不能用 latest 或浮动标签"
         $images[$name] = $image.Groups['ref'].Value
     }
-    Assert-Equal -Expected 1 -Actual (@($images.Values | Sort-Object -Unique).Count) -Because '三份清单的 exporter 必须是同一个版本,升级时一起改'
+    Assert-Equal -Expected 1 -Actual (@($images.Values | Sort-Object -Unique).Count) -Because '两份清单的 exporter 必须是同一个版本,升级时一起改'
 }
 
 Test-Case 'E2:exporter 连 127.0.0.1:6379、端口 9121;口令只经 secretKeyRef 注入,命令行不出现口令参数' {

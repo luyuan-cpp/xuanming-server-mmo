@@ -1,6 +1,6 @@
 # 实名认证与未成年人防沉迷
 
-> **状态：设计稿（2026-11-19），未落码。** 规则与平台能力已查清（来源见 §10）；§5 的服务端方案只对 App 形态生效，开不开工等负责人答 §7 第 1 条。§8 的文件清单超过 30 个，落码前要负责人对这一批的明确同意（AGENTS §10.2）。
+> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Codex 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。
 
 ## 0. 结论
 
@@ -61,10 +61,10 @@
 
 | auth_type | 实名 | 时段 | 充值限额 | 上下线上报 |
 |---|---|---|---|---|
-| `wechat_minigame`、`douyin_minigame` | 平台 | 平台 | 平台（抖音待核实） | 平台（凭渠道的数据上报权限） |
+| `wechat_minigame`、`douyin_minigame` | 平台 | 平台 | 平台（抖音待核实）；账号有 pi 时 go/payment 也按我们的规则合并计额（§5.6） | 平台（凭渠道的数据上报权限） |
 | `wechat`、`qq`（App）、`password`、`satoken` | 我们接国家接口（§5.2） | login 执行（§5.3、§5.4） | go/payment 执行（§5.6） | login 上报（§5.5） |
 | `access_token` | 沿用签发令牌时的渠道（令牌记录里的 `auth_type`） | 同左 | 同左 | 同左 |
-| `apple`、`google` | 海外部署，`AntiAddiction.Enabled=false` | — | — | — |
+| `apple`、`google` | 海外部署，`AntiAddiction.Enabled=false` | — | go/payment 配 `MinorSpendingGate: overseas`（§5.6） | — |
 
 - **按部署开关**：国内部署 `AntiAddiction.Enabled=true`。开着时，凡不在 `PlatformManagedAuthTypes` 里的 auth_type 都要我们自己实名，新加的登录方式默认也要（fail-closed）。
 - **按本次登录的渠道判，不按账号判**：微信 App 和微信小游戏是同一个账号 `wx_<unionid>`（第三方登录设计 §11.1）。同一个账号从小游戏进来由平台管，从 App 进来由我们管。
@@ -133,13 +133,45 @@
 - **上报器**：每个 login 副本一个，进程内攒批：每批 ≤ 128 条，两次请求至少间隔 1 秒，同一时刻只有一个请求在途。失败就重试，直到这批里最早的事件已过 150 秒，丢弃并计数（`login_nppa_report_dropped_total`）。
 - **限流**：每个副本最多 1 QPS，login 副本数 ≤ 10 时合计不超过 10 QPS，容量约每秒 1280 条上下线。副本要超过 10 个时先联系国家系统管理员调流控（规范备注第 4 条），或改成集中上报。
 - **已知局限**：进程崩溃会丢还没发出的事件。180 秒的时限让持久化队列的收益很小，这里先不做。
+- **会话收尾取不到记录时不重放 Disconnect**（2026-11-19 与断线重连会话对齐）：GETDEL 出错只记日志，Disconnect 照常回成功，这一条下线就不报了。理由有三：
+  - 上报器本身至多一次（内存队列、150 秒内重试、进程退出即丢），在 Disconnect 上做到至少一次换不来端到端的保证；
+  - GETDEL 结果未知时记录可能已经删掉，重放也取不回来；
+  - 让上报这条旁路的抖动决定 Disconnect 成败，会拖住断线收尾（断线租约、player_locator），主次颠倒。
+  
+  登录域 Redis 真不可用时，Disconnect 关栅栏那一步先失败、回 `Unavailable`，gate 重发时 GETDEL 跟着重试。
 
 ### 5.6 充值限额
 
-- 闸在 go/payment（充值设计 §12），归「游戏应用支付系统接入」会话。本方案只提供数据：`GetAccountRealName(player_id)` 回 pi；从 pi 算出生日期、年龄段的纯函数放 `go/shared/antiaddiction`，login 和 payment 共用一份。
-- 小游戏渠道没有 pi，由平台执行限额。go/payment 已经是这个口径（支付会话 2026-11-19 确认）：`Payment.Compliance.MinorSpendingGate` 目前只认 `none`，非 dev / test 模式下 `config.Validate` 拒绝启用 wechat_pay、alipay、apple、google 四个 App 真钱渠道，两个小游戏渠道可以开。
-- **接入点**（支付会话给出，那边本轮不预留接缝）：`go/payment/internal/config/config.go` 的 `Validate` 给 `MinorSpendingGate` 加第二个取值，并放开四个 App 渠道；`go/payment/internal/core/service.go` 的 `CreateIntent` 在 `openIntent` 之前按玩家和订单金额判限额，拒绝时回新的 payment_error tip。这两处等 data_service 接口和 `go/shared/antiaddiction` 落码之后改，归本任务第二批，或由负责人另派。
-- 单日上限的数字仍是充值设计 §18 第 7 条的待决项。
+**2026-11-19 已落码**（「充值按年龄段限额闸接入 go/payment」会话，在支付会话确认 go/payment 与 Tip.xlsx 改完之后），未生成、未编译、未测试，待 Codex 验证（命令见 `docs/PROGRESS.md` 同日「未成年人充值限额闸」条目）。数据接口沿用本方案：`GetAccountRealName(player_id)` 回 pi，出生日期、周岁、单次与每月上限取 `go/shared/antiaddiction`。
+
+- **开关**：`Payment.Compliance.MinorSpendingGate` 三个取值。
+  - `none`（缺省）：不接实名，生产模式下 wechat_pay、alipay、apple、google 四个 App 渠道拒启。
+  - `realname`（中国大陆）：建意图前读实名并执行限额，四个 App 渠道这时才能在生产模式开。必须配 `DataServiceRpc`；密钥 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT` 缺失或不足 32 字节拒启。
+  - `overseas`（大陆以外的部署）：不适用国新出发〔2019〕34 号，不读实名，App 渠道照开；当地的未成年人消费规则由商店的家长控制与运营按当地法规执行。和 login 的 `AntiAddiction.Enabled=false` 是同一个部署口径。
+- **谁经闸**：闸开着时每个新意图都读实名，渠道只决定「没有实名」怎么办。
+  - App 内的渠道（微信支付、支付宝、App Store、Google Play，以及联调用的 devpay；以后新加的默认也算）：没有实名就拒绝。
+  - 微信 / 抖音小游戏：平台实名、平台限额，账号没有 pi 照常放行。账号有 pi（同一个人也在 App 实名过，微信 App 与小游戏是同一个账号）时一样按下面的规则判、一起计额：法规按「同一网络游戏企业」合并计算，不合并的话 App 与小游戏各自不超限、合起来却可能超。这也是 §4「账号已经有 pi 时，任何渠道都按我们的规则限」。
+  - 闸只在新建意图时判；同一订单再次调起沿用已有意图，不重复判、不重复占。
+- **判定**（`go/payment/internal/core/minor.go`，在 `openIntent` 核对完商城订单之后、写意图之前）：
+  1. 读 pi。读失败一律回 `kPaymentBusy`（小游戏渠道也一样：放行就可能漏掉这个人在别的渠道已经花的钱）；目录里没有这名角色回 `kPaymentRealNameRequired`；账号没有 pi 时 App 渠道回 `kPaymentRealNameRequired`，小游戏渠道放行、不计额。
+  2. 按北京日期算周岁。成年人放行，不计额。
+  3. 未满 8 周岁回 `kPaymentMinorNotAllowed`；订单不是人民币回 `kPaymentCurrencyUnsupported`（法规按人民币定额，国内发行的订单都是人民币）；单笔超过年龄段的单次上限回 `kPaymentMinorSingleLimit`。
+  4. 在这个人的额度行锁下核对月、日累计，通过才写意图；超限回 `kPaymentMinorMonthlyLimit` / `kPaymentMinorDailyLimit`。
+- **额度的口径**（`go/payment/internal/data/spend.go`）：
+  - 主体是 pi，同一个人的多个账号合并。库里存 `SHA-256("spender|" + pi)` 的前 16 字节（`payment_intent.spender_hi/lo`），不存 pi（它含出生日期）。成年人的意图不记主体。
+  - 不另记计数器，由这个人名下的意图算：还在等付款的（CREATED）全额占着，已付的（PAID）按转已付的时刻 `paid_ms` 计入当月、当日，已关闭的（过期、被渠道撤销）不占。这正是充值设计 §12 的「商城关单、玩家取消都不释放，只在过期或转已付时变」：待付款的意图要到后台关单才释放，我们定价的渠道是支付截止后约两分钟，商店渠道是商城截止后再 72 小时。
+  - 核对式：`本月一日零点起已付 + 全部在途 + 本次 ≤ 每月上限`，单日同理（单日上限配了才核）。在途的不分月份全额计入，所以任何一个月最终到账的总额都不会超过上限，在途的意图到账时不用再核。§12 写的是「到账周期与预占周期不同时在到账周期重新核对」，这里少了这一步，保证相同。`paid_ms` 取本服务时钟、不早于意图创建时刻，时钟偏差记到「未来」的也算本月。
+  - 并发：`payment_spend` 一人一行。预占在 `INSERT … ON DUPLICATE KEY UPDATE` 拿到的行锁下排队，事务用读已提交 + 锁读，看得见排在前面刚提交的那一笔；同一订单并发建意图只插入一行，核对时不计这张订单自己。
+  - 上面的保证不覆盖意图关闭之后才到的钱，这些在同一把锁下单独处理（`ReviveMinorIntent`）：
+    - 迟到的付款（意图已过期关闭才到，商店渠道居多）：额度够就照常记账；不够就不发货、转人工（`ORPHAN`；Google 不确认，三天后自动退款）。复核用建意图时记下的周岁 `minor_age`：人只会长大，只会更严。
+    - App Store 撤回退款，以及「记账的第二步没做完、意图已到期关闭」：钱在商户手里、商城照常发货，照样计入；超限记合规日志与指标 `payment_minor_gate_total{outcome="recounted_over_limit"}`，人工处理。
+  - 退款按净额算：订单绑定的那笔钱退回给用户之后，意图关掉，额度随之释放。
+    - 渠道撤销（用户在渠道侧退款）：只有订单绑定的那笔（已绑定、还没报给商城，或取消后才到账、商城为它本身建了退款）的翻转才改意图状态。重复付款、金额或币种不符这些异常付款，以及拒收、转人工的，被撤销或撤回不改意图。这一条同时修了原来的问题：重复付款被撤销会把意图关掉，释放掉正付着的那一单的额度。
+    - 商城的退款待办：原因是 `CANCELLED_LATE`、`DELIVERY_REJECTED`（退的是订单绑定的那笔，`CommerceApi.RefundReason.refundsOrdersOwnPayment`）时，渠道退成就关意图，再回执商城；重复付款、金额币种不符的退款不动意图。
+    - 金额或币种不符的那笔钱商城不绑定订单，意图却已记成已付（记账时还不知道商城的结论），额度在它退掉之后也不退：偏严，只出现在要告警排查的异常里。
+- **单日上限**：`Payment.Compliance.DailyLimitFenAge8To16`、`DailyLimitFenAge16To18`（分），缺省 0 = 不设。数字仍是充值设计 §18 第 7 条的待决项；负责人定了填进配置，不用改代码。
+- **tip 码**（Tip.xlsx payment 段末尾，都不是故障）：`kPaymentRealNameRequired`、`kPaymentMinorNotAllowed`、`kPaymentMinorSingleLimit`、`kPaymentMinorDailyLimit`、`kPaymentMinorMonthlyLimit`。
+- **已知局限**：只在小游戏里玩、从没在 App 实名的人，我们拿不到他的年龄，他的小游戏消费只受平台的限额；他之后到 App 实名，之前在小游戏的消费也进不了我们的累计（意图上没有主体键）。平台不给开发者实名或年龄（§3），这一段只能由平台管。
 
 ### 5.7 客户端
 
@@ -159,7 +191,7 @@ AntiAddiction:
   Nppa:
     AppId: ""
     BizId: ""
-    SecretKeyEnv: LOGIN_NPPA_SECRET_KEY   # 只写变量名,值从 Secret 注入
+    SecretKeyEnv: LOGIN_NPPA_SECRET_KEY   # 只写变量名,值从 Secret 注入;K8s 部署脚本渲染成 MMORPG_LOGIN_NPPA_SECRET_KEY(§8 末尾)
     CheckUrl: https://api.wlc.nppa.gov.cn/idcard/authentication/check
     QueryUrl: http://api2.wlc.nppa.gov.cn/idcard/authentication/query
     LoginoutUrl: http://api2.wlc.nppa.gov.cn/behavior/collection/loginout
@@ -182,7 +214,7 @@ AntiAddiction:
 
 ## 6. 与其它会话的分工
 
-- **go/payment 与充值设计 §12**：归「游戏应用支付系统接入」会话。2026-11-19 已对齐：`GetAccountRealName` 由本任务在 data_service 加；那边不碰账号目录，也不改 §12（只追加 §22）；限额闸的两处接入点见 §5.6。
+- **go/payment 与充值设计 §12**：归「游戏应用支付系统接入」会话。2026-11-19 已对齐：`GetAccountRealName` 由本任务在 data_service 加；那边不碰账号目录，也不改 §12（只追加 §22）。限额闸在那边改完 go/payment 之后，由「充值按年龄段限额闸接入 go/payment」会话按 §5.6 落码。
 - **Tip.xlsx**：支付会话 2026-11-19 正在追加 `//payment_error base=31000` 段。本任务的码进 login_error 段，等那边写完再动这张表，两边不同时保存 xlsx。
 - **小游戏客户端连 gate（WebSocket）**：互不影响。小游戏包不做实名。
 - **Java 版**：只在 Java 仓 `PARITY.md` 登记待做。两版共享的客户端契约是 `/api/real-name`、`LoginResponse.anti_addiction`、新 tip 码与踢线原因。
@@ -207,10 +239,25 @@ AntiAddiction:
 | 本仓 Java 网关（约 6） | `/api/real-name` 的 controller、service、`LoginRpcClient`、请求与应答 DTO、测试 |
 | 客户端（约 6） | `GatewayHttpClient.cs`、`GameClient.cs`、新增实名窗与倒计时提示、踢线原因处理、EditMode 测试 |
 | K8s（约 3） | `tools/scripts/k8s_deploy.ps1`（AppId、BizId、Secret `login-nppa`）、`dev_tools.ps1`、契约测试 |
-| go/payment（2 + 测试，可另派） | `internal/config/config.go`、`internal/core/service.go`（§5.6 接入点），等支付会话本轮改完再动 |
+| go/payment（2026-11-19 已落码，见 §5.6） | `internal/config/config.go` 与 `config_test.go`；`internal/core/service.go`、`workers.go`（指标登记），新增 `minor.go`、`minor_test.go`；`internal/data/repo.go`、`tables.go`，新增 `spend.go`、`spend_test.go`、`spend_tidb_test.go`；`internal/constants/constants.go`、`internal/server/server.go`、`internal/mall/client.go`（退款原因是否退订单那笔）；`payment.go`、`channels.go`、`etc/payment.yaml`；客户端仓 `Assets/Scripts/Game/Jubaozhai/PaymentClient.cs`（5 个码的文案）；`proto/payment/payment_table.proto`（意图加 4 列、新表 `payment_spend`）；`go/shared/accountdirectory/real_name.go`（构造时校验密钥）；`data/tip/Tip.xlsx` payment 段 5 个码 |
 | 文档（约 5） | 本文、`docs/README.md`、`docs/PROGRESS.md`、第三方登录设计 §七、Java 仓 `PARITY.md` |
 
 分两批交 Codex：第一批协议、tip、Go 共用、data_service、login、gate；第二批网关、客户端、K8s。
+
+**落码时的调整（2026-11-19）**：
+
+- **和账号注销共用一次目录读**：注销会话同时在账号行上加注销状态。两边约定 `readAccount` 的同一条 SELECT 带出注销状态与 `real_name_pi`，`ReadAccountDirectory` 一律走 `ReadWithLifecycle`（注销没装配时只是不回注销状态，pi 照回）；login 侧是同一个 `readAccountDirectoryWithRealName`，回角色列表、pi 与注销状态。账号目录列号：注销占 3–7，`real_name_pi` 是第 8 号；`AccountDirectoryResponse.real_name_pi` 是第 3 号，`LoginResponse.anti_addiction` 是第 10 号。
+- **gate 上的 Login 先读目录再写登录态**：原来目录读在写登录态之后。现在提到前面，防沉迷拒绝和目录读失败都不会留下能拿去 CreatePlayer / EnterGame 的登录态。
+- **实名提交挂在 `LoginPreGate`**（网关专用的服务，客户端经 gate 发不了），请求体登记进 `rpclogging.ProtectCredentials`，go-zero 的慢请求日志不打姓名和身份证号。令牌不能用回 gRPC UNAUTHENTICATED，网关照现有映射回 401，网关不用认具体 tip。
+- **客户端实名窗复用账号面板**：账号框填姓名，密码框改明文填身份证号；提交成功后口令登录用原口令重进，渠道登录（凭证一次性）改用 `LoginCredential.ForAccessToken` 凭这次的 access token 重进。
+
+**这一批没做的**：
+
+| 项 | 状态与原因 |
+|---|---|
+| K8s 部署参数 | **2026-11-19 已落码，未运行，待 Codex 跑契约测试**（命令见 `docs/PROGRESS.md` 同日「实名与防沉迷接进 K8s 部署脚本」条目）。`k8s_deploy.ps1 -LoginNppaAppId / -LoginNppaBizId`（要么都给要么都不给）渲染 login 顶层 `AntiAddiction` 段：`Enabled: true`、`PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]`、`Nppa.AppId / BizId`、`Nppa.SecretKeyEnv: "MMORPG_LOGIN_NPPA_SECRET_KEY"`；`-LoginAntiAddictionExtraPlayDays`（逗号分隔的北京日期）与接口测试用的 `-LoginNppaCheckUrl / -LoginNppaQueryUrl / -LoginNppaLoginoutUrl` 给了才写，`DailySubmitLimit` 不写（缺省 5）。secretKey 从部署机环境变量 `MMORPG_LOGIN_NPPA_SECRET_KEY`（32 位十六进制，任何档位都没有回落值）经工作负载密钥目录的单键 Secret `login-nppa` 注入 login 容器的同名变量，Pod 模板带指纹。不粘滞、防误关（线上开着而本次漏传或换了 AppId / BizId 就在写操作之前拒绝，确认开关同第三方登录 `-ConfirmLoginAuthProviderChange`）、`dev_tools.ps1` 照传与 `k8s-image-*` / `k8s-release-*` 拒绝、摘要行 `login_anti_addiction=` 都与小游戏同一套。login 是 SQL 写者：`AntiAddiction` 段要照抄进运维预置的 `runtimeConfigSecret` 才生效；部署另把 AppId / BizId 明文注入 login 主容器（`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`），login 启动时与运行配置比（`config.checkExpectedAntiAddiction`），漏抄、关着或抄成别的应用都拒启，不会带着关掉的防沉迷起来；所以开、关、换应用都是先改那份 Secret、不单独滚动 login，紧接着部署。data-service 与 payment 的清单各从运维预置的 `domain-service-secrets` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`（键 `account-directory-payment`，照 trade 那把写成 `optional: false`：每个 zone namespace 与 infra namespace 都要先预置、两边同值，见开服手册 §1）；data_service 的跨用途复用检查（`validateGlobalCallerSecrets`）也管这一把，部署脚本的写前门禁 `Assert-SharedDomainServiceSecretsForRun` 核它在、够长、与别的键不同、zone 与 infra 同值。本机 `go_services.ps1` 给 data_service 与 payment 发同一把开发密钥 |
+| go/payment 限额闸 | **2026-11-19 已落码，未生成、未编译、未测试**（§5.6；命令见 `docs/PROGRESS.md` 同日「未成年人充值限额闸」条目）。K8s 上 payment 的 ConfigMap 要带 `DataServiceRpc`（集群的 etcd 发现）与 `Payment.Compliance` 的新键，归支付会话的 K8s 批次；密钥注入见上一行 |
+| 人工换实名 | 不做。pi 只写一次；填错别人的身份信息要换，走客服后台改库，当前没有管理 RPC |
 
 ## 9. 负责人要亲自办的手续（Claude 不能代办）
 

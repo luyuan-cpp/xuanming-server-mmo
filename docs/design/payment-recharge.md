@@ -937,7 +937,7 @@ Payment:
 | 交易服务 | `go/trade`:货币发放、扣回收敛 | 已写完,未编译 |
 | scene | `asset_op_system.cpp`:交易扣出流允许 `TX_PAYMENT_REVERSAL` | 已写完,未编译 |
 | 客户端 | `mmorpg-client`:`PaymentClient`、订单界面入口、安卓与小游戏的桥 | 已写完,未在 Unity 编译,未上真机 |
-| 部署 | 本机脚本已登记;K8s 清单、回调 Ingress、密钥 Secret | **未做** |
+| 部署 | 本机脚本已登记。K8s(2026-11-19):payment 与商城的清单、迁移 Job、回调入口 Service、密钥 Secret、契约测试,见 `deploy/k8s/README.md`「支付 payment」「商城 mall」 | 已写完,未运行。商城的业务表没有接进部署脚本,要运维手工装一次 |
 | Java 版 | 独立仓 `PARITY.md` | 只登记待做 |
 
 支持的渠道:`wechat_pay`(微信支付 App,APIv3 公钥模式)、`alipay`(支付宝 App,RSA2 公钥模式)、`wechat_minigame`(微信小游戏道具直购)、
@@ -1036,8 +1036,20 @@ trade 收货时用 `currencytype.IsKnown` 核对种类。管理接口 `CatalogAd
 
 ### 22.8 合规闸
 
-`Payment.Compliance.MinorSpendingGate` 目前只认 `none`。非 dev / test 模式下,`wechat_pay`、`alipay`、`apple`、`google` 四个 App 渠道**拒绝启用**
-(§12:未成年人充值限额未接入)。两个小游戏渠道由平台执行实名与限额,可以开。实名系统落码后在 `config.Validate` 与 `core.CreateIntent` 接入(见 `real-name-anti-addiction.md` §5.6)。
+`Payment.Compliance.MinorSpendingGate` 有三个取值。限额闸由会话「充值按年龄段限额闸」在 2026-11-19 落码(未编译),规则与依据在 `real-name-anti-addiction.md` §5.6,以那里为准。
+
+| 取值 | 含义 |
+|---|---|
+| `none` | 不读实名。非 dev / test 模式下 `wechat_pay`、`alipay`、`apple`、`google` 四个 App 渠道拒绝启用;两个小游戏渠道可以开(平台自己执行实名与限额)。 |
+| `realname` | 建支付意图之前,按账号目录里的实名执行未成年人充值限额。选它才许在生产开四个 App 渠道。要配 `DataServiceRpc` 和密钥 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`。 |
+| `overseas` | 大陆以外的部署:不读实名,App 渠道照开。 |
+
+`realname` 下小游戏渠道也读实名:账号没有实名标识的照常放行,有的与 App 渠道一起计额。实名读不到一律回 `kPaymentBusy`,不放行。
+
+额度按付款人累计(表 `payment_spend`;意图上记付款人、付款时刻与年龄段)。额度不能被错误释放,所以意图状态只跟「订单自己的那笔付款」走(`core/minor.go` 的 `drivesIntent`):
+
+- 渠道撤销一笔付款时,只有商城状态是 PENDING、BOUND,或已排退款且原因是「取消后迟到」「交付被拒」的那笔才改意图。重复付款、金额币种不符的异常付款被撤销,不动意图。
+- 渠道退款成功、回执商城之前,原因是「取消后迟到」或「交付被拒」的退款先关掉意图(`mall.RefundsOrdersOwnPayment`)。
 ### 22.9 配置、密钥与本机运行
 
 - **密钥**:配置里只写环境变量名,值由 Secret 注入:`COMMERCE_PAYMENT_SECRET`(与商城同值)、`PAYMENT_DEVPAY_SECRET`、`PAYMENT_WECHATPAY_PRIVATE_KEY`、
@@ -1046,7 +1058,11 @@ trade 收货时用 `currencytype.IsKnown` 核对种类。管理接口 `CatalogAd
   `PAYMENT_GOOGLE_SERVICE_ACCOUNT`。缺失、过短、带首尾空白都拒启,报错只点变量名。
 - **本机**:`go_services.ps1` 已登记 `payment`(端口 51200,回调 18130,指标 9280),库 `mmorpg_payment` 已进建库脚本与本机写者目录。
   默认配置只开 `devpay`。启动前要自己设 `COMMERCE_PAYMENT_SECRET` 与 `PAYMENT_DEVPAY_SECRET`,并把 `devpay` 加进商城的 `COMMERCE_ALLOWED_PAYMENT_CHANNELS`。
-- **回调地址**:`https://<支付域名>/notify/<渠道名>`,要在各渠道后台登记。K8s 的 Ingress 与清单还没写。
+- **回调地址**:`https://<支付域名>/notify/<渠道名>`,要在各渠道后台登记。K8s 上的入口是 infra namespace 的 Service `payment-notify`(对外 443,回源到容器的 18130),不用 Ingress。
+  类型跟运维档位走:托管云是 `LoadBalancer`,自建集群是 `NodePort`。HTTPS 在云负载均衡或外部七层终结,Pod 里只收明文 HTTP。域名解析到这个 Service 的外部地址。
+- **K8s 上的配置与密钥**(2026-11-19,未运行):支付配置用 `k8s_deploy.ps1 -PaymentConfigPath <文件>` 给,文件里是整段 `Payment:`,不含密钥值。不给时 dev 只开 `devpay`,staging / prod 一个渠道都不开。
+  商城调用密钥与 dev 的 devpay 密钥走工作负载密钥目录,容器里的变量名是 `MMORPG_COMMERCE_PAYMENT_SECRET`、`MMORPG_PAYMENT_DEVPAY_SECRET`(与本机的名字不同,配置模板里写的是这两个名字)。
+  真实渠道的密钥由运维预置在 Secret `payment-channel-secrets`,键名就是上面列的变量名;部署脚本只核对键在不在,不读值。细节见 `deploy/k8s/README.md`「支付 payment」。
 
 ### 22.10 客户端
 
@@ -1067,10 +1083,12 @@ iOS 上的微信支付与支付宝不做:苹果审核规则 3.1.1 要求虚拟�
 
 ### 22.11 未做与风险
 
-1. K8s 部署(清单、迁移 Job、回调 Ingress、Secret、契约测试)没做,支付服务目前只能本机跑。
+1. K8s 部署 2026-11-19 已写(清单、迁移 Job、回调入口 Service、Secret、契约测试),没跑过契约测试,没上过集群。
+   商城的业务表由 Job `mall-schema` 的 `-ddl-file` 装(`schema.sql` 末尾的戳改成 `INSERT IGNORE`,可重跑);重跑不升级旧库,结构对不上时商城拒启,要清库重装。
+   回调入口的证书、域名与云厂商的负载均衡注解要运维自己配,脚本不生成。
 2. 苹果、谷歌的客户端桥没写;安卓与小游戏的桥没上过真机。
 3. 没有任何渠道的真实商户号,所有渠道代码只对照官方文档与官方 SDK 源码写成,没有打过真实接口。抖音的文档当时打不开,按附录 A 的事实写。
-4. 四个 App 渠道在生产被合规闸挡着,要等实名与未成年人限额。
+4. 四个 App 渠道在生产要把合规闸设成 `realname`(或海外部署的 `overseas`)才能开(§22.8)。限额闸已落码未编译,每日限额的数字还没定(缺省 0 = 不设)。
 5. 扣回扣不到时转人工,目前没有专门的处置工具,走 trade 现有的人工合同入口。
 6. 修订号、货币发放改了商城存储合同戳与 trade 合同摘要,旧库须清空重装(项目未上线)。
 

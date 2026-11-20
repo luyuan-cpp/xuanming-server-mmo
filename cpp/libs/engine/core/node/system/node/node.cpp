@@ -36,6 +36,7 @@
 #include "node/system/node/thread_observability.h"
 #include "network/traffic_statistics.h"
 #include "network/rpc_channel_stats.h"
+#include "metrics/dependency_link_metrics.h"
 #include "metrics/metrics_http_exporter.h"
 #include "metrics/metrics_registry.h"
 #include <boost/algorithm/string.hpp>
@@ -47,6 +48,7 @@
 #include "node/system/node/muduo_grpc_channel_slot.h"
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/open_file_limit.h"
+#include "node/system/node/clock_check.h"
 #include "node/system/node/process_fd_metrics.h"
 #include "node/system/node/node_planned_drain.h"
 #include "node/system/node/release_track.h"
@@ -71,6 +73,10 @@
 #ifdef __linux__
 #include <dirent.h>
 #include <sys/resource.h>
+#endif
+#if defined(__linux__) && defined(MMORPG_AGONES_CURL)
+#include <curl/curl.h>
+#include <strings.h>
 #endif
 #include "muduo/net/Acceptor.h" // 只读 Acceptor::exhaustionCounts(),给指标出口用
 
@@ -1016,6 +1022,98 @@ namespace
 #endif
 	}
 
+	// 时钟启动门槛:和 Kubernetes API server 的时钟差得太多就拒启,判定规则见 clock_check.h,为什么要这一道见
+	// docs/ops/clock-sync-runbook.md。只在 Linux 的 Kubernetes 里执行(本机开发没有参照)。参照读不到只告警、照常启动:
+	// 拿不到参照不等于时钟错了。超限时缺省经 FatalStartupConfig 拒启,MMORPG_CLOCK_CHECK_MODE=warn 只告警。
+	void EnsureClockOrDie()
+	{
+#if defined(__linux__) && defined(MMORPG_AGONES_CURL)
+		const auto emit = [](const std::string &line, bool warn)
+		{
+			std::fputs(line.c_str(), stdout);
+			std::fputc('\n', stdout);
+			std::fflush(stdout);
+			if (warn)
+			{
+				LOG_WARN << line;
+			}
+			else
+			{
+				LOG_INFO << line;
+			}
+		};
+		const char *host = std::getenv("KUBERNETES_SERVICE_HOST");
+		const char *port = std::getenv("KUBERNETES_SERVICE_PORT");
+		if (host == nullptr || port == nullptr || *host == '\0' || *port == '\0')
+		{
+			return; // 不在 Kubernetes 里:没有参照,不核
+		}
+		const std::string authority = std::strchr(host, ':') != nullptr ? "[" + std::string(host) + "]:" + port
+																		 : std::string(host) + ":" + port;
+		const std::string url = "https://" + authority + "/version";
+		CURL *handle = curl_easy_init();
+		if (handle == nullptr)
+		{
+			emit("clock check skipped: curl_easy_init failed", true);
+			return;
+		}
+		// 只要回应头里的 Date:回应体丢掉,状态码不论(匿名访问被拒的回应也带 Date)。
+		std::string date;
+		curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
+		curl_easy_setopt(handle, CURLOPT_CAINFO, "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt");
+		curl_easy_setopt(handle, CURLOPT_PROXY, "");
+		curl_easy_setopt(handle, CURLOPT_NOSIGNAL, 1L);
+		curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT_MS, 2000L);
+		curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, 3000L);
+		curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, +[](char *, size_t size, size_t count, void *) -> size_t
+						 { return size * count; });
+		curl_easy_setopt(handle, CURLOPT_HEADERFUNCTION, +[](char *data, size_t size, size_t count, void *out) -> size_t
+						 {
+							 const std::string line(data, size * count);
+							 if (line.size() > 5 && ::strncasecmp(line.c_str(), "date:", 5) == 0)
+							 {
+								 *static_cast<std::string *>(out) = boost::algorithm::trim_copy(line.substr(5));
+							 }
+							 return size * count; });
+		curl_easy_setopt(handle, CURLOPT_HEADERDATA, &date);
+		const auto nowMillis = []
+		{
+			return static_cast<int64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+											std::chrono::system_clock::now().time_since_epoch())
+											.count());
+		};
+		const int64_t sent = nowMillis();
+		const CURLcode code = curl_easy_perform(handle);
+		const int64_t received = nowMillis();
+		curl_easy_cleanup(handle);
+		const time_t dateSeconds = date.empty() ? -1 : curl_getdate(date.c_str(), nullptr);
+		if (code != CURLE_OK || dateSeconds < 0)
+		{
+			const std::string why = code != CURLE_OK ? std::string(curl_easy_strerror(code)) : "unusable Date header '" + date + "'";
+			emit("clock check skipped: cannot read the Kubernetes API server clock: " + why, true);
+			return;
+		}
+		const int64_t offset = clock_check::OffsetMillis(sent, received, static_cast<int64_t>(dateSeconds));
+		const std::string measured = "the local clock is " + std::to_string(offset) + " ms off the Kubernetes API server clock";
+		switch (clock_check::Judge(offset, std::getenv(clock_check::kModeEnv)))
+		{
+		case clock_check::Verdict::kOk:
+			emit("clock check passed: " + measured, false);
+			return;
+		case clock_check::Verdict::kWarnOnly:
+			emit("clock check failed but " + std::string(clock_check::kModeEnv) + "=warn: " + measured, true);
+			return;
+		case clock_check::Verdict::kRefuse:
+			break;
+		}
+		FatalStartupConfig("clock", measured + ", more than the " + std::to_string(clock_check::kMaxOffsetMillis) +
+										" ms allowed; fix the node clock (docs/ops/clock-sync-runbook.md), or set " +
+										clock_check::kModeEnv + "=warn to start anyway");
+#else
+		LOG_DEBUG << "Clock check skipped: it needs Linux and libcurl";
+#endif
+	}
+
 	std::string FormatEndpoint(const EndpointComp &endpoint)
 	{
 		return endpoint.ip() + ":" + std::to_string(endpoint.port());
@@ -1176,6 +1274,8 @@ void Node::Initialize()
 	// 所以发布前必须先读各节点池硬限,不能指望「拒启只会让滚动停住」。运维豁免只认 NODE_OPEN_FILE_LIMIT_MODE=warn,
 	// 与 *_RUN_MODE 无关(scene 的运行模式同时决定 GM 放行,不能为绕过这条检查去开 GM)。
 	EnsureOpenFileLimitOrDie(GetNodeType(), tlsNodeConfigManager.GetBaseDeployConfig());
+	// 时钟门槛:同样要在注册进 etcd、开始接流量之前。只发一次 HTTPS 请求,最多等 3 秒。
+	EnsureClockOrDie();
 	// 生成的 gRPC 客户端的 deadline 必须在发出第一个请求(InitEtcdService 里的 etcd Range / LeaseGrant)之前就位;
 	// 放在 InitLogSystem 之后,被忽略的配置项与生效值才进日志文件。
 	grpc_call_deadline::Apply(tlsNodeConfigManager.GetBaseDeployConfig().grpc_client());
@@ -1228,6 +1328,13 @@ void Node::StartMetricsExporter()
 	{
 		LOG_INFO << "[Metrics] " << kMetricsPortEnv << " is not set; Prometheus exporter disabled";
 		return;
+	}
+	// 错误汇总缓冲是进程级的,三种节点都有,在这里登记一次(docs/design/error-reporting.md 切片 B)。
+	error_reporter::RegisterMetrics();
+	// 各依赖(Redis、etcd、调 Go 的 gRPC、节点链路)的连接状态计数也是进程级的,同样在这里登记一次(断线重连 R17)。
+	if (!GlobalMetricsRegistry().Register("dependency_link", &dependency_link_metrics::Write))
+	{
+		LOG_ERROR << "[Metrics] dependency_link collector already registered; dependency connection metrics may be missing";
 	}
 	// 回调捕获 this:出口是本 Node 的成员,在 FinalizeTeardownInLoop 里先于 Node 释放,
 	// 属于 AGENTS.md §11.7「与被绑对象同寿命的成员」的例外。只在 loop 线程上读 NodeInfo。
@@ -1713,8 +1820,9 @@ void Node::OnGrpcServerDrained()
 
 void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 {
-	// 四个触发点(keepalive TTL=0 / 本地租约 deadline / 重注册 CAS 失败 / Watch 发现
-	// 身份被抢)都可能重复触发,而且 keepalive 定时器还在跑,必须幂等。
+	// 触发点有两个(都是 kReRegistrationFailed):重注册时分配键的 CAS 发现 node_id 已归别的 uuid,
+	// 以及 Watch 发现身份被抢。keepalive TTL=0 与本地租约 deadline 2026-09-08 起只请求重注册、不再到这里(node.h 的枚举注释)。
+	// 两个触发点都可能重复触发,而且 keepalive 还在跑,必须幂等。
 	if (conflictShutdownStarted_)
 	{
 		return;
@@ -1731,7 +1839,7 @@ void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 
 	// 2) 停掉所有会再次触发注册 / 冲突判定的重试,避免收尾期间又跑一遍分配流程 ——
 	//    这台节点已经不是 node_id 的合法持有者,重抢端口 / 重占 node_id 只会干扰接手的进程。
-	//    注意重试定时器住在 EtcdService 里,不是 Node 里。
+	//    注意注册重试是 EtcdService 里的协程任务,不是 Node 里的定时器。
 	serviceHealthMonitorTimer.Cancel();
 	serviceDiscoveryManager.etcdService.StopRegistrationRetries();
 
@@ -2863,7 +2971,7 @@ void Node::StartNodeRegistrationHealthMonitor()
 										   // 先检查租约截止时间,覆盖 Watch 流中断而本地 ServiceNodeSnapshot 尚未更新的网络分区。
 										   //
 										   // 失租**不再**直接走冲突关停:拿新 lease 重注册,分配键的 CAS 才是身份的裁判
-										   // (被别的 uuid 持有 → OnTxnFailed → OnNodeIdConflictShutdown)。
+										   // (被别的 uuid 持有 → 重注册的 CAS 失败 → OnNodeIdConflictShutdown(kReRegistrationFailed))。
 										   // 永久 guid 走号段(GuidSegmentRegistry),唯一性由数据库的 CAS 领段保证,与 lease 无关。
 										   if (serviceDiscoveryManager.etcdService.IsLeasePresumablyExpired())
 										   {

@@ -344,6 +344,8 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	// RPC returns success; client waits for Gate/Scene push to know they're in.
 	resp.ErrorMessage = nil
 	resp.PlayerId = in.PlayerId
+	// 客户端按它判断本机待确认记录是不是角色换主人之前留下的(login.proto EnterGameResponse.owner_revision)。
+	resp.OwnerRevision = ownership.OwnerRevision
 	return resp, nil
 }
 
@@ -737,7 +739,7 @@ func (l *EnterGameLogic) commitEnterGameSession(ctx context.Context, state enter
 //     走短线重连接回;租约到期之前不会误清。
 //
 // 补偿用 WithoutCancel 派生的独立 ctx:走到这里时链 ctx 可能已被心跳丢锁取消(chainCancel)或临近链预算截止,
-// markPlayerSessionDisconnecting 在 ctx 已取消时直接放弃,只留一条 CRITICAL 日志(与 CreatePlayer 补偿同约定)。
+// markPlayerSessionDisconnectingWithRetry 在 ctx 已取消时直接放弃,只留一条 CRITICAL 日志(与 CreatePlayer 补偿同约定)。
 func (l *EnterGameLogic) bindSessionFence(ctx context.Context, state enterGameSessionState) error {
 	outcome, err := sessionfence.BindPlayer(ctx, l.svcCtx.LoginRedis, state.fenceKey, state.playerID, state.fenceGen)
 	if err != nil {
@@ -758,18 +760,18 @@ func (l *EnterGameLogic) bindSessionFence(ctx context.Context, state enterGameSe
 	}
 }
 
-// fenceBindCompensationTimeout 覆盖 markPlayerSessionDisconnecting 的 4 次尝试(退避合计 1.4s)加每次 RPC。
+// fenceBindCompensationTimeout 覆盖 markPlayerSessionDisconnectingWithRetry 的 4 次尝试(退避合计 1.4s)加每次 RPC。
 const fenceBindCompensationTimeout = 10 * time.Second
 
 // compensateFenceBind 撤销绑定失败时已写入的会话:placeLease = true 挂断线租约,否则删会话。
 // ReplaceLogin 的 SetSession 报错、复读却确认已提交时也用它补挂断线租约(placeLease = true,
 // scene-enter-chain-residuals.md §2.2 ②)。两处都带本链的 gate 实例号:本链写下的会话记录就是这个实例号,
-// player_locator 的实例号校验因此放行(§6.2)。
+// player_locator 的实例号校验因此放行(§6.2)。挂租约时再带本链的会话代次,同理与本链写下的记录相同。
 func (l *EnterGameLogic) compensateFenceBind(ctx context.Context, state enterGameSessionState, placeLease bool) {
 	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), fenceBindCompensationTimeout)
 	defer cancel()
 	if placeLease {
-		markPlayerSessionDisconnecting(cctx, l.svcCtx, state.playerID, state.sessionID, state.gateInstanceID)
+		markPlayerSessionDisconnectingWithRetry(cctx, l.svcCtx, state.playerID, state.sessionID, state.gateInstanceID, state.fenceKey.Incarnation)
 		return
 	}
 	deletePlayerSession(cctx, l.svcCtx, state.playerID, state.sessionID, state.gateInstanceID)
@@ -803,6 +805,8 @@ func (l *EnterGameLogic) persistEnterGameSession(
 			RequestID:       state.requestID,
 			Now:             time.Now(),
 			LoginGeneration: loginGeneration,
+
+			SessionIncarnation: state.fenceKey.Incarnation,
 		})
 		if err := sessionmanager.SetSession(ctx, l.svcCtx.PlayerLocatorClient, newSession); err != nil {
 			// 记录在本链读它之后变了:locator 明确没有写入,不用复读消歧,也没有可踢的旧会话。
@@ -828,6 +832,7 @@ func (l *EnterGameLogic) persistEnterGameSession(
 			state.sessionID,
 			state.gateID,
 			state.gateInstanceID,
+			state.fenceKey.Incarnation,
 			state.account,
 			state.requestID,
 			loginGeneration,
@@ -919,7 +924,7 @@ func (l *EnterGameLogic) settleReplaceLoginAfterSetSessionError(
 	logx.Errorf("[login-kick] WARN SetSession outcome unknown, probe confirms commit: player=%d session=%d generation=%d err=%v; kicking replaced session and placing disconnect lease",
 		state.playerID, state.sessionID, loginGeneration, setErr)
 	l.kickReplacedSessionAfterCommit(ctx, existing, state, loginGeneration)
-	// 等价于绑定失败的补偿:独立于链 ctx(WithoutCancel)、预算覆盖 markPlayerSessionDisconnecting 的退避重试,
+	// 等价于绑定失败的补偿:独立于链 ctx(WithoutCancel)、预算覆盖 markPlayerSessionDisconnectingWithRetry 的退避重试,
 	// 带本链的 gate 实例号(e:与本链写下的记录同一个实例号)。
 	l.compensateFenceBind(ctx, state, true)
 }

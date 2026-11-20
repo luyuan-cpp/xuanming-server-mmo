@@ -60,6 +60,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
 
+	"shared/authoritysql"
 	"shared/rolefence"
 	"shared/safego"
 
@@ -216,7 +217,8 @@ func commitTx(tx *sql.Tx) error { return classifyCommitErr(tx.Commit()) }
 //     交给 retryOnDeadlock 去分类、计数、重跑。这条最容易写错:**TiDB 的写冲突 9007 正是由
 //     COMMIT 语句报出来的**,在这里归一成 ErrWriteConflict,等于把 9007 的重试在它唯一出现的
 //     位置又关掉一次(ErrWriteConflict 不是可重试错误,retryOnDeadlock 见到它会立刻返回)。
-//  2. ErrTxDone / ctx 取消 / ctx 超时:结论明确(事务没提交,或调用方自己走了)。
+//  2. ErrTxDone / ctx 取消 / ctx 超时 / 守卫判定的提交前中止(authoritysql.IsAbortedBeforeCommit,COMMIT 还没发出
+//     连接就断了):结论明确(事务没提交,或调用方自己走了)。提交前中止交给 retryOnDeadlock 换连接重跑。
 //  3. 其余(连接被重置、驱动报未知错误):**结果不明**,COMMIT 可能已经在库里生效了,只是回执没收到。
 //     打 ERROR 让人看见,对外归一到 ErrWriteConflict —— 客户端收到"稍后重试",重试时先读当前状态,
 //     幂等分支会兜住已生效的那一半。归一时用 %w 把 ErrWriteConflict 包进去、原因用 %v 留在文本里,
@@ -225,7 +227,7 @@ func classifyCommitErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	if isRetryableTxError(err) || isLockWaitTimeout(err) {
+	if isRetryableTxError(err) || isLockWaitTimeout(err) || authoritysql.IsAbortedBeforeCommit(err) {
 		return err
 	}
 	if errors.Is(err, sql.ErrTxDone) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -246,12 +248,15 @@ func retryOnDeadlock(ctx context.Context, op string, run func() error) error {
 		case isLockWaitTimeout(err):
 			guildTxLockWaitTimeoutTotal.Inc(op)
 			return ErrWriteConflict
+		case authoritysql.IsAbortedBeforeCommit(err):
+			// 守卫判定的提交前中止(R6):COMMIT 还没发连接就断了,确定没写,换一条连接整笔重跑。不是锁冲突,不计死锁。
 		case !isRetryableTxError(err):
 			return err
+		default:
+			txDeadlockObserved(op, err)
 		}
-		txDeadlockObserved(op, err)
 		if attempt >= maxTxAttempts {
-			logx.Errorf("[guild] %s: deadlock persisted after %d attempts: %v", op, attempt, err)
+			logx.Errorf("[guild] %s: transaction still retryable after %d attempts: %v", op, attempt, err)
 			return ErrWriteConflict
 		}
 		// 10–50ms 随机退避:两个互相回滚的事务若同时重来,大概率再撞一次;
@@ -426,6 +431,9 @@ const (
 	opTrialRegister = "trial_register" // 开战后登记对局行(G → 插 T)
 	opTrialMark     = "trial_mark"     // 毒消息标记、巡检判 EXPIRED(G → T 单行)
 	opTrialOwed     = "trial_owed"     // 待入队物品转成资产指令行(Q → 插 O → 删 W)
+
+	// 删角收尾(role_fence_purge.go):事务由角色护栏参与者开,这里只用于提交之后的缓存失效。
+	opRolePurge = "role_purge"
 )
 
 // ── 权限判定(§2.2,纯函数,事务内调用) ──────────────────────
@@ -1394,7 +1402,9 @@ func (r *GuildRepo) readOperatorRole(ctx context.Context, guildID, actorID uint6
 //
 // 输入约束:actorID != targetID;officerCap != nil。
 // 不变量:事务结束时 guild.leader_id 与唯一一行 role=3 必须指向同一人(第 9 步硬断言,不满足即回滚)。
-// 事务边界:单事务 op=transfer,锁序 guild → guild_member。
+// 事务边界:单事务 op=transfer,锁序 副本(操作者与目标,升序)→ guild → guild_member。
+// 目标的副本也锁:冻结中(挂寄售、删角投票)或已删除的角色不能被转成帮主,lockRolePrefix 回 ErrWriteConflict。
+// 否则帮主之位会落到一个注定要删、自己又无法操作的角色上(docs/design/account-deletion.md §6.3)。
 // 错误语义:ErrLeaderMismatch(双存储已被破坏,fail-closed 不写)、ErrGuildLevelConfigMissing,
 // 其余同 SetMemberRole。幂等:重放时操作者已不是帮主 → ErrRankTooLow。
 func (r *GuildRepo) TransferLeader(ctx context.Context, guildID, actorID, targetID uint64, officerCap OfficerCapFunc) (MemberWriteResult, error) {
@@ -1406,7 +1416,7 @@ func (r *GuildRepo) TransferLeader(ctx context.Context, guildID, actorID, target
 	}
 
 	var out MemberWriteResult
-	err := r.inTx(ctx, opTransfer, func(ctx context.Context, tx *sql.Tx) error {
+	err := r.inTx(withRoleTargets(ctx, targetID), opTransfer, func(ctx context.Context, tx *sql.Tx) error {
 		var res MemberWriteResult
 
 		guild, err := lockGuildRow(ctx, tx, guildID)
@@ -2165,70 +2175,11 @@ func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint
 		}
 		res.ZoneID = guild.ZoneID
 
-		memberIDs, err := lockAllMembers(ctx, tx, guildID)
+		memberIDs, err := disbandLockedGuild(ctx, tx, guildID, now, r.fence != nil)
 		if err != nil {
 			return err
 		}
 		res.MemberIDs = memberIDs
-		// 成员行已逐行锁住,紧接着逐行删(主键升序;为什么排在删申请之前见函数头)。
-		for _, playerID := range memberIDs {
-			if err := execExactlyOneRow(ctx, tx, fmt.Sprintf("delete member %d of disbanded guild %d", playerID, guildID),
-				sqlDeleteMember, guildID, playerID); err != nil {
-				return err
-			}
-		}
-
-		// I3:本帮的待审申请,以及成员们在别的帮会留下的申请(不删会在解散后按 I1 复活),合成一个列表按主键升序删。
-		keys, err := applicationKeysOfGuild(ctx, tx, guildID)
-		if err != nil {
-			return err
-		}
-		memberKeys, err := applicationKeysOfPlayers(ctx, tx, memberIDs)
-		if err != nil {
-			return err
-		}
-		if err := deleteApplicationRows(ctx, tx, append(keys, memberKeys...)); err != nil {
-			return fmt.Errorf("delete applications of disbanded guild %d: %w", guildID, err)
-		}
-		// B5 捐献提前截止。解散后帮会行不在了,这些捐献即便被 scene 扣成功也记不上资金(D2 计 orphan),
-		// 所以更要让它们尽快改发中止。前提(accelerateDonationDeadlines 的候选集完整性):全体成员行在上面锁住
-		// (已删,X 锁持有到提交),捐献预留必须先锁成员行才会插 op 行。
-		if err := accelerateDonationDeadlines(ctx, tx, guildID, memberIDs, now); err != nil {
-			return err
-		}
-		// B6a 帮会活动进度(X-14,锁序位置 8 = P):必须排在提前截止(O)之后、删 guild 行之前 —— 放到删申请 / 提前截止前面,
-		// 就成了持着 P 回头取 A / O,违反表间全序。普通读候选 → 主键升序逐行点删,理由与候选集完整性见 activity_repo.go。
-		// 计数行(按玩家)与 ACTIVITY_REWARD 指令行(物品属于玩家,解散后照常投递)都不删(06 §6.14)。
-		if err := deleteGuildActivityProgress(ctx, tx, guildID); err != nil {
-			return err
-		}
-		// B6b 历练对局行(X-14,锁序位置 9 = T):排在删进度(P)之后、删 guild 行之前,理由同上一步。
-		// 只删本帮 STARTED 行:帮会行一删,就再没有路径能写它们(T 的写者都先锁 guild 行),留着会一直卡在巡检器的扫描队头。
-		if err := deleteGuildTrialBattles(ctx, tx, guildID); err != nil {
-			return err
-		}
-		if r.fence != nil {
-			if err := releaseGuildTrialLaunches(ctx, tx, guildID, now); err != nil {
-				return err
-			}
-		}
-		// 0 行 = 这一瞬间帮会已经被别的事务解散了(我们持有的行锁本该挡住,
-		// 但库层面真发生时要给出**业务**答复而不是内部错误):回 ErrGuildGone,
-		// logic 层会映射成 kGuildNotFound。>1 行则是 WHERE 写错,属于必须暴露的内部错误。
-		result, err := tx.ExecContext(ctx, sqlDeleteGuild, guildID)
-		if err != nil {
-			return fmt.Errorf("delete guild %d: %w", guildID, err)
-		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("delete guild %d: read rows affected: %w", guildID, err)
-		}
-		switch {
-		case affected == 0:
-			return ErrGuildGone
-		case affected > 1:
-			return fmt.Errorf("delete guild %d: deleted %d rows", guildID, affected)
-		}
 
 		out = res
 		return nil
@@ -2238,6 +2189,79 @@ func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID, now uint
 	}
 	r.invalidateAfterCommit(ctx, opDisband, guildID, out.MemberIDs...)
 	return out, nil
+}
+
+// disbandLockedGuild 是解散事务在锁住 guild 行、核完授权之后的全部写:锁全体成员并逐行删成员行 → 申请 → 提前截止捐献 →
+// 活动进度 → 在途历练对局 →(releaseLaunches 时)历练开局原件 → 删 guild 行。锁序与每一步的理由见 DisbandGuild 函数头。
+// DisbandGuild 与删角收尾(帮主是帮里最后一个人,role_fence_purge.go)共用这一段。
+//
+// 前置:已持有该帮 guild 行锁;全体成员的状态行都已存在(lockAllMembers 缺行即拒)。
+// 返回解散前的全体成员,player_id 升序。releaseLaunches 对应调用方装配了角色护栏(DisbandGuild 的 r.fence != nil)。
+func disbandLockedGuild(ctx context.Context, tx *sql.Tx, guildID, now uint64, releaseLaunches bool) ([]uint64, error) {
+	memberIDs, err := lockAllMembers(ctx, tx, guildID)
+	if err != nil {
+		return nil, err
+	}
+	// 成员行已逐行锁住,紧接着逐行删(主键升序;为什么排在删申请之前见 DisbandGuild 函数头)。
+	for _, playerID := range memberIDs {
+		if err := execExactlyOneRow(ctx, tx, fmt.Sprintf("delete member %d of disbanded guild %d", playerID, guildID),
+			sqlDeleteMember, guildID, playerID); err != nil {
+			return nil, err
+		}
+	}
+
+	// I3:本帮的待审申请,以及成员们在别的帮会留下的申请(不删会在解散后按 I1 复活),合成一个列表按主键升序删。
+	keys, err := applicationKeysOfGuild(ctx, tx, guildID)
+	if err != nil {
+		return nil, err
+	}
+	memberKeys, err := applicationKeysOfPlayers(ctx, tx, memberIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := deleteApplicationRows(ctx, tx, append(keys, memberKeys...)); err != nil {
+		return nil, fmt.Errorf("delete applications of disbanded guild %d: %w", guildID, err)
+	}
+	// B5 捐献提前截止。解散后帮会行不在了,这些捐献即便被 scene 扣成功也记不上资金(D2 计 orphan),
+	// 所以更要让它们尽快改发中止。前提(accelerateDonationDeadlines 的候选集完整性):全体成员行在上面锁住
+	// (已删,X 锁持有到提交),捐献预留必须先锁成员行才会插 op 行。
+	if err := accelerateDonationDeadlines(ctx, tx, guildID, memberIDs, now); err != nil {
+		return nil, err
+	}
+	// B6a 帮会活动进度(X-14,锁序位置 8 = P):必须排在提前截止(O)之后、删 guild 行之前 —— 放到删申请 / 提前截止前面,
+	// 就成了持着 P 回头取 A / O,违反表间全序。普通读候选 → 主键升序逐行点删,理由与候选集完整性见 activity_repo.go。
+	// 计数行(按玩家)与 ACTIVITY_REWARD 指令行(物品属于玩家,解散后照常投递)都不删(06 §6.14)。
+	if err := deleteGuildActivityProgress(ctx, tx, guildID); err != nil {
+		return nil, err
+	}
+	// B6b 历练对局行(X-14,锁序位置 9 = T):排在删进度(P)之后、删 guild 行之前,理由同上一步。
+	// 只删本帮 STARTED 行:帮会行一删,就再没有路径能写它们(T 的写者都先锁 guild 行),留着会一直卡在巡检器的扫描队头。
+	if err := deleteGuildTrialBattles(ctx, tx, guildID); err != nil {
+		return nil, err
+	}
+	if releaseLaunches {
+		if err := releaseGuildTrialLaunches(ctx, tx, guildID, now); err != nil {
+			return nil, err
+		}
+	}
+	// 0 行 = 这一瞬间帮会已经被别的事务解散了(我们持有的行锁本该挡住,
+	// 但库层面真发生时要给出**业务**答复而不是内部错误):回 ErrGuildGone,
+	// logic 层会映射成 kGuildNotFound。>1 行则是 WHERE 写错,属于必须暴露的内部错误。
+	result, err := tx.ExecContext(ctx, sqlDeleteGuild, guildID)
+	if err != nil {
+		return nil, fmt.Errorf("delete guild %d: %w", guildID, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("delete guild %d: read rows affected: %w", guildID, err)
+	}
+	switch {
+	case affected == 0:
+		return nil, ErrGuildGone
+	case affected > 1:
+		return nil, fmt.Errorf("delete guild %d: deleted %d rows", guildID, affected)
+	}
+	return memberIDs, nil
 }
 
 // disbandRefusal 区分解散被拒的两种原因:操作者仍是本帮成员、只是不是帮主 → ErrRankTooLow;操作者已不是本帮成员 → ErrNotGuildMember。

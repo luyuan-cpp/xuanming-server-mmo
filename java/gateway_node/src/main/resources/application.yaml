@@ -83,6 +83,12 @@ gate:
     ip-rps: 5
     ip-burst: 20
     account-cooldown-ms: 5000
+    # 排队提示(波次未开、区桶空)的 retry_after_ms = max(下限, 原始等待) + [0, 抖动) 的随机量(2026-11-19)。
+    # 区桶补到一个令牌往往只要 1~2ms,原样下发等于让排队的人紧循环重试同一个 rl:zone:<id> 键;下限必须为正。
+    queue-retry-min-ms: 2000
+    queue-retry-jitter-ms: 2000
+    # 区桶空时 IP 桶扣多少(千分之一令牌,0~1000):100 = 0.1 个。0 = 全额退还(不守提示的单个 IP 可以无限速刷区桶)。
+    queue-retry-ip-cost-milli: 100
     queue-timeout-ms: 300000
     # Per-zone overrides example (commented):
     # zone-overrides:

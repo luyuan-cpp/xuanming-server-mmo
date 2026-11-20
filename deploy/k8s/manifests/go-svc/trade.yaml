@@ -24,6 +24,10 @@
 # Secret asset-op-secret-trade 注入成 MMORPG_ASSET_OP_SECRET_TRADE —— env 由脚本注入(Add-GoSvcSecretEnv),本文件不要手写。
 # Pod 模板上的 mmorpg.io/asset-op-secret-trade-hash 是密钥指纹占位:on 时换成指纹,off 时整行删掉(模板与开关引入之前相同)。
 #
+# 官方商城(java/mall_game,infra namespace 的 Service mall):ConfigMap 的 Mall.URL 指向它,只有资产通道开着时 trade 才连。
+# 两把调用密钥(gateway、delivery 角色)走工作负载密钥目录($script:WorkloadSecretCatalog 的 commerce-gateway / commerce-delivery):
+# env MMORPG_COMMERCE_GATEWAY_SECRET、MMORPG_COMMERCE_DELIVERY_SECRET 与指纹注解由脚本注入,本文件不要手写。
+#
 # 连接数:ConfigMap 的 MySQL.MaxOpenConn × replicas 要算进 MySQL 的 max_connections。
 apiVersion: v1
 kind: Service
@@ -147,12 +151,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: COMMERCE_GATEWAY_SECRET
-              valueFrom:
-                secretKeyRef: {name: domain-service-secrets, key: commerce-gateway, optional: true}
-            - name: COMMERCE_DELIVERY_SECRET
-              valueFrom:
-                secretKeyRef: {name: domain-service-secrets, key: commerce-delivery, optional: true}
           command: ["/bin/sh", "-ec"]
           args: ["(umask 077; mkdir -p /run/sql-writer/consume/private); if ls /run/sql-writer/consume/private/*.consumed >/dev/null 2>&1; then echo sql writer grant already consumed, the reaper replaces this pod >&2; exit 78; fi; MMORPG_SQL_WRITER_GRANT_SHA256=\"$(cat /run/sql-writer/grant/private/boot-grant.json.sha256)\"; export MMORPG_SQL_WRITER_GRANT_SHA256; exec /app/service \"$@\"","--","-f","/app/etc/private/trade.yaml"]
           ports:

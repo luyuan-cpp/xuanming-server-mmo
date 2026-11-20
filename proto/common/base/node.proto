@@ -34,6 +34,7 @@ enum eNodeType {
 	ClientRpcRouterNodeService = 29; // 客户端 RPC 路由服(Go-Zero,全局池):gate 唯一的 gRPC 目标,按 message_id 不透明转发到各业务 Go 服务(docs/design/client-rpc-router.md)
 	PlayerInboxNodeService  = 30; // 玩家持久收件箱(Go-Zero,独占库 mmorpg_player_inbox):scene 经 etcd 前缀 PlayerInboxNodeService.rpc 发现(docs/design/player-inbox-service.md §1.4)
 	PlayerStoreNodeService  = 31; // 玩家存盘(go/db 提供,scene 调用,按 zone 发现)
+	ContentGuardNodeService = 32; // 内容安全(Go-Zero,全局池,无状态):名字与聊天的文字送检;scene 经 etcd 前缀 ContentGuardNodeService.rpc 发现(docs/design/rename-and-content-safety.md §6)
 };
 
 enum eSceneNodeType

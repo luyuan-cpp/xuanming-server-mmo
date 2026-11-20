@@ -123,13 +123,25 @@ func VerifySchema(ctx context.Context, db *sql.DB) error {
 	return verifyAuditOutboxSchema(ctx, db)
 }
 
+// newestKnownKind 是本二进制认识的最大行种号。行种号只增不复用:比它大的只会来自更新版本的 scene;
+// 不比它大却不认识的是退役号(旧布局的 1、2、5,proto 里 reserved),哪个版本的 scene 都不会再发。与 C++ IsNewerKind
+// (kind >= kKindCount)同一口径。
+var newestKnownKind = func() int32 {
+	newest := int32(0)
+	for kind := range storepb.PlayerStoreKind_name {
+		newest = max(newest, kind)
+	}
+	return newest
+}()
+
 // validateSave 是进事务前的拒绝,不碰库。返回 UNSPECIFIED 表示通过。
 //
-// INVALID 只给请求本身坏了的情形(身份为空、行种为 0 或负数、重复),scene 收到后按确定性拒绝处置,退出时不再等这一笔。
-// 本二进制不认识的正数行种不是请求坏了:行种的号只增不复用,scene 也发不出它自己不认识的号,所以它只会来自
+// INVALID 只给请求本身坏了的情形(身份为空、行种为 0 或负数、退役号、重复),scene 收到后按确定性拒绝处置,退出时不再等这一笔。
+// 比本二进制认识的最大号还大的行种不是请求坏了:scene 也发不出它自己不认识的号,所以它只会来自
 // 和本 go/db 版本不一致的 scene(发布顺序不对,或回退了 go/db)。这时回可重试的 SCHEMA_TOO_NEW,scene 保留实体、
 // 等版本对齐后照常提交。回 INVALID 的话,scene 下线时不存盘就销毁,认领以来的进度全丢(数据覆写审计 r2-ps#11)。
 // 这一条不能只靠认领时的世代判定兜住:go/db 新旧副本混跑时,在新副本上认领的玩家,下一笔存盘可能落到旧副本。
+// 退役号不按这条走:回 TOO_NEW 会让告警去提示升 go/db,而升哪个版本都认不出它(2026-11-20 独立评审)。
 func (s *Store) validateSave(req *storepb.SavePlayerRequest) storepb.SavePlayerResult {
 	if req.GetPlayerId() == 0 || req.GetOwnerEpoch() == 0 || req.GetSaveSeq() == 0 ||
 		len(req.GetInstanceId()) == 0 || len(req.GetInstanceId()) > maxInstanceBytes {
@@ -143,7 +155,10 @@ func (s *Store) validateSave(req *storepb.SavePlayerRequest) storepb.SavePlayerR
 			return storepb.SavePlayerResult_SAVE_PLAYER_INVALID
 		}
 		if _, known := storepb.PlayerStoreKind_name[kind]; !known {
-			return storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW
+			if kind > newestKnownKind {
+				return storepb.SavePlayerResult_SAVE_PLAYER_SCHEMA_TOO_NEW
+			}
+			return storepb.SavePlayerResult_SAVE_PLAYER_INVALID // 退役号
 		}
 		if _, duplicate := seen[kind]; duplicate {
 			return storepb.SavePlayerResult_SAVE_PLAYER_INVALID

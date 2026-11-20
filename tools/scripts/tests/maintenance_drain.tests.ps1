@@ -95,6 +95,40 @@ try {
         Assert-Match -Text $message -Pattern '未知' -Because '列级UPDATE特例已随对账表删除，计划不能再带updateColumns'
         foreach($forbidden in @('route_meta','ROUTE_META','Route_Meta','writer_registry','WRITER_REGISTRY','writer_slot','WRITER_SLOT','writer_lifecycle_receipt','WRITER_LIFECYCLE_RECEIPT','sql_writer_drain_run','SQL_WRITER_DRAIN_RUN','sql_writer_freeze_ticket','SQL_WRITER_FREEZE_TICKET','sql_writer_maintenance_receipt','SQL_WRITER_MAINTENANCE_RECEIPT')){$plan.tables=@(@{schema='authority_fixture';table=$forbidden;operations=@('UPDATE')});$message='';try{$null=ConvertTo-AuthorityRoleSql -Plan $plan -TemplateRoot (Join-Path $PSScriptRoot '../../../deploy/sql')}catch{$message=$_.Exception.Message};Assert-Match -Text $message -Pattern '权限真值' -Because '所有真正权限真值表仍禁止business清单写入'}
     }
+    # 2026-11-19 负责人定:数据修复工具(create_residual、admission_recover)用独立的修复身份,维护身份不授业务表。
+    Test-Case '修复身份按工具语句逐表授权，闸门行只读，墓碑不可改删' {
+        $plan=@{repairPrincipal='repair_fixture@%';maintenancePrincipal='maintenance_fixture@%';registrarPrincipal='registrar_fixture@%';schemaPrincipal='schema_fixture@%';directorySchemas=@('dir_fixture_00','dir_fixture_01');storeSchemas=@('store_fixture_1')}
+        $sql=ConvertTo-AuthorityRepairRoleSql -Plan $plan
+        $grants=@($sql -split "`r?`n" | Where-Object { $_ -match '^GRANT ' })
+        $body=$grants -join "`n"
+        Assert-Equal -Expected 20 -Actual $grants.Count -Because '两个目录片各 9 张表、一个存档库 2 张表'
+        foreach($schema in @('dir_fixture_00','dir_fixture_01','store_fixture_1')){
+            Assert-Match -Text $body -Pattern ([regex]::Escape("GRANT SELECT ON ``$schema``.``route_meta`` TO 'repair_fixture'@'%';")) -Because "每个要写的库都要能锁读闸门行:$schema"
+        }
+        Assert-Match -Text $body -Pattern ([regex]::Escape("GRANT SELECT,INSERT ON ``dir_fixture_00``.``account_role`` TO 'repair_fixture'@'%';")) -Because '证明孤儿角色只插墓碑'
+        Assert-Match -Text $body -Pattern ([regex]::Escape("GRANT SELECT,INSERT,UPDATE ON ``dir_fixture_01``.``account_directory`` TO 'repair_fixture'@'%';")) -Because '补 ref 锁目录行,没有就建(upsert)'
+        Assert-Match -Text $body -Pattern ([regex]::Escape("GRANT SELECT,INSERT,UPDATE ON ``store_fixture_1``.``player_store`` TO 'repair_fixture'@'%';")) -Because '补初始行与摘死持有者'
+        Assert-True -Condition ($body -cnotmatch 'GRANT [A-Z,]*(UPDATE|DELETE)[A-Z,]* ON [^ ;]*`route_meta`') -Because '闸门行只读:能改它就能把冻结的库解冻'
+        Assert-True -Condition ($body -cnotmatch 'GRANT [A-Z,]*(UPDATE|DELETE)[A-Z,]* ON [^ ;]*`account_role` ') -Because '墓碑不可改、不可删'
+        Assert-True -Condition ($body -cnotmatch '(?i)ALL PRIVILEGES|CREATE|ALTER|DROP|GRANT OPTION|LOCK TABLES|ON\s+[^;]+\.\*') -Because '没有DDL、整库授权或锁表'
+        Assert-True -Condition ($body -cnotmatch 'writer_registry|writer_slot|writer_lifecycle_receipt|sql_writer_|db_move_sentinel|zone_merged_into|zone_merge_history') -Because '碰不到权限真值表与合服表'
+        Assert-True -Condition ($body -cnotmatch 'dir_fixture_0[01]`\.`player_store`') -Because '存档行只在存档库授'
+        Assert-True -Condition ($body -cnotmatch 'store_fixture_1`\.`(account_|player_name|player_route|directory_shard)') -Because '目录的表只在目录片授'
+        foreach($other in @('maintenance_fixture@%','registrar_fixture@%','schema_fixture@%')){
+            $bad=@{}+$plan;$bad.repairPrincipal=$other
+            $message='';try{$null=ConvertTo-AuthorityRepairRoleSql -Plan $bad}catch{$message=$_.Exception.Message}
+            Assert-Match -Text $message -Pattern '不同principal' -Because "修复身份不能借用 $other"
+        }
+        $bad=@{}+$plan;$bad.storeSchemas=@('dir_fixture_00')
+        $message='';try{$null=ConvertTo-AuthorityRepairRoleSql -Plan $bad}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '重复' -Because '同一个库不能既算目录片又算存档库'
+        $bad=@{}+$plan;$bad.storeSchemas=@()
+        $message='';try{$null=ConvertTo-AuthorityRepairRoleSql -Plan $bad}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '显式列出' -Because '库清单不能为空,也不从别处推断'
+        $bad=@{}+$plan;$bad.tables=@(@{schema='dir_fixture_00';table='account_role';operations=@('DELETE')})
+        $message='';try{$null=ConvertTo-AuthorityRepairRoleSql -Plan $bad}catch{$message=$_.Exception.Message}
+        Assert-Match -Text $message -Pattern '未知' -Because '计划不能自带表清单把授权放宽'
+    }
     Test-Case '在线激活保留原runtime字节且拒绝替换既有上下文' {
         $control=Join-Path $taskRoot 'control';$null=[IO.Directory]::CreateDirectory($control)
         $runtime=Join-Path $taskRoot 'runtime.json';[IO.File]::WriteAllText($runtime,'{"runPhase":"ROOTS_CLOSED"}',[Text.UTF8Encoding]::new($false))

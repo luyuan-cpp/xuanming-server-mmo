@@ -81,8 +81,8 @@
 | 能从 TiDB 重建的展示缓存 | 好友档案摘要、在线目录、公会展示缓存(cache-aside) | friend、guild | 只做加速;必须能从 TiDB 重算,不得成为唯一来源 |
 
 - **排行榜**:本仓 rank 已全部走 SQL,不用 Redis(TiDB 决策 §9.3 表 C [D])。以后若用 ZSET 做实时榜,榜单必须能从 SQL 重算。
-- **Redis 自身也要水平扩展**:玩家相关的协调键按 `{player_id}` 分片成 Cluster,控制域按用途和 zone 拆(§8.4)。去掉存档后内存从 TB 级降到几十 GB 级(推算 [I]),但会话、位置、排队的读写量仍然很大,所以仍要分片。
-- **改造时要一起改的读方**:match 的组队在线判定、friend 的在线推荐和好友档案、login 的选角外观补齐,今天读的是父快照(TiDB 决策 §9.3 表 B),要改成读位置 / 会话,或读 TiDB / 展示投影。
+- **Redis 自身也要水平扩展**:玩家域与登录域在玩家域集群 `redis-player`(按 `{player_id}` 与登录域的 tag 分片);其余用途(排队、场景路由、选主锁、gate 标记、限流、落点唤醒等)在控制集群 `redis-control`,按 zone / 帮 / 玩家的 hash tag 分片。两套都靠加主节点扩写入(§8.4)。去掉存档后内存从 TB 级降到几十 GB 级(推算 [I]),但会话、位置、排队的读写量仍然很大,所以仍要分片。
+- **原来读父快照的读方已改完**:Redis 父快照已删(2026-11-19 核对,`go/` 下没有读它的代码)。match 组队的在线判定读 `player:session:{<id>}`,展示信息经 data_service 读 `player_store`(`go/match/internal/team/presence.go`);friend 的在线与最后活跃读会话,好友档案经 data_service `BatchGetPlayerDisplay` 补全;login 选角列表的外观来自账号目录的角色摘要。
 
 ### 2.2 以后新功能怎么判断放 Redis 还是 TiDB
 
@@ -660,7 +660,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 | scene / battle | MMO 加分线、加场景实例;战斗按对局装箱 | 一个场景里很多人(万人攻城)的瓶颈在场景计算与视野广播,不在存储 |
 | SLG 地图服 | 加世界;单张大图按州拆分片 | §10 |
 | TiDB | 单集群加 TiKV、TiDB 节点;到顶后多集群;每个地域各一套 | §8.1、§8.2 |
-| Redis | 玩家相关协调键按 `{player_id}` 分片成 Cluster;控制域按用途和 zone 拆 | §8.4 |
+| Redis | 两套 Redis Cluster 各自加主节点 + 原子迁 slot:玩家域与登录域在 `redis-player`,其余用途在控制集群 `redis-control`(按 zone / 帮 / 玩家的 hash tag) | 单个 zone 的控制域与排队各落一个槽,上限一台主节点(§8.4) |
 | Kafka | 加 broker | topic 分区数第一代给足(D5 契约规定分区数不可变) |
 | etcd、PD | 不靠加机器扩写入 | §8.3 |
 
@@ -692,9 +692,8 @@ etcd 和 TiDB 的 PD 都是单 leader,加机器提升不了写能力。只让它
 
 ### 8.4 其他「加机器没用」的单主(不在上面四类里)
 
-- Redis 登录域和玩家域:令牌、登录态、连接栅栏、位置、会话、战斗锁进 Redis Cluster,加主节点就扩。2026-10-31 已落码,未编译([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13,存档相关批次作废)。规模按剩下的键重算(TiDB 决策 §9.5)。
-- Redis 控制域按 zone 组分实例,一个组内是单主:排队 `redis-queue-g<N>`(G4a 第 1a 批,10-24)与 scene_manager 控制域 `redis-ctl-g<N>`(场景路由、成员集合、世界频道、选主锁、死节点收尾任务,2026-11-05 落码、未编译,[control-plane-zone-scoping-20261105.md](control-plane-zone-scoping-20261105.md) §4),组号都是 zones 配置的 `redisQueueGroup`。scene_manager 按 zone 选主、只读写本 zone 的键,加组就扩写入;一个组装不下时拆组。gate 排空标记与落点唤醒频道仍在核心。实际压力看压测。
-- 2026-11-10 负责人改口径:按 zone 组分单主实例与核心单主都不算水平扩展。排队、控制域、核心剩下的全部用途改上新建的控制集群 `redis-control`,设计见[全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md),还没落码。
+- Redis 登录域和玩家域:令牌、登录态、连接栅栏、位置、会话、战斗锁进玩家域集群 `redis-player`,加主节点就扩。2026-10-31 已落码,未编译([玩家态 Redis 集群化](./redis-player-store-cluster.md) §13,存档相关批次作废)。规模按剩下的键重算(TiDB 决策 §9.5)。
+- Redis 控制域:不再是单主。排队、场景路由、成员集合、世界频道、选主锁、死节点收尾任务、gate 标记、落点唤醒等都在控制集群 `redis-control`,多键操作的键按 zone / 帮 / 玩家共用 hash tag(每个 zone 的控制域键共用 `{ctl:<z>}`,排队 `{q:<z>}`),加主节点 + 原子迁 slot 就扩写入([全部 Redis 上 Cluster](redis-cluster-all-domains-20261110.md),代码写完,未编译、未运行)。仍是单点的只有一个 zone 的控制域与排队各自那一个槽:上限一台主节点,到顶时把这个 zone 的槽迁到独占的主节点,再大就拆 zone(该稿 §6.2、§6.3)。2026-11-05 曾按 zone 组分单主实例(`redis-queue-g<N>`、`redis-ctl-g<N>`),11-10 负责人改口径,第 6b-1 批已退役。
 - data_service 写门禁用的 MappingRedis 随映射直读 TiDB 删除(映射提案 §15.9),配置段只留名字缓存,改名 `NameCacheRedis`。(2026-11-13:名字缓存并进控制集群段 `ControlRedis`,`NameCacheRedis` 段已删,见 [redis-cluster-all-domains-20261110.md](redis-cluster-all-domains-20261110.md) §4.8。)
 
 ## 9. 按预算分三档部署

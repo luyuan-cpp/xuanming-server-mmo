@@ -2,10 +2,12 @@ package clientplayerloginlogic
 
 import (
 	"context"
+	"errors"
 	"login/internal/svc"
 	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/generated/pb/table"
 )
 
 // 两次强读限制旧异步链，但不声称闭合最后重读到原生入场提交之间的竞态；
@@ -33,17 +35,19 @@ func (l *EnterGameLogic) lookupEnteringRole(ctx context.Context, player uint64) 
 	return l.svcCtx.AccountDirectory.Lookup(ctx, player)
 }
 
-// readAccountLifecycle 同 readAccountDirectory,另回账号的注销状态(登录应答要带给客户端)。没装配注销时状态为空(0)。
+// readAccountLifecycle 同 readAccountDirectory,另回账号的注销状态;与 readAccountDirectoryWithRealName 是同一次目录读。
 func readAccountLifecycle(ctx context.Context, sc *svc.ServiceContext, account string, create bool) (*dbpb.UserAccounts, *dspb.AccountLifecycle, error) {
-	if sc.AccountDeletions == nil {
-		accounts, err := readAccountDirectory(ctx, sc, account, create)
-		return accounts, &dspb.AccountLifecycle{}, err
+	userAccount, _, lifecycle, err := readAccountDirectoryWithRealName(ctx, sc, account, create)
+	return userAccount, lifecycle, err
+}
+
+// loginDirectoryFailureTip 是登录读目录失败的提示。用 access token 登录而目录里没有这个账号(已注销,§7.3)按凭证无效回,
+// 客户端重新走渠道登录;其余同 accountDirectoryFailureTip(故障码)。ErrMissing 只会出在不建行的 access token 路径上。
+func loginDirectoryFailureTip(err error) uint32 {
+	if errors.Is(err, accountdirectory.ErrMissing) {
+		return uint32(table.LoginError_kLoginAccountNotFound)
 	}
-	out, err := sc.AccountDeletions.ReadWithLifecycle(ctx, account, create)
-	if err != nil {
-		return nil, nil, err
-	}
-	return &dbpb.UserAccounts{Account: account, SimplePlayers: out.Players}, out.Lifecycle, nil
+	return accountDirectoryFailureTip(err)
 }
 
 func readAccountDirectory(ctx context.Context, sc *svc.ServiceContext, account string, create bool) (*dbpb.UserAccounts, error) {

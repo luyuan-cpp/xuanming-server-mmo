@@ -526,6 +526,20 @@ domain_meta:
         handler: "go/generated/player_locator/handler"
         grpc: "go/generated/player_locator/grpc"
 
+  # 内容安全(docs/design/rename-and-content-safety.md §6):Go 服务 go/content_guard 实现 ContentGuard.CheckText,
+  # 调用方是 login / guild / chat(Go)与 scene(C++,按 etcd 前缀 ContentGuardNodeService.rpc 发现)。内部服务,不进客户端清单。
+  # 形状照 player_inbox:只出 Go outputs;C++ 的 pb / grpc_client 由全量生成照常产出。
+  # 漏掉本块 = 整个域不被解析,消息号也会丢;proto_gen.no-unity.yaml 必须同步加同样一块。
+  content_guard:
+    source: "{{proto_dir}}content_guard/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/content_guard/proto"
+        handler: "go/generated/content_guard/handler"
+        grpc: "go/generated/content_guard/grpc"
+
   friend:
     source: "{{proto_dir}}friend/"
     rpc:

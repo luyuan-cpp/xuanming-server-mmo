@@ -38,6 +38,10 @@ message UnregisterPlayer
 message PlayerUint64Comp
 {
 	uint64 registration_timestamp  = 1;
+	// 挂机月卡到期的 Unix 秒(docs/design/afk-monthly-card.md §3)。0 = 从未开通或已清除;<= 现在 = 已到期。
+	// 事实源就是这一份(存档 PROFILE 行):唯一写入方 AfkPassSystem(灵石开通、GM),其余代码只读;
+	// 玩家域 Redis 的 player:afk_pass:{<player_id>} 只是它提交之后的投影。
+	uint64 afk_pass_expires_at = 2;
 }
 
 message PlayerUint32Comp

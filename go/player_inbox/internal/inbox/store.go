@@ -24,7 +24,7 @@ import (
 //
 // 并发与锁(设计 §10):
 //   - 所有事务都是 READ COMMITTED,经 assetop.WithTxRetryConfig 执行,并**显式注入**可重试判定
-//     (1213 / 1205 / 9007,IsRetryableTxError)—— IsRetryable 为 nil 时一次都不重试(assetop/seq.go)。
+//     (1213 / 1205 / 9007,authoritysql.IsRetryableTxError)—— IsRetryable 为 nil 时一次都不重试(assetop/seq.go)。
 //     RC 的理由同 assetop/seq.go:TiDB 悲观事务没有间隙锁;锁内的普通读必须看得见前一个持锁者已提交的行。
 //   - 锁顺序固定:角色护栏副本行→流行→条目主键→审计行插入。入场原件在事务外向目录核,事务里不调 RPC。
 //     条目行一律先普通读、再按主键条件写,**不做**二级索引上的加锁读(二级索引加锁读与主键 CAS 加锁顺序相反会成环)。
@@ -105,31 +105,12 @@ func NewStore(d StoreDeps) (*Store, error) {
 func (s *Store) Registry() *Registry { return s.registry }
 
 // TxRetryConfig 是本服务全部事务的参数:assetop 默认值(RC、3 次、10ms 起退避 + 抖动),再**注入**
-// 可重试判定 IsRetryableTxError。单测钉住注入不为 nil 且覆盖 1213 / 1205 / 9007(设计 §10)。
+// 可重试判定 authoritysql.IsRetryableTxError(全仓唯一的一份:1213 / 1205 / 9007 与守卫判定的提交前中止,
+// 结局未知不重试)。单测钉住注入不为 nil 且覆盖 1213 / 1205 / 9007(设计 §10)。
 func TxRetryConfig() assetop.TxRetryConfig {
 	cfg := assetop.DefaultTxRetryConfig()
-	cfg.IsRetryable = IsRetryableTxError
+	cfg.IsRetryable = authoritysql.IsRetryableTxError
 	return cfg
-}
-
-// IsRetryableTxError 判定「事务已整体回滚,重跑是安全的」:1213 死锁、1205 锁等待超时、9007 TiDB 写冲突,
-// 以及权威 SQL 守卫判定的「提交前中止」(authoritysql.IsAbortedBeforeCommit,R6):事务里只发过纯 DML、COMMIT 还没发时
-// 连接断开或调用取消,库会回滚未提交的事务,确定没写,换一条连接整笔重跑是安全的。错误树里混有结局未知时它回假,照旧不重试。
-// 9007 必须在内:迁到 TiDB 之后它会取代死锁成为最常见的一类,漏判就等于不重试(assetop/seq.go 的注释)。
-func IsRetryableTxError(err error) bool {
-	if authoritysql.IsAbortedBeforeCommit(err) {
-		return true
-	}
-	var myErr *mysql.MySQLError
-	if !errors.As(err, &myErr) {
-		return false
-	}
-	switch myErr.Number {
-	case 1213, 1205, 9007:
-		return true
-	default:
-		return false
-	}
 }
 
 // isDuplicateKeyError 判定 1062(唯一键 / 主键冲突)。

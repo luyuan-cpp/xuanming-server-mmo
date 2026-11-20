@@ -89,13 +89,13 @@ func TestBoundConsumerGroupDrainHandsOffRecordAndConfirmsFromGroupCommit(t *test
 	h.sleepFn = closingSleep(&closing, backingOff)
 	h.groupCommitted = func(read int) int64 {
 		if read == 1 {
-			return -1 // 第一轮:新属主还没提交过
+			return 0 // 第一轮:新属主还没提交越过它
 		}
 		return 1 // 第二轮:新属主处理并提交到 1
 	}
 	reader := h.addReader()
 	h.start()
-	h.deliver(1, kafkago.FirstOffset)
+	h.deliver(1, 0) // 组在该分区已提交到 0:有真实的已提交位点,新属主从 0 重投
 	reader.push(0, "battle-0")
 	waitSignal(t, backingOff, "处理失败后进入退避")
 	closing.Store(true)
@@ -137,7 +137,7 @@ func TestBoundConsumerGroupLeavingOneByOneHandsOffRejectedOldGenerationCommit(t 
 	h.groupCommitted = func(int) int64 { return 1 }
 	reader := h.addReader()
 	h.start()
-	h.deliver(1, kafkago.FirstOffset)
+	h.deliver(1, 0) // 组在该分区已提交到 0
 	reader.push(0, "battle-0")
 	waitSignal(t, entered, "回调开始处理 offset 0")
 
@@ -217,6 +217,180 @@ func TestBoundMessageReaderResolvesDriftedReplayTicketAtClose(t *testing.T) {
 				t.Fatalf("收据没有记下收尾核对的结清方式: %s", raw)
 			}
 		})
+	}
+}
+
+// ── 从没提交过的分区:接纳第一条之前先提交起点(负责人 2026-11-19 定,设计 §3.1)──────────
+//
+// 改之前组在分区上从没提交过时,接纳了却没结清的记录在换代或换属主之后又从日志起点读起,起点被保留期推过它就静默越过;
+// 收尾核对也只能看到一个越过它的位点,分不出是处理过还是删掉了。
+
+// 日志起点是 5(0..4 已被删):接纳 offset 5 之前先把 5 提交成起点;起点提交失败按退避重试,成功之前不调回调。
+func TestBoundConsumerGroupCommitsTheStartOffsetBeforeAcceptingTheFirstRecord(t *testing.T) {
+	var startFailures int
+	var handledBeforeStart atomic.Bool
+	var h *boundHarness
+	h = newBoundHarness(t, func(context.Context, kafkago.Message) error {
+		committed := false
+		for _, commit := range h.commitsOf(1) {
+			committed = committed || (commit.next == 5 && commit.err == nil)
+		}
+		if !committed {
+			handledBeforeStart.Store(true)
+		}
+		return nil
+	})
+	h.commitErr = func(_ int32, next int64) error {
+		if next == 5 && startFailures < 2 {
+			startFailures++
+			return errors.New("[16] Not Coordinator For Group")
+		}
+		return nil
+	}
+	reader := newFakePartitionReader()
+	h.opens <- fakeOpen{reader: reader, earliest: 5}
+	h.start()
+	h.deliver(1, kafkago.FirstOffset)
+	reader.push(5, "battle-5")
+	waitOwnerState(t, h.owner, "起点提交成功后接纳并结清", func() bool { p := partitionZero(h.owner); return p != nil && p.committed == 6 })
+	if handledBeforeStart.Load() {
+		t.Fatal("起点提交成功之前就调了回调")
+	}
+	commits := h.commitsOf(1)
+	if len(commits) != 4 || commits[0].next != 5 || commits[0].err == nil || commits[1].next != 5 || commits[1].err == nil ||
+		commits[2].next != 5 || commits[2].err != nil || commits[3].next != 6 || commits[3].err != nil {
+		t.Fatalf("应先提交起点 5(失败两次后成功),再提交越过 offset 5: %+v", commits)
+	}
+	if sleeps := h.recordedSleeps(); !slices.Equal(sleeps, []time.Duration{time.Second, 2 * time.Second}) {
+		t.Fatalf("起点提交失败按退避重试: %v", sleeps)
+	}
+	if _, err := h.stop(); err != nil {
+		t.Fatalf("排空收据不成立: %v", err)
+	}
+}
+
+// 起点一直提交不上(本代次正在再均衡)时这一代次一条都不接纳:不调回调、不拿票据、不记 HOLD;下一代次提交上起点再照常处理。
+func TestBoundConsumerGroupAcceptsNothingWhileTheStartOffsetCannotBeCommitted(t *testing.T) {
+	var calls atomic.Int32
+	h := newBoundHarness(t, func(context.Context, kafkago.Message) error { calls.Add(1); return nil })
+	h.commitErr = func(generation int32, _ int64) error {
+		if generation == 1 {
+			return errors.New("[27] Rebalance In Progress")
+		}
+		return nil
+	}
+	retrying := make(chan struct{}, 1)
+	h.sleepFn = func(ctx context.Context) bool {
+		select {
+		case retrying <- struct{}{}:
+		default:
+		}
+		<-ctx.Done()
+		return false
+	}
+	first := h.addReader()
+	second := h.addReader()
+	h.start()
+	h.deliver(1, kafkago.FirstOffset)
+	first.push(0, "battle-0")
+	waitSignal(t, retrying, "起点提交失败后进入退避")
+	h.endGeneration(1)
+	h.waitGeneration(1)
+	if calls.Load() != 0 || h.relay.Pending() != 0 {
+		t.Fatalf("起点没提交上就接纳了记录: calls=%d pending=%d", calls.Load(), h.relay.Pending())
+	}
+	if err := h.failure(); err != nil {
+		t.Fatalf("起点提交失败是暂时的,不能 HOLD: %v", err)
+	}
+	h.deliver(2, kafkago.FirstOffset) // 组还是没有位点:下一代次重新提交起点
+	second.push(0, "battle-0")
+	waitUntil(t, "第二代次提交到 offset 1", func() bool { return h.committedNext(2) == 1 })
+	if calls.Load() != 1 {
+		t.Fatalf("第二代次应处理一次: %d", calls.Load())
+	}
+	if _, err := h.stop(); err != nil {
+		t.Fatalf("排空收据不成立: %v", err)
+	}
+}
+
+// reader 模式同样在把第一条交出去之前提交起点:FetchMessage 拿到它时组内位点已经有了。
+func TestBoundMessageReaderCommitsTheStartOffsetBeforeHandingOutTheFirstRecord(t *testing.T) {
+	h := newBoundReaderHarness(t)
+	first := h.addReader()
+	h.start()
+	h.deliver(1, kafkago.FirstOffset)
+	first.push(0, "snapshot-a")
+	message := h.fetch()
+	if commits := h.commitsOf(1); message.Offset != 0 || len(commits) != 1 || commits[0].next != 0 || commits[0].err != nil {
+		t.Fatalf("交出第一条之前要先提交起点: offset=%d commits=%+v", message.Offset, commits)
+	}
+	if err := h.owner.CommitMessages(context.Background(), metadata(message.Offset)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.stop(); err != nil {
+		t.Fatalf("排空收据不成立: %v", err)
+	}
+}
+
+// 兜底判据(评审修正 2026-11-19):票据产生时组在该分区没有已提交位点,收尾读到的位点再越过它也不结清 —— 那可能只是新属主从
+// 被保留期推过的日志起点读起。起点提交之后正常路径走不到这里,这一条防的是以后改坏接纳顺序。
+func TestTicketsWithoutACommitFrontierAreNotResolvedFromTheGroupCommit(t *testing.T) {
+	owner := &BoundConsumerGroup{replay: map[string]*boundDelivery{}}
+	unpinned := &boundPartition{topic: boundTestTopic, partition: 1}
+	owner.handoffs = []*boundHandoff{{topic: boundTestTopic, partition: 0, offset: 0, finish: func() {}}}
+	owner.replay["drifted"] = &boundDelivery{partition: unpinned, message: kafkago.Message{Topic: boundTestTopic, Partition: 1, Offset: 0}, finish: func() {}}
+	committed := map[string]map[int32]int64{boundTestTopic: {0: 6, 1: 6}}
+	if finished := owner.resolvePassedTicketsLocked(committed); len(finished) != 0 || len(owner.handoffs) != 1 || len(owner.replay) != 1 {
+		t.Fatalf("没有位点的票据被按组内位点结清: finished=%d handoffs=%d replay=%d", len(finished), len(owner.handoffs), len(owner.replay))
+	}
+	owner.handoffs[0].frontier = true
+	unpinned.startCommitted = true
+	if finished := owner.resolvePassedTicketsLocked(committed); len(finished) != 2 || len(owner.handoffs) != 0 || len(owner.replay) != 0 {
+		t.Fatalf("有位点之后同一批位点应结清两张票据: finished=%d handoffs=%d replay=%d", len(finished), len(owner.handoffs), len(owner.replay))
+	}
+}
+
+// 评审修正(2026-11-19):收尾核对按单调时钟有整体上限(boundTicketConfirmBudget),不只按轮数(AGENTS §11.3)。broker 不通时
+// 每轮新建探针、读位点要几十秒,只靠 30 轮会拖到十几分钟才 HOLD;调用方的 ctx 也可能不带期限(data_service 关停)。
+// 这里把上限设成 50ms,读位点的替身记下每轮拿到的 ctx 还剩多久、立即失败:改之前每轮看到的都是调用方给的 10 秒。
+func TestBoundConsumerGroupTicketConfirmationHasATimeBudget(t *testing.T) {
+	const budget = 50 * time.Millisecond
+	h := newBoundHarness(t, func(context.Context, kafkago.Message) error { return errors.New("tidb: write conflict") })
+	backingOff := make(chan struct{}, 1)
+	var closing atomic.Bool
+	h.sleepFn = closingSleep(&closing, backingOff)
+	h.owner.ticketConfirmBudget = budget
+	var mu sync.Mutex
+	var remaining []time.Duration
+	h.owner.readCommitted = func(ctx context.Context, _ string, _ []int32) (map[int32]int64, error) {
+		left := time.Duration(1<<63 - 1) // 没有期限
+		if deadline, ok := ctx.Deadline(); ok {
+			left = time.Until(deadline)
+		}
+		mu.Lock()
+		remaining = append(remaining, left)
+		mu.Unlock()
+		return nil, errors.New("kafka: broker unreachable")
+	}
+	reader := h.addReader()
+	h.start()
+	h.deliver(1, 0) // 组在该分区已提交到 0:票据可以按组内位点核
+	reader.push(0, "battle-0")
+	waitSignal(t, backingOff, "处理失败后进入退避")
+	closing.Store(true)
+	raw, err := h.stop()
+	if !errors.Is(err, drainproof.ErrHold) || !errors.Is(err, errBoundTicketUnconfirmed) || raw != nil {
+		t.Fatalf("读不到组内位点必须 HOLD: %v %s", err, raw)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(remaining) == 0 {
+		t.Fatal("收尾没有读组内位点")
+	}
+	for i, left := range remaining {
+		if left > budget {
+			t.Fatalf("第 %d 轮读位点拿到的 ctx 还剩 %v,应带收尾自己的上限(<= %v),不是调用方的整段期限", i+1, left, budget)
+		}
 	}
 }
 
@@ -345,9 +519,10 @@ func TestBoundConsumerGroupDeadLettersAfterRetryBudgetAndMovesOn(t *testing.T) {
 	if sleeps := h.recordedSleeps(); !slices.Equal(sleeps, []time.Duration{time.Second, 2 * time.Second}) {
 		t.Fatalf("预算用完立即写死信,不再多等一轮: %v", sleeps)
 	}
+	// 第一笔是接纳 offset 0 之前的起点提交(组在该分区从没提交过,§3.1)。
 	commits := h.commitsOf(1)
-	if len(commits) != 2 || commits[0].next != 1 || commits[1].next != 2 || commits[0].err != nil || commits[1].err != nil {
-		t.Fatalf("死信写成功后才提交越过,之后照常提交: %+v", commits)
+	if len(commits) != 3 || commits[0].next != 0 || commits[1].next != 1 || commits[2].next != 2 || commits[0].err != nil || commits[1].err != nil || commits[2].err != nil {
+		t.Fatalf("先提交起点,死信写成功后才提交越过,之后照常提交: %+v", commits)
 	}
 	if !bytes.Contains(raw, []byte(`"Accepted":2,"Settled":2,"Replayed":0,"Released":0,"HandedOff":0,"DeadLettered":1`)) {
 		t.Fatalf("收据没有记下转死信的那条: %s", raw)
@@ -405,7 +580,8 @@ func TestBoundConsumerGroupKeepsRecordInPlaceWhileDeadLetterWriteFails(t *testin
 	if calls.Load() != 1 {
 		t.Fatalf("预算用完后只重写死信,不再调用回调: %d", calls.Load())
 	}
-	if commits := h.commitsOf(1); len(commits) != 1 || commits[0].next != 1 {
+	// 第一笔是起点提交(§3.1),越过这一条的只有死信写成功之后那一笔。
+	if commits := h.commitsOf(1); len(commits) != 2 || commits[0].next != 0 || commits[1].next != 1 {
 		t.Fatalf("死信写成功之前不能提交越过: %+v", commits)
 	}
 	if sleeps := h.recordedSleeps(); !slices.Equal(sleeps, []time.Duration{time.Second, 2 * time.Second}) {

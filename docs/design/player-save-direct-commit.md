@@ -154,7 +154,7 @@ message SavePlayerResponse {
 事务(`storage_id` 选库后,读已提交 + 悲观锁):
 
 ```
-进事务前校验(不碰库):E、q、实例非空,kind 为正、不重复 → 否则 INVALID;kind 是本 go/db 不认识的正数 → SCHEMA_TOO_NEW(scene 比 go/db 新,可重试,见 §4);payload 超预算 → TOO_LARGE
+进事务前校验(不碰库):E、q、实例非空,kind 为正、不是退役号、不重复 → 否则 INVALID;kind 比本 go/db 认识的最大号还大 → SCHEMA_TOO_NEW(scene 比 go/db 新,可重试,见 §4);payload 超预算 → TOO_LARGE
 SELECT owner_epoch, save_seq, schema_gen, holder_instance, released
   FROM player_store WHERE player_id=? AND kind=0 FOR UPDATE
 按 §4 判定;拒绝或幂等成功就回滚并返回
@@ -233,6 +233,7 @@ COMMIT
 - 行种的号只增不复用,scene 也发不出它自己不认识的号,所以这只会来自比 go/db 新的 scene(发布顺序不对,或回退了 go/db)。这是版本问题,不是请求坏了,按上表的 `SCHEMA_TOO_NEW` 重试。
 - 原先回 `INVALID`。新 scene 的存盘拼装给每个持久组件都设了存在位,新行种第一笔就脏;于是窗口期内新 scene 上几乎每个玩家下线时都不存盘就销毁,认领以来的进度全丢。
 - 这一条不能只靠认领时的世代判定兜住:go/db 新旧副本混跑时,在新副本上认领的玩家,下一笔存盘可能落到旧副本。
+- 只有比本 go/db 认识的最大号还大的才算更新版本的号。不大于它却不认识的是退役号(旧布局的 1、2、5,proto 里 `reserved`),哪个版本的 scene 都不会再发,回 `INVALID`;回 `SCHEMA_TOO_NEW` 会让告警去提示升 go/db,而升哪个版本都认不出它。与 C++ 加载侧 `IsNewerKind`(kind ≥ kKindCount)同一口径(2026-11-20 独立评审)。
 
 **三条要点:**
 

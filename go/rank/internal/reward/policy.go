@@ -3,6 +3,7 @@ package reward
 import (
 	mailpb "proto/mail"
 	"rank/internal/data"
+	table "shared/generated/pb/table"
 	"shared/serverbase"
 	"time"
 )
@@ -18,6 +19,9 @@ const (
 	attemptUnknown
 	// attemptRejected 邮件明确拒收(业务拒绝码),或本地原件损坏没有发出。
 	attemptRejected
+	// attemptRecipientGone 邮件拒收,因为收件人的角色已删除(账号注销,docs/design/account-deletion.md §6.2):
+	// 再投也没有人收,直接转放弃终态,不是故障,也不要人工跟进。
+	attemptRecipientGone
 )
 
 // MaxAttempts 是一条奖励的总尝试次数上限(含结果未知),只在明确拒收时裁决,只兜时钟或数据异常。
@@ -74,6 +78,9 @@ func classify(response *mailpb.SendMailResponse, callErr error) attempt {
 	if callErr != nil || response == nil {
 		return attemptUnknown
 	}
+	if response.GetErrorMessage().GetId() == uint32(table.MailError_kMailRecipientDeleted) {
+		return attemptRecipientGone
+	}
 	switch serverbase.TipVerdict(response.GetErrorMessage().GetId()) {
 	case serverbase.VerdictOK:
 		if response.GetMailId() != 0 {
@@ -100,6 +107,8 @@ func nextStep(result attempt, attempts uint32, nowMs, expireMs uint64) (status u
 	switch result {
 	case attemptDelivered:
 		return data.RewardDelivered, nowMs
+	case attemptRecipientGone:
+		return data.RewardAbandoned, nowMs
 	case attemptUnknown:
 		nextMs = nowMs + backoff(attempts, unknownRetryBaseMs, unknownRetryCeilingMs)
 		if nextMs > cutoffMs && nextMs < probeMs {

@@ -101,7 +101,7 @@ func planReissue(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflo
 	for _, l := range failed {
 		role := reissueRole(w, l.Role)
 		l.SupersededBy = role
-		addLeg(w, role, l.PlayerId, 4, proto.Clone(l.Bundle).(*assetpb.AssetBundle))
+		addEscrowLeg(w, role, l.PlayerId, l.EscrowOwnerId, proto.Clone(l.Bundle).(*assetpb.AssetBundle))
 		result.NewLegs = append(result.NewLegs, role)
 		result.SupersededLegs = append(result.SupersededLegs, l.Role)
 	}
@@ -160,11 +160,27 @@ func isRefundLeg(role string) bool {
 	return strings.HasSuffix(base, "/refund")
 }
 
-// plannedLeg 是一条要新建的腿。
+// plannedLeg 是一条要新建的退回腿:发给 player,付出的是 owner 托管的资产(escrow_owner_id)。
 type plannedLeg struct {
 	role   string
 	player uint64
+	owner  uint64
 	bundle *assetpb.AssetBundle
+}
+
+// refundRecipient 是整单退回时一条扣出腿的退款收件人:合同上这一方现在的角色。人工改绑之后它是目标角色
+// (改绑等于这一方整体换成目标角色,此后该收的发给它,§15.7.1 第 1 类),不是扣出时那个已经换主或删掉的角色:
+// 发给后者,资产就落到别的账号手里,而 advance 只核当前两方的归属,拦不住(2026-11-20 独立评审)。
+// 托管者仍记扣出时的角色,所以改绑之后的这笔退款按成交所得判、照常过获取封禁(legTxType)。
+func refundRecipient(r *tradepb.TradeCommerceRecord, debit *tradepb.TradeCommerceLeg) uint64 {
+	party := r.GetSellerPlayerId() // seller_debit、bid_debit(出价合同的出价人记在 SellerPlayerId)
+	if strings.HasPrefix(debit.GetRole(), "buyer_debit") {
+		party = r.GetBuyerPlayerId() // buyer_debit、寄售的 buyer_debit_<数量>_<请求>
+	}
+	if party == 0 {
+		return debit.GetPlayerId()
+	}
+	return party
 }
 
 // planRefund 整单退回:每条已扣进托管的腿各退一条给扣出它的人,没到账的发放腿标被退回取代,stage 改 return,按取消结案。
@@ -268,7 +284,7 @@ func refundReturns(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkf
 		if emptyBundle(b) {
 			continue
 		}
-		out = append(out, plannedLeg{role: refundLegRole(l.Role), player: l.PlayerId, bundle: b})
+		out = append(out, plannedLeg{role: refundLegRole(l.Role), player: refundRecipient(r, l), owner: l.PlayerId, bundle: b})
 	}
 	return out, nil
 }
@@ -287,7 +303,7 @@ func applyRefund(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflo
 		}
 	}
 	for _, p := range returns {
-		addLeg(w, p.role, p.player, 4, p.bundle)
+		addEscrowLeg(w, p.role, p.player, p.owner, p.bundle)
 		result.NewLegs = append(result.NewLegs, p.role)
 	}
 	w.Stage, r.Status = "return", CancelPending
@@ -356,7 +372,7 @@ func planPartial(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflo
 	for _, s := range credits {
 		role := reissueRole(w, s.leg.Role)
 		s.leg.SupersededBy = role
-		addLeg(w, role, s.leg.PlayerId, 4, s.missing)
+		addEscrowLeg(w, role, s.leg.PlayerId, s.leg.EscrowOwnerId, s.missing)
 		result.NewLegs = append(result.NewLegs, role)
 		result.SupersededLegs = append(result.SupersededLegs, s.leg.Role)
 	}
@@ -592,12 +608,13 @@ func planRedirect(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkfl
 			}
 			switch {
 			case l.OpId == 0:
-				l.PlayerId = c.req.To
+				l.PlayerId = c.req.To // 只换收件人,escrow_owner_id 不变
 				result.RetargetedLegs = append(result.RetargetedLegs, l.Role)
 			case l.Stream == 4 && done(l) && !applied(l) && l.Outcome != partialOutcome:
+				// 托管者照抄:收件人换成目标角色,付出的仍是原来那个角色托管的资产,退回腿因此按成交所得判(legTxType)。
 				role := reissueRole(w, l.Role)
 				l.SupersededBy = role
-				addLeg(w, role, c.req.To, 4, proto.Clone(l.Bundle).(*assetpb.AssetBundle))
+				addEscrowLeg(w, role, c.req.To, l.EscrowOwnerId, proto.Clone(l.Bundle).(*assetpb.AssetBundle))
 				result.NewLegs = append(result.NewLegs, role)
 				result.SupersededLegs = append(result.SupersededLegs, l.Role)
 			}
@@ -655,7 +672,7 @@ func planVoidAuction(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWor
 	if err != nil {
 		return notAllowed("拍品托管原件转不动,要按 player_snapshot 人工补发: %v", err)
 	}
-	applyRefund(r, w, []plannedLeg{{role: refundLegRole(debit.Role), player: debit.PlayerId, bundle: back}}, result)
+	applyRefund(r, w, []plannedLeg{{role: refundLegRole(debit.Role), player: refundRecipient(r, debit), owner: debit.PlayerId, bundle: back}}, result)
 	var bidQuarantine *tradepb.TradeCommerceQuarantine
 	if q := bw.GetQuarantine(); q != nil && bid.Status == Manual {
 		bidQuarantine = proto.Clone(q).(*tradepb.TradeCommerceQuarantine)

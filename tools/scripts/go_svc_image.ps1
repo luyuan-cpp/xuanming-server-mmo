@@ -175,6 +175,10 @@ $Catalogue = [ordered]@{
     # 由 Dockerfile.go-svc 通用的 `COPY schemamigrate/` 带入。同一镜像既跑 player-inbox Deployment,也跑 player-inbox-migrate Job
     # (args 加 -migrate,D-14)。
     "player-inbox"  = @{ Dir = "player_inbox";    Entry = "player_inbox.go";        ImageName = "mmorpg-player-inbox" }
+    # 内容安全 content-guard(docs/design/rename-and-content-safety.md §6):与 k8s_deploy.ps1 $GoSvcCatalogue 的 content-guard 条目配对
+    # (ImageName 必须一致)。调用方是 login / guild / chat 与 C++ scene,不经路由服。无状态、没有建表 Job;
+    # 词库发布工具 cmd/lexicon 不进镜像,在运维机上对着 etcd 跑(deploy/k8s/README.md「内容安全」)。
+    "content-guard" = @{ Dir = "content_guard";   Entry = "content_guard.go";       ImageName = "mmorpg-content-guard" }
     # 帮会 guild(K8s 上线批 BK8s,2026-10-16):与 k8s_deploy.ps1 $GoSvcCatalogue 的 guild 条目配对(ImageName 必须一致)。只经路由服可达,
     # 与路由服成对发布。go.mod 的 replace schemamigrate => ../schemamigrate 与 trade 同形态,由 Dockerfile.go-svc 通用的 COPY schemamigrate/ 带入;
     # proto2mysql 的 replace 是远程仓名映射(不是本地目录),不走 ExternalReplaceStages。同一镜像既跑 guild Deployment,也跑 guild-migrate Job。
@@ -190,6 +194,11 @@ $Catalogue = [ordered]@{
     # COPY 带入,**不需要改 Dockerfile**,也不走 ExternalReplaceStages。零 MySQL,没有 migrate Job。
     # ⚠ 镜像里要编得过:本条目只能在 rank 的 proto-gen 产物(go/proto/rank)入库之后存在(leaderboard-system.md §12.6)。
     rank            = @{ Dir = "rank";            Entry = "rank.go";                ImageName = "mmorpg-rank" }
+    # 支付 payment(docs/design/payment-recharge.md §22):与 k8s_deploy.ps1 $GoSvcCatalogue 的 payment 条目配对(ImageName 必须一致)。
+    # 客户端请求只经路由服可达,与路由服成对发布;渠道回调走独立的 HTTP 口。go.mod 的 replace proto / shared / schemamigrate 都在 go/ 之内,
+    # 由 Dockerfile.go-svc 通用的 COPY 带入,不需要改 Dockerfile。按包构建:payment.go 依赖同目录的 channels.go,所以 Entry 是 "."。
+    # 同一镜像既跑 payment StatefulSet,也跑 payment-migrate Job(args 加 -migrate,D-14)。
+    payment         = @{ Dir = "payment";         Entry = ".";                      ImageName = "mmorpg-payment" }
 }
 
 # 先把每个元素再按逗号拆一次,兼容 "a,b"(单字符串)和 a,b(数组)两种传法。

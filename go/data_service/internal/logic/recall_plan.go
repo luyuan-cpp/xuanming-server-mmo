@@ -21,10 +21,11 @@ import (
 // 回收计划:把流水算成「要回收什么」。纯函数,没有 I/O(证据由 recall_logic.go 的 loadRecallInputs 一次取齐),
 // 预览和执行走同一份代码,所以摘要相等就是计划相同。
 //
-// 流水只是线索,不是证据(docs/design/exploit_loss_prevention_zh.md「计划怎么算」)。2026-11-05 起 scene 只在存盘
-// 提交之后才发流水(TransactionLogSystem 的提交闸门),但发送失败只打日志,提交成功而回包丢失时崩溃也会少一条;
-// 混版窗口里没开闸门的旧 scene 仍在内存改动时就发:崩溃后重载、同一条指令重投再应用时,会多出一条同 correlation_id、
-// 不同 tx_id 的流水,确定性拒存时整段会话都不落盘,流水却都在。所以一笔收益要进自动回收,必须由玩家已提交的
+// 流水只是线索,不是证据(docs/design/exploit_loss_prevention_zh.md「计划怎么算」)。2026-11-11 起流水随玩家存盘提交:
+// 和存档在同一个 TiDB 事务里写进 go/db 的审计发件箱,再由转发循环投 Kafka(docs/design/player-audit-outbox.md),
+// 「流水里有这条」等于「这笔改动已提交」。但转发与入库有积压,也可以暂停(部署时 -AuditOutboxRelay paused),
+// 还没进流水库的改动查不到,「没有流水」不等于「没有应用」;发件箱至少一次投递,同一条可能到两次。
+// 2026-11-05 之前的 scene 在内存改动时就直发 Kafka,崩溃重投会多出同 correlation_id、不同 tx_id 的流水(项目未上线,清库后没有)。所以一笔收益要进自动回收,必须由玩家已提交的
 // 资产账本(player_store)证明它那条指令恰好应用了一次,且这条指令的几条流水能还原成同一次发放。证明不了的列为
 // 待人工核对,不进自动扣款。去重按指令(to_player, correlation_id),不按 tx_id。
 

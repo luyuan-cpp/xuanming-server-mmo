@@ -414,7 +414,7 @@ func TestGlobalWatchTiDBRelayTierClosesLobbyWithoutOccupancy(t *testing.T) {
 	f.addFormation(t, battleId)
 	f.addViewer(t, player)
 	raiseTier(t, f.svcCtx, battleId, tierRelay)
-	_, err := f.mr.ZAdd(spectateBattlesActiveKey, float64(nowMs()), strconv.FormatUint(battleId, 10))
+	_, err := f.mr.ZAdd(spectateActiveIndex.keyFor(battleId), float64(nowMs()), strconv.FormatUint(battleId, 10))
 	require.NoError(t, err)
 	request := &pb.WatchBattleRequest{RequestId: uuid.NewString()} // 随机观战
 
@@ -431,7 +431,7 @@ func TestGlobalWatchTiDBRelayTierClosesLobbyWithoutOccupancy(t *testing.T) {
 	const other = uint64(910003)
 	f.addFormation(t, other)
 	removeSpectateActiveMember(f.svcCtx, battleId)
-	_, err = f.mr.ZAdd(spectateBattlesActiveKey, float64(nowMs()), strconv.FormatUint(other, 10))
+	_, err = f.mr.ZAdd(spectateActiveIndex.keyFor(other), float64(nowMs()), strconv.FormatUint(other, 10))
 	require.NoError(t, err)
 	replay := f.watch(t, player, request)
 	requireGlobalLobbyTicket(t, replay, battleId, player, f.battle.instance)
@@ -604,8 +604,8 @@ func TestGlobalWatchTiDBMissingRoomEvictsIndex(t *testing.T) {
 	f.addFormation(t, battleId)
 	f.addViewer(t, player)
 	member := strconv.FormatUint(battleId, 10)
-	for _, key := range []string{spectateBattlesActiveKey, spectateBroadcastActiveKey, spectateFeaturedActiveKey} {
-		_, err := f.mr.ZAdd(key, float64(lobbyFixtureDeadlineMs), member)
+	for _, ix := range []spectateIndex{spectateActiveIndex, spectateBroadcastIndex, spectateFeaturedIndex} {
+		_, err := f.mr.ZAdd(ix.keyFor(battleId), float64(lobbyFixtureDeadlineMs), member)
 		require.NoError(t, err)
 	}
 	request := &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId}
@@ -624,7 +624,7 @@ func TestGlobalWatchTiDBLongBattleKeepsTierAndListingPastOldTTL(t *testing.T) {
 	createdMs := nowMs() - 10*60*1000
 	f.addFormationAt(t, battleId, createdMs, createdMs+30*60*1000)
 	f.addViewer(t, player)
-	_, err := f.mr.ZAdd(spectateBattlesActiveKey, float64(createdMs), strconv.FormatUint(battleId, 10))
+	_, err := f.mr.ZAdd(spectateActiveIndex.keyFor(battleId), float64(createdMs), strconv.FormatUint(battleId, 10))
 	require.NoError(t, err)
 	raiseTier(t, f.svcCtx, battleId, tierRelay)
 
@@ -983,7 +983,7 @@ func TestGlobalWatchTiDBStableViewerCannotWatchCanaryBattle(t *testing.T) {
 	require.Zero(t, f.spectatorRows(t, stableViewer), "不落 L0 原件")
 	adds, removes, attaches, promotes := f.battle.counts()
 	require.Zero(t, adds+removes+attaches+promotes, "stable 观众不会被连到 canary battle 上")
-	_, err := f.svcCtx.MatchRedis.Zscore(spectateBattlesActiveKey, strconv.FormatUint(battleId, 10))
+	_, err := f.svcCtx.MatchRedis.Zscore(spectateActiveIndex.keyFor(battleId), strconv.FormatUint(battleId, 10))
 	require.NoError(t, err, "这场对 canary 观众仍可看,不摘观战索引")
 
 	direct := f.watchOnTrack(t, canaryViewer, "canary", &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId})

@@ -1,6 +1,6 @@
 package logic
 
-// 观战键的分布约定:本场的键共用 hash tag(见 spectate_tier_test.go),按实体分布的键不带花括号;
+// 观战键的分布约定:本场的键共用 hash tag(见 spectate_tier_test.go),三把全服观战索引按桶带各自的 tag(spectate_index.go);
 // 玩家域契约键带玩家 id 的 hash tag(docs/design/redis-player-store-cluster.md §5.2)。
 // 这里按 Redis 规范独立实现 slot 计算,不依赖 Redis。
 
@@ -51,15 +51,28 @@ func TestRedisHashSlotReference(t *testing.T) {
 	require.NotEqual(t, redisHashSlot("foo"), redisHashSlot("{}foo"))
 }
 
-// 按 id 分布的 key 不得带花括号(误用 tag 会把它们压到同一 slot)。
-func TestPerEntityKeysHaveNoHashTag(t *testing.T) {
-	for _, key := range []string{
-		spectateBattlesActiveKey, spectateBroadcastActiveKey, spectateFeaturedActiveKey,
-	} {
-		require.NotContains(t, key, "{", key)
-		require.NotContains(t, key, "}", key)
+// 全服观战索引的每个桶自带 tag:同一把索引的 16 个桶落 16 个不同的 slot,加主节点才分得开;三把索引的桶也互不同 slot。
+// 一场战斗的桶号 = battle_id % 16。
+func TestSpectateIndexBucketsSpreadAcrossSlots(t *testing.T) {
+	require.Equal(t, "spectate:battles:active:{sba:3}", spectateActiveIndex.bucketKey(3))
+	require.Equal(t, "spectate:bcast:active:{sbc:0}", spectateBroadcastIndex.keyFor(32))
+	require.Equal(t, "spectate:featured:active:{sft:15}", spectateFeaturedIndex.keyFor(31))
+	require.Equal(t, spectateActiveIndex.bucketKey(15), spectateActiveIndex.keyFor(1<<64-1), "uint64 上限落最后一个桶")
+
+	slots := map[int]string{}
+	for _, ix := range []spectateIndex{spectateActiveIndex, spectateBroadcastIndex, spectateFeaturedIndex} {
+		for bucket := 0; bucket < spectateIndexBuckets; bucket++ {
+			key := ix.bucketKey(bucket)
+			require.Equal(t, bucket, spectateIndexBucket(uint64(bucket)), key)
+			previous, taken := slots[redisHashSlot(key)]
+			require.False(t, taken, "%s 与 %s 同 slot", key, previous)
+			slots[redisHashSlot(key)] = key
+		}
 	}
-	// 玩家域契约键相反:同一玩家的键必须同 slot。
+}
+
+// 玩家域契约键带玩家 id 的 hash tag:同一玩家的键必须同 slot。
+func TestPlayerContractKeysShareThePlayerTag(t *testing.T) {
 	for _, key := range []string{playercontract.BattleLockKey(1), playercontract.LocationKey(1), playercontract.SessionKey(1)} {
 		require.Equal(t, redisHashSlot("1"), redisHashSlot(key), key)
 	}

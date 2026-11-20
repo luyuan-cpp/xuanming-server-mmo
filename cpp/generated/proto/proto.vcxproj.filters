@@ -600,6 +600,8 @@
     <ClInclude Include="scene\player_activity.pb.h" />
     <ClCompile Include="scene\player_mystery_merchant.pb.cc" />
     <ClInclude Include="scene\player_mystery_merchant.pb.h" />
+    <ClCompile Include="scene\player_afk_pass.pb.cc" />
+    <ClInclude Include="scene\player_afk_pass.pb.h" />
   </ItemGroup>
   <ItemGroup Label="ProtoGeneratorSources">
     <ClCompile Include="battle\battle_data.pb.cc">

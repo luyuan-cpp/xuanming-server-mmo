@@ -12,6 +12,14 @@ table_dir: "../generated/tables" # path to generated/tables dir (relative to wor
 action_interval: 3 # seconds between AI actions
 report_interval: 5 # seconds between stats prints
 
+# Transport to gate / battle: tcp (default, native clients) or websocket (WeChat / Douyin mini games).
+# See README "传输方式". Uncomment to drive the WebSocket entry instead of TCP.
+# transport:
+#   kind: websocket
+#   require_advertised: false   # true = fail when the server advertised no WebSocket address (use when going through the edge)
+#   dial_addr: ""               # dial this host:port instead of the advertised host (edge name not resolvable locally)
+#   insecure_skip_verify: false # skip edge certificate verification (self-signed test environments only)
+
 # Mode: "stress" (default) = mass concurrent bots doing AI actions
 #        "login-test"       = run login test suite (10 scenarios) then exit
 mode: "stress"

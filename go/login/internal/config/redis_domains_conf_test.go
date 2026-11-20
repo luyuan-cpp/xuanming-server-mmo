@@ -111,35 +111,6 @@ func TestControlRedisFallsBackToNodeRedisClientAndIsIndependentlyConfigurable(t 
 	}
 }
 
-// Node.QueueRedis 整段没写:排队与 gate 标记共用控制集群句柄(回 nil);写了就换成它那一个实例,
-// 没写的池与超时取与 Node.RedisClient 回落相同的固定口径。
-func TestEffectiveQueueRedis(t *testing.T) {
-	c := Config{}
-	c.Node.RedisClient = RedisConf{Host: "core:6379"}
-	if got := c.EffectiveQueueRedis(); got != nil {
-		t.Fatalf("没写 Node.QueueRedis 应回 nil,got %+v", got)
-	}
-
-	c.Node.QueueRedis = &RedisConf{Host: "redis-queue-g0:6379", Password: "pw", PoolSize: 9, ReadTimeout: 2 * time.Second}
-	got := c.EffectiveQueueRedis()
-	if got == nil || len(got.Addrs) != 1 || got.Addrs[0] != "redis-queue-g0:6379" || got.Cluster || got.Password != "pw" {
-		t.Fatalf("排队实例的配置不对: %+v", got)
-	}
-	if got.PoolSizePerNode != 9 || got.ReadTimeoutMs != 2000 || got.WriteTimeoutMs != redisDomainFallbackIOTimeoutMs ||
-		got.DialTimeoutMs != redisDomainFallbackDialTimeoutMs || got.PoolTimeoutMs != redisDomainFallbackPoolTimeoutMs {
-		t.Fatalf("排队实例的池与超时不对: %+v", got)
-	}
-	if err := got.Validate(); err != nil {
-		t.Fatalf("排队实例的配置必须合法: %v", err)
-	}
-
-	// 负的 PoolSize 不在这里改写,留给建客户端时拒绝(起服即失败)。
-	c.Node.QueueRedis = &RedisConf{Host: "redis-queue-g0:6379", PoolSize: -1}
-	if err := c.EffectiveQueueRedis().Validate(); err == nil {
-		t.Fatal("负的 PoolSize 必须在建客户端时被拒绝")
-	}
-}
-
 func TestValidateRedisDomainsCoversControlRedis(t *testing.T) {
 	good := []Config{
 		{ControlRedis: playerredis.Config{PoolSizePerNode: 20}},

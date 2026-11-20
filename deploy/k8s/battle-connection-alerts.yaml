@@ -1,0 +1,157 @@
+# battle 客户端直连的连接准入告警(docs/design/turn-based-battle-server.md D27;与 gate 同一套做法,
+# 规则形状照 deploy/k8s/gate-connection-alerts.yaml)。
+#
+# 指标由 battle 的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400,
+# Agones Fleet 与 hostPort Deployment 两种形态都开),定义在 cpp/nodes/battle/client/battle_connection_admission.cpp
+# 的 Admission::CollectMetrics:
+#   - battle_connections_current / battle_connections_max:直连会话数与生效上限(参战者与观众共用 BattleMaxConnections);
+#   - battle_unauthenticated_connections:既没完成票据握手、也没出示有效网络探测授权的直连。握手期限是 10 秒,
+#     正常客户端拿到票据后毫秒级握手,这个数「高且不周转」就是有连接占着位置不认证;
+#   - battle_accepted_total:接纳的直连,rate() 就是新建连接速率;
+#   - battle_rejected_total{reason}:被拒的直连,reason ∈ capacity / accept_rate / shutting_down / no_token_secret /
+#     preauth_budget / preauth_early_drop;
+#   - battle_handshake_duration_ms:建连到票据握手成功的耗时直方图;
+#   - battle_preauth_reaped_total:建连满握手期限仍未握手、被关掉的直连;
+#   - battle_preauth_evicted_total:未认证池承压时,建连满 3 秒还没握手、被淘汰给新直连让位的直连;
+#   - battle_preauth_budget / battle_preauth_early_drop_start / battle_preauth_evictable_age_ms:未验签预算参数
+#     (BattleMaxConnections 4096 时 1000 / 500 / 3000ms;BATTLE_PREAUTH_* 可覆盖)。
+# 规则引用的指标名与 reason 取值由 tools/scripts/tests/battle_connection_alerts_contract.tests.ps1 对照 C++ 源码钉住。
+# 处置见 docs/ops/gate-kernel-tuning-runbook.md §3.3。
+#
+# 全服匹配的网络探测也连 battle 的直连端口:match 在每个机房的可探测 battle(自报 CLOSED 的不探)里按玩家分散探测
+# (go/match/internal/logic/network_probe.go 的 probeTargets),每台的建连速率随全服匹配人数涨、按本机房可探测台数摊薄,
+# 机房里只有一台时全机房的探测都落在它上面。BattleAcceptRateLimited 先看是不是探测量(探测连接出示了授权,不计入未认证连接)。
+#
+# 安装(与其余告警文件相同,手工 apply):
+#   kubectl apply -n observability -f deploy/k8s/battle-connection-alerts.yaml
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: battle-connection-alerts
+  labels:
+    app: battle
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: battle.connections
+      interval: 30s
+      rules:
+        # 直连数逼近上限。参战者与观众共用一个上限,满了之后新开的房间里有人连不上直连(连不上的参战者每回合超时自动出手)。
+        - alert: BattleConnectionsNearCapacity
+          expr: |
+            max by (namespace, instance) (battle_connections_current / battle_connections_max) > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 直连数已超过连接上限的 90%({{ $value | printf \"%.2f\" }})"
+            description: >-
+              先看其余 battle 的 battle_connections_current:都高就加 battle 台数或调大 BattleMaxConnections
+              (同时核对 fd 上限与内存限额);只有这一台高,看它是不是热门观战房间多(观众与参战者共用上限),
+              再对照 battle_unauthenticated_connections 看是不是被不认证的连接占住。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 满员拒绝发生了:新直连在 accept 之后被 RST。参战者连不上本局的直连,观众进不了观战。
+        - alert: BattleRejectingAtCapacity
+          expr: |
+            sum by (namespace, instance) (increase(battle_rejected_total{reason="capacity"}[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 因满员拒绝了新直连({{ $value | printf \"%.0f\" }} 条 / 5 分钟)"
+            description: >-
+              这台 battle 的直连数到了上限。battle_unauthenticated_connections 占比高说明位置被不认证的连接占着
+              (它们最多活 10 秒,看 battle_preauth_reaped_total 是否同步上涨);占比低说明是真实的参战者与观众满了,加台数。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 新建连接速率闸在拒绝。缺省桶深等于连接上限、持续速率是上限的 1%/秒(下限 100):一批房间同时开局不会碰到它,
+        # 碰到说明短时间内的建连量超过了「一整台 + 周转」:要么是不停建连又断开的流量,要么是全服匹配的网络探测量
+        # (均摊在本机房每台可探测的 battle 上,机房里只有一台时全落在它上面)。
+        - alert: BattleAcceptRateLimited
+          expr: |
+            sum by (namespace, instance) (increase(battle_rejected_total{reason="accept_rate"}[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 新建直连超过速率上限,已拒绝 {{ $value | printf \"%.0f\" }} 条 / 5 分钟"
+            description: >-
+              先看同机房的 battle 是不是一起在拒(网络探测按玩家均摊在机房里每台可探测的 battle 上):一起拒、且 battle_unauthenticated_connections 低,
+              就是全服匹配的探测量,按运维手册用 BATTLE_ACCEPT_RATE_PER_SECOND 调高;只有这一台在拒,用两个指标区分洪峰与攻击:
+              未认证连接数低、battle_handshake_duration_ms 正常,是真实洪峰,同样调高;未认证连接数高、battle_preauth_reaped_total 上涨,
+              是只建连不认证的流量,速率闸在按设计工作,去上游(L4 / 防火墙)处置来源。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 未认证直连池在承压。正常客户端拿到票据后毫秒级握手,探测连接出示授权后不计入,平时接近 0;
+        # 到早拒起点的八成并持续 2 分钟,就是有来源在持续只建连不认证。到了起点 battle 开始淘汰建连满 3 秒的未认证直连
+        # (battle_preauth_evicted_total 上涨),池会停在起点附近,所以阈值取起点的 0.8,不取 1(与 gate 同一口径)。
+        - alert: BattleUnauthenticatedConnectionsHigh
+          expr: |
+            max by (namespace, instance) (battle_unauthenticated_connections / battle_preauth_early_drop_start) > 0.8
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 未认证直连已到早拒起点的 {{ $value | printf \"%.2f\" }} 倍,已持续 2 分钟"
+            description: >-
+              有连接建连后不发票据握手、占着未认证名额。battle_preauth_evicted_total 在涨说明 battle 正按设计让最老的先让位,
+              已握手的直连与能握手的新直连不受影响;看 battle 日志里采样的
+              `battle evicting the oldest unauthenticated direct connection`、
+              `battle direct connection rejected(sampled): reason=handshake_timeout` 与
+              `battle direct connection accepted(sampled)` 行里的 latest_peer 找来源;match 签不出票时不会出现这种形态
+              (那时客户端根本拿不到 battle 的地址)。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 未验签预算在拒绝新直连:池承压,而池里还没有建连满 3 秒、可以让位的直连(一次只建连不握手的突发),
+        # 新直连按概率被拒(preauth_early_drop)或到预算被拒(preauth_budget)。赶上的合法玩家会被 RST、凭票据重连。
+        - alert: BattlePreauthBudgetRejecting
+          expr: |
+            sum by (namespace, instance) (increase(battle_rejected_total{reason=~"preauth_budget|preauth_early_drop"}[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 因未验签预算拒绝了新直连({{ $value | printf \"%.0f\" }} 条 / 5 分钟)"
+            description: >-
+              未认证直连在几秒内涨过了早拒起点(battle_preauth_early_drop_start)。看 battle_handshake_duration_ms:
+              P99 正常说明涌进来的连接大多不握手,是突发攻击,预算在按设计挡,去上游处置来源;P99 也在变慢说明是 battle
+              自己卡顿或网络变差,拒掉的多半是真实玩家,先处理卡顿,反复出现再按运维手册 §3.3 用 BATTLE_PREAUTH_BUDGET /
+              BATTLE_PREAUTH_EARLY_DROP_START 调大。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 握手期限在持续收割连接:每秒超过 1 条、持续 5 分钟。偶发的收割(客户端建连后网络断了)是常态,持续的不是。
+        - alert: BattlePreauthConnectionsReaped
+          expr: |
+            sum by (namespace, instance) (rate(battle_preauth_reaped_total[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 持续关闭未握手的直连({{ $value | printf \"%.1f\" }} 条 / 秒)"
+            description: >-
+              建连满 10 秒仍未握手的直连在被持续关闭。对照 battle_handshake_duration_ms:P99 也在变慢说明是网络或 battle 自身卡顿
+              让正常客户端来不及握手(看 loop 延迟与 CPU);P99 正常说明这些连接本来就不打算握手,按 BattleUnauthenticatedConnectionsHigh 处置。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 握手变慢:握手成功的直连里 P99 超过 3 秒。握手期限是 10 秒,P99 到 3 秒说明正常客户端离被误关已经不远。
+        - alert: BattleHandshakeSlow
+          expr: |
+            histogram_quantile(0.99, sum by (namespace, instance, le) (rate(battle_handshake_duration_ms_bucket[5m]))) > 3000
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 直连握手 P99 为 {{ $value | printf \"%.0f\" }} 毫秒,已持续 10 分钟"
+            description: >-
+              建连到票据握手成功的耗时变长。验签是本地计算,耗时主要在客户端到 battle 的网络(集群外入口的 hostPort / Agones 端口映射)
+              与 battle 的 loop 排队:看这台 battle 的 CPU、loop 延迟与房间数;多台同时变慢多半是客户端网络或入口的问题。
+              握手期限(client_liveness.h 的 handshakeTimeout)要不要调,以这个直方图与 gate 的同名直方图一起看。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md

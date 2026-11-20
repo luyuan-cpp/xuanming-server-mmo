@@ -44,6 +44,32 @@ class GatewaySchemaContractTest {
         assertFormalSchema(dataSource);
     }
 
+    // 压测种子改已有区服(zone 1 由 schema.sql 插入)时必须让 version 加一:整行 PUT 靠 If-Match 比版本,不加一的话
+    // 按改之前 GET 的 ETag 发的 PUT 照样通过,把种子刚改的容量写回去(2026-11-19 评审补)。新插的行取库缺省 1。
+    @Test
+    void bundledStressSeedBumpsVersionOfExistingZone() throws Exception {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource(
+                "jdbc:h2:mem:gateway_seed_" + UUID.randomUUID().toString().replace("-", "")
+                        + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
+        try (Connection connection = dataSource.getConnection()) {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
+            assertEquals(1L, zoneVersion(connection, 1L), "schema.sql 的种子行取缺省 1");
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("seed_stress_3zones.sql"));
+            assertEquals(2L, zoneVersion(connection, 1L), "已有的 zone 1 被压测种子改过,版本必须加一");
+            assertEquals(1L, zoneVersion(connection, 2L), "压测种子新插的 zone 2 取缺省 1");
+        }
+    }
+
+    private static long zoneVersion(Connection connection, long zoneId) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT version FROM zone_config WHERE zone_id=?")) {
+            statement.setLong(1, zoneId);
+            try (ResultSet rows = statement.executeQuery()) {
+                assertTrue(rows.next(), "zone " + zoneId + " 不在");
+                return rows.getLong(1);
+            }
+        }
+    }
+
     @Test
     @EnabledIfEnvironmentVariable(named = "GATEWAY_SCHEMA_TIDB_URL", matches = ".+")
     void formalSchemaValidatesOnRealTiDbAndRoundTripsUnsignedZoneRange() throws Exception {

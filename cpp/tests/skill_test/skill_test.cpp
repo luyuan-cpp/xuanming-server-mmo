@@ -522,6 +522,52 @@ TEST_F(SkillUtilTest, StartCooldown_FirstWriteCreatesListAndSubsequentReadUsesIt
     EXPECT_EQ(kSkillCooldownNotReady, SkillSystem::CheckCooldown(caster, &tableSkill));
 }
 
+// 冷却随玩家存档保留(docs/design/realtime-cooldown-buff-persistence.md):加载链上的创建点。
+// 存档里没有冷却记录就不挂表,按需状态的「没有」照旧表示无冷却。
+TEST_F(SkillUtilTest, RestoreCooldowns_EmptySaveCreatesNothing) {
+    const auto caster = CreateSkillActor();
+    SkillSystem::RestoreCooldowns(caster, CooldownTimeListComp{});
+    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<CooldownTimeListComp>(caster));
+}
+
+// 记录原样挂上:到点的不删、开始时刻不改,更新版本加的字段(列表与条目两层)随记录带回。
+TEST_F(SkillUtilTest, RestoreCooldowns_KeepsRecordsAsSavedWithNewerFields) {
+    constexpr int kNewerField = 412347;
+    const auto caster = CreateSkillActor();
+    CooldownTimeListComp saved;
+    auto& record = (*saved.mutable_cooldown_list())[1];
+    record.set_cooldown_table_id(1);
+    record.set_start(1000); // 早已到点
+    record.GetReflection()->MutableUnknownFields(&record)->AddVarint(kNewerField, 5);
+    saved.GetReflection()->MutableUnknownFields(&saved)->AddVarint(kNewerField, 6);
+
+    SkillSystem::RestoreCooldowns(caster, saved);
+
+    const auto* restored = tlsEcs.actorRegistry.try_get<CooldownTimeListComp>(caster);
+    ASSERT_NE(nullptr, restored);
+    EXPECT_EQ(saved.SerializeAsString(), restored->SerializeAsString()); // 只有一条记录,map 的序列化顺序无关
+    SkillTable tableSkill;
+    tableSkill.set_cooldown_id(1);
+    EXPECT_EQ(kSuccess, SkillSystem::CheckCooldown(caster, &tableSkill)) << "到点的记录不挡施法";
+}
+
+// 写盘节点时钟超前:开始时刻晚于本机当前时刻的压到当前时刻,剩余最多一个整冷却,不会锁到那个未来时刻之后。
+TEST_F(SkillUtilTest, RestoreCooldowns_FutureStartIsClampedToNow) {
+    const auto caster = CreateSkillActor();
+    CooldownTimeListComp saved;
+    auto& record = (*saved.mutable_cooldown_list())[1];
+    record.set_cooldown_table_id(1);
+    record.set_start(std::numeric_limits<uint64_t>::max());
+
+    const uint64_t before = TimeSystem::NowMilliseconds();
+    SkillSystem::RestoreCooldowns(caster, saved);
+    const uint64_t after = TimeSystem::NowMilliseconds();
+
+    const auto& restored = tlsEcs.actorRegistry.get<CooldownTimeListComp>(caster).cooldown_list().at(1);
+    EXPECT_GE(restored.start(), before);
+    EXPECT_LE(restored.start(), after);
+}
+
 TEST_F(SkillUtilTest, DestroyedCasterDoesNotAcquireCooldownOrCastingPhase) {
     const auto caster = CreateSkillActor();
     tlsEcs.actorRegistry.destroy(caster);

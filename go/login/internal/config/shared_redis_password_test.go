@@ -13,34 +13,22 @@ func sharedRedisEnv(env map[string]string) func(string) (string, bool) {
 	}
 }
 
-// K8s 的形状:ConfigMap 里两段 Password 都是空串,SharedRedisPasswordEnv 指名 Secret 注入的变量。
-// 两段都要填上;玩家域与登录域没写 Addrs 时回落到 Node.RedisClient,也要拿到同一个口令。
+// K8s 的形状:ConfigMap 里 Password 都是空串,SharedRedisPasswordEnv 指名 Secret 注入的变量。
+// Node.RedisClient 要填上;玩家域与登录域没写 Addrs 时回落到 Node.RedisClient,也要拿到同一个口令。
 func TestResolveSharedRedisPasswordFillsNodeRedisSections(t *testing.T) {
 	c := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
 	c.Node.RedisClient = RedisConf{Host: "redis.infra:6379"}
-	c.Node.QueueRedis = &RedisConf{Host: "redis-queue-g0.infra:6379"}
 	if err := c.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw-from-secret"})); err != nil {
 		t.Fatalf("ResolveSharedRedisPassword: %v", err)
 	}
-	if c.Node.RedisClient.Password != "pw-from-secret" || c.Node.QueueRedis.Password != "pw-from-secret" {
-		t.Fatalf("both Node Redis sections must get the password: core=%q queue=%q", c.Node.RedisClient.Password, c.Node.QueueRedis.Password)
+	if c.Node.RedisClient.Password != "pw-from-secret" {
+		t.Fatalf("Node.RedisClient must get the password, got %q", c.Node.RedisClient.Password)
 	}
 	if got := c.EffectivePlayerRedis().Password; got != "pw-from-secret" {
 		t.Fatalf("PlayerRedis falls back to Node.RedisClient and must carry the same password, got %q", got)
 	}
 	if got := c.EffectiveLoginRedis().Password; got != "pw-from-secret" {
 		t.Fatalf("LoginRedis falls back to Node.RedisClient and must carry the same password, got %q", got)
-	}
-}
-
-// 不拆排队实例时 QueueRedis 整段不写(nil):只填 RedisClient,不能空指针。
-func TestResolveSharedRedisPasswordWithoutQueueRedis(t *testing.T) {
-	c := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
-	if err := c.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw"})); err != nil {
-		t.Fatalf("ResolveSharedRedisPassword: %v", err)
-	}
-	if c.Node.RedisClient.Password != "pw" || c.Node.QueueRedis != nil {
-		t.Fatalf("only RedisClient is filled when QueueRedis is absent: %+v", c.Node)
 	}
 }
 
@@ -63,9 +51,9 @@ func TestResolveSharedRedisPasswordFailsClosed(t *testing.T) {
 		t.Fatalf("a missing variable must be rejected by name, got %v", err)
 	}
 	both := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
-	both.Node.QueueRedis = &RedisConf{Password: "stale-literal"}
+	both.Node.RedisClient.Password = "stale-literal"
 	err := both.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw"}))
-	if err == nil || !strings.Contains(err.Error(), "Node.QueueRedis.Password") || strings.Contains(err.Error(), "stale-literal") {
+	if err == nil || !strings.Contains(err.Error(), "Node.RedisClient.Password") || strings.Contains(err.Error(), "stale-literal") {
 		t.Fatalf("a literal next to the env name must be rejected by key without echoing it, got %v", err)
 	}
 }

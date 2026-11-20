@@ -22,21 +22,22 @@
 
 namespace
 {
-	// 本机 bin/etc/base_deploy_config.yaml 的 14 个前缀,顺序同配置。
+	// 本机 bin/etc/base_deploy_config.yaml 的 15 个前缀,顺序同配置。
 	const std::vector<std::string> kLocalConfigured{
 		"SceneNodeService.rpc",       "GateNodeService.rpc",        "LoginNodeService.rpc",
 		"FriendNodeService.rpc",      "GuildNodeService.rpc",       "SceneManagerNodeService.rpc",
 		"BattleNodeService.rpc",      "ClientRpcRouterNodeService.rpc", "MatchNodeService.rpc",
 		"DataServiceNodeService.rpc", "PlayerInboxNodeService.rpc", "PlayerStoreNodeService.rpc",
-		"TeamNodeService.rpc",        "MailNodeService.rpc",
+		"TeamNodeService.rpc",        "MailNodeService.rpc",        "ContentGuardNodeService.rpc",
 	};
 
-	// tools/scripts/k8s_deploy.ps1 的 node-config 模板的 12 个前缀(没有 Friend、Guild),顺序同模板。
+	// tools/scripts/k8s_deploy.ps1 的 node-config 模板的 13 个前缀(没有 Friend、Guild),顺序同模板。
 	const std::vector<std::string> kK8sConfigured{
 		"SceneNodeService.rpc",       "GateNodeService.rpc",        "LoginNodeService.rpc",
 		"SceneManagerNodeService.rpc", "BattleNodeService.rpc",     "ClientRpcRouterNodeService.rpc",
 		"MatchNodeService.rpc",       "DataServiceNodeService.rpc", "PlayerInboxNodeService.rpc",
 		"PlayerStoreNodeService.rpc", "TeamNodeService.rpc",        "MailNodeService.rpc",
+		"ContentGuardNodeService.rpc",
 	};
 
 	std::string InZone(const std::string &prefix, uint32_t zoneId)
@@ -47,7 +48,8 @@ namespace
 	// 与三类节点 main.cpp 里写的发现集合一致(改那边要同步改这里)。
 	const std::set<uint32_t> kSceneDiscovery{SceneManagerNodeService, DataServiceNodeService, PlayerInboxNodeService,
 											 PlayerStoreNodeService,  TeamNodeService,        MatchNodeService,
-											 MailNodeService,         GateNodeService,        SceneNodeService};
+											 MailNodeService,         ContentGuardNodeService, GateNodeService,
+											 SceneNodeService};
 	const std::set<uint32_t> kGateRouterModeDiscovery{SceneNodeService, ClientRpcRouterNodeService, GateNodeService};
 	const std::set<uint32_t> kGateDirectModeDiscovery{SceneNodeService, LoginNodeService, SceneManagerNodeService,
 													  MatchNodeService, GateNodeService};
@@ -72,6 +74,8 @@ TEST(DiscoverySetTest, SceneWatchesOnlyTheTypesItReads)
 		InZone("PlayerStoreNodeService.rpc", 7),  "TeamNodeService.rpc",
 		// 邮件全服一份、不分 zone:scene 把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md)。
 		"MailNodeService.rpc",
+		// 内容安全全服一份、不分 zone:scene 把玩家填写的名字送它判定(docs/design/rename-and-content-safety.md §6.6)。
+		"ContentGuardNodeService.rpc",
 	};
 	EXPECT_EQ(plan.scopes, expected);
 	// 加 battle、路由服、login 实例不再增加 scene 的 Range 与 watch 事件。

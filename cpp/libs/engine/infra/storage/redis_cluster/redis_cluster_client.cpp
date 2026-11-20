@@ -109,9 +109,22 @@ public:
 		: loop_(loop)
 		, options_(std::move(options))
 		, queues_(options_.retry, options_.limits)
-		, refreshPolicy_(options_.topologyRefreshPeriod, options_.topologyRefreshMinInterval)
+		, refreshPolicy_(options_.topologyRefreshPeriod, options_.topologyRefreshMinInterval, options_.topologyRefreshTimeout)
 		, maintenance_(hiredis::Hiredis::ProcessMaintenance())
 	{
+		// 每条节点连接按句柄的域记连接指标(断线重连 R17):玩家域、控制集群分开报,没标域的记在 other。
+		switch (options_.keyDomain)
+		{
+		case redis_cluster::KeyDomain::kPlayer:
+			options_.connect.metricsDependency = dependency_link_metrics::Dependency::kRedisPlayer;
+			break;
+		case redis_cluster::KeyDomain::kControl:
+			options_.connect.metricsDependency = dependency_link_metrics::Dependency::kRedisControl;
+			break;
+		default:
+			options_.connect.metricsDependency = dependency_link_metrics::Dependency::kRedisOther;
+			break;
+		}
 	}
 
 	// 构造之外单独一步:绑回调要 weak_from_this,构造函数里还拿不到。
@@ -699,24 +712,25 @@ private:
 		{
 			return; // 请求留着,下一拍再试
 		}
+		// 先领代次再发:应答闭包带着它,按在途超时作废之后迟到的应答认得出来(TopologyRefreshPolicy)。
+		const uint64_t generation = refreshPolicy_.OnStarted(now);
 		const int ret = node->manager->GetConnection()->formattedCommand(
-			[weak = weak_from_this()](hiredis::Hiredis*, redisReply* reply)
+			[weak = weak_from_this(), generation](hiredis::Hiredis*, redisReply* reply)
 			{
 				if (const auto self = weak.lock())
 				{
-					self->OnClusterSlotsReply(reply);
+					self->OnClusterSlotsReply(generation, reply);
 				}
 			},
 			kClusterSlotsCommand.data(), kClusterSlotsCommand.size(), &hiredis::Hiredis::hasNoSideEffect);
 		if (ret != REDIS_OK)
 		{
+			refreshPolicy_.OnFinished(generation, /*success=*/false);
 			LOG_WARN << "Redis cluster could not send CLUSTER SLOTS (ret=" << ret << "), will retry";
-			return;
 		}
-		refreshPolicy_.OnStarted(now);
 	}
 
-	void OnClusterSlotsReply(const redisReply* reply)
+	void OnClusterSlotsReply(uint64_t generation, const redisReply* reply)
 	{
 		if (closing_)
 		{
@@ -736,14 +750,18 @@ private:
 		{
 			topology = redis_cluster::ParseClusterSlots(*reply, error);
 		}
+		if (!refreshPolicy_.OnFinished(generation, /*success=*/topology.has_value()))
+		{
+			// 这次刷新已按在途超时作废(OnTick 已记过一次失败),之后可能又开过新的一次:迟到的结果不用。
+			LOG_WARN << "Redis cluster dropped a CLUSTER SLOTS reply that arrived after its in-flight timeout";
+			return;
+		}
 		if (!topology)
 		{
-			refreshPolicy_.OnFinished(/*success=*/false);
 			++stats_.topologyRefreshFailures;
 			LOG_ERROR << "Redis cluster topology refresh failed: " << Loggable(error);
 			return;
 		}
-		refreshPolicy_.OnFinished(/*success=*/true);
 		ApplyTopology(*topology);
 	}
 
@@ -852,6 +870,13 @@ private:
 			{
 				EnsureNode(seed);
 			}
+		}
+		if (refreshPolicy_.ExpireInFlight(now))
+		{
+			++stats_.topologyRefreshFailures;
+			LOG_ERROR << "Redis cluster topology refresh got no CLUSTER SLOTS reply within "
+					  << std::chrono::duration_cast<std::chrono::milliseconds>(options_.topologyRefreshTimeout).count()
+					  << "ms; giving it up and refreshing again";
 		}
 		StartRefreshIfDue(now);
 	}

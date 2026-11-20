@@ -37,7 +37,10 @@ const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
 	{eNodeType::PlayerStoreNodeService, eNodeType_Name(PlayerStoreNodeService)},
 	// 邮件(Go-Zero,全服一份、多副本):etcd 前缀 MailNodeService.rpc;scene 以 battle 身份调 MailAdmin.SendPersonalMail,
 	// 把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md)。不进 IsZoneScopedNodeType:任一副本都行。
-	{eNodeType::MailNodeService, eNodeType_Name(MailNodeService)}};
+	{eNodeType::MailNodeService, eNodeType_Name(MailNodeService)},
+	// 内容安全(Go-Zero,全服一份、多副本、无状态):etcd 前缀 ContentGuardNodeService.rpc;scene 把玩家填写的名字
+	// (角色改名、宠物名)送它判定(docs/design/rename-and-content-safety.md §6.6)。不进 IsZoneScopedNodeType:任一副本都行。
+	{eNodeType::ContentGuardNodeService, eNodeType_Name(ContentGuardNodeService)}};
 
 eNodeType NodeUtils::GetServiceTypeFromPrefix(const std::string &prefix)
 {

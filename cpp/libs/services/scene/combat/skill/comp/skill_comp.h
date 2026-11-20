@@ -14,6 +14,8 @@
 //
 // CooldownTimeListComp / SkillContextCompMap 同样按需存在:分别在 StartCooldown 与
 // AddSkillContext 第一次写入时创建;读取缺失表示没有冷却 / 在途上下文。
+// 冷却列表随玩家存档保留,加载时存档里有记录也会由 SkillSystem::RestoreCooldowns 挂上
+// (docs/design/realtime-cooldown-buff-persistence.md)。
 
 // Pre-cast timer
 struct CastingTimerComp

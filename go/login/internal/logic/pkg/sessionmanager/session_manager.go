@@ -42,6 +42,9 @@ type PlayerSession struct {
 	// LoginGeneration 是写下这条会话的登录链铸出的代次(login_generation.go);0 = 旧版 login 写入、无代次。
 	// 下一次铸造以它为下限,保证 player_locator 提交点"严格递增"的校验能过(scene-enter-session-fence.md §3.4)。
 	LoginGeneration uint64 `json:"login_generation"`
+	// SessionIncarnation 是写下这条会话的 gate 连接的会话代次(SessionDetails.session_incarnation);0 = 旧版 login 写入。
+	// player_locator 据此忽略同号旧连接迟到的断线(gate-online-identity.md §10.4「断线通知」)。
+	SessionIncarnation uint64 `json:"session_incarnation"`
 }
 
 // EnterGameDecision mirrors Centre's enum.
@@ -93,6 +96,8 @@ type OnlineSessionInput struct {
 	Now            time.Time
 	// LoginGeneration 是本条登录链铸出的代次,原样写进会话记录。调用方保证非 0:铸造失败的链走不到写会话。
 	LoginGeneration uint64
+	// SessionIncarnation 是发起本次登录的 gate 连接的会话代次,原样写进会话记录。
+	SessionIncarnation uint64
 }
 
 func idempotencyKey(playerID uint64, requestID string) string {
@@ -132,15 +137,21 @@ func SetSession(ctx context.Context, plClient plpb.PlayerLocatorClient, session 
 // gateInstanceID 是发起断线的 gate 实例 uuid(SessionDetails.gate_instance_id,或入场链 state 里的同一个值)。
 // player_locator 在它与会话记录的实例号都非空且不等时,按旧实例迟到的上报忽略;空 = 不校验
 // (docs/design/scene-enter-chain-residuals.md §6)。
+// sessionIncarnation 是发起断线的那条 gate 连接的会话代次(SessionDetails.session_incarnation,或入场链 state 里的同一个值)。
+// 同一规则:它与会话记录的代次都非 0 且不等时,player_locator 按同号旧连接迟到的上报忽略;0 = 不校验
+// (docs/design/gate-online-identity.md §10.4「断线通知」)。
 //
 // 30s 也是 scene 断线保留的上界:C++ connection_lost_hold.h 的 kLoginReconnectLease 镜像这个值,并用 static_assert
 // 保证角色在原地只留 25s、在租约到期之前退出(docs/design/player-connection-lost-hold.md §7)。改这里必须同步改那边。
-func SetSessionDisconnecting(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64, sessionID uint32, gateInstanceID string) error {
+func SetSessionDisconnecting(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64, sessionID uint32,
+	gateInstanceID string, sessionIncarnation uint64,
+) error {
 	_, err := plClient.SetDisconnecting(ctx, &plpb.SetDisconnectingRequest{
-		PlayerId:        playerID,
-		SessionId:       sessionID,
-		LeaseTtlSeconds: 30,
-		GateInstanceId:  gateInstanceID,
+		PlayerId:           playerID,
+		SessionId:          sessionID,
+		LeaseTtlSeconds:    30,
+		GateInstanceId:     gateInstanceID,
+		SessionIncarnation: sessionIncarnation,
 	})
 	if err != nil {
 		return fmt.Errorf("player_locator SetDisconnecting: %w", err)
@@ -153,18 +164,20 @@ func SetSessionDisconnecting(ctx context.Context, plClient plpb.PlayerLocatorCli
 // loginGeneration 是本条重连链铸出的代次,由 player_locator 随整字节 CAS 写进会话记录。
 // 返回值是 locator 回带的会话记录:旧版 locator 不认这个字段,会原样回出上一条会话的代次,
 // 所以调用方下游一律用自己铸出的值,不用返回值里的(scene-enter-session-fence.md §3.4)。
+// sessionIncarnation 是发起重连的 gate 连接的会话代次,player_locator 原样写进会话记录。
 func Reconnect(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64,
-	newSessionID uint32, gateID string, gateInstanceID string,
+	newSessionID uint32, gateID string, gateInstanceID string, sessionIncarnation uint64,
 	account string, requestID string, loginGeneration uint64,
 ) (*PlayerSession, error) {
 	resp, err := plClient.Reconnect(ctx, &plpb.ReconnectRequest{
-		PlayerId:        playerID,
-		NewSessionId:    newSessionID,
-		GateId:          gateID,
-		GateInstanceId:  gateInstanceID,
-		Account:         account,
-		RequestId:       requestID,
-		LoginGeneration: loginGeneration,
+		PlayerId:           playerID,
+		NewSessionId:       newSessionID,
+		GateId:             gateID,
+		GateInstanceId:     gateInstanceID,
+		Account:            account,
+		RequestId:          requestID,
+		LoginGeneration:    loginGeneration,
+		SessionIncarnation: sessionIncarnation,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("player_locator Reconnect: %w", err)
@@ -262,6 +275,8 @@ func toProto(s *PlayerSession) *plpb.PlayerSession {
 		RequestId:       s.RequestID,
 		Account:         s.Account,
 		LoginGeneration: s.LoginGeneration,
+
+		SessionIncarnation: s.SessionIncarnation,
 	}
 }
 
@@ -282,6 +297,8 @@ func fromProto(pb *plpb.PlayerSession) *PlayerSession {
 		LastActiveTs:    pb.LastActiveTs,
 		RequestID:       pb.RequestId,
 		LoginGeneration: pb.LoginGeneration,
+
+		SessionIncarnation: pb.SessionIncarnation,
 	}
 }
 
@@ -295,6 +312,7 @@ func applyOnlineSession(session *PlayerSession, input OnlineSessionInput) {
 	session.SessionID = input.SessionID
 	session.GateID = input.GateID
 	session.GateInstanceID = input.GateInstanceID
+	session.SessionIncarnation = input.SessionIncarnation
 	session.Account = input.Account
 	session.State = StateOnline
 	session.LastActiveTs = now.UnixMilli()

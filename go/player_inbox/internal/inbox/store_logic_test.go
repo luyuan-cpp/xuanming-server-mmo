@@ -594,23 +594,23 @@ func TestNotifyRetryDueMs(t *testing.T) {
 // 所以环是 [10, 13, 15]、水位 15 —— 只比水位看不出 12 丢了(评审 M6)。13 已裁决、确认丢了,收件箱仍 PENDING。
 func TestReconcileReport(t *testing.T) {
 	const otherDomain = inboxpb.PlayerInboxDomain(2)
-	rows := []*inboxpb.PlayerInboxItemRow{
-		rcRow(10, 1, stateApplied, byConsumer), // 在环里:一致
-		rcRow(12, 6, stateApplied, byConsumer), // 水位以内、环里查无此 seq:被之后的条目掩盖的丢失
-		rcRow(13, 4, statePending, 0),          // PENDING 但水位已过:确认丢了
-		rcRow(15, 7, stateApplied, byConsumer), // 在环里:一致
-		rcRow(20, 2, stateApplied, byConsumer), // > 水位:账本没到
-		rcRow(25, 3, stateVoided, byAdmin),     // 管理员作废:不比对
-		rcRow(30, 5, statePending, 0),          // PENDING 且未处理:一致
+	refs := []FinalizedRef{
+		rcRef(10, 1, stateApplied, byConsumer), // 在环里:一致
+		rcRef(12, 6, stateApplied, byConsumer), // 水位以内、环里查无此 seq:被之后的条目掩盖的丢失
+		rcRef(13, 4, statePending, 0),          // PENDING 但水位已过:确认丢了
+		rcRef(15, 7, stateApplied, byConsumer), // 在环里:一致
+		rcRef(20, 2, stateApplied, byConsumer), // > 水位:账本没到
+		rcRef(25, 3, stateVoided, byAdmin),     // 管理员作废:不比对
+		rcRef(30, 5, statePending, 0),          // PENDING 且未处理:一致
 	}
 	ledger := rcLedger(rcCursor(gmDomain,
 		rcDecision(10, 1, outApplied, 0), rcDecision(13, 4, outApplied, 0), rcDecision(15, 7, outApplied, 0)))
 	streams := map[inboxpb.PlayerInboxDomain]*inboxpb.PlayerInboxStream{gmDomain: {Domain: uint32(gmDomain), NextSeq: 31}}
 	cursors := reconcileCursors([]inboxpb.PlayerInboxDomain{gmDomain, otherDomain}, streams, ledger)
-	diffs := appendReconcileDiffs(nil, ledger, rows)
+	diffs := appendReconcileDiffs(nil, ledger, refs)
 	// ReconcilePlayer 一页一页追加:任意切页,结果与一次读完相同。
-	for split := 0; split <= len(rows); split++ {
-		paged := appendReconcileDiffs(appendReconcileDiffs(nil, ledger, rows[:split]), ledger, rows[split:])
+	for split := 0; split <= len(refs); split++ {
+		paged := appendReconcileDiffs(appendReconcileDiffs(nil, ledger, refs[:split]), ledger, refs[split:])
 		if len(paged) != len(diffs) {
 			t.Fatalf("切在第 %d 行: %d 条差异, 一次读完 %d 条", split, len(paged), len(diffs))
 		}

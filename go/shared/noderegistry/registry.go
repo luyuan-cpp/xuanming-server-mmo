@@ -10,11 +10,10 @@
 //     match 的 TeamNodeService,以及经 shared/domainhost 的 rank、mail;
 //   - 薄适配层(2026-11-10):match / scene_manager / data_service / client_rpc_router 的 internal/noderegistry,
 //     只保留各自的调用面与 NodeInfo 填法,分配、续租、重注册、注销都转调本包;
-//   - 未迁:guild、player_locator 的 internal/node,以及 login 的 internal/logic/pkg/node(原号被占就退出进程)。
-//     player_locator 把能力键放进同一个注册事务,本包已为它备好 Spec.LeaseBoundMarkers(2026-11-12,见下文),
-//     迁移时改成薄适配层即可。
+//   - 薄适配层(2026-11-19):guild、player_locator 的 internal/node(player_locator 的能力键走 Spec.LeaseBoundMarkers),
+//     以及 login 的 internal/logic/pkg/node(策略 ExitProcess)。Go 侧至此没有别的注册副本。
 //
-// 新的注册需求加在本包里,不要在副本或适配层再写一份分配或重注册逻辑。
+// 新的注册需求加在本包里,不要在适配层再写一份分配或重注册逻辑。
 //
 // # 为什么不 import proto
 //
@@ -306,15 +305,23 @@ func RegisterAfterListening(ctx context.Context, cli *clientv3.Client, listenAdd
 	if _, err := validateInputs(cli, spec); err != nil {
 		return nil, err
 	}
-	dialAddr, err := dialAddrForListen(listenAddr)
-	if err != nil {
-		return nil, err
-	}
-	if err := waitForListening(ctx, dialAddr, timeout); err != nil {
-		return nil, fmt.Errorf("noderegistry: %s (dial %s) not accepting within %v, refusing to register: %w",
-			listenAddr, dialAddr, timeout, err)
+	if err := WaitForListening(ctx, listenAddr, timeout); err != nil {
+		return nil, fmt.Errorf("%w; refusing to register", err)
 	}
 	return Register(ctx, cli, spec)
+}
+
+// WaitForListening 是 RegisterAfterListening 的前半段:等 listenAddr(服务的 ListenOn,地址规则同上)可 TCP 连通,
+// timeout 内始终连不上返回错误。给经各自适配层 Register、又要「先监听后注册」的入口用(scene_manager、client_rpc_router)。
+func WaitForListening(ctx context.Context, listenAddr string, timeout time.Duration) error {
+	dialAddr, err := dialAddrForListen(listenAddr)
+	if err != nil {
+		return err
+	}
+	if err := waitForListening(ctx, dialAddr, timeout); err != nil {
+		return fmt.Errorf("noderegistry: %s (dial %s) not accepting within %v: %w", listenAddr, dialAddr, timeout, err)
+	}
+	return nil
 }
 
 // NodeID 返回当前 node_id(换号后随之变化),任意 goroutine 可调。

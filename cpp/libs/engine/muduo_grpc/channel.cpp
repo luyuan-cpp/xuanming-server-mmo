@@ -203,6 +203,10 @@ Channel::Channel(PrivateTag, muduo::net::EventLoop &loop, const std::string &ip,
 
 Channel::~Channel()
 {
+    if (state_ == ConnectivityState::kReady)
+    {
+        NotifyLink(ChannelLinkEvent::kClosed);
+    }
     state_ = ConnectivityState::kShutdown;
     const bool loopIsCurrent = LoopIsCurrent();
     if (!loopIsCurrent)
@@ -546,6 +550,10 @@ void Channel::OnTransportReady(Http2Transport &transport)
     LOG_INFO << "muduo_grpc channel " << target_ << " is READY (connection #" << transport.id() << ")";
     nextBackoffMs_ = static_cast<double>(options_.backoff.initial.count());
     lastFailure_ = Status::Ok();
+    if (state_ != ConnectivityState::kReady)
+    {
+        NotifyLink(ChannelLinkEvent::kReady);
+    }
     SetState(ConnectivityState::kReady);
     // 在 nghttp2 的回调栈里:不同步提交新流,投递到本轮之后。
     QueueFlushPending();
@@ -643,6 +651,7 @@ void Channel::OnTransportClosed(Http2Transport &transport, const Status &reason)
         }
         if (previous == ConnectivityState::kReady)
         {
+            NotifyLink(ChannelLinkEvent::kLost);
             // pick_first 语义:READY 连接断开回 IDLE,有排队调用就立即重连。
             SetState(ConnectivityState::kIdle);
             if (!pending_.empty() || !pendingStreams_.empty())
@@ -688,6 +697,10 @@ void Channel::RetireCurrentTransport()
 {
     std::shared_ptr<Http2Transport> retired = std::move(current_);
     current_.reset();
+    if (state_ == ConnectivityState::kReady)
+    {
+        NotifyLink(ChannelLinkEvent::kRetired);
+    }
     if (state_ != ConnectivityState::kShutdown && state_ != ConnectivityState::kTransientFailure)
     {
         SetState(ConnectivityState::kIdle);
@@ -721,6 +734,7 @@ void Channel::EnterTransientFailure(const Status &reason)
     {
         LOG_WARN << "muduo_grpc channel " << target_ << " entered TRANSIENT_FAILURE: " << reason.ToString();
     }
+    NotifyLink(ChannelLinkEvent::kConnectFailed);
     lastFailure_ = reason;
     SetState(ConnectivityState::kTransientFailure);
     std::deque<uint64_t> pending;
@@ -871,6 +885,14 @@ void Channel::OnDeadlineTimer()
         ExpireCall(callId);
     }
     ArmDeadlineTimer();
+}
+
+void Channel::NotifyLink(ChannelLinkEvent event)
+{
+    if (options_.linkObserver)
+    {
+        options_.linkObserver(event);
+    }
 }
 
 void Channel::SetState(ConnectivityState state)

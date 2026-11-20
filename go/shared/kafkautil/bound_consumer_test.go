@@ -404,8 +404,9 @@ func TestBoundConsumerGroupKeepsConsumingAfterRebalanceWithRecordInFlight(t *tes
 		}
 		return nil
 	})
-	h.commitErr = func(generation int32, _ int64) error {
-		if generation == 1 {
+	// 第一代次接纳 offset 0 之前的起点提交(next=0,§3.1)照常成功;之后越过它的提交被拒。
+	h.commitErr = func(generation int32, next int64) error {
+		if generation == 1 && next > 0 {
 			return errors.New("[27] Rebalance In Progress")
 		}
 		return nil
@@ -430,10 +431,16 @@ func TestBoundConsumerGroupKeepsConsumingAfterRebalanceWithRecordInFlight(t *tes
 	if h.relay.Pending() != 0 {
 		t.Fatal("交还重投的记录仍占着票据")
 	}
-	if len(h.commitsOf(1)) == 0 {
+	var oldGenerationCommits []fakeCommit
+	for _, commit := range h.commitsOf(1) {
+		if commit.next > 0 { // 跳过起点提交
+			oldGenerationCommits = append(oldGenerationCommits, commit)
+		}
+	}
+	if len(oldGenerationCommits) == 0 {
 		t.Fatal("代次结束后没有尝试用旧代次提交(重平衡准备期 broker 仍可能接受)")
 	}
-	for _, commit := range h.commitsOf(1) {
+	for _, commit := range oldGenerationCommits {
 		if commit.err == nil {
 			t.Fatalf("被拒的旧代次提交被当成成功: %+v", commit)
 		}
@@ -545,7 +552,8 @@ func TestBoundConsumerGroupDrainHoldsHandoffThatNoOwnerSettles(t *testing.T) {
 	if err := h.relay.Wait(context.Background()); !errors.Is(err, drainproof.ErrHold) {
 		t.Fatalf("relay 没有保留未知结局(或票据没结束): %v", err)
 	}
-	if commits := h.commitsOf(1); len(commits) != 0 {
+	// 唯一一笔是接纳 offset 0 之前的起点提交(next=0,没有越过它,§3.1)。
+	if commits := h.commitsOf(1); len(commits) != 1 || commits[0].next != 0 {
 		t.Fatalf("没处理成功的记录被提交: %+v", commits)
 	}
 }
@@ -689,7 +697,8 @@ func TestBoundMessageReaderCommitRetriesWhileAliveAndHandsOffWhenTerminating(t *
 			}
 			restarts := 0
 			generation := &kafkago.Generation{ID: 4, GroupID: "results-group", MemberID: "member"}
-			partition := &boundPartition{topic: boundTestTopic, partition: 0, initial: 20, committed: 20, pending: map[int64]*boundDelivery{}}
+			// 组在该分区已提交到 20(有真实的已提交位点),交还的记录才能由收尾按组内位点核结局。
+			partition := &boundPartition{topic: boundTestTopic, partition: 0, initial: 20, committed: 20, groupCommitted: true, pending: map[int64]*boundDelivery{}}
 			owner.generation = generation
 			owner.generationContext = context.Background()
 			owner.generationCancel = func() { restarts++ }
@@ -793,7 +802,9 @@ func TestBoundMessageReaderResolvesReplayPassedByGroupCommit(t *testing.T) {
 func TestBoundMessageReaderHoldsReplayDeletedBeforeAnyGroupCommit(t *testing.T) {
 	h := newBoundReaderHarness(t)
 	first := h.addReader()
-	h.opens <- fakeOpen{reader: newFakePartitionReader(), earliest: 5} // 分区回来时组仍没提交过,保留期已把起点推到 5
+	// 分区回来时组仍没提交过,保留期已把起点推到 5。2026-11-19 起第 1 代次交出第一条之前已提交起点(§3.1),正常路径上第 2 代次
+	// 打开时就按「提交点越过保留范围」HOLD;这里照旧按 FirstOffset 投递,守住重放票据的兜底判据。
+	h.opens <- fakeOpen{reader: newFakePartitionReader(), earliest: 5}
 	h.start()
 	h.deliver(1, kafkago.FirstOffset)
 	first.push(0, "snapshot-a")

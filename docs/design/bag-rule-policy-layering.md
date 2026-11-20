@@ -738,8 +738,9 @@ rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemp
   `BagService` 发一次「腾位通知」(`bag_service.h`),订阅方 `PlayerInboxSystem::OnBagSpaceFreed` 由 scene main 在
   `PlayerInboxSystem::Initialize` 之后经 `BagService::SetSpaceFreedListener` 装上(依赖倒置:背包层不认识收件箱)。
   - 出口只有一个、收在背包层:`BagService` 的出包入口在成功之后各调一次 `NotifySpaceFreed` —— `RemoveItem`、`RemoveItemsExact`、
-    `RemoveItemsByGuid`(整批成功)、`RemoveItemsClamped` 与 `ConsumeInventoryAndGrant`(真扣到了东西)、`MergeAndCompact` /
-    `SortByPlayerRequest`(合堆退役了实例)、`RetrieveFromTemporary`(临时格搬走了实例)。玩法入口一个都不自己调收件箱:
+    `RemoveItemsByGuid`(整批成功)、`RemoveItemsClamped`、`ConsumeInventoryAndGrant` 与 `ExchangeInventoryExact`(真扣到了东西)、
+    `MergeAndCompact` / `SortByPlayerRequest`(合堆退役了实例)、`RetrieveFromTemporary`(临时格搬走了实例)。以后加扩容 / 解锁格子的
+    入口同样要在成功之后调。玩法入口一个都不自己调收件箱:
     强化扣材料、镶嵌扣宝石、资产通道寄出 / 上架托管 / 帮会捐献、GM 回收、战斗结算扣消耗、整理、临时格取回都经过上面这些入口;
     以后的使用、出售、丢弃、存仓库也一样。`BagService` 之外移出人物背包的入口只有穿戴(`PlayerEquipSystem::Equip` 经
     `Bag::TakeInstance`):装到空槽时自己调一次 `NotifySpaceFreed`,替换时格数不变、不调 —— 与它在纯校验段问

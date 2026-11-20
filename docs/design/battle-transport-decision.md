@@ -208,7 +208,7 @@ gate 的出站白名单已含 BattleNodeService(`gate/main.cpp:198`),每个 gate
    - K8s agones 形态下,「杀」按排空走:打上 `mmorpg.io/drain` 标签后拒绝新房间,现有房间打完再回收(D83)。
 5. **改造成本低。** gate 客户端面的整套能力逐条镜像进了 battle(turn-based §18.2 / D24 / D27),客户端的第二条连接因此复用同一套 codec 和 handler 表,不需要第二套协议栈(§18.2)。逐项如下:
    - ProtobufCodec、HMAC 验签;
-   - 并发上限(`battle_max_connections`,`battle_client_edge.cpp:159`);
+   - 连接准入:并发上限(`battle_max_connections`)与新建连接速率,2026-11-19 起与 gate 一样在 accept 处判、被拒的以 RST 关闭(`battle_connection_admission.{h,cpp}`,速率闸与 gate 共用 `core/network/accept_admission.h`;未编译);
    - 握手期限 10s、体积上限 1KB(`battle_client_edge.h:51-53`);
    - 限速,与 gate 同一张 MessageLimiter 表(`battle_client_edge.h:87-88`);
    - 消息号白名单,是 battle 自己的四条,不是 gate 的 `IsClientMessageId` 表(`battle_client_edge.cpp:459-509`);

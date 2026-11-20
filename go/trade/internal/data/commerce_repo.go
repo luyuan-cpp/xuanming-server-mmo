@@ -9,6 +9,7 @@ import (
 	assetpb "proto/common/asset"
 	tradepb "proto/trade"
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/workshard"
 	"strconv"
 	"strings"
@@ -171,7 +172,7 @@ func wakeCommerce(ctx context.Context, db *sql.DB, id, atMs uint64) error {
 }
 
 func (r *CommerceRepo) Tx(ctx context.Context, body func(*sql.Tx) error) error {
-	return assetop.WithTxRetry(ctx, r.DB, 2, IsRetryableTxError, body)
+	return assetop.WithTxRetry(ctx, r.DB, 2, authoritysql.IsRetryableTxError, body)
 }
 
 // CommerceCursor 是合同列表的翻页游标。commerce_id 是打散过的,不代表先后,所以按 (created_ms, commerce_id) 翻页。

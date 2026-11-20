@@ -133,6 +133,8 @@ func dialBattleDirect(account string, playerId uint64, assigned *battle.BattleAs
 
 	// NewGameClient 只起 muduo 的连接管理 goroutine、立即返回(拨号在后台);握手放进 goroutine,
 	// 用 ctx 兜底(见 battleDirectConnTimeout 注释)。
+	// 小游戏直连这台 battle 的 WebSocket 地址:登记下来,NewGameClient 按 host:port 查(pkg/transport.go)。
+	pkg.AdvertiseWsURL(assigned.GetHost(), int(assigned.GetPort()), assigned.GetWsUrl())
 	gc, err := pkg.NewGameClient(assigned.GetHost(), int(assigned.GetPort()))
 	if err != nil {
 		return nil, fmt.Errorf("connect battle node %s:%d: %w", assigned.GetHost(), assigned.GetPort(), err)

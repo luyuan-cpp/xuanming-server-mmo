@@ -47,17 +47,27 @@ func (d deletionSessions) RevokeAll(ctx context.Context, account string) error {
 	return d.s.TokenManager.RevokeAll(ctx, account)
 }
 
-// KickPlayer 踢掉这名角色当前绑定的在线会话。代次填 0:gate 不比较代次,只要会话还绑着这名角色就踢
-// (session_identity_fence.h ClassifyKick)。没有在线会话直接成功。
-func (d deletionSessions) KickPlayer(ctx context.Context, player uint64) error {
+// KickPlayer 让这名角色彻底下线:先踢掉连着 gate 的设备(客户端弹 reasonTip),再按正常登出的终点收尾
+// (sessionmanager.DeleteSession → player_locator.MarkOffline:删会话,LeaveScene 让持有节点按会话结束释放角色)。
+// 只踢 gate 等于断线:有挂机月卡的角色会转成离线托管、留在世界里直到月卡到期(player-connection-lost-hold.md §4.1),
+// 删角要等他离场(登记全部关闭),就会一直等下去。没有会话直接成功;会话在这期间变了(踢线引起的断线上报、重连)
+// 这一次的登出被 locator 当迟到请求忽略,执行者下一轮按新会话再来一次。
+// 代次填 0:gate 不比较代次,只要会话还绑着这名角色就踢(session_identity_fence.h ClassifyKick)。会话键不带区号、存在地域共用的
+// 玩家域 Redis 上,gate 命令 topic 也是地域共用的(按 gate 实例 uuid 过滤),所以本区的 player_locator 查得到、踢得到本地域任何一个区的会话。
+func (d deletionSessions) KickPlayer(ctx context.Context, player uint64, reasonTip uint32) error {
 	session, err := sessionmanager.GetSession(ctx, d.s.PlayerLocatorClient, player)
 	if err != nil {
 		return err
 	}
-	if session == nil || session.GateID == "" || session.GateInstanceID == "" || session.State == sessionmanager.StateOffline {
+	if session == nil || session.State == sessionmanager.StateOffline {
 		return nil
 	}
-	return d.s.KickSessionOnGate(ctx, session.GateID, session.GateInstanceID, session.SessionID, player, 0)
+	if session.GateID != "" && session.GateInstanceID != "" {
+		if err := d.s.KickSessionWithReason(ctx, session.GateID, session.GateInstanceID, session.SessionID, player, reasonTip); err != nil {
+			return err
+		}
+	}
+	return sessionmanager.DeleteSession(ctx, d.s.PlayerLocatorClient, player, session.SessionID, session.GateInstanceID)
 }
 
 // startAccountDeletionExecutor 起执行者循环,关停时由 CloseSource 取消。

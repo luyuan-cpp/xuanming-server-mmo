@@ -72,6 +72,12 @@ Test-Case '夹具:C++ 导出的指标族;计数在跳过补缴的那一支自增
     Assert-Match -Text $script:SceneMain -Pattern '(?m)^\s*RegisterCurrencyMetrics\(\);' -Because 'scene main 要登记采集回调,否则指标不存在、告警永远不响'
 }
 
+# 2026-11-19 评审补:同一批的腾位通知接线。少了这一行不报错,收件箱的背包满延后只会退化成按退避等(最长约 60 秒)。
+Test-Case 'scene main:收件箱初始化之后装背包腾位通知的订阅方' {
+    Assert-Match -Text $script:SceneMain -Pattern '(?s)PlayerInboxSystem::Initialize\(\);.{0,400}?BagService::SetSpaceFreedListener\(&PlayerInboxSystem::OnBagSpaceFreed\);' `
+        -Because '订阅方装在 PlayerInboxSystem::Initialize 之后(bag-rule-policy-layering.md §6.6「腾位唤醒」)'
+}
+
 Test-Case 'persist-version-skew-alerts.yaml:PrometheusRule 形状,scene.persist-version-skew 组的规则名单与每条规则的字段' {
     Assert-Match -Text $script:Alerts -Pattern '(?m)^kind:[ ]*PrometheusRule[ ]*$' -Because '必须是 PrometheusRule(与 owner-epoch-alerts.yaml 同一安装方式)'
     Assert-Match -Text $script:Alerts -Pattern '(?m)^  name:[ ]*persist-version-skew-alerts[ ]*$' -Because 'metadata.name'

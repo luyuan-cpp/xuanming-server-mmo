@@ -16,8 +16,10 @@ import (
 	"guild/internal/data"
 	"guild/internal/session"
 	base "proto/common/base"
+	cgpb "proto/content_guard"
 	pb "proto/guild"
 	scenepb "proto/scene"
+	"shared/contentguard"
 )
 
 // IDMinter 是 guild_id 的发号入口(*shared/idsegment.Minter 满足;单测用假实现)。
@@ -59,6 +61,9 @@ type GuildLogic struct {
 	// (90 Y-02:依赖只经函数式 Option 一次装配)。只在 NewGuildLogic 执行 Option 时写一次,之后只读,并发 RPC 读它无需加锁。
 	// nil = 未接线:五个活动 RPC 一律回 kGuildActivityNotOpen 并打 ERROR(activitiesNotWiredTip),不碰任何仓储。
 	activities *ActivityDeps
+	// contentGuard 把帮会名与公告送内容安全服务判定(content_check.go),经 WithContentGuard 注入。
+	// nil = 未接线(单测):不送检。只经 checkText 访问。
+	contentGuard contentguard.Checker
 }
 
 // Option 是 NewGuildLogic 的可选项。
@@ -260,6 +265,12 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 		if verified > 0 {
 			return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "already in a guild")}, nil
 		}
+	}
+
+	// 帮名送内容安全服务判定:排在铸号和建帮事务之前(被拒不白烧一个 guild_id),排在上面几道本地检查之后
+	// (名字格式不对、已经有帮的请求不用送检)。命中回 kGuildNameSensitive,不可达回可重试的提示。
+	if tip := l.checkText(ctx, cgpb.TextScene_TEXT_SCENE_GUILD_NAME, who.playerID, name, constants.ErrGuildNameSensitive); tip != nil {
+		return &pb.CreateGuildResponse{ErrorMessage: tip}, nil
 	}
 
 	now := nowMs()
@@ -543,6 +554,12 @@ func (l *GuildLogic) SetAnnouncement(ctx context.Context, req *pb.SetAnnouncemen
 	if _, tip, err := l.clientZone(ctx, who.playerID); err != nil {
 		return nil, err
 	} else if tip != nil {
+		return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
+	}
+
+	// 公告送内容安全服务判定,排在更新事务之前(事务里不调 RPC)。清空公告(空串)不送检。
+	// 权限在事务里才复核,所以没有权限的人也会走到这一步:多一次送检,不会让他改成别人的公告。
+	if tip := l.checkText(ctx, cgpb.TextScene_TEXT_SCENE_GUILD_ANNOUNCEMENT, who.playerID, req.Announcement, constants.ErrAnnouncementSensitive); tip != nil {
 		return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
 	}
 

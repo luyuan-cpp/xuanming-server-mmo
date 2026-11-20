@@ -70,6 +70,10 @@ TEST(PlayerHandoffGate, PlayerStateRequestsMayBeRetriedOnAnotherNode)
 		{SceneCurrencyClientPlayer::descriptor(), "GetCurrencyList"},
 		{SceneActivityClientPlayer::descriptor(), "ClaimActivityVitalityReward"},
 		{SceneBattleResultClientPlayer::descriptor(), "AckBattleResults"},
+		// 挂机月卡:只读写角色自己的到期时刻与灵石;开通带幂等键,重投也只生效一次。
+		{SceneAfkPassClientPlayer::descriptor(), "GetAfkPass"},
+		{SceneAfkPassClientPlayer::descriptor(), "BuyAfkPass"},
+		{SceneAfkPassClientPlayer::descriptor(), "GmSetAfkPass"},
 		// 技能服务按方法列:看技能、升技能读写的是玩家自己的技能表。
 		{SceneSkillClientPlayer::descriptor(), "ListSkills"},
 		{SceneSkillClientPlayer::descriptor(), "UpgradeSkill"},

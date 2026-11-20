@@ -180,9 +180,9 @@ func TestNewAppleRevokerRejectsBadKeys(t *testing.T) {
 	p384PEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: mustPKCS8(t, p384)}))
 	_, goodPEM := testAppleKey(t)
 	for name, tc := range map[string]struct{ pem, team string }{
-		"不是 PEM":  {"not a key", "TEAM123456"},
-		"RSA 私钥":  {rsaPEM, "TEAM123456"},
-		"P-384":   {p384PEM, "TEAM123456"},
+		"不是 PEM":   {"not a key", "TEAM123456"},
+		"RSA 私钥":   {rsaPEM, "TEAM123456"},
+		"P-384":    {p384PEM, "TEAM123456"},
 		"缺 TeamId": {goodPEM, ""},
 	} {
 		if _, err := NewAppleRevoker("com.example.game", tc.team, "KEY1234567", tc.pem, "", nil); err == nil {

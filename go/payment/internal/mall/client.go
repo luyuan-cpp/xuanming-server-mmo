@@ -83,6 +83,12 @@ type PendingRefund struct {
 	Reason        string `json:"reason"`
 }
 
+// RefundsOrdersOwnPayment 报告退款原因退的是不是订单绑定的那笔付款(CommerceApi.RefundReason.refundsOrdersOwnPayment:
+// 取消后才到账、交付被拒)。其余原因(重复付款、金额或币种不符)退的是没有绑定订单的异常付款,订单不因它变化。
+func RefundsOrdersOwnPayment(reason string) bool {
+	return reason == "CANCELLED_LATE" || reason == "DELIVERY_REJECTED"
+}
+
 // Refund 是 /internal/refunds/receipt 的请求(CommerceApi.Refund)。PaymentTransactionID 是被退的那笔付款,TransactionID 是渠道的退款流水号。
 type Refund struct {
 	OrderID              string `json:"orderId"`

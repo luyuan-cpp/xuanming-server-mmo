@@ -479,7 +479,7 @@ func TestPendingTiDBMatchNullStateRemainsBlocking(t *testing.T) {
 func TestPendingTiDBMatchParticipationAndFreezeShareReplicaLock(t *testing.T) {
 	const secret = "fixture-only-coordinator-secret-0000"
 	s := nativeEntryStore(t)
-	participant, err := rolefence.NewParticipantServer(s.DB, RoleFencePending, secret)
+	participant, err := rolefence.NewParticipantServer(s.DB, RoleFencePending, RoleFencePurge, secret)
 	require.NoError(t, err)
 	for player := uint64(51); player <= 56; player++ {
 		actor, ticket, request := nativeEntryActor(t, s, player)

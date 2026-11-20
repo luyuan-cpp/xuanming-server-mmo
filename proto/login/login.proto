@@ -141,6 +141,11 @@ message EnterGameResponse
 
   // 3 / 4 是合服一次性提示:合服不再碰玩家数据,这两个字段没有来源,已删除。
   reserved 3, 4;
+
+  // 受理时这名角色的归属修订号(账号目录的 owner_revision,过户一次加一)。只在受理(error_message 为空)时填。
+  // 客户端把它记在本机待确认记录上:修订号变了说明角色换过主人,此前的待确认记录作废、不再恢复或重发
+  // (docs/design/cross-zone-matchmaking.md §13.2)。0 = 未知(旧服务端),客户端按没有这项信息处理。
+  uint64 owner_revision = 5;
 }
 
 message LeaveGameRequest

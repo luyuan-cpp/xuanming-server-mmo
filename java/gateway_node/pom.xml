@@ -34,6 +34,8 @@
 
     <dependencies>
         <dependency><groupId>com.game</groupId><artifactId>authority-jdbc</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+        <!-- 启动时钟核对(docs/ops/clock-sync-runbook.md),和 mall_game 共用 -->
+        <dependency><groupId>com.game</groupId><artifactId>server-startup</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
     
         
         <!-- Spring Boot Web -->

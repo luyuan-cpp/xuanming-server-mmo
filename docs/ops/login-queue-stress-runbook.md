@@ -84,10 +84,10 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 
 ## 异常模式速查
 
-> **本页的 `redis-cli` 连哪个实例(2026-11-01 补)**:排队键在 login 的 `Node.QueueRedis` 指向的实例上:拆出 queue 时是 `redis-queue-g<N>`(`dev_tools.ps1 -Command k8s-redis-split-status` 的 `login.QueueRedis` 一列),没拆时是核心 `redis`。单实例形态 exec 进 `<名>-0` 就在主上。高可用形态 `<名>-0` 不一定是主,从上的读可能滞后、写回 `READONLY`,要写 `-h <名>` 经代理落到当前的主,`xargs` 后面那个 `redis-cli` 也要带:
+> **本页的 `redis-cli` 连哪个实例(2026-11-01 补,2026-11-19 改)**:排队键(`queue:{q:<zone>}` 等)在控制域:staging / prod 是控制集群 `redis-control`,dev 没开控制集群时是核心单实例 `redis`(缺口第 34 条第 6b 批;以前的排队实例 `redis-queue-g<N>` 与 login 的 `Node.QueueRedis` 已删除)。`{q:<zone>}` 是 hash tag,一个 zone 的排队键在同一个槽上;`redis-cli -c` 跟着 `MOVED` 跳到该槽当前的主,exec 进 `<名>-0` 就行(`xargs` 后面那个 `redis-cli` 也要带 `-c`)。`<名>` 是 `redis-control` 或 `redis`:
 >
 > ```
-> kubectl -n <infra> exec statefulset/<名> -c redis -- sh -c 'if [ -n "$REDIS_PASSWORD" ]; then export REDISCLI_AUTH="$REDIS_PASSWORD"; fi; redis-cli -c -h <名> ZCARD "queue:{q:1}"'
+> kubectl -n <infra> exec <名>-0 -c redis -- sh -c 'if [ -n "$REDIS_PASSWORD" ]; then export REDISCLI_AUTH="$REDIS_PASSWORD"; fi; redis-cli -c ZCARD "queue:{q:1}"'
 > ```
 
 ### 模式 1:dispatcher 卡死
@@ -106,7 +106,7 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 - 日志里有 `goroutine_panic` 且 `point=login.queue_dispatcher_term`(指标 `safego_panic_total{point="login.queue_dispatcher_term"}` 在涨)= 出队路径有代码缺陷。该任期已放锁,本副本退避 TTL/3 后再参选,同 zone 备机可以接手;每个副本都 panic 就是每轮当选即 panic,队列照样不出,按栈修代码
 
 > (2026-10-15 补,已落码,未编译、未测试,待 Codex 验证)「队列在降、admit 不涨、robot 停在 rank=0」这一形状另查下面三条日志(见 `docs/handoff/launch-readiness-20261013/spec_G4b-G.md` §5.8 末尾补注):
-> - `[loginqueue] PopAdmit dropped entries after zpopmin zone=<id> reason=write_failed popped=… dropped=… firstErr=…`(ERROR,每批一行)= 已弹出的条目写放行失败,这些玩家停在名次 0 直到 meta 过期(1h)。`firstErr` 含 `OOM` 即 `redis-queue` 写满(noeviction):弹出照常成功、写入全被拒,几拍之内整条队列被弹空,先扩内存或清堆积(见「故障应急」),再排查谁占了内存;其它错误按 Redis 连接 / 延迟排查。停服、丢租约已不会造成这条(弹出之后的写入有 3s 独立预算),滚动重启期间偶发一行可以接受,持续出现不行。
+> - `[loginqueue] PopAdmit dropped entries after zpopmin zone=<id> reason=write_failed popped=… dropped=… firstErr=…`(ERROR,每批一行)= 已弹出的条目写放行失败,这些玩家停在名次 0 直到 meta 过期(1h)。`firstErr` 含 `OOM` 即排队键所在实例写满(noeviction):弹出照常成功、写入全被拒,几拍之内整条队列被弹空,先扩内存或清堆积(见「故障应急」),再排查谁占了内存;其它错误按 Redis 连接 / 延迟排查。停服、丢租约已不会造成这条(弹出之后的写入有 3s 独立预算),滚动重启期间偶发一行可以接受,持续出现不行。
 > - `[loginqueue] PopAdmit dropped entries after zpopmin zone=<id> reason=meta_gone dropped=<n>`(INFO)= 队首条目已在队里等满 `QueueEntryTTL`(1h),令牌已失效,这些人查询回 EXPIRED、会重新入队;不写放行槽、不占名额、不计入 `login_queue_admit_total`。持续出现说明排队等待超过 1h。
 > - `[loginqueue] PopAdmit zone=<id> err=loginqueue: … ttl must be positive …`(ERROR,每拍一行)= `Queue.AdmitTTL` 或 `Queue.QueueEntryTTL` 被显式配成 0 或负数(配置的默认值只在键缺省时生效),dispatcher 不出队,条目原样留在队列;改配置后滚动重启。起服时的校验还没接上,`QueueEntryTTL` 非正时入队本身也会把整条队列删掉,不要配。
 >
@@ -118,9 +118,9 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 > - **「不降 = ZPOPMIN 没在跑」改读「不降 = 放行脚本没在跑,或在报错」。** 出队已是 `ZRANGE` + 每条一段 `admitEntryScript`,条目在放行写成之前一直在队列里。不降时先查下面的 ERROR 行。
 > - **两行 `PopAdmit dropped entries after zpopmin …` 已不存在**(`reason=write_failed` 的 ERROR、`reason=meta_gone` 的 INFO)。换成下面两行:
 >   - **ERROR 行**:`[loginqueue] PopAdmit zone=<id> err=…`。dispatcher 每拍至多一行,停服、丢租约时不打。err 里是以下之一:`admit script queueId=… admitted=… skipped=… untried=…: <原因>`、`zrange: …`、`skipped <n> entries without an admit slot, first queueId=…: …`。本拍已放行的人照样计入 `login_queue_admit_total`。按原因判读:
->     - 含 `OOM`:`redis-queue` 写满(noeviction)。放行停止(fail-closed),**条目留在队列、名次不变、不丢**;排队中的查询与续期照常;新入队回 `StatusError`。先扩内存或清堆积(见「故障应急」),再排查谁占了内存。
+>     - 含 `OOM`:排队键所在的控制域节点写满(noeviction)。放行停止(fail-closed),**条目留在队列、名次不变、不丢**;排队中的查询与续期照常;新入队回 `StatusError`。先扩内存或清堆积(见「故障应急」),再排查谁占了内存。
 >     - 含 `WRONGTYPE`:占位键或队列键被写成了别的类型(人工误操作)。之后各拍通常改由 `freeSlots …` 或 `queueLen …` 的 ERROR 报出;修好键之后自动恢复。若是占位键,出错那一条已写了放行槽却没有占位,至多多放 1 人。
->     - 含 `NOREPLICAS`(2026-11-01 补,只在排队实例是高可用形态时出现):主上没有一个从在线且复制延迟不超过 10 秒(`min-replicas-to-write 1`),所有写命令被拒。放行停止(fail-closed),条目留在队列、名次不变;新入队和排队中的查询也报错(查询先 `GETDEL` 放行槽),客户端按 queue-status 失败的路径退避。查两个从(`kubectl -n <infra> get pod -l app=redis-queue-g<N>`,告警 `RedisReplicaLinkDown`),从接上后自动恢复。不要为此关掉 `min-replicas-to-write`:那会让切主时丢掉已答复成功的写入。
+>     - 含 `NOREPLICAS`(2026-11-01 补,2026-11-19 改:只在控制集群每主 2 个从、即 `-ControlRedisReplicasPerMaster 2` 时出现):该槽的主上没有一个从在线且复制延迟不超过 10 秒(`min-replicas-to-write 1`),所有写命令被拒。放行停止(fail-closed),条目留在队列、名次不变;新入队和排队中的查询也报错(查询先 `GETDEL` 放行槽),客户端按 queue-status 失败的路径退避。查这个主的两个从(`kubectl -n <infra> get pod -l app=redis-control`、`CLUSTER NODES`,告警见 `deploy/k8s/redis-control-alerts.yaml`),从接上后自动恢复。不要为此关掉 `min-replicas-to-write`:那会让切主时丢掉已答复成功的写入。
 >     - 其它错误:按 Redis 连接 / 延迟排查。
 >   - **INFO 行**:`[loginqueue] PopAdmit entries not admitted zone=<id> metaGone=<n> alreadyAdmitted=<n> gone=<n>`。每批至多一行。
 >     - `metaGone`:队首条目的 meta 已过期或类型损坏,已就地清掉。meta 现在是空闲 TTL,所以持续出现说明有客户端停止轮询超过 `QueueEntryTTL`(关了客户端,或断网后不带 token 重新入队留下的孤儿),不再表示「排队等待超过 1h」。

@@ -79,8 +79,8 @@ func (s *Store) ReconcilePlayer(ctx context.Context, req *inboxpb.ReconcilePlaye
 
 	// 一页一页比对,只留有差异的行:读完这名玩家的全部条目行,读不全就回错误(forEachPlayerItemsPage)。
 	var diffs []*inboxpb.PlayerInboxReconcileDiff
-	err = s.forEachPlayerItemsPage(ctx, req.GetPlayerId(), domain, playerItemsPageSize, func(rows []*inboxpb.PlayerInboxItemRow) error {
-		diffs = appendReconcileDiffs(diffs, ledger, rows)
+	err = s.forEachPlayerItemsPage(ctx, req.GetPlayerId(), domain, playerItemsPageSize, func(refs []FinalizedRef) error {
+		diffs = appendReconcileDiffs(diffs, ledger, refs)
 		return nil
 	})
 	if err != nil {

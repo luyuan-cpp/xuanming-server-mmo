@@ -89,6 +89,19 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 			baseConfig.add_etcd_hosts(host.as<std::string>());
 		}
 	}
+	// C++ 节点只连一个 etcd 地址(断线重连 R19):注册、发现与热关停各建一条 gRPC 通道,都只连这一个地址,
+	// 成员故障靠它背后的负载均衡摘掉(K8s 上是 etcd 的 Service)。配多个地址时其余的从来不会被用到,会让人以为配了
+	// 故障转移;一个都没配时注册会解引用空列表。两种都当场拒绝启动。
+	if (baseConfig.etcd_hosts_size() != 1)
+	{
+		const std::string reason = "Etcd.Hosts in " + filename +
+								   " must list exactly one load-balanced etcd address (the K8s Service, or a VIP in front of the members), got " +
+								   std::to_string(baseConfig.etcd_hosts_size()) + "; refusing to start";
+		std::fprintf(stderr, "FATAL Etcd config: %s\n", reason.c_str());
+		std::fflush(stderr);
+		LOG_FATAL << "readBaseDeployConfig: " << reason;
+		return false; // LOG_FATAL 已 abort;这一行只为控制流明确
+	}
 	if (root["Etcd"]["KeepaliveInterval"])
 	{
 		baseConfig.set_keep_alive_interval(root["Etcd"]["KeepaliveInterval"].as<uint32_t>());

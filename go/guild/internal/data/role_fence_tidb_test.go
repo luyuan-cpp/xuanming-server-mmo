@@ -63,6 +63,30 @@ func TestTiDBRoleFenceFrozenRoleRejectsGuildWritesAndThawHeals(t *testing.T) {
 	require.NoError(t, repo.UpdateAnnouncementAuthorized(actor, 44, 11, "thawed"))
 }
 
+// 转让也锁目标的副本(docs/design/account-deletion.md §6.3):冻结中(挂寄售、删角投票)的角色不能被转成帮主,帮会一行不动。
+// 解冻推送丢了的话,下一次转让自愈后照常放行。
+func TestTiDBRoleFenceTransferLeaderRejectsFrozenTarget(t *testing.T) {
+	ctx, db, repo, directory := healRepo(t)
+	fencetest.Seed(t, ctx, db, 11, "seller", 1)
+	actor := lobbyActor(t, ctx, 11, "seller", 1)
+	officerCap := func(uint32) (uint32, bool) { return 5, true }
+	_, err := rolefence.Apply(ctx, db, directory.Set(22, "member", 1, 901))
+	require.NoError(t, err)
+
+	_, err = repo.TransferLeader(actor, 44, 11, 22, officerCap)
+	require.ErrorIs(t, err, ErrWriteConflict)
+	require.Equal(t, []uint64{22}, directory.Reads, "目标真冻结:自愈一次,第二次判定才拒绝")
+	require.Equal(t, uint64(11), guildLeaderOf(t, ctx, db, 44), "帮会不动")
+	var holder uint64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT player_id FROM guild_member WHERE guild_id=44 AND role=3").Scan(&holder))
+	require.Equal(t, uint64(11), holder)
+
+	directory.Set(22, "member", 1, 0)
+	_, err = repo.TransferLeader(actor, 44, 11, 22, officerCap)
+	require.NoError(t, err)
+	require.Equal(t, uint64(22), guildLeaderOf(t, ctx, db, 44))
+}
+
 func TestTiDBRoleFenceHealLetsNewOwnerInAndKeepsOldOwnerOut(t *testing.T) {
 	ctx, db, repo, directory := healRepo(t)
 	oldOwner := lobbyActor(t, ctx, 11, "seller", 1)
@@ -272,7 +296,7 @@ func TestTiDBPendingGuildQueryFailureIsNotClean(t *testing.T) {
 func TestTiDBPendingGuildFreezeAndMembershipCommitAreMutuallyExclusive(t *testing.T) {
 	const secret = "fixture-only-coordinator-secret-0000"
 	ctx, db, repo, _ := guildRoleTiDB(t)
-	participant, err := rolefence.NewParticipantServer(db, RoleFencePending, secret)
+	participant, err := rolefence.NewParticipantServer(db, RoleFencePending, guildPurgeFunc(new(RolePurgeResult)), secret)
 	require.NoError(t, err)
 	for n := uint64(1); n <= 12; n++ {
 		player := 100 + n

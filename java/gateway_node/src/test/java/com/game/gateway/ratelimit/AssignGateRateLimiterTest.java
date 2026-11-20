@@ -13,6 +13,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongUnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -22,7 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link AssignGateRateLimiter} 的行为用例:用回放预设结果的假存储代替 Redis,手动时钟代替单调时钟,不依赖真实时间。
  * 令牌桶本身的算术(补充、过期、等待时长)由 {@link RedisRateLimitStoreIntegrationTest} 对真实 Redis 验证。
  *
- * <p>钉住的可观察结果:限流关闭 → 放行;波次未开 → 排队;IP 桶空 → 429 IP_RATE_LIMIT;区桶空 → 排队并带等待毫秒;
+ * <p>钉住的可观察结果:限流关闭 → 放行;波次未开 → 排队;IP 桶空 → 429 IP_RATE_LIMIT;区桶空 → 排队;
+ * 两种排队的 retry_after 不短于下限、再加 [0, 抖动上界) 的随机量;
  * 账号冷却按(端点, 账号, IP)计时;存储出错 → 放过两个桶并熔断,到期只放一个请求去探;fail-open 期间进程内冷却照判;
  * 交给存储的桶键与阈值(含单区覆盖、zone_id = 0 不判区桶)。
  */
@@ -33,6 +35,8 @@ class AssignGateRateLimiterTest {
     private SimpleMeterRegistry registry;
     /** 单调时钟(毫秒),各用例手动推进。 */
     private AtomicLong clock;
+    /** 排队提示的随机源;缺省恒取 0,要看随机量的用例自己换。 */
+    private LongUnaryOperator random;
 
     @BeforeEach
     void setUp() {
@@ -43,9 +47,12 @@ class AssignGateRateLimiterTest {
         props.setIpRps(2);
         props.setIpBurst(10);
         props.setAccountCooldownMs(5000);
+        props.setQueueRetryMinMs(2000);
+        props.setQueueRetryJitterMs(2000);
         store = new ScriptedStore();
         registry = new SimpleMeterRegistry();
         clock = new AtomicLong(1_000_000L);
+        random = bound -> 0;
     }
 
     private AssignGateRateLimiter limiter() {
@@ -53,7 +60,7 @@ class AssignGateRateLimiterTest {
     }
 
     private AssignGateRateLimiter limiter(WaveSchedule wave) {
-        return new AssignGateRateLimiter(store, props, wave, registry, clock::get);
+        return new AssignGateRateLimiter(store, props, wave, registry, clock::get, bound -> random.applyAsLong(bound));
     }
 
     private static WaveSchedule disabledWave() {
@@ -81,7 +88,7 @@ class AssignGateRateLimiterTest {
 
     @Test
     void nullStore_alwaysPasses() {
-        AssignGateRateLimiter limiter = new AssignGateRateLimiter(null, props, disabledWave(), registry, clock::get);
+        AssignGateRateLimiter limiter = new AssignGateRateLimiter(null, props, disabledWave(), registry, clock::get, random);
         assertTrue(limiter.check(1, "10.0.0.1", "alice").isPass());
     }
 
@@ -99,10 +106,30 @@ class AssignGateRateLimiterTest {
         var d = limiter(new WaveSchedule(cfg, cfg.getStartEpochSec())).check(2, "10.0.0.2", "bob");
 
         assertTrue(d.isQueue());
-        assertTrue(d.getRetryAfterMs() > 0, "波次未开时 retry-after 应为正");
+        assertEquals(3_600_000L, d.getRetryAfterMs(), "zone 2 不在任何一档里:一小时后再来(随机量取 0)");
         assertEquals(-1, d.getQueuePosEstimate());
         assertEquals(0, store.calls.size(), "波次未开不碰令牌桶");
         assertEquals(1, decisions("wave_queue"));
+    }
+
+    @Test
+    void waveClosed_retryAfterIsTimeUntilOpenPlusJitter() {
+        // 波次 30s 后开始,第 0 档放 zone 1。读秒时可能跨过一个秒边界,距开放是 29 或 30 秒。
+        var cfg = new RateLimitProperties.WaveSchedule();
+        cfg.setEnabled(true);
+        cfg.setStartEpochSec(Instant.now().getEpochSecond() + 30);
+        var step = new RateLimitProperties.WaveStep();
+        step.setOffsetSec(0);
+        step.setAllowZones(List.of(1L));
+        cfg.setSchedule(List.of(step));
+        random = bound -> bound - 1;
+
+        var d = limiter(new WaveSchedule(cfg, cfg.getStartEpochSec())).check(1, "10.0.0.2", "bob");
+
+        assertTrue(d.isQueue());
+        long untilOpenMs = d.getRetryAfterMs() - 1999;
+        assertTrue(untilOpenMs == 29_000 || untilOpenMs == 30_000,
+                "距开放的毫秒再加随机量:开放那一刻回来的人被摊开,实际 " + d.getRetryAfterMs());
     }
 
     @Test
@@ -162,9 +189,45 @@ class AssignGateRateLimiterTest {
         var d = limiter().check(1, "10.0.0.3", "carol");
 
         assertTrue(d.isQueue());
-        assertEquals(2500, d.getRetryAfterMs(), "retry_after 就是区桶补到一个令牌要等的毫秒");
+        assertEquals(2500, d.getRetryAfterMs(), "区桶补到一个令牌要等的毫秒长于下限时照用(随机量取 0)");
         assertEquals(0, d.getQueuePosEstimate(), "queue_pos 只是提示值,区桶空时恒为 0");
         assertEquals(1, decisions("zone_queue"));
+    }
+
+    @Test
+    void zoneBucketEmpty_shortWaitIsRaisedToTheFloor() {
+        store.then(Admission.zoneEmpty(1)); // 2000 rps 的区桶补到一个令牌只要不到 1ms
+
+        var d = limiter().check(1, "10.0.0.3", "carol");
+
+        assertTrue(d.isQueue());
+        assertEquals(2000, d.getRetryAfterMs(), "不短于 queue-retry-min-ms:不让排队的人紧循环重试同一个区桶键");
+    }
+
+    @Test
+    void queueHint_addsJitterBelowTheConfiguredBound() {
+        List<Long> bounds = new ArrayList<>();
+        random = bound -> {
+            bounds.add(bound);
+            return bound - 1;
+        };
+        store.then(Admission.zoneEmpty(1));
+
+        var d = limiter().check(1, "10.0.0.3", "carol");
+
+        assertEquals(List.of(2000L), bounds, "随机量的上界就是 queue-retry-jitter-ms");
+        assertEquals(2000 + 1999, d.getRetryAfterMs(), "下限加随机量,随机量取不到上界本身");
+    }
+
+    @Test
+    void zeroJitter_drawsNoRandom() {
+        props.setQueueRetryJitterMs(0);
+        random = bound -> {
+            throw new AssertionError("抖动为 0 时不该取随机数(随机源只收正的上界)");
+        };
+        store.then(Admission.zoneEmpty(2500));
+
+        assertEquals(2500, limiter().check(1, "10.0.0.3", "carol").getRetryAfterMs());
     }
 
     @Test

@@ -1852,6 +1852,56 @@ TEST(ConnectionLostHoldAfkPassEcs, LateFailedOrForeignResultsChangeNothing)
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "接回之后到的结果直接丢弃";
 }
 
+// 2026-11-19 起 Probe 不读 Redis,读本实体存档里的到期时刻(docs/design/afk-monthly-card.md §5.3),
+// 但判定排到本轮之后执行:断线处理(以及托管落点入场的 EnterScene 中途)不当场开启跟随,时序与原来等 Redis 回包相同。
+TEST(ConnectionLostHoldAfkPassEcs, ProbeReadsThePassFromTheCharactersOwnSaveData)
+{
+    muduo::net::EventLoop loop; // 先于 cleanup 构造、后析构:实体上的定时器在 loop 还在时清掉
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    tlsEcs.actorRegistry.get<PlayerUint64Comp>(player).set_afk_pass_expires_at(now + 3600);
+    // 先写月卡再标"已落盘":断线时请求的关键进度存盘在 loop 里到点,走快路径,不碰 Redis 与存档库。
+    ASSERT_TRUE(MarkPersisted(player));
+
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    {
+        const auto& held = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player);
+        EXPECT_EQ(held.afkPass, clh::AfkPass::kUnknown) << "判定排在本轮之后,断线处理当中还没判";
+        EXPECT_TRUE(held.afkProbeInFlight);
+        EXPECT_FALSE(held.hostingStarted);
+    }
+
+    loop.runAfter(0.05, [&loop] { loop.quit(); });
+    loop.loop();
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    const auto& held = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player);
+    EXPECT_EQ(held.afkPass, clh::AfkPass::kActive) << "月卡来自角色自己的存档字段,不是 Redis";
+    EXPECT_EQ(held.afkPassExpiresAtSec, now + 3600);
+    EXPECT_FALSE(held.afkProbeInFlight);
+    EXPECT_TRUE(held.hostingStarted);
+}
+
+// 没开通(到期时刻 0)的角色:查询有了结论(不能托管),普通 25 秒窗口照常计,不再每次扫描重查。
+TEST(ConnectionLostHoldAfkPassEcs, ProbeWithoutAPassSettlesOnTheNormalWindow)
+{
+    muduo::net::EventLoop loop;
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    ASSERT_TRUE(MarkPersisted(player));
+
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    loop.runAfter(0.05, [&loop] { loop.quit(); });
+    loop.loop();
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player));
+    const auto& held = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player);
+    EXPECT_EQ(held.afkPass, clh::AfkPass::kInactive);
+    EXPECT_FALSE(held.afkProbeInFlight);
+    EXPECT_FALSE(held.hostingStarted);
+}
+
 TEST(ConnectionLostHoldAfkPassEcs, HostingStartTurnsOnTeamFollowWithoutTheClient)
 {
     ScopedPersistedPlayerCleanup cleanup;
@@ -10587,7 +10637,7 @@ TEST_F(HostedPlacementReentry, ArrivalWithoutAHoldRebuildsTheOfflineHold)
     EXPECT_EQ(held->sessionId, kSessionAtExit);
     EXPECT_EQ(held->loginGeneration, kReentryLoginGeneration);
     EXPECT_TRUE(held->lostAt >= before);
-    EXPECT_EQ(held->afkPass, clh::AfkPass::kUnknown) << "月卡要在本节点重新确认(宿主没有 Redis,查询没发出去)";
+    EXPECT_EQ(held->afkPass, clh::AfkPass::kUnknown) << "月卡要在本节点重新确认(宿主没有 EventLoop,查询没排上)";
     EXPECT_FALSE(held->hostingStarted);
     ASSERT_NO_FATAL_FAILURE(ExpectNoBoundSession());
 
