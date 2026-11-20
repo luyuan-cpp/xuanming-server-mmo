@@ -39,6 +39,9 @@ message KickPlayerEvent {
   uint64 player_id = 2;
   // 发起踢线、已提交的那条登录链的代次。会话已见过不小于它的代次时不踢;0 = 不比较。只经 payload 下发。
   uint64 login_generation = 3;
+  // 踢线原因,gate 原样填进给客户端的 GameKickPlayerRequest.reason。0 = 账号在别处登录(kLoginBeKickByAnOtherAccount)。
+  // 防沉迷到点下线填 kLoginMinorPlayTimeOver(docs/design/real-name-anti-addiction.md §5.4)。
+  uint32 reason_tip = 4;
 }
 
 // Sent by Gate when a player TCP connection drops.
@@ -91,6 +94,9 @@ message RedirectToGateEvent {
   bytes  token_payload = 5;    // serialized GateTokenPayload for target gate
   bytes  token_signature = 6;  // HMAC-SHA256 signature
   int64  token_deadline = 7;   // unix seconds
+  // 目标 gate 的 WebSocket 地址(NodeInfo.client_ws_url),gate 原样放进 msg 124;空串 = 不接小游戏
+  // (docs/design/minigame-websocket-gate.md W7)。
+  string target_gate_ws_url = 8;
 }
 
 // login 发给正在排空的 gate:按给定速率把本 gate 上已登录的连接迁到同 zone 的其他 gate

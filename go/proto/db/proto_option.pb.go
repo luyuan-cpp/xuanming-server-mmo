@@ -804,7 +804,7 @@ var (
 	// 决策与参数依据见 docs/design/global-data-layer-tidb-decision.md §D3/§D6。
 	//
 	// optional bool OptionTiDBNonclusteredPK = 500021;
-	E_OptionTiDBNonclusteredPK = &file_proto_db_proto_option_proto_extTypes[19] // 主键追加 /*T![clustered_index] NONCLUSTERED */(雪花主键防写热点的前提)
+	E_OptionTiDBNonclusteredPK = &file_proto_db_proto_option_proto_extTypes[19] // 主键追加 /*T![clustered_index] NONCLUSTERED */(行按 _tidb_rowid 存,是下面 SHARD_ROW_ID_BITS 打散写入的前提)
 	// optional uint32 OptionTiDBShardRowIDBits = 500022;
 	E_OptionTiDBShardRowIDBits = &file_proto_db_proto_option_proto_extTypes[20] // /*T! SHARD_ROW_ID_BITS=N */ 按 _tidb_rowid 打散写入,仅非聚簇表生效
 	// optional uint32 OptionTiDBPreSplitRegions = 500023;

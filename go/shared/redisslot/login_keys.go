@@ -42,16 +42,22 @@ func LoginSessionKey(connectionID string) string {
 	return "login_session:{" + connectionID + "}"
 }
 
-// LoginAntiAddictionKey 是本连接的防沉迷记录:login_anti_addiction:{<连接身份>},与 login_session 同槽
-// (未成年人的截止时刻、上下线上报用的 pi 与会话标识;docs/design/real-name-anti-addiction.md §5.4、§5.5)。
-func LoginAntiAddictionKey(connectionID string) string {
-	return "login_anti_addiction:{" + connectionID + "}"
-}
-
 // RealNamePendingKey 是账号认证中的那次实名提交的 ai,48 小时内可以拿它查结果。
 func RealNamePendingKey(account string) string {
 	return "login_realname_pending:{" + AccountTag(account) + "}:" + account
 }
+
+// NppaQuotaKey 是所有 login 副本共用的国家防沉迷系统调用配额(一个接口一个键,GCRA 的理论到达时刻)。
+func NppaQuotaKey(api string) string {
+	return "login_nppa_quota:{nppa}:" + api
+}
+
+// 上下线上报账本的四个键(login 的 nppa.Ledger,docs/design/real-name-anti-addiction.md §5.5)。同一个 tag:
+// 一段脚本里原子地改会话表、租约与待发事件。
+func NppaSessionsKey() string { return "login_nppa_sess:{nppa}" }
+func NppaLeasesKey() string   { return "login_nppa_live:{nppa}" }
+func NppaOutboxKey() string   { return "login_nppa_outbox:{nppa}" }
+func NppaSweepKey() string    { return "login_nppa_sweep:{nppa}" }
 
 // RealNameAttemptsKey 是账号在某个北京日期(2006-01-02)提交实名的次数。
 func RealNameAttemptsKey(account, day string) string {

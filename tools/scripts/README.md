@@ -193,6 +193,8 @@ Java 网关的限流(`gate.rate-limit.enabled` 缺省关)要连过来时,在 `ja
 
 压测抓本机 C++ 节点的 `/metrics`(2026-11-12 起):C++ 进程设了 `MMORPG_METRICS_PORT` 才开出口,本机缺省不开。起节点前设 `$env:MMORPG_METRICS_BASE_PORT = '19400'`(或 `cpp_nodes.ps1 -MetricsBasePort 19400`),每个实例按 `lib/cpp_metrics_ports.ps1` 拿一个端口(gate 19401…、scene 19501…、battle 19601…,`-Zone N` 再加 1000 × N);`stress_snap.ps1 -CppMetricsBasePort 19400` 按 `run/pids/cpp_nodes.pid.json` 逐个抓成 `t<N>m_cpp_<实例键>.txt`,`stress_summarize.ps1` 的 N1 表读它们。契约测试 `tests/stress_cpp_metrics.tests.ps1`。
 
+同一批快照里 gate / battle 的连接准入指标出在 N2 表(2026-11-20 起):连接数、未验签池与早拒起点、各原因的拒绝数、淘汰与收割、握手耗时分位、按来源限速。造未验签连接用 `python tools/scripts/preauth_flood.py --host <地址> --port <端口> --connections N --rate R`:只建连不发包,报告每条连接是被 RST 拒、被 FIN 关(收割 / 淘汰)还是一直挂着;真规模只在 Linux 上跑,本机先跑 `--self-test`。准入阈值的校准步骤见 `docs/design/gate-connection-admission-control.md` §9.7,部署时用 `k8s_deploy.ps1 -ConnectionAdmissionEnv` 改阈值。
+
 ### redis_cluster_capacity.ps1(Redis Cluster 容量基准:玩家域 redis-player、控制 redis-control)
 
 逐档加压,按 `INFO` 求差出每个主节点的 ops 和主线程 CPU,判定有没有真的压到饱和(设计 §14.3)。副本数、代理数、连接数都不是证据。

@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 53;
+        public const int TableCount = 54;
 
         private static Action s_loadSuccessCallback;
 
@@ -43,6 +43,7 @@ namespace MmorpgClient.Table
                 ActivityVitalityRuleTableManager.FileName(useBinary),
                 ActorActionCombatStateTableManager.FileName(useBinary),
                 ActorActionStateTableManager.FileName(useBinary),
+                AfkPassRuleTableManager.FileName(useBinary),
                 AttributeAllocRatioTableManager.FileName(useBinary),
                 AttributeAutoPlanTableManager.FileName(useBinary),
                 AttributeDimensionTableManager.FileName(useBinary),
@@ -103,6 +104,7 @@ namespace MmorpgClient.Table
             ActivityVitalityRuleTableManager.Instance.Load(configDir, useBinary);
             ActorActionCombatStateTableManager.Instance.Load(configDir, useBinary);
             ActorActionStateTableManager.Instance.Load(configDir, useBinary);
+            AfkPassRuleTableManager.Instance.Load(configDir, useBinary);
             AttributeAllocRatioTableManager.Instance.Load(configDir, useBinary);
             AttributeAutoPlanTableManager.Instance.Load(configDir, useBinary);
             AttributeDimensionTableManager.Instance.Load(configDir, useBinary);
@@ -185,6 +187,8 @@ namespace MmorpgClient.Table
                 ActorActionCombatStateTableManager.Instance.LoadFromBytes, ActorActionCombatStateTableManager.Instance.LoadFromJson);
             LoadOne(ActorActionStateTableManager.FileName(useBinary), byteProvider, useBinary,
                 ActorActionStateTableManager.Instance.LoadFromBytes, ActorActionStateTableManager.Instance.LoadFromJson);
+            LoadOne(AfkPassRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                AfkPassRuleTableManager.Instance.LoadFromBytes, AfkPassRuleTableManager.Instance.LoadFromJson);
             LoadOne(AttributeAllocRatioTableManager.FileName(useBinary), byteProvider, useBinary,
                 AttributeAllocRatioTableManager.Instance.LoadFromBytes, AttributeAllocRatioTableManager.Instance.LoadFromJson);
             LoadOne(AttributeAutoPlanTableManager.FileName(useBinary), byteProvider, useBinary,

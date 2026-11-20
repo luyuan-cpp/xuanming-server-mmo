@@ -40,6 +40,10 @@ func (f *fakeVerifier) Query(_ context.Context, ai string) (nppa.AuthResult, err
 	return f.query(ai)
 }
 
+type fakeQuota struct{ deny bool }
+
+func (q *fakeQuota) Allow(context.Context, nppa.QuotaRule) (bool, error) { return !q.deny, nil }
+
 type fakeDirectory struct {
 	stored string
 	err    error
@@ -61,7 +65,21 @@ func newService(t *testing.T, v *fakeVerifier, d *fakeDirectory, limit int) (*Se
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	now := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
-	return &Service{Redis: rdb, Verifier: v, Directory: d, DailyLimit: limit, Now: func() time.Time { return now }}, mr
+	return &Service{Redis: rdb, Verifier: v, Directory: d, Quota: &fakeQuota{}, DailyLimit: limit,
+		Now: func() time.Time { return now }}, mr
+}
+
+// 全服额度用完时回繁忙:不调国家系统,也不占账号当天的提交次数。
+func TestSubmitWithoutQuotaIsBusyAndKeepsTheAttempt(t *testing.T) {
+	v := &fakeVerifier{check: ok(testPI)}
+	s, mr := newService(t, v, &fakeDirectory{}, 5)
+	s.Quota = &fakeQuota{deny: true}
+	if _, tip := s.Submit(context.Background(), testAccount, "张三", validID); tip != uint32(table.LoginError_kLoginRealNameServiceUnavailable) {
+		t.Fatalf("tip = %d, want service unavailable", tip)
+	}
+	if v.checks != 0 || mr.Exists(redisslot.RealNameAttemptsKey(testAccount, "2026-11-19")) {
+		t.Fatalf("no quota: checks=%d, attempt counted=%v; want neither", v.checks, mr.Exists(redisslot.RealNameAttemptsKey(testAccount, "2026-11-19")))
+	}
 }
 
 func ok(pi string) func() (nppa.AuthResult, error) {

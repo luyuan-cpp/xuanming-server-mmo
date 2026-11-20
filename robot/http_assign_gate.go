@@ -203,12 +203,13 @@ func queuePollInterval(rsp *httpAssignGateResponse) time.Duration {
 //     queue-status 连续失败时按 2s 起翻倍退避,封顶 30s。
 //   - /api/queue-status 本身失败(只限网络错误、HTTP 非 200、回包 code==500,见 pollQueueStatus)时,
 //     带同一 token 立即重调一次 /api/assign-gate 作恢复,连续失败次数加 1;queue-status 回一次非失败回包即清零,
-//     恢复重入的回包不清零。重入回 code=100(ratelimit,或 login 续上原排队条目)或回 code=429,
-//     都保留 token、按 heldTokenWait 等待后回到 /api/queue-status 轮询;不按 429 的 30/60/120s 退避重调
-//     assign-gate,否则已被放行的玩家会错过 login 的放行窗口(AdmitTTL 60s)。
+//     恢复重入的回包不清零。重入回 code=100(ratelimit,或 login 续上原排队条目)、code=429、code=500,
+//     或重入自身网络错误 / HTTP 非 200(2026-11-20 起,§11.5 第 6 条),都保留 token、按 heldTokenWait 等待后
+//     回到 /api/queue-status 轮询;不按 429 的 30/60/120s 退避重调 assign-gate,否则已被放行的玩家会错过
+//     login 的放行窗口(AdmitTTL 60s)。
 //   - queue-status 回 503 zone_*(zone_maintenance / zone_closed / zone_not_open,zone 不可进的终态)或
 //     404 zone_not_found:不发恢复重入,按错误返回,交外层。
-//   - 收到 410 丢掉 token,不带 token 立即重调 /api/assign-gate;此后按不持 token 的口径处理。
+//   - 收到 410 丢掉 token、连续失败次数清零,不带 token 立即重调 /api/assign-gate;此后按不持 token 的口径处理。
 //   - 不持有 token 时(口径未变),code=100(ratelimit)按 queuePollInterval 重调 /api/assign-gate,不加抖动;
 //     code=429 直接返回错误,交给调用方的外层重试(robot 是 main.go 的 resolveGateViaHTTPLocal,退避节奏以该函数为准,
 //     远短于真实客户端此时按设计稿 §11.5 原第 2 条用的 30/60/120s;robot 把 429 当失败,设计稿 §11.7 R2)。
@@ -216,7 +217,7 @@ func queuePollInterval(rsp *httpAssignGateResponse) time.Duration {
 // 每个请求发出前都确认排队预算(ctx)未用完:等待都经 sleep,sleep 返回错误即返回;queue-status 失败后紧接的恢复重入、
 // 410 后不带 token 的重调不等待,发出前先查 ctx.Err(),预算用完同样立即返回,不再发请求。已发出的请求不随预算取消
 // (每次调用各带 perCallTimeout),所以最后一次请求的回包可能在截止后才到,此时回 code=0 仍算放行。
-// 恢复用的重入也失败时返回错误,外层重试从头开始,token 随之丢弃(压测可接受)。
+// 恢复重入回 401、503 zone_*、404 等其它失败码时返回错误,外层重试从头开始,token 随之丢弃。
 //
 // req 被就地更新(QueueToken 随回包变化)。stats 可为 nil,口径:首次回 code=100 记 entered,
 // 放行时记等待时长与最大名次,丢弃 token 时记 expired。sleep 与 jitter 由调用方注入,
@@ -294,13 +295,18 @@ func AssignGateWithQueue(
 				return nil, err
 			}
 
-		case 429:
+		case 429, 500:
 			if req.QueueToken == "" {
-				return nil, fmt.Errorf("rate-limited: %s", rsp.Error)
+				if rsp.Code == 429 {
+					return nil, fmt.Errorf("rate-limited: %s", rsp.Error)
+				}
+				return nil, fmt.Errorf("AssignGate code=%d err=%q", rsp.Code, rsp.Error)
 			}
-			// 恢复用的重入被 IP 桶挡住:按持 token 的同一口径等待后回到 queue-status 轮询,不退避重调 assign-gate。
+			// 持 token 时只有恢复重入的回包落到这里(queue-status 的 500 在 pollQueueStatus 里已转成重入):
+			// 429 = 重入被 IP 桶挡住;500 = 重入到了 login 而 login 仍不可用,或重入自身网络 / HTTP 失败(pollQueueStatus 合成)。
+			// 都按持 token 的同一口径等待后回到 queue-status 轮询,不退避重调 assign-gate。
 			if err := sleep(ctx, heldTokenWait(rsp.RetryAfterMs, statusFailures, jitter)); err != nil {
-				return nil, fmt.Errorf("queue budget exceeded (rate-limited: %s)", rsp.Error)
+				return nil, fmt.Errorf("queue budget exceeded (code=%d err=%q)", rsp.Code, rsp.Error)
 			}
 			rsp, err = pollHeld()
 			if err != nil {
@@ -317,6 +323,8 @@ func AssignGateWithQueue(
 				stats.QueueExpiredToken()
 			}
 			req.QueueToken = ""
+			// 连续失败次数跟着旧 token 走:换来的新 token 从头计,首次等待不沿用旧的退避。
+			statusFailures = 0
 			// 这次重调不等待,所以在这里确认排队预算未用完:410 可能是预算到期前发出、到期后才回的那次请求。
 			if ctx.Err() != nil {
 				return nil, fmt.Errorf("queue budget exceeded (code=410 err=%q)", rsp.Error)
@@ -331,7 +339,7 @@ func AssignGateWithQueue(
 			return nil, fmt.Errorf("%w: err=%q", errAssignGateUnauthenticated, rsp.Error)
 
 		default:
-			// 含 queue-status 或重入回的 503 zone_* / 404 zone_not_found(zone 不可进),以及重入回的 500:交外层。
+			// 含 queue-status 或重入回的 503 zone_* / 404 zone_not_found(zone 不可进):交外层。
 			return nil, fmt.Errorf("AssignGate code=%d err=%q", rsp.Code, rsp.Error)
 		}
 	}
@@ -343,8 +351,9 @@ func AssignGateWithQueue(
 // 都是非失败回包,原样交回状态机,不发重入。
 //
 // 失败时带同一 token 立即重调一次 /api/assign-gate 作恢复,把重入的回包交回状态机(statusFailed=true);
-// 重入本身也失败(网络错误 / 非 200)才返回错误。发重入前先查 ctx:排队预算已在这次 queue-status 途中用完则不发重入,
-// 返回 queue budget exceeded 错误(statusFailed=true)。口径见 open-server-rate-limit-design.md §11.5 的 2026-10-15 更正及其补注。
+// 重入本身也失败(网络错误 / 非 200)时不返回错误,合成一个 code=500 的回包交回,状态机按重入回 500 保票退避
+// (§11.5 第 6 条,2026-11-20 起;此前返回错误、token 随之丢弃)。发重入前先查 ctx:排队预算已在这次 queue-status
+// 途中用完则不发重入,返回 queue budget exceeded 错误(statusFailed=true)。口径见 open-server-rate-limit-design.md §11.5。
 func pollQueueStatus(ctx context.Context, api gatewayQueueAPI, req *httpAssignGateRequest) (rsp *httpAssignGateResponse, statusFailed bool, err error) {
 	rsp, err = api.QueueStatus(req.QueueToken, req.ZoneID)
 	if err == nil && rsp.Code != 500 {
@@ -359,7 +368,7 @@ func pollQueueStatus(ctx context.Context, api gatewayQueueAPI, req *httpAssignGa
 	}
 	reentry, reentryErr := api.AssignGate(req)
 	if reentryErr != nil {
-		return nil, true, fmt.Errorf("queue-status failed (%v) and re-entry failed: %w", err, reentryErr)
+		return &httpAssignGateResponse{Code: 500, Error: fmt.Sprintf("queue-status failed (%v) and re-entry failed: %v", err, reentryErr)}, true, nil
 	}
 	return reentry, true, nil
 }

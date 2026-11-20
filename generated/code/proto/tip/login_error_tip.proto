@@ -85,4 +85,28 @@ enum login_error {
 
   kLoginZoneCreateRoleClosed = 2037;
 
+  kLoginAccountDeletionPending = 2038;
+
+  kLoginAccountDeletionBlocked = 2039;
+
+  kLoginAccountDeletionInProgress = 2040;
+
+  kLoginAccountDeletionReauthRequired = 2041;
+
+  kLoginRealNameRequired = 2042;
+
+  kLoginRealNameInvalid = 2043;
+
+  kLoginRealNamePending = 2044;
+
+  kLoginRealNameTooManyAttempts = 2045;
+
+  kLoginRealNameAlreadyBound = 2046;
+
+  kLoginRealNameServiceUnavailable = 2047;
+
+  kLoginMinorNotInPlayTime = 2048;
+
+  kLoginMinorPlayTimeOver = 2049;
+
 };

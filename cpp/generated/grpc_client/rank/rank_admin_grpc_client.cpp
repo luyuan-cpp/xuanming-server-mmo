@@ -29,6 +29,7 @@ namespace rankpb {
 #pragma region RankAdminOpenRankGeneration
 namespace {
 void QueueLocalRankAdminOpenRankGenerationFailure(GrpcDone<::rankpb::OpenRankGenerationResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kRankAdminOpenRankGenerationGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendRankAdminOpenRankGenerationErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC RankAdmin.OpenRankGeneration: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminOpenRankGenerationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendRankAdminOpenRankGenerationErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::rankpb::OpenRankGenerationRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC RankAdmin.OpenRankGeneration: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminOpenRankGenerationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendRankAdminOpenRankGenerationErased(entt::registry& registry, entt::entit
 #pragma region RankAdminSubmitRankScores
 namespace {
 void QueueLocalRankAdminSubmitRankScoresFailure(GrpcDone<::rankpb::SubmitRankScoresResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kRankAdminSubmitRankScoresGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendRankAdminSubmitRankScoresErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC RankAdmin.SubmitRankScores: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminSubmitRankScoresGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendRankAdminSubmitRankScoresErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::rankpb::SubmitRankScoresRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC RankAdmin.SubmitRankScores: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminSubmitRankScoresGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendRankAdminSubmitRankScoresErased(entt::registry& registry, entt::entity 
 #pragma region RankAdminFreezeRankGeneration
 namespace {
 void QueueLocalRankAdminFreezeRankGenerationFailure(GrpcDone<::rankpb::FreezeRankGenerationResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kRankAdminFreezeRankGenerationGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendRankAdminFreezeRankGenerationErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC RankAdmin.FreezeRankGeneration: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminFreezeRankGenerationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendRankAdminFreezeRankGenerationErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::rankpb::FreezeRankGenerationRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC RankAdmin.FreezeRankGeneration: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminFreezeRankGenerationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendRankAdminFreezeRankGenerationErased(entt::registry& registry, entt::ent
 #pragma region RankAdminRemoveRankEntry
 namespace {
 void QueueLocalRankAdminRemoveRankEntryFailure(GrpcDone<::rankpb::RankAdminResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kRankAdminRemoveRankEntryGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendRankAdminRemoveRankEntryErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC RankAdmin.RemoveRankEntry: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminRemoveRankEntryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendRankAdminRemoveRankEntryErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::rankpb::RemoveRankEntryRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC RankAdmin.RemoveRankEntry: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminRemoveRankEntryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendRankAdminRemoveRankEntryErased(entt::registry& registry, entt::entity n
 #pragma region RankAdminDeleteRankGeneration
 namespace {
 void QueueLocalRankAdminDeleteRankGenerationFailure(GrpcDone<::rankpb::RankAdminResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kRankAdminDeleteRankGenerationGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendRankAdminDeleteRankGenerationErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC RankAdmin.DeleteRankGeneration: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminDeleteRankGenerationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendRankAdminDeleteRankGenerationErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::rankpb::RemoveRankEntryRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC RankAdmin.DeleteRankGeneration: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kRankAdminDeleteRankGenerationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

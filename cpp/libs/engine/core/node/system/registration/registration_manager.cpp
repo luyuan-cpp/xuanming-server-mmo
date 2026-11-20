@@ -252,6 +252,10 @@ void NodeHandshakeManager::OnNodeHandshake(
 		};
 
 	if (tryRegister(rpcConn, peerNode.node_type())) {
+		// 记下这条入站连接属于哪个进程,先于回成功:发起方收到成功才 Ready、才发业务,所以本连接上的业务调用一律读得到它
+		// (RpcController::HandshakePeerUuid)。与节点实体分开记:对端从 etcd 摘除时实体随之销毁,连接却可能还开着
+		// (老进程还没关停),scene 仍要认得出它发来的消息出自哪个进程(scene-enter-chain-residuals.md §14)。
+		RpcChannel::RecordHandshakePeer(rpcConn, peerNode.node_uuid());
 		response.mutable_error_message()->set_id(kCommon_errorOK);
 		LOG_INFO << "Node registration succeeded: " << peerNode.DebugString();
 		return;

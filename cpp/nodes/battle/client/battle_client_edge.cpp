@@ -125,31 +125,38 @@ void BattleClientEdge::Install(muduo::net::TcpServer &server)
 bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
                                        const battle_connection_admission::SteadyTime now)
 {
-    // 未认证直连池:没完成票据握手、也没出示探测授权,且还连着(正在关闭的马上就走,不必再挑它,也不占池)。
-    battle_connection_admission::UnauthenticatedScan scan;
-    for (const auto &[connId, session] : sessions_)
-    {
-        if (session.verified || session.probeGrant.has_value())
-        {
-            continue;
-        }
-        if (const auto conn = session.conn.lock(); conn && conn->connected())
-        {
-            scan.Add(connId, session.openedAt);
-        }
-    }
-    // 本端 loop 刚卡过就不给最老一条的年龄:那时「建连多久还没握手」不可信,不该据此淘汰。
+    const uint64_t unauthenticated = unauthenticated_.size();
+    // 最老的一条未认证直连只在池承压时用得上,也只在那时才找。本端 loop 刚卡过就不找:那时「建连多久还没握手」不可信,
+    // 握手包可能还在接收缓冲里没读,不该据此淘汰。
+    std::optional<uint64_t> oldestConnId;
     std::optional<battle_connection_admission::SteadyTime::duration> oldestAge;
-    if (scan.oldestConnId && !loopStall_.RecentlyStalled(now))
+    if (unauthenticated >= admission_.CurrentPreAuthBudget().earlyDropStart && !loopStall_.RecentlyStalled(now))
     {
-        oldestAge = now - scan.oldestOpenedAt;
+        oldestConnId = OldestConnectedUnauthenticated();
+        if (oldestConnId)
+        {
+            oldestAge = now - sessions_.at(*oldestConnId).openedAt;
+        }
     }
-    const auto verdict = admission_.Admit(sessions_.size(), EffectiveMaxConnections(), scan.count, oldestAge, now);
+    const auto verdict =
+        admission_.Admit(peer, sessions_.size(), EffectiveMaxConnections(), unauthenticated, oldestAge, now);
     if (!verdict.rejected)
     {
-        if (verdict.evictOldestUnauthenticated && scan.oldestConnId)
+        if (verdict.sourceUntracked)
         {
-            EvictUnauthenticated(*scan.oldestConnId, now);
+            // 前缀表满、这个来源没登记上就放行了(fail-open):按原因采样(与其余拒绝同一个限流表)。对端地址只进日志。
+            uint64_t total = 0;
+            if (SampleRejection("source_untracked", total))
+            {
+                LOG_WARN << "battle per-source prefix table is full, admitting a direct connection without per-source "
+                            "accounting(sampled): max_tracked="
+                         << accept_admission::kMaxTrackedSources << " untracked_total=" << total
+                         << " latest_peer=" << peer.toIpPort();
+            }
+        }
+        if (verdict.evictOldestUnauthenticated && oldestConnId)
+        {
+            EvictUnauthenticated(*oldestConnId, now);
         }
         return true;
     }
@@ -159,6 +166,24 @@ bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
         LogRejectionSampled(battle_connection_admission::RejectReasonName(*verdict.rejected).data(), peer);
     }
     return false;
+}
+
+std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated() const
+{
+    // 通常第一条就是;只有队头恰好是 shutdown 之后等延迟强关的那几条(至多 100ms)时才往后看几条。
+    for (const uint64_t connId : unauthenticated_)
+    {
+        const auto it = sessions_.find(connId);
+        if (it == sessions_.end())
+        {
+            continue;
+        }
+        if (const auto conn = it->second.conn.lock(); conn && conn->connected())
+        {
+            return connId;
+        }
+    }
+    return std::nullopt;
 }
 
 void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_connection_admission::SteadyTime now)
@@ -173,6 +198,8 @@ void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_
     {
         return;
     }
+    // 先移出池:这一刻起它不再算在池里(与 gate 先收回占位同一做法),紧接着的下一条 accept 看到的就是腾出位置之后的池。
+    unauthenticated_.erase(connId);
     admission_.NotePreAuthEvicted();
     // 淘汰的量与只建连不握手的流量同一量级:按原因采样(与其余拒绝同一个限流表)。对端地址只进日志。
     uint64_t total = 0;
@@ -186,14 +213,6 @@ void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_
     // forceClose 只把连接置成关闭中、真正的关闭排到之后的 loop 轮次,随后照常走 HandleClosed 删会话;不在准入回调里摘。
     // 连接一进关闭中,codec 就不再分发它的帧,被选中之后不会再握手成功。
     conn->forceClose();
-}
-
-size_t BattleClientEdge::UnauthenticatedConnectionCount() const
-{
-    // 探测连接从不握手(全服匹配的探测按玩家均摊在本机房每台可探测的 battle 上),但出示过 match 签发的授权,
-    // 不算未认证;否则每台的未认证连接数都会随探测量涨,和「建连不认证」的流量分不开。
-    return static_cast<size_t>(std::count_if(sessions_.begin(), sessions_.end(), [](const auto &entry)
-                                             { return !entry.second.verified && !entry.second.probeGrant.has_value(); }));
 }
 
 void BattleClientEdge::RegisterMetrics()
@@ -367,6 +386,8 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
     session.conn = conn;
     session.openedAt = std::chrono::steady_clock::now();
     admission_.NoteAccepted();
+    // 进未认证池:到握手成功、出示探测授权、被淘汰或断开时出池。
+    unauthenticated_.insert(connId);
 
     // 闸 3:握手期限。回调只持 connId,到期时重查会话;已验证则什么都不做。
     std::weak_ptr<muduo::net::TcpConnection> weakConn = conn;
@@ -409,7 +430,11 @@ void BattleClientEdge::OnProbeStart(const muduo::net::TcpConnectionPtr& conn,
        !gNode||grant.physical_region()!=network_probe::PhysicalRegion()||grant.target_node_id()!=gNode->GetNodeInfo().node_id()||
        grant.target_instance_id()!=gNode->GetNodeInfo().node_uuid()||grant.expires_at_ms()<=TimeSystem::NowMillisecondsUTC())
     {conn->forceClose();return;}
-    s->probeGrant=std::move(grant);SendProbeChallenge(*s,conn);
+    s->probeGrant=std::move(grant);
+    // 出示了 match 签发、验过签的探测授权:出未认证池。探测连接从不握手,不出池的话每台的未认证数都会随探测量涨,
+    // 和「建连不认证」的流量分不开。
+    unauthenticated_.erase(s->connId);
+    SendProbeChallenge(*s,conn);
 }
 
 void BattleClientEdge::SendProbeChallenge(DirectSession& s,const muduo::net::TcpConnectionPtr& conn)
@@ -465,6 +490,7 @@ void BattleClientEdge::HandleClosed(const muduo::net::TcpConnectionPtr &conn)
                  << " peer=" << conn->peerAddress().toIpPort()
                  << " remaining=" << (sessions_.size() - 1);
     }
+    unauthenticated_.erase(connId);
     sessions_.erase(it);
 }
 
@@ -581,6 +607,7 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
     }
 
     session->verified = true;
+    unauthenticated_.erase(session->connId);
     session->battleId = payload.battle_id();
     session->playerId = payload.player_id();
     session->role = payload.role();

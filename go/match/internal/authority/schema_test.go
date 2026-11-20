@@ -114,3 +114,20 @@ func TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "match_spectator_intent")
 }
+
+// 剧本审核流水的保留期清理同样按 (reviewed_ms, 主键) 翻页,索引缺了每轮全表扫描,启动核对拒绝接流。
+func TestTiDBCandidateIndexesRequireBattleScriptReviewPurgeIndex(t *testing.T) {
+	s := testStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	require.NoError(t, s.CheckCandidateIndexes(ctx))
+	var index string
+	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT index_name FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='match_battle_script_review' AND seq_in_index=1 AND column_name='reviewed_ms' LIMIT 1").Scan(&index))
+	_, err := s.DB.ExecContext(ctx, fmt.Sprintf("DROP INDEX `%s` ON match_battle_script_review", index))
+	require.NoError(t, err)
+
+	err = s.CheckCandidateIndexes(ctx)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "match_battle_script_review")
+}

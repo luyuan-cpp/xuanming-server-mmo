@@ -1,7 +1,7 @@
 // Package constants 是 chat 服务写进 TipInfoMessage.id 的 tip 码(契约 §9)。
 //
-// chat 还没有自己的业务域段:Tip.xlsx 开 chat 段之前,v1 只复用 common 段的既有码
-// (与路由服同一做法)。开段后把这里整体换成 table.ChatError_kX,客户端文案随表走。
+// v1 的五个码复用 common 段的既有码(与路由服同一做法),不改:它们已是客户端可见的契约。
+// 2026-11-20 起聊天自己的码落在 chat 段(Tip.xlsx 的 //chat_error base=18000),写成 table.ChatError_kX。
 // 码值一律引用导表器生成的枚举(AGENTS.md §7.5),不许手写数字;
 // chat_test.go 的 TestNoHandWrittenTipCodes 机械守住这条。
 package constants
@@ -60,11 +60,18 @@ const (
 	// 这是 Tip.xlsx 里 fault 列标 1 的码,serverbase 会把它记成 rpc_inband_fault 并告警 ——
 	// **只用于真故障**,任何业务拒绝都不许复用它,否则告警会被正常流量淹没。
 	ErrStorage = uint32(table.CommonError_kServiceUnavailable)
+
+	// ErrContentRejected:正文命中屏蔽词,且这一类在聊天里按拒绝处理(涉政、色情、广告等;辱骂类打码后照发)。
+	ErrContentRejected = uint32(table.ChatError_kChatContentRejected)
+
+	// ErrContentCheckUnavailable:内容安全服务不可达或超时,没检过的正文不发,客户端可稍后重试。
+	// fault 码:依赖故障要告警。
+	ErrContentCheckUnavailable = uint32(table.ChatError_kChatContentCheckUnavailable)
 )
 
 // TipClassifier 返回本服务的 in-band 业务码定性函数,供 serverbase.UnaryInterceptor 使用。
 //
-// chat 复用的 5 个 common 码的定性(哪个算故障)已经在 Tip.xlsx 的 fault 列里,
+// 各码的定性(哪个算故障)已经在 Tip.xlsx 的 fault 列里,
 // 生成到 shared/generated/tip.Faults,serverbase.TipVerdict 直接认得;
 // 这里显式交回全局判定只是为了固定本服务的定性接缝(与 friend 同口径),
 // **不要**在这里包一层本地 map 去"微调"—— 要改分类,改表。

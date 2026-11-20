@@ -28,6 +28,7 @@ GrpcCallOutcome MakeLocalFailureOutcome(uint32_t code, std::string message) {
 #pragma region BattleClientPlayerSubmitBattleAction
 namespace {
 void QueueLocalBattleClientPlayerSubmitBattleActionFailure(GrpcDone<::SubmitBattleActionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerSubmitBattleActionGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -95,6 +96,7 @@ void SendBattleClientPlayerSubmitBattleActionErased(entt::registry& registry, en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.SubmitBattleAction: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerSubmitBattleActionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -104,6 +106,7 @@ void SendBattleClientPlayerSubmitBattleActionErased(entt::registry& registry, en
     const auto* typedRequest = dynamic_cast<const ::SubmitBattleActionRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.SubmitBattleAction: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerSubmitBattleActionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -116,6 +119,7 @@ void SendBattleClientPlayerSubmitBattleActionErased(entt::registry& registry, en
 #pragma region BattleClientPlayerGetBattleState
 namespace {
 void QueueLocalBattleClientPlayerGetBattleStateFailure(GrpcDone<::BattleStateS2C> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerGetBattleStateGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -183,6 +187,7 @@ void SendBattleClientPlayerGetBattleStateErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.GetBattleState: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerGetBattleStateGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -192,6 +197,7 @@ void SendBattleClientPlayerGetBattleStateErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::GetBattleStateRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.GetBattleState: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerGetBattleStateGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -204,6 +210,7 @@ void SendBattleClientPlayerGetBattleStateErased(entt::registry& registry, entt::
 #pragma region BattleClientPlayerNotifyBattleStart
 namespace {
 void QueueLocalBattleClientPlayerNotifyBattleStartFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleStartGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -271,6 +278,7 @@ void SendBattleClientPlayerNotifyBattleStartErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleStart: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleStartGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -280,6 +288,7 @@ void SendBattleClientPlayerNotifyBattleStartErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::BattleStartS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleStart: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleStartGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -292,6 +301,7 @@ void SendBattleClientPlayerNotifyBattleStartErased(entt::registry& registry, ent
 #pragma region BattleClientPlayerNotifyTurnResult
 namespace {
 void QueueLocalBattleClientPlayerNotifyTurnResultFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyTurnResultGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -359,6 +369,7 @@ void SendBattleClientPlayerNotifyTurnResultErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyTurnResult: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyTurnResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -368,6 +379,7 @@ void SendBattleClientPlayerNotifyTurnResultErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::TurnResultS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyTurnResult: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyTurnResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -380,6 +392,7 @@ void SendBattleClientPlayerNotifyTurnResultErased(entt::registry& registry, entt
 #pragma region BattleClientPlayerNotifyBattleEnd
 namespace {
 void QueueLocalBattleClientPlayerNotifyBattleEndFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleEndGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -447,6 +460,7 @@ void SendBattleClientPlayerNotifyBattleEndErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleEnd: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleEndGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -456,6 +470,7 @@ void SendBattleClientPlayerNotifyBattleEndErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::BattleEndS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleEnd: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleEndGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -468,6 +483,7 @@ void SendBattleClientPlayerNotifyBattleEndErased(entt::registry& registry, entt:
 #pragma region BattleClientPlayerNotifyBattleReconnect
 namespace {
 void QueueLocalBattleClientPlayerNotifyBattleReconnectFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleReconnectGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -535,6 +551,7 @@ void SendBattleClientPlayerNotifyBattleReconnectErased(entt::registry& registry,
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleReconnect: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleReconnectGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -544,6 +561,7 @@ void SendBattleClientPlayerNotifyBattleReconnectErased(entt::registry& registry,
     const auto* typedRequest = dynamic_cast<const ::BattleReconnectS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleReconnect: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleReconnectGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -556,6 +574,7 @@ void SendBattleClientPlayerNotifyBattleReconnectErased(entt::registry& registry,
 #pragma region BattleClientPlayerStopWatchBattle
 namespace {
 void QueueLocalBattleClientPlayerStopWatchBattleFailure(GrpcDone<::StopWatchBattleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerStopWatchBattleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -623,6 +642,7 @@ void SendBattleClientPlayerStopWatchBattleErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.StopWatchBattle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerStopWatchBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -632,6 +652,7 @@ void SendBattleClientPlayerStopWatchBattleErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::StopWatchBattleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.StopWatchBattle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerStopWatchBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -644,6 +665,7 @@ void SendBattleClientPlayerStopWatchBattleErased(entt::registry& registry, entt:
 #pragma region BattleClientPlayerSetAutoBattle
 namespace {
 void QueueLocalBattleClientPlayerSetAutoBattleFailure(GrpcDone<::SetAutoBattleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerSetAutoBattleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -711,6 +733,7 @@ void SendBattleClientPlayerSetAutoBattleErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.SetAutoBattle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerSetAutoBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -720,6 +743,7 @@ void SendBattleClientPlayerSetAutoBattleErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::SetAutoBattleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.SetAutoBattle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerSetAutoBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -732,6 +756,7 @@ void SendBattleClientPlayerSetAutoBattleErased(entt::registry& registry, entt::e
 #pragma region BattleClientPlayerNotifySpectateState
 namespace {
 void QueueLocalBattleClientPlayerNotifySpectateStateFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateStateGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -799,6 +824,7 @@ void SendBattleClientPlayerNotifySpectateStateErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifySpectateState: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateStateGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -808,6 +834,7 @@ void SendBattleClientPlayerNotifySpectateStateErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::SpectateStateS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifySpectateState: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateStateGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -820,6 +847,7 @@ void SendBattleClientPlayerNotifySpectateStateErased(entt::registry& registry, e
 #pragma region BattleClientPlayerNotifySpectateTurnResult
 namespace {
 void QueueLocalBattleClientPlayerNotifySpectateTurnResultFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateTurnResultGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -887,6 +915,7 @@ void SendBattleClientPlayerNotifySpectateTurnResultErased(entt::registry& regist
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifySpectateTurnResult: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateTurnResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -896,6 +925,7 @@ void SendBattleClientPlayerNotifySpectateTurnResultErased(entt::registry& regist
     const auto* typedRequest = dynamic_cast<const ::TurnResultS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifySpectateTurnResult: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateTurnResultGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -908,6 +938,7 @@ void SendBattleClientPlayerNotifySpectateTurnResultErased(entt::registry& regist
 #pragma region BattleClientPlayerNotifySpectateEnd
 namespace {
 void QueueLocalBattleClientPlayerNotifySpectateEndFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateEndGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -975,6 +1006,7 @@ void SendBattleClientPlayerNotifySpectateEndErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifySpectateEnd: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateEndGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -984,6 +1016,7 @@ void SendBattleClientPlayerNotifySpectateEndErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::SpectateEndS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifySpectateEnd: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifySpectateEndGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -996,6 +1029,7 @@ void SendBattleClientPlayerNotifySpectateEndErased(entt::registry& registry, ent
 #pragma region BattleClientPlayerNotifyBattleAssigned
 namespace {
 void QueueLocalBattleClientPlayerNotifyBattleAssignedFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleAssignedGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1063,6 +1097,7 @@ void SendBattleClientPlayerNotifyBattleAssignedErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleAssigned: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleAssignedGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1072,6 +1107,7 @@ void SendBattleClientPlayerNotifyBattleAssignedErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::BattleAssignedS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC BattleClientPlayer.NotifyBattleAssigned: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kBattleClientPlayerNotifyBattleAssignedGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

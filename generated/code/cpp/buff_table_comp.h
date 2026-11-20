@@ -202,6 +202,10 @@ struct BuffTick_on_applyComp {
     uint32_t value;
 };
 
+struct BuffKeep_on_logoutComp {
+    uint32_t value;
+};
+
 struct BuffInterval_effectComp {
     std::span<const double> values;
 };
@@ -359,6 +363,9 @@ inline BuffRequire_living_casterComp MakeBuffRequire_living_casterComp(const Buf
 }
 inline BuffTick_on_applyComp MakeBuffTick_on_applyComp(const BuffTable& row) {
     return { row.tick_on_apply() };
+}
+inline BuffKeep_on_logoutComp MakeBuffKeep_on_logoutComp(const BuffTable& row) {
+    return { row.keep_on_logout() };
 }
 inline BuffInterval_effectComp MakeBuffInterval_effectComp(const BuffTable& row) {
     const auto& rf = row.interval_effect();

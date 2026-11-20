@@ -551,6 +551,19 @@ TEST_F(SkillUtilTest, RestoreCooldowns_KeepsRecordsAsSavedWithNewerFields) {
     EXPECT_EQ(kSuccess, SkillSystem::CheckCooldown(caster, &tableSkill)) << "到点的记录不挡施法";
 }
 
+// 列表里没有记录、却带着更新版本加的列表级字段:照样挂上并原样带回,不能因为没有记录就把那些字段丢掉。
+TEST_F(SkillUtilTest, RestoreCooldowns_EmptyListWithNewerFieldsIsCarried) {
+    const auto caster = CreateSkillActor();
+    CooldownTimeListComp saved;
+    saved.GetReflection()->MutableUnknownFields(&saved)->AddVarint(412349, 7);
+
+    SkillSystem::RestoreCooldowns(caster, saved);
+
+    const auto* restored = tlsEcs.actorRegistry.try_get<CooldownTimeListComp>(caster);
+    ASSERT_NE(nullptr, restored);
+    EXPECT_EQ(saved.SerializeAsString(), restored->SerializeAsString());
+}
+
 // 写盘节点时钟超前:开始时刻晚于本机当前时刻的压到当前时刻,剩余最多一个整冷却,不会锁到那个未来时刻之后。
 TEST_F(SkillUtilTest, RestoreCooldowns_FutureStartIsClampedToNow) {
     const auto caster = CreateSkillActor();

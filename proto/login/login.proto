@@ -266,6 +266,9 @@ message AssignGateRequest {
 //   3 = EXPIRED   (queue_token expired or unknown — client must restart from /assign-gate)
 //   4 = UNAUTHENTICATED (AssignGate only: access_token invalid, or missing while anonymous assignment is off —
 //                        client must log in again; never returned by QueryQueueStatus)
+//   5 = QUEUE_FULL (AssignGate only: the zone queue is at its length limit, nothing was enqueued and there is no
+//                   queue_token; retry_after_ms says when to call AssignGate again. The gateway turns it into the
+//                   same retry hint as its own rate limiter, so clients need no extra branch)
 
 message AssignGateResponse {
   string ip = 1;
@@ -383,10 +386,25 @@ message ScheduleAccountDeletionRequest {
   string reason = 3;      // 必填,≤ 256 字节
 }
 
+// 客服重置实名(docs/design/real-name-anti-addiction.md §5.2 末):玩家填错了身份信息、客服在系统外核实之后,清掉账号上的实名,
+// 玩家下次登录重新提交。player_id 与 account 恰好填一个:填错身份证号的账号可能一个角色都建不了,所以也能按账号找。
+message ResetAccountRealNameRequest {
+  uint64 player_id = 1;   // 账号下任一角色
+  string account = 2;     // 或者直接给账号
+  string operator = 3;    // 必填,≤ 64 字节
+  string reason = 4;      // 必填,≤ 256 字节
+}
+
+message ResetAccountRealNameResponse {
+  TipInfoMessage error_message = 1; // 角色或账号不存在:kLoginAccountNotFound
+  bool had_real_name = 2;           // 重置之前有没有实名;false = 本来就没有(重放也落在这里)
+}
+
 service LoginAdmin {
   // 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
   // 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
   // (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
   rpc RemovePlayersFromAccounts (RemovePlayersFromAccountsRequest) returns (RemovePlayersFromAccountsResponse);
   rpc ScheduleAccountDeletion (ScheduleAccountDeletionRequest) returns (AccountDeletionResponse);
+  rpc ResetAccountRealName (ResetAccountRealNameRequest) returns (ResetAccountRealNameResponse);
 }

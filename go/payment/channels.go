@@ -262,10 +262,9 @@ func serviceOptions(c config.Config, realNames core.RealNames) core.Options {
 		}
 		products = append(products, core.Product{SkuID: product.SkuId, Title: product.Title, ByChannel: byChannel})
 	}
-	compliance := c.Payment.Compliance
 	return core.Options{Products: products, TestPolicies: map[string]core.TestPolicy{
 		channel.NameApple:          testPolicy(c.Payment.Apple.Test),
 		channel.NameGoogle:         testPolicy(c.Payment.Google.Test),
 		channel.NameWechatMinigame: testPolicy(c.Payment.WechatMinigame.Test),
-	}, RealNames: realNames, DailyLimitFenAge8To16: compliance.DailyLimitFenAge8To16, DailyLimitFenAge16To18: compliance.DailyLimitFenAge16To18}
+	}, RealNames: realNames}
 }

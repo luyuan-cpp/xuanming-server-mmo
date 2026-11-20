@@ -31,6 +31,8 @@ service DataService {
   rpc SetAccountRealName(SetAccountRealNameRequest) returns (SetAccountRealNameResponse) {}
   // 充值限额闸按玩家查实名(§5.6)。只认 payment 的调用证明;角色不存在或已删回 found=false。
   rpc GetAccountRealName(GetAccountRealNameRequest) returns (GetAccountRealNameResponse) {}
+  // 客服重置实名(§5.2 末):清掉账号行上的 pi,玩家下次登录重新提交。幂等,只认 login 的调用证明;账号行不存在回 NOT_FOUND。
+  rpc ResetAccountRealName(ResetAccountRealNameRequest) returns (ResetAccountRealNameResponse) {}
   // 角色寄售控制仅允许独立 trade 证明；Begin 只阻新入场，不等于在线实体已冻结。
   rpc BeginAccountRoleTrade(BeginAccountRoleTradeRequest) returns (AccountRoleTradeReceipt) {}
   // 请求不接受 caller proof。只有装配的服务端 SQL 验证器能确认 FROZEN；未装配时拒绝。
@@ -113,6 +115,9 @@ service DataService {
   // 已绑定的名字一律拒绝,预留态的先在玩家片证明角色永远不会提交(§3.4a)。删角之后的释放不走这里。
   rpc ReleasePlayerName(ReleasePlayerNameRequest) returns (google.protobuf.Empty) {}
   rpc BatchGetPlayerName(BatchGetPlayerNameRequest) returns (BatchGetPlayerNameResponse) {}
+  // 角色改名(docs/design/rename-and-content-safety.md §4)。只认 scene 的调用证明;同一个 (player_id, seq) 重发回同一个结局。
+  // 名字不合规、被占用、冷却中这些都回 OK + result,由 scene 翻成提示;只有库不可用这类真故障才走 gRPC error(scene 按结局未知重发)。
+  rpc RenameRole(RenameRoleRequest) returns (RenameRoleResponse) {}
   // 玩家展示资料:名字、等级、职业、性别、外观,读 player_store。
   // 好友列表、在线目录、队伍视图用。只读、不鉴权,与 BatchGetPlayerName 同级。
   rpc BatchGetPlayerDisplay(BatchGetPlayerDisplayRequest) returns (BatchGetPlayerDisplayResponse) {}
@@ -157,6 +162,13 @@ message GetAccountRealNameRequest {
 message GetAccountRealNameResponse {
   bool found = 1;          // 角色在目录里、且没有删
   string real_name_pi = 2; // 空串 = 所属账号没由游戏方实名(例如小游戏渠道由平台实名)
+}
+message ResetAccountRealNameRequest {
+  string account = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message ResetAccountRealNameResponse {
+  bool had_real_name = 1; // 重置之前账号上有没有 pi;false = 本来就没实名(重放也落在这里)
 }
 
 // 账号注销的状态(docs/design/account-deletion.md §4.1),与 account_directory.deletion_state 同值。
@@ -740,6 +752,54 @@ message ReleasePlayerNameRequest {
 
 // 一次最多 500 个 id;超了返回 InvalidArgument,不做截断 —— 静默截断会让调用方
 // 把"没返回"当成"没登记",给玩家显示空名。
+// ── 角色改名(docs/design/rename-and-content-safety.md §4)─────────────────────
+//
+// 结局分三类,scene 的处理各不相同:
+//   - 成功(OK):角色现在就是这个名字,scene 扣改名卡、改存档里的名字。
+//   - 这一次不成(TAKEN / INVALID / COOLDOWN / FROZEN / SAME_NAME / EXPIRED / NOT_FOUND):这个 seq 作废,scene 解除占用、提示玩家;
+//     STALE_SEQ 同样作废,scene 另把自己的流水号追到 current_seq。
+//   - 还没有结局(BUSY,以及任何 gRPC error):scene 用同一个 seq 稍后重发。
+enum RenameRoleResult {
+  RENAME_ROLE_RESULT_UNSPECIFIED = 0;
+  RENAME_ROLE_OK = 1;         // 已提交:角色现在就是这个名字(旧名保护、缓存这些收尾可能还在后台)
+  RENAME_ROLE_TAKEN = 2;      // 名字被别人占着(含别人还在保护期内的旧名)
+  RENAME_ROLE_INVALID = 3;    // 名字不合规(字数、字符集)
+  RENAME_ROLE_COOLDOWN = 4;   // 距上一次改名成功还没过冷却;next_allowed_ms 是最早可以再改的时刻
+  RENAME_ROLE_FROZEN = 5;     // 角色正在过户或删角
+  RENAME_ROLE_STALE_SEQ = 6;  // seq 比已有记录小,或同一个 seq 换了名字;current_seq 是服务端记的号
+  RENAME_ROLE_SAME_NAME = 7;  // 和现在的名字一样
+  RENAME_ROLE_NOT_FOUND = 8;  // 没有这名在役角色
+  RENAME_ROLE_EXPIRED = 9;    // 这一次改名太久没有结局,已被服务端作废
+  RENAME_ROLE_BUSY = 10;      // 上一次改名的收尾还没做完,稍后用同一个 seq 重发(不是结局)
+}
+
+message RenameRoleRequest {
+  uint64 player_id = 1;
+  // scene 按玩家递增发的流水号,从 1 起。
+  uint64 seq = 2;
+  // 新名原文;规范化与结构校验在 data_service(和建角同一套规则)。内容安全由 scene 在调用之前送检。
+  string name = 3;
+  // 规则数值由调用方带来(配表 RoleNameRule 在 scene),data_service 不加载玩法配表。
+  uint32 cooldown_seconds = 4; // 两次改名成功之间的最短间隔
+  uint32 hold_seconds = 5;     // 旧名留在原主名下的时长
+  common.base.ServiceCallAuth auth = 6;
+  // 字数上下界(Unicode 码点,RoleNameRule.min_chars / max_chars),和建角时 login 用的是同一行配表。
+  uint32 min_chars = 7;
+  uint32 max_chars = 8;
+}
+
+message RenameRoleResponse {
+  RenameRoleResult result = 1;
+  // 服务端记的流水号。STALE_SEQ 时 scene 把自己的号追到它。
+  uint64 current_seq = 2;
+  // OK:角色现在的展示名(规范化后的写法),scene 把它写进存档。
+  string name = 3;
+  // OK:这次改名成功的时刻 Unix 毫秒。
+  uint64 renamed_ms = 4;
+  // COOLDOWN:最早可以再改的时刻 Unix 毫秒。
+  uint64 next_allowed_ms = 5;
+}
+
 message BatchGetPlayerNameRequest {
   repeated uint64 player_ids = 1;
 }

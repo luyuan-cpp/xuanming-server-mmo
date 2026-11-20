@@ -1300,6 +1300,18 @@ TEST_F(PetRenameReviewTest, DirectRenameStillAppliesWithoutReview) {
     EXPECT_TRUE(FakeContentGuard::requests.empty());
 }
 
+// 可选模式(本机)只把「服务不可用」放宽成通过;明确的拒绝、打码照旧。严格模式什么都不改。
+TEST(ContentGuardClientTest, ApplyOptionalOnlyRelaxesUnavailable) {
+    using Verdict = ContentGuardClient::Verdict;
+    for (const auto verdict : {Verdict::kPass, Verdict::kMasked, Verdict::kReject, Verdict::kUnavailable}) {
+        ContentGuardClient::Result result;
+        result.verdict = verdict;
+        EXPECT_EQ(verdict, ContentGuardClient::ApplyOptional(result, false).verdict) << "strict mode must not change a verdict";
+        const Verdict relaxed = ContentGuardClient::ApplyOptional(result, true).verdict;
+        EXPECT_EQ(verdict == Verdict::kUnavailable ? Verdict::kPass : verdict, relaxed);
+    }
+}
+
 TEST(ContentGuardClientTest, FromReplyOnlyTrustsPass) {
     using Verdict = ContentGuardClient::Verdict;
     content_guard::CheckTextResponse reply;

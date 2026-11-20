@@ -49,6 +49,9 @@ import java.util.concurrent.TimeoutException;
  *                    restart from /assign-gate rather than retry /queue-status</li>
  *   <li>4 UNAUTHENTICATED → code=401: access_token 无效,或没带令牌而 login 已关匿名分配;客户端重新登录
  *                    (或先用 refresh token 换新的 access token)。不能落进 default:那里按 ADMITTED 处理,会给客户端一个空地址。</li>
+ *   <li>5 QUEUE_FULL → code=100 (queueSource=ratelimit):本区队列已到上限,这次没有入队、没有排队令牌。
+ *                    与前置限流的重试提示同一个形状,客户端等够 retry_after_ms 再调 /assign-gate,不用为它加分支。
+ *                    同样不能落进 default。</li>
  * </ul>
  */
 @Service
@@ -62,6 +65,12 @@ public class AssignGateService {
     private static final int STATUS_ERROR    = 2;
     private static final int STATUS_EXPIRED  = 3;
     private static final int STATUS_UNAUTHENTICATED = 4;
+    private static final int STATUS_QUEUE_FULL = 5;
+
+    /** login 没给重试间隔时「排队已满」的缺省等待;login 正常下发 30~40 秒(loginqueue.RetryAfterWhenFull)。 */
+    private static final long QUEUE_FULL_DEFAULT_RETRY_MS = 30_000;
+    /** 「排队已满」没有名次,与波次未开时的提示同值。 */
+    private static final long NO_QUEUE_POSITION = -1;
 
     /** HTTP-shape codes used by the existing {@link AssignGateResponse}. */
     private static final int HTTP_OK             = 0;
@@ -364,6 +373,10 @@ public class AssignGateService {
                 out.setError(rsp.error != null && !rsp.error.isEmpty() ? rsp.error : "unauthenticated");
                 return out;
             }
+            case STATUS_QUEUE_FULL:
+                return AssignGateResponse.queueing(
+                        rsp.retryAfterMs > 0 ? rsp.retryAfterMs : QUEUE_FULL_DEFAULT_RETRY_MS,
+                        NO_QUEUE_POSITION);
             case STATUS_ADMITTED:
             default:
                 return admittedResponse(rsp.ip, rsp.port, rsp.wsUrl, rsp.tokenPayload, rsp.tokenSignature, rsp.tokenDeadline, rsp.error);

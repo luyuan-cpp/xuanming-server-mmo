@@ -24,8 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/luyuancpp/muduoclient/muduo"
-
 	"proto/battle"
 	"proto/common/base"
 )
@@ -34,7 +32,7 @@ import (
 type heartbeat struct {
 	mu sync.Mutex
 	// conn 是最近一次验签成功、且 gate 通告了心跳的连接,只往它发。nil = 当前 gate 不支持心跳,或已 Close。
-	conn *muduo.Client
+	conn *wireConn
 	// interval / timeout 是 gate 最近一次通告的值。重定向到不支持心跳的 gate 后 interval 保留,只作心跳 goroutine 的节拍。
 	interval time.Duration
 	timeout  time.Duration
@@ -48,17 +46,17 @@ type heartbeat struct {
 }
 
 // onGateVerified 在 VerifyGateToken 于连接 c 上验签成功后调用(调用 VerifyGateToken 的 goroutine)。
-func (gc *GameClient) onGateVerified(c *muduo.Client, resp *base.ClientTokenVerifyResponse) {
+func (gc *GameClient) onGateVerified(c *wireConn, resp *base.ClientTokenVerifyResponse) {
 	gc.onVerified(c, resp.GetHeartbeatIntervalMs(), resp.GetHeartbeatTimeoutMs())
 }
 
 // onBattleVerified 在 VerifyBattleToken 于战斗直连 c 上握手成功后调用。battle 的通告与 gate 同义同值。
-func (gc *GameClient) onBattleVerified(c *muduo.Client, resp *battle.BattleTokenVerifyResponse) {
+func (gc *GameClient) onBattleVerified(c *wireConn, resp *battle.BattleTokenVerifyResponse) {
 	gc.onVerified(c, resp.GetHeartbeatIntervalMs(), resp.GetHeartbeatTimeoutMs())
 }
 
 // onVerified 按服务端在验签成功回包里通告的参数起心跳。intervalMs 为 0 = 这台服务端不支持心跳,不往这条连接发。
-func (gc *GameClient) onVerified(c *muduo.Client, intervalMs, timeoutMs uint32) {
+func (gc *GameClient) onVerified(c *wireConn, intervalMs, timeoutMs uint32) {
 	interval := time.Duration(intervalMs) * time.Millisecond
 	timeout := time.Duration(timeoutMs) * time.Millisecond
 	hb := &gc.hb
@@ -130,7 +128,7 @@ func (gc *GameClient) heartbeatWait(d time.Duration) <-chan time.Time {
 	return time.After(d)
 }
 
-func (gc *GameClient) sendHeartbeat(c *muduo.Client, request *base.ClientHeartbeatRequest) {
+func (gc *GameClient) sendHeartbeat(c *wireConn, request *base.ClientHeartbeatRequest) {
 	if gc.heartbeatSend != nil {
 		gc.heartbeatSend(c, request)
 		return

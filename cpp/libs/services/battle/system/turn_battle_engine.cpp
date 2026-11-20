@@ -3242,7 +3242,7 @@ bool TurnBattleEngine::StackOrRefreshExistingBuff(BattleActorState& target,
         if (existing.layer() < buffRow.max_layer()) {
             existing.set_layer(existing.layer() + 1);
         }
-        // 刷新持续回合(实时 OnBuffRefresh 为 TODO;回合侧采用"重挂满时"口径)
+        // 刷新持续回合:"重挂满时",与实时侧 BuffSystem::OnBuffRefresh 同一口径
         if (existing.remain_rounds() > 0 && buffRow.duration() > 0) {
             existing.set_remain_rounds(RoundsFromSeconds(buffRow.duration()));
         }

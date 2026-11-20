@@ -29,6 +29,7 @@ namespace friendpb {
 #pragma region ClientPlayerFriendAddFriend
 namespace {
 void QueueLocalClientPlayerFriendAddFriendFailure(GrpcDone<::friendpb::AddFriendResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendAddFriendGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendClientPlayerFriendAddFriendErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.AddFriend: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendAddFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendClientPlayerFriendAddFriendErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::friendpb::AddFriendRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.AddFriend: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendAddFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendClientPlayerFriendAddFriendErased(entt::registry& registry, entt::entit
 #pragma region ClientPlayerFriendAcceptFriend
 namespace {
 void QueueLocalClientPlayerFriendAcceptFriendFailure(GrpcDone<::friendpb::AcceptFriendResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendAcceptFriendGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendClientPlayerFriendAcceptFriendErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.AcceptFriend: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendAcceptFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendClientPlayerFriendAcceptFriendErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::friendpb::AcceptFriendRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.AcceptFriend: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendAcceptFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendClientPlayerFriendAcceptFriendErased(entt::registry& registry, entt::en
 #pragma region ClientPlayerFriendRejectFriend
 namespace {
 void QueueLocalClientPlayerFriendRejectFriendFailure(GrpcDone<::friendpb::RejectFriendResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendRejectFriendGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendClientPlayerFriendRejectFriendErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.RejectFriend: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendRejectFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendClientPlayerFriendRejectFriendErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::friendpb::RejectFriendRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.RejectFriend: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendRejectFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendClientPlayerFriendRejectFriendErased(entt::registry& registry, entt::en
 #pragma region ClientPlayerFriendRemoveFriend
 namespace {
 void QueueLocalClientPlayerFriendRemoveFriendFailure(GrpcDone<::friendpb::RemoveFriendResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendRemoveFriendGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendClientPlayerFriendRemoveFriendErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.RemoveFriend: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendRemoveFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendClientPlayerFriendRemoveFriendErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::friendpb::RemoveFriendRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.RemoveFriend: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendRemoveFriendGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendClientPlayerFriendRemoveFriendErased(entt::registry& registry, entt::en
 #pragma region ClientPlayerFriendGetFriendList
 namespace {
 void QueueLocalClientPlayerFriendGetFriendListFailure(GrpcDone<::friendpb::GetFriendListResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendGetFriendListGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendClientPlayerFriendGetFriendListErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.GetFriendList: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendGetFriendListGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendClientPlayerFriendGetFriendListErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::friendpb::GetFriendListRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.GetFriendList: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendGetFriendListGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendClientPlayerFriendGetFriendListErased(entt::registry& registry, entt::e
 #pragma region ClientPlayerFriendGetPendingRequests
 namespace {
 void QueueLocalClientPlayerFriendGetPendingRequestsFailure(GrpcDone<::friendpb::GetPendingRequestsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendGetPendingRequestsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendClientPlayerFriendGetPendingRequestsErased(entt::registry& registry, en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.GetPendingRequests: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendGetPendingRequestsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendClientPlayerFriendGetPendingRequestsErased(entt::registry& registry, en
     const auto* typedRequest = dynamic_cast<const ::friendpb::GetPendingRequestsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.GetPendingRequests: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendGetPendingRequestsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +575,7 @@ void SendClientPlayerFriendGetPendingRequestsErased(entt::registry& registry, en
 #pragma region ClientPlayerFriendBlock
 namespace {
 void QueueLocalClientPlayerFriendBlockFailure(GrpcDone<::friendpb::BlockResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendBlockGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +643,7 @@ void SendClientPlayerFriendBlockErased(entt::registry& registry, entt::entity no
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.Block: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendBlockGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +653,7 @@ void SendClientPlayerFriendBlockErased(entt::registry& registry, entt::entity no
     const auto* typedRequest = dynamic_cast<const ::friendpb::BlockRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.Block: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendBlockGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -645,6 +666,7 @@ void SendClientPlayerFriendBlockErased(entt::registry& registry, entt::entity no
 #pragma region ClientPlayerFriendUnblock
 namespace {
 void QueueLocalClientPlayerFriendUnblockFailure(GrpcDone<::friendpb::UnblockResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendUnblockGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -712,6 +734,7 @@ void SendClientPlayerFriendUnblockErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.Unblock: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendUnblockGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -721,6 +744,7 @@ void SendClientPlayerFriendUnblockErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::friendpb::UnblockRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.Unblock: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendUnblockGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -733,6 +757,7 @@ void SendClientPlayerFriendUnblockErased(entt::registry& registry, entt::entity 
 #pragma region ClientPlayerFriendListBlocks
 namespace {
 void QueueLocalClientPlayerFriendListBlocksFailure(GrpcDone<::friendpb::ListBlocksResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendListBlocksGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -800,6 +825,7 @@ void SendClientPlayerFriendListBlocksErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.ListBlocks: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendListBlocksGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -809,6 +835,7 @@ void SendClientPlayerFriendListBlocksErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::friendpb::ListBlocksRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.ListBlocks: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendListBlocksGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -821,6 +848,7 @@ void SendClientPlayerFriendListBlocksErased(entt::registry& registry, entt::enti
 #pragma region ClientPlayerFriendRecommendFriends
 namespace {
 void QueueLocalClientPlayerFriendRecommendFriendsFailure(GrpcDone<::friendpb::RecommendFriendsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendRecommendFriendsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -888,6 +916,7 @@ void SendClientPlayerFriendRecommendFriendsErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.RecommendFriends: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendRecommendFriendsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -897,6 +926,7 @@ void SendClientPlayerFriendRecommendFriendsErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::friendpb::RecommendFriendsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.RecommendFriends: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendRecommendFriendsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -909,6 +939,7 @@ void SendClientPlayerFriendRecommendFriendsErased(entt::registry& registry, entt
 #pragma region ClientPlayerFriendNotifyFriendEvent
 namespace {
 void QueueLocalClientPlayerFriendNotifyFriendEventFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerFriendNotifyFriendEventGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -976,6 +1007,7 @@ void SendClientPlayerFriendNotifyFriendEventErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerFriend.NotifyFriendEvent: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendNotifyFriendEventGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -985,6 +1017,7 @@ void SendClientPlayerFriendNotifyFriendEventErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::friendpb::FriendEventS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerFriend.NotifyFriendEvent: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerFriendNotifyFriendEventGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

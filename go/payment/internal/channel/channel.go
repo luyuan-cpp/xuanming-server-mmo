@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -458,6 +459,21 @@ func newHTTPClient() *http.Client {
 		Transport:     transport,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
+}
+
+// send 发一次渠道请求。传输失败(超时、连接被拒)时 net/http 给的错误带着完整的请求地址,而微信小游戏的 AppSecret、
+// access_token 与 Google 的购买令牌就在地址里;调用方会把错误写进日志,所以这里只留方法、主机与底层原因。
+// 底层原因用 %w 包着,errors.Is(err, context.DeadlineExceeded) 之类的判断照常成立。
+func send(client *http.Client, request *http.Request) (*http.Response, error) {
+	response, err := client.Do(request)
+	if err == nil {
+		return response, nil
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		err = urlErr.Err
+	}
+	return nil, fmt.Errorf("payment channel: %s %s failed: %w", request.Method, request.URL.Host, err)
 }
 
 // maxResponseBytes 是渠道应答体的上限。查单、退款、作废列表的应答都远小于它。

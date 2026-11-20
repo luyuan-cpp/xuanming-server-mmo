@@ -79,6 +79,10 @@ public final class MailErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMailAttachmentNotOpen = 17010;</code>
      */
     kMailAttachmentNotOpen(17010),
+    /**
+     * <code>kMailRecipientDeleted = 17011;</code>
+     */
+    kMailRecipientDeleted(17011),
     UNRECOGNIZED(-1),
     ;
 
@@ -139,6 +143,10 @@ public final class MailErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMailAttachmentNotOpen = 17010;</code>
      */
     public static final int kMailAttachmentNotOpen_VALUE = 17010;
+    /**
+     * <code>kMailRecipientDeleted = 17011;</code>
+     */
+    public static final int kMailRecipientDeleted_VALUE = 17011;
 
 
     public final int getNumber() {
@@ -177,6 +185,7 @@ public final class MailErrorTip extends com.google.protobuf.GeneratedFile {
         case 17008: return kMailAttachmentProtected;
         case 17009: return kMailClaimNotOpen;
         case 17010: return kMailAttachmentNotOpen;
+        case 17011: return kMailRecipientDeleted;
         default: return null;
       }
     }
@@ -242,7 +251,7 @@ public final class MailErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\024mail_error_tip.proto*\303\002\n\nmail_error\022\021\n" +
+      "\n\024mail_error_tip.proto*\340\002\n\nmail_error\022\021\n" +
       "\rkMail_errorOK\020\000\022\023\n\rkMailNotFound\020\350\204\001\022\022\n" +
       "\014kMailExpired\020\351\204\001\022\033\n\025kMailRecipientBoxFu" +
       "ll\020\352\204\001\022\034\n\026kMailAttachmentInvalid\020\353\204\001\022\032\n\024" +
@@ -250,8 +259,9 @@ public final class MailErrorTip extends com.google.protobuf.GeneratedFile {
       "ailLimit\020\355\204\001\022\027\n\021kMailClaimPending\020\356\204\001\022\026\n" +
       "\020kMailClaimManual\020\357\204\001\022\036\n\030kMailAttachment" +
       "Protected\020\360\204\001\022\027\n\021kMailClaimNotOpen\020\361\204\001\022\034" +
-      "\n\026kMailAttachmentNotOpen\020\362\204\001B$\n\016com.game" +
-      ".tableZ\022generated/pb/tableb\006proto3"
+      "\n\026kMailAttachmentNotOpen\020\362\204\001\022\033\n\025kMailRec" +
+      "ipientDeleted\020\363\204\001B$\n\016com.game.tableZ\022gen" +
+      "erated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

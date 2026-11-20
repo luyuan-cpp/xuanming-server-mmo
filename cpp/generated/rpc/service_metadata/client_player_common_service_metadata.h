@@ -14,3 +14,11 @@ constexpr uint32_t SceneClientPlayerCommonKickPlayerIndex = 1;
 constexpr uint32_t SceneClientPlayerCommonRedirectToGateMessageId = 124;
 constexpr uint32_t SceneClientPlayerCommonRedirectToGateIndex = 2;
 #define SceneClientPlayerCommonRedirectToGateMethod  ::SceneClientPlayerCommon_Stub::descriptor()->method(2)
+
+constexpr uint32_t SceneClientPlayerCommonRenamePlayerMessageId = 428;
+constexpr uint32_t SceneClientPlayerCommonRenamePlayerIndex = 3;
+#define SceneClientPlayerCommonRenamePlayerMethod  ::SceneClientPlayerCommon_Stub::descriptor()->method(3)
+
+constexpr uint32_t SceneClientPlayerCommonNotifyPlayerRenamedMessageId = 429;
+constexpr uint32_t SceneClientPlayerCommonNotifyPlayerRenamedIndex = 4;
+#define SceneClientPlayerCommonNotifyPlayerRenamedMethod  ::SceneClientPlayerCommon_Stub::descriptor()->method(4)

@@ -54,7 +54,7 @@ type Config struct {
 	IdSegment idsegment.Conf `json:"IdSegment,optional"`
 	// ContentGuard 是内容安全服务(go/content_guard)的调用端:建角时玩家自己起的名字先送检
 	// (docs/design/rename-and-content-safety.md §6.6)。没配目标时跳过送检,只剩 playername 的内置词,仅供本机开发;
-	// staging / prod 写 Required: true,没配就拒启。
+	// 缺省严格:没配目标拒启、不可达不放行;只有本机 yaml 写 Optional: true 才放宽。
 	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
 	// GateTokenSecret 已废弃:单个 string 无法不停服轮换,而且 gate token 与
 	// 排队 token 共用同一把密钥,信任域没拆。保留字段只为让 deploy/*.yaml 与
@@ -404,6 +404,13 @@ type HomeZoneConf struct {
 //     签名过期(loginqueue.queueTokenMaxAge),不再等于 QueueEntryTTL。QueueEntryTTL 取值须在 [1s, 24h],否则起服
 //     失败。本版本以及从它回滚,都必须在 Enabled=false 下滚完:排队开着混跑时,旧版 leader 弹出、尚未写完的条目会被
 //     新版判为 queue_gone、打回队尾。
+//   - MaxAdmitPerTick(2026-11-20)是 dispatcher 一拍(DispatchInterval)最多放行多少人。空位一下子腾出来时
+//     (调大区容量、一台 gate 掉线)不设上限会在一拍里把空位放满,几万人同时去连 gate、进场景。缺省 2000,
+//     与网关前置限流开服档的区桶同值(每秒 2000,快速通道那一侧由它限速);它不是实测的进场吞吐,压测出基线后调。
+//   - MaxQueueLength(2026-11-20)是一个 zone 的队列最多排多少人,到了上限的新请求回「稍后再试」、不入队。
+//     缺省 1000000,取自单 zone 排队容量分析的上界(redis-cluster-all-domains-20261110.md §6.2):一个 zone 的排队键
+//     都在同一个 Redis 主节点上,超过分析过的规模就拒绝,不让一个 zone 把这个主节点写满、连累同节点的其它 zone。
+//     这两项显式写 0 表示不设上限(default 只在键缺省时生效),生产不要这样写。
 type QueueConf struct {
 	Enabled             bool          `json:"Enabled,default=false"`
 	DispatchInterval    time.Duration `json:"DispatchInterval,default=1s"`
@@ -413,6 +420,8 @@ type QueueConf struct {
 	DefaultRetryAfterMs uint32        `json:"DefaultRetryAfterMs,default=2000"`
 	DispatcherLockTTL   time.Duration `json:"DispatcherLockTTL,default=30s"`
 	DispatcherLockKey   string        `json:"DispatcherLockKey,default=dispatcher:lock:login_queue"`
+	MaxAdmitPerTick     uint32        `json:"MaxAdmitPerTick,default=2000"`
+	MaxQueueLength      uint32        `json:"MaxQueueLength,default=1000000"`
 }
 
 // InternalAuthConf 控制内部调用方身份声明的验签闸门(见

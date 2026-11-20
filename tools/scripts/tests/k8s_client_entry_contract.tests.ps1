@@ -637,6 +637,76 @@ Test-Case '库:-PodAnnotations 与 sidecar 配置指纹写进同一个 annotatio
     }
 }
 
+Test-Case '库:连接准入覆盖变量 —— 「名字=值」按契约名单分成 gate / battle 两组、按名单顺序;拼错、重名、值不合规 throw;PodCommon 给了才写,三个生成器都写;名单与 C++ 的 k*Env 一致' {
+    # k8s_deploy.ps1 -ConnectionAdmissionEnv 的入口解析与渲染(docs/ops/gate-kernel-tuning-runbook.md §3.2、§3.3)。参数不粘滞,
+    # 模板里有没有这些 env 就是这次部署带没带;名字与 C++ 对不上时进程静默按推导缺省跑,所以名单要逐个核对。
+    $contract = Get-ClientEntryContract
+    $none = Resolve-ClientEntryConnectionAdmissionEnv
+    Assert-Equal -Expected 0 -Actual ($none.Gate.Count + $none.Battle.Count) -Because '不传 = 两组都空'
+    # 一个元素里逗号分隔(经 pwsh -File 进来的样子)与数组两种写法都收;输出按名单顺序,与给出的先后无关。
+    $resolved = Resolve-ClientEntryConnectionAdmissionEnv -Entries @('BATTLE_SOURCE_RATE_PER_SECOND=20,GATE_PREAUTH_BUDGET=3000', 'GATE_ACCEPT_RATE_PER_SECOND=2000')
+    $pairsOf = { param($table) (@($table.Keys | ForEach-Object { "$_=$($table[$_])" }) -join ',') }
+    Assert-Equal -Expected 'GATE_ACCEPT_RATE_PER_SECOND=2000,GATE_PREAUTH_BUDGET=3000' -Actual (& $pairsOf $resolved.Gate) -Because 'gate 一组只有 GATE_*,按名单顺序'
+    Assert-Equal -Expected 'BATTLE_SOURCE_RATE_PER_SECOND=20' -Actual (& $pairsOf $resolved.Battle) -Because 'battle 一组只有 BATTLE_*'
+    $swapped = Resolve-ClientEntryConnectionAdmissionEnv -Entries @('GATE_ACCEPT_RATE_PER_SECOND=2000', 'BATTLE_SOURCE_RATE_PER_SECOND=20', 'GATE_PREAUTH_BUDGET=3000')
+    Assert-Equal -Expected (& $pairsOf $resolved.Gate) -Actual (& $pairsOf $swapped.Gate) -Because '换个先后,渲染出来逐字相同(不会无故滚动)'
+    foreach ($bad in @(
+        @{ Entries = @('GATE_ACCEPT_RATE=2000'); Pattern = "unknown variable 'GATE_ACCEPT_RATE'" }
+        @{ Entries = @('gate_accept_burst=2000'); Pattern = "unknown variable 'gate_accept_burst'" }
+        @{ Entries = @('NODE_OPEN_FILE_LIMIT_MODE=1'); Pattern = "unknown variable 'NODE_OPEN_FILE_LIMIT_MODE'" }
+        @{ Entries = @('GATE_ACCEPT_BURST'); Pattern = 'is not NAME=VALUE' }
+        @{ Entries = @('GATE_ACCEPT_BURST=0'); Pattern = 'positive decimal integer' }
+        @{ Entries = @('GATE_ACCEPT_BURST=020'); Pattern = 'positive decimal integer' }
+        @{ Entries = @('GATE_ACCEPT_BURST=-5'); Pattern = 'positive decimal integer' }
+        @{ Entries = @('GATE_ACCEPT_BURST=1.5'); Pattern = 'positive decimal integer' }
+        @{ Entries = @('GATE_ACCEPT_BURST='); Pattern = 'positive decimal integer' }
+        @{ Entries = @('GATE_ACCEPT_BURST=1234567890'); Pattern = 'positive decimal integer' }
+        @{ Entries = @('GATE_ACCEPT_BURST=10,GATE_ACCEPT_BURST=20'); Pattern = 'GATE_ACCEPT_BURST is given more than once' }
+    )) {
+        $err = $null
+        try { Resolve-ClientEntryConnectionAdmissionEnv -Entries $bad.Entries | Out-Null } catch { $err = $_.Exception.Message }
+        Assert-Match -Text $err -Pattern ([regex]::Escape($bad.Pattern)) -Because "'$($bad.Entries -join ' ')':入口就拒,不渲染出去"
+    }
+
+    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; LogVolumeSizeLimit = '2Gi' }
+    $plain = New-ClientEntryPodCommon @commonArgs
+    $emptyTable = New-ClientEntryPodCommon @commonArgs -ConnectionAdmissionEnv ([ordered]@{})
+    $gateCommon = New-ClientEntryPodCommon @commonArgs -ConnectionAdmissionEnv $resolved.Gate
+    $battleCommon = New-ClientEntryPodCommon @commonArgs -ConnectionAdmissionEnv $resolved.Battle
+    $renderers = @(
+        @{ Name = 'gate StatefulSet'; PodCommon = $gateCommon; Expected = $resolved.Gate; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
+        @{ Name = 'battle Fleet'; PodCommon = $battleCommon; Expected = $resolved.Battle; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
+        @{ Name = 'battle hostPort'; PodCommon = $battleCommon; Expected = $resolved.Battle; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
+    )
+    $allNames = $contract.GateConnectionAdmissionEnvNames + $contract.BattleConnectionAdmissionEnvNames
+    foreach ($r in $renderers) {
+        $plainDoc = ConvertTo-LfText (& $r.Render $plain)
+        Assert-True -Condition ($plainDoc -ceq (ConvertTo-LfText (& $r.Render $emptyTable))) -Because "$($r.Name):空表与不传逐字相同(没给覆盖时生成物不变,不触发滚动)"
+        foreach ($name in $allNames) {
+            Assert-NotMatch -Text $plainDoc -Pattern $name -Because "$($r.Name):不传时不写 $name"
+        }
+        $doc = ConvertTo-LfText (& $r.Render $r.PodCommon)
+        foreach ($name in $r.Expected.Keys) {
+            Assert-Equal -Expected 1 -Actual ([regex]::Matches($doc, '(?m)^[ ]+- name: ' + $name + '\n[ ]+value: "' + $r.Expected[$name] + '"$').Count) -Because "$($r.Name):$name 原样写一份"
+        }
+    }
+    foreach ($bad in @([ordered]@{ 'GATE_ACCEPT_RATE' = '2000' }, [ordered]@{ 'GATE_ACCEPT_BURST' = '0' }, [ordered]@{ 'MMORPG_GATE_TOKEN_SECRET' = '1' })) {
+        $err = $null
+        try { New-BattleHostPortDeploymentYaml -PodCommon (New-ClientEntryPodCommon @commonArgs -ConnectionAdmissionEnv $bad) -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' | Out-Null } catch { $err = $_.Exception.Message }
+        Assert-Match -Text $err -Pattern 'PodCommon\.ConnectionAdmissionEnv only accepts' -Because "手拼的 PodCommon 也绕不过渲染处的校验($(@($bad.Keys) -join ','))"
+    }
+
+    # 名单与 C++ 一个不多一个不少:gate connection_admission.h、battle battle_connection_admission.h 里该前缀的 k*Env 就是这几个。
+    foreach ($side in @(
+        @{ Names = $contract.GateConnectionAdmissionEnvNames; Header = 'cpp/nodes/gate/handler/rpc/connection_admission.h'; Prefix = 'GATE_' }
+        @{ Names = $contract.BattleConnectionAdmissionEnvNames; Header = 'cpp/nodes/battle/client/battle_connection_admission.h'; Prefix = 'BATTLE_' }
+    )) {
+        $header = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) $side.Header)
+        $cppNames = @([regex]::Matches($header, 'inline constexpr const char \*k[A-Za-z]+Env = "(?<n>' + $side.Prefix + '[A-Z_]+)";') | ForEach-Object { $_.Groups['n'].Value })
+        Assert-Equal -Expected ((@($cppNames) | Sort-Object) -join ',') -Actual ((@($side.Names) | Sort-Object) -join ',') -Because "契约名单与 $($side.Header) 的 k*Env 一致(C++ 加了覆盖变量要同步到这里,部署才接得上)"
+    }
+}
+
 Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共 env 之后,三个生成器都写;不给或空列表时逐字不变;名字非法、缺键、重名在打包时 throw' {
     # k8s_deploy.ps1 经 -SecretEnv 传 gate / battle 的工作负载密钥(Get-CppNodeWorkloadSecretEnvEntries,如 Secret gate-token 的 MMORPG_GATE_TOKEN_SECRET):
     # 密钥只在 Secret 里,不进 battle-node-config / node-config。optional: false 让 Secret 缺失的 Pod 停在 CreateContainerConfigError,不带空值起来。
@@ -737,6 +807,20 @@ Test-Case '库:ws-edge —— nginx 终止 TLS,只按路径转到 Pod 网段里�
     $otherCidr.PodCidrs = @('10.246.0.0/16')
     Assert-True -Condition ([regex]::Match($edge, $hashPattern).Groups[1].Value -cne [regex]::Match((ConvertTo-LfText (New-WsEdgeYaml @otherCidr)), $hashPattern).Groups[1].Value) -Because '配置变了指纹就变'
     Assert-True -Condition ($edge -ceq (ConvertTo-LfText (New-WsEdgeYaml @edgeArgs))) -Because '同样的参数逐字相同(重复 apply 不触发滚动)'
+
+    # 按来源限速缺省不开;开了之后来源按 /24 聚合、限新建速率,桶深 = 速率 × 握手期限(与 gate 的按来源限速同一口径)。
+    Assert-NotMatch -Text $edge -Pattern 'limit_req|ws_source|__SOURCE_LIMIT' -Because '缺省不限:配置里没有限速指令,也没有残留的占位行'
+    Assert-Equal -Expected 10 -Actual $contract.WsEdgeSourceBurstSeconds -Because '桶深的倍数 = 握手期限的秒数(cpp client_liveness.h 的 handshakeTimeout)'
+    $limited = ConvertTo-LfText (New-WsEdgeYaml @edgeArgs -SourceRatePerSecond 20)
+    foreach ($literal in @(
+        'map $remote_addr $ws_source_prefix {', '~^(?<ws_source_24>\d+\.\d+\.\d+)\.\d+$ $ws_source_24;', 'default $remote_addr;',
+        'limit_req_zone $ws_source_prefix zone=ws_source:32m rate=20r/s;', 'limit_req_status 429;', 'limit_req zone=ws_source burst=200 nodelay;'
+    )) {
+        Assert-Match -Text $limited -Pattern ('(?m)^[ ]+' + [regex]::Escape($literal) + '$') -Because "开了按来源限速,nginx.conf 必须有这一行:$literal"
+    }
+    Assert-Match -Text $limited -Pattern 'return 403;\s+\}\s+limit_req zone=ws_source burst=200 nodelay;\s+proxy_pass ' -Because '限速排在目标校验之后、转发之前:目标不合法的请求不消耗名额'
+    Assert-NotMatch -Text $limited -Pattern '__SOURCE_LIMIT' -Because '占位行都被替换掉了'
+    Assert-True -Condition ([regex]::Match($edge, $hashPattern).Groups[1].Value -cne [regex]::Match($limited, $hashPattern).Groups[1].Value) -Because '开关限速改了配置,指纹跟着变(触发滚动)'
 
     # Service:缺省 LoadBalancer + Local;NodePort 形态可以钉端口。
     Assert-Match -Text $edge -Pattern '(?m)^  type: LoadBalancer\n  externalTrafficPolicy: Local$' -Because '缺省 LoadBalancer,保留客户端源地址'
@@ -1644,6 +1728,21 @@ $FakeKubeConfig = Join-Path $FakeKubectlDir 'kubeconfig-without-contexts.yaml'
 Set-Content -LiteralPath $FakeKubeConfig -Encoding utf8 -Value @('apiVersion: v1', 'kind: Config', 'clusters: []', 'contexts: []', 'users: []', 'current-context: ""')
 $script:FakeRunSeq = 0
 
+# 假集群里已备好部署替运维维护的内部密钥(k8s_deploy.ps1 的 $script:ManagedDomainServiceSecrets,全集群每把一个值):
+# 托管密钥的门禁(Initialize-ManagedDomainServiceSecrets)放行,写入步骤(Sync-ManagedDomainServiceSecrets)无事可做。
+# 本节测的不是这道闸,它的用例在 k8s_migrate_gate.tests.ps1;值是虚构的,只为各 namespace 齐、同值、互不相同。
+$ManagedSecretsFakeListJson = & {
+    $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$null)
+    $assign = $ast.Find({ param($a) $a -is [Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:ManagedDomainServiceSecrets' }, $false)
+    if ($null -eq $assign) { throw 'k8s_deploy.ps1 缺少 $script:ManagedDomainServiceSecrets' }
+    $data = [ordered]@{}
+    foreach ($row in @(& ([scriptblock]::Create($assign.Right.Extent.Text)))) {
+        $data[$row.Key] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("$($row.Key)-contract-fake-value-0123456789abcdef"))
+    }
+    $items = @(foreach ($ns in @('mmorpg-infra', $TestInfraNs, $TestZoneNs)) { [ordered]@{ metadata = [ordered]@{ name = 'domain-service-secrets'; namespace = $ns }; data = $data } })
+    ConvertTo-Json -InputObject @{ items = $items } -Depth 6 -Compress
+}
+
 <#
 .SYNOPSIS
     以非 DryRun 跑 k8s_deploy.ps1,kubectl 由规则表回应。返回 { ExitCode; Output; Calls }。
@@ -1671,6 +1770,8 @@ function Invoke-DeployWithFakeKubectl {
     # 网关的 mmorpg 在全球权威入口上,和 Go 服务一样所有档位都要显式给(Resolve-GatewaySqlMode,在 Assert-LogicalDbPreflight 里核);
     # 本节测的不是这条闸,同 Invoke-EntryDryRun 补虚构入口。用例自己给了就用它的。
     if (-not $all.ContainsKey('GlobalAuthorityTiDBHost')) { $all.GlobalAuthorityTiDBHost = 'tidb.invalid:4000' }
+    # 托管内部密钥的门禁一次列出全集群的 domain-service-secrets:答「已备好」($ManagedSecretsFakeListJson)。用例自己的规则不匹配这条调用,放在最前不影响它们。
+    $Rules = @(@{ Pattern = '^get secrets --all-namespaces --field-selector metadata\.name=domain-service-secrets -o json$'; ExitCode = 0; Stdout = $ManagedSecretsFakeListJson }) + @($Rules)
     # 非 dev 档必须给 -PlayerRedisMasters 与 -ControlRedisMasters,非 DryRun 还要读线上的 statefulset/redis-player 与 statefulset/redis-control
     # (Assert-RedisClusterPreflight)。本节用例测的不是这条闸:补上参数与口令,让假 kubectl 答两套集群都已在。用例自己的规则不匹配这两条调用,放在最前不影响它们。
     if ([string]$DeployArgs.ReleaseProfile -in @('staging', 'prod')) {
@@ -2008,7 +2109,7 @@ $ClientEntryWrapperKeys = @('ClientEntryMode', 'ClientPublicHost', 'GateClientHo
     'RequireClientEndpoint', 'AllowDisruptiveSwitch',
     # 小游戏 WebSocket 边缘:不粘滞,包装层漏传 = 经它发布之后 gate / battle 不再自报 WebSocket 地址(k8s_deploy.ps1 按集群现状拒绝,
     # 但包装入口得能把参数传下去才过得了那道闸);ws-edge 的副本数、Service 形态同理,漏传会被改回默认值。
-    'WsEdgeHost', 'WsEdgeTlsSecret', 'WsEdgePodCidrs', 'WsEdgeReplicas', 'WsEdgeServiceType', 'WsEdgeNodePort', 'WsEdgeImage')
+    'WsEdgeHost', 'WsEdgeTlsSecret', 'WsEdgePodCidrs', 'WsEdgeReplicas', 'WsEdgeServiceType', 'WsEdgeNodePort', 'WsEdgeImage', 'WsEdgeSourceRatePerSecond')
 # 共享 Redis 按用途拆实例的 -RedisSplit 系列参数随 queue / ctl 单实例在缺口第 34 条第 6b 批退役(控制域上了 redis-control),包装链不再透传。
 # 玩家域与控制两套 Redis Cluster 三条包装链都透传的键(给了才传)。不粘滞:漏传 = staging / prod 被拒,dev 则把服务渲染回单实例(玩家域)或不建集群(控制)。
 $PlayerRedisWrapperKeys = @('PlayerRedisMasters', 'PlayerRedisReplicasPerMaster', 'PlayerRedisMaxMemory', 'PlayerRedisStorage',
@@ -2026,12 +2127,15 @@ $WrapperPairs = @(
             'LoginAppleClientId', 'LoginAppleEndpoint', 'LoginGoogleClientId', 'LoginGoogleEndpoint', 'LoginAppleTeamId', 'LoginAppleKeyId',
             # 实名与防沉迷的六个参数,口径同上(漏传 = 重新部署时关掉或改掉线上的防沉迷)。
             'LoginNppaAppId', 'LoginNppaBizId', 'LoginAntiAddictionExtraPlayDays', 'LoginNppaCheckUrl', 'LoginNppaQueryUrl', 'LoginNppaLoginoutUrl',
+            # 托管内部密钥的修复开关:漏传 = 经包装入口修复不了不一致的值。
+            'ResyncDomainServiceSecrets',
             # B0-4 nofile 豁免开关:不粘滞,包装入口漏传 = 以 warn 运行的环境经包装入口重新部署时落回 enforce、硬限不够即拒启。
+            # 连接准入覆盖变量同理:漏传 = 压测或应急调过的阈值经包装入口重新部署时落回推导缺省。
             # 其后 + 拼上 k8s-redis-wipe 的确认开关(只走这一条包装链)与两套 Redis Cluster、逻辑库的键。
             # 用 + 拼接而不写进本逗号列表:逗号比 + 结合得紧,会变成嵌套数组。
-            'NodeOpenFileLimitMode') + @('ConfirmWipeAllRedis') + $PlayerRedisWrapperKeys + $LogicalDbWrapperKeys },
-    @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sImage'; Downstream = 'k8s_image.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $PlayerRedisWrapperKeys },
-    @{ Source = 'k8s_image.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode') + $PlayerRedisWrapperKeys }
+            'NodeOpenFileLimitMode', 'ConnectionAdmissionEnv') + @('ConfirmWipeAllRedis') + $PlayerRedisWrapperKeys + $LogicalDbWrapperKeys },
+    @{ Source = 'dev_tools.ps1'; Function = 'Invoke-K8sImage'; Downstream = 'k8s_image.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode', 'ConnectionAdmissionEnv') + $PlayerRedisWrapperKeys },
+    @{ Source = 'k8s_image.ps1'; Function = 'Invoke-K8sDeploy'; Downstream = 'k8s_deploy.ps1'; Forwarded = $ClientEntryWrapperKeys + @('GateRouterMode', 'NodeOpenFileLimitMode', 'ConnectionAdmissionEnv') + $PlayerRedisWrapperKeys }
 )
 foreach ($pair in $WrapperPairs) {
     Test-Case "AST 契约:$($pair.Source)::$($pair.Function) → $($pair.Downstream) 的每个 splat 键都是下游 param 块声明过的参数" {
@@ -2064,9 +2168,9 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
         LoginAppleClientId = 'String'; LoginAppleEndpoint = 'String'; LoginGoogleClientId = 'String'; LoginGoogleEndpoint = 'String'
         LoginAppleTeamId = 'String'; LoginAppleKeyId = 'String'
         LoginNppaAppId = 'String'; LoginNppaBizId = 'String'; LoginAntiAddictionExtraPlayDays = 'String'; LoginNppaCheckUrl = 'String'
-        LoginNppaQueryUrl = 'String'; LoginNppaLoginoutUrl = 'String'
+        LoginNppaQueryUrl = 'String'; LoginNppaLoginoutUrl = 'String'; ResyncDomainServiceSecrets = 'SwitchParameter'
         WsEdgeHost = 'String'; WsEdgeTlsSecret = 'String'; WsEdgePodCidrs = 'String'; WsEdgeReplicas = 'Int32'; WsEdgeServiceType = 'String'
-        WsEdgeNodePort = 'Int32'; WsEdgeImage = 'String'
+        WsEdgeNodePort = 'Int32'; WsEdgeImage = 'String'; WsEdgeSourceRatePerSecond = 'Int32'
     }
     foreach ($name in $expected.Keys) {
         Assert-Equal -Expected $expected[$name] -Actual $types[$name] -Because "k8s_deploy.ps1 -$name 的类型(GatewayTrustedProxies 为逗号分隔字符串,开关类为 switch)"

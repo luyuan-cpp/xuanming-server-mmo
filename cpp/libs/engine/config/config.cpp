@@ -271,6 +271,12 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.mutable_tracing()->set_otlp_traces_endpoint(root["Tracing"]["OtlpTracesEndpoint"].as<std::string>());
 	}
 
+	// 内容安全是否可有可无(见 config.proto content_guard_optional)。可以不写:缺席 = 必须可达。只有本机 bin/etc 写 true。
+	if (root["ContentGuard"] && root["ContentGuard"]["Optional"])
+	{
+		baseConfig.set_content_guard_optional(root["ContentGuard"]["Optional"].as<bool>());
+	}
+
 	// C++ 节点 unary gRPC 调用的 deadline(见 config.proto GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
 	// 这里只原样读入;键名是否认识、值是否为 0 由 grpc_call_deadline::Apply 校验(那里知道 ENodeType)。
 	if (root["GrpcClient"] && root["GrpcClient"]["CallDeadlineMs"])

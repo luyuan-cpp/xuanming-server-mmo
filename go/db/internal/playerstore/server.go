@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 	"time"
 
+	"github.com/zeromicro/go-zero/core/breaker"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -82,6 +84,33 @@ func playerStoreResultNames(enum map[int32]string) []string {
 	return names
 }
 
+// storeBreakerName 是存档库 storageID 的熔断在 go-zero 具名熔断表里的名字。编号只来自验过签的 scene 请求与目录路由,个数就是存档库数。
+func storeBreakerName(storageID uint32) string {
+	return "player_store/" + strconv.FormatUint(uint64(storageID), 10)
+}
+
+// enterStore 过存档库 storageID 的熔断(go-zero 的自适应熔断,每个库一个)。
+//
+// 熔断按库、不按方法:一个库失联时,指向它的调用立即回暂不可用,不再各自占着连接等超时;指向别的库的调用不受影响。
+// zrpc 自带的服务端熔断以方法名为键,做不到后一点,go/db 的入口把它关了(db.go;依据见
+// docs/design/db-task-store-unavailable-deferral.md 文首 2026-11-20)。
+//
+// 放行时返回 settle,调用方拿到这次调用的结局之后必须调一次;熔断开着时返回 breaker.ErrServiceUnavailable,这次调用不碰库。
+// 不算这个库的失败:闸门冻结(搬库窗口,库没有坏)、调用方自己取消。
+func enterStore(ctx context.Context, storageID uint32) (settle func(outcome error), err error) {
+	promise, err := breaker.GetBreaker(storeBreakerName(storageID)).Allow()
+	if err != nil {
+		return nil, err
+	}
+	return func(outcome error) {
+		if outcome == nil || errors.Is(outcome, authoritysql.ErrWriterFrozen) || errors.Is(ctx.Err(), context.Canceled) {
+			promise.Accept()
+			return
+		}
+		promise.Reject(outcome.Error())
+	}, nil
+}
+
 // SavePlayer 见 Store.Save。返回 gRPC 错误就是结果未知,scene 用同样的内容、同一个序号重试。
 func (s *Server) SavePlayer(ctx context.Context, req *storepb.SavePlayerRequest) (*storepb.SavePlayerResponse, error) {
 	start := time.Now()
@@ -105,17 +134,26 @@ func (s *Server) SavePlayer(ctx context.Context, req *storepb.SavePlayerRequest)
 		}
 		storageID = resolved
 	}
+	settle, err := enterStore(ctx, storageID)
+	if err != nil {
+		// 这个库的熔断开着。不逐次打日志:原因看同一个库被放行的那几次调用打的行。
+		metrics.ObservePlayerStore(opSave, metrics.PlayerStoreUnavailable, time.Since(start))
+		return nil, status.Error(codes.Unavailable, "player store: storage breaker open")
+	}
 	db, err := s.open(ctx, storageID)
 	if err != nil {
+		settle(err)
 		metrics.ObservePlayerStore(opSave, metrics.PlayerStoreUnavailable, time.Since(start))
 		logx.Errorf("[player_store] open storage %d for player %d: %v", storageID, req.GetPlayerId(), err)
 		return nil, status.Error(codes.Unavailable, "player store: storage unavailable")
 	}
 	store, err := New(db, s.knownGen, s.limits)
 	if err != nil {
+		settle(nil) // 装配问题,不是这个库的故障
 		return nil, status.Error(codes.Internal, "player store: not configured")
 	}
 	resp, err := store.Save(ctx, req)
+	settle(err)
 	if errors.Is(err, authoritysql.ErrWriterFrozen) {
 		// 闸门冻结(搬库切换窗口):这笔没写进去,结局是确定的。scene 按原序号退避重试,不算未知结局,也不打错误日志。
 		metrics.ObservePlayerStore(opSave, metrics.PlayerStoreUnavailable, time.Since(start))
@@ -148,17 +186,25 @@ func (s *Server) LoadAndClaim(ctx context.Context, req *storepb.LoadAndClaimRequ
 		logx.Errorf("[player_store] resolve storage of player %d: %v", req.GetPlayerId(), err)
 		return nil, status.Error(codes.Unavailable, "player store: storage not resolved")
 	}
+	settle, err := enterStore(ctx, storageID)
+	if err != nil {
+		metrics.ObservePlayerStore(opClaim, metrics.PlayerStoreUnavailable, time.Since(start))
+		return nil, status.Error(codes.Unavailable, "player store: storage breaker open")
+	}
 	db, err := s.open(ctx, storageID)
 	if err != nil {
+		settle(err)
 		metrics.ObservePlayerStore(opClaim, metrics.PlayerStoreUnavailable, time.Since(start))
 		logx.Errorf("[player_store] open storage %d for player %d: %v", storageID, req.GetPlayerId(), err)
 		return nil, status.Error(codes.Unavailable, "player store: storage unavailable")
 	}
 	store, err := New(db, s.knownGen, s.limits)
 	if err != nil {
+		settle(nil)
 		return nil, status.Error(codes.Internal, "player store: not configured")
 	}
 	resp, err := store.LoadAndClaim(ctx, req)
+	settle(err)
 	if errors.Is(err, authoritysql.ErrWriterFrozen) {
 		metrics.ObservePlayerStore(opClaim, metrics.PlayerStoreUnavailable, time.Since(start))
 		return nil, status.Error(codes.Unavailable, "player store: writer gate frozen")

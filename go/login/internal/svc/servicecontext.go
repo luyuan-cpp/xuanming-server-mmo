@@ -262,7 +262,7 @@ func NewServiceContext() *ServiceContext {
 	sc.initPlayerIDMinter()
 	sc.initHomeZoneResolver() // 依赖 initPlayerIDMinter 可能已拨好的 DataServiceClient
 	sc.initPlayerNames()      // 依赖 initHomeZoneResolver 兜底拨好的 DataServiceClient
-	// 内容安全:配置要求(Required)而没配目标、或客户端建不起来,起服即失败,不带着「名字不送检」对外服务。
+	// 内容安全:没配目标(又不是本机的 Optional)、或客户端建不起来,起服即失败,不带着「名字不送检」对外服务。
 	contentGuard, err := contentguard.New("login", config.AppConfig.ContentGuard)
 	if err != nil {
 		logx.Error(err)
@@ -604,6 +604,7 @@ func (s *ServiceContext) initLoginQueue() {
 		cfg.AdmitTTL,
 		s.QueueTokenSigningSecret(),
 	)
+	s.LoginQueue.LimitLength(cfg.MaxQueueLength)
 	// 放行流水线走专用句柄(不带守卫、发给槽位所在主节点),见 mustNewQueueAdmitRedis。
 	if s.queueAdmitRedis != nil {
 		s.LoginQueue.UseAdmitPipelineClient(s.queueAdmitRedis)
@@ -635,6 +636,7 @@ func (s *ServiceContext) initLoginQueue() {
 	s.QueueDispatcher = queueDispatcher
 	// dispatcher 挑定的 gate 记进同一份在途票,下一拍与快速通道都能看到(Start 之前接上)。
 	s.QueueDispatcher.SetGateInflight(s.gateInflight)
+	s.QueueDispatcher.LimitAdmitPerTick(cfg.MaxAdmitPerTick)
 	// Identify this pod in the dispatcher_is_leader gauge so Grafana can
 	// answer "which replica is leading right now". Hostname is the simplest
 	// stable identifier across both bare-metal and K8s deployments; falling

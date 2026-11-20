@@ -484,4 +484,8 @@
     <ClInclude Include="common\component\pet_cultivation_effects.pb.h" />
     <ClInclude Include="common\component\support_effects.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="content_guard\content_guard.pb.cc" />
+    <ClInclude Include="content_guard\content_guard.pb.h" />
+  </ItemGroup>
 </Project>

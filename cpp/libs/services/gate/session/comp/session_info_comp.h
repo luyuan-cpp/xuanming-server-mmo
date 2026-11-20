@@ -208,6 +208,11 @@ struct SessionInfo
 	// 登录态续租(docs/design/gate-online-identity.md §10.4):连接活着期间,gate 定期替它向 login 续租登录态、设备集成员与
 	// 绑定栅栏。放在会话里 = 会话 erase 即随之消失,到期登记按会话代次核对,不怕 session_id 复用。
 	LoginRenewalState loginRenewal{LoginRenewalState::kIdle};
+
+	// 未成年人当天的截止时刻(Unix 毫秒,0 = 不限),取自最近一次成功的 Login 回包(LoginResponse.anti_addiction.play_deadline_ms)。
+	// 只由 nodes/gate/handler/rpc/minor_play_deadline.{h,cpp} 读写:到点前几秒由它关连接
+	// (docs/design/real-name-anti-addiction.md §5.4)。
+	uint64_t minorPlayDeadlineMs{0};
 private:
 	NodeEntityMap nodeEntities; // Sparse map, only stores assigned node entities
 };

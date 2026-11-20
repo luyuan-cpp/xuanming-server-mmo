@@ -25,6 +25,9 @@ message NetworkProbeTarget {
   string host = 2;
   uint32 port = 3;
   SignedNetworkProbe grant = 4;
+  // 同一台 battle 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url):小游戏客户端测速连它,原生客户端仍连 host / port;
+  // 空串 = 这台 battle 不接小游戏(docs/design/minigame-websocket-gate.md W9)。
+  string ws_url = 5;
 }
 
 message GetNetworkProbePlanRequest {}

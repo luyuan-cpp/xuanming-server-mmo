@@ -205,6 +205,18 @@ public:
     std::size_t OutstandingCount() const { return outstandings_.Size(); }
     muduo::net::EventLoop& GetLoop() const { return loop_; }
 
+    // ---- 入站链路的握手身份(docs/design/muduo-rpc-channel.md §8.3) ----
+
+    // 本连接对端进程的 node_uuid:入站侧握手成功时由 NodeHandshakeManager::OnNodeHandshake 经 RecordHandshakePeer 记下,
+    // 此后本连接上派发的每次调用都经 RpcController::HandshakePeerUuid 读到它。空 = 这条连接还没握手成功(出站 channel 恒为空)。
+    // 它是连接的属性、不随消息体变:scene 据此按 (gate 实例, session_id) 认会话,不信消息自报的实例号
+    // (docs/design/scene-enter-chain-residuals.md §14)。只在 loop 线程读写。
+    const std::string& HandshakePeerUuid() const { return handshakePeerUuid_; }
+
+    // 给 connection 上 RpcServer 放进 context 的那个 channel 记下握手身份,返回是否记下。context 里没有 channel
+    // (不是 RpcServer 的入站连接)时什么都不做。一条连接只属于一个进程,再记一次即覆盖。只在 loop 线程调用。
+    static bool RecordHandshakePeer(const TcpConnectionPtr& connection, const std::string& peerNodeUuid);
+
     // 超时扫描:把截止时刻 <= now 的在途调用以 kTimeout 完成。超时 tick 每 100ms 调一次;也是单测接缝(loop 线程调用)。
     void SweepTimeouts(Clock::time_point now);
 
@@ -288,6 +300,8 @@ private:
     // 没开链路心跳时为空。
     std::optional<RpcLinkLiveness> liveness_;
     bool linkCheckArmed_{false};
+    // 见 HandshakePeerUuid。
+    std::string handshakePeerUuid_;
 };
 
 using RpcChannelPtr = std::shared_ptr<RpcChannel>;

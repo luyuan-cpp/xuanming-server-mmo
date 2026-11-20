@@ -19,6 +19,7 @@
 #include "handler/rpc/connection_admission.h"
 #include "handler/rpc/drain_migration.h"
 #include "handler/rpc/login_session_renewal.h"
+#include "handler/rpc/minor_play_deadline.h"
 #include "handler/rpc/router_muduo_forward.h"
 #include "handler/rpc/router_subset.h"
 #include "muduo_grpc/channel.h"
@@ -197,7 +198,8 @@ namespace
                  << " (overrides: " << admission::kAcceptRateEnv << " / " << admission::kAcceptBurstEnv << ", "
                  << admission::kPreAuthBudgetEnv << " / " << admission::kPreAuthEarlyDropStartEnv << " / "
                  << admission::kPreAuthEvictableAgeEnv << "; per-source limiting is off unless "
-                 << admission::kSourceRateEnv << " is set, suggested " << suggestedSource.perSecond << ")";
+                 << admission::kSourceRateEnv << " is set, suggested " << suggestedSource.perSecond
+                 << ", applies to public source addresses only)";
     }
 
     // 启动门禁:观战凭证密钥(docs/design/battle-spectate-tiered-fanout.md §15.7,口径同 battle 令牌)。
@@ -282,6 +284,9 @@ namespace
         // 为仍然连着的连接定期向 login 续租登录态,并重发已关闭连接还没被 login 确认的断线通知。回调不捕获任何对象;
         // 没有到期项时每拍只做两次堆顶比较。
         TimerTaskComp loginRenewalTimer;
+        // 未成年人到点断开的每秒一拍(handler/rpc/minor_play_deadline.cpp,docs/design/real-name-anti-addiction.md §5.4)。
+        // 回调不捕获任何对象;没有到期项时每拍只做一次堆顶比较。
+        TimerTaskComp minorDeadlineTimer;
         bool sourceClosed = false;
 
         GateRuntimeContext()
@@ -624,6 +629,7 @@ int main(int argc, char *argv[])
                     context.clientLivenessSweepTimer.Cancel();
                     context.drainMigrationTimer.Cancel();
                     context.loginRenewalTimer.Cancel();
+                    context.minorDeadlineTimer.Cancel();
                     // 剩下的断线通知随进程一起没了:gate 的 etcd 键删掉之后,player_locator 的死 gate 清扫把这台 gate 上
                     // 仍是 ONLINE 的会话转成 DISCONNECTING(gate_sweep.go)。打一行,复盘时知道有多少交给了清扫。
                     if (const auto pending = gate_login_renewal::PendingDisconnects(); pending > 0)
@@ -745,6 +751,11 @@ int main(int argc, char *argv[])
                         // 回调装上;关源时不停(断线通知要靠它重发),拆除前(stopGateTimers)才取消。
                         context.loginRenewalTimer.RunEvery(gate_login_renewal::kTickIntervalSeconds, [] {
                             gate_login_renewal::Tick(std::chrono::steady_clock::now());
+                        });
+                        // 未成年人到点断开:离当天的截止时刻不到 5 秒的连接,推踢线并关掉(截止时刻来自成功的 Login 回包)。
+                        // 同样紧跟客户端回调装上;拆除前(stopGateTimers)取消,那时客户端连接已经全部关掉。
+                        context.minorDeadlineTimer.RunEvery(gate_minor_deadline::kTickIntervalSeconds, [] {
+                            gate_minor_deadline::Tick(gate_minor_deadline::UnixNowMs());
                         });
 
                         // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连

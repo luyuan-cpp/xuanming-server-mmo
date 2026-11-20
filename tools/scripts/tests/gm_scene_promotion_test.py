@@ -215,6 +215,20 @@ class ReadyRuntimeTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'identity or input'):
             self.load()
 
+    def test_clean_reboot_timestamp_change_is_accepted_but_stopped_service_is_rejected(self):
+        self.current = deepcopy(self.current)
+        self.current['states']['scene'].update(status='running', restartCount=0, oomKilled=False, startedAt='after-reboot')
+        self.current['states']['gate'].update(status='running', restartCount=0, oomKilled=False, startedAt='after-reboot')
+        saved = json.loads((self.out / 'runtime-after.json').read_bytes())
+        saved['states']['scene'].update(status='running', restartCount=0, oomKilled=False, startedAt='before-reboot')
+        saved['states']['gate'].update(status='running', restartCount=0, oomKilled=False, startedAt='before-reboot')
+        self.ready['runtime'] = self.fixture.save('runtime-after.json', saved)
+        self.seal()
+        self.assertEqual(self.load(), self.runtime_env)
+        self.current['states']['scene']['status'] = 'exited'
+        with self.assertRaisesRegex(RuntimeError, 'runtime state changed'):
+            self.load()
+
     def test_missing_or_failed_source_check_is_rejected(self):
         self.ready['sourceCheck'] = self.fixture.save('source-check.json', {'success': False, 'services': []})
         self.seal()

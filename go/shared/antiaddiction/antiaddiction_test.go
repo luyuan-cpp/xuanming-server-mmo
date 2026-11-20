@@ -20,6 +20,18 @@ func TestBirthDateDecodesSpecExample(t *testing.T) {
 	}
 }
 
+func TestPIBirthPrefixIsTheInverseOfBirthDate(t *testing.T) {
+	if got := PIBirthPrefix(2010, 1, 1); got != specPI[:6] {
+		t.Fatalf("PIBirthPrefix(2010-01-01) = %q, want the spec sample prefix %q", got, specPI[:6])
+	}
+	for _, day := range []time.Time{beijing(1949, time.December, 31, 0, 0), beijing(2026, time.February, 28, 0, 0)} {
+		pi := PIBirthPrefix(day.Year(), int(day.Month()), day.Day()) + specPI[6:]
+		if got, ok := BirthDate(pi); !ok || !got.Equal(day) {
+			t.Errorf("round trip of %s = %v, %v", day.Format(time.DateOnly), got, ok)
+		}
+	}
+}
+
 func TestBirthDateRejectsMalformed(t *testing.T) {
 	for _, pi := range []string{
 		"",
@@ -56,10 +68,10 @@ func TestSpendLimitAtFollowsThe2019Notice(t *testing.T) {
 		want SpendLimit
 	}{
 		{7, SpendLimit{}},
-		{8, SpendLimit{SingleFen: 5000, MonthlyFen: 20000}},
-		{15, SpendLimit{SingleFen: 5000, MonthlyFen: 20000}},
-		{16, SpendLimit{SingleFen: 10000, MonthlyFen: 40000}},
-		{17, SpendLimit{SingleFen: 10000, MonthlyFen: 40000}},
+		{8, SpendLimit{SingleFen: 5000, DailyFen: 5000, MonthlyFen: 20000}},
+		{15, SpendLimit{SingleFen: 5000, DailyFen: 5000, MonthlyFen: 20000}},
+		{16, SpendLimit{SingleFen: 10000, DailyFen: 10000, MonthlyFen: 40000}},
+		{17, SpendLimit{SingleFen: 10000, DailyFen: 10000, MonthlyFen: 40000}},
 		{18, SpendLimit{Unlimited: true}},
 	}
 	for _, c := range cases {

@@ -1850,11 +1850,11 @@ constexpr BaseDeployConfig::ParseTableT_ BaseDeployConfig::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_._has_bits_),
       0, // no _extensions_
-      25, 248,  // max_field_number, fast_idx_mask
+      26, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4268228608,  // skipmap
+      4234674176,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      22,  // num_field_entries
+      23,  // num_field_entries
       5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1956,7 +1956,10 @@ constexpr BaseDeployConfig::ParseTableT_ BaseDeployConfig::InternalGenerateParse
       {::_pbi::TcParser::FastMtS2,
        {458, 13, 4,
         PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.tracing_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool content_guard_optional = 26;
+      {::_pbi::TcParser::FastV8S2,
+       {464, 22, 0,
+        PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.content_guard_optional_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -2009,6 +2012,8 @@ constexpr BaseDeployConfig::ParseTableT_ BaseDeployConfig::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.spectate_token_secret_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .TracingConfig tracing = 25;
       {PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.tracing_), _Internal::kHasBitsOffset + 13, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool content_guard_optional = 26;
+      {PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.content_guard_optional_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2105,7 +2110,8 @@ inline constexpr BaseDeployConfig::Impl_::Impl_(
         node_removal_grace_seconds_{0u},
         gate_max_connections_{0u},
         battle_max_connections_{0u},
-        cluster_id_{0u} {}
+        cluster_id_{0u},
+        content_guard_optional_{false} {}
 
 template <typename>
 constexpr BaseDeployConfig::BaseDeployConfig(::_pbi::ConstantInitialized,
@@ -2267,7 +2273,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_._has_bits_),
-        25, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.etcd_hosts_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.log_level_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.services_),
@@ -2290,6 +2296,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.id_segment_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.grpc_client_),
         PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.tracing_),
+        PROTOBUF_FIELD_OFFSET(::BaseDeployConfig, _impl_.content_guard_optional_),
         0,
         14,
         1,
@@ -2312,6 +2319,7 @@ const ::uint32_t
         11,
         12,
         13,
+        22,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GameConfig_RedisClusterConfig, _impl_._has_bits_),
         6, // hasbit index offset
@@ -2364,10 +2372,10 @@ static const ::_pbi::MigrationSchema
         {49, sizeof(::GrpcClientConfig)},
         {54, sizeof(::TracingConfig)},
         {59, sizeof(::BaseDeployConfig)},
-        {106, sizeof(::GameConfig_RedisClusterConfig)},
-        {115, sizeof(::GameConfig_PlayerInboxConfig)},
-        {122, sizeof(::GameConfig_AuditSnapshotConfig)},
-        {131, sizeof(::GameConfig)},
+        {108, sizeof(::GameConfig_RedisClusterConfig)},
+        {117, sizeof(::GameConfig_PlayerInboxConfig)},
+        {124, sizeof(::GameConfig_AuditSnapshotConfig)},
+        {133, sizeof(::GameConfig)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2401,7 +2409,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto[] AB
     "\0132%.GrpcClientConfig.CallDeadlineMsEntry"
     "\0325\n\023CallDeadlineMsEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005"
     "value\030\002 \001(\r:\0028\001\"-\n\rTracingConfig\022\034\n\024otlp"
-    "_traces_endpoint\030\001 \001(\t\"\300\005\n\020BaseDeployCon"
+    "_traces_endpoint\030\001 \001(\t\"\340\005\n\020BaseDeployCon"
     "fig\022\022\n\netcd_hosts\030\001 \003(\t\022\021\n\tlog_level\030\002 \001"
     "(\r\022 \n\010services\030\003 \003(\0132\016.ServiceConfig\022\"\n\032"
     "service_discovery_prefixes\030\004 \003(\t\022\033\n\023keep"
@@ -2418,28 +2426,29 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto[] AB
     "et\030\030 \001(\t\022\022\n\ncluster_id\030\022 \001(\r\022$\n\nid_segme"
     "nt\030\023 \001(\0132\020.IdSegmentConfig\022&\n\013grpc_clien"
     "t\030\025 \001(\0132\021.GrpcClientConfig\022\037\n\007tracing\030\031 "
-    "\001(\0132\016.TracingConfigJ\004\010\024\020\025R\026audit_topic_g"
-    "eneration\"\262\004\n\nGameConfig\022\027\n\017scene_node_t"
-    "ype\030\001 \001(\r\022\017\n\007zone_id\030\002 \001(\r\0223\n\014player_inb"
-    "ox\030\010 \001(\0132\035.GameConfig.PlayerInboxConfig\022"
-    "4\n\014player_redis\030\t \001(\0132\036.GameConfig.Redis"
-    "ClusterConfig\0227\n\016audit_snapshot\030\n \001(\0132\037."
-    "GameConfig.AuditSnapshotConfig\0225\n\rcontro"
-    "l_redis\030\014 \001(\0132\036.GameConfig.RedisClusterC"
-    "onfig\032C\n\022RedisClusterConfig\022\014\n\004mode\030\001 \001("
-    "\t\022\r\n\005seeds\030\002 \003(\t\022\020\n\010password\030\003 \001(\t\032M\n\021Pl"
-    "ayerInboxConfig\022\030\n\020consumer_enabled\030\001 \001("
-    "\010\022\036\n\026periodic_fetch_minutes\030\002 \001(\r\032^\n\023Aud"
-    "itSnapshotConfig\022\025\n\rlogin_enabled\030\001 \001(\010\022"
-    "\026\n\016logout_enabled\030\002 \001(\010\022\030\n\020sample_per_mi"
-    "lle\030\003 \001(\rJ\004\010\007\020\010J\004\010\013\020\014R\nzone_redisR\023scene"
-    "_control_redisB\rZ\013common/baseb\006proto3"
+    "\001(\0132\016.TracingConfig\022\036\n\026content_guard_opt"
+    "ional\030\032 \001(\010J\004\010\024\020\025R\026audit_topic_generatio"
+    "n\"\262\004\n\nGameConfig\022\027\n\017scene_node_type\030\001 \001("
+    "\r\022\017\n\007zone_id\030\002 \001(\r\0223\n\014player_inbox\030\010 \001(\013"
+    "2\035.GameConfig.PlayerInboxConfig\0224\n\014playe"
+    "r_redis\030\t \001(\0132\036.GameConfig.RedisClusterC"
+    "onfig\0227\n\016audit_snapshot\030\n \001(\0132\037.GameConf"
+    "ig.AuditSnapshotConfig\0225\n\rcontrol_redis\030"
+    "\014 \001(\0132\036.GameConfig.RedisClusterConfig\032C\n"
+    "\022RedisClusterConfig\022\014\n\004mode\030\001 \001(\t\022\r\n\005see"
+    "ds\030\002 \003(\t\022\020\n\010password\030\003 \001(\t\032M\n\021PlayerInbo"
+    "xConfig\022\030\n\020consumer_enabled\030\001 \001(\010\022\036\n\026per"
+    "iodic_fetch_minutes\030\002 \001(\r\032^\n\023AuditSnapsh"
+    "otConfig\022\025\n\rlogin_enabled\030\001 \001(\010\022\026\n\016logou"
+    "t_enabled\030\002 \001(\010\022\030\n\020sample_per_mille\030\003 \001("
+    "\rJ\004\010\007\020\010J\004\010\013\020\014R\nzone_redisR\023scene_control"
+    "_redisB\rZ\013common/baseb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto = {
     false,
     false,
-    1917,
+    1949,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fconfig_2eproto,
     "proto/common/base/config.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fconfig_2eproto_once,
@@ -4236,9 +4245,9 @@ BaseDeployConfig::BaseDeployConfig(
                offsetof(Impl_, log_level_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, log_level_),
-           offsetof(Impl_, cluster_id_) -
+           offsetof(Impl_, content_guard_optional_) -
                offsetof(Impl_, log_level_) +
-               sizeof(Impl_::cluster_id_));
+               sizeof(Impl_::content_guard_optional_));
 
   // @@protoc_insertion_point(copy_constructor:BaseDeployConfig)
 }
@@ -4274,9 +4283,9 @@ inline void BaseDeployConfig::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, kafka_),
            0,
-           offsetof(Impl_, cluster_id_) -
+           offsetof(Impl_, content_guard_optional_) -
                offsetof(Impl_, kafka_) +
-               sizeof(Impl_::cluster_id_));
+               sizeof(Impl_::content_guard_optional_));
 }
 BaseDeployConfig::~BaseDeployConfig() {
   // @@protoc_insertion_point(destructor:BaseDeployConfig)
@@ -4392,10 +4401,10 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
         reinterpret_cast<char*>(&_impl_.keep_alive_interval_) -
         reinterpret_cast<char*>(&_impl_.log_level_)) + sizeof(_impl_.keep_alive_interval_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     ::memset(&_impl_.node_ttl_seconds_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cluster_id_) -
-        reinterpret_cast<char*>(&_impl_.node_ttl_seconds_)) + sizeof(_impl_.cluster_id_));
+        reinterpret_cast<char*>(&_impl_.content_guard_optional_) -
+        reinterpret_cast<char*>(&_impl_.node_ttl_seconds_)) + sizeof(_impl_.content_guard_optional_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -4623,6 +4632,15 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
         stream);
   }
 
+  // bool content_guard_optional = 26;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_content_guard_optional() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          26, this_._internal_content_guard_optional(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4760,7 +4778,7 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     // uint32 node_ttl_seconds = 7;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_node_ttl_seconds() != 0) {
@@ -4801,6 +4819,12 @@ PROTOBUF_NOINLINE void BaseDeployConfig::Clear() {
       if (this_._internal_cluster_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_cluster_id());
+      }
+    }
+    // bool content_guard_optional = 26;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_content_guard_optional() != 0) {
+        total_size += 3;
       }
     }
   }
@@ -4946,7 +4970,7 @@ void BaseDeployConfig::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_node_ttl_seconds() != 0) {
         _this->_impl_.node_ttl_seconds_ = from._impl_.node_ttl_seconds_;
@@ -4975,6 +4999,11 @@ void BaseDeployConfig::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (from._internal_cluster_id() != 0) {
         _this->_impl_.cluster_id_ = from._impl_.cluster_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_content_guard_optional() != 0) {
+        _this->_impl_.content_guard_optional_ = from._impl_.content_guard_optional_;
       }
     }
   }
@@ -5008,8 +5037,8 @@ void BaseDeployConfig::InternalSwap(BaseDeployConfig* PROTOBUF_RESTRICT PROTOBUF
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.battle_token_secret_, &other->_impl_.battle_token_secret_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.spectate_token_secret_, &other->_impl_.spectate_token_secret_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.cluster_id_)
-      + sizeof(BaseDeployConfig::_impl_.cluster_id_)
+      PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.content_guard_optional_)
+      + sizeof(BaseDeployConfig::_impl_.content_guard_optional_)
       - PROTOBUF_FIELD_OFFSET(BaseDeployConfig, _impl_.kafka_)>(
           reinterpret_cast<char*>(&_impl_.kafka_),
           reinterpret_cast<char*>(&other->_impl_.kafka_));

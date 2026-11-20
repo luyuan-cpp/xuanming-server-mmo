@@ -152,139 +152,24 @@ inline std::optional<PreAuthBudget> ResolvePreAuthBudget(const char *rawBudget, 
 // 按来源前缀的新建连接速率闸(设计稿 P2-2)
 // ---------------------------------------------------------------------------
 //
-// 前面几道都是全局的:持续超限时,合法新连接与攻击连接抢同一个速率桶,谁来得多谁占得多。这一道按来源前缀
-// (IPv4 /24、IPv6 /64)各给一个小令牌桶,让单个来源最多拿到全局速率的一成。照设计稿 §7 的约束:
-//   - 限速率不限总量:CGNAT / 网吧 / 校园网 / 基站出口后面可能有几百上千个真玩家,不做每来源并发上限;
-//   - 按 /24、/64 聚合:IPv6 按 /128 等于没做(单主机能在自己的 /64 里生成 2^64 个源地址);
-//   - 缺省关闭:只有 gate 看得到玩家真实源地址时才有意义(G9:external 入口 + externalTrafficPolicy: Local)。
-//     podip 形态、代理型 LB 后面看到的是节点或 LB 的地址,开了就会把所有人当成同一个来源限速;
-//   - 开了也只在承压时生效(「告警后自动开启」):未验签池过了早拒起点,或全局速率闸在最近一个握手期限内拒过连接。
-//     平时一条都不拦,不会误伤同一出口后面的大批玩家;
-//   - 不封来源、不落持久状态(§7「拒绝 N 次就封 IP」是状态炸弹):每个前缀只是一个会自己回满的桶。
-//
-// 开启时的推荐参数(DefaultSourceRateLimit;没有压测数据,按推导先定):
-//   持续速率 = 全局缺省持续速率的 1/10(上限 2 万时 20 条/秒;全局取下限 100 时为 10):至少要十个前缀一起来才吃得满全局速率闸;
-//   桶深 = 持续速率 × 握手期限(200 / 100):单个前缀稳态下最多占住未验签预算的一成。
-//   承压期间一个 /24 后面几百个真玩家同时重连,先放行一个桶深,之后按持续速率进,几十秒内接完。这是攻击期间的降级,平时不生效。
-// 前缀表有上限(kMaxTrackedSources):满了先清掉桶已回满的前缀(每秒最多清一次),清不出位置时新前缀不登记、直接放行
-// (fail-open,计 gate_source_untracked_total 并采样打日志)。只有极分散的来源(上万个前缀)才撑得满它,那时这一道帮不上忙,
-// 全局的几道照常生效;拒掉新来源反而会把真玩家一起挡掉。
-inline constexpr uint32_t kSourceShareDivisor = 10;
-inline constexpr size_t kMaxTrackedSources = 65536;
+// 规则、推荐值、前缀表与「只限公网来源」在 core 的 network/accept_admission.h(与 battle 直连同一份),这里引进来。
+// gate 只在看得到玩家真实源地址的形态里有用:external 入口 + externalTrafficPolicy: Local(G9)。podip 形态、代理型 LB
+// 与小游戏 WebSocket 的边缘 nginx 后面看到的都是私网地址,按规则本来就不限。
+using accept_admission::DefaultSourceRateLimit;
+using accept_admission::IsPublicSourcePrefix;
+using accept_admission::kMaxTrackedSources;
+using accept_admission::kSourceShareDivisor;
+using accept_admission::RateLimitedSourceOf;
+using accept_admission::SourcePrefix;
+using accept_admission::SourcePrefixHash;
+using accept_admission::SourcePrefixOf;
+using accept_admission::SourcePrefixOfIpv4;
+using accept_admission::SourcePrefixOfIpv6;
+using accept_admission::SourceRateGate;
 
-constexpr RateLimit DefaultSourceRateLimit(uint32_t effectiveMaxConnections)
-{
-	const uint32_t deadlineSeconds = static_cast<uint32_t>(
-		std::chrono::duration_cast<std::chrono::seconds>(client_liveness::kClientLiveness.handshakeTimeout).count());
-	const uint32_t perSecond = (std::max)(uint32_t{1}, DefaultRateLimit(effectiveMaxConnections).perSecond / kSourceShareDivisor);
-	return RateLimit{perSecond, perSecond * deadlineSeconds};
-}
-
-// 一个来源前缀:IPv4 取高 24 位,IPv6 取高 64 位。
-struct SourcePrefix
-{
-	bool ipv6{false};
-	uint64_t bits{0};
-
-	bool operator==(const SourcePrefix &) const = default;
-};
-
-struct SourcePrefixHash
-{
-	size_t operator()(const SourcePrefix &prefix) const noexcept
-	{
-		return std::hash<uint64_t>{}(prefix.bits ^ (prefix.ipv6 ? 0x9E3779B97F4A7C15ULL : 0ULL));
-	}
-};
-
-constexpr SourcePrefix SourcePrefixOfIpv4(uint32_t hostOrderAddress)
-{
-	return SourcePrefix{false, hostOrderAddress >> 8};
-}
-
-// address 是网络字节序的 16 个字节。IPv4 映射地址(::ffff:a.b.c.d)按 IPv4 算:同一台客户端经 IPv4 还是双栈套接字进来,
-// 不该落进两个桶。
-constexpr SourcePrefix SourcePrefixOfIpv6(const std::array<uint8_t, 16> &address)
-{
-	bool mapped = address[10] == 0xFF && address[11] == 0xFF;
-	for (size_t i = 0; i < 10; ++i)
-	{
-		mapped = mapped && address[i] == 0;
-	}
-	if (mapped)
-	{
-		return SourcePrefixOfIpv4((uint32_t{address[12]} << 24) | (uint32_t{address[13]} << 16) |
-								  (uint32_t{address[14]} << 8) | uint32_t{address[15]});
-	}
-	uint64_t bits = 0;
-	for (size_t i = 0; i < 8; ++i)
-	{
-		bits = (bits << 8) | address[i];
-	}
-	return SourcePrefix{true, bits};
-}
-
-// 按前缀分桶的速率闸:每个前缀一个 AcceptRateGate(GCRA,起步是满桶)。判定阶段只问 WouldAdmit,不改状态;
-// 所有闸都放行之后才 Take,被别的闸拒掉的连接不消耗这个前缀的名额。不加锁:只在 gate 的 accept 线程上用。
-class SourceRateGate
-{
-public:
-	explicit SourceRateGate(RateLimit limit, size_t maxTracked = kMaxTrackedSources)
-		: limit_(limit), maxTracked_(maxTracked)
-	{
-	}
-
-	bool WouldAdmit(const SourcePrefix &prefix, SteadyTime now) const
-	{
-		const auto it = gates_.find(prefix);
-		return it == gates_.end() || it->second.CanTake(now);
-	}
-
-	// 放行之后记一笔。表满时先清掉桶已回满的前缀;仍然满就不登记、返回 false(这个前缀这次没被计入,调用方计一次 untracked)。
-	bool Take(const SourcePrefix &prefix, SteadyTime now)
-	{
-		auto it = gates_.find(prefix);
-		if (it == gates_.end())
-		{
-			if (gates_.size() >= maxTracked_)
-			{
-				PruneIfDue(now);
-			}
-			if (gates_.size() >= maxTracked_)
-			{
-				return false;
-			}
-			it = gates_.emplace(prefix, AcceptRateGate(limit_)).first;
-		}
-		it->second.TryTake(now);
-		return true;
-	}
-
-	size_t Tracked() const { return gates_.size(); }
-	const RateLimit &Limit() const { return limit_; }
-
-private:
-	// 桶已回满的前缀与没登记过等价,可以删。只在表满时清、每秒最多一次:撑满时不至于每条连接都扫一遍表。
-	void PruneIfDue(SteadyTime now)
-	{
-		if (lastPruneAt_ && now - *lastPruneAt_ < std::chrono::seconds(1))
-		{
-			return;
-		}
-		lastPruneAt_ = now;
-		std::erase_if(gates_, [now](const auto &entry) { return entry.second.Full(now); });
-	}
-
-	RateLimit limit_;
-	size_t maxTracked_;
-	std::unordered_map<SourcePrefix, AcceptRateGate, SourcePrefixHash> gates_;
-	std::optional<SteadyTime> lastPruneAt_;
-};
-
-// 开关与参数(缺省关闭,理由见上):
-//   GATE_SOURCE_RATE_PER_SECOND  设了就开启:单个前缀的持续速率,规范十进制 1..accept_admission::kMaxAcceptRatePerSecond;
-//                                推荐值见 DefaultSourceRateLimit(启动日志会打出来);
-//   GATE_SOURCE_BURST            单个前缀的桶深,规范十进制 1..accept_admission::kMaxAcceptBurst;不设时取持续速率 × 握手期限。
+// 开关与参数(缺省关闭,取值范围见 accept_admission::SourceRateEnvNames):
+//   GATE_SOURCE_RATE_PER_SECOND  设了就开启:单个前缀的持续速率;推荐值见 DefaultSourceRateLimit(启动日志会打出来);
+//   GATE_SOURCE_BURST            单个前缀的桶深;不设时取持续速率 × 握手期限。
 // 只设桶深不设速率、或写错都拒绝启动。
 inline constexpr const char *kSourceRateEnv = "GATE_SOURCE_RATE_PER_SECOND";
 inline constexpr const char *kSourceBurstEnv = "GATE_SOURCE_BURST";
@@ -293,36 +178,7 @@ inline constexpr const char *kSourceBurstEnv = "GATE_SOURCE_BURST";
 inline bool ResolveSourceRateLimit(const char *rawRate, const char *rawBurst, std::optional<RateLimit> &limit,
 								   std::string &error)
 {
-	limit.reset();
-	const auto rate = ParseOptionalPositive(rawRate, accept_admission::kMaxAcceptRatePerSecond);
-	if (!rate)
-	{
-		error = std::string(kSourceRateEnv) + " must be an integer 1.." +
-				std::to_string(accept_admission::kMaxAcceptRatePerSecond) + " (leave it unset to keep per-source limiting off)";
-		return false;
-	}
-	const auto burst = ParseOptionalPositive(rawBurst, accept_admission::kMaxAcceptBurst);
-	if (!burst)
-	{
-		error = std::string(kSourceBurstEnv) + " must be an integer 1.." + std::to_string(accept_admission::kMaxAcceptBurst) +
-				" (leave it unset for rate x handshake deadline)";
-		return false;
-	}
-	if (*rate == 0)
-	{
-		if (*burst != 0)
-		{
-			error = std::string(kSourceBurstEnv) + " is set but " + kSourceRateEnv +
-					" is not; per-source limiting is enabled by setting the rate";
-			return false;
-		}
-		return true;
-	}
-	const uint64_t deadlineSeconds = static_cast<uint64_t>(
-		std::chrono::duration_cast<std::chrono::seconds>(client_liveness::kClientLiveness.handshakeTimeout).count());
-	const uint64_t derivedBurst = (std::min)(uint64_t{accept_admission::kMaxAcceptBurst}, uint64_t{*rate} * deadlineSeconds);
-	limit = RateLimit{*rate, *burst != 0 ? *burst : static_cast<uint32_t>(derivedBurst)};
-	return true;
+	return accept_admission::ResolveSourceRateLimit({kSourceRateEnv, kSourceBurstEnv}, rawRate, rawBurst, limit, error);
 }
 
 // 判定所需的当前状态。
@@ -400,11 +256,8 @@ void CloseSource();
 // 并按原因计数、采样打日志(被拒的量就是攻击流量的量级,不能逐条写盘)。
 // 判定要求先淘汰时,放行之前收回最老那条未验签连接的占位,再经会话里的 weak 连接 forceClose 它:
 // 会话不在这里删,留给随后的断开回调(没验签的会话没有角色,断开回调只删会话)。本端 loop 刚卡过时不淘汰。
-// 按来源限速开启且承压时,从 peer 取来源前缀问它的桶;放行之后才给这个前缀记一笔。
+// 按来源限速开启且承压时,从 peer 取来源前缀(只认公网地址,RateLimitedSourceOf)问它的桶;放行之后才给这个前缀记一笔。
 bool AdmitConnection(const muduo::net::InetAddress &peer, SteadyTime now);
-
-// 来源前缀(IPv4 /24、IPv6 /64)。不是 IPv4 / IPv6 的地址返回空,这样的连接不按来源限速。
-std::optional<SourcePrefix> SourcePrefixOf(const muduo::net::InetAddress &peer);
 
 // 连接已经建出来之后才发现不能要(HandleConnectionEstablished 里的纵深防御分支):只计数,连接由调用方 forceClose。
 void NoteRejectedAfterAccept(RejectReason reason);

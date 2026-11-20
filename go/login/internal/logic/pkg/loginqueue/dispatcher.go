@@ -87,6 +87,9 @@ type Dispatcher struct {
 	// nil = 不记(单测与没接线的调用方)。只在 Start 之前经 SetGateInflight 设一次,之后只读。
 	inflight *GateInflight
 
+	// maxAdmitPerTick 是一拍最多放行多少人,0 = 不设上限(单测)。只在 Start 之前经 LimitAdmitPerTick 设一次,之后只读。
+	maxAdmitPerTick uint32
+
 	cancel  context.CancelFunc
 	stopped chan struct{}
 	mu      sync.Mutex
@@ -191,6 +194,16 @@ func (d *Dispatcher) SetPodID(id string) {
 // 每挑定一台 gate 记一张在途票,见 gate_inflight.go。
 func (d *Dispatcher) SetGateInflight(inflight *GateInflight) {
 	d.inflight = inflight
+}
+
+// LimitAdmitPerTick 设一拍最多放行多少人,必须在 Start 之前调用。生产由起服装配按 Queue.MaxAdmitPerTick 调用
+// (缺省 2000);0 或不调用 = 不设上限。
+//
+// 空位是一下子腾出来的时候(运维调大区容量、一台 gate 掉线后人数清零),不设上限的话这一拍会把空位全部放满:
+// 几万人在同一个轮询周期里拿到票,同时去连 gate、进场景。上限把它摊到若干拍;快速通道那一侧由网关的区桶限速,
+// 两条路各有各的闸。排队的人只是晚几拍放行,名次不变。
+func (d *Dispatcher) LimitAdmitPerTick(maxAdmitPerTick uint32) {
+	d.maxAdmitPerTick = maxAdmitPerTick
 }
 
 func (d *Dispatcher) podLabel() string {
@@ -382,6 +395,9 @@ func (d *Dispatcher) dispatchOnce(ctx context.Context) {
 	// 在途上界因此是 capacity − online,不再是它的两倍。free > 0 意味着 capacity > online + 占位,减法不会下溢。
 	budget := capacity - online
 	batch := min(free, queueLen)
+	if d.maxAdmitPerTick > 0 {
+		batch = min(batch, d.maxAdmitPerTick)
+	}
 
 	admitted, err := d.queue.PopAdmit(ctx, zoneID, int(batch), budget, recordPicks(newBatchPickFn(candidates), d.inflight))
 	// PopAdmit 出错时已放行数仍然有效(2026-10-18 起):先记账,再判错误。此前出错直接返回,本拍已放行的人不计入。

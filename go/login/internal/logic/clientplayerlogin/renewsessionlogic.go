@@ -55,12 +55,13 @@ func (l *RenewSessionLogic) RenewSession(in *login_proto.RenewSessionRequest) (*
 		return nil, status.Error(codes.Unavailable, "login session renewal unavailable, retry later")
 	}
 	if !kept {
+		// 这条连接在 login 已经没有登录态:防沉迷会话账本里若还留着它(绑定半途失败的),现在收尾,不等租约到期。
+		endWatchedSession(l.ctx, l.svcCtx, sessionRef)
 		return &login_proto.RenewSessionResponse{}, nil
 	}
-	resp := &login_proto.RenewSessionResponse{Renewed: true, RenewAfterSeconds: renewAfterSeconds(ttl)}
-	// 未成年人到点下线挂在续租上:间隔缩到截止时刻,到点踢线(docs/design/real-name-anti-addiction.md §5.4)。
-	enforceMinorDeadline(l.ctx, l.svcCtx, sessionRef, sessionDetails, resp, time.Now())
-	return resp, nil
+	// 防沉迷会话账本的租约跟着顺延;未成年人过了截止时刻还连着的,在这里兜底踢线(docs/design/real-name-anti-addiction.md §5.4)。
+	renewWatchedSession(l.ctx, l.svcCtx, sessionRef, sessionDetails)
+	return &login_proto.RenewSessionResponse{Renewed: true, RenewAfterSeconds: renewAfterSeconds(ttl)}, nil
 }
 
 // renewAfterSeconds 把续租间隔换成应答里的秒数,至少 1 秒(0 在协议里表示「没有间隔」)。

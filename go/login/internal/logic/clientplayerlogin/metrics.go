@@ -298,25 +298,25 @@ func PrimeCreatePlayerMetrics() {
 // ReplaceLogin 踢掉被替换的旧会话这一步的结局(docs/design/scene-enter-chain-residuals.md §2.2 ⑥)。
 // 全称 `login_kick_total`:本文件上面 EnterGame 那批的命名空间是 `entergame`,这里显式写 `login`。
 // 只有一个低基数 label,**不放 player_id / session_id**;定位具体玩家靠同一处的 `[login-kick]` 日志。
-// 稳态下 skip_uncommitted 只在 SetSession 失败时出现;send_failed 有数 = 旧设备没被踢,靠 scene 栅栏改绑后变哑;
-// skip_cross_instance 有数 = 同号跨实例的旧连接按 §12.3 定论没有被踢(方案 C 落地前只计数)。
+// 稳态下 skip_uncommitted 只在 SetSession 失败时出现;send_failed 有数 = 旧设备没被踢,靠 scene 栅栏改绑后变哑。
+// 会话号相同、gate 实例不同(同一 node_id 上的老进程还没关停)的旧连接照踢,计在 sent / send_failed 里:scene 按
+// (gate 实例, session_id) 认会话之后,旧实例关闭旧连接时代发的 ExitGame 不再退掉新会话(scene-enter-chain-residuals.md §14)。
 var kickTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 	Namespace: "login",
 	Subsystem: "",
 	Name:      "kick_total",
 	Help: "Kicks of the replaced session after a ReplaceLogin committed its session record. " +
-		"Result: sent | send_failed | skip_same_session | skip_no_target | skip_uncommitted | skip_cross_instance.",
+		"Result: sent | send_failed | skip_same_session | skip_no_target | skip_uncommitted.",
 	Labels: []string{"result"},
 })
 
 // kickTotal 的 result 取值。
 const (
-	kickResultSent              = "sent"                // 踢线命令已写进 Kafka(不等于 gate 一定踢了:gate 还要过 ClassifyKick)
-	kickResultSendFailed        = "send_failed"         // 组装被守卫拒绝或 Kafka 写失败;提交已发生,链不因此失败
-	kickResultSkipSameSession   = "skip_same_session"   // 旧记录与本链是同一连接(会话号与 gate 实例号都相同)
-	kickResultSkipNoTarget      = "skip_no_target"      // 旧记录缺 gate 寻址,或本链实例号为空(这条链注定在 Bind 失败)
-	kickResultSkipUncommitted   = "skip_uncommitted"    // SetSession 报错且复读没有确认本链已提交
-	kickResultSkipCrossInstance = "skip_cross_instance" // 会话号相同、gate 实例不同:方案 C 落地前只计数不踢(§12.3)
+	kickResultSent            = "sent"              // 踢线命令已写进 Kafka(不等于 gate 一定踢了:gate 还要过 ClassifyKick)
+	kickResultSendFailed      = "send_failed"       // 组装被守卫拒绝或 Kafka 写失败;提交已发生,链不因此失败
+	kickResultSkipSameSession = "skip_same_session" // 旧记录与本链是同一连接(会话号与 gate 实例号都相同)
+	kickResultSkipNoTarget    = "skip_no_target"    // 旧记录缺 gate 寻址,或本链实例号为空(这条链注定在 Bind 失败)
+	kickResultSkipUncommitted = "skip_uncommitted"  // SetSession 报错且复读没有确认本链已提交
 )
 
 // ── 会话提交重做指标 ─────────────────────────────────────────────────────

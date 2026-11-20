@@ -22,6 +22,102 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type PurgeRemovedRoleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	State         *RoleFenceState        `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PurgeRemovedRoleRequest) Reset() {
+	*x = PurgeRemovedRoleRequest{}
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PurgeRemovedRoleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PurgeRemovedRoleRequest) ProtoMessage() {}
+
+func (x *PurgeRemovedRoleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PurgeRemovedRoleRequest.ProtoReflect.Descriptor instead.
+func (*PurgeRemovedRoleRequest) Descriptor() ([]byte, []int) {
+	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *PurgeRemovedRoleRequest) GetState() *RoleFenceState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *PurgeRemovedRoleRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type PurgeRemovedRoleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Retry         bool                   `protobuf:"varint,1,opt,name=retry,proto3" json:"retry,omitempty"` // 这一次没清完(SQL、超时、副本还不是墓碑),协调者下一轮再调
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PurgeRemovedRoleResponse) Reset() {
+	*x = PurgeRemovedRoleResponse{}
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PurgeRemovedRoleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PurgeRemovedRoleResponse) ProtoMessage() {}
+
+func (x *PurgeRemovedRoleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PurgeRemovedRoleResponse.ProtoReflect.Descriptor instead.
+func (*PurgeRemovedRoleResponse) Descriptor() ([]byte, []int) {
+	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PurgeRemovedRoleResponse) GetRetry() bool {
+	if x != nil {
+		return x.Retry
+	}
+	return false
+}
+
 // 目录 account_role 一行的护栏字段。所有副本写入的合并规则只有一条:version 大的赢。
 type RoleFenceState struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -38,7 +134,7 @@ type RoleFenceState struct {
 
 func (x *RoleFenceState) Reset() {
 	*x = RoleFenceState{}
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[0]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -50,7 +146,7 @@ func (x *RoleFenceState) String() string {
 func (*RoleFenceState) ProtoMessage() {}
 
 func (x *RoleFenceState) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[0]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63,7 +159,7 @@ func (x *RoleFenceState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleFenceState.ProtoReflect.Descriptor instead.
 func (*RoleFenceState) Descriptor() ([]byte, []int) {
-	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{0}
+	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RoleFenceState) GetPlayerId() uint64 {
@@ -126,7 +222,7 @@ type PrepareRoleFreezeRequest struct {
 
 func (x *PrepareRoleFreezeRequest) Reset() {
 	*x = PrepareRoleFreezeRequest{}
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[1]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -138,7 +234,7 @@ func (x *PrepareRoleFreezeRequest) String() string {
 func (*PrepareRoleFreezeRequest) ProtoMessage() {}
 
 func (x *PrepareRoleFreezeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[1]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -151,7 +247,7 @@ func (x *PrepareRoleFreezeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRoleFreezeRequest.ProtoReflect.Descriptor instead.
 func (*PrepareRoleFreezeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{1}
+	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PrepareRoleFreezeRequest) GetState() *RoleFenceState {
@@ -187,7 +283,7 @@ type PrepareRoleFreezeResponse struct {
 
 func (x *PrepareRoleFreezeResponse) Reset() {
 	*x = PrepareRoleFreezeResponse{}
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[2]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -199,7 +295,7 @@ func (x *PrepareRoleFreezeResponse) String() string {
 func (*PrepareRoleFreezeResponse) ProtoMessage() {}
 
 func (x *PrepareRoleFreezeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[2]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -212,7 +308,7 @@ func (x *PrepareRoleFreezeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRoleFreezeResponse.ProtoReflect.Descriptor instead.
 func (*PrepareRoleFreezeResponse) Descriptor() ([]byte, []int) {
-	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{2}
+	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PrepareRoleFreezeResponse) GetClean() bool {
@@ -253,7 +349,7 @@ type ApplyRoleFenceRequest struct {
 
 func (x *ApplyRoleFenceRequest) Reset() {
 	*x = ApplyRoleFenceRequest{}
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[3]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -265,7 +361,7 @@ func (x *ApplyRoleFenceRequest) String() string {
 func (*ApplyRoleFenceRequest) ProtoMessage() {}
 
 func (x *ApplyRoleFenceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[3]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -278,7 +374,7 @@ func (x *ApplyRoleFenceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyRoleFenceRequest.ProtoReflect.Descriptor instead.
 func (*ApplyRoleFenceRequest) Descriptor() ([]byte, []int) {
-	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{3}
+	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ApplyRoleFenceRequest) GetState() *RoleFenceState {
@@ -304,7 +400,7 @@ type ApplyRoleFenceResponse struct {
 
 func (x *ApplyRoleFenceResponse) Reset() {
 	*x = ApplyRoleFenceResponse{}
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[4]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -316,7 +412,7 @@ func (x *ApplyRoleFenceResponse) String() string {
 func (*ApplyRoleFenceResponse) ProtoMessage() {}
 
 func (x *ApplyRoleFenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_role_fence_role_fence_proto_msgTypes[4]
+	mi := &file_proto_role_fence_role_fence_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -329,7 +425,7 @@ func (x *ApplyRoleFenceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyRoleFenceResponse.ProtoReflect.Descriptor instead.
 func (*ApplyRoleFenceResponse) Descriptor() ([]byte, []int) {
-	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{4}
+	return file_proto_role_fence_role_fence_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ApplyRoleFenceResponse) GetRetry() bool {
@@ -343,7 +439,12 @@ var File_proto_role_fence_role_fence_proto protoreflect.FileDescriptor
 
 const file_proto_role_fence_role_fence_proto_rawDesc = "" +
 	"\n" +
-	"!proto/role_fence/role_fence.proto\x12\trolefence\x1a)proto/common/base/service_call_auth.proto\"\xeb\x01\n" +
+	"!proto/role_fence/role_fence.proto\x12\trolefence\x1a)proto/common/base/service_call_auth.proto\"|\n" +
+	"\x17PurgeRemovedRoleRequest\x12/\n" +
+	"\x05state\x18\x01 \x01(\v2\x19.rolefence.RoleFenceStateR\x05state\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"0\n" +
+	"\x18PurgeRemovedRoleResponse\x12\x14\n" +
+	"\x05retry\x18\x01 \x01(\bR\x05retry\"\xeb\x01\n" +
 	"\x0eRoleFenceState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12%\n" +
@@ -365,10 +466,11 @@ const file_proto_role_fence_role_fence_proto_rawDesc = "" +
 	"\x05state\x18\x01 \x01(\v2\x19.rolefence.RoleFenceStateR\x05state\x120\n" +
 	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\".\n" +
 	"\x16ApplyRoleFenceResponse\x12\x14\n" +
-	"\x05retry\x18\x01 \x01(\bR\x05retry2\xd1\x01\n" +
+	"\x05retry\x18\x01 \x01(\bR\x05retry2\xb0\x02\n" +
 	"\x14RoleFenceParticipant\x12`\n" +
 	"\x11PrepareRoleFreeze\x12#.rolefence.PrepareRoleFreezeRequest\x1a$.rolefence.PrepareRoleFreezeResponse\"\x00\x12W\n" +
-	"\x0eApplyRoleFence\x12 .rolefence.ApplyRoleFenceRequest\x1a!.rolefence.ApplyRoleFenceResponse\"\x00B\x15Z\x10proto/role_fence\x80\x01\x00b\x06proto3"
+	"\x0eApplyRoleFence\x12 .rolefence.ApplyRoleFenceRequest\x1a!.rolefence.ApplyRoleFenceResponse\"\x00\x12]\n" +
+	"\x10PurgeRemovedRole\x12\".rolefence.PurgeRemovedRoleRequest\x1a#.rolefence.PurgeRemovedRoleResponse\"\x00B\x15Z\x10proto/role_fence\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_role_fence_role_fence_proto_rawDescOnce sync.Once
@@ -382,29 +484,35 @@ func file_proto_role_fence_role_fence_proto_rawDescGZIP() []byte {
 	return file_proto_role_fence_role_fence_proto_rawDescData
 }
 
-var file_proto_role_fence_role_fence_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_role_fence_role_fence_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_role_fence_role_fence_proto_goTypes = []any{
-	(*RoleFenceState)(nil),            // 0: rolefence.RoleFenceState
-	(*PrepareRoleFreezeRequest)(nil),  // 1: rolefence.PrepareRoleFreezeRequest
-	(*PrepareRoleFreezeResponse)(nil), // 2: rolefence.PrepareRoleFreezeResponse
-	(*ApplyRoleFenceRequest)(nil),     // 3: rolefence.ApplyRoleFenceRequest
-	(*ApplyRoleFenceResponse)(nil),    // 4: rolefence.ApplyRoleFenceResponse
-	(*base.ServiceCallAuth)(nil),      // 5: common.base.ServiceCallAuth
+	(*PurgeRemovedRoleRequest)(nil),   // 0: rolefence.PurgeRemovedRoleRequest
+	(*PurgeRemovedRoleResponse)(nil),  // 1: rolefence.PurgeRemovedRoleResponse
+	(*RoleFenceState)(nil),            // 2: rolefence.RoleFenceState
+	(*PrepareRoleFreezeRequest)(nil),  // 3: rolefence.PrepareRoleFreezeRequest
+	(*PrepareRoleFreezeResponse)(nil), // 4: rolefence.PrepareRoleFreezeResponse
+	(*ApplyRoleFenceRequest)(nil),     // 5: rolefence.ApplyRoleFenceRequest
+	(*ApplyRoleFenceResponse)(nil),    // 6: rolefence.ApplyRoleFenceResponse
+	(*base.ServiceCallAuth)(nil),      // 7: common.base.ServiceCallAuth
 }
 var file_proto_role_fence_role_fence_proto_depIdxs = []int32{
-	0, // 0: rolefence.PrepareRoleFreezeRequest.state:type_name -> rolefence.RoleFenceState
-	5, // 1: rolefence.PrepareRoleFreezeRequest.auth:type_name -> common.base.ServiceCallAuth
-	0, // 2: rolefence.ApplyRoleFenceRequest.state:type_name -> rolefence.RoleFenceState
-	5, // 3: rolefence.ApplyRoleFenceRequest.auth:type_name -> common.base.ServiceCallAuth
-	1, // 4: rolefence.RoleFenceParticipant.PrepareRoleFreeze:input_type -> rolefence.PrepareRoleFreezeRequest
-	3, // 5: rolefence.RoleFenceParticipant.ApplyRoleFence:input_type -> rolefence.ApplyRoleFenceRequest
-	2, // 6: rolefence.RoleFenceParticipant.PrepareRoleFreeze:output_type -> rolefence.PrepareRoleFreezeResponse
-	4, // 7: rolefence.RoleFenceParticipant.ApplyRoleFence:output_type -> rolefence.ApplyRoleFenceResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2, // 0: rolefence.PurgeRemovedRoleRequest.state:type_name -> rolefence.RoleFenceState
+	7, // 1: rolefence.PurgeRemovedRoleRequest.auth:type_name -> common.base.ServiceCallAuth
+	2, // 2: rolefence.PrepareRoleFreezeRequest.state:type_name -> rolefence.RoleFenceState
+	7, // 3: rolefence.PrepareRoleFreezeRequest.auth:type_name -> common.base.ServiceCallAuth
+	2, // 4: rolefence.ApplyRoleFenceRequest.state:type_name -> rolefence.RoleFenceState
+	7, // 5: rolefence.ApplyRoleFenceRequest.auth:type_name -> common.base.ServiceCallAuth
+	3, // 6: rolefence.RoleFenceParticipant.PrepareRoleFreeze:input_type -> rolefence.PrepareRoleFreezeRequest
+	5, // 7: rolefence.RoleFenceParticipant.ApplyRoleFence:input_type -> rolefence.ApplyRoleFenceRequest
+	0, // 8: rolefence.RoleFenceParticipant.PurgeRemovedRole:input_type -> rolefence.PurgeRemovedRoleRequest
+	4, // 9: rolefence.RoleFenceParticipant.PrepareRoleFreeze:output_type -> rolefence.PrepareRoleFreezeResponse
+	6, // 10: rolefence.RoleFenceParticipant.ApplyRoleFence:output_type -> rolefence.ApplyRoleFenceResponse
+	1, // 11: rolefence.RoleFenceParticipant.PurgeRemovedRole:output_type -> rolefence.PurgeRemovedRoleResponse
+	9, // [9:12] is the sub-list for method output_type
+	6, // [6:9] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_role_fence_role_fence_proto_init() }
@@ -418,7 +526,7 @@ func file_proto_role_fence_role_fence_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_role_fence_role_fence_proto_rawDesc), len(file_proto_role_fence_role_fence_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

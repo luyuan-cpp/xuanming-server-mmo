@@ -1,8 +1,11 @@
 #pragma once
 
 #include <bitset>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 
 // Bit-index map type shared by all generated *_table_id_bit_index.h headers.
@@ -40,6 +43,19 @@ bool SetBit(const BitIndexMap& bitMap, std::bitset<N>& bits, uint64_t id, bool v
     }
     bits.set(*idx, value);
     return true;
+}
+
+// 存档里的位图(proto bytes 字段):第 i 位在第 i / 8 个字节的第 i % 8 位(低位在前)。
+// 写入只在置位时加长,所以只要从空串或同样写出的串开始,末尾就不会有全 0 的字节。
+inline bool TestPackedBit(std::string_view bits, std::size_t index)
+{
+    return index / 8 < bits.size() && ((static_cast<unsigned char>(bits[index / 8]) >> (index % 8)) & 1u) != 0;
+}
+
+inline void SetPackedBit(std::string& bits, std::size_t index)
+{
+    if (bits.size() <= index / 8) bits.resize(index / 8 + 1, '\0');
+    bits[index / 8] = static_cast<char>(static_cast<unsigned char>(bits[index / 8]) | (1u << (index % 8)));
 }
 
 // Reward-decision result for a completed entry.

@@ -79,6 +79,10 @@
           when | node | cmd_own cmd_for for/own | fan_n fan_p50 fan_p99 | rel dest | track relg defer super
           cmd_* 只数命令 topic(-cmd 结尾);fan_* = 每次按收件人广播发给几台 gate;rel / dest = 场景归属对账开始排空 / 已销毁
 
+      [N2 C++ client connection admission(同一批 *_cpp_* 快照,只出 gate / battle 的行,2026-11-20 起;准入阈值的校准,设计稿 §9.7)]
+          when | node | conn max | unauth start budget | acc | cap rate pre_b pre_ed src other | evict reap | hs_n hs_p50 hs_p99 | src_on src_n untr
+          unauth 到 start = 承压;hs_* 是建连到验签成功的毫秒数;计数是进程启动以来的累计值,看一段压测拿相邻两个快照相减
+
       [R1 Redis instance load(stress_snap.ps1 抓的 t<N>m_redis_<name>.txt,INFO 相邻两份求差 + 首末整体窗口)]
           target | window | secs ops/s cpu% main% in_KB/s out_KB/s | clients used_MB mem% | rej_conn err_rep oom aof_dfs | note
           Redis Cluster 每个主节点一行(target = <name>-<节点 ID 前 8 位>),再合成一行 <name>-all:ops、连接、内存是合计;main% 也是合计,看饱和要读各主节点那一行。
@@ -1850,6 +1854,63 @@ if ($cppSnapshots.Count -eq 0) {
             (Format-CountCell (Get-SeriesSumOrNull $m 'scene_ownership_release_deferred_scenes')),
             (Format-CountCell (Get-SeriesSumOrNull $m 'scene_ownership_superseded')))
         Write-Host ($n1Fmt -f $cells)
+    }
+}
+
+# N2:C++ 客户端面连接准入(gate 大厅连接 / battle 直连;docs/design/gate-connection-admission-control.md,2026-11-20 起)。
+# 与 N1 同一批 *_cpp_* 快照,只出 gate / battle 的行(scene 没有这些指标)。准入阈值是按推导定的,校准看这张表,步骤见设计稿 §9.7:
+#   conn max             <node>_connections_current / _connections_max
+#   unauth start budget  <node>_unauthenticated_connections / _preauth_early_drop_start / _preauth_budget(unauth 到 start = 承压)
+#   acc                  <node>_accepted_total
+#   cap rate pre_b pre_ed src other
+#                        <node>_rejected_total{reason}:capacity / accept_rate / preauth_budget / preauth_early_drop / source_rate,
+#                        other = 其余原因之和(取值按节点:$cppGateRejectReasons / $cppBattleRejectReasons)
+#   evict reap           <node>_preauth_evicted_total(承压时给新连接让位)/ _preauth_reaped_total(握手期限到了仍未验签)
+#   hs_n hs_p50 hs_p99   <node>_handshake_duration_ms(建连到验签成功,毫秒;可淘汰年龄要明显大于正常洪峰下的 hs_p99)
+#   src_on src_n untr    <node>_source_rate_active / _source_tracked / _source_untracked_total(按来源限速;缺省关闭时 src_on 恒为 0)
+# 两组取值与 C++ 的 kRejectReasonNames 同序,由 tools/scripts/tests/stress_cpp_metrics.tests.ps1 对照源码钉住。
+$cppGateRejectReasons = @('capacity', 'accept_rate', 'shutting_down', 'not_ready', 'no_token_secret', 'preauth_budget', 'preauth_early_drop', 'source_rate')
+$cppBattleRejectReasons = @('capacity', 'accept_rate', 'shutting_down', 'no_token_secret', 'preauth_budget', 'preauth_early_drop', 'source_rate')
+$n2RejectColumns = [ordered]@{ cap = 'capacity'; rate = 'accept_rate'; pre_b = 'preauth_budget'; pre_ed = 'preauth_early_drop'; src = 'source_rate' }
+$n2Header = @('snapshot', 'node', 'conn', 'max', 'unauth', 'start', 'budget', 'acc') + @($n2RejectColumns.Keys) +
+    @('other', 'evict', 'reap', 'hs_n', 'hs_p50', 'hs_p99', 'src_on', 'src_n', 'untr')
+$n2Fmt = "  {0,-30} | {1,-6} | {2,-7} {3,-7} | {4,-6} {5,-6} {6,-6} | {7,-9} | {8,-5} {9,-5} {10,-5} {11,-6} {12,-5} {13,-5} | {14,-6} {15,-6} | {16,-7} {17,-7} {18,-7} | {19,-6} {20,-6} {21}"
+Write-Host ""
+Write-Host "=== N2 C++ client connection admission (<node>_connections_*, rejected_total, preauth_*, handshake_duration_ms, source_*) ===" -ForegroundColor Yellow
+Write-Host "  gate and battle rows only; counters are cumulative since process start (diff adjacent snapshots); unauth >= start = under pressure; hs_* in ms"
+Write-Host ""
+$n2Snapshots = @($cppSnapshots | Where-Object { $_.BaseName -cmatch '^t\d+m_cpp_(?:z\d+_)?(?:gate|battle)(?:_\d+)?$' })
+if ($n2Snapshots.Count -eq 0) {
+    Write-NoData "no gate / battle *_cpp_* snapshot (start them with MMORPG_METRICS_PORT and scrape with stress_snap.ps1 -CppMetricsBasePort / -CppEndpoints)"
+} else {
+    Write-Host ($n2Fmt -f $n2Header)
+    Write-Host ($n2Fmt -f @($n2Header | ForEach-Object { '-' * $_.Length }))
+    foreach ($snap in $n2Snapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $key = [regex]::Match($snap.BaseName, '^t\d+m_cpp_(?<key>.+)$').Groups['key'].Value
+        $node = [regex]::Match($key, '^(?:z\d+_)?(?<node>[a-z]+)').Groups['node'].Value
+        $reasons = if ($node -ceq 'gate') { $cppGateRejectReasons } else { $cppBattleRejectReasons }
+        $rejected = Get-FamilyCountsOrNull $m "${node}_rejected_total" 'reason' $reasons
+        $otherReasons = @($reasons | Where-Object { $_ -cnotin @($n2RejectColumns.Values) })
+        $handshake = Get-HistogramOrNull $m "${node}_handshake_duration_ms"
+        $handshakeCells = if ($null -eq $handshake) { @('n/a', 'n/a', 'n/a') }
+                          else { @((Format-CountCell $handshake.Count), (Get-QuantileCountCell $handshake 0.5), (Get-QuantileCountCell $handshake 0.99)) }
+        $cells = @($snap.BaseName, $node,
+            (Format-CountCell (Get-SeriesSumOrNull $m "${node}_connections_current")),
+            (Format-CountCell (Get-SeriesSumOrNull $m "${node}_connections_max")),
+            (Format-CountCell (Get-SeriesSumOrNull $m "${node}_unauthenticated_connections")),
+            (Format-CountCell (Get-SeriesSumOrNull $m "${node}_preauth_early_drop_start")),
+            (Format-CountCell (Get-SeriesSumOrNull $m "${node}_preauth_budget")),
+            (Format-CountCell (Get-FamilySumOrNull $m "${node}_accepted_total")))
+        $cells += @($n2RejectColumns.Values | ForEach-Object { Format-CountCell $rejected[$_] })
+        $cells += @((Format-CountCell (Get-GroupSumOrNull $rejected $otherReasons)),
+            (Format-CountCell (Get-FamilySumOrNull $m "${node}_preauth_evicted_total")),
+            (Format-CountCell (Get-FamilySumOrNull $m "${node}_preauth_reaped_total")))
+        $cells += $handshakeCells
+        $cells += @((Format-CountCell (Get-SeriesSumOrNull $m "${node}_source_rate_active")),
+            (Format-CountCell (Get-SeriesSumOrNull $m "${node}_source_tracked")),
+            (Format-CountCell (Get-FamilySumOrNull $m "${node}_source_untracked_total")))
+        Write-Host ($n2Fmt -f $cells)
     }
 }
 

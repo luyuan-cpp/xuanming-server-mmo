@@ -1,11 +1,9 @@
 package pkg
 
 import (
-	"errors"
 	"io"
 	"net"
 	"net/http/httptest"
-	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -17,8 +15,9 @@ import (
 )
 
 // 传输层(transport.go)的单测。假节点是一台只会回显的 WebSocket 服务端:握手、掩码、帧头由 x/net 的服务端实现负责,
-// 这里只看 robot 这一侧——地址怎么选、字节是不是按二进制消息原样到达、桥在断线与关闭时的行为。
-// gate / battle 自己的握手与拆帧由 C++ 的 websocket_entry_test.cpp 覆盖。
+// 这里只看 robot 这一侧——地址怎么选、客户端帧是不是一帧一条二进制消息原样到达、经边缘时拨的是哪里。
+// gate / battle 自己的握手与拆帧由 C++ 的 websocket_entry_test.cpp 覆盖;wireConn 的收发与重拨由 client / heartbeat /
+// redirect 的用例覆盖(它们用 TCP 的 wireConn 连假 gate)。
 
 const transportTestTimeout = 5 * time.Second
 
@@ -37,7 +36,7 @@ var wsTestCodec = websocket.Codec{
 	},
 }
 
-// fakeWsNode 把收到的每条消息原样发回;收到 "bye" 就结束这条会话(服务端关连接)。
+// fakeWsNode 把收到的每条消息原样发回。
 type fakeWsNode struct {
 	server *httptest.Server
 
@@ -75,9 +74,6 @@ func (n *fakeWsNode) serve(ws *websocket.Conn) {
 		n.mu.Lock()
 		n.payloadTypes = append(n.payloadTypes, frame.payloadType)
 		n.mu.Unlock()
-		if string(frame.data) == "bye" {
-			return
-		}
 		if _, err := ws.Write(frame.data); err != nil {
 			return
 		}
@@ -130,6 +126,29 @@ func echoOnce(t *testing.T, conn net.Conn, payload string) string {
 		t.Fatalf("read echo of %q: %v", payload, err)
 	}
 	return string(reply)
+}
+
+// recvRequestID 等 wireConn 的下一帧,要求它是带这个请求号的 ClientRequest(假节点原样回显)。
+func recvRequestID(t *testing.T, conn *wireConn, want uint64) {
+	t.Helper()
+	type received struct {
+		message any
+		err     error
+	}
+	done := make(chan received, 1)
+	go func() {
+		message, err := conn.Recv()
+		done <- received{message, err}
+	}()
+	select {
+	case got := <-done:
+		request, ok := got.message.(*base.ClientRequest)
+		if got.err != nil || !ok || request.GetId() != want {
+			t.Fatalf("echo = %#v, %v; want the ClientRequest with id %d", got.message, got.err, want)
+		}
+	case <-time.After(transportTestTimeout):
+		t.Fatalf("no echo of request %d within the deadline", want)
+	}
 }
 
 func TestTransportConfig_Validate(t *testing.T) {
@@ -191,54 +210,43 @@ func TestTransport_AdvertisedAddressWinsAndAMissingOneFallsBackOrFails(t *testin
 	}
 }
 
-// GameClient 用的那条路:muduo 客户端经本机桥连 WebSocket。发出的客户端帧以二进制消息到达,回来的字节照常解码。
-func TestTransport_WebSocketCarriesMuduoFramesAsBinaryMessages(t *testing.T) {
+// GameClient 用的那条路:wireConn 直接在 WebSocket 上收发。每个客户端帧是一条二进制消息(与 Unity 客户端相同),
+// 回来的字节照常解码;没下发地址时直连节点的客户端端口。
+func TestTransport_WebSocketCarriesEachClientFrameAsOneBinaryMessage(t *testing.T) {
 	node := newFakeWsNode(t, false)
 	host, port := node.hostPort(t)
 	useTransport(t, TransportConfig{Kind: TransportWebSocket})
 
-	client, closeTransport, err := newMuduoClient(host, port)
+	conn, err := dialNode(host, port)
 	if err != nil {
-		t.Fatalf("newMuduoClient: %v", err)
+		t.Fatalf("dialNode: %v", err)
 	}
-	if closeTransport == nil {
-		t.Fatal("websocket transport must return a closer for its bridge")
-	}
-	// 与 GameClient.Close 同序:先关 muduo 客户端,再收桥。
-	defer closeTransport()
-	defer client.Close()
+	defer conn.Close()
 
-	client.Send(&base.ClientRequest{Id: 7, MessageId: 900001})
-	type received struct {
-		message any
-		err     error
-	}
-	done := make(chan received, 1)
-	go func() {
-		message, err := client.Recv()
-		done <- received{message, err}
-	}()
-	select {
-	case got := <-done:
-		request, ok := got.message.(*base.ClientRequest)
-		if got.err != nil || !ok || request.GetId() != 7 || request.GetMessageId() != 900001 {
-			t.Fatalf("echo = %#v, %v; want the ClientRequest that was sent", got.message, got.err)
-		}
-	case <-time.After(transportTestTimeout):
-		t.Fatal("no echo within the deadline")
-	}
+	// 发得比拨号早的帧排在队列里,连上之后按序发出。
+	conn.Send(&base.ClientRequest{Id: 7, MessageId: 900001})
+	conn.Send(&base.ClientRequest{Id: 8, MessageId: 900001})
+	recvRequestID(t, conn, 7)
+	recvRequestID(t, conn, 8)
 
 	paths, _, payloadTypes := node.seen()
 	if len(paths) != 1 || paths[0] != "/" {
 		t.Fatalf("handshake paths = %v, want one direct connection to /", paths)
 	}
-	if len(payloadTypes) == 0 {
-		t.Fatal("the node received no frames")
+	if len(payloadTypes) != 2 || payloadTypes[0] != websocket.BinaryFrame || payloadTypes[1] != websocket.BinaryFrame {
+		t.Fatalf("frames seen by the node = %v, want two binary messages (one per client frame)", payloadTypes)
 	}
-	for _, payloadType := range payloadTypes {
-		if payloadType != websocket.BinaryFrame {
-			t.Fatalf("frame types = %v, want binary frames only", payloadTypes)
-		}
+}
+
+// 配置要求必须下发、而服务端没下发:连接在本地就失败,不去猜地址。
+func TestTransport_RequireAdvertisedFailsBeforeDialing(t *testing.T) {
+	useTransport(t, TransportConfig{Kind: TransportWebSocket, RequireAdvertised: true})
+	if conn, err := dialNode("203.0.113.9", 30000); err == nil {
+		conn.Close()
+		t.Fatal("dialNode must fail when no WebSocket address was advertised")
+	}
+	if _, err := NewGameClient("203.0.113.9", 30000); err == nil {
+		t.Fatal("NewGameClient must surface the missing WebSocket address")
 	}
 }
 
@@ -277,62 +285,7 @@ func TestTransport_EdgeAddressIsDialedThroughDialAddrOverTLS(t *testing.T) {
 	}
 }
 
-// muduo 断线后会重拨同一个地址:桥对每条连进来的连接各拨一条 WebSocket。服务端关掉会话,回环这头读到断开;
-// 桥关掉时回环连接随之断开,之后不再接新连接。
-func TestWsBridge_RedialsPerConnectionAndStopsOnClose(t *testing.T) {
-	node := newFakeWsNode(t, false)
-	host, port := node.hostPort(t)
-	wsURL := "ws://" + net.JoinHostPort(host, strconv.Itoa(port)) + "/"
-	bridge, err := startWsBridge(func() (net.Conn, error) {
-		return dialWebSocket(wsURL, TransportConfig{Kind: TransportWebSocket}, transportTestTimeout)
-	})
-	if err != nil {
-		t.Fatalf("startWsBridge: %v", err)
-	}
-	defer bridge.Close()
-	loopback := net.JoinHostPort("127.0.0.1", strconv.Itoa(bridge.port()))
-	dial := func() net.Conn {
-		t.Helper()
-		conn, err := net.DialTimeout("tcp", loopback, transportTestTimeout)
-		if err != nil {
-			t.Fatalf("dial the bridge: %v", err)
-		}
-		return conn
-	}
-
-	first := dial()
-	defer func() { _ = first.Close() }()
-	if got := echoOnce(t, first, "one"); got != "one" {
-		t.Fatalf("first echo = %q", got)
-	}
-	if _, err := first.Write([]byte("bye")); err != nil {
-		t.Fatalf("write bye: %v", err)
-	}
-	if rest, err := io.ReadAll(first); err != nil || len(rest) != 0 {
-		t.Fatalf("after the server closed the session: read %q, %v; want a clean end of stream", rest, err)
-	}
-
-	second := dial()
-	defer func() { _ = second.Close() }()
-	if got := echoOnce(t, second, "two"); got != "two" {
-		t.Fatalf("second echo = %q", got)
-	}
-	if paths, _, _ := node.seen(); len(paths) != 2 {
-		t.Fatalf("websocket sessions = %d, want one per loopback connection (2)", len(paths))
-	}
-
-	bridge.Close()
-	// 读到连接重置或干净的结束都算断开;一直读到期限才返回说明连接还挂着。
-	if _, err := io.ReadAll(second); errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Fatal("the loopback connection must be closed when the bridge closes")
-	}
-	if conn, err := net.DialTimeout("tcp", loopback, time.Second); err == nil {
-		_ = conn.Close()
-		t.Fatal("the bridge must stop accepting connections after Close")
-	}
-}
-
-// 缺省(TCP)不受影响:连接就是 TCP,地址簿里有没有这台节点的 WebSocket 地址都一样,也不起桥。
+// 缺省(TCP)不受影响:裸连接与 wireConn 都是 TCP,地址簿里有没有这台节点的 WebSocket 地址都一样。
 func TestTransport_TCPIsTheDefaultAndIgnoresAdvertisements(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -340,35 +293,39 @@ func TestTransport_TCPIsTheDefaultAndIgnoresAdvertisements(t *testing.T) {
 	}
 	defer func() { _ = listener.Close() }()
 	go func() {
-		conn, err := listener.Accept()
-		if err != nil {
-			return
+		for {
+			accepted, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = accepted.Close() }()
+				_, _ = io.Copy(accepted, accepted)
+			}()
 		}
-		defer func() { _ = conn.Close() }()
-		_, _ = io.Copy(conn, conn)
 	}()
 	port := listener.Addr().(*net.TCPAddr).Port
 	useTransport(t, TransportConfig{})
 	AdvertiseWsURL("127.0.0.1", port, "wss://ws.example.test/ws/10.244.0.5/18000")
 
-	conn, err := DialStream("127.0.0.1", port, transportTestTimeout)
+	stream, err := DialStream("127.0.0.1", port, transportTestTimeout)
 	if err != nil {
 		t.Fatalf("DialStream: %v", err)
 	}
-	defer func() { _ = conn.Close() }()
-	if _, isTCP := conn.(*net.TCPConn); !isTCP {
-		t.Fatalf("connection type %T, want a plain TCP connection", conn)
+	defer func() { _ = stream.Close() }()
+	if _, isTCP := stream.(*net.TCPConn); !isTCP {
+		t.Fatalf("connection type %T, want a plain TCP connection", stream)
 	}
-	if got := echoOnce(t, conn, "raw"); got != "raw" {
+	if got := echoOnce(t, stream, "raw"); got != "raw" {
 		t.Fatalf("echo = %q, want raw", got)
 	}
 
-	client, closeTransport, err := newMuduoClient("127.0.0.1", port)
+	// 原始 TCP 的回显服务端只认得出没有 WebSocket 帧头的客户端帧:回显能解出来,说明 wireConn 走的也是 TCP。
+	conn, err := dialNode("127.0.0.1", port)
 	if err != nil {
-		t.Fatalf("newMuduoClient: %v", err)
+		t.Fatalf("dialNode: %v", err)
 	}
-	client.Close()
-	if closeTransport != nil {
-		t.Fatal("the tcp transport has nothing to tear down; a closer means a bridge was started")
-	}
+	defer conn.Close()
+	conn.Send(&base.ClientRequest{Id: 5, MessageId: 900001})
+	recvRequestID(t, conn, 5)
 }

@@ -83,6 +83,16 @@ const (
 	// 从买家身上扣回(TRADE_DEBIT 流,腿名 official_reverse_<修订号>)。扣不到(已经用掉)由合同转人工,不透支。
 	// correlation_id 同其他交易腿。只追加,不复用旧编号。
 	TransactionType_TX_PAYMENT_REVERSAL TransactionType = 31
+	// ── 挂机月卡开通(docs/design/afk-monthly-card.md §4.1)──────────────────────
+	//
+	// 玩家花灵石开通 / 续费挂机月卡的扣钱流水(scene 内同步扣,不走资产通道)。correlation_id = 那次请求的
+	// 客户端幂等键 client_request_id,同一个键至多出现一条。月卡到期时刻不在流水里,在存档 PlayerUint64Comp。只追加,不复用旧编号。
+	TransactionType_TX_AFK_PASS_BUY TransactionType = 32
+	// ── 角色改名(docs/design/rename-and-content-safety.md §4.3)────────────────
+	//
+	// 改名成功时销毁改名卡的流水。correlation_id = 那次改名的流水号(PlayerProfileComp.rename_seq)。
+	// 改名不成时卡只是解除占用、没有离开过背包,不记流水。只追加,不复用旧编号。
+	TransactionType_TX_ROLE_RENAME TransactionType = 33
 )
 
 // Enum value maps for TransactionType.
@@ -120,6 +130,8 @@ var (
 		29: "TX_EQUIP_GEM_REMOVE",
 		30: "TX_AUCTION_RETURN",
 		31: "TX_PAYMENT_REVERSAL",
+		32: "TX_AFK_PASS_BUY",
+		33: "TX_ROLE_RENAME",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":               0,
@@ -154,6 +166,8 @@ var (
 		"TX_EQUIP_GEM_REMOVE":      29,
 		"TX_AUCTION_RETURN":        30,
 		"TX_PAYMENT_REVERSAL":      31,
+		"TX_AFK_PASS_BUY":          32,
+		"TX_ROLE_RENAME":           33,
 	}
 )
 
@@ -425,7 +439,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xb8\x05\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xe1\x05\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -460,7 +474,9 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x0eTX_EQUIP_INLAY\x10\x1c\x12\x17\n" +
 	"\x13TX_EQUIP_GEM_REMOVE\x10\x1d\x12\x15\n" +
 	"\x11TX_AUCTION_RETURN\x10\x1e\x12\x17\n" +
-	"\x13TX_PAYMENT_REVERSAL\x10\x1fB\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x13TX_PAYMENT_REVERSAL\x10\x1f\x12\x13\n" +
+	"\x0fTX_AFK_PASS_BUY\x10 \x12\x12\n" +
+	"\x0eTX_ROLE_RENAME\x10!B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

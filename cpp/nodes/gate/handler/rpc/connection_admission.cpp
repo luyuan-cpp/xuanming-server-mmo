@@ -169,14 +169,11 @@ void EvictUnauthenticated(const SessionId sessionId, SessionInfo &victim, const 
 }
 
 // 承压:未验签池过了早拒起点,或全局速率闸在最近一个握手期限内拒过连接。按来源限速只在承压时生效(设计稿 §7「告警后自动开启」)。
+// 规则与 battle 直连同一份(accept_admission::SourceRateUnderPressure)。
 bool UnderPressure(const uint64_t unauthenticated, const SteadyTime now)
 {
-	if (unauthenticated >= tlsState.preAuthBudget.earlyDropStart)
-	{
-		return true;
-	}
-	const auto &rejectedAt = tlsState.lastAcceptRateRejectAt;
-	return rejectedAt && now - *rejectedAt < client_liveness::kClientLiveness.handshakeTimeout;
+	return accept_admission::SourceRateUnderPressure(unauthenticated, tlsState.preAuthBudget,
+													 tlsState.lastAcceptRateRejectAt, now);
 }
 
 // 前缀表满、这个前缀没登记上就放行了(fail-open):计数,第一条必打,此后每 1024 条一行。
@@ -216,27 +213,6 @@ void Configure(const uint32_t configuredMaxConnections, const RateLimit rateLimi
 			  std::nullopt);
 }
 
-std::optional<SourcePrefix> SourcePrefixOf(const muduo::net::InetAddress &peer)
-{
-	const struct sockaddr *address = peer.getSockAddr();
-	if (peer.family() == AF_INET)
-	{
-		const auto *v4 = reinterpret_cast<const struct sockaddr_in *>(address);
-		return SourcePrefixOfIpv4(muduo::net::sockets::networkToHost32(v4->sin_addr.s_addr));
-	}
-	if (peer.family() == AF_INET6)
-	{
-		const auto *v6 = reinterpret_cast<const struct sockaddr_in6 *>(address);
-		std::array<uint8_t, 16> bytes{};
-		for (size_t i = 0; i < bytes.size(); ++i)
-		{
-			bytes[i] = static_cast<uint8_t>(v6->sin6_addr.s6_addr[i]);
-		}
-		return SourcePrefixOfIpv6(bytes);
-	}
-	return std::nullopt;
-}
-
 void CloseSource()
 {
 	tlsState.sourceClosed = true;
@@ -252,9 +228,9 @@ bool AdmitConnection(const muduo::net::InetAddress &peer, const SteadyTime now)
 										!gate_client_heartbeat::LoopRecentlyStalled(now)
 									? OldestUnauthenticated(&oldestId)
 									: nullptr;
-	// 按来源限速:开启且承压时才问这条连接所在前缀的桶。
+	// 按来源限速:开启且承压时才问这条连接所在前缀的桶;非公网来源(代理、LB、集群内)认不出真实玩家,不按来源限。
 	tlsState.sourceRateActive = tlsState.sourceRate.has_value() && UnderPressure(unauthenticated, now);
-	const std::optional<SourcePrefix> prefix = tlsState.sourceRateActive ? SourcePrefixOf(peer) : std::nullopt;
+	const std::optional<SourcePrefix> prefix = tlsState.sourceRateActive ? RateLimitedSourceOf(peer) : std::nullopt;
 	const AdmissionState state{
 		.sourceClosed = tlsState.sourceClosed,
 		.currentSessions = tlsSessionManager.sessions().size(),

@@ -326,6 +326,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateInfo final : public :
     kTargetGateIpFieldNumber = 1,
     kTokenPayloadFieldNumber = 3,
     kTokenSignatureFieldNumber = 4,
+    kTargetGateWsUrlFieldNumber = 6,
     kTokenDeadlineFieldNumber = 5,
     kTargetGatePortFieldNumber = 2,
   };
@@ -374,6 +375,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateInfo final : public :
   ::std::string* PROTOBUF_NONNULL _internal_mutable_token_signature();
 
   public:
+  // string target_gate_ws_url = 6;
+  void clear_target_gate_ws_url() ;
+  [[nodiscard]] const ::std::string& target_gate_ws_url() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_gate_ws_url(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_gate_ws_url();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_gate_ws_url();
+  void set_allocated_target_gate_ws_url(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_gate_ws_url() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_gate_ws_url(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_gate_ws_url();
+
+  public:
   // int64 token_deadline = 5;
   void clear_token_deadline() ;
   [[nodiscard]] ::int64_t token_deadline() const;
@@ -398,8 +414,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateInfo final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          0, 55,
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 73,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -430,6 +446,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateInfo final : public :
     ::google::protobuf::internal::ArenaStringPtr target_gate_ip_;
     ::google::protobuf::internal::ArenaStringPtr token_payload_;
     ::google::protobuf::internal::ArenaStringPtr token_signature_;
+    ::google::protobuf::internal::ArenaStringPtr target_gate_ws_url_;
     ::int64_t token_deadline_;
     ::uint32_t target_gate_port_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3484,7 +3501,7 @@ inline void RedirectToGateInfo::set_allocated_target_gate_ip(::std::string* PROT
 inline void RedirectToGateInfo::clear_target_gate_port() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_gate_port_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t RedirectToGateInfo::target_gate_port() const {
   // @@protoc_insertion_point(field_get:scene_manager.RedirectToGateInfo.target_gate_port)
@@ -3492,7 +3509,7 @@ inline ::uint32_t RedirectToGateInfo::target_gate_port() const {
 }
 inline void RedirectToGateInfo::set_target_gate_port(::uint32_t value) {
   _internal_set_target_gate_port(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:scene_manager.RedirectToGateInfo.target_gate_port)
 }
 inline ::uint32_t RedirectToGateInfo::_internal_target_gate_port() const {
@@ -3636,7 +3653,7 @@ inline void RedirectToGateInfo::set_allocated_token_signature(::std::string* PRO
 inline void RedirectToGateInfo::clear_token_deadline() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.token_deadline_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::int64_t RedirectToGateInfo::token_deadline() const {
   // @@protoc_insertion_point(field_get:scene_manager.RedirectToGateInfo.token_deadline)
@@ -3644,7 +3661,7 @@ inline ::int64_t RedirectToGateInfo::token_deadline() const {
 }
 inline void RedirectToGateInfo::set_token_deadline(::int64_t value) {
   _internal_set_token_deadline(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:scene_manager.RedirectToGateInfo.token_deadline)
 }
 inline ::int64_t RedirectToGateInfo::_internal_token_deadline() const {
@@ -3654,6 +3671,70 @@ inline ::int64_t RedirectToGateInfo::_internal_token_deadline() const {
 inline void RedirectToGateInfo::_internal_set_token_deadline(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.token_deadline_ = value;
+}
+
+// string target_gate_ws_url = 6;
+inline void RedirectToGateInfo::clear_target_gate_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_gate_ws_url_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& RedirectToGateInfo::target_gate_ws_url() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:scene_manager.RedirectToGateInfo.target_gate_ws_url)
+  return _internal_target_gate_ws_url();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RedirectToGateInfo::set_target_gate_ws_url(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.target_gate_ws_url_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:scene_manager.RedirectToGateInfo.target_gate_ws_url)
+}
+inline ::std::string* PROTOBUF_NONNULL RedirectToGateInfo::mutable_target_gate_ws_url()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_target_gate_ws_url();
+  // @@protoc_insertion_point(field_mutable:scene_manager.RedirectToGateInfo.target_gate_ws_url)
+  return _s;
+}
+inline const ::std::string& RedirectToGateInfo::_internal_target_gate_ws_url() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_gate_ws_url_.Get();
+}
+inline void RedirectToGateInfo::_internal_set_target_gate_ws_url(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_gate_ws_url_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RedirectToGateInfo::_internal_mutable_target_gate_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_gate_ws_url_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RedirectToGateInfo::release_target_gate_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:scene_manager.RedirectToGateInfo.target_gate_ws_url)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.target_gate_ws_url_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_gate_ws_url_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RedirectToGateInfo::set_allocated_target_gate_ws_url(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.target_gate_ws_url_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_gate_ws_url_.IsDefault()) {
+    _impl_.target_gate_ws_url_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:scene_manager.RedirectToGateInfo.target_gate_ws_url)
 }
 
 // -------------------------------------------------------------------

@@ -25,6 +25,114 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 账号注销的状态(docs/design/account-deletion.md §4.1),与 account_directory.deletion_state 同值。
+type AccountDeletionState int32
+
+const (
+	AccountDeletionState_ACCOUNT_DELETION_STATE_NONE     AccountDeletionState = 0 // 正常
+	AccountDeletionState_ACCOUNT_DELETION_STATE_PENDING  AccountDeletionState = 1 // 冷静期:能登录、能撤销,不能建角、不能进游戏
+	AccountDeletionState_ACCOUNT_DELETION_STATE_DELETING AccountDeletionState = 2 // 执行中,不可撤销
+)
+
+// Enum value maps for AccountDeletionState.
+var (
+	AccountDeletionState_name = map[int32]string{
+		0: "ACCOUNT_DELETION_STATE_NONE",
+		1: "ACCOUNT_DELETION_STATE_PENDING",
+		2: "ACCOUNT_DELETION_STATE_DELETING",
+	}
+	AccountDeletionState_value = map[string]int32{
+		"ACCOUNT_DELETION_STATE_NONE":     0,
+		"ACCOUNT_DELETION_STATE_PENDING":  1,
+		"ACCOUNT_DELETION_STATE_DELETING": 2,
+	}
+)
+
+func (x AccountDeletionState) Enum() *AccountDeletionState {
+	p := new(AccountDeletionState)
+	*p = x
+	return p
+}
+
+func (x AccountDeletionState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccountDeletionState) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_data_service_data_service_proto_enumTypes[0].Descriptor()
+}
+
+func (AccountDeletionState) Type() protoreflect.EnumType {
+	return &file_proto_data_service_data_service_proto_enumTypes[0]
+}
+
+func (x AccountDeletionState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccountDeletionState.Descriptor instead.
+func (AccountDeletionState) EnumDescriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{0}
+}
+
+type AccountDeletionOutcome int32
+
+const (
+	AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_UNSPECIFIED AccountDeletionOutcome = 0
+	AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_OK          AccountDeletionOutcome = 1 // 状态见 lifecycle
+	AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_NOT_FOUND   AccountDeletionOutcome = 2 // 目录里没有这个账号(从没登录过,或已注销完成)
+	AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_BLOCKED     AccountDeletionOutcome = 3 // 预检有挂起,什么都没写,见 blockers
+	AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_RETRY       AccountDeletionOutcome = 4 // 这一次没判成(读失败、参与者问不齐、没装配协调者),同参数重试
+	AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_TOO_LATE    AccountDeletionOutcome = 5 // 撤销时已在执行
+)
+
+// Enum value maps for AccountDeletionOutcome.
+var (
+	AccountDeletionOutcome_name = map[int32]string{
+		0: "ACCOUNT_DELETION_OUTCOME_UNSPECIFIED",
+		1: "ACCOUNT_DELETION_OUTCOME_OK",
+		2: "ACCOUNT_DELETION_OUTCOME_NOT_FOUND",
+		3: "ACCOUNT_DELETION_OUTCOME_BLOCKED",
+		4: "ACCOUNT_DELETION_OUTCOME_RETRY",
+		5: "ACCOUNT_DELETION_OUTCOME_TOO_LATE",
+	}
+	AccountDeletionOutcome_value = map[string]int32{
+		"ACCOUNT_DELETION_OUTCOME_UNSPECIFIED": 0,
+		"ACCOUNT_DELETION_OUTCOME_OK":          1,
+		"ACCOUNT_DELETION_OUTCOME_NOT_FOUND":   2,
+		"ACCOUNT_DELETION_OUTCOME_BLOCKED":     3,
+		"ACCOUNT_DELETION_OUTCOME_RETRY":       4,
+		"ACCOUNT_DELETION_OUTCOME_TOO_LATE":    5,
+	}
+)
+
+func (x AccountDeletionOutcome) Enum() *AccountDeletionOutcome {
+	p := new(AccountDeletionOutcome)
+	*p = x
+	return p
+}
+
+func (x AccountDeletionOutcome) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AccountDeletionOutcome) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_data_service_data_service_proto_enumTypes[1].Descriptor()
+}
+
+func (AccountDeletionOutcome) Type() protoreflect.EnumType {
+	return &file_proto_data_service_data_service_proto_enumTypes[1]
+}
+
+func (x AccountDeletionOutcome) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AccountDeletionOutcome.Descriptor instead.
+func (AccountDeletionOutcome) EnumDescriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{1}
+}
+
 type AccountRoleTradeState int32
 
 const (
@@ -71,11 +179,11 @@ func (x AccountRoleTradeState) String() string {
 }
 
 func (AccountRoleTradeState) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_data_service_data_service_proto_enumTypes[0].Descriptor()
+	return file_proto_data_service_data_service_proto_enumTypes[2].Descriptor()
 }
 
 func (AccountRoleTradeState) Type() protoreflect.EnumType {
-	return &file_proto_data_service_data_service_proto_enumTypes[0]
+	return &file_proto_data_service_data_service_proto_enumTypes[2]
 }
 
 func (x AccountRoleTradeState) Number() protoreflect.EnumNumber {
@@ -84,7 +192,7 @@ func (x AccountRoleTradeState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AccountRoleTradeState.Descriptor instead.
 func (AccountRoleTradeState) EnumDescriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{0}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{2}
 }
 
 type AccountRoleFreezeEvidenceKind int32
@@ -124,11 +232,11 @@ func (x AccountRoleFreezeEvidenceKind) String() string {
 }
 
 func (AccountRoleFreezeEvidenceKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_data_service_data_service_proto_enumTypes[1].Descriptor()
+	return file_proto_data_service_data_service_proto_enumTypes[3].Descriptor()
 }
 
 func (AccountRoleFreezeEvidenceKind) Type() protoreflect.EnumType {
-	return &file_proto_data_service_data_service_proto_enumTypes[1]
+	return &file_proto_data_service_data_service_proto_enumTypes[3]
 }
 
 func (x AccountRoleFreezeEvidenceKind) Number() protoreflect.EnumNumber {
@@ -137,7 +245,7 @@ func (x AccountRoleFreezeEvidenceKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use AccountRoleFreezeEvidenceKind.Descriptor instead.
 func (AccountRoleFreezeEvidenceKind) EnumDescriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{1}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{3}
 }
 
 type SnapshotType int32
@@ -179,11 +287,11 @@ func (x SnapshotType) String() string {
 }
 
 func (SnapshotType) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_data_service_data_service_proto_enumTypes[2].Descriptor()
+	return file_proto_data_service_data_service_proto_enumTypes[4].Descriptor()
 }
 
 func (SnapshotType) Type() protoreflect.EnumType {
-	return &file_proto_data_service_data_service_proto_enumTypes[2]
+	return &file_proto_data_service_data_service_proto_enumTypes[4]
 }
 
 func (x SnapshotType) Number() protoreflect.EnumNumber {
@@ -192,7 +300,7 @@ func (x SnapshotType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SnapshotType.Descriptor instead.
 func (SnapshotType) EnumDescriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{2}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{4}
 }
 
 type RecallKind int32
@@ -228,11 +336,11 @@ func (x RecallKind) String() string {
 }
 
 func (RecallKind) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_data_service_data_service_proto_enumTypes[3].Descriptor()
+	return file_proto_data_service_data_service_proto_enumTypes[5].Descriptor()
 }
 
 func (RecallKind) Type() protoreflect.EnumType {
-	return &file_proto_data_service_data_service_proto_enumTypes[3]
+	return &file_proto_data_service_data_service_proto_enumTypes[5]
 }
 
 func (x RecallKind) Number() protoreflect.EnumNumber {
@@ -241,7 +349,7 @@ func (x RecallKind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RecallKind.Descriptor instead.
 func (RecallKind) EnumDescriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{3}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{5}
 }
 
 // 一条流水为什么没进自动回收。流水在内存改动时就发出、早于存盘提交,只是线索;
@@ -297,11 +405,11 @@ func (x RecallReviewReason) String() string {
 }
 
 func (RecallReviewReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_data_service_data_service_proto_enumTypes[4].Descriptor()
+	return file_proto_data_service_data_service_proto_enumTypes[6].Descriptor()
 }
 
 func (RecallReviewReason) Type() protoreflect.EnumType {
-	return &file_proto_data_service_data_service_proto_enumTypes[4]
+	return &file_proto_data_service_data_service_proto_enumTypes[6]
 }
 
 func (x RecallReviewReason) Number() protoreflect.EnumNumber {
@@ -310,12 +418,96 @@ func (x RecallReviewReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RecallReviewReason.Descriptor instead.
 func (RecallReviewReason) EnumDescriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{4}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{6}
+}
+
+// 一次最多 500 个 id;超了返回 InvalidArgument,不做截断 —— 静默截断会让调用方
+// 把"没返回"当成"没登记",给玩家显示空名。
+// ── 角色改名(docs/design/rename-and-content-safety.md §4)─────────────────────
+//
+// 结局分三类,scene 的处理各不相同:
+//   - 成功(OK):角色现在就是这个名字,scene 扣改名卡、改存档里的名字。
+//   - 这一次不成(TAKEN / INVALID / COOLDOWN / FROZEN / SAME_NAME / EXPIRED / NOT_FOUND):这个 seq 作废,scene 解除占用、提示玩家;
+//     STALE_SEQ 同样作废,scene 另把自己的流水号追到 current_seq。
+//   - 还没有结局(BUSY,以及任何 gRPC error):scene 用同一个 seq 稍后重发。
+type RenameRoleResult int32
+
+const (
+	RenameRoleResult_RENAME_ROLE_RESULT_UNSPECIFIED RenameRoleResult = 0
+	RenameRoleResult_RENAME_ROLE_OK                 RenameRoleResult = 1  // 已提交:角色现在就是这个名字(旧名保护、缓存这些收尾可能还在后台)
+	RenameRoleResult_RENAME_ROLE_TAKEN              RenameRoleResult = 2  // 名字被别人占着(含别人还在保护期内的旧名)
+	RenameRoleResult_RENAME_ROLE_INVALID            RenameRoleResult = 3  // 名字不合规(字数、字符集)
+	RenameRoleResult_RENAME_ROLE_COOLDOWN           RenameRoleResult = 4  // 距上一次改名成功还没过冷却;next_allowed_ms 是最早可以再改的时刻
+	RenameRoleResult_RENAME_ROLE_FROZEN             RenameRoleResult = 5  // 角色正在过户或删角
+	RenameRoleResult_RENAME_ROLE_STALE_SEQ          RenameRoleResult = 6  // seq 比已有记录小,或同一个 seq 换了名字;current_seq 是服务端记的号
+	RenameRoleResult_RENAME_ROLE_SAME_NAME          RenameRoleResult = 7  // 和现在的名字一样
+	RenameRoleResult_RENAME_ROLE_NOT_FOUND          RenameRoleResult = 8  // 没有这名在役角色
+	RenameRoleResult_RENAME_ROLE_EXPIRED            RenameRoleResult = 9  // 这一次改名太久没有结局,已被服务端作废
+	RenameRoleResult_RENAME_ROLE_BUSY               RenameRoleResult = 10 // 上一次改名的收尾还没做完,稍后用同一个 seq 重发(不是结局)
+)
+
+// Enum value maps for RenameRoleResult.
+var (
+	RenameRoleResult_name = map[int32]string{
+		0:  "RENAME_ROLE_RESULT_UNSPECIFIED",
+		1:  "RENAME_ROLE_OK",
+		2:  "RENAME_ROLE_TAKEN",
+		3:  "RENAME_ROLE_INVALID",
+		4:  "RENAME_ROLE_COOLDOWN",
+		5:  "RENAME_ROLE_FROZEN",
+		6:  "RENAME_ROLE_STALE_SEQ",
+		7:  "RENAME_ROLE_SAME_NAME",
+		8:  "RENAME_ROLE_NOT_FOUND",
+		9:  "RENAME_ROLE_EXPIRED",
+		10: "RENAME_ROLE_BUSY",
+	}
+	RenameRoleResult_value = map[string]int32{
+		"RENAME_ROLE_RESULT_UNSPECIFIED": 0,
+		"RENAME_ROLE_OK":                 1,
+		"RENAME_ROLE_TAKEN":              2,
+		"RENAME_ROLE_INVALID":            3,
+		"RENAME_ROLE_COOLDOWN":           4,
+		"RENAME_ROLE_FROZEN":             5,
+		"RENAME_ROLE_STALE_SEQ":          6,
+		"RENAME_ROLE_SAME_NAME":          7,
+		"RENAME_ROLE_NOT_FOUND":          8,
+		"RENAME_ROLE_EXPIRED":            9,
+		"RENAME_ROLE_BUSY":               10,
+	}
+)
+
+func (x RenameRoleResult) Enum() *RenameRoleResult {
+	p := new(RenameRoleResult)
+	*p = x
+	return p
+}
+
+func (x RenameRoleResult) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RenameRoleResult) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_data_service_data_service_proto_enumTypes[7].Descriptor()
+}
+
+func (RenameRoleResult) Type() protoreflect.EnumType {
+	return &file_proto_data_service_data_service_proto_enumTypes[7]
+}
+
+func (x RenameRoleResult) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RenameRoleResult.Descriptor instead.
+func (RenameRoleResult) EnumDescriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{7}
 }
 
 type AccountDirectoryResponse struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
 	Players       *base.AccountSimplePlayerList `protobuf:"bytes,1,opt,name=players,proto3" json:"players,omitempty"`
+	Lifecycle     *AccountLifecycle             `protobuf:"bytes,2,opt,name=lifecycle,proto3" json:"lifecycle,omitempty"`                       // 只有 ReadAccountDirectory 填;建角等写方法的应答不填
+	RealNamePi    string                        `protobuf:"bytes,3,opt,name=real_name_pi,json=realNamePi,proto3" json:"real_name_pi,omitempty"` // 只有 ReadAccountDirectory 填:account_directory.real_name_pi,空串 = 没实名
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -357,6 +549,809 @@ func (x *AccountDirectoryResponse) GetPlayers() *base.AccountSimplePlayerList {
 	return nil
 }
 
+func (x *AccountDirectoryResponse) GetLifecycle() *AccountLifecycle {
+	if x != nil {
+		return x.Lifecycle
+	}
+	return nil
+}
+
+func (x *AccountDirectoryResponse) GetRealNamePi() string {
+	if x != nil {
+		return x.RealNamePi
+	}
+	return ""
+}
+
+type SetAccountRealNameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Account       string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	RealNamePi    string                 `protobuf:"bytes,2,opt,name=real_name_pi,json=realNamePi,proto3" json:"real_name_pi,omitempty"` // 38 位,只含 0-9a-z
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAccountRealNameRequest) Reset() {
+	*x = SetAccountRealNameRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAccountRealNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAccountRealNameRequest) ProtoMessage() {}
+
+func (x *SetAccountRealNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAccountRealNameRequest.ProtoReflect.Descriptor instead.
+func (*SetAccountRealNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SetAccountRealNameRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *SetAccountRealNameRequest) GetRealNamePi() string {
+	if x != nil {
+		return x.RealNamePi
+	}
+	return ""
+}
+
+func (x *SetAccountRealNameRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type SetAccountRealNameResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RealNamePi    string                 `protobuf:"bytes,1,opt,name=real_name_pi,json=realNamePi,proto3" json:"real_name_pi,omitempty"` // 写之后库里的值;与请求不同说明账号早已绑定别的实名
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetAccountRealNameResponse) Reset() {
+	*x = SetAccountRealNameResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetAccountRealNameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetAccountRealNameResponse) ProtoMessage() {}
+
+func (x *SetAccountRealNameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetAccountRealNameResponse.ProtoReflect.Descriptor instead.
+func (*SetAccountRealNameResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SetAccountRealNameResponse) GetRealNamePi() string {
+	if x != nil {
+		return x.RealNamePi
+	}
+	return ""
+}
+
+type GetAccountRealNameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAccountRealNameRequest) Reset() {
+	*x = GetAccountRealNameRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccountRealNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccountRealNameRequest) ProtoMessage() {}
+
+func (x *GetAccountRealNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccountRealNameRequest.ProtoReflect.Descriptor instead.
+func (*GetAccountRealNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetAccountRealNameRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GetAccountRealNameRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type GetAccountRealNameResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`                              // 角色在目录里、且没有删
+	RealNamePi    string                 `protobuf:"bytes,2,opt,name=real_name_pi,json=realNamePi,proto3" json:"real_name_pi,omitempty"` // 空串 = 所属账号没由游戏方实名(例如小游戏渠道由平台实名)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAccountRealNameResponse) Reset() {
+	*x = GetAccountRealNameResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAccountRealNameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAccountRealNameResponse) ProtoMessage() {}
+
+func (x *GetAccountRealNameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAccountRealNameResponse.ProtoReflect.Descriptor instead.
+func (*GetAccountRealNameResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetAccountRealNameResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *GetAccountRealNameResponse) GetRealNamePi() string {
+	if x != nil {
+		return x.RealNamePi
+	}
+	return ""
+}
+
+type ResetAccountRealNameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Account       string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetAccountRealNameRequest) Reset() {
+	*x = ResetAccountRealNameRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetAccountRealNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetAccountRealNameRequest) ProtoMessage() {}
+
+func (x *ResetAccountRealNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetAccountRealNameRequest.ProtoReflect.Descriptor instead.
+func (*ResetAccountRealNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ResetAccountRealNameRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *ResetAccountRealNameRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ResetAccountRealNameResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HadRealName   bool                   `protobuf:"varint,1,opt,name=had_real_name,json=hadRealName,proto3" json:"had_real_name,omitempty"` // 重置之前账号上有没有 pi;false = 本来就没实名(重放也落在这里)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetAccountRealNameResponse) Reset() {
+	*x = ResetAccountRealNameResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetAccountRealNameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetAccountRealNameResponse) ProtoMessage() {}
+
+func (x *ResetAccountRealNameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetAccountRealNameResponse.ProtoReflect.Descriptor instead.
+func (*ResetAccountRealNameResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ResetAccountRealNameResponse) GetHadRealName() bool {
+	if x != nil {
+		return x.HadRealName
+	}
+	return false
+}
+
+type AccountLifecycle struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	DeletionState          AccountDeletionState   `protobuf:"varint,1,opt,name=deletion_state,json=deletionState,proto3,enum=data_service.AccountDeletionState" json:"deletion_state,omitempty"`
+	DeletionExecuteAfterMs uint64                 `protobuf:"varint,2,opt,name=deletion_execute_after_ms,json=deletionExecuteAfterMs,proto3" json:"deletion_execute_after_ms,omitempty"`
+	// 这次读建了新账号行,而同一账号以前注销完成过:那次完成的时刻(account_deletion_receipt),其余为 0。
+	PreviousDeletedMs uint64 `protobuf:"varint,3,opt,name=previous_deleted_ms,json=previousDeletedMs,proto3" json:"previous_deleted_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AccountLifecycle) Reset() {
+	*x = AccountLifecycle{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountLifecycle) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountLifecycle) ProtoMessage() {}
+
+func (x *AccountLifecycle) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountLifecycle.ProtoReflect.Descriptor instead.
+func (*AccountLifecycle) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *AccountLifecycle) GetDeletionState() AccountDeletionState {
+	if x != nil {
+		return x.DeletionState
+	}
+	return AccountDeletionState_ACCOUNT_DELETION_STATE_NONE
+}
+
+func (x *AccountLifecycle) GetDeletionExecuteAfterMs() uint64 {
+	if x != nil {
+		return x.DeletionExecuteAfterMs
+	}
+	return 0
+}
+
+func (x *AccountLifecycle) GetPreviousDeletedMs() uint64 {
+	if x != nil {
+		return x.PreviousDeletedMs
+	}
+	return 0
+}
+
+type AccountDeletionBlocker struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"` // 参与者回的低基数枚举串;角色挂着寄售是 role_listed
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountDeletionBlocker) Reset() {
+	*x = AccountDeletionBlocker{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountDeletionBlocker) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountDeletionBlocker) ProtoMessage() {}
+
+func (x *AccountDeletionBlocker) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountDeletionBlocker.ProtoReflect.Descriptor instead.
+func (*AccountDeletionBlocker) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AccountDeletionBlocker) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *AccountDeletionBlocker) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type AccountDeletionResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Outcome       AccountDeletionOutcome    `protobuf:"varint,1,opt,name=outcome,proto3,enum=data_service.AccountDeletionOutcome" json:"outcome,omitempty"`
+	Lifecycle     *AccountLifecycle         `protobuf:"bytes,2,opt,name=lifecycle,proto3" json:"lifecycle,omitempty"`
+	Blockers      []*AccountDeletionBlocker `protobuf:"bytes,3,rep,name=blockers,proto3" json:"blockers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountDeletionResponse) Reset() {
+	*x = AccountDeletionResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountDeletionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountDeletionResponse) ProtoMessage() {}
+
+func (x *AccountDeletionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountDeletionResponse.ProtoReflect.Descriptor instead.
+func (*AccountDeletionResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AccountDeletionResponse) GetOutcome() AccountDeletionOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return AccountDeletionOutcome_ACCOUNT_DELETION_OUTCOME_UNSPECIFIED
+}
+
+func (x *AccountDeletionResponse) GetLifecycle() *AccountLifecycle {
+	if x != nil {
+		return x.Lifecycle
+	}
+	return nil
+}
+
+func (x *AccountDeletionResponse) GetBlockers() []*AccountDeletionBlocker {
+	if x != nil {
+		return x.Blockers
+	}
+	return nil
+}
+
+type RequestAccountDeletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Account       string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	Source        uint32                 `protobuf:"varint,2,opt,name=source,proto3" json:"source,omitempty"` // 1 本人申请、2 运维代办
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestAccountDeletionRequest) Reset() {
+	*x = RequestAccountDeletionRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestAccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestAccountDeletionRequest) ProtoMessage() {}
+
+func (x *RequestAccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestAccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*RequestAccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *RequestAccountDeletionRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *RequestAccountDeletionRequest) GetSource() uint32 {
+	if x != nil {
+		return x.Source
+	}
+	return 0
+}
+
+func (x *RequestAccountDeletionRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type CancelAccountDeletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Account       string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelAccountDeletionRequest) Reset() {
+	*x = CancelAccountDeletionRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelAccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelAccountDeletionRequest) ProtoMessage() {}
+
+func (x *CancelAccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelAccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*CancelAccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CancelAccountDeletionRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *CancelAccountDeletionRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ClaimAccountDeletionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         uint32                 `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // 1..32
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimAccountDeletionsRequest) Reset() {
+	*x = ClaimAccountDeletionsRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimAccountDeletionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimAccountDeletionsRequest) ProtoMessage() {}
+
+func (x *ClaimAccountDeletionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimAccountDeletionsRequest.ProtoReflect.Descriptor instead.
+func (*ClaimAccountDeletionsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ClaimAccountDeletionsRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ClaimAccountDeletionsRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type ClaimAccountDeletionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accounts      []string               `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"` // 已改成执行中、拿到租约的账号
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimAccountDeletionsResponse) Reset() {
+	*x = ClaimAccountDeletionsResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimAccountDeletionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimAccountDeletionsResponse) ProtoMessage() {}
+
+func (x *ClaimAccountDeletionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimAccountDeletionsResponse.ProtoReflect.Descriptor instead.
+func (*ClaimAccountDeletionsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ClaimAccountDeletionsResponse) GetAccounts() []string {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+type FinishAccountDeletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Account       string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FinishAccountDeletionRequest) Reset() {
+	*x = FinishAccountDeletionRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FinishAccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FinishAccountDeletionRequest) ProtoMessage() {}
+
+func (x *FinishAccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FinishAccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*FinishAccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *FinishAccountDeletionRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *FinishAccountDeletionRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type FinishAccountDeletionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Done          bool                   `protobuf:"varint,1,opt,name=done,proto3" json:"done,omitempty"`                                        // 账号行已删,或本来就不在
+	RemainingRefs uint32                 `protobuf:"varint,2,opt,name=remaining_refs,json=remainingRefs,proto3" json:"remaining_refs,omitempty"` // 没删完时还剩几条 ref,日志用
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FinishAccountDeletionResponse) Reset() {
+	*x = FinishAccountDeletionResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FinishAccountDeletionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FinishAccountDeletionResponse) ProtoMessage() {}
+
+func (x *FinishAccountDeletionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FinishAccountDeletionResponse.ProtoReflect.Descriptor instead.
+func (*FinishAccountDeletionResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *FinishAccountDeletionResponse) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
+func (x *FinishAccountDeletionResponse) GetRemainingRefs() uint32 {
+	if x != nil {
+		return x.RemainingRefs
+	}
+	return 0
+}
+
 type AccountRoleOwnership struct {
 	state          protoimpl.MessageState    `protogen:"open.v1"`
 	Account        string                    `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
@@ -367,13 +1362,16 @@ type AccountRoleOwnership struct {
 	// account_role.initial_player_commit=1:现行建角流程提交的,初始存档行先于角色行写进了存档库。只有 LookupAccountRole 回填。
 	// 这样的角色缺写权行只可能是存档库的恢复点早于建角写初始行(docs/ops/mysql-backup-pitr-runbook.md §4.1a),摘孤儿据此拒绝写墓碑。
 	InitialPlayerCommit bool `protobuf:"varint,6,opt,name=initial_player_commit,json=initialPlayerCommit,proto3" json:"initial_player_commit,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 只有请求带 include_account_state 时回填:角色所属账号的注销状态(另一片上的一次点读,与角色行不在同一个事务)。
+	// EnterGame 据此拒绝冷静期 / 执行中的账号(docs/design/account-deletion.md §4.3)。
+	AccountDeletionState AccountDeletionState `protobuf:"varint,7,opt,name=account_deletion_state,json=accountDeletionState,proto3,enum=data_service.AccountDeletionState" json:"account_deletion_state,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *AccountRoleOwnership) Reset() {
 	*x = AccountRoleOwnership{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[1]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -385,7 +1383,7 @@ func (x *AccountRoleOwnership) String() string {
 func (*AccountRoleOwnership) ProtoMessage() {}
 
 func (x *AccountRoleOwnership) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[1]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -398,7 +1396,7 @@ func (x *AccountRoleOwnership) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleOwnership.ProtoReflect.Descriptor instead.
 func (*AccountRoleOwnership) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{1}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AccountRoleOwnership) GetAccount() string {
@@ -443,6 +1441,13 @@ func (x *AccountRoleOwnership) GetInitialPlayerCommit() bool {
 	return false
 }
 
+func (x *AccountRoleOwnership) GetAccountDeletionState() AccountDeletionState {
+	if x != nil {
+		return x.AccountDeletionState
+	}
+	return AccountDeletionState_ACCOUNT_DELETION_STATE_NONE
+}
+
 type AccountRoleVersion struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -453,7 +1458,7 @@ type AccountRoleVersion struct {
 
 func (x *AccountRoleVersion) Reset() {
 	*x = AccountRoleVersion{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[2]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -465,7 +1470,7 @@ func (x *AccountRoleVersion) String() string {
 func (*AccountRoleVersion) ProtoMessage() {}
 
 func (x *AccountRoleVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[2]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -478,7 +1483,7 @@ func (x *AccountRoleVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleVersion.ProtoReflect.Descriptor instead.
 func (*AccountRoleVersion) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{2}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AccountRoleVersion) GetPlayerId() uint64 {
@@ -506,7 +1511,7 @@ type ReadAccountDirectoryRequest struct {
 
 func (x *ReadAccountDirectoryRequest) Reset() {
 	*x = ReadAccountDirectoryRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[3]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -518,7 +1523,7 @@ func (x *ReadAccountDirectoryRequest) String() string {
 func (*ReadAccountDirectoryRequest) ProtoMessage() {}
 
 func (x *ReadAccountDirectoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[3]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,7 +1536,7 @@ func (x *ReadAccountDirectoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadAccountDirectoryRequest.ProtoReflect.Descriptor instead.
 func (*ReadAccountDirectoryRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{3}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ReadAccountDirectoryRequest) GetAccount() string {
@@ -566,7 +1571,7 @@ type CreateAccountRoleRequest struct {
 
 func (x *CreateAccountRoleRequest) Reset() {
 	*x = CreateAccountRoleRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[4]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -578,7 +1583,7 @@ func (x *CreateAccountRoleRequest) String() string {
 func (*CreateAccountRoleRequest) ProtoMessage() {}
 
 func (x *CreateAccountRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[4]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -591,7 +1596,7 @@ func (x *CreateAccountRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAccountRoleRequest.ProtoReflect.Descriptor instead.
 func (*CreateAccountRoleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{4}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateAccountRoleRequest) GetAccount() string {
@@ -616,16 +1621,17 @@ func (x *CreateAccountRoleRequest) GetAuth() *base.ServiceCallAuth {
 }
 
 type LookupAccountRoleRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Auth          *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Auth                *base.ServiceCallAuth  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	IncludeAccountState bool                   `protobuf:"varint,3,opt,name=include_account_state,json=includeAccountState,proto3" json:"include_account_state,omitempty"` // 顺带读所属账号的注销状态,回在 AccountRoleOwnership.account_deletion_state
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *LookupAccountRoleRequest) Reset() {
 	*x = LookupAccountRoleRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[5]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -637,7 +1643,7 @@ func (x *LookupAccountRoleRequest) String() string {
 func (*LookupAccountRoleRequest) ProtoMessage() {}
 
 func (x *LookupAccountRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[5]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -650,7 +1656,7 @@ func (x *LookupAccountRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookupAccountRoleRequest.ProtoReflect.Descriptor instead.
 func (*LookupAccountRoleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{5}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *LookupAccountRoleRequest) GetPlayerId() uint64 {
@@ -667,6 +1673,13 @@ func (x *LookupAccountRoleRequest) GetAuth() *base.ServiceCallAuth {
 	return nil
 }
 
+func (x *LookupAccountRoleRequest) GetIncludeAccountState() bool {
+	if x != nil {
+		return x.IncludeAccountState
+	}
+	return false
+}
+
 type ReleaseDeadPlayerStoreHolderRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId   uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -681,7 +1694,7 @@ type ReleaseDeadPlayerStoreHolderRequest struct {
 
 func (x *ReleaseDeadPlayerStoreHolderRequest) Reset() {
 	*x = ReleaseDeadPlayerStoreHolderRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[6]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -693,7 +1706,7 @@ func (x *ReleaseDeadPlayerStoreHolderRequest) String() string {
 func (*ReleaseDeadPlayerStoreHolderRequest) ProtoMessage() {}
 
 func (x *ReleaseDeadPlayerStoreHolderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[6]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -706,7 +1719,7 @@ func (x *ReleaseDeadPlayerStoreHolderRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use ReleaseDeadPlayerStoreHolderRequest.ProtoReflect.Descriptor instead.
 func (*ReleaseDeadPlayerStoreHolderRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{6}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ReleaseDeadPlayerStoreHolderRequest) GetPlayerId() uint64 {
@@ -749,7 +1762,7 @@ type PlayerStoreHolder struct {
 
 func (x *PlayerStoreHolder) Reset() {
 	*x = PlayerStoreHolder{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[7]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -761,7 +1774,7 @@ func (x *PlayerStoreHolder) String() string {
 func (*PlayerStoreHolder) ProtoMessage() {}
 
 func (x *PlayerStoreHolder) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[7]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -774,7 +1787,7 @@ func (x *PlayerStoreHolder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerStoreHolder.ProtoReflect.Descriptor instead.
 func (*PlayerStoreHolder) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{7}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PlayerStoreHolder) GetOwnerEpoch() uint64 {
@@ -808,7 +1821,7 @@ type ReadPlayerStoreHolderRequest struct {
 
 func (x *ReadPlayerStoreHolderRequest) Reset() {
 	*x = ReadPlayerStoreHolderRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[8]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -820,7 +1833,7 @@ func (x *ReadPlayerStoreHolderRequest) String() string {
 func (*ReadPlayerStoreHolderRequest) ProtoMessage() {}
 
 func (x *ReadPlayerStoreHolderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[8]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -833,7 +1846,7 @@ func (x *ReadPlayerStoreHolderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadPlayerStoreHolderRequest.ProtoReflect.Descriptor instead.
 func (*ReadPlayerStoreHolderRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{8}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ReadPlayerStoreHolderRequest) GetPlayerId() uint64 {
@@ -860,7 +1873,7 @@ type ReadPlayerStoreHolderResponse struct {
 
 func (x *ReadPlayerStoreHolderResponse) Reset() {
 	*x = ReadPlayerStoreHolderResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[9]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -872,7 +1885,7 @@ func (x *ReadPlayerStoreHolderResponse) String() string {
 func (*ReadPlayerStoreHolderResponse) ProtoMessage() {}
 
 func (x *ReadPlayerStoreHolderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[9]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,7 +1898,7 @@ func (x *ReadPlayerStoreHolderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadPlayerStoreHolderResponse.ProtoReflect.Descriptor instead.
 func (*ReadPlayerStoreHolderResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{9}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ReadPlayerStoreHolderResponse) GetFound() bool {
@@ -914,7 +1927,7 @@ type RepairAccountRoleRequest struct {
 
 func (x *RepairAccountRoleRequest) Reset() {
 	*x = RepairAccountRoleRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[10]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -926,7 +1939,7 @@ func (x *RepairAccountRoleRequest) String() string {
 func (*RepairAccountRoleRequest) ProtoMessage() {}
 
 func (x *RepairAccountRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[10]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -939,7 +1952,7 @@ func (x *RepairAccountRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RepairAccountRoleRequest.ProtoReflect.Descriptor instead.
 func (*RepairAccountRoleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{10}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RepairAccountRoleRequest) GetAccount() string {
@@ -981,7 +1994,7 @@ type RemoveAccountRolesRequest struct {
 
 func (x *RemoveAccountRolesRequest) Reset() {
 	*x = RemoveAccountRolesRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[11]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -993,7 +2006,7 @@ func (x *RemoveAccountRolesRequest) String() string {
 func (*RemoveAccountRolesRequest) ProtoMessage() {}
 
 func (x *RemoveAccountRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[11]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1006,7 +2019,7 @@ func (x *RemoveAccountRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveAccountRolesRequest.ProtoReflect.Descriptor instead.
 func (*RemoveAccountRolesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{11}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RemoveAccountRolesRequest) GetAccount() string {
@@ -1046,7 +2059,7 @@ type AccountRoleFreezeEvidence struct {
 
 func (x *AccountRoleFreezeEvidence) Reset() {
 	*x = AccountRoleFreezeEvidence{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[12]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1058,7 +2071,7 @@ func (x *AccountRoleFreezeEvidence) String() string {
 func (*AccountRoleFreezeEvidence) ProtoMessage() {}
 
 func (x *AccountRoleFreezeEvidence) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[12]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1071,7 +2084,7 @@ func (x *AccountRoleFreezeEvidence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleFreezeEvidence.ProtoReflect.Descriptor instead.
 func (*AccountRoleFreezeEvidence) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{12}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *AccountRoleFreezeEvidence) GetPlayerId() uint64 {
@@ -1133,7 +2146,7 @@ type AccountRoleTradeHolder struct {
 
 func (x *AccountRoleTradeHolder) Reset() {
 	*x = AccountRoleTradeHolder{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[13]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1145,7 +2158,7 @@ func (x *AccountRoleTradeHolder) String() string {
 func (*AccountRoleTradeHolder) ProtoMessage() {}
 
 func (x *AccountRoleTradeHolder) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[13]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1158,7 +2171,7 @@ func (x *AccountRoleTradeHolder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleTradeHolder.ProtoReflect.Descriptor instead.
 func (*AccountRoleTradeHolder) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{13}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AccountRoleTradeHolder) GetSeal() *base.RoleTradeSeal {
@@ -1190,7 +2203,7 @@ type AccountRoleTradeReceipt struct {
 
 func (x *AccountRoleTradeReceipt) Reset() {
 	*x = AccountRoleTradeReceipt{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[14]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1202,7 +2215,7 @@ func (x *AccountRoleTradeReceipt) String() string {
 func (*AccountRoleTradeReceipt) ProtoMessage() {}
 
 func (x *AccountRoleTradeReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[14]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1215,7 +2228,7 @@ func (x *AccountRoleTradeReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleTradeReceipt.ProtoReflect.Descriptor instead.
 func (*AccountRoleTradeReceipt) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{14}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *AccountRoleTradeReceipt) GetListingId() uint64 {
@@ -1284,7 +2297,7 @@ type AccountRoleTransferReceipt struct {
 
 func (x *AccountRoleTransferReceipt) Reset() {
 	*x = AccountRoleTransferReceipt{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[15]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1296,7 +2309,7 @@ func (x *AccountRoleTransferReceipt) String() string {
 func (*AccountRoleTransferReceipt) ProtoMessage() {}
 
 func (x *AccountRoleTransferReceipt) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[15]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1309,7 +2322,7 @@ func (x *AccountRoleTransferReceipt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountRoleTransferReceipt.ProtoReflect.Descriptor instead.
 func (*AccountRoleTransferReceipt) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{15}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *AccountRoleTransferReceipt) GetTxId() uint64 {
@@ -1388,7 +2401,7 @@ type BeginAccountRoleTradeRequest struct {
 
 func (x *BeginAccountRoleTradeRequest) Reset() {
 	*x = BeginAccountRoleTradeRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[16]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1400,7 +2413,7 @@ func (x *BeginAccountRoleTradeRequest) String() string {
 func (*BeginAccountRoleTradeRequest) ProtoMessage() {}
 
 func (x *BeginAccountRoleTradeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[16]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1413,7 +2426,7 @@ func (x *BeginAccountRoleTradeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginAccountRoleTradeRequest.ProtoReflect.Descriptor instead.
 func (*BeginAccountRoleTradeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{16}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *BeginAccountRoleTradeRequest) GetListingId() uint64 {
@@ -1464,7 +2477,7 @@ type ConfirmAccountRoleTradeFreezeRequest struct {
 
 func (x *ConfirmAccountRoleTradeFreezeRequest) Reset() {
 	*x = ConfirmAccountRoleTradeFreezeRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[17]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1476,7 +2489,7 @@ func (x *ConfirmAccountRoleTradeFreezeRequest) String() string {
 func (*ConfirmAccountRoleTradeFreezeRequest) ProtoMessage() {}
 
 func (x *ConfirmAccountRoleTradeFreezeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[17]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1489,7 +2502,7 @@ func (x *ConfirmAccountRoleTradeFreezeRequest) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use ConfirmAccountRoleTradeFreezeRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmAccountRoleTradeFreezeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{17}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ConfirmAccountRoleTradeFreezeRequest) GetListingId() uint64 {
@@ -1540,7 +2553,7 @@ type CancelAccountRoleTradeRequest struct {
 
 func (x *CancelAccountRoleTradeRequest) Reset() {
 	*x = CancelAccountRoleTradeRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[18]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1552,7 +2565,7 @@ func (x *CancelAccountRoleTradeRequest) String() string {
 func (*CancelAccountRoleTradeRequest) ProtoMessage() {}
 
 func (x *CancelAccountRoleTradeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[18]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1565,7 +2578,7 @@ func (x *CancelAccountRoleTradeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelAccountRoleTradeRequest.ProtoReflect.Descriptor instead.
 func (*CancelAccountRoleTradeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{18}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CancelAccountRoleTradeRequest) GetListingId() uint64 {
@@ -1618,7 +2631,7 @@ type TransferAccountRoleRequest struct {
 
 func (x *TransferAccountRoleRequest) Reset() {
 	*x = TransferAccountRoleRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[19]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1630,7 +2643,7 @@ func (x *TransferAccountRoleRequest) String() string {
 func (*TransferAccountRoleRequest) ProtoMessage() {}
 
 func (x *TransferAccountRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[19]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1643,7 +2656,7 @@ func (x *TransferAccountRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferAccountRoleRequest.ProtoReflect.Descriptor instead.
 func (*TransferAccountRoleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{19}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *TransferAccountRoleRequest) GetTxId() uint64 {
@@ -1705,7 +2718,7 @@ type CheckAccountRoleSlotRequest struct {
 
 func (x *CheckAccountRoleSlotRequest) Reset() {
 	*x = CheckAccountRoleSlotRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[20]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1717,7 +2730,7 @@ func (x *CheckAccountRoleSlotRequest) String() string {
 func (*CheckAccountRoleSlotRequest) ProtoMessage() {}
 
 func (x *CheckAccountRoleSlotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[20]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1730,7 +2743,7 @@ func (x *CheckAccountRoleSlotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckAccountRoleSlotRequest.ProtoReflect.Descriptor instead.
 func (*CheckAccountRoleSlotRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{20}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CheckAccountRoleSlotRequest) GetAccount() string {
@@ -1757,7 +2770,7 @@ type CheckAccountRoleSlotResponse struct {
 
 func (x *CheckAccountRoleSlotResponse) Reset() {
 	*x = CheckAccountRoleSlotResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[21]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1769,7 +2782,7 @@ func (x *CheckAccountRoleSlotResponse) String() string {
 func (*CheckAccountRoleSlotResponse) ProtoMessage() {}
 
 func (x *CheckAccountRoleSlotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[21]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1782,7 +2795,7 @@ func (x *CheckAccountRoleSlotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckAccountRoleSlotResponse.ProtoReflect.Descriptor instead.
 func (*CheckAccountRoleSlotResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{21}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CheckAccountRoleSlotResponse) GetFull() bool {
@@ -1809,7 +2822,7 @@ type GetRoleFenceStateRequest struct {
 
 func (x *GetRoleFenceStateRequest) Reset() {
 	*x = GetRoleFenceStateRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[22]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1821,7 +2834,7 @@ func (x *GetRoleFenceStateRequest) String() string {
 func (*GetRoleFenceStateRequest) ProtoMessage() {}
 
 func (x *GetRoleFenceStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[22]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1834,7 +2847,7 @@ func (x *GetRoleFenceStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleFenceStateRequest.ProtoReflect.Descriptor instead.
 func (*GetRoleFenceStateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{22}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetRoleFenceStateRequest) GetPlayerId() uint64 {
@@ -1862,7 +2875,7 @@ type GetRoleFenceStateResponse struct {
 
 func (x *GetRoleFenceStateResponse) Reset() {
 	*x = GetRoleFenceStateResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[23]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1874,7 +2887,7 @@ func (x *GetRoleFenceStateResponse) String() string {
 func (*GetRoleFenceStateResponse) ProtoMessage() {}
 
 func (x *GetRoleFenceStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[23]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1887,7 +2900,7 @@ func (x *GetRoleFenceStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleFenceStateResponse.ProtoReflect.Descriptor instead.
 func (*GetRoleFenceStateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{23}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetRoleFenceStateResponse) GetFound() bool {
@@ -1921,7 +2934,7 @@ type VerifyRoleAdmissionRequest struct {
 
 func (x *VerifyRoleAdmissionRequest) Reset() {
 	*x = VerifyRoleAdmissionRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[24]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1933,7 +2946,7 @@ func (x *VerifyRoleAdmissionRequest) String() string {
 func (*VerifyRoleAdmissionRequest) ProtoMessage() {}
 
 func (x *VerifyRoleAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[24]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1946,7 +2959,7 @@ func (x *VerifyRoleAdmissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyRoleAdmissionRequest.ProtoReflect.Descriptor instead.
 func (*VerifyRoleAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{24}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *VerifyRoleAdmissionRequest) GetAdmission() *base.RoleAdmissionIdentity {
@@ -1974,7 +2987,7 @@ type VerifyRoleAdmissionResponse struct {
 
 func (x *VerifyRoleAdmissionResponse) Reset() {
 	*x = VerifyRoleAdmissionResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1986,7 +2999,7 @@ func (x *VerifyRoleAdmissionResponse) String() string {
 func (*VerifyRoleAdmissionResponse) ProtoMessage() {}
 
 func (x *VerifyRoleAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[25]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1999,7 +3012,7 @@ func (x *VerifyRoleAdmissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyRoleAdmissionResponse.ProtoReflect.Descriptor instead.
 func (*VerifyRoleAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{25}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *VerifyRoleAdmissionResponse) GetValid() bool {
@@ -2026,7 +3039,7 @@ type RegisterRoleAdmissionRequest struct {
 
 func (x *RegisterRoleAdmissionRequest) Reset() {
 	*x = RegisterRoleAdmissionRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2038,7 +3051,7 @@ func (x *RegisterRoleAdmissionRequest) String() string {
 func (*RegisterRoleAdmissionRequest) ProtoMessage() {}
 
 func (x *RegisterRoleAdmissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[26]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2051,7 +3064,7 @@ func (x *RegisterRoleAdmissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRoleAdmissionRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRoleAdmissionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{26}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *RegisterRoleAdmissionRequest) GetIdentity() *base.RoleAdmissionIdentity {
@@ -2078,7 +3091,7 @@ type RegisterRoleAdmissionResponse struct {
 
 func (x *RegisterRoleAdmissionResponse) Reset() {
 	*x = RegisterRoleAdmissionResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2090,7 +3103,7 @@ func (x *RegisterRoleAdmissionResponse) String() string {
 func (*RegisterRoleAdmissionResponse) ProtoMessage() {}
 
 func (x *RegisterRoleAdmissionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[27]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2103,7 +3116,7 @@ func (x *RegisterRoleAdmissionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRoleAdmissionResponse.ProtoReflect.Descriptor instead.
 func (*RegisterRoleAdmissionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{27}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *RegisterRoleAdmissionResponse) GetIdentity() *base.RoleAdmissionIdentity {
@@ -2137,7 +3150,7 @@ type CloseRoleAdmissionsRequest struct {
 
 func (x *CloseRoleAdmissionsRequest) Reset() {
 	*x = CloseRoleAdmissionsRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2149,7 +3162,7 @@ func (x *CloseRoleAdmissionsRequest) String() string {
 func (*CloseRoleAdmissionsRequest) ProtoMessage() {}
 
 func (x *CloseRoleAdmissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[28]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2162,7 +3175,7 @@ func (x *CloseRoleAdmissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseRoleAdmissionsRequest.ProtoReflect.Descriptor instead.
 func (*CloseRoleAdmissionsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{28}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *CloseRoleAdmissionsRequest) GetPlayerId() uint64 {
@@ -2223,7 +3236,7 @@ type CloseRoleAdmissionsResponse struct {
 
 func (x *CloseRoleAdmissionsResponse) Reset() {
 	*x = CloseRoleAdmissionsResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2235,7 +3248,7 @@ func (x *CloseRoleAdmissionsResponse) String() string {
 func (*CloseRoleAdmissionsResponse) ProtoMessage() {}
 
 func (x *CloseRoleAdmissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[29]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2248,7 +3261,7 @@ func (x *CloseRoleAdmissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseRoleAdmissionsResponse.ProtoReflect.Descriptor instead.
 func (*CloseRoleAdmissionsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{29}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *CloseRoleAdmissionsResponse) GetClosedThrough() uint64 {
@@ -2270,7 +3283,7 @@ type AckRoleTradeDrainRequest struct {
 
 func (x *AckRoleTradeDrainRequest) Reset() {
 	*x = AckRoleTradeDrainRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2282,7 +3295,7 @@ func (x *AckRoleTradeDrainRequest) String() string {
 func (*AckRoleTradeDrainRequest) ProtoMessage() {}
 
 func (x *AckRoleTradeDrainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[30]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2295,7 +3308,7 @@ func (x *AckRoleTradeDrainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AckRoleTradeDrainRequest.ProtoReflect.Descriptor instead.
 func (*AckRoleTradeDrainRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{30}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *AckRoleTradeDrainRequest) GetSeal() *base.RoleTradeSeal {
@@ -2339,7 +3352,7 @@ type RegisterPlayerZoneRequest struct {
 
 func (x *RegisterPlayerZoneRequest) Reset() {
 	*x = RegisterPlayerZoneRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2351,7 +3364,7 @@ func (x *RegisterPlayerZoneRequest) String() string {
 func (*RegisterPlayerZoneRequest) ProtoMessage() {}
 
 func (x *RegisterPlayerZoneRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[31]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2364,7 +3377,7 @@ func (x *RegisterPlayerZoneRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterPlayerZoneRequest.ProtoReflect.Descriptor instead.
 func (*RegisterPlayerZoneRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{31}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *RegisterPlayerZoneRequest) GetPlayerId() uint64 {
@@ -2397,7 +3410,7 @@ type GetPlayerHomeZoneRequest struct {
 
 func (x *GetPlayerHomeZoneRequest) Reset() {
 	*x = GetPlayerHomeZoneRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2409,7 +3422,7 @@ func (x *GetPlayerHomeZoneRequest) String() string {
 func (*GetPlayerHomeZoneRequest) ProtoMessage() {}
 
 func (x *GetPlayerHomeZoneRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[32]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2422,7 +3435,7 @@ func (x *GetPlayerHomeZoneRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerHomeZoneRequest.ProtoReflect.Descriptor instead.
 func (*GetPlayerHomeZoneRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{32}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *GetPlayerHomeZoneRequest) GetPlayerId() uint64 {
@@ -2443,7 +3456,7 @@ type GetPlayerHomeZoneResponse struct {
 
 func (x *GetPlayerHomeZoneResponse) Reset() {
 	*x = GetPlayerHomeZoneResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2455,7 +3468,7 @@ func (x *GetPlayerHomeZoneResponse) String() string {
 func (*GetPlayerHomeZoneResponse) ProtoMessage() {}
 
 func (x *GetPlayerHomeZoneResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[33]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2468,7 +3481,7 @@ func (x *GetPlayerHomeZoneResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerHomeZoneResponse.ProtoReflect.Descriptor instead.
 func (*GetPlayerHomeZoneResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{33}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *GetPlayerHomeZoneResponse) GetHomeZoneId() uint32 {
@@ -2487,7 +3500,7 @@ type BatchGetPlayerHomeZoneRequest struct {
 
 func (x *BatchGetPlayerHomeZoneRequest) Reset() {
 	*x = BatchGetPlayerHomeZoneRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2499,7 +3512,7 @@ func (x *BatchGetPlayerHomeZoneRequest) String() string {
 func (*BatchGetPlayerHomeZoneRequest) ProtoMessage() {}
 
 func (x *BatchGetPlayerHomeZoneRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[34]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2512,7 +3525,7 @@ func (x *BatchGetPlayerHomeZoneRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerHomeZoneRequest.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerHomeZoneRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{34}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *BatchGetPlayerHomeZoneRequest) GetPlayerIds() []uint64 {
@@ -2531,7 +3544,7 @@ type BatchGetPlayerHomeZoneResponse struct {
 
 func (x *BatchGetPlayerHomeZoneResponse) Reset() {
 	*x = BatchGetPlayerHomeZoneResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2543,7 +3556,7 @@ func (x *BatchGetPlayerHomeZoneResponse) String() string {
 func (*BatchGetPlayerHomeZoneResponse) ProtoMessage() {}
 
 func (x *BatchGetPlayerHomeZoneResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[35]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2556,7 +3569,7 @@ func (x *BatchGetPlayerHomeZoneResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerHomeZoneResponse.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerHomeZoneResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{35}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *BatchGetPlayerHomeZoneResponse) GetPlayerZoneMap() map[uint64]uint32 {
@@ -2575,7 +3588,7 @@ type GetMergedZonesResponse struct {
 
 func (x *GetMergedZonesResponse) Reset() {
 	*x = GetMergedZonesResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2587,7 +3600,7 @@ func (x *GetMergedZonesResponse) String() string {
 func (*GetMergedZonesResponse) ProtoMessage() {}
 
 func (x *GetMergedZonesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[36]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2600,7 +3613,7 @@ func (x *GetMergedZonesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMergedZonesResponse.ProtoReflect.Descriptor instead.
 func (*GetMergedZonesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{36}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *GetMergedZonesResponse) GetMergedInto() map[uint32]uint32 {
@@ -2619,7 +3632,7 @@ type CountZoneRolesRequest struct {
 
 func (x *CountZoneRolesRequest) Reset() {
 	*x = CountZoneRolesRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2631,7 +3644,7 @@ func (x *CountZoneRolesRequest) String() string {
 func (*CountZoneRolesRequest) ProtoMessage() {}
 
 func (x *CountZoneRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[37]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2644,7 +3657,7 @@ func (x *CountZoneRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountZoneRolesRequest.ProtoReflect.Descriptor instead.
 func (*CountZoneRolesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{37}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *CountZoneRolesRequest) GetZoneId() uint32 {
@@ -2663,7 +3676,7 @@ type CountZoneRolesResponse struct {
 
 func (x *CountZoneRolesResponse) Reset() {
 	*x = CountZoneRolesResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2675,7 +3688,7 @@ func (x *CountZoneRolesResponse) String() string {
 func (*CountZoneRolesResponse) ProtoMessage() {}
 
 func (x *CountZoneRolesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[38]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2688,7 +3701,7 @@ func (x *CountZoneRolesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountZoneRolesResponse.ProtoReflect.Descriptor instead.
 func (*CountZoneRolesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{38}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *CountZoneRolesResponse) GetRoles() uint64 {
@@ -2708,7 +3721,7 @@ type GetPlayerRouteRequest struct {
 
 func (x *GetPlayerRouteRequest) Reset() {
 	*x = GetPlayerRouteRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2720,7 +3733,7 @@ func (x *GetPlayerRouteRequest) String() string {
 func (*GetPlayerRouteRequest) ProtoMessage() {}
 
 func (x *GetPlayerRouteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2733,7 +3746,7 @@ func (x *GetPlayerRouteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerRouteRequest.ProtoReflect.Descriptor instead.
 func (*GetPlayerRouteRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{39}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *GetPlayerRouteRequest) GetPlayerId() uint64 {
@@ -2762,7 +3775,7 @@ type GetPlayerRouteResponse struct {
 
 func (x *GetPlayerRouteResponse) Reset() {
 	*x = GetPlayerRouteResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2774,7 +3787,7 @@ func (x *GetPlayerRouteResponse) String() string {
 func (*GetPlayerRouteResponse) ProtoMessage() {}
 
 func (x *GetPlayerRouteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2787,7 +3800,7 @@ func (x *GetPlayerRouteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerRouteResponse.ProtoReflect.Descriptor instead.
 func (*GetPlayerRouteResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{40}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetPlayerRouteResponse) GetStorageId() uint32 {
@@ -2829,7 +3842,7 @@ type ListPlayerSnapshotsRequest struct {
 
 func (x *ListPlayerSnapshotsRequest) Reset() {
 	*x = ListPlayerSnapshotsRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2841,7 +3854,7 @@ func (x *ListPlayerSnapshotsRequest) String() string {
 func (*ListPlayerSnapshotsRequest) ProtoMessage() {}
 
 func (x *ListPlayerSnapshotsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2854,7 +3867,7 @@ func (x *ListPlayerSnapshotsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlayerSnapshotsRequest.ProtoReflect.Descriptor instead.
 func (*ListPlayerSnapshotsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{41}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ListPlayerSnapshotsRequest) GetPlayerId() uint64 {
@@ -2895,7 +3908,7 @@ type SnapshotInfo struct {
 
 func (x *SnapshotInfo) Reset() {
 	*x = SnapshotInfo{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2907,7 +3920,7 @@ func (x *SnapshotInfo) String() string {
 func (*SnapshotInfo) ProtoMessage() {}
 
 func (x *SnapshotInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2920,7 +3933,7 @@ func (x *SnapshotInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotInfo.ProtoReflect.Descriptor instead.
 func (*SnapshotInfo) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{42}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *SnapshotInfo) GetSnapshotId() uint64 {
@@ -2996,7 +4009,7 @@ type ListPlayerSnapshotsResponse struct {
 
 func (x *ListPlayerSnapshotsResponse) Reset() {
 	*x = ListPlayerSnapshotsResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3008,7 +4021,7 @@ func (x *ListPlayerSnapshotsResponse) String() string {
 func (*ListPlayerSnapshotsResponse) ProtoMessage() {}
 
 func (x *ListPlayerSnapshotsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3021,7 +4034,7 @@ func (x *ListPlayerSnapshotsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlayerSnapshotsResponse.ProtoReflect.Descriptor instead.
 func (*ListPlayerSnapshotsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{43}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListPlayerSnapshotsResponse) GetErrorCode() uint32 {
@@ -3058,7 +4071,7 @@ type BatchRecallItemsRequest struct {
 
 func (x *BatchRecallItemsRequest) Reset() {
 	*x = BatchRecallItemsRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3070,7 +4083,7 @@ func (x *BatchRecallItemsRequest) String() string {
 func (*BatchRecallItemsRequest) ProtoMessage() {}
 
 func (x *BatchRecallItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3083,7 +4096,7 @@ func (x *BatchRecallItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchRecallItemsRequest.ProtoReflect.Descriptor instead.
 func (*BatchRecallItemsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{44}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *BatchRecallItemsRequest) GetPlayerIds() []uint64 {
@@ -3190,7 +4203,7 @@ type RecallResult struct {
 
 func (x *RecallResult) Reset() {
 	*x = RecallResult{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3202,7 +4215,7 @@ func (x *RecallResult) String() string {
 func (*RecallResult) ProtoMessage() {}
 
 func (x *RecallResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3215,7 +4228,7 @@ func (x *RecallResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecallResult.ProtoReflect.Descriptor instead.
 func (*RecallResult) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{45}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *RecallResult) GetPlayerId() uint64 {
@@ -3318,7 +4331,7 @@ type BatchRecallItemsResponse struct {
 
 func (x *BatchRecallItemsResponse) Reset() {
 	*x = BatchRecallItemsResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[46]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3330,7 +4343,7 @@ func (x *BatchRecallItemsResponse) String() string {
 func (*BatchRecallItemsResponse) ProtoMessage() {}
 
 func (x *BatchRecallItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[46]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3343,7 +4356,7 @@ func (x *BatchRecallItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchRecallItemsResponse.ProtoReflect.Descriptor instead.
 func (*BatchRecallItemsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{46}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *BatchRecallItemsResponse) GetErrorCode() uint32 {
@@ -3468,7 +4481,7 @@ type RecallReviewRow struct {
 
 func (x *RecallReviewRow) Reset() {
 	*x = RecallReviewRow{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[47]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3480,7 +4493,7 @@ func (x *RecallReviewRow) String() string {
 func (*RecallReviewRow) ProtoMessage() {}
 
 func (x *RecallReviewRow) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[47]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3493,7 +4506,7 @@ func (x *RecallReviewRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecallReviewRow.ProtoReflect.Descriptor instead.
 func (*RecallReviewRow) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{47}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *RecallReviewRow) GetPlayerId() uint64 {
@@ -3561,7 +4574,7 @@ type GetRecallBatchRequest struct {
 
 func (x *GetRecallBatchRequest) Reset() {
 	*x = GetRecallBatchRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[48]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3573,7 +4586,7 @@ func (x *GetRecallBatchRequest) String() string {
 func (*GetRecallBatchRequest) ProtoMessage() {}
 
 func (x *GetRecallBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[48]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3586,7 +4599,7 @@ func (x *GetRecallBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRecallBatchRequest.ProtoReflect.Descriptor instead.
 func (*GetRecallBatchRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{48}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *GetRecallBatchRequest) GetRequestId() uint64 {
@@ -3608,7 +4621,7 @@ type CancelRecallBatchRequest struct {
 
 func (x *CancelRecallBatchRequest) Reset() {
 	*x = CancelRecallBatchRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[49]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3620,7 +4633,7 @@ func (x *CancelRecallBatchRequest) String() string {
 func (*CancelRecallBatchRequest) ProtoMessage() {}
 
 func (x *CancelRecallBatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[49]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3633,7 +4646,7 @@ func (x *CancelRecallBatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRecallBatchRequest.ProtoReflect.Descriptor instead.
 func (*CancelRecallBatchRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{49}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *CancelRecallBatchRequest) GetRequestId() uint64 {
@@ -3671,7 +4684,7 @@ type ResolveRecallOpRequest struct {
 
 func (x *ResolveRecallOpRequest) Reset() {
 	*x = ResolveRecallOpRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[50]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3683,7 +4696,7 @@ func (x *ResolveRecallOpRequest) String() string {
 func (*ResolveRecallOpRequest) ProtoMessage() {}
 
 func (x *ResolveRecallOpRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[50]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3696,7 +4709,7 @@ func (x *ResolveRecallOpRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveRecallOpRequest.ProtoReflect.Descriptor instead.
 func (*ResolveRecallOpRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{50}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *ResolveRecallOpRequest) GetOpId() uint64 {
@@ -3741,7 +4754,7 @@ type ResolveRecallOpResponse struct {
 
 func (x *ResolveRecallOpResponse) Reset() {
 	*x = ResolveRecallOpResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[51]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3753,7 +4766,7 @@ func (x *ResolveRecallOpResponse) String() string {
 func (*ResolveRecallOpResponse) ProtoMessage() {}
 
 func (x *ResolveRecallOpResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[51]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3766,7 +4779,7 @@ func (x *ResolveRecallOpResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveRecallOpResponse.ProtoReflect.Descriptor instead.
 func (*ResolveRecallOpResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{51}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ResolveRecallOpResponse) GetErrorCode() uint32 {
@@ -3818,7 +4831,7 @@ type RegisterRecallReviewHandledRequest struct {
 
 func (x *RegisterRecallReviewHandledRequest) Reset() {
 	*x = RegisterRecallReviewHandledRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[52]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3830,7 +4843,7 @@ func (x *RegisterRecallReviewHandledRequest) String() string {
 func (*RegisterRecallReviewHandledRequest) ProtoMessage() {}
 
 func (x *RegisterRecallReviewHandledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[52]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3843,7 +4856,7 @@ func (x *RegisterRecallReviewHandledRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use RegisterRecallReviewHandledRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRecallReviewHandledRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{52}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *RegisterRecallReviewHandledRequest) GetRecallKind() RecallKind {
@@ -3924,7 +4937,7 @@ type RegisterRecallReviewHandledResponse struct {
 
 func (x *RegisterRecallReviewHandledResponse) Reset() {
 	*x = RegisterRecallReviewHandledResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[53]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3936,7 +4949,7 @@ func (x *RegisterRecallReviewHandledResponse) String() string {
 func (*RegisterRecallReviewHandledResponse) ProtoMessage() {}
 
 func (x *RegisterRecallReviewHandledResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[53]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3949,7 +4962,7 @@ func (x *RegisterRecallReviewHandledResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use RegisterRecallReviewHandledResponse.ProtoReflect.Descriptor instead.
 func (*RegisterRecallReviewHandledResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{53}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *RegisterRecallReviewHandledResponse) GetErrorCode() uint32 {
@@ -3996,7 +5009,7 @@ type QueryTransactionLogRequest struct {
 
 func (x *QueryTransactionLogRequest) Reset() {
 	*x = QueryTransactionLogRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[54]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4008,7 +5021,7 @@ func (x *QueryTransactionLogRequest) String() string {
 func (*QueryTransactionLogRequest) ProtoMessage() {}
 
 func (x *QueryTransactionLogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[54]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4021,7 +5034,7 @@ func (x *QueryTransactionLogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryTransactionLogRequest.ProtoReflect.Descriptor instead.
 func (*QueryTransactionLogRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{54}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *QueryTransactionLogRequest) GetPlayerId() uint64 {
@@ -4102,7 +5115,7 @@ type TransactionLogRow struct {
 
 func (x *TransactionLogRow) Reset() {
 	*x = TransactionLogRow{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[55]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4114,7 +5127,7 @@ func (x *TransactionLogRow) String() string {
 func (*TransactionLogRow) ProtoMessage() {}
 
 func (x *TransactionLogRow) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[55]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4127,7 +5140,7 @@ func (x *TransactionLogRow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransactionLogRow.ProtoReflect.Descriptor instead.
 func (*TransactionLogRow) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{55}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *TransactionLogRow) GetTxId() uint64 {
@@ -4239,7 +5252,7 @@ type QueryTransactionLogResponse struct {
 
 func (x *QueryTransactionLogResponse) Reset() {
 	*x = QueryTransactionLogResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[56]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4251,7 +5264,7 @@ func (x *QueryTransactionLogResponse) String() string {
 func (*QueryTransactionLogResponse) ProtoMessage() {}
 
 func (x *QueryTransactionLogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[56]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4264,7 +5277,7 @@ func (x *QueryTransactionLogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryTransactionLogResponse.ProtoReflect.Descriptor instead.
 func (*QueryTransactionLogResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{56}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *QueryTransactionLogResponse) GetErrorCode() uint32 {
@@ -4298,7 +5311,7 @@ type AllocateIdSegmentRequest struct {
 
 func (x *AllocateIdSegmentRequest) Reset() {
 	*x = AllocateIdSegmentRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[57]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4310,7 +5323,7 @@ func (x *AllocateIdSegmentRequest) String() string {
 func (*AllocateIdSegmentRequest) ProtoMessage() {}
 
 func (x *AllocateIdSegmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[57]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4323,7 +5336,7 @@ func (x *AllocateIdSegmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateIdSegmentRequest.ProtoReflect.Descriptor instead.
 func (*AllocateIdSegmentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{57}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *AllocateIdSegmentRequest) GetBizTag() string {
@@ -4356,7 +5369,7 @@ type AllocateIdSegmentResponse struct {
 
 func (x *AllocateIdSegmentResponse) Reset() {
 	*x = AllocateIdSegmentResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[58]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4368,7 +5381,7 @@ func (x *AllocateIdSegmentResponse) String() string {
 func (*AllocateIdSegmentResponse) ProtoMessage() {}
 
 func (x *AllocateIdSegmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[58]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4381,7 +5394,7 @@ func (x *AllocateIdSegmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AllocateIdSegmentResponse.ProtoReflect.Descriptor instead.
 func (*AllocateIdSegmentResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{58}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *AllocateIdSegmentResponse) GetErrorCode() uint32 {
@@ -4417,7 +5430,7 @@ type ReservePlayerNameRequest struct {
 
 func (x *ReservePlayerNameRequest) Reset() {
 	*x = ReservePlayerNameRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[59]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4429,7 +5442,7 @@ func (x *ReservePlayerNameRequest) String() string {
 func (*ReservePlayerNameRequest) ProtoMessage() {}
 
 func (x *ReservePlayerNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[59]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4442,7 +5455,7 @@ func (x *ReservePlayerNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReservePlayerNameRequest.ProtoReflect.Descriptor instead.
 func (*ReservePlayerNameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{59}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ReservePlayerNameRequest) GetPlayerId() uint64 {
@@ -4478,7 +5491,7 @@ type ReservePlayerNameResponse struct {
 
 func (x *ReservePlayerNameResponse) Reset() {
 	*x = ReservePlayerNameResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[60]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4490,7 +5503,7 @@ func (x *ReservePlayerNameResponse) String() string {
 func (*ReservePlayerNameResponse) ProtoMessage() {}
 
 func (x *ReservePlayerNameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[60]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4503,7 +5516,7 @@ func (x *ReservePlayerNameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReservePlayerNameResponse.ProtoReflect.Descriptor instead.
 func (*ReservePlayerNameResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{60}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ReservePlayerNameResponse) GetResult() uint32 {
@@ -4538,7 +5551,7 @@ type ReleasePlayerNameRequest struct {
 
 func (x *ReleasePlayerNameRequest) Reset() {
 	*x = ReleasePlayerNameRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[61]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4550,7 +5563,7 @@ func (x *ReleasePlayerNameRequest) String() string {
 func (*ReleasePlayerNameRequest) ProtoMessage() {}
 
 func (x *ReleasePlayerNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[61]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4563,7 +5576,7 @@ func (x *ReleasePlayerNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReleasePlayerNameRequest.ProtoReflect.Descriptor instead.
 func (*ReleasePlayerNameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{61}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ReleasePlayerNameRequest) GetPlayerId() uint64 {
@@ -4587,8 +5600,190 @@ func (x *ReleasePlayerNameRequest) GetAuth() *base.ServiceCallAuth {
 	return nil
 }
 
-// 一次最多 500 个 id;超了返回 InvalidArgument,不做截断 —— 静默截断会让调用方
-// 把"没返回"当成"没登记",给玩家显示空名。
+type RenameRoleRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// scene 按玩家递增发的流水号,从 1 起。
+	Seq uint64 `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
+	// 新名原文;规范化与结构校验在 data_service(和建角同一套规则)。内容安全由 scene 在调用之前送检。
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// 规则数值由调用方带来(配表 RoleNameRule 在 scene),data_service 不加载玩法配表。
+	CooldownSeconds uint32                `protobuf:"varint,4,opt,name=cooldown_seconds,json=cooldownSeconds,proto3" json:"cooldown_seconds,omitempty"` // 两次改名成功之间的最短间隔
+	HoldSeconds     uint32                `protobuf:"varint,5,opt,name=hold_seconds,json=holdSeconds,proto3" json:"hold_seconds,omitempty"`             // 旧名留在原主名下的时长
+	Auth            *base.ServiceCallAuth `protobuf:"bytes,6,opt,name=auth,proto3" json:"auth,omitempty"`
+	// 字数上下界(Unicode 码点,RoleNameRule.min_chars / max_chars),和建角时 login 用的是同一行配表。
+	MinChars      uint32 `protobuf:"varint,7,opt,name=min_chars,json=minChars,proto3" json:"min_chars,omitempty"`
+	MaxChars      uint32 `protobuf:"varint,8,opt,name=max_chars,json=maxChars,proto3" json:"max_chars,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenameRoleRequest) Reset() {
+	*x = RenameRoleRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[77]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenameRoleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenameRoleRequest) ProtoMessage() {}
+
+func (x *RenameRoleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[77]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenameRoleRequest.ProtoReflect.Descriptor instead.
+func (*RenameRoleRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{77}
+}
+
+func (x *RenameRoleRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *RenameRoleRequest) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *RenameRoleRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RenameRoleRequest) GetCooldownSeconds() uint32 {
+	if x != nil {
+		return x.CooldownSeconds
+	}
+	return 0
+}
+
+func (x *RenameRoleRequest) GetHoldSeconds() uint32 {
+	if x != nil {
+		return x.HoldSeconds
+	}
+	return 0
+}
+
+func (x *RenameRoleRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+func (x *RenameRoleRequest) GetMinChars() uint32 {
+	if x != nil {
+		return x.MinChars
+	}
+	return 0
+}
+
+func (x *RenameRoleRequest) GetMaxChars() uint32 {
+	if x != nil {
+		return x.MaxChars
+	}
+	return 0
+}
+
+type RenameRoleResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Result RenameRoleResult       `protobuf:"varint,1,opt,name=result,proto3,enum=data_service.RenameRoleResult" json:"result,omitempty"`
+	// 服务端记的流水号。STALE_SEQ 时 scene 把自己的号追到它。
+	CurrentSeq uint64 `protobuf:"varint,2,opt,name=current_seq,json=currentSeq,proto3" json:"current_seq,omitempty"`
+	// OK:角色现在的展示名(规范化后的写法),scene 把它写进存档。
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// OK:这次改名成功的时刻 Unix 毫秒。
+	RenamedMs uint64 `protobuf:"varint,4,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"`
+	// COOLDOWN:最早可以再改的时刻 Unix 毫秒。
+	NextAllowedMs uint64 `protobuf:"varint,5,opt,name=next_allowed_ms,json=nextAllowedMs,proto3" json:"next_allowed_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenameRoleResponse) Reset() {
+	*x = RenameRoleResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenameRoleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenameRoleResponse) ProtoMessage() {}
+
+func (x *RenameRoleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenameRoleResponse.ProtoReflect.Descriptor instead.
+func (*RenameRoleResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{78}
+}
+
+func (x *RenameRoleResponse) GetResult() RenameRoleResult {
+	if x != nil {
+		return x.Result
+	}
+	return RenameRoleResult_RENAME_ROLE_RESULT_UNSPECIFIED
+}
+
+func (x *RenameRoleResponse) GetCurrentSeq() uint64 {
+	if x != nil {
+		return x.CurrentSeq
+	}
+	return 0
+}
+
+func (x *RenameRoleResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RenameRoleResponse) GetRenamedMs() uint64 {
+	if x != nil {
+		return x.RenamedMs
+	}
+	return 0
+}
+
+func (x *RenameRoleResponse) GetNextAllowedMs() uint64 {
+	if x != nil {
+		return x.NextAllowedMs
+	}
+	return 0
+}
+
 type BatchGetPlayerNameRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerIds     []uint64               `protobuf:"varint,1,rep,packed,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
@@ -4598,7 +5793,7 @@ type BatchGetPlayerNameRequest struct {
 
 func (x *BatchGetPlayerNameRequest) Reset() {
 	*x = BatchGetPlayerNameRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[62]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4610,7 +5805,7 @@ func (x *BatchGetPlayerNameRequest) String() string {
 func (*BatchGetPlayerNameRequest) ProtoMessage() {}
 
 func (x *BatchGetPlayerNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[62]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4623,7 +5818,7 @@ func (x *BatchGetPlayerNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerNameRequest.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerNameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{62}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *BatchGetPlayerNameRequest) GetPlayerIds() []uint64 {
@@ -4644,7 +5839,7 @@ type BatchGetPlayerNameResponse struct {
 
 func (x *BatchGetPlayerNameResponse) Reset() {
 	*x = BatchGetPlayerNameResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[63]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4656,7 +5851,7 @@ func (x *BatchGetPlayerNameResponse) String() string {
 func (*BatchGetPlayerNameResponse) ProtoMessage() {}
 
 func (x *BatchGetPlayerNameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[63]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4669,7 +5864,7 @@ func (x *BatchGetPlayerNameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerNameResponse.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerNameResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{63}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *BatchGetPlayerNameResponse) GetNames() map[uint64]string {
@@ -4688,7 +5883,7 @@ type BatchGetPlayerDisplayRequest struct {
 
 func (x *BatchGetPlayerDisplayRequest) Reset() {
 	*x = BatchGetPlayerDisplayRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[64]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4700,7 +5895,7 @@ func (x *BatchGetPlayerDisplayRequest) String() string {
 func (*BatchGetPlayerDisplayRequest) ProtoMessage() {}
 
 func (x *BatchGetPlayerDisplayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[64]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4713,7 +5908,7 @@ func (x *BatchGetPlayerDisplayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerDisplayRequest.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerDisplayRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{64}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *BatchGetPlayerDisplayRequest) GetPlayerIds() []uint64 {
@@ -4736,7 +5931,7 @@ type PlayerDisplay struct {
 
 func (x *PlayerDisplay) Reset() {
 	*x = PlayerDisplay{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[65]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4748,7 +5943,7 @@ func (x *PlayerDisplay) String() string {
 func (*PlayerDisplay) ProtoMessage() {}
 
 func (x *PlayerDisplay) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[65]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4761,7 +5956,7 @@ func (x *PlayerDisplay) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerDisplay.ProtoReflect.Descriptor instead.
 func (*PlayerDisplay) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{65}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *PlayerDisplay) GetName() string {
@@ -4809,7 +6004,7 @@ type BatchGetPlayerDisplayResponse struct {
 
 func (x *BatchGetPlayerDisplayResponse) Reset() {
 	*x = BatchGetPlayerDisplayResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[66]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4821,7 +6016,7 @@ func (x *BatchGetPlayerDisplayResponse) String() string {
 func (*BatchGetPlayerDisplayResponse) ProtoMessage() {}
 
 func (x *BatchGetPlayerDisplayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[66]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4834,7 +6029,7 @@ func (x *BatchGetPlayerDisplayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchGetPlayerDisplayResponse.ProtoReflect.Descriptor instead.
 func (*BatchGetPlayerDisplayResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{66}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *BatchGetPlayerDisplayResponse) GetPlayers() map[uint64]*PlayerDisplay {
@@ -4853,7 +6048,7 @@ type GetPlayerAssetOpLedgerRequest struct {
 
 func (x *GetPlayerAssetOpLedgerRequest) Reset() {
 	*x = GetPlayerAssetOpLedgerRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[67]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4865,7 +6060,7 @@ func (x *GetPlayerAssetOpLedgerRequest) String() string {
 func (*GetPlayerAssetOpLedgerRequest) ProtoMessage() {}
 
 func (x *GetPlayerAssetOpLedgerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[67]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4878,7 +6073,7 @@ func (x *GetPlayerAssetOpLedgerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerAssetOpLedgerRequest.ProtoReflect.Descriptor instead.
 func (*GetPlayerAssetOpLedgerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{67}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *GetPlayerAssetOpLedgerRequest) GetPlayerId() uint64 {
@@ -4899,7 +6094,7 @@ type GetPlayerAssetOpLedgerResponse struct {
 
 func (x *GetPlayerAssetOpLedgerResponse) Reset() {
 	*x = GetPlayerAssetOpLedgerResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[68]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4911,7 +6106,7 @@ func (x *GetPlayerAssetOpLedgerResponse) String() string {
 func (*GetPlayerAssetOpLedgerResponse) ProtoMessage() {}
 
 func (x *GetPlayerAssetOpLedgerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[68]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4924,7 +6119,7 @@ func (x *GetPlayerAssetOpLedgerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerAssetOpLedgerResponse.ProtoReflect.Descriptor instead.
 func (*GetPlayerAssetOpLedgerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{68}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *GetPlayerAssetOpLedgerResponse) GetFound() bool {
@@ -4957,7 +6152,7 @@ type GetPlayerInboxLedgerRequest struct {
 
 func (x *GetPlayerInboxLedgerRequest) Reset() {
 	*x = GetPlayerInboxLedgerRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[69]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4969,7 +6164,7 @@ func (x *GetPlayerInboxLedgerRequest) String() string {
 func (*GetPlayerInboxLedgerRequest) ProtoMessage() {}
 
 func (x *GetPlayerInboxLedgerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[69]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4982,7 +6177,7 @@ func (x *GetPlayerInboxLedgerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerInboxLedgerRequest.ProtoReflect.Descriptor instead.
 func (*GetPlayerInboxLedgerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{69}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *GetPlayerInboxLedgerRequest) GetPlayerId() uint64 {
@@ -5002,7 +6197,7 @@ type GetPlayerInboxLedgerResponse struct {
 
 func (x *GetPlayerInboxLedgerResponse) Reset() {
 	*x = GetPlayerInboxLedgerResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[70]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5014,7 +6209,7 @@ func (x *GetPlayerInboxLedgerResponse) String() string {
 func (*GetPlayerInboxLedgerResponse) ProtoMessage() {}
 
 func (x *GetPlayerInboxLedgerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[70]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5027,7 +6222,7 @@ func (x *GetPlayerInboxLedgerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerInboxLedgerResponse.ProtoReflect.Descriptor instead.
 func (*GetPlayerInboxLedgerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{70}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *GetPlayerInboxLedgerResponse) GetFound() bool {
@@ -5053,7 +6248,7 @@ type GetPlayerItemGainBlockRequest struct {
 
 func (x *GetPlayerItemGainBlockRequest) Reset() {
 	*x = GetPlayerItemGainBlockRequest{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[71]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5065,7 +6260,7 @@ func (x *GetPlayerItemGainBlockRequest) String() string {
 func (*GetPlayerItemGainBlockRequest) ProtoMessage() {}
 
 func (x *GetPlayerItemGainBlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[71]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5078,7 +6273,7 @@ func (x *GetPlayerItemGainBlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerItemGainBlockRequest.ProtoReflect.Descriptor instead.
 func (*GetPlayerItemGainBlockRequest) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{71}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *GetPlayerItemGainBlockRequest) GetPlayerId() uint64 {
@@ -5098,7 +6293,7 @@ type GetPlayerItemGainBlockResponse struct {
 
 func (x *GetPlayerItemGainBlockResponse) Reset() {
 	*x = GetPlayerItemGainBlockResponse{}
-	mi := &file_proto_data_service_data_service_proto_msgTypes[72]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5110,7 +6305,7 @@ func (x *GetPlayerItemGainBlockResponse) String() string {
 func (*GetPlayerItemGainBlockResponse) ProtoMessage() {}
 
 func (x *GetPlayerItemGainBlockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_data_service_data_service_proto_msgTypes[72]
+	mi := &file_proto_data_service_data_service_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5123,7 +6318,7 @@ func (x *GetPlayerItemGainBlockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlayerItemGainBlockResponse.ProtoReflect.Descriptor instead.
 func (*GetPlayerItemGainBlockResponse) Descriptor() ([]byte, []int) {
-	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{72}
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *GetPlayerItemGainBlockResponse) GetFound() bool {
@@ -5144,16 +6339,69 @@ var File_proto_data_service_data_service_proto protoreflect.FileDescriptor
 
 const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\n" +
-	"%proto/data_service/data_service.proto\x12\fdata_service\x1a\x1bgoogle/protobuf/empty.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a%proto/common/base/user_accounts.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/role_admission.proto\x1a!proto/role_fence/role_fence.proto\"N\n" +
+	"%proto/data_service/data_service.proto\x12\fdata_service\x1a\x1bgoogle/protobuf/empty.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a%proto/common/base/user_accounts.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/role_admission.proto\x1a!proto/role_fence/role_fence.proto\"\xae\x01\n" +
 	"\x18AccountDirectoryResponse\x122\n" +
-	"\aplayers\x18\x01 \x01(\v2\x18.AccountSimplePlayerListR\aplayers\"\x84\x02\n" +
+	"\aplayers\x18\x01 \x01(\v2\x18.AccountSimplePlayerListR\aplayers\x12<\n" +
+	"\tlifecycle\x18\x02 \x01(\v2\x1e.data_service.AccountLifecycleR\tlifecycle\x12 \n" +
+	"\freal_name_pi\x18\x03 \x01(\tR\n" +
+	"realNamePi\"\x89\x01\n" +
+	"\x19SetAccountRealNameRequest\x12\x18\n" +
+	"\aaccount\x18\x01 \x01(\tR\aaccount\x12 \n" +
+	"\freal_name_pi\x18\x02 \x01(\tR\n" +
+	"realNamePi\x120\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\">\n" +
+	"\x1aSetAccountRealNameResponse\x12 \n" +
+	"\freal_name_pi\x18\x01 \x01(\tR\n" +
+	"realNamePi\"j\n" +
+	"\x19GetAccountRealNameRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"T\n" +
+	"\x1aGetAccountRealNameResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x12 \n" +
+	"\freal_name_pi\x18\x02 \x01(\tR\n" +
+	"realNamePi\"i\n" +
+	"\x1bResetAccountRealNameRequest\x12\x18\n" +
+	"\aaccount\x18\x01 \x01(\tR\aaccount\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"B\n" +
+	"\x1cResetAccountRealNameResponse\x12\"\n" +
+	"\rhad_real_name\x18\x01 \x01(\bR\vhadRealName\"\xc8\x01\n" +
+	"\x10AccountLifecycle\x12I\n" +
+	"\x0edeletion_state\x18\x01 \x01(\x0e2\".data_service.AccountDeletionStateR\rdeletionState\x129\n" +
+	"\x19deletion_execute_after_ms\x18\x02 \x01(\x04R\x16deletionExecuteAfterMs\x12.\n" +
+	"\x13previous_deleted_ms\x18\x03 \x01(\x04R\x11previousDeletedMs\"M\n" +
+	"\x16AccountDeletionBlocker\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xd9\x01\n" +
+	"\x17AccountDeletionResponse\x12>\n" +
+	"\aoutcome\x18\x01 \x01(\x0e2$.data_service.AccountDeletionOutcomeR\aoutcome\x12<\n" +
+	"\tlifecycle\x18\x02 \x01(\v2\x1e.data_service.AccountLifecycleR\tlifecycle\x12@\n" +
+	"\bblockers\x18\x03 \x03(\v2$.data_service.AccountDeletionBlockerR\bblockers\"\x83\x01\n" +
+	"\x1dRequestAccountDeletionRequest\x12\x18\n" +
+	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\rR\x06source\x120\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"j\n" +
+	"\x1cCancelAccountDeletionRequest\x12\x18\n" +
+	"\aaccount\x18\x01 \x01(\tR\aaccount\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"f\n" +
+	"\x1cClaimAccountDeletionsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\rR\x05limit\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\";\n" +
+	"\x1dClaimAccountDeletionsResponse\x12\x1a\n" +
+	"\baccounts\x18\x01 \x03(\tR\baccounts\"j\n" +
+	"\x1cFinishAccountDeletionRequest\x12\x18\n" +
+	"\aaccount\x18\x01 \x01(\tR\aaccount\x120\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"Z\n" +
+	"\x1dFinishAccountDeletionResponse\x12\x12\n" +
+	"\x04done\x18\x01 \x01(\bR\x04done\x12%\n" +
+	"\x0eremaining_refs\x18\x02 \x01(\rR\rremainingRefs\"\xde\x02\n" +
 	"\x14AccountRoleOwnership\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12(\n" +
 	"\x04role\x18\x02 \x01(\v2\x14.AccountSimplePlayerR\x04role\x12%\n" +
 	"\x0eowner_revision\x18\x03 \x01(\x04R\rownerRevision\x12(\n" +
 	"\x10trade_listing_id\x18\x04 \x01(\x04R\x0etradeListingId\x12#\n" +
 	"\rprepare_token\x18\x05 \x01(\x04R\fprepareToken\x122\n" +
-	"\x15initial_player_commit\x18\x06 \x01(\bR\x13initialPlayerCommit\"X\n" +
+	"\x15initial_player_commit\x18\x06 \x01(\bR\x13initialPlayerCommit\x12X\n" +
+	"\x16account_deletion_state\x18\a \x01(\x0e2\".data_service.AccountDeletionStateR\x14accountDeletionState\"X\n" +
 	"\x12AccountRoleVersion\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12%\n" +
 	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\"\x95\x01\n" +
@@ -5164,10 +6412,11 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x18CreateAccountRoleRequest\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\x12(\n" +
 	"\x04role\x18\x02 \x01(\v2\x14.AccountSimplePlayerR\x04role\x120\n" +
-	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"i\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x9d\x01\n" +
 	"\x18LookupAccountRoleRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x120\n" +
-	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xca\x01\n" +
+	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x122\n" +
+	"\x15include_account_state\x18\x03 \x01(\bR\x13includeAccountState\"\xca\x01\n" +
 	"#ReleaseDeadPlayerStoreHolderRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vowner_epoch\x18\x02 \x01(\x04R\n" +
@@ -5508,7 +6757,24 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x18ReleasePlayerNameRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x120\n" +
-	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\":\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x90\x02\n" +
+	"\x11RenameRoleRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x10\n" +
+	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12)\n" +
+	"\x10cooldown_seconds\x18\x04 \x01(\rR\x0fcooldownSeconds\x12!\n" +
+	"\fhold_seconds\x18\x05 \x01(\rR\vholdSeconds\x120\n" +
+	"\x04auth\x18\x06 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12\x1b\n" +
+	"\tmin_chars\x18\a \x01(\rR\bminChars\x12\x1b\n" +
+	"\tmax_chars\x18\b \x01(\rR\bmaxChars\"\xc8\x01\n" +
+	"\x12RenameRoleResponse\x126\n" +
+	"\x06result\x18\x01 \x01(\x0e2\x1e.data_service.RenameRoleResultR\x06result\x12\x1f\n" +
+	"\vcurrent_seq\x18\x02 \x01(\x04R\n" +
+	"currentSeq\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"renamed_ms\x18\x04 \x01(\x04R\trenamedMs\x12&\n" +
+	"\x0fnext_allowed_ms\x18\x05 \x01(\x04R\rnextAllowedMs\":\n" +
 	"\x19BatchGetPlayerNameRequest\x12\x1d\n" +
 	"\n" +
 	"player_ids\x18\x01 \x03(\x04R\tplayerIds\"\xa1\x01\n" +
@@ -5547,7 +6813,18 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"f\n" +
 	"\x1eGetPlayerItemGainBlockResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12.\n" +
-	"\x05block\x18\x02 \x01(\v2\x18.PlayerItemGainBlockCompR\x05block*\xb4\x02\n" +
+	"\x05block\x18\x02 \x01(\v2\x18.PlayerItemGainBlockCompR\x05block*\x80\x01\n" +
+	"\x14AccountDeletionState\x12\x1f\n" +
+	"\x1bACCOUNT_DELETION_STATE_NONE\x10\x00\x12\"\n" +
+	"\x1eACCOUNT_DELETION_STATE_PENDING\x10\x01\x12#\n" +
+	"\x1fACCOUNT_DELETION_STATE_DELETING\x10\x02*\xfc\x01\n" +
+	"\x16AccountDeletionOutcome\x12(\n" +
+	"$ACCOUNT_DELETION_OUTCOME_UNSPECIFIED\x10\x00\x12\x1f\n" +
+	"\x1bACCOUNT_DELETION_OUTCOME_OK\x10\x01\x12&\n" +
+	"\"ACCOUNT_DELETION_OUTCOME_NOT_FOUND\x10\x02\x12$\n" +
+	" ACCOUNT_DELETION_OUTCOME_BLOCKED\x10\x03\x12\"\n" +
+	"\x1eACCOUNT_DELETION_OUTCOME_RETRY\x10\x04\x12%\n" +
+	"!ACCOUNT_DELETION_OUTCOME_TOO_LATE\x10\x05*\xb4\x02\n" +
 	"\x15AccountRoleTradeState\x12(\n" +
 	"$ACCOUNT_ROLE_TRADE_STATE_UNSPECIFIED\x10\x00\x12%\n" +
 	"!ACCOUNT_ROLE_TRADE_STATE_FREEZING\x10\x01\x12#\n" +
@@ -5581,13 +6858,29 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x1dRECALL_REVIEW_LEDGER_REJECTED\x10\x05\x12 \n" +
 	"\x1cRECALL_REVIEW_LEDGER_PARTIAL\x10\x06\x12$\n" +
 	" RECALL_REVIEW_LEDGER_NOT_APPLIED\x10\a\x12\x1f\n" +
-	"\x1bRECALL_REVIEW_ROWS_DISAGREE\x10\b2\xcd\x1f\n" +
+	"\x1bRECALL_REVIEW_ROWS_DISAGREE\x10\b*\xac\x02\n" +
+	"\x10RenameRoleResult\x12\"\n" +
+	"\x1eRENAME_ROLE_RESULT_UNSPECIFIED\x10\x00\x12\x12\n" +
+	"\x0eRENAME_ROLE_OK\x10\x01\x12\x15\n" +
+	"\x11RENAME_ROLE_TAKEN\x10\x02\x12\x17\n" +
+	"\x13RENAME_ROLE_INVALID\x10\x03\x12\x18\n" +
+	"\x14RENAME_ROLE_COOLDOWN\x10\x04\x12\x16\n" +
+	"\x12RENAME_ROLE_FROZEN\x10\x05\x12\x19\n" +
+	"\x15RENAME_ROLE_STALE_SEQ\x10\x06\x12\x19\n" +
+	"\x15RENAME_ROLE_SAME_NAME\x10\a\x12\x19\n" +
+	"\x15RENAME_ROLE_NOT_FOUND\x10\b\x12\x17\n" +
+	"\x13RENAME_ROLE_EXPIRED\x10\t\x12\x14\n" +
+	"\x10RENAME_ROLE_BUSY\x10\n" +
+	"2\xad&\n" +
 	"\vDataService\x12k\n" +
 	"\x14ReadAccountDirectory\x12).data_service.ReadAccountDirectoryRequest\x1a&.data_service.AccountDirectoryResponse\"\x00\x12e\n" +
 	"\x11CreateAccountRole\x12&.data_service.CreateAccountRoleRequest\x1a&.data_service.AccountDirectoryResponse\"\x00\x12a\n" +
 	"\x11LookupAccountRole\x12&.data_service.LookupAccountRoleRequest\x1a\".data_service.AccountRoleOwnership\"\x00\x12e\n" +
 	"\x11RepairAccountRole\x12&.data_service.RepairAccountRoleRequest\x1a&.data_service.AccountDirectoryResponse\"\x00\x12W\n" +
-	"\x12RemoveAccountRoles\x12'.data_service.RemoveAccountRolesRequest\x1a\x16.google.protobuf.Empty\"\x00\x12l\n" +
+	"\x12RemoveAccountRoles\x12'.data_service.RemoveAccountRolesRequest\x1a\x16.google.protobuf.Empty\"\x00\x12i\n" +
+	"\x12SetAccountRealName\x12'.data_service.SetAccountRealNameRequest\x1a(.data_service.SetAccountRealNameResponse\"\x00\x12i\n" +
+	"\x12GetAccountRealName\x12'.data_service.GetAccountRealNameRequest\x1a(.data_service.GetAccountRealNameResponse\"\x00\x12o\n" +
+	"\x14ResetAccountRealName\x12).data_service.ResetAccountRealNameRequest\x1a*.data_service.ResetAccountRealNameResponse\"\x00\x12l\n" +
 	"\x15BeginAccountRoleTrade\x12*.data_service.BeginAccountRoleTradeRequest\x1a%.data_service.AccountRoleTradeReceipt\"\x00\x12|\n" +
 	"\x1dConfirmAccountRoleTradeFreeze\x122.data_service.ConfirmAccountRoleTradeFreezeRequest\x1a%.data_service.AccountRoleTradeReceipt\"\x00\x12n\n" +
 	"\x16CancelAccountRoleTrade\x12+.data_service.CancelAccountRoleTradeRequest\x1a%.data_service.AccountRoleTradeReceipt\"\x00\x12k\n" +
@@ -5597,7 +6890,11 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x13VerifyRoleAdmission\x12(.data_service.VerifyRoleAdmissionRequest\x1a).data_service.VerifyRoleAdmissionResponse\"\x00\x12r\n" +
 	"\x15RegisterRoleAdmission\x12*.data_service.RegisterRoleAdmissionRequest\x1a+.data_service.RegisterRoleAdmissionResponse\"\x00\x12l\n" +
 	"\x13CloseRoleAdmissions\x12(.data_service.CloseRoleAdmissionsRequest\x1a).data_service.CloseRoleAdmissionsResponse\"\x00\x12U\n" +
-	"\x11AckRoleTradeDrain\x12&.data_service.AckRoleTradeDrainRequest\x1a\x16.google.protobuf.Empty\"\x00\x12k\n" +
+	"\x11AckRoleTradeDrain\x12&.data_service.AckRoleTradeDrainRequest\x1a\x16.google.protobuf.Empty\"\x00\x12n\n" +
+	"\x16RequestAccountDeletion\x12+.data_service.RequestAccountDeletionRequest\x1a%.data_service.AccountDeletionResponse\"\x00\x12l\n" +
+	"\x15CancelAccountDeletion\x12*.data_service.CancelAccountDeletionRequest\x1a%.data_service.AccountDeletionResponse\"\x00\x12r\n" +
+	"\x15ClaimAccountDeletions\x12*.data_service.ClaimAccountDeletionsRequest\x1a+.data_service.ClaimAccountDeletionsResponse\"\x00\x12r\n" +
+	"\x15FinishAccountDeletion\x12*.data_service.FinishAccountDeletionRequest\x1a+.data_service.FinishAccountDeletionResponse\"\x00\x12k\n" +
 	"\x1cReleaseDeadPlayerStoreHolder\x121.data_service.ReleaseDeadPlayerStoreHolderRequest\x1a\x16.google.protobuf.Empty\"\x00\x12r\n" +
 	"\x15ReadPlayerStoreHolder\x12*.data_service.ReadPlayerStoreHolderRequest\x1a+.data_service.ReadPlayerStoreHolderResponse\"\x00\x12W\n" +
 	"\x12RegisterPlayerZone\x12'.data_service.RegisterPlayerZoneRequest\x1a\x16.google.protobuf.Empty\"\x00\x12f\n" +
@@ -5616,7 +6913,9 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x11AllocateIdSegment\x12&.data_service.AllocateIdSegmentRequest\x1a'.data_service.AllocateIdSegmentResponse\"\x00\x12f\n" +
 	"\x11ReservePlayerName\x12&.data_service.ReservePlayerNameRequest\x1a'.data_service.ReservePlayerNameResponse\"\x00\x12U\n" +
 	"\x11ReleasePlayerName\x12&.data_service.ReleasePlayerNameRequest\x1a\x16.google.protobuf.Empty\"\x00\x12i\n" +
-	"\x12BatchGetPlayerName\x12'.data_service.BatchGetPlayerNameRequest\x1a(.data_service.BatchGetPlayerNameResponse\"\x00\x12r\n" +
+	"\x12BatchGetPlayerName\x12'.data_service.BatchGetPlayerNameRequest\x1a(.data_service.BatchGetPlayerNameResponse\"\x00\x12Q\n" +
+	"\n" +
+	"RenameRole\x12\x1f.data_service.RenameRoleRequest\x1a .data_service.RenameRoleResponse\"\x00\x12r\n" +
 	"\x15BatchGetPlayerDisplay\x12*.data_service.BatchGetPlayerDisplayRequest\x1a+.data_service.BatchGetPlayerDisplayResponse\"\x00\x12u\n" +
 	"\x16GetPlayerAssetOpLedger\x12+.data_service.GetPlayerAssetOpLedgerRequest\x1a,.data_service.GetPlayerAssetOpLedgerResponse\"\x00\x12o\n" +
 	"\x14GetPlayerInboxLedger\x12).data_service.GetPlayerInboxLedgerRequest\x1a*.data_service.GetPlayerInboxLedgerResponse\"\x00\x12u\n" +
@@ -5634,239 +6933,290 @@ func file_proto_data_service_data_service_proto_rawDescGZIP() []byte {
 	return file_proto_data_service_data_service_proto_rawDescData
 }
 
-var file_proto_data_service_data_service_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 77)
+var file_proto_data_service_data_service_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
+var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 94)
 var file_proto_data_service_data_service_proto_goTypes = []any{
-	(AccountRoleTradeState)(0),                   // 0: data_service.AccountRoleTradeState
-	(AccountRoleFreezeEvidenceKind)(0),           // 1: data_service.AccountRoleFreezeEvidenceKind
-	(SnapshotType)(0),                            // 2: data_service.SnapshotType
-	(RecallKind)(0),                              // 3: data_service.RecallKind
-	(RecallReviewReason)(0),                      // 4: data_service.RecallReviewReason
-	(*AccountDirectoryResponse)(nil),             // 5: data_service.AccountDirectoryResponse
-	(*AccountRoleOwnership)(nil),                 // 6: data_service.AccountRoleOwnership
-	(*AccountRoleVersion)(nil),                   // 7: data_service.AccountRoleVersion
-	(*ReadAccountDirectoryRequest)(nil),          // 8: data_service.ReadAccountDirectoryRequest
-	(*CreateAccountRoleRequest)(nil),             // 9: data_service.CreateAccountRoleRequest
-	(*LookupAccountRoleRequest)(nil),             // 10: data_service.LookupAccountRoleRequest
-	(*ReleaseDeadPlayerStoreHolderRequest)(nil),  // 11: data_service.ReleaseDeadPlayerStoreHolderRequest
-	(*PlayerStoreHolder)(nil),                    // 12: data_service.PlayerStoreHolder
-	(*ReadPlayerStoreHolderRequest)(nil),         // 13: data_service.ReadPlayerStoreHolderRequest
-	(*ReadPlayerStoreHolderResponse)(nil),        // 14: data_service.ReadPlayerStoreHolderResponse
-	(*RepairAccountRoleRequest)(nil),             // 15: data_service.RepairAccountRoleRequest
-	(*RemoveAccountRolesRequest)(nil),            // 16: data_service.RemoveAccountRolesRequest
-	(*AccountRoleFreezeEvidence)(nil),            // 17: data_service.AccountRoleFreezeEvidence
-	(*AccountRoleTradeHolder)(nil),               // 18: data_service.AccountRoleTradeHolder
-	(*AccountRoleTradeReceipt)(nil),              // 19: data_service.AccountRoleTradeReceipt
-	(*AccountRoleTransferReceipt)(nil),           // 20: data_service.AccountRoleTransferReceipt
-	(*BeginAccountRoleTradeRequest)(nil),         // 21: data_service.BeginAccountRoleTradeRequest
-	(*ConfirmAccountRoleTradeFreezeRequest)(nil), // 22: data_service.ConfirmAccountRoleTradeFreezeRequest
-	(*CancelAccountRoleTradeRequest)(nil),        // 23: data_service.CancelAccountRoleTradeRequest
-	(*TransferAccountRoleRequest)(nil),           // 24: data_service.TransferAccountRoleRequest
-	(*CheckAccountRoleSlotRequest)(nil),          // 25: data_service.CheckAccountRoleSlotRequest
-	(*CheckAccountRoleSlotResponse)(nil),         // 26: data_service.CheckAccountRoleSlotResponse
-	(*GetRoleFenceStateRequest)(nil),             // 27: data_service.GetRoleFenceStateRequest
-	(*GetRoleFenceStateResponse)(nil),            // 28: data_service.GetRoleFenceStateResponse
-	(*VerifyRoleAdmissionRequest)(nil),           // 29: data_service.VerifyRoleAdmissionRequest
-	(*VerifyRoleAdmissionResponse)(nil),          // 30: data_service.VerifyRoleAdmissionResponse
-	(*RegisterRoleAdmissionRequest)(nil),         // 31: data_service.RegisterRoleAdmissionRequest
-	(*RegisterRoleAdmissionResponse)(nil),        // 32: data_service.RegisterRoleAdmissionResponse
-	(*CloseRoleAdmissionsRequest)(nil),           // 33: data_service.CloseRoleAdmissionsRequest
-	(*CloseRoleAdmissionsResponse)(nil),          // 34: data_service.CloseRoleAdmissionsResponse
-	(*AckRoleTradeDrainRequest)(nil),             // 35: data_service.AckRoleTradeDrainRequest
-	(*RegisterPlayerZoneRequest)(nil),            // 36: data_service.RegisterPlayerZoneRequest
-	(*GetPlayerHomeZoneRequest)(nil),             // 37: data_service.GetPlayerHomeZoneRequest
-	(*GetPlayerHomeZoneResponse)(nil),            // 38: data_service.GetPlayerHomeZoneResponse
-	(*BatchGetPlayerHomeZoneRequest)(nil),        // 39: data_service.BatchGetPlayerHomeZoneRequest
-	(*BatchGetPlayerHomeZoneResponse)(nil),       // 40: data_service.BatchGetPlayerHomeZoneResponse
-	(*GetMergedZonesResponse)(nil),               // 41: data_service.GetMergedZonesResponse
-	(*CountZoneRolesRequest)(nil),                // 42: data_service.CountZoneRolesRequest
-	(*CountZoneRolesResponse)(nil),               // 43: data_service.CountZoneRolesResponse
-	(*GetPlayerRouteRequest)(nil),                // 44: data_service.GetPlayerRouteRequest
-	(*GetPlayerRouteResponse)(nil),               // 45: data_service.GetPlayerRouteResponse
-	(*ListPlayerSnapshotsRequest)(nil),           // 46: data_service.ListPlayerSnapshotsRequest
-	(*SnapshotInfo)(nil),                         // 47: data_service.SnapshotInfo
-	(*ListPlayerSnapshotsResponse)(nil),          // 48: data_service.ListPlayerSnapshotsResponse
-	(*BatchRecallItemsRequest)(nil),              // 49: data_service.BatchRecallItemsRequest
-	(*RecallResult)(nil),                         // 50: data_service.RecallResult
-	(*BatchRecallItemsResponse)(nil),             // 51: data_service.BatchRecallItemsResponse
-	(*RecallReviewRow)(nil),                      // 52: data_service.RecallReviewRow
-	(*GetRecallBatchRequest)(nil),                // 53: data_service.GetRecallBatchRequest
-	(*CancelRecallBatchRequest)(nil),             // 54: data_service.CancelRecallBatchRequest
-	(*ResolveRecallOpRequest)(nil),               // 55: data_service.ResolveRecallOpRequest
-	(*ResolveRecallOpResponse)(nil),              // 56: data_service.ResolveRecallOpResponse
-	(*RegisterRecallReviewHandledRequest)(nil),   // 57: data_service.RegisterRecallReviewHandledRequest
-	(*RegisterRecallReviewHandledResponse)(nil),  // 58: data_service.RegisterRecallReviewHandledResponse
-	(*QueryTransactionLogRequest)(nil),           // 59: data_service.QueryTransactionLogRequest
-	(*TransactionLogRow)(nil),                    // 60: data_service.TransactionLogRow
-	(*QueryTransactionLogResponse)(nil),          // 61: data_service.QueryTransactionLogResponse
-	(*AllocateIdSegmentRequest)(nil),             // 62: data_service.AllocateIdSegmentRequest
-	(*AllocateIdSegmentResponse)(nil),            // 63: data_service.AllocateIdSegmentResponse
-	(*ReservePlayerNameRequest)(nil),             // 64: data_service.ReservePlayerNameRequest
-	(*ReservePlayerNameResponse)(nil),            // 65: data_service.ReservePlayerNameResponse
-	(*ReleasePlayerNameRequest)(nil),             // 66: data_service.ReleasePlayerNameRequest
-	(*BatchGetPlayerNameRequest)(nil),            // 67: data_service.BatchGetPlayerNameRequest
-	(*BatchGetPlayerNameResponse)(nil),           // 68: data_service.BatchGetPlayerNameResponse
-	(*BatchGetPlayerDisplayRequest)(nil),         // 69: data_service.BatchGetPlayerDisplayRequest
-	(*PlayerDisplay)(nil),                        // 70: data_service.PlayerDisplay
-	(*BatchGetPlayerDisplayResponse)(nil),        // 71: data_service.BatchGetPlayerDisplayResponse
-	(*GetPlayerAssetOpLedgerRequest)(nil),        // 72: data_service.GetPlayerAssetOpLedgerRequest
-	(*GetPlayerAssetOpLedgerResponse)(nil),       // 73: data_service.GetPlayerAssetOpLedgerResponse
-	(*GetPlayerInboxLedgerRequest)(nil),          // 74: data_service.GetPlayerInboxLedgerRequest
-	(*GetPlayerInboxLedgerResponse)(nil),         // 75: data_service.GetPlayerInboxLedgerResponse
-	(*GetPlayerItemGainBlockRequest)(nil),        // 76: data_service.GetPlayerItemGainBlockRequest
-	(*GetPlayerItemGainBlockResponse)(nil),       // 77: data_service.GetPlayerItemGainBlockResponse
-	nil,                                          // 78: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
-	nil,                                          // 79: data_service.GetMergedZonesResponse.MergedIntoEntry
-	nil,                                          // 80: data_service.BatchGetPlayerNameResponse.NamesEntry
-	nil,                                          // 81: data_service.BatchGetPlayerDisplayResponse.PlayersEntry
-	(*base.AccountSimplePlayerList)(nil),         // 82: AccountSimplePlayerList
-	(*base.AccountSimplePlayer)(nil),             // 83: AccountSimplePlayer
-	(*base.ServiceCallAuth)(nil),                 // 84: common.base.ServiceCallAuth
-	(*base.RoleTradeSeal)(nil),                   // 85: common.base.RoleTradeSeal
-	(*role_fence.RoleFenceState)(nil),            // 86: rolefence.RoleFenceState
-	(*base.RoleAdmissionIdentity)(nil),           // 87: common.base.RoleAdmissionIdentity
-	(*component.PlayerAssetOpLedgerComp)(nil),    // 88: PlayerAssetOpLedgerComp
-	(*component.PlayerInboxLedgerComp)(nil),      // 89: PlayerInboxLedgerComp
-	(*component.PlayerItemGainBlockComp)(nil),    // 90: PlayerItemGainBlockComp
-	(*emptypb.Empty)(nil),                        // 91: google.protobuf.Empty
+	(AccountDeletionState)(0),                    // 0: data_service.AccountDeletionState
+	(AccountDeletionOutcome)(0),                  // 1: data_service.AccountDeletionOutcome
+	(AccountRoleTradeState)(0),                   // 2: data_service.AccountRoleTradeState
+	(AccountRoleFreezeEvidenceKind)(0),           // 3: data_service.AccountRoleFreezeEvidenceKind
+	(SnapshotType)(0),                            // 4: data_service.SnapshotType
+	(RecallKind)(0),                              // 5: data_service.RecallKind
+	(RecallReviewReason)(0),                      // 6: data_service.RecallReviewReason
+	(RenameRoleResult)(0),                        // 7: data_service.RenameRoleResult
+	(*AccountDirectoryResponse)(nil),             // 8: data_service.AccountDirectoryResponse
+	(*SetAccountRealNameRequest)(nil),            // 9: data_service.SetAccountRealNameRequest
+	(*SetAccountRealNameResponse)(nil),           // 10: data_service.SetAccountRealNameResponse
+	(*GetAccountRealNameRequest)(nil),            // 11: data_service.GetAccountRealNameRequest
+	(*GetAccountRealNameResponse)(nil),           // 12: data_service.GetAccountRealNameResponse
+	(*ResetAccountRealNameRequest)(nil),          // 13: data_service.ResetAccountRealNameRequest
+	(*ResetAccountRealNameResponse)(nil),         // 14: data_service.ResetAccountRealNameResponse
+	(*AccountLifecycle)(nil),                     // 15: data_service.AccountLifecycle
+	(*AccountDeletionBlocker)(nil),               // 16: data_service.AccountDeletionBlocker
+	(*AccountDeletionResponse)(nil),              // 17: data_service.AccountDeletionResponse
+	(*RequestAccountDeletionRequest)(nil),        // 18: data_service.RequestAccountDeletionRequest
+	(*CancelAccountDeletionRequest)(nil),         // 19: data_service.CancelAccountDeletionRequest
+	(*ClaimAccountDeletionsRequest)(nil),         // 20: data_service.ClaimAccountDeletionsRequest
+	(*ClaimAccountDeletionsResponse)(nil),        // 21: data_service.ClaimAccountDeletionsResponse
+	(*FinishAccountDeletionRequest)(nil),         // 22: data_service.FinishAccountDeletionRequest
+	(*FinishAccountDeletionResponse)(nil),        // 23: data_service.FinishAccountDeletionResponse
+	(*AccountRoleOwnership)(nil),                 // 24: data_service.AccountRoleOwnership
+	(*AccountRoleVersion)(nil),                   // 25: data_service.AccountRoleVersion
+	(*ReadAccountDirectoryRequest)(nil),          // 26: data_service.ReadAccountDirectoryRequest
+	(*CreateAccountRoleRequest)(nil),             // 27: data_service.CreateAccountRoleRequest
+	(*LookupAccountRoleRequest)(nil),             // 28: data_service.LookupAccountRoleRequest
+	(*ReleaseDeadPlayerStoreHolderRequest)(nil),  // 29: data_service.ReleaseDeadPlayerStoreHolderRequest
+	(*PlayerStoreHolder)(nil),                    // 30: data_service.PlayerStoreHolder
+	(*ReadPlayerStoreHolderRequest)(nil),         // 31: data_service.ReadPlayerStoreHolderRequest
+	(*ReadPlayerStoreHolderResponse)(nil),        // 32: data_service.ReadPlayerStoreHolderResponse
+	(*RepairAccountRoleRequest)(nil),             // 33: data_service.RepairAccountRoleRequest
+	(*RemoveAccountRolesRequest)(nil),            // 34: data_service.RemoveAccountRolesRequest
+	(*AccountRoleFreezeEvidence)(nil),            // 35: data_service.AccountRoleFreezeEvidence
+	(*AccountRoleTradeHolder)(nil),               // 36: data_service.AccountRoleTradeHolder
+	(*AccountRoleTradeReceipt)(nil),              // 37: data_service.AccountRoleTradeReceipt
+	(*AccountRoleTransferReceipt)(nil),           // 38: data_service.AccountRoleTransferReceipt
+	(*BeginAccountRoleTradeRequest)(nil),         // 39: data_service.BeginAccountRoleTradeRequest
+	(*ConfirmAccountRoleTradeFreezeRequest)(nil), // 40: data_service.ConfirmAccountRoleTradeFreezeRequest
+	(*CancelAccountRoleTradeRequest)(nil),        // 41: data_service.CancelAccountRoleTradeRequest
+	(*TransferAccountRoleRequest)(nil),           // 42: data_service.TransferAccountRoleRequest
+	(*CheckAccountRoleSlotRequest)(nil),          // 43: data_service.CheckAccountRoleSlotRequest
+	(*CheckAccountRoleSlotResponse)(nil),         // 44: data_service.CheckAccountRoleSlotResponse
+	(*GetRoleFenceStateRequest)(nil),             // 45: data_service.GetRoleFenceStateRequest
+	(*GetRoleFenceStateResponse)(nil),            // 46: data_service.GetRoleFenceStateResponse
+	(*VerifyRoleAdmissionRequest)(nil),           // 47: data_service.VerifyRoleAdmissionRequest
+	(*VerifyRoleAdmissionResponse)(nil),          // 48: data_service.VerifyRoleAdmissionResponse
+	(*RegisterRoleAdmissionRequest)(nil),         // 49: data_service.RegisterRoleAdmissionRequest
+	(*RegisterRoleAdmissionResponse)(nil),        // 50: data_service.RegisterRoleAdmissionResponse
+	(*CloseRoleAdmissionsRequest)(nil),           // 51: data_service.CloseRoleAdmissionsRequest
+	(*CloseRoleAdmissionsResponse)(nil),          // 52: data_service.CloseRoleAdmissionsResponse
+	(*AckRoleTradeDrainRequest)(nil),             // 53: data_service.AckRoleTradeDrainRequest
+	(*RegisterPlayerZoneRequest)(nil),            // 54: data_service.RegisterPlayerZoneRequest
+	(*GetPlayerHomeZoneRequest)(nil),             // 55: data_service.GetPlayerHomeZoneRequest
+	(*GetPlayerHomeZoneResponse)(nil),            // 56: data_service.GetPlayerHomeZoneResponse
+	(*BatchGetPlayerHomeZoneRequest)(nil),        // 57: data_service.BatchGetPlayerHomeZoneRequest
+	(*BatchGetPlayerHomeZoneResponse)(nil),       // 58: data_service.BatchGetPlayerHomeZoneResponse
+	(*GetMergedZonesResponse)(nil),               // 59: data_service.GetMergedZonesResponse
+	(*CountZoneRolesRequest)(nil),                // 60: data_service.CountZoneRolesRequest
+	(*CountZoneRolesResponse)(nil),               // 61: data_service.CountZoneRolesResponse
+	(*GetPlayerRouteRequest)(nil),                // 62: data_service.GetPlayerRouteRequest
+	(*GetPlayerRouteResponse)(nil),               // 63: data_service.GetPlayerRouteResponse
+	(*ListPlayerSnapshotsRequest)(nil),           // 64: data_service.ListPlayerSnapshotsRequest
+	(*SnapshotInfo)(nil),                         // 65: data_service.SnapshotInfo
+	(*ListPlayerSnapshotsResponse)(nil),          // 66: data_service.ListPlayerSnapshotsResponse
+	(*BatchRecallItemsRequest)(nil),              // 67: data_service.BatchRecallItemsRequest
+	(*RecallResult)(nil),                         // 68: data_service.RecallResult
+	(*BatchRecallItemsResponse)(nil),             // 69: data_service.BatchRecallItemsResponse
+	(*RecallReviewRow)(nil),                      // 70: data_service.RecallReviewRow
+	(*GetRecallBatchRequest)(nil),                // 71: data_service.GetRecallBatchRequest
+	(*CancelRecallBatchRequest)(nil),             // 72: data_service.CancelRecallBatchRequest
+	(*ResolveRecallOpRequest)(nil),               // 73: data_service.ResolveRecallOpRequest
+	(*ResolveRecallOpResponse)(nil),              // 74: data_service.ResolveRecallOpResponse
+	(*RegisterRecallReviewHandledRequest)(nil),   // 75: data_service.RegisterRecallReviewHandledRequest
+	(*RegisterRecallReviewHandledResponse)(nil),  // 76: data_service.RegisterRecallReviewHandledResponse
+	(*QueryTransactionLogRequest)(nil),           // 77: data_service.QueryTransactionLogRequest
+	(*TransactionLogRow)(nil),                    // 78: data_service.TransactionLogRow
+	(*QueryTransactionLogResponse)(nil),          // 79: data_service.QueryTransactionLogResponse
+	(*AllocateIdSegmentRequest)(nil),             // 80: data_service.AllocateIdSegmentRequest
+	(*AllocateIdSegmentResponse)(nil),            // 81: data_service.AllocateIdSegmentResponse
+	(*ReservePlayerNameRequest)(nil),             // 82: data_service.ReservePlayerNameRequest
+	(*ReservePlayerNameResponse)(nil),            // 83: data_service.ReservePlayerNameResponse
+	(*ReleasePlayerNameRequest)(nil),             // 84: data_service.ReleasePlayerNameRequest
+	(*RenameRoleRequest)(nil),                    // 85: data_service.RenameRoleRequest
+	(*RenameRoleResponse)(nil),                   // 86: data_service.RenameRoleResponse
+	(*BatchGetPlayerNameRequest)(nil),            // 87: data_service.BatchGetPlayerNameRequest
+	(*BatchGetPlayerNameResponse)(nil),           // 88: data_service.BatchGetPlayerNameResponse
+	(*BatchGetPlayerDisplayRequest)(nil),         // 89: data_service.BatchGetPlayerDisplayRequest
+	(*PlayerDisplay)(nil),                        // 90: data_service.PlayerDisplay
+	(*BatchGetPlayerDisplayResponse)(nil),        // 91: data_service.BatchGetPlayerDisplayResponse
+	(*GetPlayerAssetOpLedgerRequest)(nil),        // 92: data_service.GetPlayerAssetOpLedgerRequest
+	(*GetPlayerAssetOpLedgerResponse)(nil),       // 93: data_service.GetPlayerAssetOpLedgerResponse
+	(*GetPlayerInboxLedgerRequest)(nil),          // 94: data_service.GetPlayerInboxLedgerRequest
+	(*GetPlayerInboxLedgerResponse)(nil),         // 95: data_service.GetPlayerInboxLedgerResponse
+	(*GetPlayerItemGainBlockRequest)(nil),        // 96: data_service.GetPlayerItemGainBlockRequest
+	(*GetPlayerItemGainBlockResponse)(nil),       // 97: data_service.GetPlayerItemGainBlockResponse
+	nil,                                          // 98: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	nil,                                          // 99: data_service.GetMergedZonesResponse.MergedIntoEntry
+	nil,                                          // 100: data_service.BatchGetPlayerNameResponse.NamesEntry
+	nil,                                          // 101: data_service.BatchGetPlayerDisplayResponse.PlayersEntry
+	(*base.AccountSimplePlayerList)(nil),         // 102: AccountSimplePlayerList
+	(*base.ServiceCallAuth)(nil),                 // 103: common.base.ServiceCallAuth
+	(*base.AccountSimplePlayer)(nil),             // 104: AccountSimplePlayer
+	(*base.RoleTradeSeal)(nil),                   // 105: common.base.RoleTradeSeal
+	(*role_fence.RoleFenceState)(nil),            // 106: rolefence.RoleFenceState
+	(*base.RoleAdmissionIdentity)(nil),           // 107: common.base.RoleAdmissionIdentity
+	(*component.PlayerAssetOpLedgerComp)(nil),    // 108: PlayerAssetOpLedgerComp
+	(*component.PlayerInboxLedgerComp)(nil),      // 109: PlayerInboxLedgerComp
+	(*component.PlayerItemGainBlockComp)(nil),    // 110: PlayerItemGainBlockComp
+	(*emptypb.Empty)(nil),                        // 111: google.protobuf.Empty
 }
 var file_proto_data_service_data_service_proto_depIdxs = []int32{
-	82, // 0: data_service.AccountDirectoryResponse.players:type_name -> AccountSimplePlayerList
-	83, // 1: data_service.AccountRoleOwnership.role:type_name -> AccountSimplePlayer
-	84, // 2: data_service.ReadAccountDirectoryRequest.auth:type_name -> common.base.ServiceCallAuth
-	83, // 3: data_service.CreateAccountRoleRequest.role:type_name -> AccountSimplePlayer
-	84, // 4: data_service.CreateAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
-	84, // 5: data_service.LookupAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
-	84, // 6: data_service.ReleaseDeadPlayerStoreHolderRequest.auth:type_name -> common.base.ServiceCallAuth
-	12, // 7: data_service.ReleaseDeadPlayerStoreHolderRequest.seen:type_name -> data_service.PlayerStoreHolder
-	84, // 8: data_service.ReadPlayerStoreHolderRequest.auth:type_name -> common.base.ServiceCallAuth
-	12, // 9: data_service.ReadPlayerStoreHolderResponse.holder:type_name -> data_service.PlayerStoreHolder
-	83, // 10: data_service.RepairAccountRoleRequest.role:type_name -> AccountSimplePlayer
-	84, // 11: data_service.RepairAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
-	7,  // 12: data_service.RemoveAccountRolesRequest.roles:type_name -> data_service.AccountRoleVersion
-	84, // 13: data_service.RemoveAccountRolesRequest.auth:type_name -> common.base.ServiceCallAuth
-	1,  // 14: data_service.AccountRoleFreezeEvidence.kind:type_name -> data_service.AccountRoleFreezeEvidenceKind
-	85, // 15: data_service.AccountRoleTradeHolder.seal:type_name -> common.base.RoleTradeSeal
-	0,  // 16: data_service.AccountRoleTradeReceipt.state:type_name -> data_service.AccountRoleTradeState
-	17, // 17: data_service.AccountRoleTradeReceipt.freeze_evidence:type_name -> data_service.AccountRoleFreezeEvidence
-	18, // 18: data_service.AccountRoleTradeReceipt.holders:type_name -> data_service.AccountRoleTradeHolder
-	83, // 19: data_service.AccountRoleTransferReceipt.role:type_name -> AccountSimplePlayer
-	84, // 20: data_service.BeginAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
-	84, // 21: data_service.ConfirmAccountRoleTradeFreezeRequest.auth:type_name -> common.base.ServiceCallAuth
-	84, // 22: data_service.CancelAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
-	84, // 23: data_service.TransferAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
-	84, // 24: data_service.CheckAccountRoleSlotRequest.auth:type_name -> common.base.ServiceCallAuth
-	84, // 25: data_service.GetRoleFenceStateRequest.auth:type_name -> common.base.ServiceCallAuth
-	86, // 26: data_service.GetRoleFenceStateResponse.state:type_name -> rolefence.RoleFenceState
-	87, // 27: data_service.VerifyRoleAdmissionRequest.admission:type_name -> common.base.RoleAdmissionIdentity
-	84, // 28: data_service.VerifyRoleAdmissionRequest.auth:type_name -> common.base.ServiceCallAuth
-	87, // 29: data_service.RegisterRoleAdmissionRequest.identity:type_name -> common.base.RoleAdmissionIdentity
-	84, // 30: data_service.RegisterRoleAdmissionRequest.auth:type_name -> common.base.ServiceCallAuth
-	87, // 31: data_service.RegisterRoleAdmissionResponse.identity:type_name -> common.base.RoleAdmissionIdentity
-	84, // 32: data_service.CloseRoleAdmissionsRequest.auth:type_name -> common.base.ServiceCallAuth
-	85, // 33: data_service.AckRoleTradeDrainRequest.seal:type_name -> common.base.RoleTradeSeal
-	84, // 34: data_service.AckRoleTradeDrainRequest.auth:type_name -> common.base.ServiceCallAuth
-	78, // 35: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
-	79, // 36: data_service.GetMergedZonesResponse.merged_into:type_name -> data_service.GetMergedZonesResponse.MergedIntoEntry
-	84, // 37: data_service.GetPlayerRouteRequest.auth:type_name -> common.base.ServiceCallAuth
-	2,  // 38: data_service.SnapshotInfo.type:type_name -> data_service.SnapshotType
-	47, // 39: data_service.ListPlayerSnapshotsResponse.snapshots:type_name -> data_service.SnapshotInfo
-	3,  // 40: data_service.BatchRecallItemsRequest.recall_kind:type_name -> data_service.RecallKind
-	50, // 41: data_service.BatchRecallItemsResponse.results:type_name -> data_service.RecallResult
-	52, // 42: data_service.BatchRecallItemsResponse.needs_review:type_name -> data_service.RecallReviewRow
-	4,  // 43: data_service.RecallReviewRow.reason:type_name -> data_service.RecallReviewReason
-	3,  // 44: data_service.RegisterRecallReviewHandledRequest.recall_kind:type_name -> data_service.RecallKind
-	4,  // 45: data_service.RegisterRecallReviewHandledRequest.review_reason:type_name -> data_service.RecallReviewReason
-	4,  // 46: data_service.RegisterRecallReviewHandledResponse.review_reason:type_name -> data_service.RecallReviewReason
-	60, // 47: data_service.QueryTransactionLogResponse.rows:type_name -> data_service.TransactionLogRow
-	84, // 48: data_service.ReleasePlayerNameRequest.auth:type_name -> common.base.ServiceCallAuth
-	80, // 49: data_service.BatchGetPlayerNameResponse.names:type_name -> data_service.BatchGetPlayerNameResponse.NamesEntry
-	81, // 50: data_service.BatchGetPlayerDisplayResponse.players:type_name -> data_service.BatchGetPlayerDisplayResponse.PlayersEntry
-	88, // 51: data_service.GetPlayerAssetOpLedgerResponse.ledger:type_name -> PlayerAssetOpLedgerComp
-	89, // 52: data_service.GetPlayerInboxLedgerResponse.ledger:type_name -> PlayerInboxLedgerComp
-	90, // 53: data_service.GetPlayerItemGainBlockResponse.block:type_name -> PlayerItemGainBlockComp
-	70, // 54: data_service.BatchGetPlayerDisplayResponse.PlayersEntry.value:type_name -> data_service.PlayerDisplay
-	8,  // 55: data_service.DataService.ReadAccountDirectory:input_type -> data_service.ReadAccountDirectoryRequest
-	9,  // 56: data_service.DataService.CreateAccountRole:input_type -> data_service.CreateAccountRoleRequest
-	10, // 57: data_service.DataService.LookupAccountRole:input_type -> data_service.LookupAccountRoleRequest
-	15, // 58: data_service.DataService.RepairAccountRole:input_type -> data_service.RepairAccountRoleRequest
-	16, // 59: data_service.DataService.RemoveAccountRoles:input_type -> data_service.RemoveAccountRolesRequest
-	21, // 60: data_service.DataService.BeginAccountRoleTrade:input_type -> data_service.BeginAccountRoleTradeRequest
-	22, // 61: data_service.DataService.ConfirmAccountRoleTradeFreeze:input_type -> data_service.ConfirmAccountRoleTradeFreezeRequest
-	23, // 62: data_service.DataService.CancelAccountRoleTrade:input_type -> data_service.CancelAccountRoleTradeRequest
-	24, // 63: data_service.DataService.TransferAccountRole:input_type -> data_service.TransferAccountRoleRequest
-	25, // 64: data_service.DataService.CheckAccountRoleSlot:input_type -> data_service.CheckAccountRoleSlotRequest
-	27, // 65: data_service.DataService.GetRoleFenceState:input_type -> data_service.GetRoleFenceStateRequest
-	29, // 66: data_service.DataService.VerifyRoleAdmission:input_type -> data_service.VerifyRoleAdmissionRequest
-	31, // 67: data_service.DataService.RegisterRoleAdmission:input_type -> data_service.RegisterRoleAdmissionRequest
-	33, // 68: data_service.DataService.CloseRoleAdmissions:input_type -> data_service.CloseRoleAdmissionsRequest
-	35, // 69: data_service.DataService.AckRoleTradeDrain:input_type -> data_service.AckRoleTradeDrainRequest
-	11, // 70: data_service.DataService.ReleaseDeadPlayerStoreHolder:input_type -> data_service.ReleaseDeadPlayerStoreHolderRequest
-	13, // 71: data_service.DataService.ReadPlayerStoreHolder:input_type -> data_service.ReadPlayerStoreHolderRequest
-	36, // 72: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
-	37, // 73: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
-	39, // 74: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
-	91, // 75: data_service.DataService.GetMergedZones:input_type -> google.protobuf.Empty
-	42, // 76: data_service.DataService.CountZoneRoles:input_type -> data_service.CountZoneRolesRequest
-	44, // 77: data_service.DataService.GetPlayerRoute:input_type -> data_service.GetPlayerRouteRequest
-	46, // 78: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
-	49, // 79: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
-	53, // 80: data_service.DataService.GetRecallBatch:input_type -> data_service.GetRecallBatchRequest
-	54, // 81: data_service.DataService.CancelRecallBatch:input_type -> data_service.CancelRecallBatchRequest
-	55, // 82: data_service.DataService.ResolveRecallOp:input_type -> data_service.ResolveRecallOpRequest
-	57, // 83: data_service.DataService.RegisterRecallReviewHandled:input_type -> data_service.RegisterRecallReviewHandledRequest
-	59, // 84: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
-	62, // 85: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
-	64, // 86: data_service.DataService.ReservePlayerName:input_type -> data_service.ReservePlayerNameRequest
-	66, // 87: data_service.DataService.ReleasePlayerName:input_type -> data_service.ReleasePlayerNameRequest
-	67, // 88: data_service.DataService.BatchGetPlayerName:input_type -> data_service.BatchGetPlayerNameRequest
-	69, // 89: data_service.DataService.BatchGetPlayerDisplay:input_type -> data_service.BatchGetPlayerDisplayRequest
-	72, // 90: data_service.DataService.GetPlayerAssetOpLedger:input_type -> data_service.GetPlayerAssetOpLedgerRequest
-	74, // 91: data_service.DataService.GetPlayerInboxLedger:input_type -> data_service.GetPlayerInboxLedgerRequest
-	76, // 92: data_service.DataService.GetPlayerItemGainBlock:input_type -> data_service.GetPlayerItemGainBlockRequest
-	5,  // 93: data_service.DataService.ReadAccountDirectory:output_type -> data_service.AccountDirectoryResponse
-	5,  // 94: data_service.DataService.CreateAccountRole:output_type -> data_service.AccountDirectoryResponse
-	6,  // 95: data_service.DataService.LookupAccountRole:output_type -> data_service.AccountRoleOwnership
-	5,  // 96: data_service.DataService.RepairAccountRole:output_type -> data_service.AccountDirectoryResponse
-	91, // 97: data_service.DataService.RemoveAccountRoles:output_type -> google.protobuf.Empty
-	19, // 98: data_service.DataService.BeginAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
-	19, // 99: data_service.DataService.ConfirmAccountRoleTradeFreeze:output_type -> data_service.AccountRoleTradeReceipt
-	19, // 100: data_service.DataService.CancelAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
-	20, // 101: data_service.DataService.TransferAccountRole:output_type -> data_service.AccountRoleTransferReceipt
-	26, // 102: data_service.DataService.CheckAccountRoleSlot:output_type -> data_service.CheckAccountRoleSlotResponse
-	28, // 103: data_service.DataService.GetRoleFenceState:output_type -> data_service.GetRoleFenceStateResponse
-	30, // 104: data_service.DataService.VerifyRoleAdmission:output_type -> data_service.VerifyRoleAdmissionResponse
-	32, // 105: data_service.DataService.RegisterRoleAdmission:output_type -> data_service.RegisterRoleAdmissionResponse
-	34, // 106: data_service.DataService.CloseRoleAdmissions:output_type -> data_service.CloseRoleAdmissionsResponse
-	91, // 107: data_service.DataService.AckRoleTradeDrain:output_type -> google.protobuf.Empty
-	91, // 108: data_service.DataService.ReleaseDeadPlayerStoreHolder:output_type -> google.protobuf.Empty
-	14, // 109: data_service.DataService.ReadPlayerStoreHolder:output_type -> data_service.ReadPlayerStoreHolderResponse
-	91, // 110: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
-	38, // 111: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
-	40, // 112: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
-	41, // 113: data_service.DataService.GetMergedZones:output_type -> data_service.GetMergedZonesResponse
-	43, // 114: data_service.DataService.CountZoneRoles:output_type -> data_service.CountZoneRolesResponse
-	45, // 115: data_service.DataService.GetPlayerRoute:output_type -> data_service.GetPlayerRouteResponse
-	48, // 116: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
-	51, // 117: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
-	51, // 118: data_service.DataService.GetRecallBatch:output_type -> data_service.BatchRecallItemsResponse
-	51, // 119: data_service.DataService.CancelRecallBatch:output_type -> data_service.BatchRecallItemsResponse
-	56, // 120: data_service.DataService.ResolveRecallOp:output_type -> data_service.ResolveRecallOpResponse
-	58, // 121: data_service.DataService.RegisterRecallReviewHandled:output_type -> data_service.RegisterRecallReviewHandledResponse
-	61, // 122: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
-	63, // 123: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
-	65, // 124: data_service.DataService.ReservePlayerName:output_type -> data_service.ReservePlayerNameResponse
-	91, // 125: data_service.DataService.ReleasePlayerName:output_type -> google.protobuf.Empty
-	68, // 126: data_service.DataService.BatchGetPlayerName:output_type -> data_service.BatchGetPlayerNameResponse
-	71, // 127: data_service.DataService.BatchGetPlayerDisplay:output_type -> data_service.BatchGetPlayerDisplayResponse
-	73, // 128: data_service.DataService.GetPlayerAssetOpLedger:output_type -> data_service.GetPlayerAssetOpLedgerResponse
-	75, // 129: data_service.DataService.GetPlayerInboxLedger:output_type -> data_service.GetPlayerInboxLedgerResponse
-	77, // 130: data_service.DataService.GetPlayerItemGainBlock:output_type -> data_service.GetPlayerItemGainBlockResponse
-	93, // [93:131] is the sub-list for method output_type
-	55, // [55:93] is the sub-list for method input_type
-	55, // [55:55] is the sub-list for extension type_name
-	55, // [55:55] is the sub-list for extension extendee
-	0,  // [0:55] is the sub-list for field type_name
+	102, // 0: data_service.AccountDirectoryResponse.players:type_name -> AccountSimplePlayerList
+	15,  // 1: data_service.AccountDirectoryResponse.lifecycle:type_name -> data_service.AccountLifecycle
+	103, // 2: data_service.SetAccountRealNameRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 3: data_service.GetAccountRealNameRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 4: data_service.ResetAccountRealNameRequest.auth:type_name -> common.base.ServiceCallAuth
+	0,   // 5: data_service.AccountLifecycle.deletion_state:type_name -> data_service.AccountDeletionState
+	1,   // 6: data_service.AccountDeletionResponse.outcome:type_name -> data_service.AccountDeletionOutcome
+	15,  // 7: data_service.AccountDeletionResponse.lifecycle:type_name -> data_service.AccountLifecycle
+	16,  // 8: data_service.AccountDeletionResponse.blockers:type_name -> data_service.AccountDeletionBlocker
+	103, // 9: data_service.RequestAccountDeletionRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 10: data_service.CancelAccountDeletionRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 11: data_service.ClaimAccountDeletionsRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 12: data_service.FinishAccountDeletionRequest.auth:type_name -> common.base.ServiceCallAuth
+	104, // 13: data_service.AccountRoleOwnership.role:type_name -> AccountSimplePlayer
+	0,   // 14: data_service.AccountRoleOwnership.account_deletion_state:type_name -> data_service.AccountDeletionState
+	103, // 15: data_service.ReadAccountDirectoryRequest.auth:type_name -> common.base.ServiceCallAuth
+	104, // 16: data_service.CreateAccountRoleRequest.role:type_name -> AccountSimplePlayer
+	103, // 17: data_service.CreateAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 18: data_service.LookupAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 19: data_service.ReleaseDeadPlayerStoreHolderRequest.auth:type_name -> common.base.ServiceCallAuth
+	30,  // 20: data_service.ReleaseDeadPlayerStoreHolderRequest.seen:type_name -> data_service.PlayerStoreHolder
+	103, // 21: data_service.ReadPlayerStoreHolderRequest.auth:type_name -> common.base.ServiceCallAuth
+	30,  // 22: data_service.ReadPlayerStoreHolderResponse.holder:type_name -> data_service.PlayerStoreHolder
+	104, // 23: data_service.RepairAccountRoleRequest.role:type_name -> AccountSimplePlayer
+	103, // 24: data_service.RepairAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
+	25,  // 25: data_service.RemoveAccountRolesRequest.roles:type_name -> data_service.AccountRoleVersion
+	103, // 26: data_service.RemoveAccountRolesRequest.auth:type_name -> common.base.ServiceCallAuth
+	3,   // 27: data_service.AccountRoleFreezeEvidence.kind:type_name -> data_service.AccountRoleFreezeEvidenceKind
+	105, // 28: data_service.AccountRoleTradeHolder.seal:type_name -> common.base.RoleTradeSeal
+	2,   // 29: data_service.AccountRoleTradeReceipt.state:type_name -> data_service.AccountRoleTradeState
+	35,  // 30: data_service.AccountRoleTradeReceipt.freeze_evidence:type_name -> data_service.AccountRoleFreezeEvidence
+	36,  // 31: data_service.AccountRoleTradeReceipt.holders:type_name -> data_service.AccountRoleTradeHolder
+	104, // 32: data_service.AccountRoleTransferReceipt.role:type_name -> AccountSimplePlayer
+	103, // 33: data_service.BeginAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 34: data_service.ConfirmAccountRoleTradeFreezeRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 35: data_service.CancelAccountRoleTradeRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 36: data_service.TransferAccountRoleRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 37: data_service.CheckAccountRoleSlotRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 38: data_service.GetRoleFenceStateRequest.auth:type_name -> common.base.ServiceCallAuth
+	106, // 39: data_service.GetRoleFenceStateResponse.state:type_name -> rolefence.RoleFenceState
+	107, // 40: data_service.VerifyRoleAdmissionRequest.admission:type_name -> common.base.RoleAdmissionIdentity
+	103, // 41: data_service.VerifyRoleAdmissionRequest.auth:type_name -> common.base.ServiceCallAuth
+	107, // 42: data_service.RegisterRoleAdmissionRequest.identity:type_name -> common.base.RoleAdmissionIdentity
+	103, // 43: data_service.RegisterRoleAdmissionRequest.auth:type_name -> common.base.ServiceCallAuth
+	107, // 44: data_service.RegisterRoleAdmissionResponse.identity:type_name -> common.base.RoleAdmissionIdentity
+	103, // 45: data_service.CloseRoleAdmissionsRequest.auth:type_name -> common.base.ServiceCallAuth
+	105, // 46: data_service.AckRoleTradeDrainRequest.seal:type_name -> common.base.RoleTradeSeal
+	103, // 47: data_service.AckRoleTradeDrainRequest.auth:type_name -> common.base.ServiceCallAuth
+	98,  // 48: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	99,  // 49: data_service.GetMergedZonesResponse.merged_into:type_name -> data_service.GetMergedZonesResponse.MergedIntoEntry
+	103, // 50: data_service.GetPlayerRouteRequest.auth:type_name -> common.base.ServiceCallAuth
+	4,   // 51: data_service.SnapshotInfo.type:type_name -> data_service.SnapshotType
+	65,  // 52: data_service.ListPlayerSnapshotsResponse.snapshots:type_name -> data_service.SnapshotInfo
+	5,   // 53: data_service.BatchRecallItemsRequest.recall_kind:type_name -> data_service.RecallKind
+	68,  // 54: data_service.BatchRecallItemsResponse.results:type_name -> data_service.RecallResult
+	70,  // 55: data_service.BatchRecallItemsResponse.needs_review:type_name -> data_service.RecallReviewRow
+	6,   // 56: data_service.RecallReviewRow.reason:type_name -> data_service.RecallReviewReason
+	5,   // 57: data_service.RegisterRecallReviewHandledRequest.recall_kind:type_name -> data_service.RecallKind
+	6,   // 58: data_service.RegisterRecallReviewHandledRequest.review_reason:type_name -> data_service.RecallReviewReason
+	6,   // 59: data_service.RegisterRecallReviewHandledResponse.review_reason:type_name -> data_service.RecallReviewReason
+	78,  // 60: data_service.QueryTransactionLogResponse.rows:type_name -> data_service.TransactionLogRow
+	103, // 61: data_service.ReleasePlayerNameRequest.auth:type_name -> common.base.ServiceCallAuth
+	103, // 62: data_service.RenameRoleRequest.auth:type_name -> common.base.ServiceCallAuth
+	7,   // 63: data_service.RenameRoleResponse.result:type_name -> data_service.RenameRoleResult
+	100, // 64: data_service.BatchGetPlayerNameResponse.names:type_name -> data_service.BatchGetPlayerNameResponse.NamesEntry
+	101, // 65: data_service.BatchGetPlayerDisplayResponse.players:type_name -> data_service.BatchGetPlayerDisplayResponse.PlayersEntry
+	108, // 66: data_service.GetPlayerAssetOpLedgerResponse.ledger:type_name -> PlayerAssetOpLedgerComp
+	109, // 67: data_service.GetPlayerInboxLedgerResponse.ledger:type_name -> PlayerInboxLedgerComp
+	110, // 68: data_service.GetPlayerItemGainBlockResponse.block:type_name -> PlayerItemGainBlockComp
+	90,  // 69: data_service.BatchGetPlayerDisplayResponse.PlayersEntry.value:type_name -> data_service.PlayerDisplay
+	26,  // 70: data_service.DataService.ReadAccountDirectory:input_type -> data_service.ReadAccountDirectoryRequest
+	27,  // 71: data_service.DataService.CreateAccountRole:input_type -> data_service.CreateAccountRoleRequest
+	28,  // 72: data_service.DataService.LookupAccountRole:input_type -> data_service.LookupAccountRoleRequest
+	33,  // 73: data_service.DataService.RepairAccountRole:input_type -> data_service.RepairAccountRoleRequest
+	34,  // 74: data_service.DataService.RemoveAccountRoles:input_type -> data_service.RemoveAccountRolesRequest
+	9,   // 75: data_service.DataService.SetAccountRealName:input_type -> data_service.SetAccountRealNameRequest
+	11,  // 76: data_service.DataService.GetAccountRealName:input_type -> data_service.GetAccountRealNameRequest
+	13,  // 77: data_service.DataService.ResetAccountRealName:input_type -> data_service.ResetAccountRealNameRequest
+	39,  // 78: data_service.DataService.BeginAccountRoleTrade:input_type -> data_service.BeginAccountRoleTradeRequest
+	40,  // 79: data_service.DataService.ConfirmAccountRoleTradeFreeze:input_type -> data_service.ConfirmAccountRoleTradeFreezeRequest
+	41,  // 80: data_service.DataService.CancelAccountRoleTrade:input_type -> data_service.CancelAccountRoleTradeRequest
+	42,  // 81: data_service.DataService.TransferAccountRole:input_type -> data_service.TransferAccountRoleRequest
+	43,  // 82: data_service.DataService.CheckAccountRoleSlot:input_type -> data_service.CheckAccountRoleSlotRequest
+	45,  // 83: data_service.DataService.GetRoleFenceState:input_type -> data_service.GetRoleFenceStateRequest
+	47,  // 84: data_service.DataService.VerifyRoleAdmission:input_type -> data_service.VerifyRoleAdmissionRequest
+	49,  // 85: data_service.DataService.RegisterRoleAdmission:input_type -> data_service.RegisterRoleAdmissionRequest
+	51,  // 86: data_service.DataService.CloseRoleAdmissions:input_type -> data_service.CloseRoleAdmissionsRequest
+	53,  // 87: data_service.DataService.AckRoleTradeDrain:input_type -> data_service.AckRoleTradeDrainRequest
+	18,  // 88: data_service.DataService.RequestAccountDeletion:input_type -> data_service.RequestAccountDeletionRequest
+	19,  // 89: data_service.DataService.CancelAccountDeletion:input_type -> data_service.CancelAccountDeletionRequest
+	20,  // 90: data_service.DataService.ClaimAccountDeletions:input_type -> data_service.ClaimAccountDeletionsRequest
+	22,  // 91: data_service.DataService.FinishAccountDeletion:input_type -> data_service.FinishAccountDeletionRequest
+	29,  // 92: data_service.DataService.ReleaseDeadPlayerStoreHolder:input_type -> data_service.ReleaseDeadPlayerStoreHolderRequest
+	31,  // 93: data_service.DataService.ReadPlayerStoreHolder:input_type -> data_service.ReadPlayerStoreHolderRequest
+	54,  // 94: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
+	55,  // 95: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
+	57,  // 96: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
+	111, // 97: data_service.DataService.GetMergedZones:input_type -> google.protobuf.Empty
+	60,  // 98: data_service.DataService.CountZoneRoles:input_type -> data_service.CountZoneRolesRequest
+	62,  // 99: data_service.DataService.GetPlayerRoute:input_type -> data_service.GetPlayerRouteRequest
+	64,  // 100: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
+	67,  // 101: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
+	71,  // 102: data_service.DataService.GetRecallBatch:input_type -> data_service.GetRecallBatchRequest
+	72,  // 103: data_service.DataService.CancelRecallBatch:input_type -> data_service.CancelRecallBatchRequest
+	73,  // 104: data_service.DataService.ResolveRecallOp:input_type -> data_service.ResolveRecallOpRequest
+	75,  // 105: data_service.DataService.RegisterRecallReviewHandled:input_type -> data_service.RegisterRecallReviewHandledRequest
+	77,  // 106: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
+	80,  // 107: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
+	82,  // 108: data_service.DataService.ReservePlayerName:input_type -> data_service.ReservePlayerNameRequest
+	84,  // 109: data_service.DataService.ReleasePlayerName:input_type -> data_service.ReleasePlayerNameRequest
+	87,  // 110: data_service.DataService.BatchGetPlayerName:input_type -> data_service.BatchGetPlayerNameRequest
+	85,  // 111: data_service.DataService.RenameRole:input_type -> data_service.RenameRoleRequest
+	89,  // 112: data_service.DataService.BatchGetPlayerDisplay:input_type -> data_service.BatchGetPlayerDisplayRequest
+	92,  // 113: data_service.DataService.GetPlayerAssetOpLedger:input_type -> data_service.GetPlayerAssetOpLedgerRequest
+	94,  // 114: data_service.DataService.GetPlayerInboxLedger:input_type -> data_service.GetPlayerInboxLedgerRequest
+	96,  // 115: data_service.DataService.GetPlayerItemGainBlock:input_type -> data_service.GetPlayerItemGainBlockRequest
+	8,   // 116: data_service.DataService.ReadAccountDirectory:output_type -> data_service.AccountDirectoryResponse
+	8,   // 117: data_service.DataService.CreateAccountRole:output_type -> data_service.AccountDirectoryResponse
+	24,  // 118: data_service.DataService.LookupAccountRole:output_type -> data_service.AccountRoleOwnership
+	8,   // 119: data_service.DataService.RepairAccountRole:output_type -> data_service.AccountDirectoryResponse
+	111, // 120: data_service.DataService.RemoveAccountRoles:output_type -> google.protobuf.Empty
+	10,  // 121: data_service.DataService.SetAccountRealName:output_type -> data_service.SetAccountRealNameResponse
+	12,  // 122: data_service.DataService.GetAccountRealName:output_type -> data_service.GetAccountRealNameResponse
+	14,  // 123: data_service.DataService.ResetAccountRealName:output_type -> data_service.ResetAccountRealNameResponse
+	37,  // 124: data_service.DataService.BeginAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
+	37,  // 125: data_service.DataService.ConfirmAccountRoleTradeFreeze:output_type -> data_service.AccountRoleTradeReceipt
+	37,  // 126: data_service.DataService.CancelAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
+	38,  // 127: data_service.DataService.TransferAccountRole:output_type -> data_service.AccountRoleTransferReceipt
+	44,  // 128: data_service.DataService.CheckAccountRoleSlot:output_type -> data_service.CheckAccountRoleSlotResponse
+	46,  // 129: data_service.DataService.GetRoleFenceState:output_type -> data_service.GetRoleFenceStateResponse
+	48,  // 130: data_service.DataService.VerifyRoleAdmission:output_type -> data_service.VerifyRoleAdmissionResponse
+	50,  // 131: data_service.DataService.RegisterRoleAdmission:output_type -> data_service.RegisterRoleAdmissionResponse
+	52,  // 132: data_service.DataService.CloseRoleAdmissions:output_type -> data_service.CloseRoleAdmissionsResponse
+	111, // 133: data_service.DataService.AckRoleTradeDrain:output_type -> google.protobuf.Empty
+	17,  // 134: data_service.DataService.RequestAccountDeletion:output_type -> data_service.AccountDeletionResponse
+	17,  // 135: data_service.DataService.CancelAccountDeletion:output_type -> data_service.AccountDeletionResponse
+	21,  // 136: data_service.DataService.ClaimAccountDeletions:output_type -> data_service.ClaimAccountDeletionsResponse
+	23,  // 137: data_service.DataService.FinishAccountDeletion:output_type -> data_service.FinishAccountDeletionResponse
+	111, // 138: data_service.DataService.ReleaseDeadPlayerStoreHolder:output_type -> google.protobuf.Empty
+	32,  // 139: data_service.DataService.ReadPlayerStoreHolder:output_type -> data_service.ReadPlayerStoreHolderResponse
+	111, // 140: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
+	56,  // 141: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
+	58,  // 142: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
+	59,  // 143: data_service.DataService.GetMergedZones:output_type -> data_service.GetMergedZonesResponse
+	61,  // 144: data_service.DataService.CountZoneRoles:output_type -> data_service.CountZoneRolesResponse
+	63,  // 145: data_service.DataService.GetPlayerRoute:output_type -> data_service.GetPlayerRouteResponse
+	66,  // 146: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
+	69,  // 147: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
+	69,  // 148: data_service.DataService.GetRecallBatch:output_type -> data_service.BatchRecallItemsResponse
+	69,  // 149: data_service.DataService.CancelRecallBatch:output_type -> data_service.BatchRecallItemsResponse
+	74,  // 150: data_service.DataService.ResolveRecallOp:output_type -> data_service.ResolveRecallOpResponse
+	76,  // 151: data_service.DataService.RegisterRecallReviewHandled:output_type -> data_service.RegisterRecallReviewHandledResponse
+	79,  // 152: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
+	81,  // 153: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
+	83,  // 154: data_service.DataService.ReservePlayerName:output_type -> data_service.ReservePlayerNameResponse
+	111, // 155: data_service.DataService.ReleasePlayerName:output_type -> google.protobuf.Empty
+	88,  // 156: data_service.DataService.BatchGetPlayerName:output_type -> data_service.BatchGetPlayerNameResponse
+	86,  // 157: data_service.DataService.RenameRole:output_type -> data_service.RenameRoleResponse
+	91,  // 158: data_service.DataService.BatchGetPlayerDisplay:output_type -> data_service.BatchGetPlayerDisplayResponse
+	93,  // 159: data_service.DataService.GetPlayerAssetOpLedger:output_type -> data_service.GetPlayerAssetOpLedgerResponse
+	95,  // 160: data_service.DataService.GetPlayerInboxLedger:output_type -> data_service.GetPlayerInboxLedgerResponse
+	97,  // 161: data_service.DataService.GetPlayerItemGainBlock:output_type -> data_service.GetPlayerItemGainBlockResponse
+	116, // [116:162] is the sub-list for method output_type
+	70,  // [70:116] is the sub-list for method input_type
+	70,  // [70:70] is the sub-list for extension type_name
+	70,  // [70:70] is the sub-list for extension extendee
+	0,   // [0:70] is the sub-list for field type_name
 }
 
 func init() { file_proto_data_service_data_service_proto_init() }
@@ -5879,8 +7229,8 @@ func file_proto_data_service_data_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_data_service_data_service_proto_rawDesc), len(file_proto_data_service_data_service_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   77,
+			NumEnums:      8,
+			NumMessages:   94,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

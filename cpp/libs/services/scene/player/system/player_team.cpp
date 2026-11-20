@@ -617,21 +617,12 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 		{
 			co_return;
 		}
-		// node_id 不是 entt 实体句柄(network_utils.h 禁令),必须走 ResolveLocalZoneGateEntity,
-		// 否则 gate_instance_id 为空,scene_manager 侧的 gate 防僵尸过滤会失效
+		// gate_instance_id 取会话所在的 gate 进程(BoundGateInstanceId:记下了实例就用它,没记下才按 node_id 查);
+		// 为空时 scene_manager 侧的 gate 防僵尸过滤会失效,带成同一 node_id 上的另一个进程则投错进程(scene-enter-chain-residuals.md §14.6)
 		const NodeId gateNodeId = GetGateNodeId(session->gate_session_id());
-		std::string gateInstanceId;
-		if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(session->gate_session_id()))
-		{
-			auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-			if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
-			{
-				gateInstanceId = gateNodeInfo->node_uuid();
-			}
-		}
 		request.set_session_id(session->gate_session_id());
 		request.set_gate_id(std::to_string(gateNodeId));
-		request.set_gate_instance_id(gateInstanceId);
+		request.set_gate_instance_id(BoundGateInstanceId(player, session->gate_session_id()));
 	}
 	// 不设 request_id:同 player_lifecycle.cpp DispatchEmergencyRelocate 的理由,
 	// SceneManager 的 60s 去重会吞掉同一玩家短时间内的第二次合法跟随

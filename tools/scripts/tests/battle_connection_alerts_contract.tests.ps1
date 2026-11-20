@@ -12,7 +12,7 @@
       - 直连面确实把准入回调装到了 TcpServer 上(只绑 weak)、登记了指标,建连 / 握手 / 握手超时 / 纵深防御分支都计了数,
         未认证连接数不把出示过探测授权的连接算进去;
       - battle 的 main.cpp 启动时配了速率闸参数(写错拒启)、关源时同步关了准入闸;
-      - 指标标签只有 reason:对端地址、房间号、玩家号不进指标(AGENTS.md §9);
+      - 指标标签只有 reason 与 result:对端地址、房间号、玩家号不进指标(AGENTS.md §9);
       - PrometheusRule 形状、规则名单、每条规则的 severity / summary / description / runbook_url / for;
       - 告警名在 deploy/k8s 的全部告警文件里不重名。
     只读文本,不执行部署入口,不访问任何集群。规则语法由 promtool 另验(见 docs/PROGRESS.md 对应条目)。
@@ -73,6 +73,7 @@ $script:Alerts = Read-RepoText -RelativePath 'deploy/k8s/battle-connection-alert
 $script:AdmissionHeader = Read-RepoText -RelativePath 'cpp/nodes/battle/client/battle_connection_admission.h'
 $script:AdmissionSource = Read-RepoText -RelativePath 'cpp/nodes/battle/client/battle_connection_admission.cpp'
 $script:EdgeSource = Read-RepoText -RelativePath 'cpp/nodes/battle/client/battle_client_edge.cpp'
+$script:EdgeHeader = Read-RepoText -RelativePath 'cpp/nodes/battle/client/battle_client_edge.h'
 $script:BattleMain = Read-RepoText -RelativePath 'cpp/nodes/battle/main.cpp'
 $script:GateAdmissionHeader = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rpc/connection_admission.h'
 
@@ -102,15 +103,17 @@ $script:ExpectedRules = [ordered]@{
     'BattleAcceptRateLimited'              = 'warning'
     'BattleUnauthenticatedConnectionsHigh' = 'warning'
     'BattlePreauthBudgetRejecting'         = 'warning'
+    'BattleSourceRateLimited'              = 'warning'
+    'BattleSourceTableFull'                = 'warning'
     'BattlePreauthConnectionsReaped'       = 'warning'
     'BattleHandshakeSlow'                  = 'warning'
 }
 
 Test-Case '夹具:CollectMetrics 导出的指标族与类型,拒绝原因的取值' {
     $actual = @($script:Families.GetEnumerator() | ForEach-Object { '{0}:{1}' -f $_.Key, $_.Value }) -join ','
-    Assert-Equal -Expected 'battle_connections_current:gauge,battle_connections_max:gauge,battle_unauthenticated_connections:gauge,battle_accepted_total:counter,battle_rejected_total:counter,battle_accept_rate_limit_per_second:gauge,battle_accept_burst:gauge,battle_handshake_duration_ms:histogram,battle_preauth_reaped_total:counter,battle_preauth_evicted_total:counter,battle_preauth_budget:gauge,battle_preauth_early_drop_start:gauge,battle_preauth_evictable_age_ms:gauge' `
-        -Actual $actual -Because 'CollectMetrics 的指标族与类型;增删指标要同步告警、设计稿 D27 与本用例'
-    Assert-Equal -Expected 'capacity,accept_rate,shutting_down,no_token_secret,preauth_budget,preauth_early_drop' -Actual ($script:Reasons -join ',') -Because 'battle_rejected_total 的 reason 取值(顺序即 RejectReason 的枚举顺序)'
+    Assert-Equal -Expected 'battle_connections_current:gauge,battle_connections_max:gauge,battle_unauthenticated_connections:gauge,battle_accepted_total:counter,battle_rejected_total:counter,battle_accept_rate_limit_per_second:gauge,battle_accept_burst:gauge,battle_handshake_duration_ms:histogram,battle_preauth_reaped_total:counter,battle_preauth_evicted_total:counter,battle_preauth_budget:gauge,battle_preauth_early_drop_start:gauge,battle_preauth_evictable_age_ms:gauge,battle_source_rate_limit_per_second:gauge,battle_source_burst:gauge,battle_source_rate_active:gauge,battle_source_tracked:gauge,battle_source_untracked_total:counter,battle_websocket_handshakes_total:counter,battle_websocket_protocol_closed_total:counter' `
+        -Actual $actual -Because 'CollectMetrics 的指标族与类型;增删指标要同步告警、设计稿 D27 与本用例(websocket 两族见 network/codec/websocket.h,与 gate 同义)'
+    Assert-Equal -Expected 'capacity,accept_rate,shutting_down,no_token_secret,preauth_budget,preauth_early_drop,source_rate' -Actual ($script:Reasons -join ',') -Because 'battle_rejected_total 的 reason 取值(顺序即 RejectReason 的枚举顺序)'
     foreach ($family in $script:Families.Keys) {
         if ($script:Families[$family] -ceq 'counter') {
             Assert-Match -Text $family -Pattern '_total$' -Because "$family 是 counter,名字以 _total 结尾(Prometheus 命名约定)"
@@ -125,9 +128,9 @@ Test-Case '与 gate 同义的拒绝原因用同一个取值' {
     }
 }
 
-Test-Case '指标标签只有 reason:对端地址、房间号、玩家号不进指标' {
+Test-Case '指标标签只有 reason 与 result:对端地址、房间号、玩家号不进指标' {
     $labels = @([regex]::Matches($script:AdmissionSource, 'Sample\(\{\{"(?<l>[a-z_]+)"') | ForEach-Object { $_.Groups['l'].Value } | Sort-Object -Unique)
-    Assert-Equal -Expected 'reason' -Actual ($labels -join ',') -Because '标签基数由攻击者控制时,连接层的洪水会变成监控系统的洪水(AGENTS.md §9)'
+    Assert-Equal -Expected 'reason,result' -Actual ($labels -join ',') -Because '两个标签都是封闭集合(拒绝原因、websocket 握手结果);标签基数由攻击者控制时,连接层的洪水会变成监控系统的洪水(AGENTS.md §9)'
     $collect = Get-FunctionBody -Text $script:AdmissionSource -SignaturePattern 'void Admission::CollectMetrics\(.*?\) const'
     Assert-NotMatch -Text $collect -Pattern 'toIp|peer|battleId|battle_id|playerId|player_id' -Because '采集函数里不出现对端地址、房间号与玩家号'
 }
@@ -147,20 +150,40 @@ Test-Case '直连面:准入回调装在 TcpServer 上且只绑 weak,指标已登
         Assert-Match -Text $script:EdgeSource -Pattern ('admission_\.NoteRejectedAfterAccept\(battle_connection_admission::RejectReason::{0}\);' -f $reason) `
             -Because "连接回调里的 $reason 分支要计进 battle_rejected_total"
     }
-    Assert-Match -Text $script:EdgeSource -Pattern '!entry\.second\.verified && !entry\.second\.probeGrant\.has_value\(\)' `
-        -Because '出示过探测授权的连接不算未认证,否则探测目标那台的 BattleUnauthenticatedConnectionsHigh 随探测量误报'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)s->probeGrant=std::move\(grant\);.{0,300}?unauthenticated_\.erase\(s->connId\);' `
+        -Because '出示过探测授权的连接出未认证池,否则每台的 BattleUnauthenticatedConnectionsHigh 随探测量误报'
 }
 
-Test-Case '直连面的未验签预算:扫会话表挑最老的未认证直连,loop 刚卡过不淘汰,淘汰只经 weak 连接 forceClose、不删会话' {
+Test-Case '直连面的未认证池:按 connId 有序的集合,accept 时 O(1) 不扫会话表,五处进出池,loop 刚卡过不淘汰,淘汰先出池再经 weak 连接 forceClose' {
+    Assert-Match -Text $script:EdgeHeader -Pattern '(?m)^\s*std::set<uint64_t> unauthenticated_;$' -Because 'connId 单调递增,有序集合即建连先后,begin() 就是最老的'
+    Assert-Match -Text $script:EdgeHeader -Pattern 'size_t UnauthenticatedConnectionCount\(\) const \{ return unauthenticated_\.size\(\); \}' -Because '指标与判定读同一个数'
     $admit = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'bool BattleClientEdge::AdmitConnection\(const muduo::net::InetAddress &peer,\n\s+const battle_connection_admission::SteadyTime now\)'
-    Assert-Match -Text $admit -Pattern 'if \(session\.verified \|\| session\.probeGrant\.has_value\(\)\)' -Because '池的口径与 battle_unauthenticated_connections 相同:握过手、出示过探测授权的不算'
-    Assert-Match -Text $admit -Pattern '!loopStall_\.RecentlyStalled\(now\)' -Because '本端 loop 刚卡过时不给年龄、不淘汰(握手请求可能还在接收缓冲里没读)'
-    Assert-Match -Text $admit -Pattern 'EvictUnauthenticated\(\*scan\.oldestConnId, now\);' -Because '判定要求淘汰时淘汰扫出来的最老一条'
+    Assert-NotMatch -Text $admit -Pattern 'for \([^)]*:\s*sessions_\)' -Because '准入回调排在速率闸之前,被拒的洪水也要走它:不能每次 accept 扫一遍会话表'
+    Assert-Match -Text $admit -Pattern 'const uint64_t unauthenticated = unauthenticated_\.size\(\);' -Because '池大小 O(1)'
+    Assert-Match -Text $admit -Pattern '(?s)unauthenticated >= admission_\.CurrentPreAuthBudget\(\)\.earlyDropStart && !loopStall_\.RecentlyStalled\(now\).{0,200}?OldestConnectedUnauthenticated\(\)' `
+        -Because '最老一条只在承压时找;本端 loop 刚卡过时不给年龄、不淘汰(握手请求可能还在接收缓冲里没读)'
+    Assert-Match -Text $admit -Pattern 'EvictUnauthenticated\(\*oldestConnId, now\);' -Because '判定要求淘汰时淘汰找出来的最老一条'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session\.openedAt = std::chrono::steady_clock::now\(\);.{0,300}?unauthenticated_\.insert\(connId\);' -Because '建连即进池'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session->verified = true;\s*unauthenticated_\.erase\(session->connId\);' -Because '票据握手成功出池'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated_\.erase\(connId\);\s*sessions_\.erase\(it\);' -Because '断开时与会话一起出池(HandleClosed 是会话表唯一的删除点)'
     $evict = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::EvictUnauthenticated\(const uint64_t connId, const battle_connection_admission::SteadyTime now\)'
-    Assert-Match -Text $evict -Pattern '(?s)it->second\.conn\.lock\(\);.*?admission_\.NotePreAuthEvicted\(\);.*?conn->forceClose\(\);' -Because '经会话里的 weak 连接 forceClose 并计一次淘汰'
+    Assert-Match -Text $evict -Pattern '(?s)it->second\.conn\.lock\(\);.*?unauthenticated_\.erase\(connId\);.*?admission_\.NotePreAuthEvicted\(\);.*?conn->forceClose\(\);' -Because '先出池(这一刻起不再算在池里),再经会话里的 weak 连接 forceClose 并计一次淘汰'
     Assert-NotMatch -Text $evict -Pattern 'sessions_\.erase' -Because '不在准入回调里删会话,留给 HandleClosed'
     $install = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::Install\(muduo::net::TcpServer &server\)'
     Assert-Match -Text $install -Pattern '(?s)loopStallTimer_\.RunEvery\(tickSeconds, \[weak\].{0,200}?self->loopStall_\.Tick\(' -Because 'loop 卡顿的节拍由 1 秒定时器打,只绑 weak 自己'
+}
+
+Test-Case '按来源限速:缺省关闭,只在承压时、只对公网来源问前缀的桶,放行之后才记账' {
+    Assert-Match -Text $script:AdmissionHeader -Pattern 'inline constexpr const char \*kSourceRateEnv = "BATTLE_SOURCE_RATE_PER_SECOND";' -Because '开关变量名是运维手册里写的那个'
+    $admit = Get-FunctionBody -Text $script:AdmissionSource -SignaturePattern 'Verdict Admission::Admit\(.*?\)'
+    Assert-Match -Text $admit -Pattern 'sourceRate_\.has_value\(\) &&\s*accept_admission::SourceRateUnderPressure\(unauthenticated, preAuthBudget_, lastAcceptRateRejectAt_, now\)' `
+        -Because '开了也只在承压时生效,承压的判据与 gate 同一份'
+    Assert-Match -Text $admit -Pattern 'sourceRateActive_ \? accept_admission::RateLimitedSourceOf\(peer\) : std::nullopt' -Because '只对公网源地址按来源限速:边缘 nginx、LB、集群内的连接在 accept 时只看得到内网地址'
+    Assert-Match -Text $admit -Pattern 'lastAcceptRateRejectAt_ = now;' -Because '全局速率闸拒过连接也算承压'
+    $decideAt = $admit.IndexOf('Decide(state')
+    $takeAt = $admit.IndexOf('sourceRate_->Take(')
+    Assert-True -Condition ($decideAt -ge 0 -and $takeAt -gt $decideAt) -Because '前缀的桶在所有闸都放行之后才记账,被别的闸拒掉的连接不消耗它的名额'
+    Assert-Match -Text $script:AdmissionHeader -Pattern '(?s)if \(state\.sourceOverRate\)\s*\{\s*return Verdict\{\.rejected = RejectReason::kSourceRate\};' -Because '来源超速排在预算之前:超速前缀不会让别人的老连接被淘汰'
 }
 
 Test-Case 'battle main.cpp:启动时配速率闸参数(写错拒启),关源时同步关准入闸' {
@@ -170,7 +193,8 @@ Test-Case 'battle main.cpp:启动时配速率闸参数(写错拒启),关源时�
     $configure = Get-FunctionBody -Text $script:BattleMain -SignaturePattern 'void ConfigureClientAdmissionOrDie\(BattleClientEdge &edge\)'
     Assert-Match -Text $configure -Pattern 'LOG_FATAL << "Refusing to start: " << error;' -Because '两个环境变量写错时拒绝启动,不带着一个没人知道的速率上限跑'
     Assert-Match -Text $configure -Pattern 'battle_connection_admission::ResolvePreAuthBudget\(' -Because '未验签预算的覆盖变量经 ResolvePreAuthBudget 解析(非法值拒启)'
-    Assert-Match -Text $configure -Pattern 'edge\.ConfigureAdmission\(\*rateLimit, \*preAuthBudget\);' -Because '解析出的参数要真的交给直连面'
+    Assert-Match -Text $configure -Pattern 'battle_connection_admission::ResolveSourceRateLimit\(' -Because '按来源限速的开关经 ResolveSourceRateLimit 解析(非法值拒启)'
+    Assert-Match -Text $configure -Pattern 'edge\.ConfigureAdmission\(\*rateLimit, \*preAuthBudget, sourceRateLimit\);' -Because '解析出的参数要真的交给直连面'
     Assert-Match -Text $script:BattleMain -Pattern '(?s)auto closeSource = \[&context\]\(Node &n\).{0,600}?context\.clientEdge->CloseSource\(\);' `
         -Because '关源时 accept 处的准入闸要一起关,否则停机期间新直连照样建出来再被关'
 }

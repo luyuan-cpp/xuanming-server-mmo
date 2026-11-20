@@ -76,6 +76,7 @@ type BuffTable struct {
 	StackLimit             uint32                 `protobuf:"varint,51,opt,name=stack_limit,json=stackLimit,proto3" json:"stack_limit,omitempty"`
 	RequireLivingCaster    uint32                 `protobuf:"varint,52,opt,name=require_living_caster,json=requireLivingCaster,proto3" json:"require_living_caster,omitempty"`
 	TickOnApply            uint32                 `protobuf:"varint,53,opt,name=tick_on_apply,json=tickOnApply,proto3" json:"tick_on_apply,omitempty"`
+	KeepOnLogout           uint32                 `protobuf:"varint,54,opt,name=keep_on_logout,json=keepOnLogout,proto3" json:"keep_on_logout,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -481,6 +482,13 @@ func (x *BuffTable) GetTickOnApply() uint32 {
 	return 0
 }
 
+func (x *BuffTable) GetKeepOnLogout() uint32 {
+	if x != nil {
+		return x.KeepOnLogout
+	}
+	return 0
+}
+
 type BuffTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*BuffTable           `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -529,7 +537,7 @@ var File_buff_table_proto protoreflect.FileDescriptor
 
 const file_buff_table_proto_rawDesc = "" +
 	"\n" +
-	"\x10buff_table.proto\"\xe6\x10\n" +
+	"\x10buff_table.proto\"\x8c\x11\n" +
 	"\tBuffTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1b\n" +
 	"\tno_caster\x18\x02 \x01(\rR\bnoCaster\x12\x1b\n" +
@@ -592,7 +600,8 @@ const file_buff_table_proto_rawDesc = "" +
 	"\vstack_limit\x183 \x01(\rR\n" +
 	"stackLimit\x122\n" +
 	"\x15require_living_caster\x184 \x01(\rR\x13requireLivingCaster\x12\"\n" +
-	"\rtick_on_apply\x185 \x01(\rR\vtickOnApply\x1a6\n" +
+	"\rtick_on_apply\x185 \x01(\rR\vtickOnApply\x12$\n" +
+	"\x0ekeep_on_logout\x186 \x01(\rR\fkeepOnLogout\x1a6\n" +
 	"\bTagEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\x1a<\n" +

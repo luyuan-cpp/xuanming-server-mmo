@@ -29,6 +29,7 @@ namespace playerlocator {
 #pragma region PlayerLocatorSetLocation
 namespace {
 void QueueLocalPlayerLocatorSetLocationFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerLocatorSetLocationGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendPlayerLocatorSetLocationErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerLocator.SetLocation: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorSetLocationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendPlayerLocatorSetLocationErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::playerlocator::PlayerLocation*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerLocator.SetLocation: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorSetLocationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendPlayerLocatorSetLocationErased(entt::registry& registry, entt::entity n
 #pragma region PlayerLocatorGetLocation
 namespace {
 void QueueLocalPlayerLocatorGetLocationFailure(GrpcDone<::playerlocator::PlayerLocation> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerLocatorGetLocationGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendPlayerLocatorGetLocationErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerLocator.GetLocation: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorGetLocationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendPlayerLocatorGetLocationErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::playerlocator::PlayerId*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerLocator.GetLocation: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorGetLocationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendPlayerLocatorGetLocationErased(entt::registry& registry, entt::entity n
 #pragma region PlayerLocatorMarkOffline
 namespace {
 void QueueLocalPlayerLocatorMarkOfflineFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerLocatorMarkOfflineGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendPlayerLocatorMarkOfflineErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerLocator.MarkOffline: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorMarkOfflineGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendPlayerLocatorMarkOfflineErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::playerlocator::MarkOfflineRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerLocator.MarkOffline: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorMarkOfflineGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendPlayerLocatorMarkOfflineErased(entt::registry& registry, entt::entity n
 #pragma region PlayerLocatorSetSession
 namespace {
 void QueueLocalPlayerLocatorSetSessionFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerLocatorSetSessionGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendPlayerLocatorSetSessionErased(entt::registry& registry, entt::entity no
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerLocator.SetSession: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorSetSessionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendPlayerLocatorSetSessionErased(entt::registry& registry, entt::entity no
     const auto* typedRequest = dynamic_cast<const ::playerlocator::SetSessionRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerLocator.SetSession: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorSetSessionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendPlayerLocatorSetSessionErased(entt::registry& registry, entt::entity no
 #pragma region PlayerLocatorGetSession
 namespace {
 void QueueLocalPlayerLocatorGetSessionFailure(GrpcDone<::playerlocator::GetSessionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerLocatorGetSessionGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendPlayerLocatorGetSessionErased(entt::registry& registry, entt::entity no
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerLocator.GetSession: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorGetSessionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendPlayerLocatorGetSessionErased(entt::registry& registry, entt::entity no
     const auto* typedRequest = dynamic_cast<const ::playerlocator::GetSessionRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerLocator.GetSession: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorGetSessionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendPlayerLocatorGetSessionErased(entt::registry& registry, entt::entity no
 #pragma region PlayerLocatorSetDisconnecting
 namespace {
 void QueueLocalPlayerLocatorSetDisconnectingFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerLocatorSetDisconnectingGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendPlayerLocatorSetDisconnectingErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerLocator.SetDisconnecting: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorSetDisconnectingGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendPlayerLocatorSetDisconnectingErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::playerlocator::SetDisconnectingRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerLocator.SetDisconnecting: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorSetDisconnectingGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +575,7 @@ void SendPlayerLocatorSetDisconnectingErased(entt::registry& registry, entt::ent
 #pragma region PlayerLocatorReconnect
 namespace {
 void QueueLocalPlayerLocatorReconnectFailure(GrpcDone<::playerlocator::ReconnectResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerLocatorReconnectGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +643,7 @@ void SendPlayerLocatorReconnectErased(entt::registry& registry, entt::entity nod
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerLocator.Reconnect: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorReconnectGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +653,7 @@ void SendPlayerLocatorReconnectErased(entt::registry& registry, entt::entity nod
     const auto* typedRequest = dynamic_cast<const ::playerlocator::ReconnectRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerLocator.Reconnect: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerLocatorReconnectGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

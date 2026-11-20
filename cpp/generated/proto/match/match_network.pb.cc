@@ -840,11 +840,11 @@ constexpr NetworkProbeTarget::ParseTableT_ NetworkProbeTarget::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -854,33 +854,42 @@ constexpr NetworkProbeTarget::ParseTableT_ NetworkProbeTarget::InternalGenerateP
       ::_pbi::TcParser::GetTable<::match::NetworkProbeTarget>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .match.SignedNetworkProbe grant = 4;
-      {::_pbi::TcParser::FastMtS1,
-       {34, 1, 0,
-        PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.grant_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 physical_region = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NetworkProbeTarget, _impl_.physical_region_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NetworkProbeTarget, _impl_.physical_region_), 3>(),
+       {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.physical_region_)}},
       // string host = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.host_)}},
       // uint32 port = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NetworkProbeTarget, _impl_.port_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NetworkProbeTarget, _impl_.port_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.port_)}},
+      // .match.SignedNetworkProbe grant = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 2, 0,
+        PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.grant_)}},
+      // string ws_url = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 1, 0,
+        PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.ws_url_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 physical_region = 1;
-      {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.physical_region_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.physical_region_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string host = 2;
       {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.host_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 port = 3;
-      {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.port_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.port_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .match.SignedNetworkProbe grant = 4;
-      {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.grant_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.grant_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string ws_url = 5;
+      {PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.ws_url_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -890,9 +899,10 @@ constexpr NetworkProbeTarget::ParseTableT_ NetworkProbeTarget::InternalGenerateP
         #endif
     }},
     {{
-      "\30\0\4\0\0\0\0\0"
+      "\30\0\4\0\0\6\0\0"
       "match.NetworkProbeTarget"
       "host"
+      "ws_url"
     }},
   };
 }
@@ -903,6 +913,9 @@ inline constexpr NetworkProbeTarget::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         host_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        ws_url_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         grant_{nullptr},
@@ -2016,14 +2029,16 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::NetworkProbeTarget, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::NetworkProbeTarget, _impl_.physical_region_),
         PROTOBUF_FIELD_OFFSET(::match::NetworkProbeTarget, _impl_.host_),
         PROTOBUF_FIELD_OFFSET(::match::NetworkProbeTarget, _impl_.port_),
         PROTOBUF_FIELD_OFFSET(::match::NetworkProbeTarget, _impl_.grant_),
-        2,
-        0,
+        PROTOBUF_FIELD_OFFSET(::match::NetworkProbeTarget, _impl_.ws_url_),
         3,
+        0,
+        4,
+        2,
         1,
         0x000, // bitmap
         0x081, // bitmap
@@ -2097,15 +2112,15 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::match::NetworkProbeGrant)},
         {17, sizeof(::match::SignedNetworkProbe)},
         {24, sizeof(::match::NetworkProbeTarget)},
-        {35, sizeof(::match::GetNetworkProbePlanRequest)},
-        {36, sizeof(::match::GetNetworkProbePlanResponse)},
-        {49, sizeof(::match::NetworkProbeReceipt)},
-        {62, sizeof(::match::CommitNetworkProbeRequest)},
-        {69, sizeof(::match::CommitNetworkProbeResponse)},
-        {76, sizeof(::match::NetworkProbeStart)},
-        {81, sizeof(::match::NetworkProbeChallenge)},
-        {88, sizeof(::match::NetworkProbeEcho)},
-        {95, sizeof(::match::NetworkProbeComplete)},
+        {37, sizeof(::match::GetNetworkProbePlanRequest)},
+        {38, sizeof(::match::GetNetworkProbePlanResponse)},
+        {51, sizeof(::match::NetworkProbeReceipt)},
+        {64, sizeof(::match::CommitNetworkProbeRequest)},
+        {71, sizeof(::match::CommitNetworkProbeResponse)},
+        {78, sizeof(::match::NetworkProbeStart)},
+        {83, sizeof(::match::NetworkProbeChallenge)},
+        {90, sizeof(::match::NetworkProbeEcho)},
+        {97, sizeof(::match::NetworkProbeComplete)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2131,30 +2146,31 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fnetwork_2eproto[] A
     "ical_region\030\004 \001(\r\022\026\n\016target_node_id\030\005 \001("
     "\r\022\032\n\022target_instance_id\030\006 \001(\t\022\025\n\rexpires"
     "_at_ms\030\007 \001(\004\"8\n\022SignedNetworkProbe\022\017\n\007pa"
-    "yload\030\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\"s\n\022Networ"
-    "kProbeTarget\022\027\n\017physical_region\030\001 \001(\r\022\014\n"
-    "\004host\030\002 \001(\t\022\014\n\004port\030\003 \001(\r\022(\n\005grant\030\004 \001(\013"
-    "2\031.match.SignedNetworkProbe\"\034\n\032GetNetwor"
-    "kProbePlanRequest\"\253\001\n\033GetNetworkProbePla"
-    "nResponse\022\017\n\007plan_id\030\001 \001(\t\022*\n\007targets\030\002 "
-    "\003(\0132\031.match.NetworkProbeTarget\022\025\n\rexpire"
-    "s_at_ms\030\003 \001(\004\022&\n\rerror_message\030\004 \001(\0132\017.T"
-    "ipInfoMessage\022\020\n\010required\030\005 \001(\010\"\223\001\n\023Netw"
-    "orkProbeReceipt\022\'\n\005grant\030\001 \001(\0132\030.match.N"
-    "etworkProbeGrant\022\016\n\006rtt_ms\030\002 \001(\r\022\024\n\014samp"
-    "le_count\030\003 \001(\r\022\026\n\016measured_at_ms\030\004 \001(\004\022\025"
-    "\n\rexpires_at_ms\030\005 \001(\004\"Y\n\031CommitNetworkPr"
-    "obeRequest\022\017\n\007plan_id\030\001 \001(\t\022+\n\010receipts\030"
-    "\002 \003(\0132\031.match.SignedNetworkProbe\"[\n\032Comm"
-    "itNetworkProbeResponse\022\025\n\rexpires_at_ms\030"
-    "\001 \001(\004\022&\n\rerror_message\030\002 \001(\0132\017.TipInfoMe"
-    "ssage\"=\n\021NetworkProbeStart\022(\n\005grant\030\001 \001("
-    "\0132\031.match.SignedNetworkProbe\"<\n\025NetworkP"
-    "robeChallenge\022\r\n\005nonce\030\001 \001(\014\022\024\n\014sample_i"
-    "ndex\030\002 \001(\r\"7\n\020NetworkProbeEcho\022\r\n\005nonce\030"
-    "\001 \001(\014\022\024\n\014sample_index\030\002 \001(\r\"B\n\024NetworkPr"
-    "obeComplete\022*\n\007receipt\030\001 \001(\0132\031.match.Sig"
-    "nedNetworkProbeB\rZ\013match/matchb\006proto3"
+    "yload\030\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\"\203\001\n\022Netwo"
+    "rkProbeTarget\022\027\n\017physical_region\030\001 \001(\r\022\014"
+    "\n\004host\030\002 \001(\t\022\014\n\004port\030\003 \001(\r\022(\n\005grant\030\004 \001("
+    "\0132\031.match.SignedNetworkProbe\022\016\n\006ws_url\030\005"
+    " \001(\t\"\034\n\032GetNetworkProbePlanRequest\"\253\001\n\033G"
+    "etNetworkProbePlanResponse\022\017\n\007plan_id\030\001 "
+    "\001(\t\022*\n\007targets\030\002 \003(\0132\031.match.NetworkProb"
+    "eTarget\022\025\n\rexpires_at_ms\030\003 \001(\004\022&\n\rerror_"
+    "message\030\004 \001(\0132\017.TipInfoMessage\022\020\n\010requir"
+    "ed\030\005 \001(\010\"\223\001\n\023NetworkProbeReceipt\022\'\n\005gran"
+    "t\030\001 \001(\0132\030.match.NetworkProbeGrant\022\016\n\006rtt"
+    "_ms\030\002 \001(\r\022\024\n\014sample_count\030\003 \001(\r\022\026\n\016measu"
+    "red_at_ms\030\004 \001(\004\022\025\n\rexpires_at_ms\030\005 \001(\004\"Y"
+    "\n\031CommitNetworkProbeRequest\022\017\n\007plan_id\030\001"
+    " \001(\t\022+\n\010receipts\030\002 \003(\0132\031.match.SignedNet"
+    "workProbe\"[\n\032CommitNetworkProbeResponse\022"
+    "\025\n\rexpires_at_ms\030\001 \001(\004\022&\n\rerror_message\030"
+    "\002 \001(\0132\017.TipInfoMessage\"=\n\021NetworkProbeSt"
+    "art\022(\n\005grant\030\001 \001(\0132\031.match.SignedNetwork"
+    "Probe\"<\n\025NetworkProbeChallenge\022\r\n\005nonce\030"
+    "\001 \001(\014\022\024\n\014sample_index\030\002 \001(\r\"7\n\020NetworkPr"
+    "obeEcho\022\r\n\005nonce\030\001 \001(\014\022\024\n\014sample_index\030\002"
+    " \001(\r\"B\n\024NetworkProbeComplete\022*\n\007receipt\030"
+    "\001 \001(\0132\031.match.SignedNetworkProbeB\rZ\013matc"
+    "h/matchb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fnetwork_2eproto_deps[1] = {
@@ -2164,7 +2180,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fnetwork_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fnetwork_2eproto = {
     false,
     false,
-    1238,
+    1255,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fnetwork_2eproto,
     "proto/match/match_network.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fnetwork_2eproto_once,
@@ -2836,7 +2852,8 @@ PROTOBUF_NDEBUG_INLINE NetworkProbeTarget::Impl_::Impl_(
     [[maybe_unused]] const ::match::NetworkProbeTarget& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        host_(arena, from.host_) {}
+        host_(arena, from.host_),
+        ws_url_(arena, from.ws_url_) {}
 
 NetworkProbeTarget::NetworkProbeTarget(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2853,7 +2870,7 @@ NetworkProbeTarget::NetworkProbeTarget(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.grant_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+  _impl_.grant_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.grant_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -2870,7 +2887,8 @@ PROTOBUF_NDEBUG_INLINE NetworkProbeTarget::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        host_(arena) {}
+        host_(arena),
+        ws_url_(arena) {}
 
 inline void NetworkProbeTarget::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -2893,6 +2911,7 @@ inline void NetworkProbeTarget::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.host_.Destroy();
+  this_._impl_.ws_url_.Destroy();
   delete this_._impl_.grant_;
   this_._impl_.~Impl_();
 }
@@ -2931,16 +2950,19 @@ PROTOBUF_NOINLINE void NetworkProbeTarget::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.host_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.ws_url_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.grant_ != nullptr);
       _impl_.grant_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
     ::memset(&_impl_.physical_region_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.port_) -
         reinterpret_cast<char*>(&_impl_.physical_region_)) + sizeof(_impl_.port_));
@@ -2969,7 +2991,7 @@ PROTOBUF_NOINLINE void NetworkProbeTarget::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 physical_region = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_physical_region() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2988,7 +3010,7 @@ PROTOBUF_NOINLINE void NetworkProbeTarget::Clear() {
   }
 
   // uint32 port = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_port() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2997,10 +3019,20 @@ PROTOBUF_NOINLINE void NetworkProbeTarget::Clear() {
   }
 
   // .match.SignedNetworkProbe grant = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         4, *this_._impl_.grant_, this_._impl_.grant_->GetCachedSize(), target,
         stream);
+  }
+
+  // string ws_url = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_ws_url().empty()) {
+      const ::std::string& _s = this_._internal_ws_url();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "match.NetworkProbeTarget.ws_url");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -3028,7 +3060,7 @@ PROTOBUF_NOINLINE void NetworkProbeTarget::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string host = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_host().empty()) {
@@ -3036,20 +3068,27 @@ PROTOBUF_NOINLINE void NetworkProbeTarget::Clear() {
                                         this_._internal_host());
       }
     }
-    // .match.SignedNetworkProbe grant = 4;
+    // string ws_url = 5;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_ws_url().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_ws_url());
+      }
+    }
+    // .match.SignedNetworkProbe grant = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.grant_);
     }
     // uint32 physical_region = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_physical_region() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_region());
       }
     }
     // uint32 port = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_port() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_port());
@@ -3074,7 +3113,7 @@ void NetworkProbeTarget::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_host().empty()) {
         _this->_internal_set_host(from._internal_host());
@@ -3085,6 +3124,15 @@ void NetworkProbeTarget::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_ws_url().empty()) {
+        _this->_internal_set_ws_url(from._internal_ws_url());
+      } else {
+        if (_this->_impl_.ws_url_.IsDefault()) {
+          _this->_internal_set_ws_url("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.grant_ != nullptr);
       if (_this->_impl_.grant_ == nullptr) {
         _this->_impl_.grant_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.grant_);
@@ -3092,12 +3140,12 @@ void NetworkProbeTarget::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.grant_->MergeFrom(*from._impl_.grant_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_physical_region() != 0) {
         _this->_impl_.physical_region_ = from._impl_.physical_region_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_port() != 0) {
         _this->_impl_.port_ = from._impl_.port_;
       }
@@ -3123,6 +3171,7 @@ void NetworkProbeTarget::InternalSwap(NetworkProbeTarget* PROTOBUF_RESTRICT PROT
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.host_, &other->_impl_.host_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ws_url_, &other->_impl_.ws_url_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(NetworkProbeTarget, _impl_.port_)
       + sizeof(NetworkProbeTarget::_impl_.port_)

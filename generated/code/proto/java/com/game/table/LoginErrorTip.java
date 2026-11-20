@@ -187,6 +187,54 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginZoneCreateRoleClosed = 2037;</code>
      */
     kLoginZoneCreateRoleClosed(2037),
+    /**
+     * <code>kLoginAccountDeletionPending = 2038;</code>
+     */
+    kLoginAccountDeletionPending(2038),
+    /**
+     * <code>kLoginAccountDeletionBlocked = 2039;</code>
+     */
+    kLoginAccountDeletionBlocked(2039),
+    /**
+     * <code>kLoginAccountDeletionInProgress = 2040;</code>
+     */
+    kLoginAccountDeletionInProgress(2040),
+    /**
+     * <code>kLoginAccountDeletionReauthRequired = 2041;</code>
+     */
+    kLoginAccountDeletionReauthRequired(2041),
+    /**
+     * <code>kLoginRealNameRequired = 2042;</code>
+     */
+    kLoginRealNameRequired(2042),
+    /**
+     * <code>kLoginRealNameInvalid = 2043;</code>
+     */
+    kLoginRealNameInvalid(2043),
+    /**
+     * <code>kLoginRealNamePending = 2044;</code>
+     */
+    kLoginRealNamePending(2044),
+    /**
+     * <code>kLoginRealNameTooManyAttempts = 2045;</code>
+     */
+    kLoginRealNameTooManyAttempts(2045),
+    /**
+     * <code>kLoginRealNameAlreadyBound = 2046;</code>
+     */
+    kLoginRealNameAlreadyBound(2046),
+    /**
+     * <code>kLoginRealNameServiceUnavailable = 2047;</code>
+     */
+    kLoginRealNameServiceUnavailable(2047),
+    /**
+     * <code>kLoginMinorNotInPlayTime = 2048;</code>
+     */
+    kLoginMinorNotInPlayTime(2048),
+    /**
+     * <code>kLoginMinorPlayTimeOver = 2049;</code>
+     */
+    kLoginMinorPlayTimeOver(2049),
     UNRECOGNIZED(-1),
     ;
 
@@ -355,6 +403,54 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginZoneCreateRoleClosed = 2037;</code>
      */
     public static final int kLoginZoneCreateRoleClosed_VALUE = 2037;
+    /**
+     * <code>kLoginAccountDeletionPending = 2038;</code>
+     */
+    public static final int kLoginAccountDeletionPending_VALUE = 2038;
+    /**
+     * <code>kLoginAccountDeletionBlocked = 2039;</code>
+     */
+    public static final int kLoginAccountDeletionBlocked_VALUE = 2039;
+    /**
+     * <code>kLoginAccountDeletionInProgress = 2040;</code>
+     */
+    public static final int kLoginAccountDeletionInProgress_VALUE = 2040;
+    /**
+     * <code>kLoginAccountDeletionReauthRequired = 2041;</code>
+     */
+    public static final int kLoginAccountDeletionReauthRequired_VALUE = 2041;
+    /**
+     * <code>kLoginRealNameRequired = 2042;</code>
+     */
+    public static final int kLoginRealNameRequired_VALUE = 2042;
+    /**
+     * <code>kLoginRealNameInvalid = 2043;</code>
+     */
+    public static final int kLoginRealNameInvalid_VALUE = 2043;
+    /**
+     * <code>kLoginRealNamePending = 2044;</code>
+     */
+    public static final int kLoginRealNamePending_VALUE = 2044;
+    /**
+     * <code>kLoginRealNameTooManyAttempts = 2045;</code>
+     */
+    public static final int kLoginRealNameTooManyAttempts_VALUE = 2045;
+    /**
+     * <code>kLoginRealNameAlreadyBound = 2046;</code>
+     */
+    public static final int kLoginRealNameAlreadyBound_VALUE = 2046;
+    /**
+     * <code>kLoginRealNameServiceUnavailable = 2047;</code>
+     */
+    public static final int kLoginRealNameServiceUnavailable_VALUE = 2047;
+    /**
+     * <code>kLoginMinorNotInPlayTime = 2048;</code>
+     */
+    public static final int kLoginMinorNotInPlayTime_VALUE = 2048;
+    /**
+     * <code>kLoginMinorPlayTimeOver = 2049;</code>
+     */
+    public static final int kLoginMinorPlayTimeOver_VALUE = 2049;
 
 
     public final int getNumber() {
@@ -420,6 +516,18 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
         case 2035: return kLoginAuthProviderUnavailable;
         case 2036: return kLoginTokenIssueFailed;
         case 2037: return kLoginZoneCreateRoleClosed;
+        case 2038: return kLoginAccountDeletionPending;
+        case 2039: return kLoginAccountDeletionBlocked;
+        case 2040: return kLoginAccountDeletionInProgress;
+        case 2041: return kLoginAccountDeletionReauthRequired;
+        case 2042: return kLoginRealNameRequired;
+        case 2043: return kLoginRealNameInvalid;
+        case 2044: return kLoginRealNamePending;
+        case 2045: return kLoginRealNameTooManyAttempts;
+        case 2046: return kLoginRealNameAlreadyBound;
+        case 2047: return kLoginRealNameServiceUnavailable;
+        case 2048: return kLoginMinorNotInPlayTime;
+        case 2049: return kLoginMinorPlayTimeOver;
         default: return null;
       }
     }
@@ -485,7 +593,7 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025login_error_tip.proto*\346\010\n\013login_error\022" +
+      "\n\025login_error_tip.proto*\372\013\n\013login_error\022" +
       "\022\n\016kLogin_errorOK\020\000\022\032\n\025kLoginAccountNotF" +
       "ound\020\320\017\022\034\n\027kLoginAccountPlayerFull\020\321\017\022$\n" +
       "\037kLoginCreatePlayerUnLoadAccount\020\322\017\022.\n)k" +
@@ -513,8 +621,19 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       "valid\020\360\017\022\023\n\016kRoleNameTaken\020\361\017\022\027\n\022kRoleNa" +
       "meSensitive\020\362\017\022\"\n\035kLoginAuthProviderUnav" +
       "ailable\020\363\017\022\033\n\026kLoginTokenIssueFailed\020\364\017\022" +
-      "\037\n\032kLoginZoneCreateRoleClosed\020\365\017B$\n\016com." +
-      "game.tableZ\022generated/pb/tableb\006proto3"
+      "\037\n\032kLoginZoneCreateRoleClosed\020\365\017\022!\n\034kLog" +
+      "inAccountDeletionPending\020\366\017\022!\n\034kLoginAcc" +
+      "ountDeletionBlocked\020\367\017\022$\n\037kLoginAccountD" +
+      "eletionInProgress\020\370\017\022(\n#kLoginAccountDel" +
+      "etionReauthRequired\020\371\017\022\033\n\026kLoginRealName" +
+      "Required\020\372\017\022\032\n\025kLoginRealNameInvalid\020\373\017\022" +
+      "\032\n\025kLoginRealNamePending\020\374\017\022\"\n\035kLoginRea" +
+      "lNameTooManyAttempts\020\375\017\022\037\n\032kLoginRealNam" +
+      "eAlreadyBound\020\376\017\022%\n kLoginRealNameServic" +
+      "eUnavailable\020\377\017\022\035\n\030kLoginMinorNotInPlayT" +
+      "ime\020\200\020\022\034\n\027kLoginMinorPlayTimeOver\020\201\020B$\n\016" +
+      "com.game.tableZ\022generated/pb/tableb\006prot" +
+      "o3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

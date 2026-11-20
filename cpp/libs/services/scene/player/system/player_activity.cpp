@@ -10,6 +10,7 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/mission/comp/mission_comp.h"
+#include "muduo/base/Logging.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
@@ -27,6 +28,9 @@
 namespace {
 constexpr int kMaxLedgerRecords = 4096;
 constexpr size_t kMaxThresholds = 64;
+// 已结束周期的领取记录留多少条供重放原请求。不小于单周期档数上限,上一周期的领取全部留得住。
+constexpr int kKeptPastClaims = 64;
+static_assert(kKeptPastClaims >= static_cast<int>(kMaxThresholds));
 constexpr uint64_t kResaveIntervalMs = 1000;
 struct ActivityPersistRequestComp { uint64_t lastRequestMs{0}; };
 PlayerActivitySystem::RuleLookupFn ruleLookup = nullptr;
@@ -146,6 +150,29 @@ const PlayerActivityClaimRecord* FindClaim(const PlayerActivityLedger& ledger, u
     return nullptr;
 }
 
+// 保留策略(docs/design/player-features-ui.md「领取身份、提交与重启恢复」):同一规则的周期锚点与长度不可改,
+// 当前周期起点只会前进。别的规则算不出周期是否结束,它们的记录不动。
+//
+// 积分只按当前周期算,已结束周期的来源没有任何用处(一次性任务的去重靠 credited_missions 位图),全删。
+void PruneEndedSources(PlayerActivityLedger& ledger, uint32_t ruleId, uint64_t period) {
+    auto* sources = ledger.mutable_sources();
+    sources->erase(std::remove_if(sources->begin(), sources->end(), [&](const PlayerActivityPointSource& source) {
+        return source.rule_id() == ruleId && source.period_id() < period;
+    }), sources->end());
+}
+
+// 已结束周期的领取记录不会再挡住任何新领取,只供重放原请求,留最近 kKeptPastClaims 条。
+void PrunePastClaims(PlayerActivityLedger& ledger, uint32_t ruleId, uint64_t period) {
+    const auto past = [&](const PlayerActivityClaimRecord& claim) { return claim.rule_id() == ruleId && claim.period_id() < period; };
+    auto* claims = ledger.mutable_claims();
+    auto excess = std::count_if(claims->begin(), claims->end(), past) - kKeptPastClaims;
+    // 记录按领取先后追加,最老的在前。
+    for (int i = 0; excess > 0;) {
+        if (past(claims->Get(i))) { claims->DeleteSubrange(i, 1); --excess; }
+        else ++i;
+    }
+}
+
 bool Durable(entt::entity player, const PlayerActivityClaimRecord& claim) {
     const auto* persisted = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
     const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
@@ -224,9 +251,22 @@ void PlayerActivitySystem::OnMissionCompleted(entt::entity player, uint32_t scop
     // 奖励表暂时异常只禁领，不改变已经启用的积分规则和事实发生的周期。
     if (!LoadPolicy(rule, rewards) || !ResolvePeriod(rule, nowMs, start, end)) return;
     auto* ledger = MutableLedger(player);
-    if (!ValidLedger(*ledger) || ledger->sources_size() >= kMaxLedgerRecords) return;
-    for (const auto& source : ledger->sources())
-        if (source.mission_scope() == scope && source.mission_id() == missionId) return;
+    // 任务表 id 列带位序标记,每个任务都有位序;没有就是导表产物不一致,不记(记了也没法去重)。
+    const auto bit = GetBitIndex(MissionBitMap, missionId);
+    if (!ValidLedger(*ledger) || !bit.has_value()) {
+        LOG_ERROR << "Activity vitality source not recorded: ledger invalid or mission has no bit index, mission=" << missionId;
+        return;
+    }
+    // 一次性任务只记一次,跨周期也一样(docs/design/player-features-ui.md「正式活跃配置与来源」)。
+    if (TestPackedBit(ledger->credited_missions(), *bit)) return;
+    PruneEndedSources(*ledger, rule.id(), start);
+    if (ledger->sources_size() >= kMaxLedgerRecords) {
+        LOG_ERROR << "Activity vitality source not recorded: current period already has " << ledger->sources_size()
+                  << " sources, mission=" << missionId;
+        return;
+    }
+    // 去重位与来源同帧写入、同一次存盘提交。
+    SetPackedBit(*ledger->mutable_credited_missions(), *bit);
     auto* source = ledger->add_sources();
     source->set_mission_scope(scope);
     source->set_mission_id(missionId);
@@ -312,10 +352,15 @@ uint32_t PlayerActivitySystem::Claim(entt::entity player, uint64_t nowMs,
     uint64_t start, end;
     if (!LoadPolicy(rule, rewards)) return kFeatureUnavailable;
     if (!ValidPolicy(rule, rewards, nowMs, start, end)) return kInvalidTableData;
+    // 周期已结束单列一个码:跨日边界上发出的请求会落到这里;原请求的记录被裁掉之后的重放也落到这里,
+    // 这时无法判断当初领没领到,码的文案让玩家以背包为准。
+    if (request.rule_id() == rule.id() && request.period_id() < start) return kRewardPeriodEnded;
     if (request.rule_id() != rule.id() || request.configuration_revision() != rule.configuration_revision() || request.period_id() != start)
         return kInvalidParameter;
     const auto threshold = std::find_if(rewards.begin(), rewards.end(), [&](const auto& row) { return row.id() == request.threshold_id(); });
     if (threshold == rewards.end() || Points(*ledger, rule, start) < threshold->required_points()) return kInvalidParameter;
+    // 先裁再判预算:否则每周期每档一条,攒满之后这个角色再也领不了。裁掉的记录不会再用到,后面发放失败也不用还原。
+    PrunePastClaims(*MutableLedger(player), rule.id(), start);
     if (ledger->claims_size() >= kMaxLedgerRecords) return kServiceUnavailable;
     auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
     if (bags == nullptr) return kServiceUnavailable;

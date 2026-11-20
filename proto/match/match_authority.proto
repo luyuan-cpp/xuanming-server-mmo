@@ -431,9 +431,12 @@ message MatchBattleScriptRecord {
 }
 
 // 审核流水:每审一次一行,与剧本行的状态变更同一事务写入,只增不改(审计、追责、事后核对审的是哪一版正文)。
+// 保留期按 reviewed_ms 算(match 配置 BattleScript.ReviewRetentionDays,缺省 180 天),到期由保留期清理按
+// (reviewed_ms, 主键) 翻页分批删除(authority.PurgeExpiredBattleScriptReviews),只索引读,不扫全表。
 message MatchBattleScriptReviewRecord {
   option (OptionTableName) = "match_battle_script_review";
   option (OptionPrimaryKey) = "script_id,revision";
+  option (OptionIndex) = "reviewed_ms,script_id,revision";
   uint64 script_id = 1;
   uint32 revision = 2;
   uint64 owner_player_id = 3;

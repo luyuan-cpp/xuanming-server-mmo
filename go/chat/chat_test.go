@@ -248,11 +248,14 @@ func tipCodes() map[string]uint32 {
 		"ErrRateLimited":        constants.ErrRateLimited,
 		"ErrChannelUnavailable": constants.ErrChannelUnavailable,
 		"ErrStorage":            constants.ErrStorage,
+
+		"ErrContentRejected":         constants.ErrContentRejected,
+		"ErrContentCheckUnavailable": constants.ErrContentCheckUnavailable,
 	}
 }
 
-// TestNoHandWrittenTipCodes:Err 常量必须直接写成 uint32(table.CommonError_kX)(AGENTS.md §7.5)。
-// 与 match / friend / client_rpc_router 的同名测试同一机制;chat 开私有段后把前缀换成 ChatError_。
+// TestNoHandWrittenTipCodes:Err 常量必须直接写成 uint32(table.CommonError_kX) 或 uint32(table.ChatError_kX)(AGENTS.md §7.5)。
+// 与 match / friend / client_rpc_router 的同名测试同一机制;v1 的五个码留在 common 段,之后新增的都在 chat 段。
 func TestNoHandWrittenTipCodes(t *testing.T) {
 	const path = "internal/constants/constants.go"
 	fset := token.NewFileSet()
@@ -277,8 +280,8 @@ func TestNoHandWrittenTipCodes(t *testing.T) {
 				t.Errorf("%s 必须显式写生成枚举引用,不能省略 RHS 继承上一常量", name.Name)
 				continue
 			}
-			if !isGeneratedTipRef(valueSpec.Values[index], "CommonError_") {
-				t.Errorf("%s 必须直接写成 uint32(table.CommonError_kX),不能手写数字、别名或引用其他码轴", name.Name)
+			if !isGeneratedTipRef(valueSpec.Values[index], "CommonError_") && !isGeneratedTipRef(valueSpec.Values[index], "ChatError_") {
+				t.Errorf("%s 必须直接写成 uint32(table.CommonError_kX) 或 uint32(table.ChatError_kX),不能手写数字、别名或引用其他码轴", name.Name)
 			}
 		}
 		return true
@@ -312,23 +315,22 @@ func isGeneratedTipRef(expr ast.Expr, enumPrefix string) bool {
 	return ok && pkg.Name == "table"
 }
 
-// TestTipCodesVerdicts:复用的码都在 common 段内、互不重复,且定性符合契约 §9 ——
-// 只有 ErrStorage 是故障(告警),其余都是业务拒绝。若 Tip.xlsx 的 fault 列被改,这里先红。
+// TestTipCodesVerdicts:码都在 common 段或 chat 段内、互不重复,且定性符合契约 §9 ——
+// 只有 ErrStorage 与 ErrContentCheckUnavailable(依赖不可用)是故障(告警),其余都是业务拒绝。
+// 若 Tip.xlsx 的 fault 列被改,这里先红。
 func TestTipCodesVerdicts(t *testing.T) {
-	var common tip.Segment
+	domains := map[string]bool{}
 	for _, segment := range tip.Segments {
-		if segment.Domain == "common" {
-			common = segment
-		}
+		domains[segment.Domain] = true
 	}
-	if common.Width == 0 {
-		t.Fatal("生成的段表里没有 common 段")
+	if !domains["common"] || !domains["chat"] {
+		t.Fatal("生成的段表里应同时有 common 段与 chat 段")
 	}
 
 	seen := make(map[uint32]string)
 	for name, code := range tipCodes() {
-		if code < common.Base || code >= common.Base+common.Width {
-			t.Errorf("%s = %d 落在 common 段 [%d,%d) 之外", name, code, common.Base, common.Base+common.Width)
+		if domain := tip.DomainOf(code); domain != "common" && domain != "chat" {
+			t.Errorf("%s = %d 落在 common 段与 chat 段之外(域 %q)", name, code, domain)
 		}
 		if previous, exists := seen[code]; exists {
 			t.Errorf("tip 码 %d 被 %s 与 %s 同时使用", code, previous, name)
@@ -336,7 +338,7 @@ func TestTipCodesVerdicts(t *testing.T) {
 		seen[code] = name
 
 		wantVerdict := serverbase.VerdictBizReject
-		if name == "ErrStorage" {
+		if name == "ErrStorage" || name == "ErrContentCheckUnavailable" {
 			wantVerdict = serverbase.VerdictFault
 		}
 		if got := constants.TipClassifier()(code); got != wantVerdict {

@@ -149,6 +149,10 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	// 0 = 上游未带(旧版 gate / login),按判定表的版本 0 规则处理(scene-enter-session-fence.md §5.2 / §6)。
 	ctx.loginGeneration = request->login_generation();
 	ctx.ownerRevision = request->owner_revision();
+	// 本次入场出自哪个 gate 进程:取请求所走入站连接的握手身份(gate 的 node_uuid),不取消息体自报的值。与会话号一起构成
+	// "哪一条会话"(scene-enter-chain-residuals.md §14):同一 node_id 短暂有两个 gate 进程时,老进程迟到的同号入场靠它被
+	// 入场栅栏认成另一条会话、按登录代次拒掉。这里只是读出请求身份,判定仍是栅栏这第一步。
+	ctx.gateInstanceId = RpcController::From(controller).HandshakePeerUuid();
 
 	// 在任何本地会话/实体/载入副作用前提交目录SQL登记。未知结果只重放原世代。
 	RoleAdmissionSystem::RequestEnter(request->player_id(), std::move(ctx));
@@ -216,6 +220,33 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 	if (!CheckRoutedPlayerIdentity("ProcessClientPlayerMessage", sessionId, it->second,
 								   request->player_id(), msg.message_id()))
 	{
+		return;
+	}
+
+	// 同号跨实例(scene-enter-chain-residuals.md §14):会话号由 gate 的 node_id 派生,同一 node_id 短暂有两个 gate 进程时,
+	// 老进程上同号、同玩家的旧连接发来的消息 —— 包括它关闭旧连接时代发的 ExitGame —— 会话号与玩家都对得上,却不是当前会话。
+	// 按入站连接的握手身份认出它出自另一个进程:不派发、不擦映射、不取消载入(下面两处 erase 都排在这之后)。请求确定未执行。
+	// 这条 (gate 实例, 会话号) 本节点还不认识,与"会话不在"同一处置:换节点执行含义不变的请求答「稍后重投」,其余空应答
+	// (gate 回 1003)。新进程上同号会话的消息若赶在它自己的入场(角色登记途中)前面到,登记完重投就能受理;老进程的重投
+	// 一直对不上,有界等待到期后回 1003。逐条只打 DEBUG,采样留 WARN,趋势看 [EnterFence] stale_gate_instance_rejected。
+	if (const std::string &gateInstanceId = RpcController::From(controller).HandshakePeerUuid();
+		PlayerLifecycleSystem::IsStaleGateInstance(it->second, sessionId, gateInstanceId))
+	{
+		enter_fence_stats::Inc(enter_fence_stats::Get().staleGateInstanceRejected);
+		static uint64_t staleGateInstanceCount = 0;
+		if ((staleGateInstanceCount++ & 0x3FF) == 0)
+		{
+			LOG_WARN << "ProcessClientPlayerMessage: message from another gate process on a reused session id not dispatched (sampled)"
+					 << " session_id=" << sessionId << " player_id=" << it->second << " gate_instance=" << gateInstanceId
+					 << " latest_message_id=" << msg.message_id() << " rejected_total=" << staleGateInstanceCount;
+		}
+		LOG_DEBUG << "ProcessClientPlayerMessage: session " << sessionId << " of player_id=" << it->second
+				  << " is bound through another gate process; not dispatching message_id=" << msg.message_id()
+				  << " from gate_instance=" << gateInstanceId;
+		if (scene_handoff_gate::ShouldAnswerRetryLater(scene_handoff_gate::EntryState::kSessionUnknown, entt::null, *method))
+		{
+			MarkRetryLater(response);
+		}
 		return;
 	}
 
@@ -431,9 +462,10 @@ void SceneHandler::UpdateSessionDetail(::google::protobuf::RpcController* contro
 	///<<< BEGIN WRITING YOUR CODE
 	// 入场会话栅栏(scene-enter-session-fence.md §5.8):本 RPC 无条件改绑会话、不带登录代次,按代次 0 过同一栅栏 ——
 	// 实体已有代次且会话不同即拒(kRejectUnversioned)。非生成代码里没有发送方,但消息号可达,不能留成绕过栅栏的口子。
-	// 拒绝时什么都不碰(不摘当前会话)。
+	// 拒绝时什么都不碰(不摘当前会话)。gate 实例同入场:取入站连接的握手身份。
+	const std::string &gateInstanceId = RpcController::From(controller).HandshakePeerUuid();
 	const enter_fence::Verdict verdict =
-		PlayerLifecycleSystem::JudgeEnter(request->player_id(), request->session_id(), /*loginGeneration=*/0);
+		PlayerLifecycleSystem::JudgeEnter(request->player_id(), request->session_id(), /*loginGeneration=*/0, gateInstanceId);
 	if (!enter_fence::Admits(verdict))
 	{
 		enter_fence_stats::Inc(enter_fence_stats::Get().sessionUpdateRejected);
@@ -446,7 +478,8 @@ void SceneHandler::UpdateSessionDetail(::google::protobuf::RpcController* contro
 	// 只读校验全部做完再动会话,与上面栅栏拒绝同口径:任何一项不满足都什么都不碰。
 	// 以前先 RemovePlayerSession 再查 gate / 玩家:gate 查不到时旧会话已经摘掉,玩家停在无会话状态;
 	// 快照组件缺失时还会走到无守卫的 get(ecs-entt-misuse-audit-20261015 F094)。
-	if (!ResolveLocalZoneGateEntity(request->session_id()))
+	// gate 按请求出自的进程找(握手身份已知时不认同一 node_id 上的另一个进程,scene-enter-chain-residuals.md §14.6)。
+	if (!ResolveSessionGateEntity(request->session_id(), gateInstanceId))
 	{
 		LOG_ERROR << "Gate not found " << GetGateNodeId(request->session_id());
 		return;
@@ -480,7 +513,7 @@ void SceneHandler::UpdateSessionDetail(::google::protobuf::RpcController* contro
 	// RemovePlayerSession 与 SessionMap 只改字段和映射,不增删 actorRegistry 的组件,sessionSnapshot 仍然有效。
 	sessionSnapshot->set_gate_session_id(request->session_id());
 	// 改绑后同步登录身份的会话号(代次按 0 传 = 保持原值):之后到达的陈旧入场拿它比,而不是拿已被改掉的旧会话。
-	PlayerLifecycleSystem::RecordLoginIdentity(player, request->session_id(), /*loginGeneration=*/0);
+	PlayerLifecycleSystem::RecordLoginIdentity(player, request->session_id(), /*loginGeneration=*/0, gateInstanceId);
 
 	PlayerLifecycleSystem::HandleBindPlayerToGateOK(player);
 	///<<< END WRITING YOUR CODE

@@ -279,6 +279,7 @@ func register() {
 		prometheus.MustRegister(resultConsumerCollectors()...) // 对局结果消费组积压(result_consumer.go)
 		prometheus.MustRegister(battleReportCollectors()...)   // 战报回放(battle_report.go)
 		prometheus.MustRegister(battleScriptCollectors()...)   // 战斗剧本(battle_script.go)
+		prometheus.MustRegister(retentionCollectors()...)      // 保留期清理的失败与逾期(retention.go)
 		prometheus.MustRegister(loopCollectors()...)           // 后台循环活性(loops.go)
 	})
 }

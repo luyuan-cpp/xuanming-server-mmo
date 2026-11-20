@@ -1,7 +1,7 @@
 # team-follow-smoke 配置:两个机器人对「组队跟随 v1.1」的服务端部分做端到端冒烟
 # (docs/design/team-system.md「组队跟随 v1.1」V.2;走路跟随本身在客户端,不在本冒烟范围)
 #
-# 流程:F0 两人离开残留队伍、读出自己的实体号与坐标 → F1 队长 A 走开到离 B 12 以上
+# 流程:F0 两人离开残留队伍、读出自己的实体号与坐标 → F1 队长 A 分步走开到离 B 60 以上(每步 16)
 #       → F2 A 建队、B 申请、A 同意,B 在 15s 内收到 TeleportS2C(reason=5)且落点在 A 身边 1 以内
 #       → F3 双方互相收到对方的 ActorCreate(归队瞬移后可见性重建)
 #       → F4 A 起步 / 停步时 B 收到 ActorMoveS2C(move_state 1 → 0),反向同理 → F5 A 解散。
@@ -10,7 +10,7 @@
 #   1. scene 是含组队跟随 v1.1 的二进制(移动广播、入队即跟随、归队瞬移);旧 scene 会停在 F2。
 #   2. gate 以 GATE_CLIENT_RPC_ROUTER=1 启动(start_game.ps1 默认),match(含 team)、client_rpc_router 在跑。
 #   3. robot_9305 / robot_9306 起步在同一张地图(新号默认如此);不要求同一条线,不同线时 B 会先被带到 A 的线。
-#   4. 出生点四周至少有一个方向能走出 12 以上(主城满足)。
+#   4. 出生点四周至少有一个方向能分步走出 60 以上(每步 16,主城满足)。
 #
 # 用法(robot/ 目录下):
 #   .\robot.exe -c etc/team_follow_smoke.yaml
@@ -32,7 +32,7 @@ mode: "team-follow-smoke"
 team_follow_smoke:
   # true = 改跑「真实客户端跟随」验收:机器人 B 入队后下线并打印 TEAM_FOLLOW_CLIENT_READY,
   # 外层脚本随后用 DevAutoPilot(-zone 1 -account robot_9306 …)让真实客户端登录同一账号;
-  # 机器人 A 当队长按脚本走 6 段,断言客户端每段都跟着走、停在身后约 1.4 处(TEAM_FOLLOW_CLIENT_OK)。
+  # 机器人 A 当队长按脚本走 6 段,断言客户端每段都跟着走、停在身后约 3 处(TEAM_FOLLOW_CLIENT_OK)。
   client_follower: false
   client_wait_seconds: 240 # 等客户端登录并出现在队长视野里的预算(秒)
 

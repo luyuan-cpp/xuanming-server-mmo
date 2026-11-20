@@ -17,6 +17,10 @@ namespace client_rpc_router {
     void SetClientRpcRouterCallDeadline(std::chrono::milliseconds deadline);
 }
 
+namespace content_guard {
+    void SetContentGuardCallDeadline(std::chrono::milliseconds deadline);
+}
+
 namespace data_service {
     void SetDataServiceCallDeadline(std::chrono::milliseconds deadline);
 }
@@ -121,6 +125,9 @@ void SetGrpcCallDeadline(uint32_t nodeType, std::chrono::milliseconds deadline){
     }
     if (static_cast<uint32_t>(common::base::eNodeType::ClientRpcRouterNodeService) == nodeType) {
         client_rpc_router::SetClientRpcRouterCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::ContentGuardNodeService) == nodeType) {
+        content_guard::SetContentGuardCallDeadline(deadline);
     }
     if (static_cast<uint32_t>(common::base::eNodeType::DataServiceNodeService) == nodeType) {
         data_service::SetDataServiceCallDeadline(deadline);

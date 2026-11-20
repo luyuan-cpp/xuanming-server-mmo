@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/reward_error_tip.proto*?\n\x0creward_error\x12\x13\n\x0fkReward_errorOK\x10\x00\x12\x1a\n\x15kRewardAlreadyClaimed\x10\xe0]B$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/reward_error_tip.proto*X\n\x0creward_error\x12\x13\n\x0fkReward_errorOK\x10\x00\x12\x1a\n\x15kRewardAlreadyClaimed\x10\xe0]\x12\x17\n\x12kRewardPeriodEnded\x10\xe1]B$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_REWARD_ERROR']._serialized_start=30
-  _globals['_REWARD_ERROR']._serialized_end=93
+  _globals['_REWARD_ERROR']._serialized_end=118
 # @@protoc_insertion_point(module_scope)

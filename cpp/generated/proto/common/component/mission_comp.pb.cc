@@ -33,8 +33,6 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::MissionListComp_MissionsEntry_DoNotUse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto, /* tracker*/ nullptr,},
-        // ::MissionListComp_MissionBeginTimeEntry_DoNotUse
-        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::MissionListComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerActivityPointSource
@@ -132,7 +130,7 @@ constexpr auto RewardListComp_CanRewardMissionIdEntry_DoNotUse::InternalGenerate
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
@@ -310,7 +308,7 @@ constexpr auto PlayerActivityPointSource::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
@@ -499,7 +497,7 @@ constexpr auto PlayerActivityClaimRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[4],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
@@ -546,139 +544,6 @@ const ::_pbi::ClassData* PlayerActivityClaimRecord_get_class_data() {
   return PlayerActivityClaimRecord_globals_.GetClassData();
 #else
   return PlayerActivityClaimRecord_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
-constexpr MissionListComp_MissionBeginTimeEntry_DoNotUse::ParseTableT_ MissionListComp_MissionBeginTimeEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_._has_bits_),
-      0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      0,  // num_aux_entries
-      offsetof(ParseTableT_, field_names),  // no aux_entries
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::MissionListComp_MissionBeginTimeEntry_DoNotUse>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // uint64 value = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.value_), 0>(),
-       {16, 0, 0,
-        PROTOBUF_FIELD_OFFSET(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.value_)}},
-      // uint32 key = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.key_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.key_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // uint32 key = 1;
-      {PROTOBUF_FIELD_OFFSET(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 value = 2;
-      {PROTOBUF_FIELD_OFFSET(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-    }},
-    // no aux_entries
-    {{
-    }},
-  };
-}
-
-template <typename>
-constexpr MissionListComp_MissionBeginTimeEntry_DoNotUse::MissionListComp_MissionBeginTimeEntry_DoNotUse(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : MissionListComp_MissionBeginTimeEntry_DoNotUse::MapEntry(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-      ) {
-}
-inline void* PROTOBUF_NONNULL MissionListComp_MissionBeginTimeEntry_DoNotUse::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) MissionListComp_MissionBeginTimeEntry_DoNotUse(arena);
-}
-constexpr auto MissionListComp_MissionBeginTimeEntry_DoNotUse::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(MissionListComp_MissionBeginTimeEntry_DoNotUse), alignof(MissionListComp_MissionBeginTimeEntry_DoNotUse));
-}
-constexpr auto MissionListComp_MissionBeginTimeEntry_DoNotUse::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &MissionListComp_MissionBeginTimeEntry_DoNotUse::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<MissionListComp_MissionBeginTimeEntry_DoNotUse>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &MissionListComp_MissionBeginTimeEntry_DoNotUse::SharedDtor,
-          static_cast<void (::google::protobuf::MessageLite::*)()>(&MissionListComp_MissionBeginTimeEntry_DoNotUse::ClearImpl),
-              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
-              ,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(MissionListComp_MissionBeginTimeEntry_DoNotUse::InternalGenerateClassData_(
-            _default, &MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<MissionListComp_MissionBeginTimeEntry_DoNotUse>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) MissionListComp_MissionBeginTimeEntry_DoNotUse _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<MissionListComp_MissionBeginTimeEntry_DoNotUse>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* MissionListComp_MissionBeginTimeEntry_DoNotUse_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_.GetClassData();
-#else
-  return MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -946,7 +811,7 @@ constexpr auto RewardListComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
@@ -1009,11 +874,11 @@ constexpr PlayerActivityLedger::ParseTableT_ PlayerActivityLedger::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1023,14 +888,19 @@ constexpr PlayerActivityLedger::ParseTableT_ PlayerActivityLedger::InternalGener
       ::_pbi::TcParser::GetTable<::PlayerActivityLedger>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .PlayerActivityClaimRecord claims = 2;
-      {::_pbi::TcParser::FastMtR1,
-       {18, 1, 1,
-        PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_.claims_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated .PlayerActivityPointSource sources = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_.sources_)}},
+      // repeated .PlayerActivityClaimRecord claims = 2;
+      {::_pbi::TcParser::FastMtR1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_.claims_)}},
+      // bytes credited_missions = 3;
+      {::_pbi::TcParser::FastBS1,
+       {26, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_.credited_missions_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1038,6 +908,8 @@ constexpr PlayerActivityLedger::ParseTableT_ PlayerActivityLedger::InternalGener
       {PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_.sources_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .PlayerActivityClaimRecord claims = 2;
       {PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_.claims_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bytes credited_missions = 3;
+      {PROTOBUF_FIELD_OFFSET(PlayerActivityLedger, _impl_.credited_missions_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1070,7 +942,10 @@ inline constexpr PlayerActivityLedger::Impl_::Impl_(
             ::PlayerActivityLedger,
             PROTOBUF_FIELD_OFFSET(::PlayerActivityLedger, _impl_.claims_)>()
          }
-     {}
+        ,
+        credited_missions_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
 
 template <typename>
 constexpr PlayerActivityLedger::PlayerActivityLedger(::_pbi::ConstantInitialized,
@@ -1113,7 +988,7 @@ constexpr auto PlayerActivityLedger::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
@@ -1317,10 +1192,10 @@ constexpr MissionListComp::ParseTableT_ MissionListComp::InternalGenerateParseTa
       0, // no _extensions_
       5, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967268,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
-      4,  // num_aux_entries
+      4,  // num_field_entries
+      3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1349,8 +1224,6 @@ constexpr MissionListComp::ParseTableT_ MissionListComp::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(MissionListComp, _impl_.missions_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // bytes complete_missions = 2;
       {PROTOBUF_FIELD_OFFSET(MissionListComp, _impl_.complete_missions_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
-      // map<uint32, uint64> mission_begin_time = 3;
-      {PROTOBUF_FIELD_OFFSET(MissionListComp, _impl_.mission_begin_time_), _Internal::kHasBitsOffset + 4, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // uint32 type = 4;
       {PROTOBUF_FIELD_OFFSET(MissionListComp, _impl_.type_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .PlayerActivityLedger activity_ledger = 5;
@@ -1369,8 +1242,6 @@ constexpr MissionListComp::ParseTableT_ MissionListComp::InternalGenerateParseTa
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::MissionComp_globals_},
         #endif
-        {::_pbi::TcParser::GetMapAuxInfo(
-            0, 0, 13, 4, 0)},
     }},
     {{
     }},
@@ -1390,11 +1261,6 @@ inline constexpr MissionListComp::Impl_::Impl_(
         missions_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::MissionListComp,
             PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.missions_)>()
-         }
-        ,
-        mission_begin_time_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::MissionListComp,
-            PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.mission_begin_time_)>()
          }
      {}
 
@@ -1439,7 +1305,7 @@ constexpr auto MissionListComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
@@ -1516,23 +1382,14 @@ const ::uint32_t
         0,
         1,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.key_),
-        PROTOBUF_FIELD_OFFSET(::MissionListComp_MissionBeginTimeEntry_DoNotUse, _impl_.value_),
-        0,
-        1,
-        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_._has_bits_),
-        8, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.missions_),
         PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.complete_missions_),
-        PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.mission_begin_time_),
         PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.type_),
         PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.activity_ledger_),
         3,
         0,
-        4,
         2,
         1,
         0x081, // bitmap
@@ -1569,11 +1426,13 @@ const ::uint32_t
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerActivityLedger, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerActivityLedger, _impl_.sources_),
         PROTOBUF_FIELD_OFFSET(::PlayerActivityLedger, _impl_.claims_),
+        PROTOBUF_FIELD_OFFSET(::PlayerActivityLedger, _impl_.credited_missions_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RewardListComp_CanRewardMissionIdEntry_DoNotUse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -1592,19 +1451,17 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::MissionComp)},
         {11, sizeof(::MissionListComp_MissionsEntry_DoNotUse)},
-        {18, sizeof(::MissionListComp_MissionBeginTimeEntry_DoNotUse)},
-        {25, sizeof(::MissionListComp)},
-        {38, sizeof(::PlayerActivityPointSource)},
-        {53, sizeof(::PlayerActivityClaimRecord)},
-        {70, sizeof(::PlayerActivityLedger)},
-        {77, sizeof(::RewardListComp_CanRewardMissionIdEntry_DoNotUse)},
-        {84, sizeof(::RewardListComp)},
+        {18, sizeof(::MissionListComp)},
+        {29, sizeof(::PlayerActivityPointSource)},
+        {44, sizeof(::PlayerActivityClaimRecord)},
+        {61, sizeof(::PlayerActivityLedger)},
+        {70, sizeof(::RewardListComp_CanRewardMissionIdEntry_DoNotUse)},
+        {77, sizeof(::RewardListComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::MissionComp_globals_,
         &::MissionListComp_MissionsEntry_DoNotUse_globals_,
-        &::MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_,
         &::MissionListComp_globals_,
         &::PlayerActivityPointSource_globals_,
         &::PlayerActivityClaimRecord_globals_,
@@ -1620,46 +1477,44 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fmission_5fcomp
     "\206\001\n\016eMissionStatus\022\024\n\020E_MISSION_NORMAL\020\000"
     "\022\031\n\025E_MISSION_ACHIEVEMENT\020\001\022\026\n\022E_MISSION"
     "_COMPLETE\020\002\022\026\n\022E_MISSION_TIME_OUT\020\003\022\023\n\017E"
-    "_MISSION_FAILD\020\004\"\306\003\n\017MissionListComp\0220\n\010"
+    "_MISSION_FAILD\020\004\"\317\002\n\017MissionListComp\0220\n\010"
     "missions\030\001 \003(\0132\036.MissionListComp.Mission"
-    "sEntry\022\031\n\021complete_missions\030\002 \001(\014\022B\n\022mis"
-    "sion_begin_time\030\003 \003(\0132&.MissionListComp."
-    "MissionBeginTimeEntry\022\014\n\004type\030\004 \001(\r\022.\n\017a"
-    "ctivity_ledger\030\005 \001(\0132\025.PlayerActivityLed"
-    "ger\032=\n\rMissionsEntry\022\013\n\003key\030\001 \001(\r\022\033\n\005val"
-    "ue\030\002 \001(\0132\014.MissionComp:\0028\001\0327\n\025MissionBeg"
-    "inTimeEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\004:"
-    "\0028\001\"l\n\reMissionScope\022\022\n\016kPlayerMission\020\000"
-    "\022\025\n\021kPlayerAchievment\020\001\022\030\n\024kPlayerDailyA"
-    "ctivity\020\002\022\026\n\022kPlayerMissionSize\020\003\"\232\001\n\031Pl"
-    "ayerActivityPointSource\022\025\n\rmission_scope"
-    "\030\001 \001(\r\022\022\n\nmission_id\030\002 \001(\r\022\017\n\007rule_id\030\003 "
-    "\001(\r\022\036\n\026configuration_revision\030\004 \001(\004\022\021\n\tp"
-    "eriod_id\030\005 \001(\004\022\016\n\006points\030\006 \001(\r\"\263\001\n\031Playe"
-    "rActivityClaimRecord\022\017\n\007rule_id\030\001 \001(\r\022\036\n"
-    "\026configuration_revision\030\002 \001(\004\022\021\n\tperiod_"
-    "id\030\003 \001(\004\022\024\n\014threshold_id\030\004 \001(\r\022\022\n\nreques"
-    "t_id\030\005 \001(\t\022\021\n\treward_id\030\006 \001(\r\022\025\n\rclaimed"
-    "_at_ms\030\007 \001(\004\"o\n\024PlayerActivityLedger\022+\n\007"
-    "sources\030\001 \003(\0132\032.PlayerActivityPointSourc"
-    "e\022*\n\006claims\030\002 \003(\0132\032.PlayerActivityClaimR"
-    "ecord\"\223\001\n\016RewardListComp\022F\n\025can_reward_m"
-    "ission_id\030\001 \003(\0132\'.RewardListComp.CanRewa"
-    "rdMissionIdEntry\0329\n\027CanRewardMissionIdEn"
-    "try\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\010:\0028\001B\022Z\020c"
-    "ommon/componentb\006proto3"
+    "sEntry\022\031\n\021complete_missions\030\002 \001(\014\022\014\n\004typ"
+    "e\030\004 \001(\r\022.\n\017activity_ledger\030\005 \001(\0132\025.Playe"
+    "rActivityLedger\032=\n\rMissionsEntry\022\013\n\003key\030"
+    "\001 \001(\r\022\033\n\005value\030\002 \001(\0132\014.MissionComp:\0028\001\"l"
+    "\n\reMissionScope\022\022\n\016kPlayerMission\020\000\022\025\n\021k"
+    "PlayerAchievment\020\001\022\030\n\024kPlayerDailyActivi"
+    "ty\020\002\022\026\n\022kPlayerMissionSize\020\003J\004\010\003\020\004\"\232\001\n\031P"
+    "layerActivityPointSource\022\025\n\rmission_scop"
+    "e\030\001 \001(\r\022\022\n\nmission_id\030\002 \001(\r\022\017\n\007rule_id\030\003"
+    " \001(\r\022\036\n\026configuration_revision\030\004 \001(\004\022\021\n\t"
+    "period_id\030\005 \001(\004\022\016\n\006points\030\006 \001(\r\"\263\001\n\031Play"
+    "erActivityClaimRecord\022\017\n\007rule_id\030\001 \001(\r\022\036"
+    "\n\026configuration_revision\030\002 \001(\004\022\021\n\tperiod"
+    "_id\030\003 \001(\004\022\024\n\014threshold_id\030\004 \001(\r\022\022\n\nreque"
+    "st_id\030\005 \001(\t\022\021\n\treward_id\030\006 \001(\r\022\025\n\rclaime"
+    "d_at_ms\030\007 \001(\004\"\212\001\n\024PlayerActivityLedger\022+"
+    "\n\007sources\030\001 \003(\0132\032.PlayerActivityPointSou"
+    "rce\022*\n\006claims\030\002 \003(\0132\032.PlayerActivityClai"
+    "mRecord\022\031\n\021credited_missions\030\003 \001(\014\"\223\001\n\016R"
+    "ewardListComp\022F\n\025can_reward_mission_id\030\001"
+    " \003(\0132\'.RewardListComp.CanRewardMissionId"
+    "Entry\0329\n\027CanRewardMissionIdEntry\022\013\n\003key\030"
+    "\001 \001(\r\022\r\n\005value\030\002 \001(\010:\0028\001B\022Z\020common/compo"
+    "nentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto = {
     false,
     false,
-    1343,
+    1252,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto,
     "proto/common/component/mission_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto_once,
     nullptr,
     0,
-    9,
+    8,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto::offsets,
@@ -2042,44 +1897,6 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MissionListComp_MissionsEntry_DoNotUse::
 #endif  // !PROTOBUF_MESSAGE_GLOBALS
 // ===================================================================
 
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-MissionListComp_MissionBeginTimeEntry_DoNotUse::MissionListComp_MissionBeginTimeEntry_DoNotUse() : SuperType(MissionListComp_MissionBeginTimeEntry_DoNotUse_get_class_data()) {}
-MissionListComp_MissionBeginTimeEntry_DoNotUse::MissionListComp_MissionBeginTimeEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-    : SuperType(arena, MissionListComp_MissionBeginTimeEntry_DoNotUse_get_class_data()) {}
-#else   // PROTOBUF_CUSTOM_VTABLE
-MissionListComp_MissionBeginTimeEntry_DoNotUse::MissionListComp_MissionBeginTimeEntry_DoNotUse() : SuperType() {}
-MissionListComp_MissionBeginTimeEntry_DoNotUse::MissionListComp_MissionBeginTimeEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
-#endif  // PROTOBUF_CUSTOM_VTABLE
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_ =
-        MissionListComp_MissionBeginTimeEntry_DoNotUse::InternalGenerateClassData_(MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_._default);
-
-// including ~ all the vtables and everything they use become part
-// of the same ~ SCC.
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-MissionListComp_MissionBeginTimeEntry_DoNotUse::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_.tc_table);
-  return MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_.base();
-}
-#else
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-MissionListComp_MissionBeginTimeEntry_DoNotUse::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_);
-  ::google::protobuf::internal::PrefetchToLocalCache(
-      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_));
-  return MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_.GetClassData();
-}
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MissionListComp_MissionBeginTimeEntry_DoNotUse::ParseTableT_
-    MissionListComp_MissionBeginTimeEntry_DoNotUse::_table_ =
-        MissionListComp_MissionBeginTimeEntry_DoNotUse::InternalGenerateParseTable_(MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_.base());
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-// ===================================================================
-
 MissionListComp::MissionListComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, MissionListComp_get_class_data()) {
@@ -2101,13 +1918,6 @@ PROTOBUF_NDEBUG_INLINE MissionListComp::Impl_::Impl_(
               ::MissionListComp,
               PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.missions_)>()
           , from.missions_
-        }
-        ,
-        mission_begin_time_ {
-          visibility, ::_pbi::InternalMetadataOffset::Build<
-              ::MissionListComp,
-              PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.mission_begin_time_)>()
-          , from.mission_begin_time_
         }
      {}
 
@@ -2141,11 +1951,6 @@ PROTOBUF_NDEBUG_INLINE MissionListComp::Impl_::Impl_(
         missions_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::MissionListComp,
             PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.missions_)>()
-         }
-        ,
-        mission_begin_time_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::MissionListComp,
-            PROTOBUF_FIELD_OFFSET(::MissionListComp, _impl_.mission_begin_time_)>()
          }
      {}
 
@@ -2217,13 +2022,10 @@ PROTOBUF_NOINLINE void MissionListComp::Clear() {
       _impl_.activity_ledger_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
     _impl_.type_ = 0u;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.missions_.Clear();
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      _impl_.mission_begin_time_.Clear();
     }
   }
   _impl_._has_bits_.Clear();
@@ -2280,29 +2082,6 @@ PROTOBUF_NOINLINE void MissionListComp::Clear() {
     }
   }
 
-  // map<uint32, uint64> mission_begin_time = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-    if (!this_._internal_mission_begin_time().empty()) {
-      using MapType = ::google::protobuf::Map<::uint32_t, ::uint64_t>;
-      using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint64_t,
-                                     _pbi::WireFormatLite::TYPE_UINT32,
-                                     _pbi::WireFormatLite::TYPE_UINT64>;
-      const auto& field = this_._internal_mission_begin_time();
-
-      if (stream->IsSerializationDeterministic() && field.size() > 1) {
-        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
-          target = WireHelper::InternalSerialize(
-              3, entry.first, entry.second, target, stream);
-        }
-      } else {
-        for (const auto& entry : field) {
-          target = WireHelper::InternalSerialize(
-              3, entry.first, entry.second, target, stream);
-        }
-      }
-    }
-  }
-
   // uint32 type = 4;
   if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_type() != 0) {
@@ -2344,7 +2123,7 @@ PROTOBUF_NOINLINE void MissionListComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // bytes complete_missions = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_complete_missions().empty()) {
@@ -2374,16 +2153,6 @@ PROTOBUF_NOINLINE void MissionListComp::Clear() {
                                        _pbi::WireFormatLite::TYPE_MESSAGE>::ByteSizeLong(entry.first, entry.second);
       }
     }
-    // map<uint32, uint64> mission_begin_time = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      total_size +=
-          1 * ::google::protobuf::internal::FromIntSize(this_._internal_mission_begin_time_size());
-      for (const auto& entry : this_._internal_mission_begin_time()) {
-        total_size += _pbi::MapEntryFuncs<::uint32_t, ::uint64_t,
-                                       _pbi::WireFormatLite::TYPE_UINT32,
-                                       _pbi::WireFormatLite::TYPE_UINT64>::ByteSizeLong(entry.first, entry.second);
-      }
-    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -2403,7 +2172,7 @@ void MissionListComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_complete_missions().empty()) {
         _this->_internal_set_complete_missions(from._internal_complete_missions());
@@ -2428,9 +2197,6 @@ void MissionListComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _this->_impl_.missions_.MergeFrom(from._impl_.missions_);
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      _this->_impl_.mission_begin_time_.MergeFrom(from._impl_.mission_begin_time_);
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -2460,7 +2226,6 @@ void MissionListComp::InternalSwap(MissionListComp* PROTOBUF_RESTRICT PROTOBUF_N
           reinterpret_cast<char*>(&_impl_.activity_ledger_),
           reinterpret_cast<char*>(&other->_impl_.activity_ledger_));
   _impl_.missions_.InternalSwap(&other->_impl_.missions_);
-  _impl_.mission_begin_time_.InternalSwap(&other->_impl_.mission_begin_time_);
 }
 
 ::google::protobuf::Metadata MissionListComp::GetMetadata() const {
@@ -3175,7 +2940,8 @@ PROTOBUF_NDEBUG_INLINE PlayerActivityLedger::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::PlayerActivityLedger, _impl_.claims_)>()
           , from.claims_
         }
-     {}
+        ,
+        credited_missions_(arena, from.credited_missions_) {}
 
 PlayerActivityLedger::PlayerActivityLedger(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3207,7 +2973,8 @@ PROTOBUF_NDEBUG_INLINE PlayerActivityLedger::Impl_::Impl_(
             ::PlayerActivityLedger,
             PROTOBUF_FIELD_OFFSET(::PlayerActivityLedger, _impl_.claims_)>()
          }
-     {}
+        ,
+        credited_missions_(arena) {}
 
 inline void PlayerActivityLedger::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -3223,6 +2990,7 @@ inline void PlayerActivityLedger::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.credited_missions_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -3260,12 +3028,15 @@ PROTOBUF_NOINLINE void PlayerActivityLedger::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.sources_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _impl_.claims_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.credited_missions_.ClearNonDefaultToEmpty();
     }
   }
   _impl_._has_bits_.Clear();
@@ -3317,6 +3088,14 @@ PROTOBUF_NOINLINE void PlayerActivityLedger::Clear() {
     }
   }
 
+  // bytes credited_missions = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_credited_missions().empty()) {
+      const ::std::string& _s = this_._internal_credited_missions();
+      target = stream->WriteBytesMaybeAliased(3, _s, target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3342,7 +3121,7 @@ PROTOBUF_NOINLINE void PlayerActivityLedger::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // repeated .PlayerActivityPointSource sources = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_sources_size();
@@ -3355,6 +3134,13 @@ PROTOBUF_NOINLINE void PlayerActivityLedger::Clear() {
       total_size += 1UL * this_._internal_claims_size();
       for (const auto& msg : this_._internal_claims()) {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // bytes credited_missions = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_credited_missions().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_credited_missions());
       }
     }
   }
@@ -3376,7 +3162,7 @@ void PlayerActivityLedger::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_sources()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -3386,6 +3172,15 @@ void PlayerActivityLedger::MergeImpl(::google::protobuf::MessageLite& to_msg,
       _this->_internal_mutable_claims()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_claims());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_credited_missions().empty()) {
+        _this->_internal_set_credited_missions(from._internal_credited_missions());
+      } else {
+        if (_this->_impl_.credited_missions_.IsDefault()) {
+          _this->_internal_set_credited_missions("");
+        }
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3403,10 +3198,13 @@ void PlayerActivityLedger::CopyFrom(const PlayerActivityLedger& from) {
 
 void PlayerActivityLedger::InternalSwap(PlayerActivityLedger* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.sources_.InternalSwap(&other->_impl_.sources_);
   _impl_.claims_.InternalSwap(&other->_impl_.claims_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.credited_missions_, &other->_impl_.credited_missions_, arena);
 }
 
 ::google::protobuf::Metadata PlayerActivityLedger::GetMetadata() const {

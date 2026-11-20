@@ -283,6 +283,16 @@ message MatchRankOutboxRecord {
   uint32 shard = 5;
   uint32 mode = 6; // MatchMode 数值,与来源行一致
 }
+// 删角之后要从评级榜摘掉的玩家(docs/design/account-deletion.md §6.2):删角收尾删评分行的同一事务里,按他有评分的计分模式
+// 各写一行;投榜循环向 rank 调 RemoveRankEntry(rank 同一事务立墓碑,迟到的旧批次不会把人带回榜上),确认之后删行。
+// 摘完即删,不留历史。
+message MatchRankRemovalRecord {
+  option (OptionTableName) = "match_rank_removal";
+  option (OptionPrimaryKey) = "mode,player_id";
+  uint32 mode = 1;       // MatchMode 数值,计分模式之一
+  uint64 player_id = 2;
+  uint64 created_ms = 3; // match 库时间,只给排障看积压
+}
 
 enum MatchBattleCompletionSourceKind {
   MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED = 0;
@@ -421,9 +431,12 @@ message MatchBattleScriptRecord {
 }
 
 // 审核流水:每审一次一行,与剧本行的状态变更同一事务写入,只增不改(审计、追责、事后核对审的是哪一版正文)。
+// 保留期按 reviewed_ms 算(match 配置 BattleScript.ReviewRetentionDays,缺省 180 天),到期由保留期清理按
+// (reviewed_ms, 主键) 翻页分批删除(authority.PurgeExpiredBattleScriptReviews),只索引读,不扫全表。
 message MatchBattleScriptReviewRecord {
   option (OptionTableName) = "match_battle_script_review";
   option (OptionPrimaryKey) = "script_id,revision";
+  option (OptionIndex) = "reviewed_ms,script_id,revision";
   uint64 script_id = 1;
   uint32 revision = 2;
   uint64 owner_player_id = 3;

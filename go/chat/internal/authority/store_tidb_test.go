@@ -13,6 +13,7 @@ import (
 
 	"chat/internal/constants"
 	chatpb "proto/chat"
+	"shared/contentguard"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -66,7 +67,7 @@ func independentStore(t *testing.T, s *Store, fixture *sqltest.Fixture) *Store {
 	require.NoError(t, first.QueryRowContext(ctx, "SELECT CONNECTION_ID()").Scan(&firstID))
 	require.NoError(t, second.QueryRowContext(ctx, "SELECT CONNECTION_ID()").Scan(&secondID))
 	require.NotEqual(t, firstID, secondID, "副本必须持有不同物理连接")
-	peer, err := New(ctx, db, s.states, authoritysql.BackendTiDB, s.rules)
+	peer, err := New(ctx, db, s.states, authoritysql.BackendTiDB, s.rules, WithContentGuard(s.guard))
 	require.NoError(t, err)
 	return peer
 }
@@ -100,6 +101,40 @@ func TestChatTiDBSQLSendPullPreserveOriginalAndIgnoreRedis(t *testing.T) {
 	_, err = s.Send(ctx, changed)
 	require.ErrorIs(t, err, ErrConflict)
 	require.Equal(t, 1, count(t, s))
+}
+
+// 正文送检没过的消息不落库、不占 request_id;已接受的原件重放时不因送检结局后来变了而改口。
+func TestChatTiDBContentReviewRejectsBeforeAnyRowAndReplayKeepsTheOriginal(t *testing.T) {
+	s := nativeStore(t)
+	guard := guardOf(t, s)
+	ctx := original(t, 11)
+	accepted := sendRequest("accepted", 22)
+	r, err := s.Send(ctx, accepted)
+	require.NoError(t, err)
+	require.Zero(t, r.Tip)
+	for _, c := range []struct {
+		verdict contentguard.Verdict
+		tip     uint32
+	}{{contentguard.Reject, constants.ErrContentRejected}, {contentguard.Unavailable, constants.ErrContentCheckUnavailable}} {
+		guard.force(c.verdict)
+		r, err = s.Send(ctx, sendRequest("fresh", 22))
+		require.NoError(t, err)
+		require.Equal(t, c.tip, r.Tip)
+		require.False(t, r.Duplicate)
+		require.Nil(t, r.Message)
+		require.Equal(t, 1, count(t, s), "没过送检的消息不落库")
+		r, err = s.Send(ctx, accepted)
+		require.NoError(t, err)
+		require.Zero(t, r.Tip, "已接受的原件按重复回,不改口")
+		require.True(t, r.Duplicate)
+	}
+	// 被拒的 request_id 没有被占用:送检恢复后同一个 id 能发出去。
+	guard.force(0)
+	r, err = s.Send(ctx, sendRequest("fresh", 22))
+	require.NoError(t, err)
+	require.Zero(t, r.Tip)
+	require.False(t, r.Duplicate)
+	require.Equal(t, 2, count(t, s))
 }
 
 func TestChatTiDBOldOwnerTransferABAAndFreezeRejectAllEntrances(t *testing.T) {

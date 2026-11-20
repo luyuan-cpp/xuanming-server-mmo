@@ -78,6 +78,14 @@ enum sql_writer_maintenance_receipt_Phase : int;
 extern const uint32_t sql_writer_maintenance_receipt_Phase_internal_data_[];
 enum sql_writer_registry_State : int;
 extern const uint32_t sql_writer_registry_State_internal_data_[];
+class account_deletion_receipt;
+struct account_deletion_receiptGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern account_deletion_receiptGlobalsTypeInternal account_deletion_receipt_globals_;
+extern const ::google::protobuf::internal::ClassDataFull account_deletion_receipt_class_data_;
+#else
+extern const account_deletion_receiptGlobalsTypeInternal account_deletion_receipt_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class account_directory;
 struct account_directoryGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -117,6 +125,14 @@ extern account_role_removalGlobalsTypeInternal account_role_removal_globals_;
 extern const ::google::protobuf::internal::ClassDataFull account_role_removal_class_data_;
 #else
 extern const account_role_removalGlobalsTypeInternal account_role_removal_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class account_role_rename;
+struct account_role_renameGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern account_role_renameGlobalsTypeInternal account_role_rename_globals_;
+extern const ::google::protobuf::internal::ClassDataFull account_role_rename_class_data_;
+#else
+extern const account_role_renameGlobalsTypeInternal account_role_rename_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class account_role_trade;
 struct account_role_tradeGlobalsTypeInternal;
@@ -1973,7 +1989,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_slot final : public ::go
   [[nodiscard]] static const sql_writer_slot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_slot>(&sql_writer_slot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(sql_writer_slot& a, sql_writer_slot& b) { a.Swap(&b); }
   inline void Swap(sql_writer_slot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2244,7 +2260,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_registry final : public 
   [[nodiscard]] static const sql_writer_registry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_registry>(&sql_writer_registry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(sql_writer_registry& a, sql_writer_registry& b) { a.Swap(&b); }
   inline void Swap(sql_writer_registry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2621,7 +2637,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Tick
   [[nodiscard]] static const sql_writer_maintenance_receipt_TicketEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_TicketEvidence>(&sql_writer_maintenance_receipt_TicketEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 41;
+  static constexpr int kIndexInFileMessages = 43;
   friend void swap(sql_writer_maintenance_receipt_TicketEvidence& a, sql_writer_maintenance_receipt_TicketEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_TicketEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2895,7 +2911,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Sour
   [[nodiscard]] static const sql_writer_maintenance_receipt_SourcePin& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_SourcePin>(&sql_writer_maintenance_receipt_SourcePin_globals_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 36;
   friend void swap(sql_writer_maintenance_receipt_SourcePin& a, sql_writer_maintenance_receipt_SourcePin& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_SourcePin* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3118,7 +3134,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Redi
   [[nodiscard]] static const sql_writer_maintenance_receipt_RedisKeyClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_RedisKeyClosure>(&sql_writer_maintenance_receipt_RedisKeyClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 37;
+  static constexpr int kIndexInFileMessages = 39;
   friend void swap(sql_writer_maintenance_receipt_RedisKeyClosure& a, sql_writer_maintenance_receipt_RedisKeyClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_RedisKeyClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3474,7 +3490,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Manu
   [[nodiscard]] static const sql_writer_maintenance_receipt_ManualConsumerAssignment& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ManualConsumerAssignment>(&sql_writer_maintenance_receipt_ManualConsumerAssignment_globals_);
   }
-  static constexpr int kIndexInFileMessages = 45;
+  static constexpr int kIndexInFileMessages = 47;
   friend void swap(sql_writer_maintenance_receipt_ManualConsumerAssignment& a, sql_writer_maintenance_receipt_ManualConsumerAssignment& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ManualConsumerAssignment* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3890,7 +3906,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Kafk
   [[nodiscard]] static const sql_writer_maintenance_receipt_KafkaPartitionClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_KafkaPartitionClosure>(&sql_writer_maintenance_receipt_KafkaPartitionClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 36;
+  static constexpr int kIndexInFileMessages = 38;
   friend void swap(sql_writer_maintenance_receipt_KafkaPartitionClosure& a, sql_writer_maintenance_receipt_KafkaPartitionClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_KafkaPartitionClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4219,7 +4235,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt final 
   [[nodiscard]] static const sql_writer_lifecycle_receipt& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_lifecycle_receipt>(&sql_writer_lifecycle_receipt_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(sql_writer_lifecycle_receipt& a, sql_writer_lifecycle_receipt& b) { a.Swap(&b); }
   inline void Swap(sql_writer_lifecycle_receipt* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4546,7 +4562,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_freeze_ticket final : pu
   [[nodiscard]] static const sql_writer_freeze_ticket& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_freeze_ticket>(&sql_writer_freeze_ticket_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(sql_writer_freeze_ticket& a, sql_writer_freeze_ticket& b) { a.Swap(&b); }
   inline void Swap(sql_writer_freeze_ticket* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5037,7 +5053,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_drain_run final : public
   [[nodiscard]] static const sql_writer_drain_run& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_drain_run>(&sql_writer_drain_run_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(sql_writer_drain_run& a, sql_writer_drain_run& b) { a.Swap(&b); }
   inline void Swap(sql_writer_drain_run* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5428,7 +5444,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_roster_RuntimeEnvir
   [[nodiscard]] static const sql_writer_boot_roster_RuntimeEnvironment& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_roster_RuntimeEnvironment>(&sql_writer_boot_roster_RuntimeEnvironment_globals_);
   }
-  static constexpr int kIndexInFileMessages = 54;
+  static constexpr int kIndexInFileMessages = 56;
   friend void swap(sql_writer_boot_roster_RuntimeEnvironment& a, sql_writer_boot_roster_RuntimeEnvironment& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_roster_RuntimeEnvironment* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5668,7 +5684,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_grant final : publi
   [[nodiscard]] static const sql_writer_boot_grant& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_grant>(&sql_writer_boot_grant_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(sql_writer_boot_grant& a, sql_writer_boot_grant& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_grant* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8113,6 +8129,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_name final : public ::google
     kPlayerIdFieldNumber = 1,
     kCreatedMsFieldNumber = 4,
     kBoundMsFieldNumber = 5,
+    kHeldUntilMsFieldNumber = 6,
   };
   // string name = 2;
   void clear_name() ;
@@ -8174,11 +8191,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_name final : public ::google
   void _internal_set_bound_ms(::uint64_t value);
 
   public:
+  // uint64 held_until_ms = 6;
+  void clear_held_until_ms() ;
+  [[nodiscard]] ::uint64_t held_until_ms() const;
+  void set_held_until_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_held_until_ms() const;
+  void _internal_set_held_until_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:player_name)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 33,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -8212,6 +8239,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_name final : public ::google
     ::uint64_t player_id_;
     ::uint64_t created_ms_;
     ::uint64_t bound_ms_;
+    ::uint64_t held_until_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10407,7 +10435,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_transfer_receipt final
   [[nodiscard]] static const account_role_transfer_receipt& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_transfer_receipt>(&account_role_transfer_receipt_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(account_role_transfer_receipt& a, account_role_transfer_receipt& b) { a.Swap(&b); }
   inline void Swap(account_role_transfer_receipt* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10736,7 +10764,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_trade_holder final : p
   [[nodiscard]] static const account_role_trade_holder& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_trade_holder>(&account_role_trade_holder_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(account_role_trade_holder& a, account_role_trade_holder& b) { a.Swap(&b); }
   inline void Swap(account_role_trade_holder* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11012,7 +11040,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_trade final : public :
   [[nodiscard]] static const account_role_trade& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_trade>(&account_role_trade_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(account_role_trade& a, account_role_trade& b) { a.Swap(&b); }
   inline void Swap(account_role_trade* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11292,6 +11320,330 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_trade final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_rename final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:account_role_rename) */ {
+ public:
+  inline account_role_rename() : account_role_rename(nullptr) {}
+  ~account_role_rename() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(account_role_rename* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(account_role_rename));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr account_role_rename(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline account_role_rename(const account_role_rename& from) : account_role_rename(nullptr, from) {}
+  inline account_role_rename(account_role_rename&& from) noexcept : account_role_rename(nullptr, ::std::move(from)) {}
+  inline account_role_rename& operator=(const account_role_rename& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline account_role_rename& operator=(account_role_rename&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const account_role_rename& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_rename>(&account_role_rename_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(account_role_rename& a, account_role_rename& b) { a.Swap(&b); }
+  inline void Swap(account_role_rename* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(account_role_rename* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] account_role_rename* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<account_role_rename>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const account_role_rename& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const account_role_rename& from) { account_role_rename::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(account_role_rename* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "account_role_rename"; }
+
+  explicit account_role_rename(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  account_role_rename(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const account_role_rename& from);
+  account_role_rename(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, account_role_rename&& from) noexcept
+      : account_role_rename(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNewNameFieldNumber = 5,
+    kNewNormFieldNumber = 6,
+    kOldNormFieldNumber = 7,
+    kPlayerIdFieldNumber = 1,
+    kSeqFieldNumber = 2,
+    kStateFieldNumber = 3,
+    kResultFieldNumber = 4,
+    kRenamedMsFieldNumber = 8,
+    kHeldUntilMsFieldNumber = 9,
+    kUpdatedMsFieldNumber = 10,
+  };
+  // string new_name = 5;
+  void clear_new_name() ;
+  [[nodiscard]] const ::std::string& new_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_new_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_new_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_new_name();
+  void set_allocated_new_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_new_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_new_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_new_name();
+
+  public:
+  // string new_norm = 6;
+  void clear_new_norm() ;
+  [[nodiscard]] const ::std::string& new_norm() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_new_norm(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_new_norm();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_new_norm();
+  void set_allocated_new_norm(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_new_norm() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_new_norm(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_new_norm();
+
+  public:
+  // string old_norm = 7;
+  void clear_old_norm() ;
+  [[nodiscard]] const ::std::string& old_norm() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_old_norm(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_old_norm();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_old_norm();
+  void set_allocated_old_norm(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_old_norm() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_old_norm(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_old_norm();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint64 seq = 2;
+  void clear_seq() ;
+  [[nodiscard]] ::uint64_t seq() const;
+  void set_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seq() const;
+  void _internal_set_seq(::uint64_t value);
+
+  public:
+  // uint32 state = 3;
+  void clear_state() ;
+  [[nodiscard]] ::uint32_t state() const;
+  void set_state(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state() const;
+  void _internal_set_state(::uint32_t value);
+
+  public:
+  // uint32 result = 4;
+  void clear_result() ;
+  [[nodiscard]] ::uint32_t result() const;
+  void set_result(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_result() const;
+  void _internal_set_result(::uint32_t value);
+
+  public:
+  // uint64 renamed_ms = 8;
+  void clear_renamed_ms() ;
+  [[nodiscard]] ::uint64_t renamed_ms() const;
+  void set_renamed_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_renamed_ms() const;
+  void _internal_set_renamed_ms(::uint64_t value);
+
+  public:
+  // uint64 held_until_ms = 9;
+  void clear_held_until_ms() ;
+  [[nodiscard]] ::uint64_t held_until_ms() const;
+  void set_held_until_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_held_until_ms() const;
+  void _internal_set_held_until_ms(::uint64_t value);
+
+  public:
+  // uint64 updated_ms = 10;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:account_role_rename)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 60,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const account_role_rename& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr new_name_;
+    ::google::protobuf::internal::ArenaStringPtr new_norm_;
+    ::google::protobuf::internal::ArenaStringPtr old_norm_;
+    ::uint64_t player_id_;
+    ::uint64_t seq_;
+    ::uint32_t state_;
+    ::uint32_t result_;
+    ::uint64_t renamed_ms_;
+    ::uint64_t held_until_ms_;
+    ::uint64_t updated_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_removal final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:account_role_removal) */ {
  public:
@@ -11348,7 +11700,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_removal final : public
   [[nodiscard]] static const account_role_removal& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_removal>(&account_role_removal_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(account_role_removal& a, account_role_removal& b) { a.Swap(&b); }
   inline void Swap(account_role_removal* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11590,7 +11942,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_ref final : public ::g
   [[nodiscard]] static const account_role_ref& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_ref>(&account_role_ref_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(account_role_ref& a, account_role_ref& b) { a.Swap(&b); }
   inline void Swap(account_role_ref* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11909,7 +12261,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role_admission final : publ
   [[nodiscard]] static const account_role_admission& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role_admission>(&account_role_admission_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(account_role_admission& a, account_role_admission& b) { a.Swap(&b); }
   inline void Swap(account_role_admission* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12238,7 +12590,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_role final : public ::googl
   [[nodiscard]] static const account_role& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_role>(&account_role_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(account_role& a, account_role& b) { a.Swap(&b); }
   inline void Swap(account_role* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12638,7 +12990,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_directory final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kAccountFieldNumber = 1,
+    kRealNamePiFieldNumber = 8,
     kCreatedMsFieldNumber = 2,
+    kDeletionRequestedMsFieldNumber = 4,
+    kDeletionExecuteAfterMsFieldNumber = 5,
+    kDeletionStateFieldNumber = 3,
+    kDeletionSourceFieldNumber = 7,
+    kDeletionLeaseUntilMsFieldNumber = 6,
   };
   // string account = 1;
   void clear_account() ;
@@ -12655,6 +13013,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_directory final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_account();
 
   public:
+  // string real_name_pi = 8;
+  void clear_real_name_pi() ;
+  [[nodiscard]] const ::std::string& real_name_pi() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_real_name_pi(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_real_name_pi();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_real_name_pi();
+  void set_allocated_real_name_pi(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_real_name_pi() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_real_name_pi(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_real_name_pi();
+
+  public:
   // uint64 created_ms = 2;
   void clear_created_ms() ;
   [[nodiscard]] ::uint64_t created_ms() const;
@@ -12665,12 +13038,62 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_directory final : public ::
   void _internal_set_created_ms(::uint64_t value);
 
   public:
+  // uint64 deletion_requested_ms = 4;
+  void clear_deletion_requested_ms() ;
+  [[nodiscard]] ::uint64_t deletion_requested_ms() const;
+  void set_deletion_requested_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_deletion_requested_ms() const;
+  void _internal_set_deletion_requested_ms(::uint64_t value);
+
+  public:
+  // uint64 deletion_execute_after_ms = 5;
+  void clear_deletion_execute_after_ms() ;
+  [[nodiscard]] ::uint64_t deletion_execute_after_ms() const;
+  void set_deletion_execute_after_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_deletion_execute_after_ms() const;
+  void _internal_set_deletion_execute_after_ms(::uint64_t value);
+
+  public:
+  // uint32 deletion_state = 3;
+  void clear_deletion_state() ;
+  [[nodiscard]] ::uint32_t deletion_state() const;
+  void set_deletion_state(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_deletion_state() const;
+  void _internal_set_deletion_state(::uint32_t value);
+
+  public:
+  // uint32 deletion_source = 7;
+  void clear_deletion_source() ;
+  [[nodiscard]] ::uint32_t deletion_source() const;
+  void set_deletion_source(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_deletion_source() const;
+  void _internal_set_deletion_source(::uint32_t value);
+
+  public:
+  // uint64 deletion_lease_until_ms = 6;
+  void clear_deletion_lease_until_ms() ;
+  [[nodiscard]] ::uint64_t deletion_lease_until_ms() const;
+  void set_deletion_lease_until_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_deletion_lease_until_ms() const;
+  void _internal_set_deletion_lease_until_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:account_directory)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 33,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 53,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -12699,7 +13122,255 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_directory final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr account_;
+    ::google::protobuf::internal::ArenaStringPtr real_name_pi_;
     ::uint64_t created_ms_;
+    ::uint64_t deletion_requested_ms_;
+    ::uint64_t deletion_execute_after_ms_;
+    ::uint32_t deletion_state_;
+    ::uint32_t deletion_source_;
+    ::uint64_t deletion_lease_until_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fdatabase_2frollback_5fdatabase_5ftable_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED account_deletion_receipt final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:account_deletion_receipt) */ {
+ public:
+  inline account_deletion_receipt() : account_deletion_receipt(nullptr) {}
+  ~account_deletion_receipt() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(account_deletion_receipt* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(account_deletion_receipt));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr account_deletion_receipt(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline account_deletion_receipt(const account_deletion_receipt& from) : account_deletion_receipt(nullptr, from) {}
+  inline account_deletion_receipt(account_deletion_receipt&& from) noexcept : account_deletion_receipt(nullptr, ::std::move(from)) {}
+  inline account_deletion_receipt& operator=(const account_deletion_receipt& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline account_deletion_receipt& operator=(account_deletion_receipt&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const account_deletion_receipt& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<account_deletion_receipt>(&account_deletion_receipt_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(account_deletion_receipt& a, account_deletion_receipt& b) { a.Swap(&b); }
+  inline void Swap(account_deletion_receipt* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(account_deletion_receipt* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] account_deletion_receipt* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<account_deletion_receipt>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const account_deletion_receipt& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const account_deletion_receipt& from) { account_deletion_receipt::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(account_deletion_receipt* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "account_deletion_receipt"; }
+
+  explicit account_deletion_receipt(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  account_deletion_receipt(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const account_deletion_receipt& from);
+  account_deletion_receipt(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, account_deletion_receipt&& from) noexcept
+      : account_deletion_receipt(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAccountDigestFieldNumber = 1,
+    kRequestedMsFieldNumber = 2,
+    kDeletedMsFieldNumber = 3,
+    kSourceFieldNumber = 4,
+  };
+  // bytes account_digest = 1;
+  void clear_account_digest() ;
+  [[nodiscard]] const ::std::string& account_digest() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_account_digest(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_account_digest();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_account_digest();
+  void set_allocated_account_digest(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_account_digest() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_account_digest(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_account_digest();
+
+  public:
+  // uint64 requested_ms = 2;
+  void clear_requested_ms() ;
+  [[nodiscard]] ::uint64_t requested_ms() const;
+  void set_requested_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_requested_ms() const;
+  void _internal_set_requested_ms(::uint64_t value);
+
+  public:
+  // uint64 deleted_ms = 3;
+  void clear_deleted_ms() ;
+  [[nodiscard]] ::uint64_t deleted_ms() const;
+  void set_deleted_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_deleted_ms() const;
+  void _internal_set_deleted_ms(::uint64_t value);
+
+  public:
+  // uint32 source = 4;
+  void clear_source() ;
+  [[nodiscard]] ::uint32_t source() const;
+  void set_source(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_source() const;
+  void _internal_set_source(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:account_deletion_receipt)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const account_deletion_receipt& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr account_digest_;
+    ::uint64_t requested_ms_;
+    ::uint64_t deleted_ms_;
+    ::uint32_t source_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -12763,7 +13434,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Sour
   [[nodiscard]] static const sql_writer_maintenance_receipt_SourceOpenAck& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_SourceOpenAck>(&sql_writer_maintenance_receipt_SourceOpenAck_globals_);
   }
-  static constexpr int kIndexInFileMessages = 49;
+  static constexpr int kIndexInFileMessages = 51;
   friend void swap(sql_writer_maintenance_receipt_SourceOpenAck& a, sql_writer_maintenance_receipt_SourceOpenAck& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_SourceOpenAck* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13157,7 +13828,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Redi
   [[nodiscard]] static const sql_writer_maintenance_receipt_RedisTargetClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_RedisTargetClosure>(&sql_writer_maintenance_receipt_RedisTargetClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 38;
+  static constexpr int kIndexInFileMessages = 40;
   friend void swap(sql_writer_maintenance_receipt_RedisTargetClosure& a, sql_writer_maintenance_receipt_RedisTargetClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_RedisTargetClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13495,7 +14166,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Manu
   [[nodiscard]] static const sql_writer_maintenance_receipt_ManualConsumerEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ManualConsumerEvidence>(&sql_writer_maintenance_receipt_ManualConsumerEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 46;
+  static constexpr int kIndexInFileMessages = 48;
   friend void swap(sql_writer_maintenance_receipt_ManualConsumerEvidence& a, sql_writer_maintenance_receipt_ManualConsumerEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ManualConsumerEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13824,7 +14495,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Laun
   [[nodiscard]] static const sql_writer_maintenance_receipt_LaunchClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_LaunchClosure>(&sql_writer_maintenance_receipt_LaunchClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(sql_writer_maintenance_receipt_LaunchClosure& a, sql_writer_maintenance_receipt_LaunchClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_LaunchClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14070,7 +14741,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Issu
   [[nodiscard]] static const sql_writer_maintenance_receipt_IssuerReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_IssuerReadiness>(&sql_writer_maintenance_receipt_IssuerReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 48;
+  static constexpr int kIndexInFileMessages = 50;
   friend void swap(sql_writer_maintenance_receipt_IssuerReadiness& a, sql_writer_maintenance_receipt_IssuerReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_IssuerReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14413,7 +15084,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Issu
   [[nodiscard]] static const sql_writer_maintenance_receipt_IssuerClosure& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_IssuerClosure>(&sql_writer_maintenance_receipt_IssuerClosure_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 37;
   friend void swap(sql_writer_maintenance_receipt_IssuerClosure& a, sql_writer_maintenance_receipt_IssuerClosure& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_IssuerClosure* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -14763,7 +15434,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Emer
   [[nodiscard]] static const sql_writer_maintenance_receipt_EmergencyEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_EmergencyEvidence>(&sql_writer_maintenance_receipt_EmergencyEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 42;
+  static constexpr int kIndexInFileMessages = 44;
   friend void swap(sql_writer_maintenance_receipt_EmergencyEvidence& a, sql_writer_maintenance_receipt_EmergencyEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_EmergencyEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15044,7 +15715,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Cons
   [[nodiscard]] static const sql_writer_maintenance_receipt_ConsumerGroupReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ConsumerGroupReadiness>(&sql_writer_maintenance_receipt_ConsumerGroupReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 44;
+  static constexpr int kIndexInFileMessages = 46;
   friend void swap(sql_writer_maintenance_receipt_ConsumerGroupReadiness& a, sql_writer_maintenance_receipt_ConsumerGroupReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ConsumerGroupReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15393,7 +16064,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_lifecycle_receipt_Reques
   [[nodiscard]] static const sql_writer_lifecycle_receipt_Request& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_lifecycle_receipt_Request>(&sql_writer_lifecycle_receipt_Request_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(sql_writer_lifecycle_receipt_Request& a, sql_writer_lifecycle_receipt_Request& b) { a.Swap(&b); }
   inline void Swap(sql_writer_lifecycle_receipt_Request* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -15813,7 +16484,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_grant_set final : p
   [[nodiscard]] static const sql_writer_boot_grant_set& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_grant_set>(&sql_writer_boot_grant_set_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(sql_writer_boot_grant_set& a, sql_writer_boot_grant_set& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_grant_set* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16042,7 +16713,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Publ
   [[nodiscard]] static const sql_writer_maintenance_receipt_PublicationReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_PublicationReadiness>(&sql_writer_maintenance_receipt_PublicationReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 50;
+  static constexpr int kIndexInFileMessages = 52;
   friend void swap(sql_writer_maintenance_receipt_PublicationReadiness& a, sql_writer_maintenance_receipt_PublicationReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_PublicationReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16311,7 +16982,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Publ
   [[nodiscard]] static const sql_writer_maintenance_receipt_PublicationEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_PublicationEvidence>(&sql_writer_maintenance_receipt_PublicationEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 39;
+  static constexpr int kIndexInFileMessages = 41;
   friend void swap(sql_writer_maintenance_receipt_PublicationEvidence& a, sql_writer_maintenance_receipt_PublicationEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_PublicationEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -16563,7 +17234,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Plan
   [[nodiscard]] static const sql_writer_maintenance_receipt_Plan& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_Plan>(&sql_writer_maintenance_receipt_Plan_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(sql_writer_maintenance_receipt_Plan& a, sql_writer_maintenance_receipt_Plan& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_Plan* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17086,7 +17757,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_NonS
   [[nodiscard]] static const sql_writer_maintenance_receipt_NonSqlClosureEvidence& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_NonSqlClosureEvidence>(&sql_writer_maintenance_receipt_NonSqlClosureEvidence_globals_);
   }
-  static constexpr int kIndexInFileMessages = 40;
+  static constexpr int kIndexInFileMessages = 42;
   friend void swap(sql_writer_maintenance_receipt_NonSqlClosureEvidence& a, sql_writer_maintenance_receipt_NonSqlClosureEvidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_NonSqlClosureEvidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17499,7 +18170,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Cons
   [[nodiscard]] static const sql_writer_maintenance_receipt_ConsumerReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ConsumerReadiness>(&sql_writer_maintenance_receipt_ConsumerReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 47;
+  static constexpr int kIndexInFileMessages = 49;
   friend void swap(sql_writer_maintenance_receipt_ConsumerReadiness& a, sql_writer_maintenance_receipt_ConsumerReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ConsumerReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -17734,7 +18405,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_roster_Entry final 
   [[nodiscard]] static const sql_writer_boot_roster_Entry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_roster_Entry>(&sql_writer_boot_roster_Entry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 53;
+  static constexpr int kIndexInFileMessages = 55;
   friend void swap(sql_writer_boot_roster_Entry& a, sql_writer_boot_roster_Entry& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_roster_Entry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -18003,7 +18674,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Rele
   [[nodiscard]] static const sql_writer_maintenance_receipt_ReleaseReadiness& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt_ReleaseReadiness>(&sql_writer_maintenance_receipt_ReleaseReadiness_globals_);
   }
-  static constexpr int kIndexInFileMessages = 43;
+  static constexpr int kIndexInFileMessages = 45;
   friend void swap(sql_writer_maintenance_receipt_ReleaseReadiness& a, sql_writer_maintenance_receipt_ReleaseReadiness& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_ReleaseReadiness* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -18278,7 +18949,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_boot_roster final : publ
   [[nodiscard]] static const sql_writer_boot_roster& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_boot_roster>(&sql_writer_boot_roster_globals_);
   }
-  static constexpr int kIndexInFileMessages = 55;
+  static constexpr int kIndexInFileMessages = 57;
   friend void swap(sql_writer_boot_roster& a, sql_writer_boot_roster& b) { a.Swap(&b); }
   inline void Swap(sql_writer_boot_roster* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -18518,7 +19189,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt_Evid
     kPublicationReadiness = 15,
     DETAIL_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 51;
+  static constexpr int kIndexInFileMessages = 53;
   friend void swap(sql_writer_maintenance_receipt_Evidence& a, sql_writer_maintenance_receipt_Evidence& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt_Evidence* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -18888,7 +19559,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED sql_writer_maintenance_receipt fina
   [[nodiscard]] static const sql_writer_maintenance_receipt& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<sql_writer_maintenance_receipt>(&sql_writer_maintenance_receipt_globals_);
   }
-  static constexpr int kIndexInFileMessages = 52;
+  static constexpr int kIndexInFileMessages = 54;
   friend void swap(sql_writer_maintenance_receipt& a, sql_writer_maintenance_receipt& b) { a.Swap(&b); }
   inline void Swap(sql_writer_maintenance_receipt* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -23486,6 +24157,30 @@ inline void player_name::_internal_set_bound_ms(::uint64_t value) {
   _impl_.bound_ms_ = value;
 }
 
+// uint64 held_until_ms = 6;
+inline void player_name::clear_held_until_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_until_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t player_name::held_until_ms() const {
+  // @@protoc_insertion_point(field_get:player_name.held_until_ms)
+  return _internal_held_until_ms();
+}
+inline void player_name::set_held_until_ms(::uint64_t value) {
+  _internal_set_held_until_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:player_name.held_until_ms)
+}
+inline ::uint64_t player_name::_internal_held_until_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.held_until_ms_;
+}
+inline void player_name::_internal_set_held_until_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_until_ms_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // player_name_owner
@@ -24710,7 +25405,7 @@ inline void account_directory::set_allocated_account(::std::string* PROTOBUF_NUL
 inline void account_directory::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t account_directory::created_ms() const {
   // @@protoc_insertion_point(field_get:account_directory.created_ms)
@@ -24718,7 +25413,7 @@ inline ::uint64_t account_directory::created_ms() const {
 }
 inline void account_directory::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:account_directory.created_ms)
 }
 inline ::uint64_t account_directory::_internal_created_ms() const {
@@ -24728,6 +25423,330 @@ inline ::uint64_t account_directory::_internal_created_ms() const {
 inline void account_directory::_internal_set_created_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = value;
+}
+
+// uint32 deletion_state = 3;
+inline void account_directory::clear_deletion_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_state_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t account_directory::deletion_state() const {
+  // @@protoc_insertion_point(field_get:account_directory.deletion_state)
+  return _internal_deletion_state();
+}
+inline void account_directory::set_deletion_state(::uint32_t value) {
+  _internal_set_deletion_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:account_directory.deletion_state)
+}
+inline ::uint32_t account_directory::_internal_deletion_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deletion_state_;
+}
+inline void account_directory::_internal_set_deletion_state(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_state_ = value;
+}
+
+// uint64 deletion_requested_ms = 4;
+inline void account_directory::clear_deletion_requested_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_requested_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t account_directory::deletion_requested_ms() const {
+  // @@protoc_insertion_point(field_get:account_directory.deletion_requested_ms)
+  return _internal_deletion_requested_ms();
+}
+inline void account_directory::set_deletion_requested_ms(::uint64_t value) {
+  _internal_set_deletion_requested_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:account_directory.deletion_requested_ms)
+}
+inline ::uint64_t account_directory::_internal_deletion_requested_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deletion_requested_ms_;
+}
+inline void account_directory::_internal_set_deletion_requested_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_requested_ms_ = value;
+}
+
+// uint64 deletion_execute_after_ms = 5;
+inline void account_directory::clear_deletion_execute_after_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_execute_after_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t account_directory::deletion_execute_after_ms() const {
+  // @@protoc_insertion_point(field_get:account_directory.deletion_execute_after_ms)
+  return _internal_deletion_execute_after_ms();
+}
+inline void account_directory::set_deletion_execute_after_ms(::uint64_t value) {
+  _internal_set_deletion_execute_after_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:account_directory.deletion_execute_after_ms)
+}
+inline ::uint64_t account_directory::_internal_deletion_execute_after_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deletion_execute_after_ms_;
+}
+inline void account_directory::_internal_set_deletion_execute_after_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_execute_after_ms_ = value;
+}
+
+// uint64 deletion_lease_until_ms = 6;
+inline void account_directory::clear_deletion_lease_until_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_lease_until_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t account_directory::deletion_lease_until_ms() const {
+  // @@protoc_insertion_point(field_get:account_directory.deletion_lease_until_ms)
+  return _internal_deletion_lease_until_ms();
+}
+inline void account_directory::set_deletion_lease_until_ms(::uint64_t value) {
+  _internal_set_deletion_lease_until_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:account_directory.deletion_lease_until_ms)
+}
+inline ::uint64_t account_directory::_internal_deletion_lease_until_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deletion_lease_until_ms_;
+}
+inline void account_directory::_internal_set_deletion_lease_until_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_lease_until_ms_ = value;
+}
+
+// uint32 deletion_source = 7;
+inline void account_directory::clear_deletion_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_source_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t account_directory::deletion_source() const {
+  // @@protoc_insertion_point(field_get:account_directory.deletion_source)
+  return _internal_deletion_source();
+}
+inline void account_directory::set_deletion_source(::uint32_t value) {
+  _internal_set_deletion_source(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:account_directory.deletion_source)
+}
+inline ::uint32_t account_directory::_internal_deletion_source() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deletion_source_;
+}
+inline void account_directory::_internal_set_deletion_source(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deletion_source_ = value;
+}
+
+// string real_name_pi = 8;
+inline void account_directory::clear_real_name_pi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.real_name_pi_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& account_directory::real_name_pi() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:account_directory.real_name_pi)
+  return _internal_real_name_pi();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void account_directory::set_real_name_pi(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.real_name_pi_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:account_directory.real_name_pi)
+}
+inline ::std::string* PROTOBUF_NONNULL account_directory::mutable_real_name_pi()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_real_name_pi();
+  // @@protoc_insertion_point(field_mutable:account_directory.real_name_pi)
+  return _s;
+}
+inline const ::std::string& account_directory::_internal_real_name_pi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.real_name_pi_.Get();
+}
+inline void account_directory::_internal_set_real_name_pi(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.real_name_pi_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL account_directory::_internal_mutable_real_name_pi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.real_name_pi_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE account_directory::release_real_name_pi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:account_directory.real_name_pi)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.real_name_pi_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.real_name_pi_.Set("", GetArena());
+  }
+  return released;
+}
+inline void account_directory::set_allocated_real_name_pi(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.real_name_pi_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.real_name_pi_.IsDefault()) {
+    _impl_.real_name_pi_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:account_directory.real_name_pi)
+}
+
+// -------------------------------------------------------------------
+
+// account_deletion_receipt
+
+// bytes account_digest = 1;
+inline void account_deletion_receipt::clear_account_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_digest_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& account_deletion_receipt::account_digest() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:account_deletion_receipt.account_digest)
+  return _internal_account_digest();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void account_deletion_receipt::set_account_digest(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.account_digest_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:account_deletion_receipt.account_digest)
+}
+inline ::std::string* PROTOBUF_NONNULL account_deletion_receipt::mutable_account_digest()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_account_digest();
+  // @@protoc_insertion_point(field_mutable:account_deletion_receipt.account_digest)
+  return _s;
+}
+inline const ::std::string& account_deletion_receipt::_internal_account_digest() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_digest_.Get();
+}
+inline void account_deletion_receipt::_internal_set_account_digest(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_digest_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL account_deletion_receipt::_internal_mutable_account_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.account_digest_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE account_deletion_receipt::release_account_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:account_deletion_receipt.account_digest)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.account_digest_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.account_digest_.Set("", GetArena());
+  }
+  return released;
+}
+inline void account_deletion_receipt::set_allocated_account_digest(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.account_digest_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.account_digest_.IsDefault()) {
+    _impl_.account_digest_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:account_deletion_receipt.account_digest)
+}
+
+// uint64 requested_ms = 2;
+inline void account_deletion_receipt::clear_requested_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.requested_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t account_deletion_receipt::requested_ms() const {
+  // @@protoc_insertion_point(field_get:account_deletion_receipt.requested_ms)
+  return _internal_requested_ms();
+}
+inline void account_deletion_receipt::set_requested_ms(::uint64_t value) {
+  _internal_set_requested_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:account_deletion_receipt.requested_ms)
+}
+inline ::uint64_t account_deletion_receipt::_internal_requested_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.requested_ms_;
+}
+inline void account_deletion_receipt::_internal_set_requested_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.requested_ms_ = value;
+}
+
+// uint64 deleted_ms = 3;
+inline void account_deletion_receipt::clear_deleted_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deleted_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t account_deletion_receipt::deleted_ms() const {
+  // @@protoc_insertion_point(field_get:account_deletion_receipt.deleted_ms)
+  return _internal_deleted_ms();
+}
+inline void account_deletion_receipt::set_deleted_ms(::uint64_t value) {
+  _internal_set_deleted_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:account_deletion_receipt.deleted_ms)
+}
+inline ::uint64_t account_deletion_receipt::_internal_deleted_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deleted_ms_;
+}
+inline void account_deletion_receipt::_internal_set_deleted_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deleted_ms_ = value;
+}
+
+// uint32 source = 4;
+inline void account_deletion_receipt::clear_source() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t account_deletion_receipt::source() const {
+  // @@protoc_insertion_point(field_get:account_deletion_receipt.source)
+  return _internal_source();
+}
+inline void account_deletion_receipt::set_source(::uint32_t value) {
+  _internal_set_source(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:account_deletion_receipt.source)
+}
+inline ::uint32_t account_deletion_receipt::_internal_source() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.source_;
+}
+inline void account_deletion_receipt::_internal_set_source(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.source_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -25492,6 +26511,370 @@ inline ::uint64_t account_role_removal::_internal_started_ms() const {
 inline void account_role_removal::_internal_set_started_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.started_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// account_role_rename
+
+// uint64 player_id = 1;
+inline void account_role_rename::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t account_role_rename::player_id() const {
+  // @@protoc_insertion_point(field_get:account_role_rename.player_id)
+  return _internal_player_id();
+}
+inline void account_role_rename::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:account_role_rename.player_id)
+}
+inline ::uint64_t account_role_rename::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void account_role_rename::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint64 seq = 2;
+inline void account_role_rename::clear_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t account_role_rename::seq() const {
+  // @@protoc_insertion_point(field_get:account_role_rename.seq)
+  return _internal_seq();
+}
+inline void account_role_rename::set_seq(::uint64_t value) {
+  _internal_set_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:account_role_rename.seq)
+}
+inline ::uint64_t account_role_rename::_internal_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seq_;
+}
+inline void account_role_rename::_internal_set_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = value;
+}
+
+// uint32 state = 3;
+inline void account_role_rename::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t account_role_rename::state() const {
+  // @@protoc_insertion_point(field_get:account_role_rename.state)
+  return _internal_state();
+}
+inline void account_role_rename::set_state(::uint32_t value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:account_role_rename.state)
+}
+inline ::uint32_t account_role_rename::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_;
+}
+inline void account_role_rename::_internal_set_state(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// uint32 result = 4;
+inline void account_role_rename::clear_result() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t account_role_rename::result() const {
+  // @@protoc_insertion_point(field_get:account_role_rename.result)
+  return _internal_result();
+}
+inline void account_role_rename::set_result(::uint32_t value) {
+  _internal_set_result(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:account_role_rename.result)
+}
+inline ::uint32_t account_role_rename::_internal_result() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.result_;
+}
+inline void account_role_rename::_internal_set_result(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.result_ = value;
+}
+
+// string new_name = 5;
+inline void account_role_rename::clear_new_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.new_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& account_role_rename::new_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:account_role_rename.new_name)
+  return _internal_new_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void account_role_rename::set_new_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.new_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:account_role_rename.new_name)
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_rename::mutable_new_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_new_name();
+  // @@protoc_insertion_point(field_mutable:account_role_rename.new_name)
+  return _s;
+}
+inline const ::std::string& account_role_rename::_internal_new_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.new_name_.Get();
+}
+inline void account_role_rename::_internal_set_new_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.new_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_rename::_internal_mutable_new_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.new_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE account_role_rename::release_new_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:account_role_rename.new_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.new_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.new_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void account_role_rename::set_allocated_new_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.new_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.new_name_.IsDefault()) {
+    _impl_.new_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:account_role_rename.new_name)
+}
+
+// string new_norm = 6;
+inline void account_role_rename::clear_new_norm() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.new_norm_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& account_role_rename::new_norm() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:account_role_rename.new_norm)
+  return _internal_new_norm();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void account_role_rename::set_new_norm(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.new_norm_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:account_role_rename.new_norm)
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_rename::mutable_new_norm()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_new_norm();
+  // @@protoc_insertion_point(field_mutable:account_role_rename.new_norm)
+  return _s;
+}
+inline const ::std::string& account_role_rename::_internal_new_norm() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.new_norm_.Get();
+}
+inline void account_role_rename::_internal_set_new_norm(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.new_norm_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_rename::_internal_mutable_new_norm() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.new_norm_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE account_role_rename::release_new_norm() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:account_role_rename.new_norm)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.new_norm_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.new_norm_.Set("", GetArena());
+  }
+  return released;
+}
+inline void account_role_rename::set_allocated_new_norm(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.new_norm_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.new_norm_.IsDefault()) {
+    _impl_.new_norm_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:account_role_rename.new_norm)
+}
+
+// string old_norm = 7;
+inline void account_role_rename::clear_old_norm() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.old_norm_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& account_role_rename::old_norm() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:account_role_rename.old_norm)
+  return _internal_old_norm();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void account_role_rename::set_old_norm(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.old_norm_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:account_role_rename.old_norm)
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_rename::mutable_old_norm()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_old_norm();
+  // @@protoc_insertion_point(field_mutable:account_role_rename.old_norm)
+  return _s;
+}
+inline const ::std::string& account_role_rename::_internal_old_norm() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.old_norm_.Get();
+}
+inline void account_role_rename::_internal_set_old_norm(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.old_norm_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL account_role_rename::_internal_mutable_old_norm() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.old_norm_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE account_role_rename::release_old_norm() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:account_role_rename.old_norm)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.old_norm_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.old_norm_.Set("", GetArena());
+  }
+  return released;
+}
+inline void account_role_rename::set_allocated_old_norm(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.old_norm_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.old_norm_.IsDefault()) {
+    _impl_.old_norm_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:account_role_rename.old_norm)
+}
+
+// uint64 renamed_ms = 8;
+inline void account_role_rename::clear_renamed_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renamed_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t account_role_rename::renamed_ms() const {
+  // @@protoc_insertion_point(field_get:account_role_rename.renamed_ms)
+  return _internal_renamed_ms();
+}
+inline void account_role_rename::set_renamed_ms(::uint64_t value) {
+  _internal_set_renamed_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:account_role_rename.renamed_ms)
+}
+inline ::uint64_t account_role_rename::_internal_renamed_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.renamed_ms_;
+}
+inline void account_role_rename::_internal_set_renamed_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.renamed_ms_ = value;
+}
+
+// uint64 held_until_ms = 9;
+inline void account_role_rename::clear_held_until_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_until_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t account_role_rename::held_until_ms() const {
+  // @@protoc_insertion_point(field_get:account_role_rename.held_until_ms)
+  return _internal_held_until_ms();
+}
+inline void account_role_rename::set_held_until_ms(::uint64_t value) {
+  _internal_set_held_until_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:account_role_rename.held_until_ms)
+}
+inline ::uint64_t account_role_rename::_internal_held_until_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.held_until_ms_;
+}
+inline void account_role_rename::_internal_set_held_until_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.held_until_ms_ = value;
+}
+
+// uint64 updated_ms = 10;
+inline void account_role_rename::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t account_role_rename::updated_ms() const {
+  // @@protoc_insertion_point(field_get:account_role_rename.updated_ms)
+  return _internal_updated_ms();
+}
+inline void account_role_rename::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:account_role_rename.updated_ms)
+}
+inline ::uint64_t account_role_rename::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void account_role_rename::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
 }
 
 // -------------------------------------------------------------------

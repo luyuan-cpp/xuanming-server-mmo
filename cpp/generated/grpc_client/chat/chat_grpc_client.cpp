@@ -29,6 +29,7 @@ namespace chatpb {
 #pragma region ClientPlayerChatSendChat
 namespace {
 void QueueLocalClientPlayerChatSendChatFailure(GrpcDone<::chatpb::SendChatResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerChatSendChatGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendClientPlayerChatSendChatErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerChat.SendChat: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatSendChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendClientPlayerChatSendChatErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::chatpb::SendChatRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerChat.SendChat: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatSendChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendClientPlayerChatSendChatErased(entt::registry& registry, entt::entity n
 #pragma region ClientPlayerChatPullChatHistory
 namespace {
 void QueueLocalClientPlayerChatPullChatHistoryFailure(GrpcDone<::chatpb::PullChatHistoryResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerChatPullChatHistoryGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendClientPlayerChatPullChatHistoryErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerChat.PullChatHistory: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatPullChatHistoryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendClientPlayerChatPullChatHistoryErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::chatpb::PullChatHistoryRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerChat.PullChatHistory: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatPullChatHistoryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendClientPlayerChatPullChatHistoryErased(entt::registry& registry, entt::e
 #pragma region ClientPlayerChatNotifyWorldChat
 namespace {
 void QueueLocalClientPlayerChatNotifyWorldChatFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerChatNotifyWorldChatGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendClientPlayerChatNotifyWorldChatErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerChat.NotifyWorldChat: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatNotifyWorldChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendClientPlayerChatNotifyWorldChatErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::chatpb::ChatMessage*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerChat.NotifyWorldChat: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerChatNotifyWorldChatGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

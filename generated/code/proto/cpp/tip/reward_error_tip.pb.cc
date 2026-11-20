@@ -35,16 +35,16 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_reward_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026reward_error_tip.proto*\?\n\014reward_error"
+    "\n\026reward_error_tip.proto*X\n\014reward_error"
     "\022\023\n\017kReward_errorOK\020\000\022\032\n\025kRewardAlreadyC"
-    "laimed\020\340]B$\n\016com.game.tableZ\022generated/p"
-    "b/tableb\006proto3"
+    "laimed\020\340]\022\027\n\022kRewardPeriodEnded\020\341]B$\n\016co"
+    "m.game.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_reward_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_reward_5ferror_5ftip_2eproto = {
     false,
     false,
-    135,
+    160,
     descriptor_table_protodef_reward_5ferror_5ftip_2eproto,
     "reward_error_tip.proto",
     &descriptor_table_reward_5ferror_5ftip_2eproto_once,
@@ -63,7 +63,7 @@ reward_error_descriptor() {
   return file_level_enum_descriptors_reward_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t reward_error_internal_data_[] = {
-    65536u, 65536u, 12000u, };
+    65536u, 131072u, 12001u, 12000u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

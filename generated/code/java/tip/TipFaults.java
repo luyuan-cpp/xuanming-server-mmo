@@ -57,6 +57,7 @@ public final class TipFaults {
             new Fault(2031, "login_error", "LoginTimeout"),
             new Fault(2035, "login_error", "LoginAuthProviderUnavailable"),
             new Fault(2036, "login_error", "LoginTokenIssueFailed"),
+            new Fault(2047, "login_error", "LoginRealNameServiceUnavailable"),
             new Fault(3003, "scene_error", "EnterNodeUnavailable"),
             new Fault(3010, "scene_error", "EnterSceneGsInfoNull"),
             new Fault(3012, "scene_error", "EnterSceneYourSceneIsNull"),
@@ -78,7 +79,8 @@ public final class TipFaults {
             new Fault(27008, "asset_error", "AssetAuthFailed"),
             new Fault(28010, "equip_error", "EquipInternalError"),
             new Fault(29014, "player_inbox_error", "PlayerInboxStoreUnavailable"),
-            new Fault(30011, "mystery_merchant_error", "MysteryMerchantInternalError")
+            new Fault(30011, "mystery_merchant_error", "MysteryMerchantInternalError"),
+            new Fault(32004, "afk_pass_error", "AfkPassUnavailable")
     );
 
     /** 由 FAULTS 派生,不单独生成第二份字面量。 */

@@ -2827,6 +2827,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAssignedS2C final : public ::
     kHostFieldNumber = 2,
     kTokenPayloadFieldNumber = 4,
     kTokenSignatureFieldNumber = 5,
+    kWsUrlFieldNumber = 8,
     kBattleIdFieldNumber = 1,
     kPortFieldNumber = 3,
     kRoleFieldNumber = 7,
@@ -2877,6 +2878,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAssignedS2C final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_token_signature();
 
   public:
+  // string ws_url = 8;
+  void clear_ws_url() ;
+  [[nodiscard]] const ::std::string& ws_url() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ws_url(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ws_url();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ws_url();
+  void set_allocated_ws_url(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ws_url() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ws_url(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ws_url();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -2921,8 +2937,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAssignedS2C final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 30,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 44,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2953,6 +2969,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleAssignedS2C final : public ::
     ::google::protobuf::internal::ArenaStringPtr host_;
     ::google::protobuf::internal::ArenaStringPtr token_payload_;
     ::google::protobuf::internal::ArenaStringPtr token_signature_;
+    ::google::protobuf::internal::ArenaStringPtr ws_url_;
     ::uint64_t battle_id_;
     ::uint32_t port_;
     int role_;
@@ -7852,7 +7869,7 @@ inline void BattleTokenVerifyResponse::_internal_set_heartbeat_timeout_ms(::uint
 inline void BattleAssignedS2C::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t BattleAssignedS2C::battle_id() const {
   // @@protoc_insertion_point(field_get:BattleAssignedS2C.battle_id)
@@ -7860,7 +7877,7 @@ inline ::uint64_t BattleAssignedS2C::battle_id() const {
 }
 inline void BattleAssignedS2C::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:BattleAssignedS2C.battle_id)
 }
 inline ::uint64_t BattleAssignedS2C::_internal_battle_id() const {
@@ -7940,7 +7957,7 @@ inline void BattleAssignedS2C::set_allocated_host(::std::string* PROTOBUF_NULLAB
 inline void BattleAssignedS2C::clear_port() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.port_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t BattleAssignedS2C::port() const {
   // @@protoc_insertion_point(field_get:BattleAssignedS2C.port)
@@ -7948,7 +7965,7 @@ inline ::uint32_t BattleAssignedS2C::port() const {
 }
 inline void BattleAssignedS2C::set_port(::uint32_t value) {
   _internal_set_port(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:BattleAssignedS2C.port)
 }
 inline ::uint32_t BattleAssignedS2C::_internal_port() const {
@@ -8092,7 +8109,7 @@ inline void BattleAssignedS2C::set_allocated_token_signature(::std::string* PROT
 inline void BattleAssignedS2C::clear_expire_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expire_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t BattleAssignedS2C::expire_at_ms() const {
   // @@protoc_insertion_point(field_get:BattleAssignedS2C.expire_at_ms)
@@ -8100,7 +8117,7 @@ inline ::uint64_t BattleAssignedS2C::expire_at_ms() const {
 }
 inline void BattleAssignedS2C::set_expire_at_ms(::uint64_t value) {
   _internal_set_expire_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleAssignedS2C.expire_at_ms)
 }
 inline ::uint64_t BattleAssignedS2C::_internal_expire_at_ms() const {
@@ -8116,7 +8133,7 @@ inline void BattleAssignedS2C::_internal_set_expire_at_ms(::uint64_t value) {
 inline void BattleAssignedS2C::clear_role() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::eBattleTicketRole BattleAssignedS2C::role() const {
   // @@protoc_insertion_point(field_get:BattleAssignedS2C.role)
@@ -8124,7 +8141,7 @@ inline ::eBattleTicketRole BattleAssignedS2C::role() const {
 }
 inline void BattleAssignedS2C::set_role(::eBattleTicketRole value) {
   _internal_set_role(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattleAssignedS2C.role)
 }
 inline ::eBattleTicketRole BattleAssignedS2C::_internal_role() const {
@@ -8134,6 +8151,70 @@ inline ::eBattleTicketRole BattleAssignedS2C::_internal_role() const {
 inline void BattleAssignedS2C::_internal_set_role(::eBattleTicketRole value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_ = value;
+}
+
+// string ws_url = 8;
+inline void BattleAssignedS2C::clear_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ws_url_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& BattleAssignedS2C::ws_url() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleAssignedS2C.ws_url)
+  return _internal_ws_url();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleAssignedS2C::set_ws_url(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.ws_url_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:BattleAssignedS2C.ws_url)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleAssignedS2C::mutable_ws_url()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_ws_url();
+  // @@protoc_insertion_point(field_mutable:BattleAssignedS2C.ws_url)
+  return _s;
+}
+inline const ::std::string& BattleAssignedS2C::_internal_ws_url() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ws_url_.Get();
+}
+inline void BattleAssignedS2C::_internal_set_ws_url(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ws_url_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleAssignedS2C::_internal_mutable_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ws_url_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleAssignedS2C::release_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BattleAssignedS2C.ws_url)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.ws_url_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ws_url_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleAssignedS2C::set_allocated_ws_url(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.ws_url_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ws_url_.IsDefault()) {
+    _impl_.ws_url_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:BattleAssignedS2C.ws_url)
 }
 
 // -------------------------------------------------------------------

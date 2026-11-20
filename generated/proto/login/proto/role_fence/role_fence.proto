@@ -21,6 +21,18 @@ service RoleFenceParticipant {
   rpc PrepareRoleFreeze(PrepareRoleFreezeRequest) returns (PrepareRoleFreezeResponse) {}
   // 版本更大才覆盖。尽力推送,丢了由下一次访问自愈。
   rpc ApplyRoleFence(ApplyRoleFenceRequest) returns (ApplyRoleFenceResponse) {}
+  // 删角收尾清数据(docs/design/account-deletion.md §6.1):state 必须是墓碑(account 为空)。先按版本合并进副本,
+  // 再在一个事务里锁副本、复核是墓碑、删本库里这名玩家的个人数据。墓碑之后没有写者,所以可重试、可重复,没有回滚。
+  rpc PurgeRemovedRole(PurgeRemovedRoleRequest) returns (PurgeRemovedRoleResponse) {}
+}
+
+message PurgeRemovedRoleRequest {
+  RoleFenceState state = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+
+message PurgeRemovedRoleResponse {
+  bool retry = 1;     // 这一次没清完(SQL、超时、副本还不是墓碑),协调者下一轮再调
 }
 
 // 目录 account_role 一行的护栏字段。所有副本写入的合并规则只有一条:version 大的赢。

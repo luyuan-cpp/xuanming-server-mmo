@@ -4,12 +4,11 @@ import (
 	"testing"
 
 	"chat/internal/constants"
-	"chat/internal/textfilter"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestValidateSensitiveWordsBeforeServiceStartup(t *testing.T) {
+func TestValidateHistoryLimitsAndContentGuardBeforeServiceStartup(t *testing.T) {
 	cfg := Config{
 		ZoneId: 1, LeaseTTL: 60, MaxContentBytes: 512, RateLimitPerSecond: 5,
 		HistoryMaxEntries: 200, HistoryTTLSeconds: 604800, HistoryDefaultLimit: 20,
@@ -20,16 +19,20 @@ func TestValidateSensitiveWordsBeforeServiceStartup(t *testing.T) {
 	cfg.ListenOn = "127.0.0.1:50700"
 	cfg.Timeout = 3500
 	cfg.Etcd.Hosts = []string{"127.0.0.1:2379"}
-	cfg.SensitiveWords = []string{"广告", "Spam", ""}
-	require.NoError(t, cfg.Validate())
+	// 缺省严格:没配内容安全的目标就拒启,不能让 staging / prod 带着不送检的聊天起来。
+	require.ErrorContains(t, cfg.Validate(), "ContentGuard")
+	cfg.ContentGuard.Optional = true
+	require.NoError(t, cfg.Validate(), "本机显式写 Optional 才允许不配")
 	cfg.HistoryMaxLimit = 200
 	cfg.HistoryMaxEntries = 1000
 	require.NoError(t, cfg.Validate(), "可见存储容量独立配置，单次200条合法")
 	cfg.HistoryMaxLimit = 201
 	require.ErrorContains(t, cfg.Validate(), "HistoryMaxLimit")
 	cfg.HistoryMaxLimit = 200
-	cfg.SensitiveWords = make([]string, textfilter.MaxWords+1)
-	require.ErrorContains(t, cfg.Validate(), "SensitiveWords")
+	cfg.ContentGuard.Optional = false
+	cfg.ContentGuard.Rpc.Endpoints = []string{"127.0.0.1:50250"}
+	cfg.ContentGuard.TimeoutMs = 300
+	require.NoError(t, cfg.Validate(), "配了目标的严格模式")
 }
 
 // 世界频道发言间隔只许在 [0, 上限] 内;历史可见窗口不得长过原件保留期减一天(原件到期由库删除)。
@@ -45,6 +48,7 @@ func TestValidateWorldCooldownAndHistoryWindowAgainstRetention(t *testing.T) {
 		cfg.ListenOn = "127.0.0.1:50700"
 		cfg.Timeout = 3500
 		cfg.Etcd.Hosts = []string{"127.0.0.1:2379"}
+		cfg.ContentGuard.Optional = true
 		return cfg
 	}
 	cfg := valid()

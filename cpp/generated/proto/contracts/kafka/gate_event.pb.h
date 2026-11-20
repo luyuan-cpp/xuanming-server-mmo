@@ -954,6 +954,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateEvent final : public 
     kTargetGateIpFieldNumber = 3,
     kTokenPayloadFieldNumber = 5,
     kTokenSignatureFieldNumber = 6,
+    kTargetGateWsUrlFieldNumber = 8,
     kPlayerIdFieldNumber = 1,
     kSessionIdFieldNumber = 2,
     kTargetGatePortFieldNumber = 4,
@@ -1004,6 +1005,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateEvent final : public 
   ::std::string* PROTOBUF_NONNULL _internal_mutable_token_signature();
 
   public:
+  // string target_gate_ws_url = 8;
+  void clear_target_gate_ws_url() ;
+  [[nodiscard]] const ::std::string& target_gate_ws_url() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_gate_ws_url(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_gate_ws_url();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_gate_ws_url();
+  void set_allocated_target_gate_ws_url(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_gate_ws_url() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_gate_ws_url(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_gate_ws_url();
+
+  public:
   // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -1048,8 +1064,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateEvent final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 58,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 84,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1080,6 +1096,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RedirectToGateEvent final : public 
     ::google::protobuf::internal::ArenaStringPtr target_gate_ip_;
     ::google::protobuf::internal::ArenaStringPtr token_payload_;
     ::google::protobuf::internal::ArenaStringPtr token_signature_;
+    ::google::protobuf::internal::ArenaStringPtr target_gate_ws_url_;
     ::uint64_t player_id_;
     ::uint32_t session_id_;
     ::uint32_t target_gate_port_;
@@ -1763,8 +1780,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickPlayerEvent final : public ::go
   // accessors -------------------------------------------------------
   enum : int {
     kPlayerIdFieldNumber = 2,
-    kLoginGenerationFieldNumber = 3,
     kSessionIdFieldNumber = 1,
+    kReasonTipFieldNumber = 4,
+    kLoginGenerationFieldNumber = 3,
   };
   // uint64 player_id = 2;
   void clear_player_id() ;
@@ -1774,16 +1792,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickPlayerEvent final : public ::go
   private:
   ::uint64_t _internal_player_id() const;
   void _internal_set_player_id(::uint64_t value);
-
-  public:
-  // uint64 login_generation = 3;
-  void clear_login_generation() ;
-  [[nodiscard]] ::uint64_t login_generation() const;
-  void set_login_generation(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_login_generation() const;
-  void _internal_set_login_generation(::uint64_t value);
 
   public:
   // uint32 session_id = 1;
@@ -1796,11 +1804,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickPlayerEvent final : public ::go
   void _internal_set_session_id(::uint32_t value);
 
   public:
+  // uint32 reason_tip = 4;
+  void clear_reason_tip() ;
+  [[nodiscard]] ::uint32_t reason_tip() const;
+  void set_reason_tip(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reason_tip() const;
+  void _internal_set_reason_tip(::uint32_t value);
+
+  public:
+  // uint64 login_generation = 3;
+  void clear_login_generation() ;
+  [[nodiscard]] ::uint64_t login_generation() const;
+  void set_login_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_login_generation() const;
+  void _internal_set_login_generation(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:contracts.kafka.KickPlayerEvent)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1830,8 +1858,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickPlayerEvent final : public ::go
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
-    ::uint64_t login_generation_;
     ::uint32_t session_id_;
+    ::uint32_t reason_tip_;
+    ::uint64_t login_generation_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3508,7 +3537,7 @@ inline void RoutePlayerEvent::_internal_set_owner_revision(::uint64_t value) {
 inline void KickPlayerEvent::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint32_t KickPlayerEvent::session_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.KickPlayerEvent.session_id)
@@ -3516,7 +3545,7 @@ inline ::uint32_t KickPlayerEvent::session_id() const {
 }
 inline void KickPlayerEvent::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:contracts.kafka.KickPlayerEvent.session_id)
 }
 inline ::uint32_t KickPlayerEvent::_internal_session_id() const {
@@ -3556,7 +3585,7 @@ inline void KickPlayerEvent::_internal_set_player_id(::uint64_t value) {
 inline void KickPlayerEvent::clear_login_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t KickPlayerEvent::login_generation() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.KickPlayerEvent.login_generation)
@@ -3564,7 +3593,7 @@ inline ::uint64_t KickPlayerEvent::login_generation() const {
 }
 inline void KickPlayerEvent::set_login_generation(::uint64_t value) {
   _internal_set_login_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:contracts.kafka.KickPlayerEvent.login_generation)
 }
 inline ::uint64_t KickPlayerEvent::_internal_login_generation() const {
@@ -3574,6 +3603,30 @@ inline ::uint64_t KickPlayerEvent::_internal_login_generation() const {
 inline void KickPlayerEvent::_internal_set_login_generation(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = value;
+}
+
+// uint32 reason_tip = 4;
+inline void KickPlayerEvent::clear_reason_tip() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t KickPlayerEvent::reason_tip() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.KickPlayerEvent.reason_tip)
+  return _internal_reason_tip();
+}
+inline void KickPlayerEvent::set_reason_tip(::uint32_t value) {
+  _internal_set_reason_tip(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.KickPlayerEvent.reason_tip)
+}
+inline ::uint32_t KickPlayerEvent::_internal_reason_tip() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_tip_;
+}
+inline void KickPlayerEvent::_internal_set_reason_tip(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4268,7 +4321,7 @@ inline void BindSessionEvent::_internal_set_owner_revision(::uint64_t value) {
 inline void RedirectToGateEvent::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t RedirectToGateEvent::player_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.RedirectToGateEvent.player_id)
@@ -4276,7 +4329,7 @@ inline ::uint64_t RedirectToGateEvent::player_id() const {
 }
 inline void RedirectToGateEvent::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:contracts.kafka.RedirectToGateEvent.player_id)
 }
 inline ::uint64_t RedirectToGateEvent::_internal_player_id() const {
@@ -4292,7 +4345,7 @@ inline void RedirectToGateEvent::_internal_set_player_id(::uint64_t value) {
 inline void RedirectToGateEvent::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t RedirectToGateEvent::session_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.RedirectToGateEvent.session_id)
@@ -4300,7 +4353,7 @@ inline ::uint32_t RedirectToGateEvent::session_id() const {
 }
 inline void RedirectToGateEvent::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:contracts.kafka.RedirectToGateEvent.session_id)
 }
 inline ::uint32_t RedirectToGateEvent::_internal_session_id() const {
@@ -4380,7 +4433,7 @@ inline void RedirectToGateEvent::set_allocated_target_gate_ip(::std::string* PRO
 inline void RedirectToGateEvent::clear_target_gate_port() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_gate_port_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t RedirectToGateEvent::target_gate_port() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.RedirectToGateEvent.target_gate_port)
@@ -4388,7 +4441,7 @@ inline ::uint32_t RedirectToGateEvent::target_gate_port() const {
 }
 inline void RedirectToGateEvent::set_target_gate_port(::uint32_t value) {
   _internal_set_target_gate_port(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:contracts.kafka.RedirectToGateEvent.target_gate_port)
 }
 inline ::uint32_t RedirectToGateEvent::_internal_target_gate_port() const {
@@ -4532,7 +4585,7 @@ inline void RedirectToGateEvent::set_allocated_token_signature(::std::string* PR
 inline void RedirectToGateEvent::clear_token_deadline() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.token_deadline_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::int64_t RedirectToGateEvent::token_deadline() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.RedirectToGateEvent.token_deadline)
@@ -4540,7 +4593,7 @@ inline ::int64_t RedirectToGateEvent::token_deadline() const {
 }
 inline void RedirectToGateEvent::set_token_deadline(::int64_t value) {
   _internal_set_token_deadline(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:contracts.kafka.RedirectToGateEvent.token_deadline)
 }
 inline ::int64_t RedirectToGateEvent::_internal_token_deadline() const {
@@ -4550,6 +4603,70 @@ inline ::int64_t RedirectToGateEvent::_internal_token_deadline() const {
 inline void RedirectToGateEvent::_internal_set_token_deadline(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.token_deadline_ = value;
+}
+
+// string target_gate_ws_url = 8;
+inline void RedirectToGateEvent::clear_target_gate_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_gate_ws_url_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& RedirectToGateEvent::target_gate_ws_url() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:contracts.kafka.RedirectToGateEvent.target_gate_ws_url)
+  return _internal_target_gate_ws_url();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void RedirectToGateEvent::set_target_gate_ws_url(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.target_gate_ws_url_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:contracts.kafka.RedirectToGateEvent.target_gate_ws_url)
+}
+inline ::std::string* PROTOBUF_NONNULL RedirectToGateEvent::mutable_target_gate_ws_url()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_target_gate_ws_url();
+  // @@protoc_insertion_point(field_mutable:contracts.kafka.RedirectToGateEvent.target_gate_ws_url)
+  return _s;
+}
+inline const ::std::string& RedirectToGateEvent::_internal_target_gate_ws_url() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_gate_ws_url_.Get();
+}
+inline void RedirectToGateEvent::_internal_set_target_gate_ws_url(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_gate_ws_url_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL RedirectToGateEvent::_internal_mutable_target_gate_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_gate_ws_url_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE RedirectToGateEvent::release_target_gate_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:contracts.kafka.RedirectToGateEvent.target_gate_ws_url)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.target_gate_ws_url_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_gate_ws_url_.Set("", GetArena());
+  }
+  return released;
+}
+inline void RedirectToGateEvent::set_allocated_target_gate_ws_url(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.target_gate_ws_url_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_gate_ws_url_.IsDefault()) {
+    _impl_.target_gate_ws_url_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:contracts.kafka.RedirectToGateEvent.target_gate_ws_url)
 }
 
 // -------------------------------------------------------------------

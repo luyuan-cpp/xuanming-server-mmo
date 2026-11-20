@@ -4,6 +4,7 @@
 #include "actor/actor_net_id.h"
 #include "core/system/id_generator.h"
 #include "engine/core/type_define/player_guid_comp.h"
+#include "engine/core/type_define/type_define.h"  // kInvalidSessionId
 #include "engine/core/utils/registry/actor_log.h"
 #include "generated/attribute/actorbaseattributess2c_attribute_sync.h"
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
@@ -1839,4 +1840,35 @@ TEST_F(AoiDeliveryTest, MoveBatchOfOneIsAPlainMoveBroadcast) {
 
     EXPECT_EQ((std::vector<uint32_t>{SceneMovementClientPlayerNotifyActorMoveMessageId}), MessageIdsFor(observer));
     EXPECT_EQ(1u, broadcasts.size());
+}
+
+TEST_F(AoiDeliveryTest, BroadcastsSkipObserversWhoseSessionWasInvalidated) {
+    const auto walkerA = Spawn(0, 0);
+    const auto walkerB = Spawn(3, 0);
+    const auto liveObserver = Spawn(0, 5);
+    const auto hostedObserver = Spawn(3, 5);
+    for (const auto entity : {liveObserver, hostedObserver}) GiveClient(entity);
+    tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(liveObserver).set_gate_session_id(81);
+    tlsEcs.actorRegistry.get<PlayerSessionSnapshotComp>(hostedObserver).set_gate_session_id(kInvalidSessionId);
+    AoiSystem::Update(0);
+    Walk(walkerA, 9, 0);
+    Walk(walkerB, 9, 0);
+    deliveries.clear();
+    broadcasts.clear();
+
+    ActorMoveBatch batch;
+    batch.Add(walkerA, /*includeSelf=*/false);
+    batch.Add(walkerB, /*includeSelf=*/false);
+    batch.Flush();
+
+    EXPECT_EQ((std::vector<uint32_t>{SceneMovementClientPlayerNotifyActorMoveListMessageId}), MessageIdsFor(liveObserver));
+    EXPECT_TRUE(MessageIdsFor(hostedObserver).empty()) << "断线保留 / 离线托管中的角色没有客户端,不进移动广播也不多拆组";
+    EXPECT_EQ(1u, broadcasts.size());
+
+    deliveries.clear();
+    broadcasts.clear();
+    ActorMoveS2C visibleMsg;
+    ViewSystem::BroadcastMessageToVisiblePlayers(walkerA, SceneMovementClientPlayerNotifyActorMoveMessageId, visibleMsg);
+    EXPECT_EQ((std::vector<uint32_t>{SceneMovementClientPlayerNotifyActorMoveMessageId}), MessageIdsFor(liveObserver));
+    EXPECT_TRUE(MessageIdsFor(hostedObserver).empty()) << "可见广播同样跳过已置无效的会话";
 }

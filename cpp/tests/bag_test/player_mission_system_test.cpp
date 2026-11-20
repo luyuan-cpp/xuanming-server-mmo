@@ -3,6 +3,7 @@
 
 #include <limits>
 #include <set>
+#include <string>
 #include <utility>
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
@@ -151,9 +152,8 @@ TEST_F(PlayerMissionSystemTest, AcceptRejectsUnknownEmptyAndUnsupportedContentWi
     EXPECT_EQ(0u, ItemCount());
 }
 
-TEST_F(PlayerMissionSystemTest, AcceptPersistsTimestampAndRejectsDuplicateTypeAndCompletedMission) {
+TEST_F(PlayerMissionSystemTest, AcceptRejectsDuplicateTypeAndCompletedMission) {
     ASSERT_EQ(kSuccess, PlayerMissionSystem::Accept(player, 0, 4, 123456789));
-    EXPECT_EQ(123456789u, Missions().GetMissionList().mission_begin_time().at(4));
     EXPECT_EQ(kMissionIdRepeated, PlayerMissionSystem::Accept(player, 0, 4, 123456790));
     EXPECT_EQ(kMissionTypeAlreadyExists, PlayerMissionSystem::Accept(player, 0, 7, 123456790));
     Progress(1);
@@ -324,10 +324,8 @@ TEST_F(PlayerMissionSystemTest, MissionAndRewardSurviveRoundTripWithoutAwardOrAc
     ReadyReward();
     QuestAllData saved;
     mission_marshal::Marshal(player, saved);
-    ASSERT_TRUE(saved.scoped_state_present());
     mission_marshal::Unmarshal(player, saved);
     EXPECT_EQ(3u, Missions().GetMissionList().missions().at(7).progress(0));
-    EXPECT_EQ(1234u, Missions().GetMissionList().mission_begin_time().at(7));
     EXPECT_TRUE(Missions().GetTypeFilter().contains({1, 1}));
     EXPECT_TRUE(Missions().IsClaimable(12));
     EXPECT_EQ(0u, ItemCount());
@@ -357,8 +355,8 @@ TEST_F(PlayerMissionSystemTest, ClaimedRewardAndStableItemIdsSurviveReloadWithou
 
 TEST_F(PlayerMissionSystemTest, UnknownConfigurationAndOtherScopesArePreservedWithoutOpeningClaim) {
     auto& container = tlsEcs.actorRegistry.get<MissionsContainerComp>(player);
+    // 本二进制不认识的已完成任务以位图里超出容量的位出现,见 CompletedBitsBeyondThisBuildSurviveLoadAndSave。
     auto& oldScope = container.GetOrCreate(9);
-    oldScope.RestoreCompleted(999999);
     oldScope.RestoreClaimable(999999);
     auto& active = (*oldScope.GetMutableMissionList().mutable_missions())[999998];
     active.set_id(999998);
@@ -368,7 +366,6 @@ TEST_F(PlayerMissionSystemTest, UnknownConfigurationAndOtherScopesArePreservedWi
     mission_marshal::Unmarshal(player, saved);
     const auto* restored = container.Get(9);
     ASSERT_NE(nullptr, restored);
-    EXPECT_TRUE(restored->IsComplete(999999));
     EXPECT_TRUE(restored->IsClaimable(999999));
     EXPECT_EQ(123u, restored->GetMissionList().missions().at(999998).progress(0));
     QuestAllData again;
@@ -377,20 +374,43 @@ TEST_F(PlayerMissionSystemTest, UnknownConfigurationAndOtherScopesArePreservedWi
     EXPECT_EQ(kInvalidParameter, PlayerMissionSystem::ClaimReward(player, 9, 999999));
 }
 
-TEST_F(PlayerMissionSystemTest, LegacySnapshotImportsProgressAndDoesNotRegrantCompletedRewards) {
-    QuestAllData old;
-    auto* active = old.add_active();
-    active->set_config_id(7);
-    active->set_progress(3);
-    active->set_accepted_at_ms(321);
-    old.add_completed(12);
-    mission_marshal::Unmarshal(player, old);
-    EXPECT_EQ(3u, Missions().GetMissionList().missions().at(7).progress(0));
-    EXPECT_TRUE(Missions().IsComplete(12));
-    EXPECT_FALSE(Missions().IsClaimable(12));
-    EXPECT_EQ(kRewardAlreadyClaimed, PlayerMissionSystem::ClaimReward(player, 0, 12));
-    EXPECT_EQ(0u, ItemCount());
+TEST_F(PlayerMissionSystemTest, CompletedMissionsAreSavedAsBitIndexBitmap) {
+    // 位序是导表器发的,只增不改:任务 1 是第 0 位,任务 11 是第 10 位,任务 15 是第 14 位。
+    ASSERT_EQ(0u, MissionBitMap.at(1)); ASSERT_EQ(10u, MissionBitMap.at(11)); ASSERT_EQ(14u, MissionBitMap.at(15));
+    for (const uint32_t id : {1u, 11u, 15u}) Missions().RestoreCompleted(id);
+    QuestAllData saved;
+    mission_marshal::Marshal(player, saved);
+    ASSERT_EQ(1, saved.scopes_size());
+    // 每字节低位在前:第 0 位是首字节的 0x01;第 10、14 位是第二个字节的 0x04 | 0x40。
+    EXPECT_EQ(std::string("\x01\x44", 2), saved.scopes(0).mission_list().complete_missions());
+
+    // 读回来再存,逐字节不变;运行时的任务列表里不留位图字段。
+    mission_marshal::Unmarshal(player, saved);
+    EXPECT_TRUE(Missions().IsComplete(1)); EXPECT_TRUE(Missions().IsComplete(11)); EXPECT_TRUE(Missions().IsComplete(15));
+    EXPECT_FALSE(Missions().IsComplete(12));
+    EXPECT_TRUE(Missions().GetMissionList().complete_missions().empty());
+    QuestAllData again;
+    mission_marshal::Marshal(player, again);
+    EXPECT_EQ(saved.SerializeAsString(), again.SerializeAsString());
 }
+
+TEST_F(PlayerMissionSystemTest, CompletedBitsBeyondThisBuildSurviveLoadAndSave) {
+    // 更新版本的表多出来的任务:位序超出本二进制的位图容量,不认识也要原样存回去。
+    const std::size_t unknownBit = kMissionBitmapCapacity + 5;
+    std::string bits(unknownBit / 8 + 1, '\0');
+    bits[0] = 0x01;
+    bits[unknownBit / 8] = static_cast<char>(bits[unknownBit / 8] | (1 << (unknownBit % 8)));
+    QuestAllData newer;
+    newer.add_scopes()->mutable_mission_list()->set_complete_missions(bits);
+    mission_marshal::Unmarshal(player, newer);
+    EXPECT_TRUE(Missions().IsComplete(1));
+    Missions().RestoreCompleted(11);
+    QuestAllData saved;
+    mission_marshal::Marshal(player, saved);
+    bits[1] = static_cast<char>(bits[1] | 0x04);
+    EXPECT_EQ(bits, saved.scopes(0).mission_list().complete_missions());
+}
+
 TEST_F(PlayerMissionSystemTest, OrderedMissionRoundTripRebuildsTheCurrentObjective) {
     ASSERT_EQ(kSuccess, AcceptForRuleTest(2));
     Progress(1);
@@ -408,10 +428,8 @@ TEST_F(PlayerMissionSystemTest, OrderedMissionRoundTripRebuildsTheCurrentObjecti
     EXPECT_EQ(1u, Missions().GetMissionList().missions().at(2).progress(2));
 }
 
-TEST_F(PlayerMissionSystemTest, EmptyScopedSnapshotDoesNotImportLegacyCompletedFallback) {
+TEST_F(PlayerMissionSystemTest, EmptySnapshotLoadsNoMissions) {
     QuestAllData saved;
-    saved.set_scoped_state_present(true);
-    saved.add_completed(12);
     mission_marshal::Unmarshal(player, saved);
     EXPECT_FALSE(Missions().IsComplete(12));
     EXPECT_FALSE(Missions().IsClaimable(12));
@@ -505,7 +523,6 @@ TEST_F(PlayerMissionSystemTest, LevelConditionAcceptIsRefusedBeforeAnyWriteWhenL
     EXPECT_EQ(kServiceUnavailable, PlayerMissionSystem::CheckAccept(player, 0, 15, 1500));
     EXPECT_EQ(kServiceUnavailable, PlayerMissionSystem::Accept(player, 0, 15, 1500));
     EXPECT_FALSE(Missions().IsAccepted(15));
-    EXPECT_FALSE(Missions().GetMissionList().mission_begin_time().contains(15));
     EXPECT_EQ(0u, Missions().MissionSize());
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<LevelComp>(player)) << "读路径不补建持久组件";
 
@@ -664,42 +681,6 @@ TEST_F(PlayerMissionSystemTest, TargetedConditionRefreshDoesNotReplaceLiveEventF
     MissionSystem::HandleConditionEvent(Kill(1), Missions(), MissionConfig::GetSingleton(), followUps);
     EXPECT_EQ(2u, Missions().GetMissionList().missions().at(7).progress(0));
     EXPECT_EQ(1u, Missions().GetMissionList().missions().at(8).progress(0));
-}
-TEST_F(PlayerMissionSystemTest, LegacyDuplicateActiveEntryDoesNotAppendExtraProgressSlots) {
-    QuestAllData old;
-    auto* first = old.add_active();
-    first->set_config_id(7);
-    first->set_progress(3);
-    first->set_accepted_at_ms(321);
-    auto* duplicate = old.add_active();
-    duplicate->set_config_id(7);
-    duplicate->set_progress(5);
-    duplicate->set_accepted_at_ms(999);
-    mission_marshal::Unmarshal(player, old);
-    const auto& active = Missions().GetMissionList().missions().at(7);
-    EXPECT_EQ(1, active.progress_size());
-    EXPECT_EQ(3u, active.progress(0));
-    EXPECT_EQ(321u, Missions().GetMissionList().mission_begin_time().at(7));
-    Progress(1, 5);
-    EXPECT_TRUE(Missions().IsComplete(7));
-}
-
-TEST_F(PlayerMissionSystemTest, LegacyExplicitCompletedEntryCannotReviveClaimFromDuplicateReadyEntry) {
-    for (const bool completedFirst : {false, true}) {
-        QuestAllData old;
-        for (const uint32_t state : completedFirst ? std::initializer_list<uint32_t>{3, 2} :
-                                                     std::initializer_list<uint32_t>{2, 3}) {
-            auto* entry = old.add_active();
-            entry->set_config_id(12);
-            entry->set_state(state);
-        }
-        mission_marshal::Unmarshal(player, old);
-        EXPECT_TRUE(Missions().IsComplete(12));
-        EXPECT_FALSE(Missions().IsClaimable(12));
-        EXPECT_FALSE(Missions().IsAccepted(12));
-        EXPECT_EQ(kRewardAlreadyClaimed, PlayerMissionSystem::ClaimReward(player, 0, 12));
-        EXPECT_EQ(0u, ItemCount());
-    }
 }
 TEST_F(PlayerMissionSystemTest, PartiallyFilledStacksUseExactBatchGuidBudgetWithoutPartialReward) {
     const auto [reward, error] = RewardTableManager::Instance().FindByIdSilent(1);

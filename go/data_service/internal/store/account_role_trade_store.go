@@ -336,6 +336,12 @@ func (s *AccountRoleTradeStore) beginPrepare(ctx context.Context, in *dspb.Begin
 		if owned.Account != in.SellerAccount || owned.OwnerRevision != in.ExpectedOwnerRevision || owned.TradeListingId != 0 || owned.PrepareToken != 0 {
 			return accountdirectory.ErrConflict
 		}
+		// 改名没收完时先不冻结,理由同删角(account_role_removal.go 的 beginRemoval):回可重试,trade 的对账循环会再来。
+		if open, err := renameOpenTx(ctx, tx, in.PlayerId); err != nil {
+			return err
+		} else if open {
+			return accountdirectory.ErrRetryLater
+		}
 		if _, err = tx.ExecContext(ctx, "UPDATE account_role SET prepare_token=?,fence_version=fence_version+1,updated_ms="+dbNowMsSQL+" WHERE player_id=?", in.ListingId, in.PlayerId); err != nil {
 			return err
 		}

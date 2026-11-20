@@ -18,12 +18,18 @@ const realNameTestPI = "1hpfml09b57f3f8185f8cb5094ea3f26278efb"
 
 type fakeRealNames struct {
 	sets    int
+	resets  int
 	lookups int
 }
 
 func (f *fakeRealNames) SetRealName(_ context.Context, _ string, pi string) (string, error) {
 	f.sets++
 	return pi, nil
+}
+
+func (f *fakeRealNames) ResetRealName(context.Context, string) (bool, error) {
+	f.resets++
+	return true, nil
 }
 
 func (f *fakeRealNames) RealNameOfPlayer(context.Context, uint64) (string, bool, error) {
@@ -84,5 +90,21 @@ func TestGetAccountRealNameRequiresPaymentProof(t *testing.T) {
 	out, err := realNameServer(t, names).GetAccountRealName(context.Background(), in)
 	if err != nil || !out.GetFound() || out.GetRealNamePi() != realNameTestPI {
 		t.Fatalf("payment proof: out=%v err=%v", out, err)
+	}
+}
+
+// 客服重置实名只认 login 的证明:payment 的证明能查实名,不能清实名。
+func TestResetAccountRealNameRequiresLoginProof(t *testing.T) {
+	names := &fakeRealNames{}
+	in := &dspb.ResetAccountRealNameRequest{Account: "acc"}
+	signDirectoryRequest(t, "ResetAccountRealName", in, accountdirectory.PaymentCaller, uint64(time.Now().UnixMilli()))
+	if _, err := realNameServer(t, names).ResetAccountRealName(context.Background(), in); status.Code(err) != codes.PermissionDenied || names.resets != 0 {
+		t.Fatalf("payment proof: err=%v resets=%d; want PermissionDenied without a write", err, names.resets)
+	}
+	in = &dspb.ResetAccountRealNameRequest{Account: "acc"}
+	signDirectoryRequest(t, "ResetAccountRealName", in, "login", uint64(time.Now().UnixMilli()))
+	out, err := realNameServer(t, names).ResetAccountRealName(context.Background(), in)
+	if err != nil || !out.GetHadRealName() || names.resets != 1 {
+		t.Fatalf("login proof: out=%v err=%v resets=%d", out, err, names.resets)
 	}
 }

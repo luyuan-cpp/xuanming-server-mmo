@@ -96,7 +96,7 @@ func queueRankRemovalsTx(ctx context.Context, tx *sql.Tx, player uint64) error {
 
 // purgeBattleScriptsTx 删这名玩家自己写的战斗剧本和他的选用(docs/design/battle-script.md §6):剧本正文是他写的内容,随角色删;
 // 选用只指向本人剧本或官方剧本,别的玩家没有指向它们的引用。审核流水 match_battle_script_review 是审核留痕(谁在什么时候审了
-// 哪一版正文),按审计保留,不删(docs/design/account-deletion.md §6.2)。
+// 哪一版正文),按审计保留,这里不删;过了保留期(缺省 180 天)由 PurgeExpiredBattleScriptReviews 统一删(docs/design/account-deletion.md §6.2)。
 // 剧本行先按 owner 索引普通读候选,再按主键逐行删,与审核对剧本行的 FOR UPDATE 点锁串行:审核先提交,我们随后删掉;
 // 我们先删,审核读不到行按过时拒绝。玩家自己的提交、删除、选用都先锁他的副本,墓碑之后不会再有新行。
 func purgeBattleScriptsTx(ctx context.Context, tx *sql.Tx, player uint64) error {

@@ -3,7 +3,6 @@ package loginpregatelogic
 import (
 	"context"
 	"errors"
-	"time"
 
 	"login/internal/logic/pkg/token"
 	"login/internal/svc"
@@ -72,6 +71,6 @@ func (l *SubmitRealNameLogic) SubmitRealName(in *loginpb.SubmitRealNameRequest) 
 			resp.ErrorMessage = &base.TipInfoMessage{Id: tip}
 		}
 	}
-	resp.AntiAddiction = aa.Evaluate(channel, pi, time.Now()).Status
+	resp.AntiAddiction = aa.Evaluate(channel, pi, aa.Now()).Status
 	return resp, nil
 }

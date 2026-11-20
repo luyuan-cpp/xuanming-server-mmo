@@ -87,6 +87,22 @@ extern const ::google::protobuf::internal::ClassDataFull PrepareRoleFreezeRespon
 #else
 extern const PrepareRoleFreezeResponseGlobalsTypeInternal PrepareRoleFreezeResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PurgeRemovedRoleRequest;
+struct PurgeRemovedRoleRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PurgeRemovedRoleRequestGlobalsTypeInternal PurgeRemovedRoleRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PurgeRemovedRoleRequest_class_data_;
+#else
+extern const PurgeRemovedRoleRequestGlobalsTypeInternal PurgeRemovedRoleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PurgeRemovedRoleResponse;
+struct PurgeRemovedRoleResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PurgeRemovedRoleResponseGlobalsTypeInternal PurgeRemovedRoleResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PurgeRemovedRoleResponse_class_data_;
+#else
+extern const PurgeRemovedRoleResponseGlobalsTypeInternal PurgeRemovedRoleResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RoleFenceState;
 struct RoleFenceStateGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -164,7 +180,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RoleFenceState final : public ::goo
   [[nodiscard]] static const RoleFenceState& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RoleFenceState>(&RoleFenceState_globals_);
   }
-  static constexpr int kIndexInFileMessages = 0;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(RoleFenceState& a, RoleFenceState& b) { a.Swap(&b); }
   inline void Swap(RoleFenceState* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -386,6 +402,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RoleFenceState final : public ::goo
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PurgeRemovedRoleResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:rolefence.PurgeRemovedRoleResponse) */ {
+ public:
+  inline PurgeRemovedRoleResponse() : PurgeRemovedRoleResponse(nullptr) {}
+  ~PurgeRemovedRoleResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PurgeRemovedRoleResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PurgeRemovedRoleResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PurgeRemovedRoleResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PurgeRemovedRoleResponse(const PurgeRemovedRoleResponse& from) : PurgeRemovedRoleResponse(nullptr, from) {}
+  inline PurgeRemovedRoleResponse(PurgeRemovedRoleResponse&& from) noexcept : PurgeRemovedRoleResponse(nullptr, ::std::move(from)) {}
+  inline PurgeRemovedRoleResponse& operator=(const PurgeRemovedRoleResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PurgeRemovedRoleResponse& operator=(PurgeRemovedRoleResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PurgeRemovedRoleResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PurgeRemovedRoleResponse>(&PurgeRemovedRoleResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(PurgeRemovedRoleResponse& a, PurgeRemovedRoleResponse& b) { a.Swap(&b); }
+  inline void Swap(PurgeRemovedRoleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PurgeRemovedRoleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PurgeRemovedRoleResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PurgeRemovedRoleResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PurgeRemovedRoleResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PurgeRemovedRoleResponse& from) { PurgeRemovedRoleResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PurgeRemovedRoleResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "rolefence.PurgeRemovedRoleResponse"; }
+
+  explicit PurgeRemovedRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PurgeRemovedRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PurgeRemovedRoleResponse& from);
+  PurgeRemovedRoleResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PurgeRemovedRoleResponse&& from) noexcept
+      : PurgeRemovedRoleResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRetryFieldNumber = 1,
+  };
+  // bool retry = 1;
+  void clear_retry() ;
+  [[nodiscard]] bool retry() const;
+  void set_retry(bool value);
+
+  private:
+  bool _internal_retry() const;
+  void _internal_set_retry(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:rolefence.PurgeRemovedRoleResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PurgeRemovedRoleResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool retry_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2frole_5ffence_2frole_5ffence_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareRoleFreezeResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:rolefence.PrepareRoleFreezeResponse) */ {
  public:
@@ -442,7 +659,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareRoleFreezeResponse final : p
   [[nodiscard]] static const PrepareRoleFreezeResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PrepareRoleFreezeResponse>(&PrepareRoleFreezeResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(PrepareRoleFreezeResponse& a, PrepareRoleFreezeResponse& b) { a.Swap(&b); }
   inline void Swap(PrepareRoleFreezeResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -684,7 +901,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyRoleFenceResponse final : publ
   [[nodiscard]] static const ApplyRoleFenceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ApplyRoleFenceResponse>(&ApplyRoleFenceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(ApplyRoleFenceResponse& a, ApplyRoleFenceResponse& b) { a.Swap(&b); }
   inline void Swap(ApplyRoleFenceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -829,6 +1046,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyRoleFenceResponse final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PurgeRemovedRoleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:rolefence.PurgeRemovedRoleRequest) */ {
+ public:
+  inline PurgeRemovedRoleRequest() : PurgeRemovedRoleRequest(nullptr) {}
+  ~PurgeRemovedRoleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PurgeRemovedRoleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PurgeRemovedRoleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PurgeRemovedRoleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PurgeRemovedRoleRequest(const PurgeRemovedRoleRequest& from) : PurgeRemovedRoleRequest(nullptr, from) {}
+  inline PurgeRemovedRoleRequest(PurgeRemovedRoleRequest&& from) noexcept : PurgeRemovedRoleRequest(nullptr, ::std::move(from)) {}
+  inline PurgeRemovedRoleRequest& operator=(const PurgeRemovedRoleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PurgeRemovedRoleRequest& operator=(PurgeRemovedRoleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PurgeRemovedRoleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PurgeRemovedRoleRequest>(&PurgeRemovedRoleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 0;
+  friend void swap(PurgeRemovedRoleRequest& a, PurgeRemovedRoleRequest& b) { a.Swap(&b); }
+  inline void Swap(PurgeRemovedRoleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PurgeRemovedRoleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PurgeRemovedRoleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PurgeRemovedRoleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PurgeRemovedRoleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PurgeRemovedRoleRequest& from) { PurgeRemovedRoleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PurgeRemovedRoleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "rolefence.PurgeRemovedRoleRequest"; }
+
+  explicit PurgeRemovedRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PurgeRemovedRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PurgeRemovedRoleRequest& from);
+  PurgeRemovedRoleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PurgeRemovedRoleRequest&& from) noexcept
+      : PurgeRemovedRoleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kStateFieldNumber = 1,
+    kAuthFieldNumber = 2,
+  };
+  // .rolefence.RoleFenceState state = 1;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::rolefence::RoleFenceState& state() const;
+  [[nodiscard]] ::rolefence::RoleFenceState* PROTOBUF_NULLABLE release_state();
+  ::rolefence::RoleFenceState* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::rolefence::RoleFenceState* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::rolefence::RoleFenceState* PROTOBUF_NULLABLE value);
+  ::rolefence::RoleFenceState* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::rolefence::RoleFenceState& _internal_state() const;
+  ::rolefence::RoleFenceState* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // .common.base.ServiceCallAuth auth = 2;
+  [[nodiscard]] bool has_auth()
+      const;
+  void clear_auth() ;
+  [[nodiscard]] const ::common::base::ServiceCallAuth& auth() const;
+  [[nodiscard]] ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE release_auth();
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL mutable_auth();
+  void set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE unsafe_arena_release_auth();
+
+  private:
+  const ::common::base::ServiceCallAuth& _internal_auth() const;
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // @@protoc_insertion_point(class_scope:rolefence.PurgeRemovedRoleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PurgeRemovedRoleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::rolefence::RoleFenceState* PROTOBUF_NULLABLE state_;
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2frole_5ffence_2frole_5ffence_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareRoleFreezeRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:rolefence.PrepareRoleFreezeRequest) */ {
  public:
@@ -885,7 +1327,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareRoleFreezeRequest final : pu
   [[nodiscard]] static const PrepareRoleFreezeRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PrepareRoleFreezeRequest>(&PrepareRoleFreezeRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(PrepareRoleFreezeRequest& a, PrepareRoleFreezeRequest& b) { a.Swap(&b); }
   inline void Swap(PrepareRoleFreezeRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1122,7 +1564,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyRoleFenceRequest final : publi
   [[nodiscard]] static const ApplyRoleFenceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ApplyRoleFenceRequest>(&ApplyRoleFenceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(ApplyRoleFenceRequest& a, ApplyRoleFenceRequest& b) { a.Swap(&b); }
   inline void Swap(ApplyRoleFenceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1302,6 +1744,229 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyRoleFenceRequest final : publi
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// PurgeRemovedRoleRequest
+
+// .rolefence.RoleFenceState state = 1;
+inline bool PurgeRemovedRoleRequest::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void PurgeRemovedRoleRequest::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::rolefence::RoleFenceState& PurgeRemovedRoleRequest::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::rolefence::RoleFenceState* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::rolefence::RoleFenceState>(&::rolefence::RoleFenceState_globals_);
+}
+inline const ::rolefence::RoleFenceState& PurgeRemovedRoleRequest::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:rolefence.PurgeRemovedRoleRequest.state)
+  return _internal_state();
+}
+inline void PurgeRemovedRoleRequest::unsafe_arena_set_allocated_state(
+    ::rolefence::RoleFenceState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::rolefence::RoleFenceState*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:rolefence.PurgeRemovedRoleRequest.state)
+}
+inline ::rolefence::RoleFenceState* PROTOBUF_NULLABLE PurgeRemovedRoleRequest::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::rolefence::RoleFenceState* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::rolefence::RoleFenceState* PROTOBUF_NULLABLE PurgeRemovedRoleRequest::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:rolefence.PurgeRemovedRoleRequest.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::rolefence::RoleFenceState* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::rolefence::RoleFenceState* PROTOBUF_NONNULL PurgeRemovedRoleRequest::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::rolefence::RoleFenceState>(GetArena());
+    _impl_.state_ = reinterpret_cast<::rolefence::RoleFenceState*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::rolefence::RoleFenceState* PROTOBUF_NONNULL PurgeRemovedRoleRequest::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::rolefence::RoleFenceState* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:rolefence.PurgeRemovedRoleRequest.state)
+  return _msg;
+}
+inline void PurgeRemovedRoleRequest::set_allocated_state(::rolefence::RoleFenceState* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::rolefence::RoleFenceState*>(value);
+  // @@protoc_insertion_point(field_set_allocated:rolefence.PurgeRemovedRoleRequest.state)
+}
+
+// .common.base.ServiceCallAuth auth = 2;
+inline bool PurgeRemovedRoleRequest::has_auth() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
+  return value;
+}
+inline const ::common::base::ServiceCallAuth& PurgeRemovedRoleRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::ServiceCallAuth* p = _impl_.auth_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::ServiceCallAuth>(&::common::base::ServiceCallAuth_globals_);
+}
+inline const ::common::base::ServiceCallAuth& PurgeRemovedRoleRequest::auth() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:rolefence.PurgeRemovedRoleRequest.auth)
+  return _internal_auth();
+}
+inline void PurgeRemovedRoleRequest::unsafe_arena_set_allocated_auth(
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:rolefence.PurgeRemovedRoleRequest.auth)
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE PurgeRemovedRoleRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::ServiceCallAuth* released = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE PurgeRemovedRoleRequest::unsafe_arena_release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:rolefence.PurgeRemovedRoleRequest.auth)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::ServiceCallAuth* temp = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  return temp;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL PurgeRemovedRoleRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::ServiceCallAuth>(GetArena());
+    _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(p);
+  }
+  return _impl_.auth_;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL PurgeRemovedRoleRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:rolefence.PurgeRemovedRoleRequest.auth)
+  return _msg;
+}
+inline void PurgeRemovedRoleRequest::set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  // @@protoc_insertion_point(field_set_allocated:rolefence.PurgeRemovedRoleRequest.auth)
+}
+
+// -------------------------------------------------------------------
+
+// PurgeRemovedRoleResponse
+
+// bool retry = 1;
+inline void PurgeRemovedRoleResponse::clear_retry() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retry_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool PurgeRemovedRoleResponse::retry() const {
+  // @@protoc_insertion_point(field_get:rolefence.PurgeRemovedRoleResponse.retry)
+  return _internal_retry();
+}
+inline void PurgeRemovedRoleResponse::set_retry(bool value) {
+  _internal_set_retry(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:rolefence.PurgeRemovedRoleResponse.retry)
+}
+inline bool PurgeRemovedRoleResponse::_internal_retry() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retry_;
+}
+inline void PurgeRemovedRoleResponse::_internal_set_retry(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retry_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // RoleFenceState

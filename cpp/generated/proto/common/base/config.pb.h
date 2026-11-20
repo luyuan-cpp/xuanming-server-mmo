@@ -2780,6 +2780,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     kGateMaxConnectionsFieldNumber = 15,
     kBattleMaxConnectionsFieldNumber = 17,
     kClusterIdFieldNumber = 18,
+    kContentGuardOptionalFieldNumber = 26,
   };
   // repeated string etcd_hosts = 1;
   [[nodiscard]] int etcd_hosts_size()
@@ -3105,11 +3106,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   void _internal_set_cluster_id(::uint32_t value);
 
   public:
+  // bool content_guard_optional = 26;
+  void clear_content_guard_optional() ;
+  [[nodiscard]] bool content_guard_optional() const;
+  void set_content_guard_optional(bool value);
+
+  private:
+  bool _internal_content_guard_optional() const;
+  void _internal_set_content_guard_optional(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BaseDeployConfig)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 22,
+      ::google::protobuf::internal::TcParseTable<5, 23,
                           5, 210,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3160,6 +3171,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     ::uint32_t gate_max_connections_;
     ::uint32_t battle_max_connections_;
     ::uint32_t cluster_id_;
+    bool content_guard_optional_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5219,6 +5231,30 @@ inline void BaseDeployConfig::set_allocated_tracing(::TracingConfig* PROTOBUF_NU
 
   _impl_.tracing_ = reinterpret_cast<::TracingConfig*>(value);
   // @@protoc_insertion_point(field_set_allocated:BaseDeployConfig.tracing)
+}
+
+// bool content_guard_optional = 26;
+inline void BaseDeployConfig::clear_content_guard_optional() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.content_guard_optional_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline bool BaseDeployConfig::content_guard_optional() const {
+  // @@protoc_insertion_point(field_get:BaseDeployConfig.content_guard_optional)
+  return _internal_content_guard_optional();
+}
+inline void BaseDeployConfig::set_content_guard_optional(bool value) {
+  _internal_set_content_guard_optional(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:BaseDeployConfig.content_guard_optional)
+}
+inline bool BaseDeployConfig::_internal_content_guard_optional() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.content_guard_optional_;
+}
+inline void BaseDeployConfig::_internal_set_content_guard_optional(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.content_guard_optional_ = value;
 }
 
 // -------------------------------------------------------------------

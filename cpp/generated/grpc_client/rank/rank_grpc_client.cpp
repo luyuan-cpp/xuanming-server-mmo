@@ -29,6 +29,7 @@ namespace rankpb {
 #pragma region ClientPlayerRankGetRankPage
 namespace {
 void QueueLocalClientPlayerRankGetRankPageFailure(GrpcDone<::rankpb::GetRankPageResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerRankGetRankPageGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendClientPlayerRankGetRankPageErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerRank.GetRankPage: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerRankGetRankPageGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendClientPlayerRankGetRankPageErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::rankpb::GetRankPageRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerRank.GetRankPage: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerRankGetRankPageGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendClientPlayerRankGetRankPageErased(entt::registry& registry, entt::entit
 #pragma region ClientPlayerRankGetRankAround
 namespace {
 void QueueLocalClientPlayerRankGetRankAroundFailure(GrpcDone<::rankpb::GetRankAroundResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerRankGetRankAroundGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendClientPlayerRankGetRankAroundErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerRank.GetRankAround: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerRankGetRankAroundGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendClientPlayerRankGetRankAroundErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::rankpb::GetRankAroundRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerRank.GetRankAround: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerRankGetRankAroundGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

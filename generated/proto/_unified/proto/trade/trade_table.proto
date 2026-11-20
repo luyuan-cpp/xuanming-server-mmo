@@ -325,6 +325,10 @@ message TradeCommerceLeg {
   uint32 outcome = 7;
   // 被人工补发取代时是补发腿的名字,被整单退回取代时是 "refund"。取代后不再算作最终发放(commerce.finalCredits)。
   string superseded_by = 8;
+  // 发放腿付出的是谁托管的资产:扣出它的那个角色,建腿时记下,补发照抄,人工改绑只换收件人不换它。
+  // 退回腿只有付回给这个角色时才算「退回本人托管的资产」、不判获取封禁(commerce.legTxType);改绑到同账号的另一名角色之后
+  // 收件人不再是它,按成交所得判(2026-11-20)。0 = 本合同不记:扣出腿、官方发货,以及拍品的卖家所得(货款托管在出价合同里)。
+  uint64 escrow_owner_id = 9;
 }
 
 // outbox 行做的是哪一步。与 stream 不是一回事:同为 TRADE_CREDIT 流,交付买家与退回卖家

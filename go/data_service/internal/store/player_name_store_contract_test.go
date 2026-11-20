@@ -25,6 +25,8 @@ import (
 // playerNameReleaseRemovedSQL / playerNameUndoRestoreSQL)+ owner 行两条写(playerNameOwnerUpsertSQL / playerNameOwnerDeleteSQL)
 // + 五条读(ownedNormOf / ownerOfNorm / nameRowStateOf / nameHoldingOf / BatchGet 的 IN 查询),
 // 对应下面七个应答队列(两张表的写各共用一个队列,按调用顺序消费)。
+// 2026-11-20 角色改名又加了四条:名字行三条写(playerNameTakeOverSQL / playerNameUnholdSQL / playerNameHoldSQL,进名字行的写队列)
+// 和一条读(playerNameOwnerHeldSQL:reserveNameRow 撞键之后读占用者与保护到期时刻,和 ownerOfNorm 共用 owner 队列)。
 //
 // 假驱动**不模拟 InnoDB 的锁与唯一约束**:并发下"谁赢"、会不会 1213,只有真库能证(见
 // player_name_store_integration_test.go)。这里只证"给定库的应答,本层的判定与语句不变"。
@@ -36,10 +38,12 @@ type fakeNameExec struct {
 }
 
 // fakeNameLookup 是一次等值读的应答。found=false → 驱动返回零行,database/sql 给出 sql.ErrNoRows。
+// heldUntilMs 只对 reserveNameRow 撞键之后的那条读(占用者 + 保护到期时刻)有意义,不写就是 0(不在保护期)。
 type fakeNameLookup struct {
-	value any
-	found bool
-	err   error
+	value       any
+	found       bool
+	err         error
+	heldUntilMs uint64
 }
 
 // fakeNamePair 是一次读两列(都是 uint64)的应答:nameRowStateOf 是 (created_ms, bound_ms),
@@ -322,6 +326,26 @@ func (c *fakeNameConn) QueryContext(_ context.Context, query string, args []driv
 		rows := &fakeNameRows{cols: pairCols}
 		if next.found {
 			rows.rows = [][]driver.Value{{int64(next.first), int64(next.second)}}
+		}
+		return rows, nil
+	}
+
+	// reserveNameRow 撞键之后的读(占用者 + 保护到期时刻)和 ownerOfNorm 共用 owner 队列:脚本只给占用者时保护到期时刻是 0。
+	if query == playerNameOwnerHeldSQL {
+		next, err := c.fake.recordQuery(stmt, &c.fake.script.owner)
+		if err != nil {
+			return nil, err
+		}
+		if next.err != nil {
+			return nil, next.err
+		}
+		rows := &fakeNameRows{cols: []string{"player_id", "held_until_ms"}}
+		if next.found {
+			val, err := toDriverValue(next.value)
+			if err != nil {
+				return nil, err
+			}
+			rows.rows = [][]driver.Value{{val, int64(next.heldUntilMs)}}
 		}
 		return rows, nil
 	}
@@ -1894,5 +1918,162 @@ func TestOutcomeStringsAreStableLowCardinality(t *testing.T) {
 		if tc.got != tc.want {
 			t.Fatalf("outcome label = %q, want %q", tc.got, tc.want)
 		}
+	}
+}
+
+// ── 改名之后旧名的保护期(docs/design/rename-and-content-safety.md §4.2)────────────────────
+
+// 保护期没过的名字照旧是被占用,一条接管都不发;过了期的由来登记的人接管,接管带着读到的到期时刻当条件。
+func TestReserveTakesOverOnlyExpiredHolds(t *testing.T) {
+	t.Run("还在保护期", func(t *testing.T) {
+		st, fake := newFakeNameStore(t, fakeNameScript{
+			owned: []fakeNameLookup{{found: false}},
+			execs: []fakeNameExec{{affected: 0}},
+			owner: []fakeNameLookup{{value: contractOther, found: true, heldUntilMs: contractNowMs + 1}},
+		})
+		outcome, owner, err := st.Reserve(context.Background(), contractNamePlayer, contractName, contractNorm, contractNowMs)
+		if err != nil || outcome != ReserveTaken || owner != contractOther {
+			t.Fatalf("Reserve = %s, owner=%d, %v; want taken by %d", outcome, owner, err, contractOther)
+		}
+		if got := fake.nameExecCount(); got != 1 {
+			t.Fatalf("保护期内不该发接管:名字行上 %d 条写,want 1", got)
+		}
+	})
+	t.Run("保护期已过", func(t *testing.T) {
+		st, fake := newFakeNameStore(t, fakeNameScript{
+			owned:      []fakeNameLookup{{found: false}},
+			execs:      []fakeNameExec{{affected: 0}, {affected: 1}},
+			owner:      []fakeNameLookup{{value: contractOther, found: true, heldUntilMs: contractNowMs}},
+			ownerExecs: []fakeNameExec{{affected: 1}},
+		})
+		outcome, owner, err := st.Reserve(context.Background(), contractNamePlayer, contractName, contractNorm, contractNowMs)
+		if err != nil || outcome != ReserveInserted || owner != 0 {
+			t.Fatalf("Reserve = %s, owner=%d, %v; want inserted", outcome, owner, err)
+		}
+		takeOver := fake.execAt(1)
+		if takeOver.sql != playerNameTakeOverSQL {
+			t.Fatalf("第二条写不是接管:%q", takeOver.sql)
+		}
+		want := []driver.Value{int64(contractNamePlayer), contractName, int64(contractNowMs), contractNorm, int64(contractOther), int64(contractNowMs), int64(contractNowMs)}
+		if !reflect.DeepEqual(takeOver.args, want) {
+			t.Fatalf("接管的参数 = %v, want %v", takeOver.args, want)
+		}
+		if got := fake.ownerExecCount(); got != 1 {
+			t.Fatalf("接管之后要照常写 owner 行:%d 条,want 1", got)
+		}
+	})
+	t.Run("接管没改到就重读", func(t *testing.T) {
+		// 原主在这之间改回了旧名(撤了保护):接管改到 0 行,下一轮读到的是普通的占用。
+		st, fake := newFakeNameStore(t, fakeNameScript{
+			owned: []fakeNameLookup{{found: false}},
+			execs: []fakeNameExec{{affected: 0}, {affected: 0}, {affected: 0}},
+			owner: []fakeNameLookup{
+				{value: contractOther, found: true, heldUntilMs: contractNowMs - 1},
+				{value: contractOther, found: true},
+			},
+		})
+		outcome, owner, err := st.Reserve(context.Background(), contractNamePlayer, contractName, contractNorm, contractNowMs)
+		if err != nil || outcome != ReserveTaken || owner != contractOther {
+			t.Fatalf("Reserve = %s, owner=%d, %v; want taken by %d", outcome, owner, err, contractOther)
+		}
+		if got := fake.nameExecCount(); got != 3 {
+			t.Fatalf("名字行上 %d 条写,want 3(登记、接管、再登记)", got)
+		}
+	})
+}
+
+// 改名预留只写名字行,不读也不写 owner 行;撞上自己的行(重发,或者自己还在保护期内的旧名)时把它还原成预留态。
+func TestReserveForRenameTouchesOnlyTheNameRow(t *testing.T) {
+	st, fake := newFakeNameStore(t, fakeNameScript{execs: []fakeNameExec{{affected: 1}}})
+	outcome, _, err := st.ReserveForRename(context.Background(), contractNamePlayer, contractName, contractNorm, contractNowMs)
+	if err != nil || outcome != ReserveInserted {
+		t.Fatalf("ReserveForRename = %s, %v; want inserted", outcome, err)
+	}
+	if fake.queryCount() != 0 || fake.ownerExecCount() != 0 || fake.nameExecCount() != 1 {
+		t.Fatalf("新插入只该有一条名字行的写:query=%d owner=%d name=%d", fake.queryCount(), fake.ownerExecCount(), fake.nameExecCount())
+	}
+
+	st, fake = newFakeNameStore(t, fakeNameScript{
+		execs: []fakeNameExec{{affected: 0}, {affected: 1}},
+		owner: []fakeNameLookup{{value: contractNamePlayer, found: true, heldUntilMs: contractNowMs + 5}},
+	})
+	outcome, _, err = st.ReserveForRename(context.Background(), contractNamePlayer, contractName, contractNorm, contractNowMs)
+	if err != nil || outcome != ReserveAlreadyOwned {
+		t.Fatalf("ReserveForRename on the player's own row = %s, %v; want already_owned", outcome, err)
+	}
+	unhold := fake.execAt(1)
+	if unhold.sql != playerNameUnholdSQL {
+		t.Fatalf("撞上自己的行之后要还原成预留态:%q", unhold.sql)
+	}
+	if want := []driver.Value{contractName, int64(contractNowMs), contractNorm, int64(contractNamePlayer)}; !reflect.DeepEqual(unhold.args, want) {
+		t.Fatalf("还原的参数 = %v, want %v", unhold.args, want)
+	}
+	if fake.ownerExecCount() != 0 {
+		t.Fatalf("改名预留不写 owner 行:%d 条", fake.ownerExecCount())
+	}
+
+	st, _ = newFakeNameStore(t, fakeNameScript{
+		execs: []fakeNameExec{{affected: 0}},
+		owner: []fakeNameLookup{{value: contractOther, found: true}},
+	})
+	outcome, owner, err := st.ReserveForRename(context.Background(), contractNamePlayer, contractName, contractNorm, contractNowMs)
+	if err != nil || outcome != ReserveTaken || owner != contractOther {
+		t.Fatalf("ReserveForRename on another player's name = %s, owner=%d, %v; want taken", outcome, owner, err)
+	}
+}
+
+func TestHoldRenamedIsOneConditionalUpdate(t *testing.T) {
+	st, fake := newFakeNameStore(t, fakeNameScript{execs: []fakeNameExec{{affected: 1}}})
+	if err := st.HoldRenamed(context.Background(), contractNamePlayer, contractNorm, contractNowMs+7, contractNowMs); err != nil {
+		t.Fatalf("HoldRenamed: %v", err)
+	}
+	hold := fake.execAt(0)
+	if hold.sql != playerNameHoldSQL {
+		t.Fatalf("发的不是置保护那一条:%q", hold.sql)
+	}
+	if want := []driver.Value{int64(contractNowMs + 7), int64(contractNowMs), contractNorm, int64(contractNamePlayer)}; !reflect.DeepEqual(hold.args, want) {
+		t.Fatalf("置保护的参数 = %v, want %v", hold.args, want)
+	}
+	// 没有可保护的行(改到 0 行)不是错误。
+	st, _ = newFakeNameStore(t, fakeNameScript{execs: []fakeNameExec{{affected: 0}}})
+	if err := st.HoldRenamed(context.Background(), contractNamePlayer, contractNorm, contractNowMs+7, contractNowMs); err != nil {
+		t.Fatalf("HoldRenamed with nothing to hold: %v", err)
+	}
+	for name, call := range map[string]func(*PlayerNameStore) error{
+		"player_id为0": func(s *PlayerNameStore) error { return s.HoldRenamed(context.Background(), 0, contractNorm, 1, 1) },
+		"到期时刻为0":      func(s *PlayerNameStore) error { return s.HoldRenamed(context.Background(), 1, contractNorm, 0, 1) },
+		"预留时刻为0": func(s *PlayerNameStore) error {
+			_, _, err := s.ReserveForRename(context.Background(), 1, contractName, contractNorm, 0)
+			return err
+		},
+	} {
+		st, fake := newFakeNameStore(t, fakeNameScript{})
+		if err := call(st); !errors.Is(err, ErrPlayerNameInvalidArgument) {
+			t.Fatalf("%s: want ErrPlayerNameInvalidArgument, got %v", name, err)
+		}
+		if fake.execCount() != 0 || fake.queryCount() != 0 {
+			t.Fatalf("%s: 入参非法却发了语句", name)
+		}
+	}
+}
+
+// 三条新语句的形状:都按主键 name_norm 定位、都带 player_id 条件;接管和置保护的条件决定了它们碰不到不该碰的行。
+func TestHoldSQLShape(t *testing.T) {
+	for name, tc := range map[string]struct {
+		sql  string
+		want []string
+	}{
+		"接管":  {playerNameTakeOverSQL, []string{"WHERE name_norm = ? AND player_id = ? AND held_until_ms = ? AND held_until_ms <= ?", "bound_ms = 0, held_until_ms = 0"}},
+		"撤保护": {playerNameUnholdSQL, []string{"WHERE name_norm = ? AND player_id = ? AND held_until_ms <> 0", "bound_ms = 0, held_until_ms = 0"}},
+		"置保护": {playerNameHoldSQL, []string{"WHERE name_norm = ? AND player_id = ? AND held_until_ms = 0", "bound_ms = IF(bound_ms = 0, ?, bound_ms)"}},
+	} {
+		for _, fragment := range tc.want {
+			if !strings.Contains(tc.sql, fragment) {
+				t.Errorf("%s: 语句里应当有 %q:%s", name, fragment, tc.sql)
+			}
+		}
+	}
+	if !strings.Contains(playerNameBootstrapDDL, "`held_until_ms` bigint unsigned NOT NULL DEFAULT 0") {
+		t.Errorf("player_name 的建表语句里要有 held_until_ms 列,缺省 0(不在保护期)")
 	}
 }

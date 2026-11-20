@@ -100,11 +100,7 @@ def test_multiple_gaps_are_never_reclaimed(cfg):
 
 
 def test_bitset_capacity_covers_retired_top_id(cfg):
-    """最大 ID 被删后,位图容量仍按已分配位数算,不能缩水。
-
-    ``_read_max_bit_index_column_value`` 只看当前表数据,ID 5 删掉后它算出 4,而位 4 仍被退休的 ID 5 占着,
-    ``std::bitset<4>`` 就会放不下位 4。
-    """
+    """最大 ID 被删后,位图容量仍按已分配位数算,不能缩水:位 4 仍被退休的 ID 5 占着,``std::bitset<4>`` 放不下。"""
     _write_mapping(cfg, {1: 0, 2: 1, 3: 2, 4: 3, 5: 4})
     tables = build_tables(cfg, [_mission_spec([1, 2, 3, 4])])
 
@@ -112,6 +108,20 @@ def test_bitset_capacity_covers_retired_top_id(cfg):
 
     header = (cfg.cpp.bit_index_dir / "mission_table_id_bit_index.h").read_text(encoding="utf-8")
     assert "kMissionBitmapCapacity = 5" in header
+
+
+def test_bitset_capacity_follows_issued_bits_not_id_values(cfg):
+    """容量只看发了多少位,与 ID 的数值无关:ID 从 100001 起编时,每个玩家的 bitset 不能按十万位开。"""
+    cfg.bit_index_bootstrap = True
+    tables = build_tables(cfg, [_mission_spec([100001, 100002, 200005])])
+
+    generate_bit_indexes(cfg, tables)
+
+    assert _read_mapping(cfg) == {100001: 0, 100002: 1, 200005: 2}
+    header = (cfg.cpp.bit_index_dir / "mission_table_id_bit_index.h").read_text(encoding="utf-8")
+    assert "kMissionBitmapCapacity = 3;" in header
+    go_src = (cfg.go.bit_index_dir / "mission" / "mission_table_id_bit_index.go").read_text(encoding="utf-8")
+    assert "BitmapCapacity = 3\n" in go_src
 
 
 # ---------------------------------------------------------------------------

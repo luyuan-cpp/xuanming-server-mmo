@@ -230,7 +230,7 @@ func TestDispatchOnce_AdmitsNoMoreThanGatesHold(t *testing.T) {
 	// 不 Start:直接调 dispatchOnce,没有 goroutine,结果确定。
 	d := mustNewDispatcher(t, q, prov, rdb, secret, "dispatcher:lock:gatecap", 1)
 	for range 8 {
-		if _, err := q.Enqueue(ctx, 1, "u", "d"); err != nil {
+		if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
 	}

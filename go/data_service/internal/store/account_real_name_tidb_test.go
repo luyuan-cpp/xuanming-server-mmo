@@ -50,4 +50,17 @@ func TestTiDBAccountRealNameIsWrittenOnce(t *testing.T) {
 	_, found, err = s.RealNameOfPlayer(ctx, 3302)
 	require.NoError(t, err)
 	require.False(t, found, "目录里没有的角色")
+
+	// 客服重置:清掉之后可以重新绑定别的实名;重放什么都不改。
+	had, err := s.ResetRealName(ctx, "real-name")
+	require.NoError(t, err)
+	require.True(t, had)
+	had, err = s.ResetRealName(ctx, "real-name")
+	require.NoError(t, err)
+	require.False(t, had, "重放:本来就没有 pi")
+	stored, err := s.SetRealName(ctx, "real-name", realNameTestOther)
+	require.NoError(t, err)
+	require.Equal(t, realNameTestOther, stored, "重置之后能绑新的实名")
+	_, err = s.ResetRealName(ctx, "no-such-account")
+	require.ErrorIs(t, err, accountdirectory.ErrMissing)
 }

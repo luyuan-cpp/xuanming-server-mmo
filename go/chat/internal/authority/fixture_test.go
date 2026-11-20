@@ -9,6 +9,7 @@ import (
 	"shared/authoritysql"
 	"shared/authoritysql/sqltest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,14 +17,49 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 	base "proto/common/base"
+	cgpb "proto/content_guard"
 	dspb "proto/data_service"
 	rfpb "proto/role_fence"
+	"shared/contentguard"
 	"shared/rolefence"
 	"shared/roleidentity"
 )
 
 func fixtureRules() Rules {
-	return Rules{MaxContentBytes: 512, RateLimitPerSecond: 5, HistoryMaxEntries: 200, HistoryTTLSeconds: 604800, HistoryDefaultLimit: 20, HistoryMaxLimit: 50, SensitiveWords: []string{"广告"}}
+	return Rules{MaxContentBytes: 512, RateLimitPerSecond: 5, HistoryMaxEntries: 200, HistoryTTLSeconds: 604800, HistoryDefaultLimit: 20, HistoryMaxLimit: 50}
+}
+
+// fixtureGuard 是内容安全服务的替身:缺省把「广告」打码成两个 *,其余原样通过;force 之后一律回指定的结局。
+type fixtureGuard struct {
+	mu      sync.Mutex
+	verdict contentguard.Verdict
+}
+
+func (g *fixtureGuard) Check(_ context.Context, _ cgpb.TextScene, _ uint64, text string) contentguard.Result {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.verdict != 0 {
+		return contentguard.Result{Verdict: g.verdict}
+	}
+	if masked := strings.ReplaceAll(text, "广告", "**"); masked != text {
+		return contentguard.Result{Verdict: contentguard.Masked, Masked: masked}
+	}
+	return contentguard.Result{Verdict: contentguard.Pass}
+}
+
+// force 让之后的送检一律回 verdict;传 0 恢复缺省行为。
+func (g *fixtureGuard) force(verdict contentguard.Verdict) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.verdict = verdict
+}
+
+// guardOf 取夹具给 Store 装的内容安全替身。
+func guardOf(t *testing.T, s *Store) *fixtureGuard {
+	t.Helper()
+	guard, ok := s.guard.(*fixtureGuard)
+	require.True(t, ok, "Store 没装内容安全替身")
+	return guard
 }
 
 // fixtureRoleStates 是目录 GetRoleFenceState 的替身:聊天只经这个 RPC 读角色归属,不碰目录的表。
@@ -151,7 +187,7 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	if len(configured) == 1 {
 		rules = configured[0]
 	}
-	s, err := New(ctx, runtimeDB, newFixtureRoleStates(), authoritysql.BackendTiDB, rules)
+	s, err := New(ctx, runtimeDB, newFixtureRoleStates(), authoritysql.BackendTiDB, rules, WithContentGuard(&fixtureGuard{}))
 	require.NoError(t, err)
 	return s, fixture
 }

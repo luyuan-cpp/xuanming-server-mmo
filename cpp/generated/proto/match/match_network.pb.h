@@ -1399,6 +1399,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NetworkProbeTarget final : public :
   // accessors -------------------------------------------------------
   enum : int {
     kHostFieldNumber = 2,
+    kWsUrlFieldNumber = 5,
     kGrantFieldNumber = 4,
     kPhysicalRegionFieldNumber = 1,
     kPortFieldNumber = 3,
@@ -1416,6 +1417,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NetworkProbeTarget final : public :
   const ::std::string& _internal_host() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_host(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_host();
+
+  public:
+  // string ws_url = 5;
+  void clear_ws_url() ;
+  [[nodiscard]] const ::std::string& ws_url() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_ws_url(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_ws_url();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_ws_url();
+  void set_allocated_ws_url(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_ws_url() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_ws_url(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_ws_url();
 
   public:
   // .match.SignedNetworkProbe grant = 4;
@@ -1458,8 +1474,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NetworkProbeTarget final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          1, 37,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          1, 43,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1488,6 +1504,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NetworkProbeTarget final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr host_;
+    ::google::protobuf::internal::ArenaStringPtr ws_url_;
     ::match::SignedNetworkProbe* PROTOBUF_NULLABLE grant_;
     ::uint32_t physical_region_;
     ::uint32_t port_;
@@ -3329,7 +3346,7 @@ inline void SignedNetworkProbe::set_allocated_signature(::std::string* PROTOBUF_
 inline void NetworkProbeTarget::clear_physical_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t NetworkProbeTarget::physical_region() const {
   // @@protoc_insertion_point(field_get:match.NetworkProbeTarget.physical_region)
@@ -3337,7 +3354,7 @@ inline ::uint32_t NetworkProbeTarget::physical_region() const {
 }
 inline void NetworkProbeTarget::set_physical_region(::uint32_t value) {
   _internal_set_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:match.NetworkProbeTarget.physical_region)
 }
 inline ::uint32_t NetworkProbeTarget::_internal_physical_region() const {
@@ -3417,7 +3434,7 @@ inline void NetworkProbeTarget::set_allocated_host(::std::string* PROTOBUF_NULLA
 inline void NetworkProbeTarget::clear_port() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.port_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t NetworkProbeTarget::port() const {
   // @@protoc_insertion_point(field_get:match.NetworkProbeTarget.port)
@@ -3425,7 +3442,7 @@ inline ::uint32_t NetworkProbeTarget::port() const {
 }
 inline void NetworkProbeTarget::set_port(::uint32_t value) {
   _internal_set_port(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:match.NetworkProbeTarget.port)
 }
 inline ::uint32_t NetworkProbeTarget::_internal_port() const {
@@ -3439,14 +3456,14 @@ inline void NetworkProbeTarget::_internal_set_port(::uint32_t value) {
 
 // .match.SignedNetworkProbe grant = 4;
 inline bool NetworkProbeTarget::has_grant() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.grant_ != nullptr);
   return value;
 }
 inline void NetworkProbeTarget::clear_grant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.grant_ != nullptr) _impl_.grant_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::match::SignedNetworkProbe& NetworkProbeTarget::_internal_grant() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3465,16 +3482,16 @@ inline void NetworkProbeTarget::unsafe_arena_set_allocated_grant(
   }
   _impl_.grant_ = reinterpret_cast<::match::SignedNetworkProbe*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.NetworkProbeTarget.grant)
 }
 inline ::match::SignedNetworkProbe* PROTOBUF_NULLABLE NetworkProbeTarget::release_grant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::SignedNetworkProbe* released = _impl_.grant_;
   _impl_.grant_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3494,7 +3511,7 @@ inline ::match::SignedNetworkProbe* PROTOBUF_NULLABLE NetworkProbeTarget::unsafe
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:match.NetworkProbeTarget.grant)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::SignedNetworkProbe* temp = _impl_.grant_;
   _impl_.grant_ = nullptr;
   return temp;
@@ -3509,7 +3526,7 @@ inline ::match::SignedNetworkProbe* PROTOBUF_NONNULL NetworkProbeTarget::_intern
 }
 inline ::match::SignedNetworkProbe* PROTOBUF_NONNULL NetworkProbeTarget::mutable_grant()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::match::SignedNetworkProbe* _msg = _internal_mutable_grant();
   // @@protoc_insertion_point(field_mutable:match.NetworkProbeTarget.grant)
   return _msg;
@@ -3526,13 +3543,77 @@ inline void NetworkProbeTarget::set_allocated_grant(::match::SignedNetworkProbe*
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.grant_ = reinterpret_cast<::match::SignedNetworkProbe*>(value);
   // @@protoc_insertion_point(field_set_allocated:match.NetworkProbeTarget.grant)
+}
+
+// string ws_url = 5;
+inline void NetworkProbeTarget::clear_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ws_url_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& NetworkProbeTarget::ws_url() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.NetworkProbeTarget.ws_url)
+  return _internal_ws_url();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void NetworkProbeTarget::set_ws_url(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.ws_url_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.NetworkProbeTarget.ws_url)
+}
+inline ::std::string* PROTOBUF_NONNULL NetworkProbeTarget::mutable_ws_url()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_ws_url();
+  // @@protoc_insertion_point(field_mutable:match.NetworkProbeTarget.ws_url)
+  return _s;
+}
+inline const ::std::string& NetworkProbeTarget::_internal_ws_url() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ws_url_.Get();
+}
+inline void NetworkProbeTarget::_internal_set_ws_url(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ws_url_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL NetworkProbeTarget::_internal_mutable_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.ws_url_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE NetworkProbeTarget::release_ws_url() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.NetworkProbeTarget.ws_url)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.ws_url_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.ws_url_.Set("", GetArena());
+  }
+  return released;
+}
+inline void NetworkProbeTarget::set_allocated_ws_url(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.ws_url_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.ws_url_.IsDefault()) {
+    _impl_.ws_url_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.NetworkProbeTarget.ws_url)
 }
 
 // -------------------------------------------------------------------

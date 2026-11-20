@@ -62,6 +62,7 @@ set(SOURCE_FILES
     logic/battle_room_manager.cpp
     logic/battle_spectate_relay.cpp
     client/battle_client_edge.cpp
+    client/battle_connection_admission.cpp
     main.cpp
     rpc_replies/register_handler.cpp
 )

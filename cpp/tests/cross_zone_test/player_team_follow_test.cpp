@@ -505,6 +505,44 @@ TEST_F(PlayerTeamFollowTest, DifferentSceneSendsCorrelatedRequestForCurrentGateS
     ExpectNoRegroup(player_);
 }
 
+TEST_F(PlayerTeamFollowTest, DifferentSceneRequestNamesTheGateProcessThatHoldsTheSession)
+{
+    // 同一 node_id 短暂有两个 gate 进程、两者在本节点上都有实体时,跟随发出的 EnterScene 带会话绑定时记下的那个进程
+    // (scene-enter-chain-residuals.md §14.6);旧代码按 node_id 取第一个匹配的实体,带的可能是另一个进程。
+    ASSERT_NO_FATAL_FAILURE(StartSceneManager());
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+
+    const auto session = SessionOnGate(kCurrentGateId);
+    BindSession(player_, kPlayerId, session);
+    auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
+    for (const char* instance : {"gate-old-process", "gate-new-process"})
+    {
+        auto& gate = gateRegistry.emplace<NodeInfo>(gateRegistry.create());
+        gate.set_zone_id(kZoneId);
+        gate.set_node_id(kCurrentGateId);
+        gate.set_node_uuid(instance);
+    }
+    // 绑在按 node_id 先找到的那个以外的进程上:不论实体遍历顺序,旧代码都带错。
+    const auto byNodeId = ResolveLocalZoneGateEntity(session);
+    ASSERT_TRUE(byNodeId.has_value());
+    const std::string boundInstance =
+        gateRegistry.get<NodeInfo>(*byNodeId).node_uuid() == "gate-old-process" ? "gate-new-process" : "gate-old-process";
+    tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player_, session, 29u, boundInstance);
+    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player_, 29u, 7u);
+
+    redis_.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId + 1));
+    ASSERT_TRUE(muduo_grpc_test::RunLoopUntil(loop_, [requests = sceneManager_.requests, player = player_]
+    {
+        return !requests->empty() &&
+               !tlsEcs.actorRegistry.any_of<PlayerSceneChangeInFlightComp>(player);
+    }, 5s));
+    ASSERT_EQ(sceneManager_.requests->size(), 1u);
+    const auto& request = sceneManager_.requests->front();
+    EXPECT_EQ(request.session_id(), session);
+    EXPECT_EQ(request.gate_id(), std::to_string(kCurrentGateId));
+    EXPECT_EQ(request.gate_instance_id(), boundInstance) << "变异红:带的是会话所在的进程,不是按 node_id 先找到的那个";
+}
+
 TEST_F(PlayerTeamFollowTest, StoppingRejectsNewChecksAndLateReplyAfterScopeDestruction)
 {
     ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
@@ -943,5 +981,64 @@ TEST_F(TeamFollowDriveTest, OnlyADetachedMemberWhoWantsToFollowNeedsARecheck)
 
     TeamFollowSystem::SetFollowIntent(follower_, false);
     EXPECT_FALSE(PlayerTeamSystem::NeedsFollowRecheck(follower_)) << "暂离:不替他跟";
+}
+
+TEST_F(TeamFollowDriveTest, LeaderJumpDoesNotTeleportFollowerInBattle)
+{
+    WalkLeader(kTeamFollowSpacing + 3.0); // 队员正在走,速度非零且已广播行走
+    const double battleX = X(follower_);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(follower_);
+
+    // 队长瞬移到远方(> kTeamFollowMaxLeaderJump 且超过步行距离):触发 RestartFormation。
+    tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location()->set_x(100.0);
+    TeamFollowSystem::Update(0.05);
+
+    EXPECT_DOUBLE_EQ(X(follower_), battleX) << "战斗中绝不瞬移";
+    EXPECT_TRUE(TeamFollowSystem::IsDriven(follower_)) << "名次照留,不摘驱动";
+    EXPECT_EQ(TeamFollowSystem::DrivenSlot(follower_).value_or(0u), 1u);
+    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower_);
+    ASSERT_NE(velocity, nullptr);
+    EXPECT_DOUBLE_EQ(velocity->x(), 0.0) << "重建队形时已替进战队员停步";
+    EXPECT_FALSE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_).broadcastMoving);
+
+    tlsEcs.actorRegistry.remove<InBattleComp>(follower_);
+    TeamFollowSystem::Update(0.05);
+    EXPECT_NEAR(X(follower_), 100.0, 1e-6) << "战斗结束后按 needsPlacement 放进队长的新槽位";
+}
+
+TEST_F(TeamFollowDriveTest, LeaderJumpWithoutTeleportKeepsBroadcastStateUntilFollowerStops)
+{
+    auto& frameTime = tlsFrameTimeManager.frameTime;
+    const auto savedFrame = frameTime.current_frame();
+
+    // 先拉出 > kTeamFollowMaxLeaderJump(4m) 的差距但未超追赶上限:战斗中停在 -1,队长走到 9。
+    tlsEcs.actorRegistry.emplace<InBattleComp>(follower_);
+    WalkLeader(9.0);
+    tlsEcs.actorRegistry.remove<InBattleComp>(follower_);
+
+    // 追赶一 tick:队员正在走(速度非零、broadcastMoving=true),此时仍离队长 > 4m。
+    frameTime.set_current_frame(savedFrame + 1);
+    TeamFollowSystem::Update(0.05);
+    ASSERT_TRUE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_).broadcastMoving);
+
+    // 队长跳回队员脚下(> 4m):触发 RestartFormation,PlaceMember 走 snap(不瞬移),必须保留 broadcastMoving。
+    const double followerX = X(follower_);
+    tlsEcs.actorRegistry.get<Transform>(leader_).mutable_location()->set_x(followerX);
+    frameTime.set_current_frame(savedFrame + 2);
+    TeamFollowSystem::Update(0.05);
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_).broadcastMoving)
+        << "不瞬移的重建不能把已广播的行走状态抹掉,否则下一 tick 停步不会发停步广播";
+
+    // 下一 tick 已在槽位上(moved==0):StopMotion 清速度并补发停步广播(更新 broadcastFrame、清 broadcastMoving)。
+    frameTime.set_current_frame(savedFrame + 3);
+    TeamFollowSystem::Update(0.05);
+    const auto& driven = tlsEcs.actorRegistry.get<TeamFollowerComp>(follower_);
+    EXPECT_FALSE(driven.broadcastMoving);
+    EXPECT_EQ(driven.broadcastFrame, savedFrame + 3);
+    const auto* velocity = tlsEcs.actorRegistry.try_get<Velocity>(follower_);
+    ASSERT_NE(velocity, nullptr);
+    EXPECT_DOUBLE_EQ(velocity->x(), 0.0);
+
+    frameTime.set_current_frame(savedFrame);
 }
 } // namespace

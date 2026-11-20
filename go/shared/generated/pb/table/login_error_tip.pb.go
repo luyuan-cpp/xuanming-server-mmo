@@ -63,6 +63,18 @@ const (
 	LoginError_kLoginAuthProviderUnavailable             LoginError = 2035
 	LoginError_kLoginTokenIssueFailed                    LoginError = 2036
 	LoginError_kLoginZoneCreateRoleClosed                LoginError = 2037
+	LoginError_kLoginAccountDeletionPending              LoginError = 2038
+	LoginError_kLoginAccountDeletionBlocked              LoginError = 2039
+	LoginError_kLoginAccountDeletionInProgress           LoginError = 2040
+	LoginError_kLoginAccountDeletionReauthRequired       LoginError = 2041
+	LoginError_kLoginRealNameRequired                    LoginError = 2042
+	LoginError_kLoginRealNameInvalid                     LoginError = 2043
+	LoginError_kLoginRealNamePending                     LoginError = 2044
+	LoginError_kLoginRealNameTooManyAttempts             LoginError = 2045
+	LoginError_kLoginRealNameAlreadyBound                LoginError = 2046
+	LoginError_kLoginRealNameServiceUnavailable          LoginError = 2047
+	LoginError_kLoginMinorNotInPlayTime                  LoginError = 2048
+	LoginError_kLoginMinorPlayTimeOver                   LoginError = 2049
 )
 
 // Enum value maps for LoginError.
@@ -107,6 +119,18 @@ var (
 		2035: "kLoginAuthProviderUnavailable",
 		2036: "kLoginTokenIssueFailed",
 		2037: "kLoginZoneCreateRoleClosed",
+		2038: "kLoginAccountDeletionPending",
+		2039: "kLoginAccountDeletionBlocked",
+		2040: "kLoginAccountDeletionInProgress",
+		2041: "kLoginAccountDeletionReauthRequired",
+		2042: "kLoginRealNameRequired",
+		2043: "kLoginRealNameInvalid",
+		2044: "kLoginRealNamePending",
+		2045: "kLoginRealNameTooManyAttempts",
+		2046: "kLoginRealNameAlreadyBound",
+		2047: "kLoginRealNameServiceUnavailable",
+		2048: "kLoginMinorNotInPlayTime",
+		2049: "kLoginMinorPlayTimeOver",
 	}
 	LoginError_value = map[string]int32{
 		"kLogin_errorOK":                            0,
@@ -148,6 +172,18 @@ var (
 		"kLoginAuthProviderUnavailable":             2035,
 		"kLoginTokenIssueFailed":                    2036,
 		"kLoginZoneCreateRoleClosed":                2037,
+		"kLoginAccountDeletionPending":              2038,
+		"kLoginAccountDeletionBlocked":              2039,
+		"kLoginAccountDeletionInProgress":           2040,
+		"kLoginAccountDeletionReauthRequired":       2041,
+		"kLoginRealNameRequired":                    2042,
+		"kLoginRealNameInvalid":                     2043,
+		"kLoginRealNamePending":                     2044,
+		"kLoginRealNameTooManyAttempts":             2045,
+		"kLoginRealNameAlreadyBound":                2046,
+		"kLoginRealNameServiceUnavailable":          2047,
+		"kLoginMinorNotInPlayTime":                  2048,
+		"kLoginMinorPlayTimeOver":                   2049,
 	}
 )
 
@@ -182,7 +218,7 @@ var File_login_error_tip_proto protoreflect.FileDescriptor
 
 const file_login_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15login_error_tip.proto*\xe6\b\n" +
+	"\x15login_error_tip.proto*\xfa\v\n" +
 	"\vlogin_error\x12\x12\n" +
 	"\x0ekLogin_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kLoginAccountNotFound\x10\xd0\x0f\x12\x1c\n" +
@@ -222,7 +258,19 @@ const file_login_error_tip_proto_rawDesc = "" +
 	"\x12kRoleNameSensitive\x10\xf2\x0f\x12\"\n" +
 	"\x1dkLoginAuthProviderUnavailable\x10\xf3\x0f\x12\x1b\n" +
 	"\x16kLoginTokenIssueFailed\x10\xf4\x0f\x12\x1f\n" +
-	"\x1akLoginZoneCreateRoleClosed\x10\xf5\x0fB$\n" +
+	"\x1akLoginZoneCreateRoleClosed\x10\xf5\x0f\x12!\n" +
+	"\x1ckLoginAccountDeletionPending\x10\xf6\x0f\x12!\n" +
+	"\x1ckLoginAccountDeletionBlocked\x10\xf7\x0f\x12$\n" +
+	"\x1fkLoginAccountDeletionInProgress\x10\xf8\x0f\x12(\n" +
+	"#kLoginAccountDeletionReauthRequired\x10\xf9\x0f\x12\x1b\n" +
+	"\x16kLoginRealNameRequired\x10\xfa\x0f\x12\x1a\n" +
+	"\x15kLoginRealNameInvalid\x10\xfb\x0f\x12\x1a\n" +
+	"\x15kLoginRealNamePending\x10\xfc\x0f\x12\"\n" +
+	"\x1dkLoginRealNameTooManyAttempts\x10\xfd\x0f\x12\x1f\n" +
+	"\x1akLoginRealNameAlreadyBound\x10\xfe\x0f\x12%\n" +
+	" kLoginRealNameServiceUnavailable\x10\xff\x0f\x12\x1d\n" +
+	"\x18kLoginMinorNotInPlayTime\x10\x80\x10\x12\x1c\n" +
+	"\x17kLoginMinorPlayTimeOver\x10\x81\x10B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

@@ -48,6 +48,7 @@ var Faults = []Fault{
 	{Code: 2031, Group: "login_error", Name: "LoginTimeout"},
 	{Code: 2035, Group: "login_error", Name: "LoginAuthProviderUnavailable"},
 	{Code: 2036, Group: "login_error", Name: "LoginTokenIssueFailed"},
+	{Code: 2047, Group: "login_error", Name: "LoginRealNameServiceUnavailable"},
 	{Code: 3003, Group: "scene_error", Name: "EnterNodeUnavailable"},
 	{Code: 3010, Group: "scene_error", Name: "EnterSceneGsInfoNull"},
 	{Code: 3012, Group: "scene_error", Name: "EnterSceneYourSceneIsNull"},
@@ -70,6 +71,7 @@ var Faults = []Fault{
 	{Code: 28010, Group: "equip_error", Name: "EquipInternalError"},
 	{Code: 29014, Group: "player_inbox_error", Name: "PlayerInboxStoreUnavailable"},
 	{Code: 30011, Group: "mystery_merchant_error", Name: "MysteryMerchantInternalError"},
+	{Code: 32004, Group: "afk_pass_error", Name: "AfkPassUnavailable"},
 }
 
 // faultSet 由 Faults 派生,不单独生成一份字面量:

@@ -2,6 +2,8 @@
 
 #include <array>
 #include <bitset>
+#include <string>
+#include <string_view>
 
 #include "proto/common/component/mission_comp.pb.h"
 #include "core/type_define/type_define.h"
@@ -26,7 +28,7 @@ public:
     // ── Query ────────────────────────────────────────────────────────────
 
     [[nodiscard]] std::size_t MissionSize() const { return missionList_.missions().size(); }
-    [[nodiscard]] std::size_t CompleteSize() const { return completedMissions_.count() + unmappedCompletedIds_.size(); }
+    [[nodiscard]] std::size_t CompleteSize() const { return completedMissions_.count(); }
     [[nodiscard]] std::size_t TypeSetSize() const { return typeFilter_.size(); }
     [[nodiscard]] std::size_t CanGetRewardSize() const;
     MissionsBits& GetCompleteMissions() { return completedMissions_; }
@@ -42,14 +44,8 @@ public:
         return missionList_.missions().count(missionId) > 0;
     }
 
-    [[nodiscard]] bool IsComplete(uint32_t missionId) const
-    {
-        if (!MissionBitMap.contains(missionId))
-        {
-            return unmappedCompletedIds_.contains(missionId);
-        }
-        return completedMissions_.test(MissionBitMap.at(missionId));
-    }
+    // 每个任务都有位序(任务表 id 列带位序标记,删掉的任务也保留原位),没有位序的 ID 不是任何版本的任务。
+    [[nodiscard]] bool IsComplete(uint32_t missionId) const { return TestBit(MissionBitMap, completedMissions_, missionId); }
 
     [[nodiscard]] bool IsMissionTypeNotRepeated() const { return missionTypeNotRepeated_; }
 
@@ -79,10 +75,13 @@ public:
     void SetMissionTypeNotRepeated(bool value) { missionTypeNotRepeated_ = value; }
     void AbandonMission(uint32_t missionId);
     void RestoreCompleted(uint32_t missionId);
+    // 存档里的完成位图(MissionListComp.complete_missions):第 i 位就是位序 i,每字节低位在前,末尾全 0 的字节不写。
+    // 位序由导表器只增不改、永不复用地发放(tools/data_table_exporter/core/generators/bit_index_gen.py),所以能直接落盘。
+    [[nodiscard]] std::string CompletedBitsForSave() const;
+    void RestoreCompletedBits(std::string_view bits);
     void RestoreClaimable(uint32_t missionId);
     void ClearClaimable(uint32_t missionId);
     void RebuildIndexes(const IMissionConfig& config);
-    [[nodiscard]] const UInt32Set& GetUnmappedCompletedIds() const { return unmappedCompletedIds_; }
     [[nodiscard]] const UInt32Set& GetUnmappedClaimableIds() const { return unmappedClaimableIds_; }
 
 private:
@@ -92,9 +91,10 @@ private:
     bool missionTypeNotRepeated_{ true };
     MissionsBits completedMissions_;
     MissionsBits claimableRewards_;
-    // 配置删除后仍保留稳定任务 ID，避免下一次保存静默丢弃历史状态。
-    UInt32Set unmappedCompletedIds_;
+    // 待领取按任务 ID 存档:本二进制不认识的 ID(更新版本的表才有)原样保留,避免下一次保存静默丢弃。
     UInt32Set unmappedClaimableIds_;
+    // 存档位图里本二进制放不下的位(位序 >= kMissionBitmapCapacity,更新版本的表才有),存盘时原样带回。
+    std::string unknownCompletedBits_;
 };
 
 using PlayerMissionList = std::array<MissionsComp, MissionListComp::kPlayerMissionSize>;

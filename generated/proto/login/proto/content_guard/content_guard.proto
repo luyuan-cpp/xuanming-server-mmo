@@ -1,0 +1,69 @@
+syntax = "proto3";
+package content_guard;
+
+option go_package = "login/proto/content_guard";
+option cc_generic_services = false;
+
+// 内容安全:玩家填写的文字在落库或转发之前送检(docs/design/rename-and-content-safety.md §6)。
+//
+// 只回答一个问题:这段文字在这个场景能不能用,打码之后是什么。它不知道玩家的等级、发言频率和对象,
+// 那些行为规则留在收文字的服务里(聊天的在 go/chat)。
+//
+// 节点类型:本文件刻意没有 `option (OptionFileDefaultNode)`(照 proto/player_inbox/player_inbox.proto):
+// protogen 按服务名 ContentGuard 直接解析到 ContentGuardNodeService(proto/common/base/node.proto = 32)。
+//
+// 内部服务:不标 OptionIsClientProtocolService,不进客户端清单,路由服的路由表里没有它,客户端到不了。
+// 调用方是收文字的服务:login(建角名)、guild(帮会名、公告)、chat(聊天)、scene(角色改名、宠物名)。
+// 只读、没有副作用,所以不做调用方签名;K8s 上靠网络策略限制来源(k8s_deploy.ps1 的 gRPC 白名单)。
+//
+// 字段号上线后不复用,删字段写 reserved(AGENTS §4)。
+
+// 场景决定命中之后的动作(拒绝 / 打码),动作表在服务里,调用方不用知道。
+enum TextScene {
+  TEXT_SCENE_UNSPECIFIED = 0;        // 非法,服务回 InvalidArgument
+  TEXT_SCENE_ROLE_NAME = 1;          // 角色名(建角、改名)
+  TEXT_SCENE_GUILD_NAME = 2;         // 帮会名(建帮、改名)
+  TEXT_SCENE_PET_NAME = 3;           // 宠物名
+  TEXT_SCENE_GUILD_ANNOUNCEMENT = 4; // 帮会公告
+  TEXT_SCENE_CHAT_WORLD = 5;         // 世界频道
+  TEXT_SCENE_CHAT_TEAM = 6;          // 队伍频道
+  TEXT_SCENE_CHAT_PRIVATE = 7;       // 私聊
+  TEXT_SCENE_PRIVATE_LABEL = 8;      // 只有填写者自己看得到的文字(属性方案名):只走本地词库,不送平台接口
+}
+
+// 调用方只认 PASS 与 MASKED;其余值(含将来新增的)一律当拒绝处理。
+enum TextVerdict {
+  TEXT_VERDICT_UNSPECIFIED = 0;
+  TEXT_VERDICT_PASS = 1;    // 原文可用
+  TEXT_VERDICT_MASKED = 2;  // 用 masked_text 代替原文
+  TEXT_VERDICT_REJECT = 3;  // 不可用
+}
+
+// 命中的类别,只用于 tip 文案与指标,基数固定。
+enum TextCategory {
+  TEXT_CATEGORY_UNSPECIFIED = 0;
+  TEXT_CATEGORY_POLITICS = 1;       // 政治
+  TEXT_CATEGORY_PORN = 2;           // 色情
+  TEXT_CATEGORY_ABUSE = 3;          // 辱骂
+  TEXT_CATEGORY_AD = 4;             // 广告引流
+  TEXT_CATEGORY_IMPERSONATION = 5;  // 冒充官方(官方、客服、GM 等),只对名字类场景生效
+  TEXT_CATEGORY_OTHER = 6;          // 其他违规
+}
+
+message CheckTextRequest {
+  TextScene scene = 1;
+  string text = 2;       // 原文;超过服务配置的 MaxTextBytes 回 InvalidArgument
+  uint64 player_id = 3;  // 填写者。本地词库不用它;平台接口按它查渠道身份。没有填写者(系统文本)填 0
+}
+
+message CheckTextResponse {
+  TextVerdict verdict = 1;
+  string masked_text = 2;      // 仅 MASKED 时有值:原文里命中的那一段换成 *,一个字符一个 *,其余原样
+  TextCategory category = 3;   // 决定这次结局的类别;PASS 时为 0
+  uint64 lexicon_version = 4;  // 判定用的词库版本,排障用;0 = 只有内置词
+}
+
+service ContentGuard {
+  // 判定一段文字。纯计算,不落库;同一版词库下同样的入参结果相同。
+  rpc CheckText(CheckTextRequest) returns (CheckTextResponse) {}
+}

@@ -294,6 +294,24 @@ Test-Case '清单:mall 是两副本写者 StatefulSet + ClusterIP Service + PDB,
     Assert-Match -Text $mallDdl -Pattern '(?im)^INSERT IGNORE INTO commerce_schema_version\b' -Because '合同戳仍由这份文件盖,重跑不改已有的戳'
 }
 
+Test-Case '告警:payment-alerts.yaml 引用的指标名与 outcome 取值都能在 go/payment 的源码里找到' {
+    $alerts = Read-RepoText 'deploy/k8s/payment-alerts.yaml'
+    $source = Read-RepoText 'go/payment/internal/core/workers.go'
+    Assert-Match -Text $alerts -Pattern '(?m)^kind: PrometheusRule\s*$' -Because '与 rank / mail 同一种告警资源'
+    Assert-NotMatch -Text $alerts -Pattern 'player_id|order_id|transaction_id' -Because '告警不按玩家、订单或交易分组(高基数)'
+    $metrics = @([regex]::Matches($alerts, '\bpayment_[a-z_]+\b') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Assert-Equal -Expected $true -Actual ($metrics.Count -ge 5) -Because '告警要覆盖回调、事实、商城同步、渠道调用与退款'
+    foreach ($metric in $metrics) {
+        $name = [regex]::Escape($metric.Substring('payment_'.Length))
+        Assert-Match -Text $source -Pattern ('Namespace: "payment", Name: "' + $name + '"') -Because "告警引用的 $metric 必须是支付服务真的在发的指标"
+    }
+    $outcomes = @([regex]::Matches($alerts, 'outcome=~?"([^"]+)"') | ForEach-Object { $_.Groups[1].Value -split '\|' } | Sort-Object -Unique)
+    Assert-Equal -Expected $true -Actual ($outcomes.Count -gt 0) -Because '告警按 outcome 取值筛选'
+    foreach ($outcome in $outcomes) {
+        Assert-Match -Text $source -Pattern ('(?<![a-z_])' + [regex]::Escape($outcome) + '(?![a-z_])') -Because "outcome=$outcome 必须是源码里出现的取值"
+    }
+}
+
 # ──────────────────────────────────────────────
 # 2. 纯函数
 # ──────────────────────────────────────────────

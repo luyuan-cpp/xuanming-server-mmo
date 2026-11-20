@@ -40,6 +40,11 @@ import (
 //     已绑定的名字只有删角写完墓碑之后的 ReleaseRemoved 能删。「角色从未提交」的证明在玩家片,不在这一层:
 //     logic 先让目录证明(必要时写墓碑),再调 Release,见 logic.ReleasePlayerName。
 //
+//  6. **改名之后旧名有保护期**(docs/design/rename-and-content-safety.md §4.2)。旧名这一行留在原主名下,held_until_ms 记到期时刻
+//     (非 0 = 保护态,bound_ms 保持非 0);期间别人 Reserve 撞上它照旧回 ReserveTaken。到期不靠后台扫描:别人来登记时发现
+//     已过期,用一条带条件的 UPDATE 接管(reserveNameRow 的「接管」)。原主改回旧名时先把它还原成自己的预留态(ReserveForRename)。
+//     Release 的条件删除只认 bound_ms = 0,碰不到保护态;删角之后的 ReleaseRemoved 只删角色当前的名字,保护态到期自然可以被接管。
+//
 // 归一化不在这一层:display(name)与 norm(name_norm)都由 go/shared/playername 的
 // Normalize 一次算出后传进来,库只做逐字节比较(表 COLLATE=utf8mb4_bin)。本 store
 // 刻意不 import 规则包,免得"什么算同一个名字"出现第二个答案。
@@ -129,6 +134,25 @@ const playerNameReleaseSQL = "DELETE player_name FROM player_name FORCE INDEX ("
 // playerNameBindSQL 把预留态的名字行置为已绑定:只改这个 player_id 的、还是预留态的那一行,别人的行和已绑定的行都碰不到。
 // 绑定时刻非 0(Bind 入口核过),所以改到即受影响 1 行,与连接带不带 CLIENT_FOUND_ROWS 无关。
 const playerNameBindSQL = "UPDATE player_name SET bound_ms = ? WHERE name_norm = ? AND player_id = ? AND bound_ms = 0"
+
+// playerNameTakeOverSQL 接管一条保护到期的名字行:只改「还在原主名下、保护到期时刻没变、而且已经到期」的那一行,
+// 改成新主人的预留态。条件带着读到的 held_until_ms,原主在这之间改回了旧名(撤保护)或别人先接管了,都改不到。
+// 绑参:(新 player_id, name, created_ms, name_norm, 原主 player_id, 读到的 held_until_ms, 现在)。
+const playerNameTakeOverSQL = "UPDATE player_name SET player_id = ?, name = ?, created_ms = ?, bound_ms = 0, held_until_ms = 0" +
+	" WHERE name_norm = ? AND player_id = ? AND held_until_ms = ? AND held_until_ms <= ?"
+
+// playerNameUnholdSQL 把本角色自己的保护态名字行还原成预留态(原主改回旧名)。还原之后它不再能被别人接管,
+// 之后和普通的预留行走同一条路:改名提交后 Bind 置为已绑定,改名不成时 Release 删掉。
+const playerNameUnholdSQL = "UPDATE player_name SET name = ?, created_ms = ?, bound_ms = 0, held_until_ms = 0" +
+	" WHERE name_norm = ? AND player_id = ? AND held_until_ms <> 0"
+
+// playerNameHoldSQL 把本角色名下的名字行置为保护态(改名提交之后处理旧名)。旧名行还是预留态(当年的绑定没做完)时一并补上绑定时刻:
+// 保护态约定 bound_ms 非 0,Release 才碰不到它。已经是保护态的不改(重放)。绑参:(到期时刻, 现在, name_norm, player_id)。
+const playerNameHoldSQL = "UPDATE player_name SET held_until_ms = ?, bound_ms = IF(bound_ms = 0, ?, bound_ms)" +
+	" WHERE name_norm = ? AND player_id = ? AND held_until_ms = 0"
+
+// playerNameOwnerHeldSQL 按主键读这个名字登记在谁名下、保护到期时刻(0 = 不在保护期):Reserve 撞键之后分辨成因。一致性读、不取锁。
+const playerNameOwnerHeldSQL = "SELECT player_id, held_until_ms FROM player_name WHERE name_norm = ?"
 
 // playerNameReleaseRemovedSQL 是删角之后的释放。角色已删(墓碑由目录在玩家片核过),这一行只要还在这名角色名下就删,
 // 不看状态、不看登记时刻。写法同 playerNameReleaseSQL:多表语法钉 PRIMARY。
@@ -328,6 +352,17 @@ func assertPlayerNameKeys(ctx context.Context, db *sql.DB, schema string) error 
 		return fmt.Errorf("table %s has no bound_ms column: it was created before the reserve/bind state machine; "+
 			"the project is not launched, drop and recreate the directory databases with `data_service -f <yaml> -migrate`", PlayerNameTableName)
 	}
+	// held_until_ms 同理(2026-11-20 加列,角色改名的旧名保护期):缺了它 Reserve 撞键后的读和改名收尾每一条都会报未知列。
+	var heldColumns int
+	if err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'held_until_ms'`,
+		schema, PlayerNameTableName).Scan(&heldColumns); err != nil {
+		return fmt.Errorf("read columns of %s: %w", PlayerNameTableName, err)
+	}
+	if heldColumns != 1 {
+		return fmt.Errorf("table %s has no held_until_ms column: it was created before role rename; "+
+			"the project is not launched, drop and recreate the directory databases with `data_service -f <yaml> -migrate`", PlayerNameTableName)
+	}
 	return nil
 }
 
@@ -496,7 +531,7 @@ func (s *PlayerNameStore) reserveNameRow(ctx context.Context, playerID uint64, n
 			return 0, 0, fmt.Errorf("player_name reserve insert player_id=%d: %w", playerID, err)
 		}
 
-		owner, hasOwner, err := s.ownerOfNorm(ctx, norm)
+		owner, heldUntilMs, hasOwner, err := s.ownerAndHoldOfNorm(ctx, norm)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -504,7 +539,26 @@ func (s *PlayerNameStore) reserveNameRow(ctx context.Context, playerID uint64, n
 			if owner == playerID {
 				return ReserveAlreadyOwned, 0, nil
 			}
-			return ReserveTaken, owner, nil
+			if heldUntilMs == 0 || heldUntilMs > nowMs {
+				// 已绑定、预留中,或者别人还在保护期内的旧名:都是被占用。
+				return ReserveTaken, owner, nil
+			}
+			// 保护期已过:接管。改到 1 行就是占到了(之后和新插入的行一样处理);0 行是原主撤了保护或别人先接管了,下一轮重读再判。
+			res, err := db.ExecContext(ctx, playerNameTakeOverSQL, playerID, name, nowMs, norm, owner, heldUntilMs, nowMs)
+			if err != nil {
+				return 0, 0, fmt.Errorf("player_name take over expired hold player_id=%d: %w", playerID, err)
+			}
+			taken, err := res.RowsAffected()
+			if err != nil {
+				return 0, 0, fmt.Errorf("player_name take over expired hold player_id=%d rows affected: %w", playerID, err)
+			}
+			if taken == 1 {
+				logx.Infof("[PlayerNameStore] player_id=%d took over a name whose hold expired (previous holder player_id=%d)", playerID, owner)
+				return ReserveInserted, 0, nil
+			}
+			logx.Infof("[PlayerNameStore] player_id=%d reserve retry %d/%d: an expired hold changed under the takeover",
+				playerID, attempt, playerNameReserveAttempts)
+			continue
 		}
 
 		// 撞键那一刻存在的行,被并发的 Release 在这两步之间删掉了。名字现在是空的,下一轮直接重插(没有锁冲突,不退避)。
@@ -545,6 +599,44 @@ func (s *PlayerNameStore) writeOwnerRow(ctx context.Context, playerID uint64, na
 func (s *PlayerNameStore) dropOwnerRow(ctx context.Context, playerID uint64, norm string) error {
 	if _, err := s.pools.forPlayer(playerID).ExecContext(ctx, playerNameOwnerDeleteSQL, playerID, norm); err != nil {
 		return fmt.Errorf("player_name_owner delete player_id=%d: %w", playerID, err)
+	}
+	return nil
+}
+
+// ReserveForRename 给一名**已有名字**的角色预留新名(角色改名第 3 步,docs/design/rename-and-content-safety.md §4.3)。
+//
+// 和 Reserve 的区别:只写名字行,不读也不写 owner 行。改名期间 owner 行还指着旧名,到玩家片的提交点才换成新名;
+// Reserve 第 0 步的「这个 player_id 已经登记了另一个名字 = ID 复用事故」在这里恰恰是正常情况。
+//
+// 结局同 reserveNameRow:
+//   - ReserveInserted:新插入,或者接管了别人保护到期的名字;
+//   - ReserveAlreadyOwned:这一行已经在本角色名下 —— 上一次请求预留过(重发),或者是本角色自己还在保护期内的旧名(改回旧名)。
+//     后一种在这里还原成预留态:保护态可以被别人在到期后接管,而这名角色马上要把它当成现名提交,不还原就可能一名两角;
+//   - ReserveTaken:别人占着(含别人的保护期),owner 是占用者。
+//
+// 调用方之后要么让改名提交、再 Bind 置为已绑定,要么 Release 删掉这条预留。
+func (s *PlayerNameStore) ReserveForRename(ctx context.Context, playerID uint64, name, norm string, nowMs uint64) (ReserveOutcome, uint64, error) {
+	if playerID == 0 || norm == "" || nowMs == 0 {
+		return 0, 0, fmt.Errorf("%w (reserve for rename player_id=%d name_norm=%q)", ErrPlayerNameInvalidArgument, playerID, norm)
+	}
+	outcome, owner, err := s.reserveNameRow(ctx, playerID, name, norm, nowMs)
+	if err != nil || outcome != ReserveAlreadyOwned {
+		return outcome, owner, err
+	}
+	if _, err := s.pools.forName(norm).ExecContext(ctx, playerNameUnholdSQL, name, nowMs, norm, playerID); err != nil {
+		return 0, 0, fmt.Errorf("player_name unhold player_id=%d: %w", playerID, err)
+	}
+	return ReserveAlreadyOwned, 0, nil
+}
+
+// HoldRenamed 把本角色名下的 norm 置为保护态,到 untilMs 为止别人登记不了(改名提交之后处理旧名)。
+// 幂等:已经是保护态不改;这一行不在或不在本角色名下(早于名字功能的角色、恢复点错开)时什么都不做 —— 没有可保护的。
+func (s *PlayerNameStore) HoldRenamed(ctx context.Context, playerID uint64, norm string, untilMs, nowMs uint64) error {
+	if playerID == 0 || norm == "" || untilMs == 0 || nowMs == 0 {
+		return fmt.Errorf("%w (hold renamed player_id=%d name_norm=%q until_ms=%d)", ErrPlayerNameInvalidArgument, playerID, norm, untilMs)
+	}
+	if _, err := s.pools.forName(norm).ExecContext(ctx, playerNameHoldSQL, untilMs, nowMs, norm, playerID); err != nil {
+		return fmt.Errorf("player_name hold renamed player_id=%d: %w", playerID, err)
 	}
 	return nil
 }
@@ -946,6 +1038,19 @@ func (s *PlayerNameStore) ownerOfNorm(ctx context.Context, norm string) (owner u
 		return 0, false, fmt.Errorf("player_name lookup by name_norm=%q: %w", norm, err)
 	}
 	return owner, true, nil
+}
+
+// ownerAndHoldOfNorm 按**主键**读这个 name_norm 的占用者和保护到期时刻(0 = 不在保护期)。found=false 表示这个名字没人占。
+// 只给 reserveNameRow 在撞键之后定位成因用。一致性读、不取锁。
+func (s *PlayerNameStore) ownerAndHoldOfNorm(ctx context.Context, norm string) (owner, heldUntilMs uint64, found bool, err error) {
+	err = s.pools.forName(norm).QueryRowContext(ctx, playerNameOwnerHeldSQL, norm).Scan(&owner, &heldUntilMs)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, false, nil
+	}
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("player_name lookup by name_norm=%q: %w", norm, err)
+	}
+	return owner, heldUntilMs, true, nil
 }
 
 // nameRowStateOf 读 (playerID, name_norm) 这一行的登记时刻和绑定时刻。found=false 表示没有行。

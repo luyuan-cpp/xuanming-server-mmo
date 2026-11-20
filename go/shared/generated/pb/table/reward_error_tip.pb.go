@@ -26,6 +26,7 @@ type RewardError int32
 const (
 	RewardError_kReward_errorOK       RewardError = 0
 	RewardError_kRewardAlreadyClaimed RewardError = 12000
+	RewardError_kRewardPeriodEnded    RewardError = 12001
 )
 
 // Enum value maps for RewardError.
@@ -33,10 +34,12 @@ var (
 	RewardError_name = map[int32]string{
 		0:     "kReward_errorOK",
 		12000: "kRewardAlreadyClaimed",
+		12001: "kRewardPeriodEnded",
 	}
 	RewardError_value = map[string]int32{
 		"kReward_errorOK":       0,
 		"kRewardAlreadyClaimed": 12000,
+		"kRewardPeriodEnded":    12001,
 	}
 )
 
@@ -71,10 +74,11 @@ var File_reward_error_tip_proto protoreflect.FileDescriptor
 
 const file_reward_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x16reward_error_tip.proto*?\n" +
+	"\x16reward_error_tip.proto*X\n" +
 	"\freward_error\x12\x13\n" +
 	"\x0fkReward_errorOK\x10\x00\x12\x1a\n" +
-	"\x15kRewardAlreadyClaimed\x10\xe0]B$\n" +
+	"\x15kRewardAlreadyClaimed\x10\xe0]\x12\x17\n" +
+	"\x12kRewardPeriodEnded\x10\xe1]B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

@@ -719,7 +719,7 @@ func startGlobalSpectateMaintenance(ctx context.Context, s *svc.ServiceContext, 
 // globalSpectatorIntentPurgeBudget 是一页保留期清理(一次读加一次删)的时间预算,与到期终局恢复同量。
 const globalSpectatorIntentPurgeBudget = 3 * time.Second
 
-// globalSpectatorIntentPurgeBatch 是每轮最多处理的行数。一分钟一轮,一天能删约 144 万行;只读索引、按主键删,不长期持锁。
+// globalSpectatorIntentPurgeBatch 是每页最多处理的行数;只读索引、按主键删,不长期持锁。一轮清几页见 retention_purge.go。
 const globalSpectatorIntentPurgeBatch = 1000
 
 // spectatorIntentPurger 是保留期清理要的能力(生产实现 *authority.Store),收窄成接口便于替身测试。
@@ -733,17 +733,24 @@ type globalSpectatorIntentPurge struct {
 	after authority.SpectatorIntentCursor
 }
 
-// round 清一页。失败只记日志、不动游标,下一轮重试:意图保留没有未知结局,不进 HoldRelay。
+// round 连续清页(drainRetentionPages)。失败的那一页不动游标,记一次失败计数与日志,下一轮重试:意图保留没有未知结局,不进 HoldRelay。
+// 持续失败由告警 MatchRetentionPurgeFailing 报(deploy/k8s/match-alerts.yaml)。
 func (p *globalSpectatorIntentPurge) round(ctx context.Context, purger spectatorIntentPurger) {
-	purgeCtx, cancel := context.WithTimeout(ctx, globalSpectatorIntentPurgeBudget)
-	defer cancel()
-	next, deleted, err := purger.PurgeClosedSpectatorIntents(purgeCtx, p.after, globalSpectatorIntentPurgeBatch)
+	err := drainRetentionPages(func() (bool, error) {
+		pageCtx, cancel := context.WithTimeout(ctx, globalSpectatorIntentPurgeBudget)
+		defer cancel()
+		next, deleted, err := purger.PurgeClosedSpectatorIntents(pageCtx, p.after, globalSpectatorIntentPurgeBatch)
+		if err != nil {
+			return false, err
+		}
+		p.after = next
+		metrics.ObserveSpectatorIntentPurged(deleted)
+		return next != (authority.SpectatorIntentCursor{}), nil
+	})
 	if err != nil {
+		metrics.ObserveRetentionPurgeFailure(metrics.RetentionPurgeSpectatorIntent)
 		logx.Errorf("[spectate] Spectator intent retention purge failed; retrying next round: %v", err)
-		return
 	}
-	p.after = next
-	metrics.ObserveSpectatorIntentPurged(deleted)
 }
 
 // 固定高水位覆盖旧占用；每状态索引页合并、两在途许可、单操作3秒，未知继续游标。

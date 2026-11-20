@@ -563,7 +563,8 @@ func (a *CreateResidualAuditor) judgeOrphan(ctx context.Context, slot int, entry
 		case ownName:
 			return f, false, nil
 		case role.Account != "":
-			// 活角色名下登记着另一个名字的预留态:只有 ID 复用这类事故到得了,交给人。
+			// 活角色名下登记着另一个名字的预留态:改名进行中的预留会短暂这样(太久没有结局的由后台 ResumeRenames 作废并清掉),
+			// 老到被扫出来的只剩 ID 复用这类事故,或者一次被放弃的改名没清掉预留(日志 [role-rename]),交给人。
 			f.Result, f.Reason = ResidualManual, "live_role_holds_other_name"
 		}
 		// 不带这个名字的墓碑:永远不会提交,可修。

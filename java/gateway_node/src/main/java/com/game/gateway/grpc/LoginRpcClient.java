@@ -981,7 +981,7 @@ public class LoginRpcClient {
         public long   tokenDeadline;
         public String error;
 
-        public int    status;          // 0=ADMITTED, 1=QUEUEING, 2=ERROR, 3=EXPIRED, 4=UNAUTHENTICATED
+        public int    status;          // 0=ADMITTED, 1=QUEUEING, 2=ERROR, 3=EXPIRED, 4=UNAUTHENTICATED, 5=QUEUE_FULL
         public String queueToken;
         public int    queueRank;
         public int    queueTotal;

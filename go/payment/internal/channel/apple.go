@@ -226,7 +226,7 @@ func (a *Apple) api(ctx context.Context, base, method, path string, body []byte)
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := a.cfg.HTTP.Do(request)
+	response, err := send(a.cfg.HTTP, request)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -341,8 +341,13 @@ type appleNotification struct {
 // ONE_TIME_CHARGE(付款)、REFUND(撤销)、REFUND_REVERSED(撤销被撤回);其余(含 TEST、CONSUMPTION_REQUEST)验过签照常应答。
 func (a *Apple) decodeNotification(signedPayload string) (Notification, error) {
 	var note appleNotification
-	if err := a.verifyJWS(signedPayload, &note); err != nil || note.Data == nil {
+	if err := a.verifyJWS(signedPayload, &note); err != nil {
 		return Notification{}, ErrBadSignature
+	}
+	if note.Data == nil {
+		// 载荷里 data / appData / summary / externalPurchaseToken / unclaimInfo 只会出现一个。不带 data 的通知没有本服务要处理的交易,
+		// 验过签照常应答:当成验签失败的话 App Store 会一直重发,通知历史补拉也会卡在这一条上。
+		return Notification{}, nil
 	}
 	if note.Data.BundleID != a.cfg.BundleID {
 		return Notification{}, ErrBadSignature
@@ -397,30 +402,60 @@ func (a *Apple) ParseNotification(_ *http.Request, body []byte) (Notification, e
 	return a.decodeNotification(envelope.SignedPayload)
 }
 
+// appleHistoryMaxPages 是一个时间窗最多翻的页数。App Store 一页至多 20 条通知。
+const appleHistoryMaxPages = 50
+
+// appleHistoryKept:App Store 只留 180 天的通知历史,起点再早接口会拒绝。留一天余量。
+const appleHistoryKept = 179 * 24 * time.Hour
+
 // PollHistory 拉正式环境的通知历史补漏(回调漏掉的付款与撤销)。时间窗 [since, now-1 分钟),翻页拉完为止。
+// 调用方只在这里不报错时才推进游标,所以每次调用都必须能往前走:
+//   - 起点早于 App Store 留存的历史时抬到留存期内;
+//   - 一个时间窗的通知多到翻不完(超过 appleHistoryMaxPages 页)时把窗口减半再拉,返回的时刻跟着缩短,剩下的下一次接着拉。
+//     报错重来的话下一次还是同一个起点、更长的窗口,游标永远停在原地。
 func (a *Apple) PollHistory(ctx context.Context, since time.Time) ([]Notification, time.Time, error) {
-	until := a.cfg.Now().Add(-time.Minute)
+	now := a.cfg.Now()
+	if floor := now.Add(-appleHistoryKept); since.Before(floor) {
+		since = floor
+	}
+	until := now.Add(-time.Minute)
 	if !until.After(since) {
 		return nil, since, nil
 	}
-	request := map[string]any{"startDate": since.UnixMilli(), "endDate": until.UnixMilli()}
-	body, err := json.Marshal(request)
+	for {
+		out, complete, err := a.historyWindow(ctx, since, until)
+		if err != nil {
+			return out, since, err
+		}
+		if complete {
+			return out, until, nil
+		}
+		until = since.Add(until.Sub(since) / 2)
+		if until.Sub(since) < time.Second {
+			return nil, since, errors.New("payment channel: apple notification history has too many notifications within one second")
+		}
+	}
+}
+
+// historyWindow 拉 [since, until) 的通知历史。complete 为假表示翻到页数上限还没拉完,这时不返回通知。
+func (a *Apple) historyWindow(ctx context.Context, since, until time.Time) ([]Notification, bool, error) {
+	body, err := json.Marshal(map[string]any{"startDate": since.UnixMilli(), "endDate": until.UnixMilli()})
 	if err != nil {
-		return nil, since, err
+		return nil, false, err
 	}
 	var out []Notification
 	pagination := ""
-	for page := 0; page < 50; page++ {
+	for page := 0; page < appleHistoryMaxPages; page++ {
 		path := "/inApps/v1/notifications/history"
 		if pagination != "" {
 			path += "?paginationToken=" + url.QueryEscape(pagination)
 		}
 		status, raw, err := a.api(ctx, a.cfg.ProductionAPI, http.MethodPost, path, body)
 		if err != nil {
-			return out, since, err
+			return out, false, err
 		}
 		if status != http.StatusOK {
-			return out, since, &CallError{Channel: NameApple, Op: "notification_history", Status: status, Code: strconv.FormatInt(appleErrorCode(raw), 10)}
+			return out, false, &CallError{Channel: NameApple, Op: "notification_history", Status: status, Code: strconv.FormatInt(appleErrorCode(raw), 10)}
 		}
 		var history struct {
 			NotificationHistory []struct {
@@ -430,23 +465,23 @@ func (a *Apple) PollHistory(ctx context.Context, since time.Time) ([]Notificatio
 			PaginationToken string `json:"paginationToken"`
 		}
 		if err := json.Unmarshal(raw, &history); err != nil {
-			return out, since, errors.New("payment channel: apple notification history answer is not readable")
+			return out, false, errors.New("payment channel: apple notification history answer is not readable")
 		}
 		for _, item := range history.NotificationHistory {
 			note, err := a.decodeNotification(item.SignedPayload)
 			if err != nil {
-				return out, since, fmt.Errorf("payment channel: apple notification history item rejected: %w", err)
+				return out, false, fmt.Errorf("payment channel: apple notification history item rejected: %w", err)
 			}
 			if note.Payment != nil || len(note.Revocations) > 0 {
 				out = append(out, note)
 			}
 		}
 		if !history.HasMore || history.PaginationToken == "" {
-			return out, until, nil
+			return out, true, nil
 		}
 		pagination = history.PaginationToken
 	}
-	return out, since, errors.New("payment channel: apple notification history has too many pages; will retry")
+	return nil, false, nil
 }
 
 // WriteAck:App Store 收到 2xx 才算送达,其余按退避重试。

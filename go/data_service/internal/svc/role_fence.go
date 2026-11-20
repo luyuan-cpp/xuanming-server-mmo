@@ -33,6 +33,15 @@ const (
 	roleRefSweepBatch = 64
 	roleRefSweepPoint = "data_service.role_ref.sweep"
 
+	// 角色改名的后台续做(docs/design/rename-and-content-safety.md §4.5):已提交、没收尾的接着收尾,已拒绝、预留没清的接着清,
+	// 都要先静置 roleRenameResumeAfter(前台请求自己会收尾,不和它抢)。进行中超过 roleRenameStaleAfter 没有结局的作废:
+	// scene 拿不到结局时按 1 秒到 1 分钟的退避重发同一个流水号、单次请求时限十来秒,10 分钟远在两者之上;
+	// 它同时是一次卡住的改名挡住删角、过户的最长时间。
+	roleRenameResumeAfter = 30 * time.Second
+	roleRenameStaleAfter  = 10 * time.Minute
+	roleRenameResumeBatch = 64
+	roleRenameResumePoint = "data_service.role_rename.resume"
+
 	// 没人重放的 PREPARING 一轮最多撤销这么多条,超时口径在 store。规格 §3.5。
 	rolePrepareAbortBatch = 64
 	rolePrepareAbortPoint = "data_service.role_prepare.abort"
@@ -53,6 +62,12 @@ type RoleRemovalResumer interface {
 	ResumeRemovals(ctx context.Context, olderThan time.Duration, limit int) (store.RemovalResumeResult, error)
 }
 
+// RoleRenamer 是角色改名在目录上的动作和后台续做(store/account_role_rename.go)。*store.AccountDirectoryStore 满足它。
+type RoleRenamer interface {
+	RenameRole(ctx context.Context, req store.RenameRequest) (store.RenameOutcome, error)
+	ResumeRenames(ctx context.Context, olderThan, pendingStaleAfter time.Duration, limit int) (store.RenameResumeResult, error)
+}
+
 // RoleRefSweeper 清陈旧的账号角色索引。*store.AccountDirectoryStore 满足它。
 type RoleRefSweeper interface {
 	SweepStaleRefs(ctx context.Context, olderThan time.Duration, limit int) (store.SweepResult, error)
@@ -66,6 +81,7 @@ type RolePreparingAborter interface {
 // AccountRealNameStore 是账号行上的实名列(docs/design/real-name-anti-addiction.md §5.1)。*store.AccountDirectoryStore 满足它。
 type AccountRealNameStore interface {
 	SetRealName(ctx context.Context, account, pi string) (string, error)
+	ResetRealName(ctx context.Context, account string) (bool, error)
 	RealNameOfPlayer(ctx context.Context, player uint64) (string, bool, error)
 }
 
@@ -87,6 +103,8 @@ func (s *ServiceContext) configureRoleFence(c config.Config, directory *store.Ac
 	s.RoleAdmissionChecks = directory
 	s.RoleRefs = directory
 	s.RolePreparing = directory
+	// 改名不依赖过户、删角的协调者:它只写目录自己的两个逻辑库。
+	s.RoleRenames = directory
 	if auth, err := newRoleFenceAuth(getenv); err != nil {
 		logx.Errorf("[role-fence] no caller key usable; GetRoleFenceState disabled: %v", err)
 	} else {
@@ -129,7 +147,7 @@ func newRoleFenceAuth(getenv func(string) string) (*serviceauth.Verifier, error)
 // StartRoleRemovalResumer 起目录的后台收尾:接着做超时的删角,撤销没人重放的超时 PREPARING,清陈旧的账号角色索引。
 // main 通过启动自检之后调用一次;都缺席时不起。每一轮走 RELAY 门禁,关停时由 StopRoleRemovalResumer 收回。
 func (s *ServiceContext) StartRoleRemovalResumer() {
-	if s.RoleRemovals == nil && s.RoleRefs == nil && s.RolePreparing == nil {
+	if s.RoleRemovals == nil && s.RoleRefs == nil && s.RolePreparing == nil && s.RoleRenames == nil {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -153,6 +171,7 @@ func (s *ServiceContext) StartRoleRemovalResumer() {
 				return
 			case <-ticker.C:
 				s.resumeRoleRemovals(ctx)
+				s.resumeRoleRenames(ctx)
 				s.abortStaleRolePreparing(ctx)
 				s.sweepStaleRoleRefs(ctx)
 				s.countOverdueDeletions(ctx)
@@ -197,6 +216,36 @@ func (s *ServiceContext) resumeRoleRemovals(ctx context.Context) {
 		}
 		if result.Finished != 0 || result.Abandoned != 0 {
 			logx.Infof("[role-fence] resume removals: finished=%d abandoned=%d failed=%d", result.Finished, result.Abandoned, result.Failed)
+		}
+	})
+	if !finished {
+		s.RelayAdmission.Hold()
+	}
+}
+
+// resumeRoleRenames 跑一轮角色改名的后台续做。没做下去的(名字片不可达、库出错)留在表里下一轮再试,每轮打一行 ERROR:
+// 已提交没收尾的改名会挡住这名角色的删角和过户,旧名的保护期也还没生效,要让人看得见。
+func (s *ServiceContext) resumeRoleRenames(ctx context.Context) {
+	if s.RoleRenames == nil {
+		return
+	}
+	finish, err := s.RelayAdmission.Enter()
+	if err != nil {
+		return
+	}
+	defer finish()
+	finished := safego.Run(roleRenameResumePoint, func() {
+		result, err := s.RoleRenames.ResumeRenames(ctx, roleRenameResumeAfter, roleRenameStaleAfter, roleRenameResumeBatch)
+		if errors.Is(err, authoritysql.ErrOutcomeUnknown) {
+			s.RelayAdmission.Hold()
+		}
+		if err != nil && ctx.Err() == nil {
+			logx.Errorf("[role-rename] resume renames: settled=%d cleaned=%d expired=%d failed=%d err=%v",
+				result.Settled, result.Cleaned, result.Expired, result.Failed, err)
+			return
+		}
+		if result.Settled != 0 || result.Cleaned != 0 || result.Expired != 0 {
+			logx.Infof("[role-rename] resume renames: settled=%d cleaned=%d expired=%d", result.Settled, result.Cleaned, result.Expired)
 		}
 	})
 	if !finished {

@@ -28,7 +28,8 @@
 //
 // Lifecycle:
 //
-//	Enqueue   → ZADD + meta + token mapping (one Redis round-trip via pipeline)
+//	Enqueue   → 一段 enqueueScript:一个账号在一个 zone 只有一个条目,已在排的沿用原位置,否则 ZADD + meta;
+//	            同一段里登记令牌索引、读出名次与总数(2026-11-20 起;此前是 MULTI 加 ZRANK、ZCARD 三次往返,每次调用新建条目)
 //	Rank      → ZRANK + ZCARD               (cheap, hot path for QueryQueueStatus)
 //	Admit     → ZPOPMIN N → write admit:{queueId} + meta.admitted_at + 占位(到期 = 现在 + AdmitTTL) (dispatcher)
 //	Consume   → GETDEL admit:{queueId}, 签 gate 票, 占位改为「现在 + handoffGrace」到期(不撤)
@@ -112,6 +113,10 @@ const (
 	// StatusUnauthenticated 只有 AssignGate 回:access token 无效,或没带令牌而匿名分配已关(LegacyGateLoginEnabled=false)。
 	// 客户端要重新登录(或先用 refresh token 换新的 access token);QueryQueueStatus 不回它。网关映射成 code=401。
 	StatusUnauthenticated Status = 4
+	// StatusQueueFull 只有 AssignGate 回:本 zone 的队列已到上限(Queue.MaxQueueLength),这次没有入队、没有排队令牌。
+	// 回包带 retry_after_ms;网关映射成与前置限流相同的形状(code=100、queue_source="ratelimit"),客户端等够时间再调
+	// AssignGate。QueryQueueStatus 不回它。
+	StatusQueueFull Status = 5
 )
 
 // AdmitToken is what the consume-time gate-token signer produces and what
@@ -170,6 +175,8 @@ type EnqueueResult struct {
 	QueueToken string
 	Rank       uint32 // 0-based
 	Total      uint32
+	// Rejoined:这个账号本来就有条目(仍在排队,或已放行待取),这次没有新建。只用于指标。
+	Rejoined bool
 }
 
 // QueueState is the snapshot returned by Poll, used by QueryQueueStatus.
@@ -237,6 +244,8 @@ type Queue struct {
 	entryTTL   time.Duration
 	admitTTL   time.Duration
 	hmacSecret []byte // signs queue tokens; same secret as gate tokens is fine
+	// maxLength 是一个 zone 的队列最多排多少人,0 = 不设上限(LimitLength 设)。
+	maxLength uint32
 
 	// handoffGrace:gate 票交到客户端之后占位再留多久。生产恒为 defaultHandoffGrace;
 	// 只有同包测试会改它(New 不收这个参数)。
@@ -273,6 +282,16 @@ func New(rdb redis.UniversalClient, entryTTL, admitTTL time.Duration, hmacSecret
 // 必须在 Dispatcher.Start 之前调用,之后只读。
 func (q *Queue) UseAdmitPipelineClient(c redis.UniversalClient) {
 	q.admitNodes = c
+}
+
+// LimitLength 设一个 zone 的队列最多排多少人,到了上限 Enqueue 回 ErrQueueFull。
+//
+// 为什么要有上限:一个 zone 的排队键都在同一个 Redis 主节点上,这个主节点还放着别的 zone 的排队键与控制域的其它键,
+// 策略是 noeviction。队列无界时,把它写满的后果是这个主节点上所有写入一起被拒;有上限时,超出的人拿到「稍后再试」,
+// 别的 zone 不受影响。生产由起服装配按 Queue.MaxQueueLength 调用(缺省 1000000);0 或不调用 = 不设上限。
+// 必须在开始接请求之前调用,之后只读。
+func (q *Queue) LimitLength(maxLength uint32) {
+	q.maxLength = maxLength
 }
 
 // ValidateTTLs 校验 New 的两个时长参数(2026-10-15)。应由起服装配在 New 之前调用、失败即起服失败,
@@ -354,84 +373,141 @@ func (q *Queue) entryRenewTTL() time.Duration { return q.entryTTL + q.entryTTL/4
 
 // ── Enqueue ────────────────────────────────────────────────────────────
 
-// Enqueue adds the caller to the zone queue and returns rank+token.
+// ErrQueueFull:这个 zone 的排队人数已到 LimitLength 给的上限。没有入队,Redis 里什么都没写。
+// 调用方回「稍后再试」(StatusQueueFull),不当成故障。
+var ErrQueueFull = errors.New("loginqueue: zone queue is full")
+
+// queueFullLogEvery:「排队已满」那条日志的最小间隔。满是持续状态,每个被拒的请求都会走到那里;次数看指标。
+const queueFullLogEvery = time.Minute
+
+var queueFullLog logThrottle
+
+// accountQueueIDPrefix 标出由账号推出来的条目号(queueIDForAccount)。匿名条目是随机 UUID,不带它。
+const accountQueueIDPrefix = "a-"
+
+// queueIDForAccount 返回账号在这个 zone 的排队条目号:同一账号、同一 zone 恒得同一个号。
 //
-// NOT idempotent on (zoneId, account, deviceID): every call mints a fresh
-// queueId. A client that loses its queueToken (e.g. due to a network blip
-// before the response arrives) and re-calls AssignGate without the token
-// WILL be appended at the tail again — the previous entry sits orphaned
-// until its 1h TTL expires. The robot client mitigates this by saving
-// queueToken from the FIRST AssignGate response and threading it through
-// every subsequent retry; the server's reentry path (handleReentry) then
-// resolves the saved token instead of creating a duplicate.
+// 取 HMAC 而不是账号原文:条目号会进 Redis 键名与日志,不带出账号;密钥用排队令牌的签名密钥。
+// 轮换签名密钥时同一账号会换一个号,轮换期间再入队就是队尾的新条目;轮换本来就让在排的令牌失效、重新入队
+// (queueTokenMaxAge 的「密钥轮换」一段),量级相同。
+func queueIDForAccount(secret []byte, zoneID uint32, account string) string {
+	sum := hmacHex(secret, fmt.Appendf(nil, "queue-entry|%d|%s", zoneID, account))
+	return accountQueueIDPrefix + string(sum[:32])
+}
+
+// Enqueue 让调用方进这个 zone 的队,返回排队令牌、名次与总数。一次 EVALSHA,见 enqueueScript。
 //
-// We DON'T enqueue under a distributed lock; ZADD is atomic. Duplicates
-// from missing-token retries are bounded (1 per retry round-trip) and
-// the orphan TTLs out cheaply, so the cost of a (deviceID → queueId)
-// reverse index would not pay back. If clients start spamming
-// AssignGate-without-token under network failure, revisit.
+// 一个账号在一个 zone 里只有一个条目(2026-11-20 起;此前每次调用都新建一个条目):条目号由账号推出
+// (queueIDForAccount),同一账号再次入队得到的是同一个条目。
+//   - 还在排队:位置不变,只多发一张令牌。丢了令牌的客户端(回包丢失、换设备、重装)不带令牌重新调 AssignGate,
+//     不会掉到队尾,也不会留下一个白占名额的孤儿条目。旧令牌照样有效,两台设备同时轮询时先取到放行槽的那台进。
+//   - 已放行、放行槽还没人取:不重新入队,回名次 0,拿这次的令牌轮询就能取走。
+//   - 上一轮已经结束(取走了、过期了、被清掉了):从队尾重新排。
 //
-// (2026-10-18 补注)上文「orphaned until its 1h TTL expires」改读:孤儿不再被轮询,它的 meta 与 token 索引自入队起
-// QueueEntryTTL 后过期(空闲 TTL 只在排队中的查询里续);它的队列成员在被出队时由放行脚本的 META_GONE 分支 ZREM 掉。
-// 排队令牌现按 queueTokenMaxAge(24h)签,不再等于 QueueEntryTTL。
+// account 为空串(匿名分配,只在 LegacyGateLoginEnabled 时出现)没有可认的身份,每次调用仍是一个新条目。
+// 队列长度到上限(LimitLength)时回 ErrQueueFull,不入队。
 func (q *Queue) Enqueue(ctx context.Context, zoneID uint32, account, deviceID string) (*EnqueueResult, error) {
 	queueID := uuid.NewString()
+	if account != "" {
+		queueID = queueIDForAccount(q.hmacSecret, zoneID, account)
+	}
 	token, err := signQueueToken(q.hmacSecret, queueID, zoneID, time.Now().Add(queueTokenMaxAge).Unix())
 	if err != nil {
 		return nil, fmt.Errorf("sign queue token: %w", err)
 	}
 
-	scoreMs := time.Now().UnixMilli()
-
-	// 三把键同 tag、同槽,MULTI 在集群里落在一个节点上。里面只有 ZADD / EXPIRE / HSET / SET:值都由本次调用定死,
-	// 集群客户端在连接出错后整批重发也只是把同样的值再写一遍(非幂等命令不许进 pipeline,见 clusterredis 的守卫)。
-	pipe := q.rdb.TxPipeline()
-	pipe.ZAdd(ctx, zoneZSetKey(zoneID), redis.Z{Score: float64(scoreMs), Member: queueID})
-	// 队列键的 TTL 只增不减(2026-10-18 起;此前无条件 EXPIRE E,会把读状态脚本续上的 1.25E、或 QueueEntryTTL 较大的
-	// 副本写的 TTL 压回本副本的 E,整条队列可能先于仍在轮询的条目过期)。NX 与 GT 缺一不可:NX 保证新建的键(或没有
-	// TTL 的键)一定设上 TTL;GT 只延长、不缩短。只用 GT 的话,没有 TTL 的键按「无限」处理、永远设不上(与
-	// admittedKeyTTL 注释里的陷阱一相同)。ZADD 在前,两条 EXPIRE 执行时键一定存在。
-	// 版本下限:EXPIRE 的 NX / GT 需要 Redis ≥ 7.0(此前排队路径只要求 6.2 的 GETDEL)。低于 7.0 时这两条在 MULTI 入列
-	// 阶段报参数错误,EXEC 回 EXECABORT,每次 Enqueue 都失败、新玩家全部进不了队;生产与 docker-compose 均为 7.2。
-	pipe.ExpireNX(ctx, zoneZSetKey(zoneID), q.entryTTL)
-	pipe.ExpireGT(ctx, zoneZSetKey(zoneID), q.entryTTL)
-	pipe.HSet(ctx, metaKey(zoneID, queueID), map[string]any{
-		"account":       account,
-		"device":        deviceID,
-		metaFieldZoneID: zoneID,
-		"createdAt":     scoreMs,
-	})
-	// meta 与 token 索引是新键,照旧无条件设 TTL。go-redis 的 EXPIRE 按秒截断,与脚本里续期用的毫秒不一致,
-	// 但 E ≥ 1s(ValidateTTLs)时无害。
-	pipe.Expire(ctx, metaKey(zoneID, queueID), q.entryTTL)
-	pipe.Set(ctx, tokenIndexKey(zoneID, token), queueID, q.entryTTL)
-	if _, err := pipe.Exec(ctx); err != nil {
-		return nil, fmt.Errorf("enqueue pipeline: %w", err)
-	}
-
-	rank, err := q.rdb.ZRank(ctx, zoneZSetKey(zoneID), queueID).Result()
+	vals, err := enqueueScript.Run(ctx, q.rdb,
+		[]string{zoneZSetKey(zoneID), metaKey(zoneID, queueID), tokenIndexKey(zoneID, token), admitKey(zoneID, queueID)},
+		queueID, time.Now().UnixMilli(), q.entryTTL.Milliseconds(), q.maxLength,
+		account, deviceID, zoneID, metaFieldZoneID, metaFieldAdmittedAt,
+	).Int64Slice()
 	if err != nil {
-		// Race: ZADD succeeded but member was popped by the dispatcher between
-		// the pipeline and ZRANK. Treat as rank 0 — the client will see it as
-		// "next" and likely receive an admit on its first poll.
-		// Since 2026-10-18 a miss here means the admit script has just ZREM'd
-		// the member in the same script that wrote its admit slot, so rank 0 is
-		// harmless: the next poll takes the admit.
-		if errors.Is(err, redis.Nil) {
-			rank = 0
-		} else {
-			return nil, fmt.Errorf("zrank just-added member: %w", err)
-		}
+		return nil, fmt.Errorf("enqueue script: %w", err)
 	}
-	total, _ := q.rdb.ZCard(ctx, zoneZSetKey(zoneID)).Result()
-
+	if len(vals) != 3 {
+		return nil, fmt.Errorf("enqueue script returned %d values, want 3", len(vals))
+	}
+	switch vals[0] {
+	case enqueueFull:
+		if queueFullLog.allow(queueFullLogEvery) {
+			logx.Errorf("[loginqueue] zone %d queue is full at %d entries (Queue.MaxQueueLength); new arrivals are told to "+
+				"retry later and are not enqueued. Watch login_queue_assign_total{outcome=\"queue_full\"}. "+
+				"Further reports are suppressed for %s", zoneID, q.maxLength, queueFullLogEvery)
+		}
+		return nil, ErrQueueFull
+	case enqueueKept, enqueueAdmitWaiting, enqueueNew:
+	default:
+		return nil, fmt.Errorf("enqueue script returned unknown code %d", vals[0])
+	}
 	return &EnqueueResult{
 		QueueID:    queueID,
 		QueueToken: token,
-		Rank:       uint32(rank),
-		Total:      uint32(total),
+		Rank:       uint32(vals[1]),
+		Total:      uint32(vals[2]),
+		Rejoined:   vals[0] != enqueueNew,
 	}, nil
 }
+
+// enqueueScript 的返回码(数组第一个元素)。
+const (
+	enqueueKept         = 1 // 账号已有条目且仍在排队:位置不变,只多发一张令牌
+	enqueueAdmitWaiting = 2 // 账号已有条目且已放行、放行槽还没人取:不重新入队,名次回 0,下一次轮询取走
+	enqueueNew          = 3 // 新建条目,排在队尾
+	enqueueFull         = 4 // 队列已到上限,什么都没写
+)
+
+// enqueueScript 是入队的全部 Redis 操作:判定这个条目号现在的状态,按需新建,签发的令牌登记进 token 索引,
+// 并在同一次执行里读出名次与总数。
+//
+//	KEYS[1] = zoneZSetKey(zone)   KEYS[2] = metaKey(zone, queueId)   KEYS[3] = tokenIndexKey(zone, token)
+//	KEYS[4] = admitKey(zone, queueId)。四个键同 tag {q:<zone>}。
+//	ARGV[1] = member(queueId)   ARGV[2] = 入队时刻 unix 毫秒(队列分数,也是 meta 的 createdAt)
+//	ARGV[3] = E 毫秒(QueueEntryTTL)   ARGV[4] = 队列长度上限(0 = 不设上限)
+//	ARGV[5] = account   ARGV[6] = device   ARGV[7] = zone(十进制)
+//	ARGV[8] = metaFieldZoneID   ARGV[9] = metaFieldAdmittedAt
+//	返回 {code, rank, total},三个都是整数;code 见 enqueue* 常量,rank / total 在 enqueueFull 时为 0。
+//
+// 判定顺序:
+//   - 放行槽还在(已放行、没人取):只登记新令牌,回 enqueueAdmitWaiting。不能把成员再加回队列,否则同一个条目既「已放行」
+//     又「在排队」。
+//   - 成员在队列里、meta 是 hash 且没有 admitted_at:这一轮排队还活着,位置不动,回 enqueueKept。
+//   - 其余都是新的一轮(从没排过;上一轮已取走、已过期;meta 先于队列成员到期的孤儿;被人工移出队列):到上限则回
+//     enqueueFull,否则 ZADD 到队尾并重建 meta。重建先 DEL:上一轮留下的 admitted_at、taken_slot 会让放行脚本和
+//     lookupScript 把新一轮当成已放行。已在队列里的孤儿成员不占新名额,所以上限只在成员不在队列时判。
+//
+// 写满(maxmemory + noeviction):两条路径的第一条写分别是 SET 与 ZADD,都是 DENYOOM 命令,之前只有只读命令,
+// 所以写满时整段被拒、什么都没写,入队失败(fail-closed)。不得把 DEL、PEXPIRE 挪到它们前面,理由同 admitEntryScript (c)。
+//
+// TTL:token 索引随 SET 带上 E。队列键与 meta 只在剩余 TTL 不足 E 时设为 E(没有 TTL 的新键 PTTL 为 -1,同样会设上),
+// 只增不减:不会把 lookupScript 续到 1.25E 的 TTL、或 QueueEntryTTL 较大的副本写的 TTL 压短。
+var enqueueScript = redis.NewScript(`
+if redis.call('EXISTS', KEYS[4]) == 1 then
+	redis.call('SET', KEYS[3], ARGV[1], 'PX', ARGV[3])
+	return {2, 0, redis.call('ZCARD', KEYS[1])}
+end
+local queued = redis.call('ZSCORE', KEYS[1], ARGV[1])
+local kept = queued and redis.call('TYPE', KEYS[2]).ok == 'hash' and redis.call('HEXISTS', KEYS[2], ARGV[9]) == 0
+if not kept then
+	if not queued and tonumber(ARGV[4]) > 0 and redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[4]) then
+		return {4, 0, 0}
+	end
+	redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
+	redis.call('DEL', KEYS[2])
+	redis.call('HSET', KEYS[2], 'account', ARGV[5], 'device', ARGV[6], ARGV[8], ARGV[7], 'createdAt', ARGV[2])
+end
+redis.call('SET', KEYS[3], ARGV[1], 'PX', ARGV[3])
+local idle = tonumber(ARGV[3])
+for i = 1, 2 do
+	if redis.call('PTTL', KEYS[i]) < idle then
+		redis.call('PEXPIRE', KEYS[i], ARGV[3])
+	end
+end
+local code = 3
+if kept then
+	code = 1
+end
+return {code, redis.call('ZRANK', KEYS[1], ARGV[1]), redis.call('ZCARD', KEYS[1])}
+`)
 
 // ── Poll (QueryQueueStatus) ─────────────────────────────────────────
 
@@ -1268,6 +1344,21 @@ func (q *Queue) TryReserveFastPathSlot(ctx context.Context, zoneID uint32, budge
 		return false, err
 	}
 	return res == 1, nil
+}
+
+// reconnectHoldPrefix 是免排队重连的在途占位成员前缀,后面跟十进制 player_id(HoldReconnectSlot)。
+const reconnectHoldPrefix = "reconnect:"
+
+// HoldReconnectSlot 给免排队的重连 / 顶号记一枚在途占位(到期 = 现在 + handoffGrace),不看名额。
+//
+// 免排队的人不经过名额判断,但他同样要「连上 gate、gate 把人数报进 etcd」才出现在在线数里。此前这段时间他不在任何
+// 计数里:一台 gate 掉线时,上面的人数随注册记录一起消失,这些人正在免排队重连,dispatcher 却看到整台 gate 的空位、
+// 把排队的人放进去,两拨人加起来超过区容量。记上占位之后,重连的人在连上之前由占位替他占着名额。
+// 成员按 player_id 定名:同一个人反复调用只是把到期时刻往后推,不会多占。还连着的顶号在这 handoffGrace 里被算了两遍,
+// 只会少放人,不会多放。
+func (q *Queue) HoldReconnectSlot(ctx context.Context, zoneID uint32, playerID uint64) error {
+	member := fmt.Sprintf("%s%d", reconnectHoldPrefix, playerID)
+	return q.holdAdmitted(ctx, q.rdb, zoneID, member, q.handoffGrace).Err()
 }
 
 // QueueLen is a thin wrapper over ZCARD for capacity decisions.

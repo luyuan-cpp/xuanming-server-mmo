@@ -169,6 +169,7 @@ message RedirectToGateInfo {
   bytes  token_payload = 3;    // serialized GateTokenPayload for target gate
   bytes  token_signature = 4;  // HMAC-SHA256 signature
   int64  token_deadline = 5;   // unix seconds
+  string target_gate_ws_url = 6; // 目标 gate 的 WebSocket 地址(NodeInfo.client_ws_url);空串 = 不接小游戏
 }
 
 message LeaveSceneRequest {

@@ -27,3 +27,17 @@ void SceneClientPlayerCommonHandler::RedirectToGate(entt::entity player,const ::
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneClientPlayerCommonHandler::RenamePlayer(entt::entity player,const ::RenamePlayerRequest* request,
+	::RenamePlayerResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+}
+
+void SceneClientPlayerCommonHandler::NotifyPlayerRenamed(entt::entity player,const ::PlayerRenamedNotify* request,
+	::Empty* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+}

@@ -38,11 +38,13 @@ enum PayFinalizeState {
 }
 
 // 支付意图:一张商城订单至多一行,渠道在第一次建意图时定下,之后不变。
+// 未成年人的意图同时是他的充值额度预占(docs/design/real-name-anti-addiction.md §5.6):CREATED 的全额占着,
+// PAID 的按 paid_ms 计入当月、当日,CLOSED 的不占。
 message PaymentIntentRecord {
   option (OptionTableName) = "payment_intent";
   option (OptionPrimaryKey) = "order_hi,order_lo";
-  // 主动查单与到期关单的扫描:只扫 state=CREATED 的行。
-  option (OptionIndex) = "state,next_check_ms";
+  // 主动查单与到期关单的扫描:只扫 state=CREATED 的行。第二条是按人汇总未成年人额度。
+  option (OptionIndex) = "state,next_check_ms;spender_hi,spender_lo,state";
 
   uint64 order_hi = 1;      // 商城订单号(UUID)的高 64 位
   uint64 order_lo = 2;      // 低 64 位
@@ -64,6 +66,22 @@ message PaymentIntentRecord {
   uint64 channel_ref_ms = 16; // 拿到 channel_ref 的时刻
   uint64 sku_id = 17;         // 商城订单的 SKU;0 = 寄售订单。按商品定价的渠道按它找商店商品号
   string payer_id = 18;       // 渠道侧的付款人(微信小游戏 openid),查单要用
+  // 未成年人买家的实名主体:SHA-256("spender|" + pi) 的前 16 字节,同一个人的多个账号合并计额。
+  // 成年人、平台执行限额的小游戏渠道、合规闸没开时为 0,不计额。不存 pi 本身(它含出生日期)。
+  uint64 spender_hi = 19;
+  uint64 spender_lo = 20;
+  uint64 paid_ms = 21;   // 最近一次转成 PAID 的时刻(本服务时钟,不早于 created_ms),按它把这笔计入哪个月、哪一天
+  uint32 minor_age = 22; // 建意图时未成年人买家的周岁;迟到的付款按它复核额度(人只会长大,按建意图时的年龄判只会更严)
+}
+
+// 一名未成年人的额度行锁:同一个人的预占与复核在这一行上排队,额度本身由他名下的意图行算出,这里不存。
+message PaymentSpendRecord {
+  option (OptionTableName) = "payment_spend";
+  option (OptionPrimaryKey) = "spender_hi,spender_lo";
+
+  uint64 spender_hi = 1; // 同 PaymentIntentRecord.spender_hi
+  uint64 spender_lo = 2;
+  uint64 updated_ms = 3; // 最近一次加锁的时刻,排查用
 }
 
 // 渠道付款事实:渠道确认过的一笔钱。同一笔只记一行。

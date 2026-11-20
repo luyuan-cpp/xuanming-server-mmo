@@ -29,6 +29,7 @@ namespace trade {
 #pragma region TradeAdminSeedListing
 namespace {
 void QueueLocalTradeAdminSeedListingFailure(GrpcDone<::trade::SeedListingResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kTradeAdminSeedListingGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendTradeAdminSeedListingErased(entt::registry& registry, entt::entity node
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC TradeAdmin.SeedListing: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTradeAdminSeedListingGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendTradeAdminSeedListingErased(entt::registry& registry, entt::entity node
     const auto* typedRequest = dynamic_cast<const ::trade::SeedListingRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC TradeAdmin.SeedListing: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTradeAdminSeedListingGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendTradeAdminSeedListingErased(entt::registry& registry, entt::entity node
 #pragma region TradeAdminListManualContracts
 namespace {
 void QueueLocalTradeAdminListManualContractsFailure(GrpcDone<::trade::ListManualContractsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kTradeAdminListManualContractsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendTradeAdminListManualContractsErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC TradeAdmin.ListManualContracts: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTradeAdminListManualContractsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendTradeAdminListManualContractsErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::trade::ListManualContractsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC TradeAdmin.ListManualContracts: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTradeAdminListManualContractsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendTradeAdminListManualContractsErased(entt::registry& registry, entt::ent
 #pragma region TradeAdminResolveManualContract
 namespace {
 void QueueLocalTradeAdminResolveManualContractFailure(GrpcDone<::trade::ResolveManualContractResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kTradeAdminResolveManualContractGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendTradeAdminResolveManualContractErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC TradeAdmin.ResolveManualContract: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTradeAdminResolveManualContractGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendTradeAdminResolveManualContractErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::trade::ResolveManualContractRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC TradeAdmin.ResolveManualContract: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTradeAdminResolveManualContractGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

@@ -125,7 +125,7 @@ func (w *WechatMinigame) code2Session(ctx context.Context, code string) (string,
 	if err != nil {
 		return "", "", err
 	}
-	response, err := w.cfg.HTTP.Do(request)
+	response, err := send(w.cfg.HTTP, request)
 	if err != nil {
 		return "", "", err
 	}
@@ -260,7 +260,7 @@ func (w *WechatMinigame) token(ctx context.Context) (string, error) {
 		return "", err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	response, err := w.cfg.HTTP.Do(request)
+	response, err := send(w.cfg.HTTP, request)
 	if err != nil {
 		return "", err
 	}
@@ -307,7 +307,7 @@ func (w *WechatMinigame) Query(ctx context.Context, req QueryRequest) (QueryResu
 		return QueryResult{}, err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	response, err := w.cfg.HTTP.Do(request)
+	response, err := send(w.cfg.HTTP, request)
 	if err != nil {
 		return QueryResult{}, err
 	}

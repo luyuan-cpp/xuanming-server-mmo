@@ -138,6 +138,7 @@ static void BuffTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, 
 	BuffTableCheckNarrowedField(RowObject, TEXT("stack_limit"), TEXT("stack_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("require_living_caster"), TEXT("require_living_caster"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("tick_on_apply"), TEXT("tick_on_apply"), RowIndex, 2147483647.0, TEXT("uint32"));
+	BuffTableCheckNarrowedField(RowObject, TEXT("keep_on_logout"), TEXT("keep_on_logout"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("sub_buff"), TEXT("sub_buff[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 	BuffTableCheckNarrowedField(RowObject, TEXT("target_sub_buff"), TEXT("target_sub_buff[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 }

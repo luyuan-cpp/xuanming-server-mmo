@@ -177,7 +177,35 @@ var (
 			"should be 1 in steady state.",
 		Labels: []string{"pod", "zone"},
 	})
+
+	// assignTotal 按结果数排队开着时的 AssignGate(不含带令牌的重入):这次请求走了哪条路。
+	// 免排队的重连此前不在任何计数里;「排队已满」持续非零说明该调大 Queue.MaxQueueLength 或给这个 zone 扩容。
+	assignTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: metricNamespace,
+		Subsystem: "",
+		Name:      "assign_total",
+		Help: "Cumulative count of AssignGate decisions while the queue is enabled (re-entries with a queue token " +
+			"are not counted), per zone and outcome: 'fast_path' = capacity available, signed directly; " +
+			"'reconnect' = the account already has a live session, signed without queueing; " +
+			"'enqueued' = new queue entry; 'rejoined' = the account already had an entry, position kept; " +
+			"'queue_full' = the zone queue reached Queue.MaxQueueLength, nothing was enqueued.",
+		Labels: []string{"zone", "outcome"},
+	})
 )
+
+// AssignGate 的结果标签(assignTotal 的 outcome)。
+const (
+	AssignOutcomeFastPath  = "fast_path"
+	AssignOutcomeReconnect = "reconnect"
+	AssignOutcomeEnqueued  = "enqueued"
+	AssignOutcomeRejoined  = "rejoined"
+	AssignOutcomeQueueFull = "queue_full"
+)
+
+// RecordAssign 记一次排队开着时的 AssignGate 结果。由 loginpregate 的 handler 调用。
+func RecordAssign(zoneID uint32, outcome string) {
+	assignTotal.Inc(labelZone(zoneID), outcome)
+}
 
 // Reason strings for expiredTotal — exported as constants so the call
 // sites self-document why they're recording an EXPIRED.

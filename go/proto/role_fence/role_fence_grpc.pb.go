@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	RoleFenceParticipant_PrepareRoleFreeze_FullMethodName = "/rolefence.RoleFenceParticipant/PrepareRoleFreeze"
 	RoleFenceParticipant_ApplyRoleFence_FullMethodName    = "/rolefence.RoleFenceParticipant/ApplyRoleFence"
+	RoleFenceParticipant_PurgeRemovedRole_FullMethodName  = "/rolefence.RoleFenceParticipant/PurgeRemovedRole"
 )
 
 // RoleFenceParticipantClient is the client API for RoleFenceParticipant service.
@@ -32,6 +33,9 @@ type RoleFenceParticipantClient interface {
 	PrepareRoleFreeze(ctx context.Context, in *PrepareRoleFreezeRequest, opts ...grpc.CallOption) (*PrepareRoleFreezeResponse, error)
 	// 版本更大才覆盖。尽力推送,丢了由下一次访问自愈。
 	ApplyRoleFence(ctx context.Context, in *ApplyRoleFenceRequest, opts ...grpc.CallOption) (*ApplyRoleFenceResponse, error)
+	// 删角收尾清数据(docs/design/account-deletion.md §6.1):state 必须是墓碑(account 为空)。先按版本合并进副本,
+	// 再在一个事务里锁副本、复核是墓碑、删本库里这名玩家的个人数据。墓碑之后没有写者,所以可重试、可重复,没有回滚。
+	PurgeRemovedRole(ctx context.Context, in *PurgeRemovedRoleRequest, opts ...grpc.CallOption) (*PurgeRemovedRoleResponse, error)
 }
 
 type roleFenceParticipantClient struct {
@@ -62,6 +66,16 @@ func (c *roleFenceParticipantClient) ApplyRoleFence(ctx context.Context, in *App
 	return out, nil
 }
 
+func (c *roleFenceParticipantClient) PurgeRemovedRole(ctx context.Context, in *PurgeRemovedRoleRequest, opts ...grpc.CallOption) (*PurgeRemovedRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeRemovedRoleResponse)
+	err := c.cc.Invoke(ctx, RoleFenceParticipant_PurgeRemovedRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RoleFenceParticipantServer is the server API for RoleFenceParticipant service.
 // All implementations must embed UnimplementedRoleFenceParticipantServer
 // for forward compatibility.
@@ -71,6 +85,9 @@ type RoleFenceParticipantServer interface {
 	PrepareRoleFreeze(context.Context, *PrepareRoleFreezeRequest) (*PrepareRoleFreezeResponse, error)
 	// 版本更大才覆盖。尽力推送,丢了由下一次访问自愈。
 	ApplyRoleFence(context.Context, *ApplyRoleFenceRequest) (*ApplyRoleFenceResponse, error)
+	// 删角收尾清数据(docs/design/account-deletion.md §6.1):state 必须是墓碑(account 为空)。先按版本合并进副本,
+	// 再在一个事务里锁副本、复核是墓碑、删本库里这名玩家的个人数据。墓碑之后没有写者,所以可重试、可重复,没有回滚。
+	PurgeRemovedRole(context.Context, *PurgeRemovedRoleRequest) (*PurgeRemovedRoleResponse, error)
 	mustEmbedUnimplementedRoleFenceParticipantServer()
 }
 
@@ -86,6 +103,9 @@ func (UnimplementedRoleFenceParticipantServer) PrepareRoleFreeze(context.Context
 }
 func (UnimplementedRoleFenceParticipantServer) ApplyRoleFence(context.Context, *ApplyRoleFenceRequest) (*ApplyRoleFenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApplyRoleFence not implemented")
+}
+func (UnimplementedRoleFenceParticipantServer) PurgeRemovedRole(context.Context, *PurgeRemovedRoleRequest) (*PurgeRemovedRoleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeRemovedRole not implemented")
 }
 func (UnimplementedRoleFenceParticipantServer) mustEmbedUnimplementedRoleFenceParticipantServer() {}
 func (UnimplementedRoleFenceParticipantServer) testEmbeddedByValue()                              {}
@@ -144,6 +164,24 @@ func _RoleFenceParticipant_ApplyRoleFence_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RoleFenceParticipant_PurgeRemovedRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeRemovedRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleFenceParticipantServer).PurgeRemovedRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleFenceParticipant_PurgeRemovedRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleFenceParticipantServer).PurgeRemovedRole(ctx, req.(*PurgeRemovedRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RoleFenceParticipant_ServiceDesc is the grpc.ServiceDesc for RoleFenceParticipant service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -158,6 +196,10 @@ var RoleFenceParticipant_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplyRoleFence",
 			Handler:    _RoleFenceParticipant_ApplyRoleFence_Handler,
+		},
+		{
+			MethodName: "PurgeRemovedRole",
+			Handler:    _RoleFenceParticipant_PurgeRemovedRole_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

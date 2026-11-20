@@ -168,6 +168,10 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("player store rejected: %v", err))
 	}
+	// 熔断按存档库做(internal/playerstore 的 enterStore),关掉 zrpc 自带的按方法那一层,yaml 里写开也不认:
+	// 存储侧的失败这里一律回 Unavailable、被那一层计成失败,一个库失联且流量占比过三分之一时,它会把同一方法上
+	// 指向健康库的调用也几乎全部挡掉(docs/design/db-task-store-unavailable-deferral.md 文首 2026-11-20)。
+	config.AppConfig.Middlewares.Breaker = false
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
 		db_grpc.RegisterDbServer(grpcServer, server.NewDbServer(ctx))

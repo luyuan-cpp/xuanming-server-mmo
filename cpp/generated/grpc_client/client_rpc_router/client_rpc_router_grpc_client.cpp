@@ -29,6 +29,7 @@ namespace client_rpc_router {
 #pragma region ClientRpcRouterForward
 namespace {
 void QueueLocalClientRpcRouterForwardFailure(GrpcDone<::MessageContent> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientRpcRouterForwardGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendClientRpcRouterForwardErased(entt::registry& registry, entt::entity nod
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientRpcRouter.Forward: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientRpcRouterForwardGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendClientRpcRouterForwardErased(entt::registry& registry, entt::entity nod
     const auto* typedRequest = dynamic_cast<const ::client_rpc_router::ForwardRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientRpcRouter.Forward: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientRpcRouterForwardGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

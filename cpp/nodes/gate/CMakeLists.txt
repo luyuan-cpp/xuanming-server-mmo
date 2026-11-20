@@ -76,6 +76,7 @@ set(SOURCE_FILES
     handler/rpc/connection_admission.cpp
     handler/rpc/drain_migration.cpp
     handler/rpc/login_session_renewal.cpp
+    handler/rpc/minor_play_deadline.cpp
     handler/rpc/router_muduo_forward.cpp
     handler/rpc/router_subset.cpp
     handler/rpc/rpc_reply_bridge.cpp

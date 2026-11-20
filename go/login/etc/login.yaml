@@ -201,9 +201,10 @@ DataServiceRpc:
 # 内容安全(go/content_guard;docs/design/rename-and-content-safety.md §6.6):建角时玩家自己起的名字先送它判定,
 # 命中屏蔽词回 kRoleNameSensitive,它不可达回 kRoleNameCheckUnavailable(可重试),不放行没检过的名字。
 # 服务端生成的默认名(空名建角)不送检。
-# 整段不写 = 不送检,只剩 playername 的几个内置防冒充词,只允许本机;Required: true 时没配目标拒启
-# (staging / prod 由部署脚本写 true)。NonBlock:内容安全晚起不挡 login 启动。熔断:它整体不可用时快速失败,
-# 不让每次建角都等满一个超时。TimeoutMs 是单次送检的时限,判定是纯内存计算,正常在几毫秒内。
+# 缺省严格:没配目标拒启,内容安全不可达时建角被拒(回可重试的提示)。Optional: true 只许本机这样写:内容安全没起时不送检、
+# 原样放行并打 ERROR,只剩 playername 的几个内置防冒充词;K8s 的 ConfigMap 不写这一键(k8s_deploy.ps1 的 New-ContentGuardClientYaml)。
+# NonBlock:内容安全晚起不挡 login 启动。熔断:它整体不可用时快速失败,不让每次建角都等满一个超时。
+# TimeoutMs 是单次送检的时限,判定是纯内存计算,正常在几毫秒内。
 ContentGuard:
   Rpc:
     Etcd:
@@ -214,7 +215,7 @@ ContentGuard:
     NonBlock: true
     Middlewares:
       Breaker: true
-  Required: false
+  Optional: true
   TimeoutMs: 300
 
 # PlayerId 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
@@ -563,6 +564,16 @@ Queue:
   # (2026-10-12 G1b;此前全服一把,多 zone 共用 Redis 时只有 leader 所在 zone 出队)。各 zone 照写这个默认值即可;
   # 同一 zone 的副本必须同值,否则该 zone 会长期双 leader。
   DispatcherLockKey: "dispatcher:lock:login_queue"
+  # 一拍(DispatchInterval)最多放行多少人。空位一下子腾出来时(调大区容量、一台 gate 掉线)不设上限会在一拍里放满,
+  # 几万人同时去连 gate、进场景。2000 与网关前置限流开服档的区桶同值(快速通道那一侧由区桶限速);它不是实测的进场
+  # 吞吐,压测出基线后调。0 = 不设上限,生产不要写 0。
+  # K8s 的 login ConfigMap 不渲染下面这两个键(k8s_deploy.ps1 的 New-LoginQueueYaml 只镜像它列出的键),集群里用的是
+  # 代码缺省值(与这里相同);要在 K8s 上改,先把这两个键加进那个函数与它的契约用例。
+  MaxAdmitPerTick: 2000
+  # 一个 zone 的队列最多排多少人,到了上限的新请求回「稍后再试」(不入队、不发排队令牌;已经在排的人不受影响)。
+  # 1000000 是单 zone 排队容量分析的上界(docs/design/redis-cluster-all-domains-20261110.md §6.2):一个 zone 的排队键
+  # 都在同一个 Redis 主节点上,超过分析过的规模就拒绝,不让它把这个主节点写满。0 = 不设上限,生产不要写 0。
+  MaxQueueLength: 1000000
   # 区容量不在这里配:只认区服目录 zone_config.capacity(见上面第一段)。读不到区服策略时
   # FreeSlots 退回 PlayerCount * SoftCapMultiplier,仍按 gate 承载封顶。
 

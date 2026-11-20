@@ -1,0 +1,23 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "AfkPassRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message AfkPassRuleTable {
+	uint32 id = 1;
+	uint32 period_days = 2;
+	uint32 price_currency_type = 3;
+	uint64 price = 4;
+	uint32 max_remaining_days = 5;
+	uint32 remind_before_hours = 6;
+	string desc = 7;
+}
+
+message AfkPassRuleTableData {
+	repeated AfkPassRuleTable data = 1;
+}

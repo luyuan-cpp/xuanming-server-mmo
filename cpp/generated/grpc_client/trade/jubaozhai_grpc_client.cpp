@@ -29,6 +29,7 @@ namespace trade {
 #pragma region ClientPlayerJubaozhaiBrowseListings
 namespace {
 void QueueLocalClientPlayerJubaozhaiBrowseListingsFailure(GrpcDone<::trade::BrowseListingsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBrowseListingsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendClientPlayerJubaozhaiBrowseListingsErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BrowseListings: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBrowseListingsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendClientPlayerJubaozhaiBrowseListingsErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::trade::BrowseListingsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BrowseListings: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBrowseListingsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendClientPlayerJubaozhaiBrowseListingsErased(entt::registry& registry, ent
 #pragma region ClientPlayerJubaozhaiGetListingDetail
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetListingDetailFailure(GrpcDone<::trade::GetListingDetailResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetListingDetailGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendClientPlayerJubaozhaiGetListingDetailErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetListingDetail: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetListingDetailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendClientPlayerJubaozhaiGetListingDetailErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::GetListingDetailRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetListingDetail: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetListingDetailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendClientPlayerJubaozhaiGetListingDetailErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiSetFavorite
 namespace {
 void QueueLocalClientPlayerJubaozhaiSetFavoriteFailure(GrpcDone<::trade::SetFavoriteResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiSetFavoriteGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendClientPlayerJubaozhaiSetFavoriteErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.SetFavorite: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiSetFavoriteGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendClientPlayerJubaozhaiSetFavoriteErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::trade::SetFavoriteRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.SetFavorite: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiSetFavoriteGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendClientPlayerJubaozhaiSetFavoriteErased(entt::registry& registry, entt::
 #pragma region ClientPlayerJubaozhaiGetMyShelf
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetMyShelfFailure(GrpcDone<::trade::GetMyShelfResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMyShelfGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendClientPlayerJubaozhaiGetMyShelfErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetMyShelf: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMyShelfGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendClientPlayerJubaozhaiGetMyShelfErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::trade::GetMyShelfRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetMyShelf: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMyShelfGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendClientPlayerJubaozhaiGetMyShelfErased(entt::registry& registry, entt::e
 #pragma region ClientPlayerJubaozhaiListOfficialSkus
 namespace {
 void QueueLocalClientPlayerJubaozhaiListOfficialSkusFailure(GrpcDone<::trade::ListOfficialSkusResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListOfficialSkusGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendClientPlayerJubaozhaiListOfficialSkusErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListOfficialSkus: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListOfficialSkusGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendClientPlayerJubaozhaiListOfficialSkusErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::ListOfficialSkusRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListOfficialSkus: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListOfficialSkusGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendClientPlayerJubaozhaiListOfficialSkusErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiCreateOfficialOrder
 namespace {
 void QueueLocalClientPlayerJubaozhaiCreateOfficialOrderFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateOfficialOrderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendClientPlayerJubaozhaiCreateOfficialOrderErased(entt::registry& registry
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateOfficialOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateOfficialOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendClientPlayerJubaozhaiCreateOfficialOrderErased(entt::registry& registry
     const auto* typedRequest = dynamic_cast<const ::trade::CreateOfficialOrderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateOfficialOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateOfficialOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +575,7 @@ void SendClientPlayerJubaozhaiCreateOfficialOrderErased(entt::registry& registry
 #pragma region ClientPlayerJubaozhaiGetCommerceOrder
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetCommerceOrderFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetCommerceOrderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +643,7 @@ void SendClientPlayerJubaozhaiGetCommerceOrderErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetCommerceOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetCommerceOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +653,7 @@ void SendClientPlayerJubaozhaiGetCommerceOrderErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::GetCommerceOrderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetCommerceOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetCommerceOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -645,6 +666,7 @@ void SendClientPlayerJubaozhaiGetCommerceOrderErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiCancelCommerceOrder
 namespace {
 void QueueLocalClientPlayerJubaozhaiCancelCommerceOrderFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelCommerceOrderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -712,6 +734,7 @@ void SendClientPlayerJubaozhaiCancelCommerceOrderErased(entt::registry& registry
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelCommerceOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelCommerceOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -721,6 +744,7 @@ void SendClientPlayerJubaozhaiCancelCommerceOrderErased(entt::registry& registry
     const auto* typedRequest = dynamic_cast<const ::trade::CancelCommerceOrderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelCommerceOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelCommerceOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -733,6 +757,7 @@ void SendClientPlayerJubaozhaiCancelCommerceOrderErased(entt::registry& registry
 #pragma region ClientPlayerJubaozhaiListCommerceOrders
 namespace {
 void QueueLocalClientPlayerJubaozhaiListCommerceOrdersFailure(GrpcDone<::trade::ListCommerceOrdersResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListCommerceOrdersGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -800,6 +825,7 @@ void SendClientPlayerJubaozhaiListCommerceOrdersErased(entt::registry& registry,
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListCommerceOrders: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListCommerceOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -809,6 +835,7 @@ void SendClientPlayerJubaozhaiListCommerceOrdersErased(entt::registry& registry,
     const auto* typedRequest = dynamic_cast<const ::trade::ListCommerceOrdersRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListCommerceOrders: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListCommerceOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -821,6 +848,7 @@ void SendClientPlayerJubaozhaiListCommerceOrdersErased(entt::registry& registry,
 #pragma region ClientPlayerJubaozhaiCreatePlayerTrade
 namespace {
 void QueueLocalClientPlayerJubaozhaiCreatePlayerTradeFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreatePlayerTradeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -888,6 +916,7 @@ void SendClientPlayerJubaozhaiCreatePlayerTradeErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreatePlayerTrade: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreatePlayerTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -897,6 +926,7 @@ void SendClientPlayerJubaozhaiCreatePlayerTradeErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::trade::CreatePlayerTradeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreatePlayerTrade: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreatePlayerTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -909,6 +939,7 @@ void SendClientPlayerJubaozhaiCreatePlayerTradeErased(entt::registry& registry, 
 #pragma region ClientPlayerJubaozhaiConfirmPlayerTrade
 namespace {
 void QueueLocalClientPlayerJubaozhaiConfirmPlayerTradeFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiConfirmPlayerTradeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -976,6 +1007,7 @@ void SendClientPlayerJubaozhaiConfirmPlayerTradeErased(entt::registry& registry,
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ConfirmPlayerTrade: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiConfirmPlayerTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -985,6 +1017,7 @@ void SendClientPlayerJubaozhaiConfirmPlayerTradeErased(entt::registry& registry,
     const auto* typedRequest = dynamic_cast<const ::trade::ConfirmPlayerTradeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ConfirmPlayerTrade: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiConfirmPlayerTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -997,6 +1030,7 @@ void SendClientPlayerJubaozhaiConfirmPlayerTradeErased(entt::registry& registry,
 #pragma region ClientPlayerJubaozhaiCreateConsignment
 namespace {
 void QueueLocalClientPlayerJubaozhaiCreateConsignmentFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateConsignmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1064,6 +1098,7 @@ void SendClientPlayerJubaozhaiCreateConsignmentErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateConsignment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1073,6 +1108,7 @@ void SendClientPlayerJubaozhaiCreateConsignmentErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::trade::CreateConsignmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateConsignment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1085,6 +1121,7 @@ void SendClientPlayerJubaozhaiCreateConsignmentErased(entt::registry& registry, 
 #pragma region ClientPlayerJubaozhaiBuyConsignment
 namespace {
 void QueueLocalClientPlayerJubaozhaiBuyConsignmentFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBuyConsignmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1152,6 +1189,7 @@ void SendClientPlayerJubaozhaiBuyConsignmentErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BuyConsignment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBuyConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1161,6 +1199,7 @@ void SendClientPlayerJubaozhaiBuyConsignmentErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::trade::BuyConsignmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BuyConsignment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBuyConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1173,6 +1212,7 @@ void SendClientPlayerJubaozhaiBuyConsignmentErased(entt::registry& registry, ent
 #pragma region ClientPlayerJubaozhaiCancelConsignment
 namespace {
 void QueueLocalClientPlayerJubaozhaiCancelConsignmentFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelConsignmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1240,6 +1280,7 @@ void SendClientPlayerJubaozhaiCancelConsignmentErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelConsignment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1249,6 +1290,7 @@ void SendClientPlayerJubaozhaiCancelConsignmentErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::trade::CancelConsignmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelConsignment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1261,6 +1303,7 @@ void SendClientPlayerJubaozhaiCancelConsignmentErased(entt::registry& registry, 
 #pragma region ClientPlayerJubaozhaiPlaceMarketOrder
 namespace {
 void QueueLocalClientPlayerJubaozhaiPlaceMarketOrderFailure(GrpcDone<::trade::MarketOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiPlaceMarketOrderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1328,6 +1371,7 @@ void SendClientPlayerJubaozhaiPlaceMarketOrderErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.PlaceMarketOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiPlaceMarketOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1337,6 +1381,7 @@ void SendClientPlayerJubaozhaiPlaceMarketOrderErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::PlaceMarketOrderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.PlaceMarketOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiPlaceMarketOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1349,6 +1394,7 @@ void SendClientPlayerJubaozhaiPlaceMarketOrderErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiCancelMarketOrder
 namespace {
 void QueueLocalClientPlayerJubaozhaiCancelMarketOrderFailure(GrpcDone<::trade::MarketOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelMarketOrderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1416,6 +1462,7 @@ void SendClientPlayerJubaozhaiCancelMarketOrderErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelMarketOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelMarketOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1425,6 +1472,7 @@ void SendClientPlayerJubaozhaiCancelMarketOrderErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::trade::CancelMarketOrderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelMarketOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelMarketOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1437,6 +1485,7 @@ void SendClientPlayerJubaozhaiCancelMarketOrderErased(entt::registry& registry, 
 #pragma region ClientPlayerJubaozhaiListMarketOrders
 namespace {
 void QueueLocalClientPlayerJubaozhaiListMarketOrdersFailure(GrpcDone<::trade::ListMarketOrdersResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListMarketOrdersGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1504,6 +1553,7 @@ void SendClientPlayerJubaozhaiListMarketOrdersErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListMarketOrders: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListMarketOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1513,6 +1563,7 @@ void SendClientPlayerJubaozhaiListMarketOrdersErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::ListMarketOrdersRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListMarketOrders: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListMarketOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1525,6 +1576,7 @@ void SendClientPlayerJubaozhaiListMarketOrdersErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiGetMarketDepth
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetMarketDepthFailure(GrpcDone<::trade::GetMarketDepthResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMarketDepthGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1592,6 +1644,7 @@ void SendClientPlayerJubaozhaiGetMarketDepthErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetMarketDepth: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMarketDepthGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1601,6 +1654,7 @@ void SendClientPlayerJubaozhaiGetMarketDepthErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::trade::GetMarketDepthRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetMarketDepth: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetMarketDepthGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1613,6 +1667,7 @@ void SendClientPlayerJubaozhaiGetMarketDepthErased(entt::registry& registry, ent
 #pragma region ClientPlayerJubaozhaiCreateAuctionLot
 namespace {
 void QueueLocalClientPlayerJubaozhaiCreateAuctionLotFailure(GrpcDone<::trade::AuctionLotResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateAuctionLotGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1680,6 +1735,7 @@ void SendClientPlayerJubaozhaiCreateAuctionLotErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateAuctionLot: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateAuctionLotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1689,6 +1745,7 @@ void SendClientPlayerJubaozhaiCreateAuctionLotErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::CreateAuctionLotRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateAuctionLot: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateAuctionLotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1701,6 +1758,7 @@ void SendClientPlayerJubaozhaiCreateAuctionLotErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiPlaceAuctionBid
 namespace {
 void QueueLocalClientPlayerJubaozhaiPlaceAuctionBidFailure(GrpcDone<::trade::AuctionLotResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiPlaceAuctionBidGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1768,6 +1826,7 @@ void SendClientPlayerJubaozhaiPlaceAuctionBidErased(entt::registry& registry, en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.PlaceAuctionBid: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiPlaceAuctionBidGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1777,6 +1836,7 @@ void SendClientPlayerJubaozhaiPlaceAuctionBidErased(entt::registry& registry, en
     const auto* typedRequest = dynamic_cast<const ::trade::PlaceAuctionBidRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.PlaceAuctionBid: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiPlaceAuctionBidGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1789,6 +1849,7 @@ void SendClientPlayerJubaozhaiPlaceAuctionBidErased(entt::registry& registry, en
 #pragma region ClientPlayerJubaozhaiGetAuctionLot
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetAuctionLotFailure(GrpcDone<::trade::AuctionLotResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetAuctionLotGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1856,6 +1917,7 @@ void SendClientPlayerJubaozhaiGetAuctionLotErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetAuctionLot: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetAuctionLotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1865,6 +1927,7 @@ void SendClientPlayerJubaozhaiGetAuctionLotErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::trade::GetAuctionLotRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetAuctionLot: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetAuctionLotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1877,6 +1940,7 @@ void SendClientPlayerJubaozhaiGetAuctionLotErased(entt::registry& registry, entt
 #pragma region ClientPlayerJubaozhaiCancelAuctionLot
 namespace {
 void QueueLocalClientPlayerJubaozhaiCancelAuctionLotFailure(GrpcDone<::trade::AuctionLotResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelAuctionLotGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1944,6 +2008,7 @@ void SendClientPlayerJubaozhaiCancelAuctionLotErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelAuctionLot: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelAuctionLotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1953,6 +2018,7 @@ void SendClientPlayerJubaozhaiCancelAuctionLotErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::CancelAuctionLotRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelAuctionLot: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelAuctionLotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1965,6 +2031,7 @@ void SendClientPlayerJubaozhaiCancelAuctionLotErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiBrowseCommerceOffers
 namespace {
 void QueueLocalClientPlayerJubaozhaiBrowseCommerceOffersFailure(GrpcDone<::trade::BrowseCommerceOffersResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBrowseCommerceOffersGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2032,6 +2099,7 @@ void SendClientPlayerJubaozhaiBrowseCommerceOffersErased(entt::registry& registr
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BrowseCommerceOffers: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBrowseCommerceOffersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2041,6 +2109,7 @@ void SendClientPlayerJubaozhaiBrowseCommerceOffersErased(entt::registry& registr
     const auto* typedRequest = dynamic_cast<const ::trade::BrowseCommerceOffersRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BrowseCommerceOffers: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBrowseCommerceOffersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2053,6 +2122,7 @@ void SendClientPlayerJubaozhaiBrowseCommerceOffersErased(entt::registry& registr
 #pragma region ClientPlayerJubaozhaiListTradeMarkets
 namespace {
 void QueueLocalClientPlayerJubaozhaiListTradeMarketsFailure(GrpcDone<::trade::ListTradeMarketsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListTradeMarketsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2120,6 +2190,7 @@ void SendClientPlayerJubaozhaiListTradeMarketsErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListTradeMarkets: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListTradeMarketsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2129,6 +2200,7 @@ void SendClientPlayerJubaozhaiListTradeMarketsErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::ListTradeMarketsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListTradeMarkets: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListTradeMarketsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2141,6 +2213,7 @@ void SendClientPlayerJubaozhaiListTradeMarketsErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiCreateRmbConsignment
 namespace {
 void QueueLocalClientPlayerJubaozhaiCreateRmbConsignmentFailure(GrpcDone<::trade::RmbConsignmentResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateRmbConsignmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2208,6 +2281,7 @@ void SendClientPlayerJubaozhaiCreateRmbConsignmentErased(entt::registry& registr
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateRmbConsignment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2217,6 +2291,7 @@ void SendClientPlayerJubaozhaiCreateRmbConsignmentErased(entt::registry& registr
     const auto* typedRequest = dynamic_cast<const ::trade::CreateRmbConsignmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateRmbConsignment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2229,6 +2304,7 @@ void SendClientPlayerJubaozhaiCreateRmbConsignmentErased(entt::registry& registr
 #pragma region ClientPlayerJubaozhaiGetRmbConsignment
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetRmbConsignmentFailure(GrpcDone<::trade::RmbConsignmentResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetRmbConsignmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2296,6 +2372,7 @@ void SendClientPlayerJubaozhaiGetRmbConsignmentErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetRmbConsignment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2305,6 +2382,7 @@ void SendClientPlayerJubaozhaiGetRmbConsignmentErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::trade::GetRmbConsignmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetRmbConsignment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2317,6 +2395,7 @@ void SendClientPlayerJubaozhaiGetRmbConsignmentErased(entt::registry& registry, 
 #pragma region ClientPlayerJubaozhaiListRmbConsignments
 namespace {
 void QueueLocalClientPlayerJubaozhaiListRmbConsignmentsFailure(GrpcDone<::trade::ListRmbConsignmentsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListRmbConsignmentsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2384,6 +2463,7 @@ void SendClientPlayerJubaozhaiListRmbConsignmentsErased(entt::registry& registry
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListRmbConsignments: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListRmbConsignmentsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2393,6 +2473,7 @@ void SendClientPlayerJubaozhaiListRmbConsignmentsErased(entt::registry& registry
     const auto* typedRequest = dynamic_cast<const ::trade::ListRmbConsignmentsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListRmbConsignments: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListRmbConsignmentsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2405,6 +2486,7 @@ void SendClientPlayerJubaozhaiListRmbConsignmentsErased(entt::registry& registry
 #pragma region ClientPlayerJubaozhaiBuyRmbConsignment
 namespace {
 void QueueLocalClientPlayerJubaozhaiBuyRmbConsignmentFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBuyRmbConsignmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2472,6 +2554,7 @@ void SendClientPlayerJubaozhaiBuyRmbConsignmentErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BuyRmbConsignment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBuyRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2481,6 +2564,7 @@ void SendClientPlayerJubaozhaiBuyRmbConsignmentErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::trade::BuyRmbConsignmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.BuyRmbConsignment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiBuyRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2493,6 +2577,7 @@ void SendClientPlayerJubaozhaiBuyRmbConsignmentErased(entt::registry& registry, 
 #pragma region ClientPlayerJubaozhaiCancelRmbConsignment
 namespace {
 void QueueLocalClientPlayerJubaozhaiCancelRmbConsignmentFailure(GrpcDone<::trade::RmbConsignmentResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelRmbConsignmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2560,6 +2645,7 @@ void SendClientPlayerJubaozhaiCancelRmbConsignmentErased(entt::registry& registr
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelRmbConsignment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2569,6 +2655,7 @@ void SendClientPlayerJubaozhaiCancelRmbConsignmentErased(entt::registry& registr
     const auto* typedRequest = dynamic_cast<const ::trade::CancelRmbConsignmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelRmbConsignment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelRmbConsignmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2581,6 +2668,7 @@ void SendClientPlayerJubaozhaiCancelRmbConsignmentErased(entt::registry& registr
 #pragma region ClientPlayerJubaozhaiGetRmbOrder
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetRmbOrderFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetRmbOrderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2648,6 +2736,7 @@ void SendClientPlayerJubaozhaiGetRmbOrderErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetRmbOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetRmbOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2657,6 +2746,7 @@ void SendClientPlayerJubaozhaiGetRmbOrderErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::trade::GetCommerceOrderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetRmbOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetRmbOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2669,6 +2759,7 @@ void SendClientPlayerJubaozhaiGetRmbOrderErased(entt::registry& registry, entt::
 #pragma region ClientPlayerJubaozhaiListRmbOrders
 namespace {
 void QueueLocalClientPlayerJubaozhaiListRmbOrdersFailure(GrpcDone<::trade::ListCommerceOrdersResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListRmbOrdersGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2736,6 +2827,7 @@ void SendClientPlayerJubaozhaiListRmbOrdersErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListRmbOrders: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListRmbOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2745,6 +2837,7 @@ void SendClientPlayerJubaozhaiListRmbOrdersErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::trade::ListCommerceOrdersRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListRmbOrders: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListRmbOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2757,6 +2850,7 @@ void SendClientPlayerJubaozhaiListRmbOrdersErased(entt::registry& registry, entt
 #pragma region ClientPlayerJubaozhaiCancelRmbOrder
 namespace {
 void QueueLocalClientPlayerJubaozhaiCancelRmbOrderFailure(GrpcDone<::trade::CommerceOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelRmbOrderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2824,6 +2918,7 @@ void SendClientPlayerJubaozhaiCancelRmbOrderErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelRmbOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelRmbOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2833,6 +2928,7 @@ void SendClientPlayerJubaozhaiCancelRmbOrderErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::trade::CancelCommerceOrderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CancelRmbOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCancelRmbOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2845,6 +2941,7 @@ void SendClientPlayerJubaozhaiCancelRmbOrderErased(entt::registry& registry, ent
 #pragma region ClientPlayerJubaozhaiListSellerIncomes
 namespace {
 void QueueLocalClientPlayerJubaozhaiListSellerIncomesFailure(GrpcDone<::trade::ListSellerIncomesResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListSellerIncomesGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2912,6 +3009,7 @@ void SendClientPlayerJubaozhaiListSellerIncomesErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListSellerIncomes: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListSellerIncomesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2921,6 +3019,7 @@ void SendClientPlayerJubaozhaiListSellerIncomesErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::trade::ListSellerIncomesRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListSellerIncomes: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListSellerIncomesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2933,6 +3032,7 @@ void SendClientPlayerJubaozhaiListSellerIncomesErased(entt::registry& registry, 
 #pragma region ClientPlayerJubaozhaiCreateWithdrawal
 namespace {
 void QueueLocalClientPlayerJubaozhaiCreateWithdrawalFailure(GrpcDone<::trade::WithdrawalResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateWithdrawalGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -3000,6 +3100,7 @@ void SendClientPlayerJubaozhaiCreateWithdrawalErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateWithdrawal: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateWithdrawalGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3009,6 +3110,7 @@ void SendClientPlayerJubaozhaiCreateWithdrawalErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::trade::CreateWithdrawalRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateWithdrawal: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateWithdrawalGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3021,6 +3123,7 @@ void SendClientPlayerJubaozhaiCreateWithdrawalErased(entt::registry& registry, e
 #pragma region ClientPlayerJubaozhaiGetWithdrawal
 namespace {
 void QueueLocalClientPlayerJubaozhaiGetWithdrawalFailure(GrpcDone<::trade::WithdrawalResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetWithdrawalGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -3088,6 +3191,7 @@ void SendClientPlayerJubaozhaiGetWithdrawalErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetWithdrawal: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetWithdrawalGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3097,6 +3201,7 @@ void SendClientPlayerJubaozhaiGetWithdrawalErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::trade::GetWithdrawalRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerJubaozhai.GetWithdrawal: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiGetWithdrawalGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

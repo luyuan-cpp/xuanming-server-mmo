@@ -497,7 +497,7 @@ func main() {
 	if err != nil {
 		logx.Must(err)
 	}
-	// 内容安全:帮会名与公告送检(logic/content_check.go)。配置要求(Required)而没配目标、或客户端建不起来,起服即失败;
+	// 内容安全:帮会名与公告送检(logic/content_check.go)。没配目标(又不是本机的 Optional)、或客户端建不起来,起服即失败;
 	// 没配目标且不要求时得到一个一律放行的客户端并打一行警告(只允许本机)。拨号是 NonBlock,内容安全晚起不挡 guild 启动。
 	contentGuard, err := contentguard.New("guild", config.AppConfig.ContentGuard)
 	if err != nil {

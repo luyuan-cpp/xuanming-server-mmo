@@ -6,6 +6,7 @@
 #include "proto/battle/battle_node.pb.h"
 #include "proto/chat/chat.pb.h"
 #include "proto/client_rpc_router/client_rpc_router.pb.h"
+#include "proto/content_guard/content_guard.pb.h"
 #include "proto/data_service/data_service.pb.h"
 #include "proto/etcd/etcd.pb.h"
 #include "proto/friend/friend.pb.h"
@@ -27,6 +28,7 @@
 #include "proto/rank/rank_admin.pb.h"
 #include "proto/scene/client_player_common.pb.h"
 #include "proto/scene/player_activity.pb.h"
+#include "proto/scene/player_afk_pass.pb.h"
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_battle_result.pb.h"
@@ -53,6 +55,7 @@
 #include "rpc/service_metadata/battle_node_service_metadata.h"
 #include "rpc/service_metadata/chat_service_metadata.h"
 #include "rpc/service_metadata/client_rpc_router_service_metadata.h"
+#include "rpc/service_metadata/content_guard_service_metadata.h"
 #include "rpc/service_metadata/data_service_service_metadata.h"
 #include "rpc/service_metadata/etcd_service_metadata.h"
 #include "rpc/service_metadata/friend_service_metadata.h"
@@ -74,6 +77,7 @@
 #include "rpc/service_metadata/rank_admin_service_metadata.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "rpc/service_metadata/player_activity_service_metadata.h"
+#include "rpc/service_metadata/player_afk_pass_service_metadata.h"
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
 #include "rpc/service_metadata/player_bag_service_metadata.h"
 #include "rpc/service_metadata/player_battle_result_service_metadata.h"
@@ -129,11 +133,15 @@ namespace chatpb{void SendClientPlayerChatSendChatErased(entt::registry& , entt:
 namespace chatpb{void SendClientPlayerChatPullChatHistoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace chatpb{void SendClientPlayerChatNotifyWorldChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace client_rpc_router{void SendClientRpcRouterForwardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace content_guard{void SendContentGuardCheckTextErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReadAccountDirectoryErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCreateAccountRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceLookupAccountRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceRepairAccountRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceRemoveAccountRolesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceSetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceGetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceResetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBeginAccountRoleTradeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceConfirmAccountRoleTradeFreezeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCancelAccountRoleTradeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -144,6 +152,10 @@ namespace data_service{void SendDataServiceVerifyRoleAdmissionErased(entt::regis
 namespace data_service{void SendDataServiceRegisterRoleAdmissionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceCloseRoleAdmissionsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceAckRoleTradeDrainErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceRequestAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceCancelAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceClaimAccountDeletionsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceFinishAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReleaseDeadPlayerStoreHolderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReadPlayerStoreHolderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceRegisterPlayerZoneErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -163,6 +175,7 @@ namespace data_service{void SendDataServiceAllocateIdSegmentErased(entt::registr
 namespace data_service{void SendDataServiceReservePlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceReleasePlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchGetPlayerNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceRenameRoleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceBatchGetPlayerDisplayErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerAssetOpLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -227,7 +240,12 @@ namespace loginpb{void SendClientPlayerLoginRenewSessionErased(entt::registry& ,
 namespace loginpb{void SendLoginPreGateAssignGateErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginPreGateQueryQueueStatusErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginPreGateGetZoneRoleCountErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace loginpb{void SendLoginPreGateSubmitRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace loginpb{void SendLoginPreGateRequestAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace loginpb{void SendLoginPreGateCancelAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginAdminRemovePlayersFromAccountsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace loginpb{void SendLoginAdminScheduleAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace loginpb{void SendLoginAdminResetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace mailpb{void SendClientPlayerMailListMailsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace mailpb{void SendClientPlayerMailReadMailErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace mailpb{void SendClientPlayerMailClaimMailAttachmentsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -373,7 +391,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 413,
+static_assert(kMaxRpcMethodCount == 433,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -512,6 +530,13 @@ void InitMessageInfo()
         std::make_unique<::MessageContent>(),
         1, common::base::eNodeType::ClientRpcRouterNodeService, client_rpc_router::SendClientRpcRouterForwardErased, "/client_rpc_router.ClientRpcRouter/Forward"};
 
+    // --- ContentGuard ---
+    gRpcMethodRegistry[ContentGuardCheckTextMessageId] = RpcMethodMeta{
+        "ContentGuard", "CheckText",
+        std::make_unique<::content_guard::CheckTextRequest>(),
+        std::make_unique<::content_guard::CheckTextResponse>(),
+        1, common::base::eNodeType::ContentGuardNodeService, content_guard::SendContentGuardCheckTextErased, "/content_guard.ContentGuard/CheckText"};
+
     // --- DataService ---
     gRpcMethodRegistry[DataServiceReadAccountDirectoryMessageId] = RpcMethodMeta{
         "DataService", "ReadAccountDirectory",
@@ -538,6 +563,21 @@ void InitMessageInfo()
         std::make_unique<::data_service::RemoveAccountRolesRequest>(),
         std::make_unique<::google::protobuf::Empty>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRemoveAccountRolesErased, "/data_service.DataService/RemoveAccountRoles"};
+    gRpcMethodRegistry[DataServiceSetAccountRealNameMessageId] = RpcMethodMeta{
+        "DataService", "SetAccountRealName",
+        std::make_unique<::data_service::SetAccountRealNameRequest>(),
+        std::make_unique<::data_service::SetAccountRealNameResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceSetAccountRealNameErased, "/data_service.DataService/SetAccountRealName"};
+    gRpcMethodRegistry[DataServiceGetAccountRealNameMessageId] = RpcMethodMeta{
+        "DataService", "GetAccountRealName",
+        std::make_unique<::data_service::GetAccountRealNameRequest>(),
+        std::make_unique<::data_service::GetAccountRealNameResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetAccountRealNameErased, "/data_service.DataService/GetAccountRealName"};
+    gRpcMethodRegistry[DataServiceResetAccountRealNameMessageId] = RpcMethodMeta{
+        "DataService", "ResetAccountRealName",
+        std::make_unique<::data_service::ResetAccountRealNameRequest>(),
+        std::make_unique<::data_service::ResetAccountRealNameResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceResetAccountRealNameErased, "/data_service.DataService/ResetAccountRealName"};
     gRpcMethodRegistry[DataServiceBeginAccountRoleTradeMessageId] = RpcMethodMeta{
         "DataService", "BeginAccountRoleTrade",
         std::make_unique<::data_service::BeginAccountRoleTradeRequest>(),
@@ -588,6 +628,26 @@ void InitMessageInfo()
         std::make_unique<::data_service::AckRoleTradeDrainRequest>(),
         std::make_unique<::google::protobuf::Empty>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceAckRoleTradeDrainErased, "/data_service.DataService/AckRoleTradeDrain"};
+    gRpcMethodRegistry[DataServiceRequestAccountDeletionMessageId] = RpcMethodMeta{
+        "DataService", "RequestAccountDeletion",
+        std::make_unique<::data_service::RequestAccountDeletionRequest>(),
+        std::make_unique<::data_service::AccountDeletionResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRequestAccountDeletionErased, "/data_service.DataService/RequestAccountDeletion"};
+    gRpcMethodRegistry[DataServiceCancelAccountDeletionMessageId] = RpcMethodMeta{
+        "DataService", "CancelAccountDeletion",
+        std::make_unique<::data_service::CancelAccountDeletionRequest>(),
+        std::make_unique<::data_service::AccountDeletionResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceCancelAccountDeletionErased, "/data_service.DataService/CancelAccountDeletion"};
+    gRpcMethodRegistry[DataServiceClaimAccountDeletionsMessageId] = RpcMethodMeta{
+        "DataService", "ClaimAccountDeletions",
+        std::make_unique<::data_service::ClaimAccountDeletionsRequest>(),
+        std::make_unique<::data_service::ClaimAccountDeletionsResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceClaimAccountDeletionsErased, "/data_service.DataService/ClaimAccountDeletions"};
+    gRpcMethodRegistry[DataServiceFinishAccountDeletionMessageId] = RpcMethodMeta{
+        "DataService", "FinishAccountDeletion",
+        std::make_unique<::data_service::FinishAccountDeletionRequest>(),
+        std::make_unique<::data_service::FinishAccountDeletionResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceFinishAccountDeletionErased, "/data_service.DataService/FinishAccountDeletion"};
     gRpcMethodRegistry[DataServiceReleaseDeadPlayerStoreHolderMessageId] = RpcMethodMeta{
         "DataService", "ReleaseDeadPlayerStoreHolder",
         std::make_unique<::data_service::ReleaseDeadPlayerStoreHolderRequest>(),
@@ -683,6 +743,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::BatchGetPlayerNameRequest>(),
         std::make_unique<::data_service::BatchGetPlayerNameResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceBatchGetPlayerNameErased, "/data_service.DataService/BatchGetPlayerName"};
+    gRpcMethodRegistry[DataServiceRenameRoleMessageId] = RpcMethodMeta{
+        "DataService", "RenameRole",
+        std::make_unique<::data_service::RenameRoleRequest>(),
+        std::make_unique<::data_service::RenameRoleResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceRenameRoleErased, "/data_service.DataService/RenameRole"};
     gRpcMethodRegistry[DataServiceBatchGetPlayerDisplayMessageId] = RpcMethodMeta{
         "DataService", "BatchGetPlayerDisplay",
         std::make_unique<::data_service::BatchGetPlayerDisplayRequest>(),
@@ -1073,6 +1138,21 @@ void InitMessageInfo()
         std::make_unique<::loginpb::ZoneRoleCountRequest>(),
         std::make_unique<::loginpb::ZoneRoleCountResponse>(),
         1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginPreGateGetZoneRoleCountErased, "/loginpb.LoginPreGate/GetZoneRoleCount"};
+    gRpcMethodRegistry[LoginPreGateSubmitRealNameMessageId] = RpcMethodMeta{
+        "LoginPreGate", "SubmitRealName",
+        std::make_unique<::loginpb::SubmitRealNameRequest>(),
+        std::make_unique<::loginpb::SubmitRealNameResponse>(),
+        1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginPreGateSubmitRealNameErased, "/loginpb.LoginPreGate/SubmitRealName"};
+    gRpcMethodRegistry[LoginPreGateRequestAccountDeletionMessageId] = RpcMethodMeta{
+        "LoginPreGate", "RequestAccountDeletion",
+        std::make_unique<::loginpb::AccountDeletionRequest>(),
+        std::make_unique<::loginpb::AccountDeletionResponse>(),
+        1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginPreGateRequestAccountDeletionErased, "/loginpb.LoginPreGate/RequestAccountDeletion"};
+    gRpcMethodRegistry[LoginPreGateCancelAccountDeletionMessageId] = RpcMethodMeta{
+        "LoginPreGate", "CancelAccountDeletion",
+        std::make_unique<::loginpb::CancelAccountDeletionRequest>(),
+        std::make_unique<::loginpb::AccountDeletionResponse>(),
+        1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginPreGateCancelAccountDeletionErased, "/loginpb.LoginPreGate/CancelAccountDeletion"};
 
     // --- LoginAdmin ---
     gRpcMethodRegistry[LoginAdminRemovePlayersFromAccountsMessageId] = RpcMethodMeta{
@@ -1080,6 +1160,16 @@ void InitMessageInfo()
         std::make_unique<::loginpb::RemovePlayersFromAccountsRequest>(),
         std::make_unique<::loginpb::RemovePlayersFromAccountsResponse>(),
         1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginAdminRemovePlayersFromAccountsErased, "/loginpb.LoginAdmin/RemovePlayersFromAccounts"};
+    gRpcMethodRegistry[LoginAdminScheduleAccountDeletionMessageId] = RpcMethodMeta{
+        "LoginAdmin", "ScheduleAccountDeletion",
+        std::make_unique<::loginpb::ScheduleAccountDeletionRequest>(),
+        std::make_unique<::loginpb::AccountDeletionResponse>(),
+        1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginAdminScheduleAccountDeletionErased, "/loginpb.LoginAdmin/ScheduleAccountDeletion"};
+    gRpcMethodRegistry[LoginAdminResetAccountRealNameMessageId] = RpcMethodMeta{
+        "LoginAdmin", "ResetAccountRealName",
+        std::make_unique<::loginpb::ResetAccountRealNameRequest>(),
+        std::make_unique<::loginpb::ResetAccountRealNameResponse>(),
+        1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginAdminResetAccountRealNameErased, "/loginpb.LoginAdmin/ResetAccountRealName"};
 
     // --- ClientPlayerMail ---
     gRpcMethodRegistry[ClientPlayerMailListMailsMessageId] = RpcMethodMeta{
@@ -1479,6 +1569,16 @@ void InitMessageInfo()
         std::make_unique<::RedirectToGateNotify>(),
         std::make_unique<::Empty>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneClientPlayerCommonRenamePlayerMessageId] = RpcMethodMeta{
+        "SceneClientPlayerCommon", "RenamePlayer",
+        std::make_unique<::RenamePlayerRequest>(),
+        std::make_unique<::RenamePlayerResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneClientPlayerCommonNotifyPlayerRenamedMessageId] = RpcMethodMeta{
+        "SceneClientPlayerCommon", "NotifyPlayerRenamed",
+        std::make_unique<::PlayerRenamedNotify>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneActivityClientPlayer ---
     gRpcMethodRegistry[SceneActivityClientPlayerGetActivityListMessageId] = RpcMethodMeta{
@@ -1490,6 +1590,23 @@ void InitMessageInfo()
         "SceneActivityClientPlayer", "ClaimActivityVitalityReward",
         std::make_unique<::ClaimActivityVitalityRewardRequest>(),
         std::make_unique<::ClaimActivityVitalityRewardResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneAfkPassClientPlayer ---
+    gRpcMethodRegistry[SceneAfkPassClientPlayerGetAfkPassMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "GetAfkPass",
+        std::make_unique<::GetAfkPassRequest>(),
+        std::make_unique<::GetAfkPassResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAfkPassClientPlayerBuyAfkPassMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "BuyAfkPass",
+        std::make_unique<::BuyAfkPassRequest>(),
+        std::make_unique<::BuyAfkPassResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAfkPassClientPlayerGmSetAfkPassMessageId] = RpcMethodMeta{
+        "SceneAfkPassClientPlayer", "GmSetAfkPass",
+        std::make_unique<::GmSetAfkPassRequest>(),
+        std::make_unique<::GmSetAfkPassResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneAttributeClientPlayer ---
@@ -2449,8 +2566,12 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerPaymentSubmitPurchaseMessageId:
 	case ClientPlayerRankGetRankPageMessageId:
 	case ClientPlayerRankGetRankAroundMessageId:
+	case SceneClientPlayerCommonRenamePlayerMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:
 	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
+	case SceneAfkPassClientPlayerGetAfkPassMessageId:
+	case SceneAfkPassClientPlayerBuyAfkPassMessageId:
+	case SceneAfkPassClientPlayerGmSetAfkPassMessageId:
 	case SceneAttributeClientPlayerGetAttributePanelMessageId:
 	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
 	case SceneAttributeClientPlayerResetAttributePointsMessageId:

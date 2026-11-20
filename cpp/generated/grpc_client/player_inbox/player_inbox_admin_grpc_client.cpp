@@ -29,6 +29,7 @@ namespace player_inbox {
 #pragma region PlayerInboxAdminGmSanctionPlayer
 namespace {
 void QueueLocalPlayerInboxAdminGmSanctionPlayerFailure(GrpcDone<::player_inbox::GmSanctionPlayerResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAdminGmSanctionPlayerGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendPlayerInboxAdminGmSanctionPlayerErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInboxAdmin.GmSanctionPlayer: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminGmSanctionPlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendPlayerInboxAdminGmSanctionPlayerErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::player_inbox::GmSanctionPlayerRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInboxAdmin.GmSanctionPlayer: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminGmSanctionPlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendPlayerInboxAdminGmSanctionPlayerErased(entt::registry& registry, entt::
 #pragma region PlayerInboxAdminGetSummary
 namespace {
 void QueueLocalPlayerInboxAdminGetSummaryFailure(GrpcDone<::player_inbox::GetPlayerInboxSummaryResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAdminGetSummaryGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendPlayerInboxAdminGetSummaryErased(entt::registry& registry, entt::entity
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInboxAdmin.GetSummary: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminGetSummaryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendPlayerInboxAdminGetSummaryErased(entt::registry& registry, entt::entity
     const auto* typedRequest = dynamic_cast<const ::player_inbox::GetPlayerInboxSummaryRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInboxAdmin.GetSummary: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminGetSummaryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendPlayerInboxAdminGetSummaryErased(entt::registry& registry, entt::entity
 #pragma region PlayerInboxAdminListItems
 namespace {
 void QueueLocalPlayerInboxAdminListItemsFailure(GrpcDone<::player_inbox::ListPlayerInboxItemsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAdminListItemsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendPlayerInboxAdminListItemsErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInboxAdmin.ListItems: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminListItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendPlayerInboxAdminListItemsErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::player_inbox::ListPlayerInboxItemsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInboxAdmin.ListItems: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminListItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendPlayerInboxAdminListItemsErased(entt::registry& registry, entt::entity 
 #pragma region PlayerInboxAdminLookupByRequest
 namespace {
 void QueueLocalPlayerInboxAdminLookupByRequestFailure(GrpcDone<::player_inbox::LookupPlayerInboxResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAdminLookupByRequestGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendPlayerInboxAdminLookupByRequestErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInboxAdmin.LookupByRequest: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminLookupByRequestGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendPlayerInboxAdminLookupByRequestErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::player_inbox::LookupPlayerInboxRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInboxAdmin.LookupByRequest: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminLookupByRequestGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendPlayerInboxAdminLookupByRequestErased(entt::registry& registry, entt::e
 #pragma region PlayerInboxAdminVoidItem
 namespace {
 void QueueLocalPlayerInboxAdminVoidItemFailure(GrpcDone<::player_inbox::VoidPlayerInboxItemResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAdminVoidItemGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendPlayerInboxAdminVoidItemErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInboxAdmin.VoidItem: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminVoidItemGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendPlayerInboxAdminVoidItemErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::player_inbox::VoidPlayerInboxItemRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInboxAdmin.VoidItem: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminVoidItemGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendPlayerInboxAdminVoidItemErased(entt::registry& registry, entt::entity n
 #pragma region PlayerInboxAdminReconcilePlayer
 namespace {
 void QueueLocalPlayerInboxAdminReconcilePlayerFailure(GrpcDone<::player_inbox::ReconcilePlayerInboxResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAdminReconcilePlayerGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendPlayerInboxAdminReconcilePlayerErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInboxAdmin.ReconcilePlayer: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminReconcilePlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendPlayerInboxAdminReconcilePlayerErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::player_inbox::ReconcilePlayerInboxRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInboxAdmin.ReconcilePlayer: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminReconcilePlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +575,7 @@ void SendPlayerInboxAdminReconcilePlayerErased(entt::registry& registry, entt::e
 #pragma region PlayerInboxAdminGetItemGainBlocks
 namespace {
 void QueueLocalPlayerInboxAdminGetItemGainBlocksFailure(GrpcDone<::player_inbox::GetPlayerItemGainBlocksResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAdminGetItemGainBlocksGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +643,7 @@ void SendPlayerInboxAdminGetItemGainBlocksErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInboxAdmin.GetItemGainBlocks: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminGetItemGainBlocksGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +653,7 @@ void SendPlayerInboxAdminGetItemGainBlocksErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::player_inbox::GetPlayerItemGainBlocksRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInboxAdmin.GetItemGainBlocks: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAdminGetItemGainBlocksGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

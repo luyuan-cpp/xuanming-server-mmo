@@ -89,7 +89,7 @@ protected:
         scope = std::make_unique<Admission::ScopedDependencies>(std::move(dependencies));
         ASSERT_EQ(scene, PlayerSceneSystem::FindSceneById(kScene)) << "夹具场景必须能被生产查找入口解析";
         ASSERT_EQ(kSuccess, PlayerSceneSystem::CheckEnterScene(kPlayer, scene));
-        ASSERT_TRUE(enter_fence::Admits(PlayerLifecycleSystem::JudgeEnter(kPlayer, 91, 9)));
+        ASSERT_TRUE(enter_fence::Admits(PlayerLifecycleSystem::JudgeEnter(kPlayer, 91, 9, /*gateInstanceId=*/{})));
     }
     void TearDown() override {
         tasks.StopAll();
@@ -112,7 +112,8 @@ protected:
         const auto player = tlsEcs.GetPlayer(kPlayer);
         const auto allowed = player == entt::null ? PlayerSceneSystem::CheckEnterScene(kPlayer, found)
             : PlayerSceneSystem::CheckEnterScene(player, found);
-        const auto verdict = PlayerLifecycleSystem::JudgeEnter(kPlayer, context.enterInfo.session_id(), context.loginGeneration);
+        const auto verdict = PlayerLifecycleSystem::JudgeEnter(kPlayer, context.enterInfo.session_id(), context.loginGeneration,
+                                                               context.gateInstanceId);
         std::ostringstream details;
         details << "scene_found=" << (found == scene) << " scene_allowed=" << allowed
             << " expected_success=" << kSuccess << " enter_fence=" << enter_fence::VerdictName(verdict)

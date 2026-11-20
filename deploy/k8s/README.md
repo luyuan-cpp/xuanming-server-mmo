@@ -502,7 +502,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     不粘滞与防误关同上(确认开关共用 `-ConfirmLoginAuthProviderChange`);login 是 SQL 写者,`AntiAddiction` 段要照抄进 `runtimeConfigSecret`,
     部署另把 AppId / BizId 明文注入 login(`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`),漏抄或抄错时 login 拒启;开、关、换应用都是先改那份 Secret、不单独滚动,紧接着部署。
     data-service 与 payment 另从 `domain-service-secrets` 的 `account-directory-payment` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`(查实名的调用密钥,
-    `optional: false`,各 namespace 先预置),见 `docs/ops/k8s-open-server-runbook.md` §1 与 `docs/design/real-name-anti-addiction.md` §8。
+    `optional: false`,由部署补齐、全集群同值,见 `-ResyncDomainServiceSecrets`),见 `docs/ops/k8s-open-server-runbook.md` §1 与 `docs/design/real-name-anti-addiction.md` §8。
   - `-ConfirmLoginAuthProviderChange`(switch):确认本次部署可关闭或改动已开启的第三方登录。未确认时,部署在任何写操作之前核对线上现状;
     漏传 AppId / Endpoint / AllowOpenId、改 AppId 或现状判不出时拒绝,并提示照传参数。`-DryRun` 不读集群;确认开关的边界见
     [微信 / QQ 沙盒手册](../../docs/ops/wechat-qq-sandbox-runbook.md) §B。
@@ -512,6 +512,10 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     (redis-0 重启,登录中断并重放 AOF;核心只在 dev 没开控制集群时部署)。
     `redis.yaml` 的 Pod 模板有变化(或线上 `sts/redis` 还没有模板摘要注解)而不给时,在 `Apply-Infra` 的任何写操作之前拒绝。`dev_tools.ps1` / `k8s_image.ps1`
     只在被指定时透传。**本项合入后第一次 `infra-up` 必须带它**,见「Redis 连接上限与总账」。
+  - `-ResyncDomainServiceSecrets`(switch,2026-11-20):`domain-service-secrets` 里 zone 工作负载引用的 16 把内部调用密钥由部署维护
+    (托管键表 `$script:ManagedDomainServiceSecrets`):缺的自动补齐,全集群每把一个值。不给时,任何 namespace 的值与 infra 不同、不足 32 字节、
+    两把同值,都在任何写操作之前拒绝;给了就统一成一个值(不可用的重新生成),并重启读这些键的 Pod(选低峰)。`dev_tools.ps1` 只在被指定时透传,
+    `k8s-image-*` / `k8s-release-*` 不透传、给了就拒绝。规则与换值步骤见 `docs/ops/k8s-open-server-runbook.md` §1。
   - **模式参数不粘滞**:每次部署按本次取值生成,漏传就落回默认 `podip` / `deployment`;以 external 运行的环境每次重跑都要照传同一组值
     (漏传时由上一条的集群现状核对在写操作之前拒绝)。
   - **上线口径**:集群外部署须与 `-GateRouterMode 1` 在同一窗口启用 `-ClientEntryMode external`(`k8s_deploy.ps1:176`),不再按旧计划"第 4 批才翻 GateRouterMode"。
@@ -526,6 +530,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - `dev_tools.ps1` 与 `k8s_image.ps1` 的 `-GateRouterMode`、`-GateServiceType` 与全部集群外入口参数一律**默认留空 = 不覆盖**,非空才透传
     (`-GateNodePortBase` 用 `-1` 表示未指定);默认值只留在 `k8s_deploy.ps1` 一处。本文「好友 friend」一节里"`dev_tools.ps1` 不透传 `-GateRouterMode`"的说法已作废。
   - `dev_tools.ps1` 的 `k8s-infra-up` / `k8s-zone-up` / `k8s-all-up` 透传全部参数。
+  - `-PaymentConfigPath`(2026-11-20):`dev_tools.ps1` 留空不透传、非空原样透传;经 `k8s-image-*` / `k8s-release-*` 给了即报错(`k8s_image.ps1` 不部署 Go 服务)。
   - `k8s_image.ps1`(以及 `dev_tools.ps1` 的 `k8s-image-*` / `k8s-release-*`)只透传 gate / battle 侧 6 个参数(`-ClientEntryMode`、`-ClientPublicHost`、
     `-GateClientHostTemplate`、`-GateNodePortBase`、`-GateExternalTrafficPolicy`、`-BattleOrchestrator`),外加 `-GateRouterMode`、`-AllowDisruptiveSwitch`、
     `-RequireClientEndpoint`(经这条路只参与预检、不改写 login / scene_manager 的 ConfigMap,给了在入口打告警)。
@@ -811,7 +816,7 @@ Pod 模板带只哈希这把密钥的指纹 `mmorpg.io/<Secret 名>-hash`,换密
 
 - **目录分片**:K=1 目录库是 `mmorpg_global`,否则 `mmorpg_global_00..`;流水和快照总在 `mmorpg_global_ledger`。AccountDirectory、PlayerName、RouteStore 的池每片一个,ConfigMap 里的上限 = `max(2, ceil(服务 yaml 的值 / K))`(`Get-DirectoryShardPoolLimit`),K=64 时每片 2 条,服务 yaml 写的是 K=1 的预算。
 - **`DbPlacement` 段的位置**:guild、trade、friend、player-inbox 在 `MySQL` 下,match 在 `GlobalMatch` 下,data-service 在 `SnapshotMySQL` 下,chat、mail、rank、db 在顶层。默认集群的地址必须等于 `-GlobalAuthorityTiDBHost`。login、gateway 写区域 MySQL 上的 `mmorpg`,不走映射,registrar init 也不带 `MMORPG_DB_PLACEMENT`。
-- **角色护栏**:data-service 的 `RoleFence.Participants` 列全部六个参与者,经 infra namespace 的 Service 直连。它们大多不写 go-zero 的 `Etcd.Key`(D-13),etcd 上发现不到。密钥走 `domain-service-secrets`,清单见 [K8s 开服手册](../../docs/ops/k8s-open-server-runbook.md) §1。
+- **角色护栏**:data-service 的 `RoleFence.Participants` 列全部六个参与者,经 infra namespace 的 Service 直连。它们大多不写 go-zero 的 `Etcd.Key`(D-13),etcd 上发现不到。密钥走 `domain-service-secrets`,由部署补齐、全集群同值,清单见 [K8s 开服手册](../../docs/ops/k8s-open-server-runbook.md) §1。
 - **data-service 的名册**:`Assert-DataServiceRosterSchemas` 在 apply 之前核 boot 名册恰好是片库、流水库和 `MMORPG_DB_ALLOWED_DATABASES`,对不上就拒绝。Pod 里 data_service 启动时同样核一次。
 - **告警**:`deploy/k8s/logical-db-alerts.yaml`,与 `owner-epoch-alerts.yaml` 同法安装,抓取前提写在文件头。`WriterGateFrozenTooLong`(`writer_frozen_seconds` 超过 2 分钟)是搬库工具被杀的主要信号,处置见[搬库手册](../../docs/ops/db-move-runbook.md) §6;排空期间也会响,按排空计划静默;大库的搬库窗口里要做一次全量比对(2026-11-12 起),超过 2 分钟时同样会响,先确认工具是不是还在跑。
   ```bash
@@ -1415,7 +1420,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
     脚本不生成、不读它的值。开着的渠道要哪些键,脚本在任何写操作之前核对这个 Secret 在不在、键齐不齐、值是不是空的(`Assert-PaymentChannelSecrets`);DryRun 不连集群,只打一行将要核对什么。
     这个 Secret 没有指纹:改了之后要 `kubectl -n <infra> rollout restart statefulset/payment`。
   - 清单还引用 `domain-service-secrets` 的 `account-directory-payment`(变量 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`,按玩家查实名的调用密钥,`optional: false`)。
-    它是实名防沉迷那一批加的,由运维预置,缺了 payment 的 Pod 起不来;见上文 Optional Flags 里「实名与防沉迷」一段与[开服手册](../../docs/ops/k8s-open-server-runbook.md) §1。
+    它是实名防沉迷那一批加的,由部署补齐(全集群同值,见 Optional Flags 的 `-ResyncDomainServiceSecrets`),缺了 payment 的 Pod 起不来;见上文 Optional Flags 里「实名与防沉迷」一段与[开服手册](../../docs/ops/k8s-open-server-runbook.md) §1。
 - **配置模板**:ConfigMap `go-svc-payment-config` 整份镜像 `go/payment/etc/payment.yaml`,只改写监听与依赖地址(`ListenOn`、`MetricsListenAddr`、etcd,根 `Etcd.Key` 写空串),`Payment` 段按上面的规则渲染,末尾加 `DbPlacement`。
   `Mode` dev 档 `dev`、其余 `pro`;`Backend` 跟 `-DatabaseBackend`。payment 是写者:常驻进程读运维预置的 `runtimeConfigSecret`,这份 ConfigMap 是运维照抄的模板。改了支付配置,运行配置要跟着改。
 - **建库与建表**:`mmorpg_payment` 登记在 `deploy/mysql-init/00_init_zone_dbs.sql`。表由 `manifests/go-svc/payment-migrate.yaml`(`-migrate`)建,DSN 取目录条目 `schemaPermissionSecret` 的 `dsn` 键(变量 `MMORPG_PAYMENT_SQL_DSN`)。
@@ -1426,7 +1431,14 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
 - **boot 目录**:`MMORPG_SQL_K8S_BOOT_CATALOG` 要有 `<infra>/payment` 条目(`replicas` 2),写法同其它写者,见[开服手册](../../docs/ops/k8s-open-server-runbook.md) §1。
 - **准入**:`-NetworkPolicies on` 时 51200 只放行 `client-rpc-router`。9280 与 18130 是清单里声明的其它端口,对任何来源开放:回调来自集群外,靠渠道签名验真。
 - **连接数**:`MaxOpenConns`(16)× 2 副本计入 MySQL 连接总账(`PaymentReplicas` / `PaymentMaxOpen`)。
-- **没做的**:没有 payment 的告警规则文件;回调入口的证书、域名与云厂商注解要运维自己配;渠道的真实商户参数没有接过真实接口(设计 §22.11)。
+- **告警**:`deploy/k8s/payment-alerts.yaml`(PrometheusRule,与 rank / mail 同法安装,2026-11-20,未运行):
+  ```bash
+  kubectl apply -n observability -f deploy/k8s/payment-alerts.yaml
+  ```
+  `PaymentMallSyncStalled`(有付款超过 10 分钟没记进商城,critical)、`PaymentMallRejected`(商城拒收,要人工,critical)、`PaymentFactStoreFailing`(事实写不进库,critical)、
+  `PaymentFactNeedsManual`(孤儿或冲突的付款)、`PaymentNotificationRetrying` / `PaymentNotificationRejected`(回调处理不成 / 验签不过)、
+  `PaymentChannelCallFailing`(调渠道接口失败)、`PaymentRefundFailed`(渠道退不了款)。指标名与取值由契约测试对照 `go/payment/internal/core/workers.go`。
+- **没做的**:回调入口的证书、域名与云厂商注解要运维自己配;渠道的真实商户参数没有接过真实接口(设计 §22.11)。
 - **验证(交 Codex,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1`,以及改到的 `k8s_deploy_contract`、`k8s_migrate_gate`、`logical_db_deploy_contract`、`redis_player_cluster_contract` 四份契约测试。
 
 ## 商城 mall:全局 Java 服务 + 独占库 `mmorpg_mall` + `mall-schema` Job(2026-11-19,docs/design/payment-recharge.md §22;未运行,待 Codex 验证)
@@ -2425,26 +2437,28 @@ match 的 `Redis` 段与 mail 的回落段指向核心单实例,取 `redis-auth`
   - 指标名与规则由 `tools/scripts/tests/cpp_node_resource_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
 - **gate 连接准入的指标与告警(2026-11-12,已落码、未编译;gate 准入设计 P1-1 ~ P1-4。2026-11-19 补 P0-2 的未验签预算与 P2-2 的按来源前缀限速,未编译)**:gate 在 accept 处依次判关源、总量(`GateMaxConnections`)、按来源前缀限速、未验签预算、新建速率,被拒的连接当场收到 RST。
   - gate 的指标出口另导出 `gate_connections_current` / `gate_connections_max`、`gate_unauthenticated_connections`、`gate_accepted_total`、`gate_rejected_total{reason}`、`gate_accept_rate_limit_per_second` / `gate_accept_burst`、`gate_handshake_duration_ms`、`gate_preauth_reaped_total`、`gate_preauth_evicted_total`、`gate_preauth_budget` / `gate_preauth_early_drop_start` / `gate_preauth_evictable_age_ms`、`gate_source_*`(按来源限速的参数、是否生效、登记的前缀数、表满放行数)。
-  - 未验签预算由 `GateMaxConnections` 推导(上限 2 万时预算 2000、早拒起点 1000、可淘汰年龄 3 秒),生成器**没有接线**覆盖参数:要调时给 gate 设 `GATE_PREAUTH_BUDGET` / `GATE_PREAUTH_EARLY_DROP_START` / `GATE_PREAUTH_EVICTABLE_AGE_MS`(`kubectl set env`,写错拒启)。取值依据见 gate 准入设计 P0-2。
-  - 按来源前缀限速缺省关闭,只在 external 入口 + `externalTrafficPolicy: Local`(gate 看得到真实源地址)时才该开:给 gate 设 `GATE_SOURCE_RATE_PER_SECOND`(推荐值在启动日志里),开了也只在承压时生效。podip 形态不要开。
+  - **覆盖变量的部署参数(2026-11-20,未运行)**:下面几条里 gate 的七个 `GATE_*` 与 battle 的七个 `BATTLE_*` 都经 `k8s_deploy.ps1 -ConnectionAdmissionEnv <名字>=<值>,...` 写进工作负载(`dev_tools.ps1` / `k8s_image.ps1` 同名透传)。`GATE_*` 只进 zone-up 的 gate,`BATTLE_*` 只进 infra-up 的 battle(三种形态都写);名字拼错、值不是规范十进制正整数在入口就拒。不粘滞,下一次部署不带就回到推导缺省。`kubectl set env` 只剩 Deployment 形态等不及部署时的应急用法,Agones Fleet 手改的 env 会被下一次部署覆盖。规则见 `docs/ops/gate-kernel-tuning-runbook.md` §3.2「怎么设」。
+  - 未验签预算由 `GateMaxConnections` 推导(上限 2 万时预算 2000、早拒起点 1000、可淘汰年龄 3 秒),要调时设 `GATE_PREAUTH_BUDGET` / `GATE_PREAUTH_EARLY_DROP_START` / `GATE_PREAUTH_EVICTABLE_AGE_MS`(写错拒启)。取值依据见 gate 准入设计 P0-2,校准步骤见同一份设计 §9.7。
+  - 按来源前缀限速缺省关闭,只在 external 入口 + `externalTrafficPolicy: Local`(gate 看得到真实源地址)时才该开:给 gate 设 `GATE_SOURCE_RATE_PER_SECOND`(推荐值在启动日志里),开了也只在承压时生效。2026-11-20 起只对公网源地址生效:podip 形态、代理型 LB 后面开了不会误伤,只是不起作用;经 ws-edge 进来的小游戏连接要按来源限,在 infra-up 带 `-WsEdgeSourceRatePerSecond`。
   - 告警在 `deploy/k8s/gate-connection-alerts.yaml`,9 条,手工 apply:
 
     ```bash
     kubectl apply -n observability -f deploy/k8s/gate-connection-alerts.yaml
     ```
 
-  - 新建速率闸缺省由 `GateMaxConnections` 推导(桶深 = 上限,持续速率 = 上限的 1%/秒,下限 100),生成器**没有接线**覆盖它的参数。要调时给 gate 手设环境变量 `GATE_ACCEPT_RATE_PER_SECOND` / `GATE_ACCEPT_BURST`(`kubectl set env`;写错 gate 拒绝启动)。与上面的 `NODE_OPEN_FILE_LIMIT_MODE` 一样,set env 加的变量不在 last-applied 里,之后的部署不会把它清掉,撤销要显式写 `GATE_ACCEPT_RATE_PER_SECOND-` / `GATE_ACCEPT_BURST-`。压测要打超过缺省速率的建连时必须先设。
+  - 新建速率闸缺省由 `GateMaxConnections` 推导(桶深 = 上限,持续速率 = 上限的 1%/秒,下限 100),要调时设 `GATE_ACCEPT_RATE_PER_SECOND` / `GATE_ACCEPT_BURST`(写错 gate 拒绝启动)。压测要打超过缺省速率的建连时必须先设:部署压测环境时带 `-ConnectionAdmissionEnv GATE_ACCEPT_RATE_PER_SECOND=<n>`。
   - 处置见 `docs/ops/gate-kernel-tuning-runbook.md` §3.2;指标名、拒绝原因与装配由 `tools/scripts/tests/gate_connection_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
-- **battle 直连准入的指标与告警(2026-11-19,已落码、未编译)**:battle 的客户端直连与 gate 同一套,在 accept 处依次判关源、总量(`BattleMaxConnections`)、未验签预算、新建速率,被拒的连接收到 RST。
-  - battle 的指标出口导出同构的 `battle_*` 指标(`battle_connections_current` … `battle_preauth_reaped_total`,加上未验签预算的 `battle_preauth_evicted_total` 与三个参数 gauge)。
-  - 未验签预算缺省 4096 时早拒起点 500、预算 1000,`BATTLE_PREAUTH_*` 覆盖(写错拒启),生成器没有接线。
-  - 告警在 `deploy/k8s/battle-connection-alerts.yaml`,7 条,手工 apply:
+- **battle 直连准入的指标与告警(2026-11-19,已落码、未编译;2026-11-20 补按来源前缀限速)**:battle 的客户端直连与 gate 同一套,在 accept 处依次判关源、总量(`BattleMaxConnections`)、按来源前缀限速、未验签预算、新建速率,被拒的连接收到 RST。
+  - battle 的指标出口导出同构的 `battle_*` 指标(`battle_connections_current` … `battle_preauth_reaped_total`,加上未验签预算的 `battle_preauth_evicted_total` 与三个参数 gauge,以及 `battle_source_*`)。
+  - 未验签预算缺省 4096 时早拒起点 500、预算 1000,`BATTLE_PREAUTH_*` 覆盖(写错拒启)。
+  - 按来源前缀限速缺省关闭,`BATTLE_SOURCE_RATE_PER_SECOND` 打开(推荐值在启动日志里),只在承压时、只对公网源地址生效;经 ws-edge 进来的小游戏直连不受它管。
+  - 告警在 `deploy/k8s/battle-connection-alerts.yaml`,9 条,手工 apply:
 
     ```bash
     kubectl apply -n observability -f deploy/k8s/battle-connection-alerts.yaml
     ```
 
-  - 速率闸缺省由 `BattleMaxConnections` 推导(4096 时 100 条/秒、桶深 4096),生成器同样**没有接线**覆盖参数:要调时给 battle 设 `BATTLE_ACCEPT_RATE_PER_SECOND` / `BATTLE_ACCEPT_BURST`(写错拒启)。全服匹配的网络探测按玩家均摊在每个机房的可探测 battle 上(机房里只有一台时全落在它上面),上线和 `match-stress` 压测前按 `docs/ops/gate-kernel-tuning-runbook.md` §3.3 估算,接近缺省就调高。
+  - 速率闸缺省由 `BattleMaxConnections` 推导(4096 时 100 条/秒、桶深 4096),要调时设 `BATTLE_ACCEPT_RATE_PER_SECOND` / `BATTLE_ACCEPT_BURST`(写错拒启;infra-up 带 `-ConnectionAdmissionEnv`,见上面 gate 一节「覆盖变量的部署参数」)。全服匹配的网络探测按玩家均摊在每个机房的可探测 battle 上(机房里只有一台时全落在它上面),上线和 `match-stress` 压测前按 `docs/ops/gate-kernel-tuning-runbook.md` §3.3 估算,接近缺省就调高。
   - 指标名、拒绝原因与装配由 `tools/scripts/tests/battle_connection_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
 - **拒启的影响面按形态不同,不等于「滚动停住」**:C++ Deployment 没写 strategy,按缺省 25% / 25%。
   - scene 缺省 4 副本,滚动时先少一台;
@@ -2751,7 +2765,7 @@ scene 通过 gRPC 直接调 go/db,在 TiDB 的 `player_store` 表上提交玩家
 
 - **形态**:按 zone 部署(`manifests/go-svc/db.yaml`,每个 zone namespace 2 副本 + 同文件 PDB `db-pdb`),gRPC 服务 `playerstore.PlayerStore`(端口 6000):
   `LoadAndClaim` 认领写权并读出完整存档,`SavePlayer` 提交一次存盘,各是一个事务。scene 经 etcd 前缀 `PlayerStoreNodeService.rpc` 发现本 zone 的实例。
-- **调用密钥**:环境变量 `MMORPG_PLAYER_STORE_SECRET_SCENE`(至少 32 字节),来自 Secret `domain-service-secrets` 的 `player-store-scene`,go/db 与 scene 两侧同值,都是 `optional: false`:
+- **调用密钥**:环境变量 `MMORPG_PLAYER_STORE_SECRET_SCENE`(至少 32 字节),来自 Secret `domain-service-secrets` 的 `player-store-scene`(由部署补齐,全集群同值,见 Optional Flags 的 `-ResyncDomainServiceSecrets`),go/db 与 scene 两侧同值,都是 `optional: false`:
   Secret 缺这个键时 Pod 起不来。go/db 只认 scene 这一个调用方,验不过回 `PermissionDenied`(`db_player_store_requests_total{result="denied"}`)。
 - **启动门禁**:`ServerConfig.Database.Backend` 必须是 `tidb` 或 `mysql`(缺省 tidb),否则拒启;启动不连任何库,库名清单里只许有地域存档库(A17c),每个存档库第一次用到时才打开并核表(表由部署阶段的 `db-migrate` Job 逐库建)。
 - **选库**:认领和实体已没的空行释放调 data_service 的 `GetPlayerRoute` 读 `storage_id`,go/db 不连目录。配置 `DataServiceRpc` 必填,两边都要有 `MMORPG_ROLE_FENCE_SECRET_DB`,缺了拒绝启动。没有路由行或 `storage_id` 为 NULL 一律拒绝,不回落 `home_zone`;`storage_id` 不是地域存档库编号同样拒绝。go/db 不连 Redis。

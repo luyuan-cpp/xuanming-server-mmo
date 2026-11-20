@@ -90,7 +90,9 @@ func TestContentLengthLimits(t *testing.T) {
 	require.Zero(t, send(t, sc, playerCtx(playerA), in))
 	require.Equal(t, 1, spy.sends)
 }
-func TestSensitiveMaskCannotBypassOriginalContentByteLimit(t *testing.T) {
+
+// 长度按原文字节算,在送检之前判:打码会让正文变短,不能靠它绕过上限。
+func TestMaskingCannotBypassOriginalContentByteLimit(t *testing.T) {
 	sc, spy := fixture()
 	in := request()
 	in.Message.Content = strings.Repeat("广告", 100)
@@ -182,6 +184,25 @@ func TestWorldCooldownRejectionSharesTheTipButHasItsOwnOutcome(t *testing.T) {
 	require.Equal(t, constants.ErrRateLimited, send(t, sc, playerCtx(playerA), request()))
 	require.Equal(t, cooldownBefore+1, svc.SendTotalValue(label, svc.OutcomeWorldCooldown))
 	require.Equal(t, rateBefore, svc.SendTotalValue(label, svc.OutcomeRateLimited), "发言间隔的拒绝不记进每秒限流")
+}
+
+// 正文送检没过的两种结局各有自己的提示码和指标,不记进限流。
+func TestContentReviewRejectionsHaveTheirOwnOutcomes(t *testing.T) {
+	sc, spy := fixture()
+	label := svc.ChannelLabel(request().GetMessage().GetChannel())
+	rateBefore := svc.SendTotalValue(label, svc.OutcomeRateLimited)
+	for tip, outcome := range map[uint32]string{
+		constants.ErrContentRejected:         svc.OutcomeContentRejected,
+		constants.ErrContentCheckUnavailable: svc.OutcomeContentUnavailable,
+	} {
+		before := svc.SendTotalValue(label, outcome)
+		spy.send = func(context.Context, *chatpb.SendChatRequest) (authority.SendResult, error) {
+			return authority.SendResult{Tip: tip}, nil
+		}
+		require.Equal(t, tip, send(t, sc, playerCtx(playerA), request()))
+		require.Equal(t, before+1, svc.SendTotalValue(label, outcome))
+	}
+	require.Equal(t, rateBefore, svc.SendTotalValue(label, svc.OutcomeRateLimited))
 }
 func TestPullLimitClamped(t *testing.T) {
 	sc, spy := fixture()

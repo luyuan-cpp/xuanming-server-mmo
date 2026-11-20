@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luyuancpp/muduoclient/muduo"
-
 	"proto/common/base"
 )
 
@@ -77,16 +75,13 @@ func newCallHarness(t *testing.T) *callHarness {
 	}
 	t.Cleanup(func() { _ = ln.Close() })
 	port := ln.Addr().(*net.TCPAddr).Port
-	c, err := muduo.NewClient("127.0.0.1", port, &muduo.TcpCodec{})
-	if err != nil {
-		t.Fatalf("muduo client: %v", err)
-	}
+	c := newTCPWireConn("127.0.0.1", port)
 	h := &callHarness{
 		gc:   &GameClient{client: c, gateIP: "127.0.0.1", gatePort: port, Account: "call-test"},
 		port: port,
 		sent: make(chan *base.ClientRequest, 1024),
 	}
-	h.gc.transmit = func(_ *muduo.Client, req *base.ClientRequest) { h.sent <- req }
+	h.gc.transmit = func(_ *wireConn, req *base.ClientRequest) { h.sent <- req }
 	h.gc.afterFunc = h.newTimer
 	// Cleanup 后进先出:先关客户端,再关监听。Close 幂等,用例里自己 Close 过也无妨。
 	t.Cleanup(h.gc.Close)

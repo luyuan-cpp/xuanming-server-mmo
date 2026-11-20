@@ -38,13 +38,21 @@
 class RpcController final : public ::google::protobuf::RpcController
 {
 public:
-    explicit RpcController(const muduo::net::TcpConnectionPtr& conn) : conn_(conn) {}
+    explicit RpcController(const muduo::net::TcpConnectionPtr& conn) : RpcController(conn, NoHandshakePeer()) {}
+    // handshakePeerUuid 引用的是派发方 RpcChannel 上的握手身份,channel 活过本次派发(RpcChannel::CallServiceMethod)。
+    RpcController(const muduo::net::TcpConnectionPtr& conn, const std::string& handshakePeerUuid)
+        : conn_(conn), handshakePeerUuid_(handshakePeerUuid) {}
 
     RpcController(const RpcController&) = delete;
     RpcController& operator=(const RpcController&) = delete;
 
     // --- 本次调用所在的连接。仅在本次派发内有效,不要存起来 ---
     const muduo::net::TcpConnectionPtr& conn() const { return conn_; }
+
+    // --- 本次调用来自哪个进程:入站连接握手时认下的对端 node_uuid(docs/design/muduo-rpc-channel.md §8.3)---
+    // 空 = 这条连接没有握手成功(出站连接上的调用、测试直接构造的 ctx)。需要按对端进程认身份的 handler 用它,
+    // 不用消息体自报的实例号(scene 按 (gate 实例, session_id) 认会话,docs/design/scene-enter-chain-residuals.md §14)。
+    const std::string& HandshakePeerUuid() const { return handshakePeerUuid_; }
 
     // 手写 handler 从生成层拿到的是基类指针;全仓唯一的 CallMethod 派发点
     // (RpcChannel::CallServiceMethod)构造的就是本类型,这里集中做一次受检下转。
@@ -72,7 +80,14 @@ public:
     void NotifyOnCancel(::google::protobuf::Closure* /*callback*/) override {}
 
 private:
+    static const std::string& NoHandshakePeer()
+    {
+        static const std::string kNone;
+        return kNone;
+    }
+
     muduo::net::TcpConnectionPtr conn_;
+    const std::string& handshakePeerUuid_;
     bool failed_{ false };
     std::string errorText_;
 };

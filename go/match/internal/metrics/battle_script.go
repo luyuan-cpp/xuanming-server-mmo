@@ -12,10 +12,22 @@ var (
 		Subsystem: subsystem, Name: "battle_script_request_total",
 		Help: "剧本接口的结局:rpc = list / submit / delete / loadout / review_list / review;result = ok / rejected / denied / error。",
 	}, []string{"rpc", "result"})
+	// battleScriptReviewPurgedTotal 保留期清理删除的审核流水行数(battle-script.md §6.4)。
+	battleScriptReviewPurgedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem, Name: "battle_script_review_purged_total",
+		Help: "match_battle_script_review rows past BattleScript.ReviewRetentionDays deleted by the retention purge.",
+	})
 )
 
 func battleScriptCollectors() []prometheus.Collector {
-	return []prometheus.Collector{battleScriptResolveTotal, battleScriptRequestTotal}
+	return []prometheus.Collector{battleScriptResolveTotal, battleScriptRequestTotal, battleScriptReviewPurgedTotal}
+}
+
+// ObserveBattleScriptReviewPurged 记一轮保留期清理删除的审核流水行数。
+func ObserveBattleScriptReviewPurged(rows int64) {
+	if rows > 0 {
+		battleScriptReviewPurgedTotal.Add(float64(rows))
+	}
 }
 
 // ObserveBattleScriptResolve 记建房时一方的剧本解析结局。

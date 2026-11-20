@@ -12,6 +12,7 @@
 #include "gate_codec.h"
 #include "login_admission.h"
 #include "login_session_renewal.h"
+#include "minor_play_deadline.h"
 #include "proto/common/base/message.pb.h"
 #include "proto/common/base/session.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
@@ -73,6 +74,9 @@ void DeliverReply(const SessionDetails &sessionDetails, const ::google::protobuf
         it->second.loginSucceeded = true;
         // 从这次登录起,连接活着期间由 gate 定期向 login 续租登录态(login_session_renewal.h)。
         gate_login_renewal::NoteLoginSucceeded(it->first, it->second, std::chrono::steady_clock::now());
+        // 未成年人当天的截止时刻随成功的回包下来,到点由 gate 自己关连接(minor_play_deadline.h)。上面已核对过回包类型。
+        gate_minor_deadline::NoteLoginSucceeded(
+            it->first, it->second, static_cast<const loginpb::LoginResponse &>(reply).anti_addiction().play_deadline_ms());
     }
     const auto clientConn = it->second.conn.lock();
     if (!clientConn)

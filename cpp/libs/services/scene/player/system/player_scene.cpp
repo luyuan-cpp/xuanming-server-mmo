@@ -36,7 +36,6 @@
 #include "player/system/player_lifecycle.h" // IsSceneChangeBusy / RequestSceneChange:换图发送侧闸与 EnterScene 唯一发送入口
 #include "player/system/player_tip.h"
 #include "core/network/grpc_client_call.h"      // GrpcCallOutcome:镜像 CreateScene 的每次调用回调
-#include "proto/common/base/node.pb.h"      // NodeInfo:自动进场 EnterScene 的 gate_instance_id
 #include "time/system/time.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/scene_error_tip.pb.h"
@@ -585,15 +584,8 @@ cobalt::task<void> CreateMirrorAndEnter(entt::entity originalPlayer, entt::entit
 
 	const SessionId gateSessionId = playerSessionPB->gate_session_id();
 	const NodeId gateNodeId = GetGateNodeId(gateSessionId);
-	std::string gateInstanceId;
-	if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(gateSessionId))
-	{
-		auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-		if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
-		{
-			gateInstanceId = gateNodeInfo->node_uuid();
-		}
-	}
+	// 会话所在的 gate 进程:记下了实例就用它,不换成同一 node_id 上的另一个进程(scene-enter-chain-residuals.md §14.6)。
+	const std::string gateInstanceId = BoundGateInstanceId(player, gateSessionId);
 
 	::scene_manager::EnterSceneRequest req;
 	req.set_player_id(playerId);

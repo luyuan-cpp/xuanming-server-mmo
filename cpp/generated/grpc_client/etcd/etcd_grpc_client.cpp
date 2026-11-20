@@ -29,6 +29,7 @@ namespace etcdserverpb {
 #pragma region KVRange
 namespace {
 void QueueLocalKVRangeFailure(GrpcDone<::etcdserverpb::RangeResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kKVRangeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendKVRangeErased(entt::registry& registry, entt::entity nodeEntity, const 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC KV.Range: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVRangeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendKVRangeErased(entt::registry& registry, entt::entity nodeEntity, const 
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::RangeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC KV.Range: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVRangeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendKVRangeErased(entt::registry& registry, entt::entity nodeEntity, const 
 #pragma region KVPut
 namespace {
 void QueueLocalKVPutFailure(GrpcDone<::etcdserverpb::PutResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kKVPutGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendKVPutErased(entt::registry& registry, entt::entity nodeEntity, const go
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC KV.Put: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVPutGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendKVPutErased(entt::registry& registry, entt::entity nodeEntity, const go
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::PutRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC KV.Put: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVPutGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendKVPutErased(entt::registry& registry, entt::entity nodeEntity, const go
 #pragma region KVDeleteRange
 namespace {
 void QueueLocalKVDeleteRangeFailure(GrpcDone<::etcdserverpb::DeleteRangeResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kKVDeleteRangeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendKVDeleteRangeErased(entt::registry& registry, entt::entity nodeEntity, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC KV.DeleteRange: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVDeleteRangeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendKVDeleteRangeErased(entt::registry& registry, entt::entity nodeEntity, 
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::DeleteRangeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC KV.DeleteRange: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVDeleteRangeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendKVDeleteRangeErased(entt::registry& registry, entt::entity nodeEntity, 
 #pragma region KVTxn
 namespace {
 void QueueLocalKVTxnFailure(GrpcDone<::etcdserverpb::TxnResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kKVTxnGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendKVTxnErased(entt::registry& registry, entt::entity nodeEntity, const go
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC KV.Txn: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVTxnGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendKVTxnErased(entt::registry& registry, entt::entity nodeEntity, const go
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::TxnRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC KV.Txn: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVTxnGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendKVTxnErased(entt::registry& registry, entt::entity nodeEntity, const go
 #pragma region KVCompact
 namespace {
 void QueueLocalKVCompactFailure(GrpcDone<::etcdserverpb::CompactionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kKVCompactGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendKVCompactErased(entt::registry& registry, entt::entity nodeEntity, cons
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC KV.Compact: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVCompactGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendKVCompactErased(entt::registry& registry, entt::entity nodeEntity, cons
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::CompactionRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC KV.Compact: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kKVCompactGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendKVCompactErased(entt::registry& registry, entt::entity nodeEntity, cons
 #pragma region LeaseLeaseGrant
 namespace {
 void QueueLocalLeaseLeaseGrantFailure(GrpcDone<::etcdserverpb::LeaseGrantResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kLeaseLeaseGrantGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendLeaseLeaseGrantErased(entt::registry& registry, entt::entity nodeEntity
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC Lease.LeaseGrant: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseGrantGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendLeaseLeaseGrantErased(entt::registry& registry, entt::entity nodeEntity
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::LeaseGrantRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC Lease.LeaseGrant: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseGrantGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +575,7 @@ void SendLeaseLeaseGrantErased(entt::registry& registry, entt::entity nodeEntity
 #pragma region LeaseLeaseRevoke
 namespace {
 void QueueLocalLeaseLeaseRevokeFailure(GrpcDone<::etcdserverpb::LeaseRevokeResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kLeaseLeaseRevokeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +643,7 @@ void SendLeaseLeaseRevokeErased(entt::registry& registry, entt::entity nodeEntit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC Lease.LeaseRevoke: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseRevokeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +653,7 @@ void SendLeaseLeaseRevokeErased(entt::registry& registry, entt::entity nodeEntit
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::LeaseRevokeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC Lease.LeaseRevoke: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseRevokeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -645,6 +666,7 @@ void SendLeaseLeaseRevokeErased(entt::registry& registry, entt::entity nodeEntit
 #pragma region LeaseLeaseTimeToLive
 namespace {
 void QueueLocalLeaseLeaseTimeToLiveFailure(GrpcDone<::etcdserverpb::LeaseTimeToLiveResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kLeaseLeaseTimeToLiveGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -712,6 +734,7 @@ void SendLeaseLeaseTimeToLiveErased(entt::registry& registry, entt::entity nodeE
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC Lease.LeaseTimeToLive: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseTimeToLiveGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -721,6 +744,7 @@ void SendLeaseLeaseTimeToLiveErased(entt::registry& registry, entt::entity nodeE
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::LeaseTimeToLiveRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC Lease.LeaseTimeToLive: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseTimeToLiveGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -733,6 +757,7 @@ void SendLeaseLeaseTimeToLiveErased(entt::registry& registry, entt::entity nodeE
 #pragma region LeaseLeaseLeases
 namespace {
 void QueueLocalLeaseLeaseLeasesFailure(GrpcDone<::etcdserverpb::LeaseLeasesResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kLeaseLeaseLeasesGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -800,6 +825,7 @@ void SendLeaseLeaseLeasesErased(entt::registry& registry, entt::entity nodeEntit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC Lease.LeaseLeases: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseLeasesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -809,6 +835,7 @@ void SendLeaseLeaseLeasesErased(entt::registry& registry, entt::entity nodeEntit
     const auto* typedRequest = dynamic_cast<const ::etcdserverpb::LeaseLeasesRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC Lease.LeaseLeases: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kLeaseLeaseLeasesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

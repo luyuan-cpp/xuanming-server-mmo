@@ -190,9 +190,10 @@ namespace
 	// 按会话把一条消息直接推给会话所在的 gate。用在没有玩家实体可用的两种场合:载入在途(SendTipToPendingSession),
 	// 以及实体已销毁、手里只剩改派票据抄下的会话(SendTipAndKickToSession)。有实体时走 SendToPlayerClient
 	// 的实体重载,不要走这里。
-	//   expectedGateInstanceId  发票时 gate 的实例 uuid。非空时与 gate 当前的 NodeInfo.node_uuid 比对,不等 = gate 进程
-	//                           已换过一个、会话随旧进程消失,不推(kGateReplaced)。空 = 不比对(载入在途的提示;
-	//                           发票时就没找到 gate、抄不到实例号的票据)。
+	//   expectedGateInstanceId  会话所在 gate 进程的实例 uuid(入场请求的握手身份 / 发票时抄下的实例)。非空时只按它找 gate
+	//                           (ResolveSessionGateEntity),那个进程已不在本节点上就不推、不改投同一 node_id 上的另一个进程:
+	//                           同一 node_id 上还有别的 gate = 进程换过、会话随旧进程消失(kGateReplaced),否则 kGateGone。
+	//                           空 = 不比对、按 node_id 找(载入在途的提示;发票时就没找到 gate、抄不到实例号的票据)。
 	//   site                    失败原因的日志前缀。四种推不出去的原因各打一条 WARN,由本函数自己打。
 	// playerId 是 gate 侧的身份栅栏(routing-identity-audit-20260908.md R13):会话号已被别的玩家占用时由 gate 在写
 	// socket 之前拦下。这里没有玩家实体可取 Guid,调用方都拿得到 player_id —— 必须传下来,否则这条路径会成为整条
@@ -208,11 +209,17 @@ namespace
 		// network_utils.h:27-30 明文禁止这种写法。单 gate 部署时 node_id 从 1 起、
 		// 实体槽位从 0 起,valid() 必假,这条提示 100% 发不出去;多 gate 时更糟,
 		// 会命中另一个 gate 的槽位、把提示发给没有这个会话的节点。
-		// 本文件 EnqueueRelocateTicket 与 SendToPlayerClient 都走 ResolveLocalZoneGateEntity,
-		// 按会话直推的函数同样一律走它。
-		const auto gateEntityOpt = ResolveLocalZoneGateEntity(sessionId);
+		// 本文件 EnqueueRelocateTicket 与 SendToPlayerClient 都按会话所在的 gate 进程找(network_utils.h 的
+		// BoundGateInstanceId / ResolvePlayerGateEntity),按会话直推的函数同样按实例找。
+		const auto gateEntityOpt = ResolveSessionGateEntity(sessionId, expectedGateInstanceId);
 		if (!gateEntityOpt)
 		{
+			// 记着实例而那个进程已不在:按 node_id 还找得到 gate,就是同一 node_id 上换了进程(会话随旧进程消失)。
+			if (!expectedGateInstanceId.empty() && ResolveLocalZoneGateEntity(sessionId))
+			{
+				LOG_WARN << site << ": gate instance replaced for session " << sessionId;
+				return relocate_confirm::GatePushResult::kGateReplaced;
+			}
 			LOG_WARN << site << ": gate not found for session " << sessionId;
 			return relocate_confirm::GatePushResult::kGateGone;
 		}
@@ -229,17 +236,6 @@ namespace
 			LOG_WARN << site << ": gate not connected for session " << sessionId;
 			return relocate_confirm::GatePushResult::kGateGone;
 		}
-		if (!expectedGateInstanceId.empty())
-		{
-			// 这里不调 ResolveGateInstanceId(定义在后面,而且会重复解析一次 gate 实体)。拿不到 NodeInfo 时证明不了
-			// 还是同一个 gate 进程,按已换处理(fail-closed:宁可不推,不把踢线推给另一个进程上的同号会话)。
-			const auto *gateNodeInfo = gateNodeRegistry.try_get<NodeInfo>(*gateEntityOpt);
-			if (gateNodeInfo == nullptr || gateNodeInfo->node_uuid() != expectedGateInstanceId)
-			{
-				LOG_WARN << site << ": gate instance replaced for session " << sessionId;
-				return relocate_confirm::GatePushResult::kGateReplaced;
-			}
-		}
 		SendToClientSession(messageId, message, *gateSessionPtr, sessionId, playerId);
 		return relocate_confirm::GatePushResult::kSent;
 	}
@@ -247,8 +243,12 @@ namespace
 	// Sends a SendTipToClient message directly to the gate by session_id.
 	// Used during the async-load window when the player entity does not yet
 	// exist, so the entity-based PlayerTipSystem path is not available.
-	// 尽力而为:推不出去(gate 不在 / 连接已断)只留 PushToSessionViaGate 的那条 WARN,调用方不看结果。
-	void SendTipToPendingSession(SessionId sessionId, Guid playerId, uint32_t tipId)
+	// gateInstanceId 是这条会话所在的 gate 进程(入场请求所走入站连接的握手身份,PlayerEnterContext::gateInstanceId)。非空时只推给
+	// 那个进程:同一 node_id 上换了进程、同号会话属于新进程上的另一个连接时不推(kGateReplaced)—— 被拒的往往正是老进程迟到的
+	// 入场,按会话号推的话 3023 会落到新进程上同号的活玩家身上,客户端收到即断线(scene-enter-chain-residuals.md §14)。
+	// 空 = 不比对(托管落点没有在场的客户端,本来就不推)。
+	// 尽力而为:推不出去(gate 不在 / 连接已断 / 进程已换)只留 PushToSessionViaGate 的那条 WARN,调用方不看结果。
+	void SendTipToPendingSession(SessionId sessionId, const std::string &gateInstanceId, Guid playerId, uint32_t tipId)
 	{
 		if (sessionId == 0)
 		{
@@ -256,8 +256,8 @@ namespace
 		}
 		TipInfoMessage tip;
 		tip.set_id(tipId);
-		PushToSessionViaGate(sessionId, playerId, /*expectedGateInstanceId=*/std::string(),
-							 SceneClientPlayerCommonSendTipToClientMessageId, tip, "SendTipToPendingSession");
+		PushToSessionViaGate(sessionId, playerId, gateInstanceId, SceneClientPlayerCommonSendTipToClientMessageId, tip,
+							 "SendTipToPendingSession");
 	}
 
 	// 疏散 / 排空改派核实出"没生效"之后的客户端出口:实体早已销毁,只能按票据里抄下的会话直推 —— 先回失败 tip,
@@ -293,19 +293,7 @@ namespace
 									SceneClientPlayerCommonKickPlayerMessageId, kick, kSite);
 	}
 
-	// 会话所在 gate 的实例 uuid(EnterSceneRequest.gate_instance_id,scene_manager 用它做 Kafka
-	// 目标校验)。找不到 gate 返回空串:与疏散票据的既有行为一致,由 scene_manager 侧决定怎么处理。
-	std::string ResolveGateInstanceId(SessionId sessionId)
-	{
-		const auto gateEntityOpt = ResolveLocalZoneGateEntity(sessionId);
-		if (!gateEntityOpt)
-		{
-			return {};
-		}
-		auto &gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-		const auto *gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt);
-		return gateNodeInfo != nullptr ? gateNodeInfo->node_uuid() : std::string{};
-	}
+	// 会话所在 gate 进程的实例 uuid 一律取 BoundGateInstanceId(network_utils.h):记下了实例就用它,没记下才按 node_id 查。
 
 	// 交接的两道看门狗预算(存盘 30s / EnterScene 应答 30s)、冻结硬上限(70s)与晚发窗口(35s)统一定义在
 	// travel_freeze_cap.h(kSaveBudget / kReplyBudget / kFreezeCap / kDispatchWindow),应答预算的下限约束也写在那里:
@@ -1597,7 +1585,7 @@ namespace
 		if (sessionId != 0 && !context.hostedPlacement)
 		{
 			// Best-effort tip; safe even if the gate session is already gone.
-			SendTipToPendingSession(sessionId, playerId, tipId);
+			SendTipToPendingSession(sessionId, context.gateInstanceId, playerId, tipId);
 			// 只擦仍属于本玩家的预登记映射(scene-enter-session-fence.md §5.6):同号会话可能已被别的玩家占用。
 			PlayerLifecycleSystem::EraseSessionMappingIfOwned(sessionId, playerId);
 		}
@@ -2431,7 +2419,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(Guid playerId, PlayerLoa
 		else if (sessionId != 0)
 		{
 			// Best-effort tip; safe even if the gate session is already gone.
-			SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
+			SendTipToPendingSession(sessionId, pendingIt->second.gateInstanceId, playerId, kEnterSceneFailed);
 			// 只擦仍属于本玩家的预登记映射(scene-enter-session-fence.md §5.6)。
 			EraseSessionMappingIfOwned(sessionId, playerId);
 		}
@@ -2785,7 +2773,7 @@ namespace
 	}
 
 	// 实体这一处的当前身份(§5.1 第 1 处):PlayerLoginIdentityComp;没有该组件(旧版实体、还没走过 EnterScene 第 1 步的
-	// 实体)时退回快照会话、代次 0。实体无效时 exists = false。
+	// 实体)时退回快照会话、代次 0、gate 实例未知。实体无效时 exists = false。gateInstanceId 借用组件里的字符串,只在当次判定里用。
 	enter_fence::Identity CurrentEntityIdentity(entt::entity player)
 	{
 		enter_fence::Identity identity;
@@ -2798,6 +2786,7 @@ namespace
 		{
 			identity.sessionId = login->sessionId;
 			identity.loginGeneration = login->loginGeneration;
+			identity.gateInstanceId = login->gateInstanceId;
 		}
 		else if (const auto *snapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player))
 		{
@@ -2817,6 +2806,7 @@ namespace
 			pending.exists = true;
 			pending.sessionId = pendingIt->second.enterInfo.session_id();
 			pending.loginGeneration = pendingIt->second.loginGeneration;
+			pending.gateInstanceId = pendingIt->second.gateInstanceId;
 		}
 		if (const relocate_confirm::Entry *entry = tlsRelocateConfirms.FindPlayer(playerId))
 		{
@@ -2824,18 +2814,25 @@ namespace
 			relocate.exists = true;
 			relocate.sessionId = entry->sessionId;
 			relocate.loginGeneration = entry->loginGeneration;
+			relocate.gateInstanceId = entry->gateInstanceId;
 		}
 		return identities;
 	}
 
-	// 只给拒绝日志用(拒绝是低频事件,拼字符串不在热路径上):"会话/代次",不存在为 "none"。
+	// 只给拒绝日志用(拒绝是低频事件,拼字符串不在热路径上):"会话/代次",gate 实例已知时再接 "@实例",不存在为 "none"。
 	std::string FormatEnterIdentity(const enter_fence::Identity &identity)
 	{
 		if (!identity.exists)
 		{
 			return "none";
 		}
-		return std::to_string(identity.sessionId) + "/" + std::to_string(identity.loginGeneration);
+		std::string text = std::to_string(identity.sessionId) + "/" + std::to_string(identity.loginGeneration);
+		if (!identity.gateInstanceId.empty())
+		{
+			text += '@';
+			text += identity.gateInstanceId;
+		}
+		return text;
 	}
 
 	std::string FormatEnterIdentities(const EnterIdentities &identities)
@@ -2895,10 +2892,25 @@ namespace
 	}
 } // namespace
 
-enter_fence::Verdict PlayerLifecycleSystem::JudgeEnter(Guid playerId, SessionId sessionId, uint64_t loginGeneration)
+enter_fence::Verdict PlayerLifecycleSystem::JudgeEnter(Guid playerId, SessionId sessionId, uint64_t loginGeneration,
+													   std::string_view gateInstanceId)
 {
 	const EnterIdentities identities = CollectEnterIdentities(playerId);
-	return enter_fence::DecideAll(identities, sessionId, loginGeneration);
+	return enter_fence::DecideAll(identities, sessionId, loginGeneration, gateInstanceId);
+}
+
+bool PlayerLifecycleSystem::IsStaleGateInstance(Guid playerId, SessionId sessionId, std::string_view gateInstanceId)
+{
+	// 实体与待入场上下文不并存(实体在时入口不登记待入场,实体只在载入回调里、待入场擦除之后才建),先看实体。
+	if (const auto player = tlsEcs.GetPlayer(playerId); player != entt::null)
+	{
+		const auto *identity = tlsEcs.actorRegistry.try_get<PlayerLoginIdentityComp>(player);
+		return identity != nullptr && identity->sessionId == sessionId &&
+			!enter_fence::SameGateInstance(identity->gateInstanceId, gateInstanceId);
+	}
+	const auto pendingIt = tlsPendingEnterMap.find(playerId);
+	return pendingIt != tlsPendingEnterMap.end() && pendingIt->second.enterInfo.session_id() == sessionId &&
+		!enter_fence::SameGateInstance(pendingIt->second.gateInstanceId, gateInstanceId);
 }
 
 bool PlayerLifecycleSystem::EraseSessionMappingIfOwned(SessionId sessionId, Guid playerId)
@@ -2920,17 +2932,24 @@ bool PlayerLifecycleSystem::EraseSessionMappingIfOwned(SessionId sessionId, Guid
 	return true;
 }
 
-void PlayerLifecycleSystem::RecordLoginIdentity(entt::entity player, SessionId sessionId, uint64_t loginGeneration)
+void PlayerLifecycleSystem::RecordLoginIdentity(entt::entity player, SessionId sessionId, uint64_t loginGeneration,
+												std::string_view gateInstanceId)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		return;
 	}
 	auto &identity = tlsEcs.actorRegistry.get_or_emplace<PlayerLoginIdentityComp>(player);
-	// 会话无效(0 / kInvalidSessionId)时保留原会话号:没有会话的入场不改变"当前是谁"。代次只升不降(G4 允许落后,
+	// 会话无效(0 / kInvalidSessionId)时保留原会话号与实例:没有会话的入场不改变"当前是谁"。代次只升不降(G4 允许落后,
 	// 但本节点已放行过的最高值不能被同会话的旧值拉低)。
+	// gate 实例跟着会话走:换了会话就换成这次的实例(未知也照写,旧会话的实例对新会话不成立);同一会话只在带来了已知实例时改 ——
+	// 托管落点等不经 gate 连接的入场不带实例,不能把已知实例抹成未知(那会让老进程同号的迟到入场重新按会话号放行)。
 	if (player_exit::IsBoundSession(sessionId))
 	{
+		if (identity.sessionId != sessionId || !gateInstanceId.empty())
+		{
+			identity.gateInstanceId = gateInstanceId;
+		}
 		identity.sessionId = sessionId;
 	}
 	identity.loginGeneration = std::max(identity.loginGeneration, loginGeneration);
@@ -2944,26 +2963,29 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 	const SessionId notifySessionId = ctx.NotifiableSessionId();
 	if (!RoleAdmissionSystem::Allows(playerId, ctx.roleAdmissionGeneration, ctx.ownerRevision))
 	{
-		RejectRoleAdmission(playerId, notifySessionId);
+		RejectRoleAdmission(playerId, notifySessionId, ctx.gateInstanceId);
 		return EnterGameNodeOutcome::kRejected;
 	}
 
 	// 0. 入场会话栅栏(scene-enter-session-fence.md §5.2 / §5.3):只读、排在一切处置之前。被拒的请求不碰当前会话、
 	//    待入场上下文、改派票据与待确认条目;只给**请求自己的会话**推 kEnterSceneFailed —— 陈旧会话多半已被踢,
 	//    会话不在时 gate 侧是 no-op;仍连着的客户端按既有 3023 契约断线重登,不会干等。推不到别人身上:gate 写 socket
-	//    前有 player_id 身份栅栏;被拒请求的会话号一定不等于当前身份的会话号(同一会话一律放行)。
+	//    前有 player_id 身份栅栏;被拒请求与当前身份不是同一会话(同一会话一律放行)—— 会话号不同,或会话号相同而出自另一个
+	//    gate 进程(同一 node_id 上的老进程),后一种只推给请求出自的那个进程(SendTipToPendingSession 按实例核对)。
+	//    请求身份是 (gate 实例, 会话号, 登录代次);gate 实例是入站连接的握手身份,组上下文时就已读出,不是栅栏之前的另一道判定。
 	//    owner_epoch 在这里帮不上忙:同节点顶号两次路由的 epoch 相同,区分"谁更新"只能靠登录代次。
-	const enter_fence::Verdict verdict = JudgeEnter(playerId, sessionId, ctx.loginGeneration);
+	const enter_fence::Verdict verdict = JudgeEnter(playerId, sessionId, ctx.loginGeneration, ctx.gateInstanceId);
 	enter_fence_stats::IncVerdict(verdict);
 	if (!enter_fence::Admits(verdict))
 	{
 		LOG_WARN << "[EnterFence] rejected enter player=" << playerId << " session=" << sessionId
+				 << " gate_instance=" << ctx.gateInstanceId
 				 << " login_generation=" << ctx.loginGeneration << " enter_gs_type=" << ctx.enterInfo.enter_gs_type()
 				 << " owner_epoch=" << ctx.ownerEpoch << " verdict=" << enter_fence::VerdictName(verdict)
 				 << " hosted=" << ctx.hostedPlacement << " current: " << FormatEnterIdentities(CollectEnterIdentities(playerId));
 		if (player_exit::IsBoundSession(notifySessionId))
 		{
-			SendTipToPendingSession(notifySessionId, playerId, kEnterSceneFailed);
+			SendTipToPendingSession(notifySessionId, ctx.gateInstanceId, playerId, kEnterSceneFailed);
 		}
 		return EnterGameNodeOutcome::kRejected;
 	}
@@ -2984,7 +3006,7 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 		LOG_WARN << "[EnterGameNode] target scene check refused entry player=" << playerId << " session=" << sessionId
 				 << " scene_id=" << ctx.enterInfo.scene_id() << " code=" << entryResult << " hosted=" << ctx.hostedPlacement
 				 << "; pushing kEnterSceneFailed to the client";
-		SendTipToPendingSession(notifySessionId, playerId, kEnterSceneFailed);
+		SendTipToPendingSession(notifySessionId, ctx.gateInstanceId, playerId, kEnterSceneFailed);
 		return EnterGameNodeOutcome::kRejected;
 	}
 	// 托管落点撞上仍绑着活会话的实体:有客户端在场就不是离线托管(纵深防御,按构造走不到 —— 入场栅栏只放行与实体
@@ -3010,7 +3032,8 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 	//    托管落点按它带来的会话号(断开那次登录)对账:本节点替离线托管的角色发的改派(托管条目,player-connection-lost-hold.md
 	//    §4.3)落回本节点时就是它 —— 同一次登录 → 落地等载入;条目是别的会话的(在线条目,玩家已重登过)→ 已被取代、不踢。
 	//    票据那一步对托管落点不作废:它从不取消退出(EnterScene 丢下退出中实体的托管落点),被"打断"的退出照常收尾、消费票据。
-	ReconcileRelocateOnReentry(playerId, ctx.hostedPlacement ? sessionId : notifySessionId, ctx.hostedPlacement);
+	ReconcileRelocateOnReentry(playerId, ctx.hostedPlacement ? sessionId : notifySessionId, ctx.hostedPlacement,
+							   ctx.gateInstanceId);
 
 	// 2. Clear existing player session (handles rapid reconnect / account takeover).
 	//    只擦仍映射到本玩家的那一条(RemovePlayerSession → EraseSessionMappingIfOwned,§5.6);登录身份组件不动。
@@ -3069,11 +3092,13 @@ PlayerLifecycleSystem::EnterGameNodeOutcome PlayerLifecycleSystem::HandleEnterGa
 	{
 		const PlayerEnterContext &previous = pendingIt->second;
 		const SessionId previousSessionId = previous.enterInfo.session_id();
-		if (previousSessionId != sessionId)
+		// 同一会话 = 同一 (gate 实例, 会话号),与入场栅栏同一口径(enter_fence::SameGateInstance)。
+		if (previousSessionId != sessionId || !enter_fence::SameGateInstance(previous.gateInstanceId, ctx.gateInstanceId))
 		{
 			// 不同会话:擦掉上一次在途载入的预登记会话,防迟到的 ExitGame(旧会话) 误杀新载入;
-			// 只擦仍属于本玩家的那一条(§5.6)。
-			if (previousSessionId != 0)
+			// 只擦仍属于本玩家的那一条(§5.6)。会话号相同(另一个 gate 进程上的同号会话)时映射刚被上面的预登记
+			// 改成这一次的,不擦;老进程迟到的 ExitGame 由 IsStaleGateInstance 按实例挡下。
+			if (previousSessionId != 0 && previousSessionId != sessionId)
 			{
 				EraseSessionMappingIfOwned(previousSessionId, playerId);
 			}
@@ -3132,11 +3157,13 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	{
 		const enter_fence::Identity current = CurrentEntityIdentity(player);
 		const enter_fence::Verdict verdict = enter_fence::DecideAll(
-			std::span<const enter_fence::Identity>(&current, 1), enterInfo.session_id(), ctx.loginGeneration);
+			std::span<const enter_fence::Identity>(&current, 1), enterInfo.session_id(), ctx.loginGeneration,
+			ctx.gateInstanceId);
 		if (!enter_fence::Admits(verdict))
 		{
 			enter_fence_stats::Inc(enter_fence_stats::Get().bindRejected);
 			LOG_ERROR << "[EnterFence] bind rejected player=" << playerId << " session=" << enterInfo.session_id()
+					  << " gate_instance=" << ctx.gateInstanceId
 					  << " login_generation=" << ctx.loginGeneration << " verdict=" << enter_fence::VerdictName(verdict)
 					  << " entity=" << FormatEnterIdentity(current) << " (metric=bind_rejected)";
 			return false;
@@ -3153,7 +3180,7 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 		LOG_WARN << "[EnterScene] target scene check refused entry player=" << playerId
 				 << " session=" << enterInfo.session_id() << " scene_id=" << enterInfo.scene_id() << " code=" << result
 				 << " hosted=" << ctx.hostedPlacement << "; pushing kEnterSceneFailed to the client";
-		SendTipToPendingSession(ctx.NotifiableSessionId(), playerId, kEnterSceneFailed);
+		SendTipToPendingSession(ctx.NotifiableSessionId(), ctx.gateInstanceId, playerId, kEnterSceneFailed);
 		return false;
 	}
 	// 托管落点不取消退出(player-connection-lost-hold.md §4.2):离线的角色已在退出中(托管到期、被别的退出取代),这条落点
@@ -3257,8 +3284,10 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 		// 同一个客户端重收入场通知、清掉已建好的画面(当时的做法还是先离场再入场,邻居会看到它先销毁再创建)。身份组件第 2 步不动。
 		// 会话号相同而代次更新同样算换了:gate 以同一 node_id 重启后会话序号从头发,新登录可能拿回旧号,它的客户端没有入场
 		// 基线。同一次登录的路由由 gate 按会话上记的代次盖章(scene_entry_dispatch.cpp),代次不变,不会被误判。
+		// 会话号相同而出自另一个 gate 进程(同一 node_id 上的新进程)同样是换了客户端,与入场栅栏同一口径。
 		const enter_fence::Identity identityBefore = CurrentEntityIdentity(player);
 		sessionChanged = identityBefore.sessionId != enterInfo.session_id() ||
+			!enter_fence::SameGateInstance(identityBefore.gateInstanceId, ctx.gateInstanceId) ||
 			ctx.loginGeneration > identityBefore.loginGeneration;
 		// 旧号只在仍映射到本玩家时才擦(scene-enter-session-fence.md §5.6)。
 		if (oldSessionId != 0 && oldSessionId != enterInfo.session_id() &&
@@ -3273,8 +3302,8 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 		snapshot.set_player_id(playerId);
 	}
 	// 登录身份与会话绑定同处写(§5.4):此后到达的陈旧入场拿它比。快照的会话会在下一次入场第 2 步被置无效,
-	// 身份组件不会,所以必须单独记。
-	RecordLoginIdentity(player, enterInfo.session_id(), ctx.loginGeneration);
+	// 身份组件不会,所以必须单独记。gate 实例一并记下:之后出自另一个 gate 进程的同号消息与入场靠它认出来。
+	RecordLoginIdentity(player, enterInfo.session_id(), ctx.loginGeneration, ctx.gateInstanceId);
 	const PlayerSceneSystem::EntryOwnershipGuard ownership(player, enterInfo.session_id());
 	const auto stopEntry = [&]
 	{
@@ -3311,7 +3340,7 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	{
 		LOG_ERROR << "EnterScene: scene transition interrupted, player_id=" << playerId;
 		if (ownership.IsCurrent() && tlsEcs.GetPlayer(playerId) == player)
-			SendTipToPendingSession(ctx.NotifiableSessionId(), playerId, kEnterSceneFailed);
+			SendTipToPendingSession(ctx.NotifiableSessionId(), ctx.gateInstanceId, playerId, kEnterSceneFailed);
 		return stopEntry();
 	}
 	if (!canContinueEntry()) return stopEntry();
@@ -3483,9 +3512,9 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 	}
 }
 
-void PlayerLifecycleSystem::RejectRoleAdmission(Guid playerId, SessionId sessionId)
+void PlayerLifecycleSystem::RejectRoleAdmission(Guid playerId, SessionId sessionId, const std::string &gateInstanceId)
 {
-	SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
+	SendTipToPendingSession(sessionId, gateInstanceId, playerId, kEnterSceneFailed);
 }
 
 bool PlayerLifecycleSystem::DrainSealedPendingEntry(Guid playerId)
@@ -4531,7 +4560,8 @@ bool PlayerLifecycleSystem::EnqueueRelocateTicket(entt::entity playerEntity, con
 		ticket.playerId = guid->value;
 		ticket.sessionId = session->gate_session_id();
 		ticket.gateNodeId = GetGateNodeId(session->gate_session_id());
-		ticket.gateInstanceId = ResolveGateInstanceId(session->gate_session_id());
+		// 票据的实例号同时是改派待确认条目在入场栅栏里的一处身份(enter_fence.h kRelocateEntry):取会话绑定时记下的实例。
+		ticket.gateInstanceId = BoundGateInstanceId(playerEntity, session->gate_session_id());
 		ticket.target = RelocateTargetOf(playerEntity);
 		tlsEmergencyRelocateTickets.insert_or_assign(guid->value, std::move(ticket));
 		ticketed = true;
@@ -5191,7 +5221,8 @@ void PlayerLifecycleSystem::ResendHostedRelocate(Guid playerId, uint64_t seq, re
 	TrackRelocateDispatch(playerId, seq, ticket, markWrite);
 }
 
-void PlayerLifecycleSystem::ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId, bool hostedPlacement)
+void PlayerLifecycleSystem::ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId, bool hostedPlacement,
+													   std::string_view gateInstanceId)
 {
 	// 1. 还没派发的票据作废。任何把玩家路由回本节点的进场,要么复用实体并取消退出(EnterScene 第 0 步),要么废黜实体
 	//    后重新载入;两种情况下那次退出都不会再正常收尾。留着票据,它会在下一次、会话已换的退出里被误消费。
@@ -5215,9 +5246,12 @@ void PlayerLifecycleSystem::ReconcileRelocateOnReentry(Guid playerId, SessionId 
 		}
 		// 托管落点例外(hostedPlacement):它从不取消退出,EnterScene 对退出中的实体直接丢下这条落点,被"打断"的退出照常收尾、
 		// 票据照常被消费;票据只在实体退出中才存在,所以这里一律留着(废黜重载那一支同上,由 DestroyDeposedPlayer 删)。
+		// "就是票据那条会话"按 (gate 实例, 会话号) 认:另一个 gate 进程上的同号会话是另一条会话。
+		const bool reentryIsTicketSession = sessionId == ticketIt->second.sessionId &&
+			enter_fence::SameGateInstance(ticketIt->second.gateInstanceId, gateInstanceId);
 		if (!hostedPlacement &&
 			relocate_confirm::CancelsTicketOnReentry(tlsEmergencyRelocating, player_exit::IsBoundSession(sessionId),
-													 sessionId == ticketIt->second.sessionId, exitSawClientDisconnect))
+													 reentryIsTicketSession, exitSawClientDisconnect))
 		{
 			tlsEmergencyRelocateTickets.erase(ticketIt);
 			relocate_confirm_stats::Inc(relocate_confirm_stats::Get().cancelledOnReentry);
@@ -5240,9 +5274,10 @@ void PlayerLifecycleSystem::ReconcileRelocateOnReentry(Guid playerId, SessionId 
 		return;
 	}
 	const relocate_confirm::Clock::time_point now = relocate_confirm::Clock::now();
-	if (!player_exit::IsBoundSession(sessionId) || sessionId != entry->sessionId)
+	if (!player_exit::IsBoundSession(sessionId) || sessionId != entry->sessionId ||
+		!enter_fence::SameGateInstance(entry->gateInstanceId, gateInstanceId))
 	{
-		// 进场带来的不是票据那条会话(或根本没带会话):玩家已经重登,票据里的旧会话已死。不踢。
+		// 进场带来的不是票据那条会话(或根本没带会话;或会话号相同却出自另一个 gate 进程):玩家已经重登,票据里的旧会话已死。不踢。
 		ResolveRelocate(playerId, relocate_confirm::Outcome::kSuperseded, relocate_confirm::kVerdictUnread, now);
 		return;
 	}
@@ -7334,7 +7369,7 @@ boost::cobalt::task<void> PlayerLifecycleSystem::PublishAndEnterTravel(TravelMar
 			const SessionId sessionId = session->gate_session_id();
 			request.set_session_id(sessionId);
 			request.set_gate_id(std::to_string(GetGateNodeId(sessionId)));
-			request.set_gate_instance_id(ResolveGateInstanceId(sessionId));
+			request.set_gate_instance_id(BoundGateInstanceId(attempt.player, sessionId));
 			request.set_login_generation(enter_fence::ActingLoginGeneration(
 				tlsEcs.actorRegistry.try_get<PlayerLoginIdentityComp>(attempt.player), sessionId));
 		}

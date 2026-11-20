@@ -51,6 +51,8 @@
 	    Get-GateClientEndpointShellPrefix                                                 → POSIX sh 片段
 	    Test-GateEntryServiceWanted     -ClientEntryMode -GateReplicas                    → bool(D90)
 	    Get-ClientEntryRequireClientEndpoint -ClientEntryMode                             → 'true' | 'false'
+	    Resolve-ClientEntryConnectionAdmissionEnv [-Entries @()]                          → { Gate; Battle }(两张 [ordered] 表)
+	                                    (k8s_deploy.ps1 -ConnectionAdmissionEnv 的「名字=值」;名单见契约 *ConnectionAdmissionEnvNames)
 	    Resolve-BattleFleetHealth       -InitialDelaySeconds -PeriodSeconds -FailureThreshold
 	                                    → { InitialDelaySeconds; PeriodSeconds; FailureThreshold; Raised;
 	                                        RequestedInitialDelaySeconds; StartupWorstSeconds }
@@ -74,6 +76,7 @@
 	                                    [-LogPrunerCommand ''] [-GrpcServerMaxPollers 0(已退役,取值被忽略)]
 	                                    [-SidecarContainerYaml ''] [-SidecarVolumeYaml ''] [-SidecarConfigHash '']
 	                                    [-PodAnnotations $null] [-OpenFileLimitMode ''(B0-4 豁免开关,留空不写)]
+	                                    [-ConnectionAdmissionEnv $null(连接准入覆盖变量,按角色的一组,留空不写)]
 	                                    [-SecretEnv @()(经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey })]
 	    New-GateStatefulSetYaml         -PodCommon -Plan -RpcPort -StartCommand -ConfigMapName -GateRouterMode -InternalAuthPublicKeys
 	                                    [-TerminationGracePeriodSeconds 30]
@@ -126,7 +129,7 @@
 	                                    (同上;读同一份 login ConfigMap 的 AntiAddiction 段)
 
 	  内部辅助(接入方不要直接依赖,签名可能调整):ConvertFrom-ClientEntryYamlScalar、ConvertTo-ClientEntryLf、ConvertTo-ClientEntryYamlString、Add-ClientEntryIndent、
-	    Get-ClientEntryMember、Test-ClientEntryHostName、ConvertTo-ClientEntryCidrList、Get-ClientEntryInvalidCidrs、
+	    Get-ClientEntryMember、Test-ClientEntryHostName、ConvertTo-ClientEntryCidrList、Get-ClientEntryInvalidCidrs、Test-ClientEntryConnectionAdmissionValue、
 	    Get-ClientEntryEnvYaml、Get-ClientEntryNodeBaseEnv、Get-ClientEntryStartScript、Get-ClientEntryVolumeMountYaml、
 	    Get-ClientEntryPodVolumeYaml、Get-ClientEntrySidecarBlocks、Get-ClientEntryPodAnnotationBlock、Measure-FleetRolloutReadiness(纯函数,契约测试可直测)、
 	    ConvertTo-ClientEntryUtcTime、Get-ClientEntryStringMapText、New-ClientEntryObsoleteItem、
@@ -213,6 +216,9 @@ function Get-ClientEntryContract {
 		WsEdgeNetworkPolicyName    = 'ws-edge-egress'
 		WsEdgePathPrefix           = '/ws'
 		WsEdgeConfigHashAnnotation = 'mmorpg.io/ws-edge-config-hash'
+		# 边缘按来源限速(New-WsEdgeYaml -SourceRatePerSecond)的桶深 = 速率 × 这个秒数。取 gate / battle 的握手期限
+		# (cpp client_liveness.h 的 handshakeTimeout),与 gate 的按来源限速同一口径(GATE_SOURCE_BURST 不设时取速率 × 握手期限)。
+		WsEdgeSourceBurstSeconds   = 10
 		# battle hostPort 形态没给 -ClientPublicHost 时 CLIENT_ENDPOINT_HOST 的值:交给 kubelet 做依赖展开的 $(HOST_IP)。
 		# Get-BattleEntryDrift 把它当作"没有主机覆盖"。
 		BattleHostPortDefaultClientHost = '$(HOST_IP)'
@@ -232,6 +238,14 @@ function Get-ClientEntryContract {
 		# 该脚本自己的两个模板(New-CppOpenFileLimitModeEnvLines)也取这里的 env 名。
 		NodeOpenFileLimitModeEnv   = 'NODE_OPEN_FILE_LIMIT_MODE'
 		NodeOpenFileLimitModes     = @('enforce', 'warn')
+		# 客户端面连接准入的覆盖变量(gate 大厅连接与 battle 直连;docs/ops/gate-kernel-tuning-runbook.md §3.2、§3.3)。
+		# k8s_deploy.ps1 -ConnectionAdmissionEnv 只收这两组名字(Resolve-ClientEntryConnectionAdmissionEnv):GATE_* 只写 gate,BATTLE_* 只写 battle,
+		# 本库三个生成器经 PodCommon.ConnectionAdmissionEnv 写,该脚本自己的 New-NodeDeploymentYaml 按同一份结果写。名字与 C++ 一致
+		# (gate connection_admission.h、battle battle_connection_admission.h 的 k*Env,契约测试逐个核对);数组顺序就是渲染顺序。
+		GateConnectionAdmissionEnvNames   = @('GATE_ACCEPT_RATE_PER_SECOND', 'GATE_ACCEPT_BURST', 'GATE_PREAUTH_BUDGET',
+			'GATE_PREAUTH_EARLY_DROP_START', 'GATE_PREAUTH_EVICTABLE_AGE_MS', 'GATE_SOURCE_RATE_PER_SECOND', 'GATE_SOURCE_BURST')
+		BattleConnectionAdmissionEnvNames = @('BATTLE_ACCEPT_RATE_PER_SECOND', 'BATTLE_ACCEPT_BURST', 'BATTLE_PREAUTH_BUDGET',
+			'BATTLE_PREAUTH_EARLY_DROP_START', 'BATTLE_PREAUTH_EVICTABLE_AGE_MS', 'BATTLE_SOURCE_RATE_PER_SECOND', 'BATTLE_SOURCE_BURST')
 		# C++ 节点 Prometheus 出口(cpp/libs/engine/core/metrics/metrics_http_exporter.h kMetricsPortEnv):设了才开 GET /metrics。
 		# k8s_deploy.ps1 -CppMetricsPort 经 PodCommon.MetricsPort 写进本库三个 C++ 生成器(env + 容器端口 metrics),
 		# 该脚本自己的两个模板(New-CppMetricsEnvLines / New-CppMetricsPortLines)也取这里的名字。
@@ -713,6 +727,9 @@ function New-ClientEntryPodCommon {
 		# 小游戏 WebSocket 入口的基地址(k8s_deploy.ps1 -WsEdgeHost 推出的 wss://<域名>/ws)。留空 = 不写 CLIENT_WS_BASE_URL
 		# (节点不自报 client_ws_url,不接小游戏),生成物与不传时逐字相同。形状在渲染时(Get-ClientEntryNodeBaseEnv)校验。
 		[AllowEmptyString()][string]$ClientWsBaseUrl = '',
+		# 连接准入覆盖变量(k8s_deploy.ps1 -ConnectionAdmissionEnv 里归这个角色的一组:gate 的 GATE_*、battle 的 BATTLE_*),键 = 变量名、
+		# 值 = 十进制字符串,按给出的顺序写。留空或空表 = 不写,生成物与不传时逐字相同。名字与值在渲染时(Get-ClientEntryNodeBaseEnv)校验。
+		[AllowNull()][System.Collections.IDictionary]$ConnectionAdmissionEnv = $null,
 		# 经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey },按给出的顺序接在公共 env 之后,渲染成 secretKeyRef(optional: false)。
 		# 留空 = 不加,生成物与不传时逐字相同。名字不是大写环境变量名、三项有空、或名字重复,在这里 throw。
 		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @()
@@ -749,6 +766,10 @@ function New-ClientEntryPodCommon {
 	if ($null -ne $PodAnnotations) {
 		foreach ($key in $PodAnnotations.Keys) { $podAnnotationsCopy[[string]$key] = [string]$PodAnnotations[$key] }
 	}
+	$connectionAdmissionCopy = [ordered]@{}
+	if ($null -ne $ConnectionAdmissionEnv) {
+		foreach ($key in $ConnectionAdmissionEnv.Keys) { $connectionAdmissionCopy[[string]$key] = [string]$ConnectionAdmissionEnv[$key] }
+	}
 
 	return [pscustomobject]@{
 		Image                = $Image
@@ -766,6 +787,7 @@ function New-ClientEntryPodCommon {
 		ReleaseTrack         = $ReleaseTrack
 		BuildLabel           = $BuildLabel
 		ClientWsBaseUrl      = $ClientWsBaseUrl
+		ConnectionAdmissionEnv = $connectionAdmissionCopy
 		SecretEnv            = $secretEnvCopy
 	}
 }
@@ -802,6 +824,54 @@ function Get-ClientEntryEnvYaml {
 		}
 	}
 	return ($lines -join "`n")
+}
+
+# 连接准入覆盖变量的值:规范十进制正整数(无符号、无前导零、无空白,至多 9 位)。范围与相互关系(早拒起点不大于预算、预算不大于
+# 连接上限等)只由 C++ 启动时校验,那边写错拒启;这里只拦一眼能看出的错,不复制第二份规则。
+function Test-ClientEntryConnectionAdmissionValue {
+	param([AllowEmptyString()][AllowNull()][string]$Value)
+	return ($Value -cmatch '^[1-9][0-9]{0,8}$')
+}
+
+<#
+.SYNOPSIS
+	把 k8s_deploy.ps1 -ConnectionAdmissionEnv 的「名字=值」解析成两组:Gate(GATE_*)与 Battle(BATTLE_*),各是按契约名单顺序排好的 [ordered] 表。
+
+.DESCRIPTION
+	一个元素可以是一项,也可以是逗号分隔的多项:经 pwsh -File 进来的包装入口把整串当成一个元素。名字只收契约
+	GateConnectionAdmissionEnvNames / BattleConnectionAdmissionEnvNames,区分大小写(C++ 按原名 getenv);值见 Test-ClientEntryConnectionAdmissionValue。
+	格式不对、名字不认识、同一个名字给两次都 throw(英文说明,进部署输出)。输出按名单顺序,与命令行里的先后无关:
+	同一组值换个写法,渲染出的 Pod 模板逐字相同,不会无故滚动。
+#>
+function Resolve-ClientEntryConnectionAdmissionEnv {
+	param([AllowNull()][AllowEmptyCollection()][string[]]$Entries = @())
+
+	$contract = Get-ClientEntryContract
+	$allowed = $contract.GateConnectionAdmissionEnvNames + $contract.BattleConnectionAdmissionEnvNames
+	$given = @{}
+	foreach ($item in @($Entries | Where-Object { $null -ne $_ } | ForEach-Object { $_ -split '[,\s]+' } | Where-Object { $_ -ne '' })) {
+		$match = [regex]::Match($item, '^(?<name>[^=]+)=(?<value>.*)$')
+		if (-not $match.Success) {
+			throw "-ConnectionAdmissionEnv: '$item' is not NAME=VALUE (comma-separated, e.g. GATE_ACCEPT_RATE_PER_SECOND=2000,GATE_ACCEPT_BURST=20000)."
+		}
+		$name = $match.Groups['name'].Value
+		$value = $match.Groups['value'].Value
+		if ($name -cnotin $allowed) {
+			throw "-ConnectionAdmissionEnv: unknown variable '$name'; allowed (case-sensitive): $($allowed -join ', ')."
+		}
+		if (-not (Test-ClientEntryConnectionAdmissionValue -Value $value)) {
+			throw "-ConnectionAdmissionEnv: $name must be a positive decimal integer without sign or leading zeros, got '$value'; leave it out to keep the derived default."
+		}
+		if ($given.ContainsKey($name)) {
+			throw "-ConnectionAdmissionEnv: $name is given more than once."
+		}
+		$given[$name] = $value
+	}
+	$gate = [ordered]@{}
+	foreach ($name in $contract.GateConnectionAdmissionEnvNames) { if ($given.ContainsKey($name)) { $gate[$name] = $given[$name] } }
+	$battle = [ordered]@{}
+	foreach ($name in $contract.BattleConnectionAdmissionEnvNames) { if ($given.ContainsKey($name)) { $battle[$name] = $given[$name] } }
+	return [pscustomobject]@{ Gate = $gate; Battle = $battle }
 }
 
 # C++ 节点共有的 env:集群内身份(POD_IP + RPC_PORT);末尾接 PodCommon.SecretEnv(zone Redis 口令等)。
@@ -865,6 +935,19 @@ function Get-ClientEntryNodeBaseEnv {
 			throw "Get-ClientEntryNodeBaseEnv: PodCommon.ClientWsBaseUrl must look like wss://host[:port][/path] without query, fragment or whitespace (empty = do not write $($contract.ClientWsBaseUrlEnv)), got '$clientWsBaseUrl'."
 		}
 		$entries += @{ Name = $contract.ClientWsBaseUrlEnv; Value = $clientWsBaseUrl }
+	}
+	# 连接准入覆盖变量(PodCommon.ConnectionAdmissionEnv,k8s_deploy.ps1 按角色给):缺成员或空表 = 不写。校验放在这里而不是打包处,
+	# 理由同上:这是值写进 YAML 的唯一入口。名字只收契约的两组名单,值的形状与 Resolve-ClientEntryConnectionAdmissionEnv 同一判据。
+	$connectionAdmission = Get-ClientEntryMember -Object $PodCommon -Path @('ConnectionAdmissionEnv')
+	if ($null -ne $connectionAdmission) {
+		$admissionNames = $contract.GateConnectionAdmissionEnvNames + $contract.BattleConnectionAdmissionEnvNames
+		foreach ($name in @($connectionAdmission.Keys)) {
+			$value = [string]$connectionAdmission[$name]
+			if ([string]$name -cnotin $admissionNames -or -not (Test-ClientEntryConnectionAdmissionValue -Value $value)) {
+				throw "Get-ClientEntryNodeBaseEnv: PodCommon.ConnectionAdmissionEnv only accepts the contract's connection admission variables with positive decimal values, got '$name=$value'."
+			}
+			$entries += @{ Name = [string]$name; Value = $value }
+		}
 	}
 	# 经 Secret 注入的附加 env(PodCommon.SecretEnv,New-ClientEntryPodCommon 打包时已校验):缺成员或空列表 = 不写。
 	foreach ($secretEntry in @(Get-ClientEntryMember -Object $PodCommon -Path @('SecretEnv'))) {
@@ -1597,7 +1680,9 @@ function New-WsEdgeYaml {
 		[Parameter(Mandatory = $true)][string]$Image,
 		[ValidateRange(1, 64)][int]$Replicas = 2,
 		[ValidateSet('LoadBalancer', 'NodePort')][string]$ServiceType = 'LoadBalancer',
-		[ValidateRange(0, 32767)][int]$NodePort = 0
+		[ValidateRange(0, 32767)][int]$NodePort = 0,
+		# 按来源限速:单个来源前缀(IPv4 /24)每秒新建的连接数;0 = 不限(缺省)。
+		[ValidateRange(0, 100000)][int]$SourceRatePerSecond = 0
 	)
 
 	$contract = Get-ClientEntryContract
@@ -1650,6 +1735,7 @@ http {
 __GEO_LINES__
     }
 
+__SOURCE_LIMIT_HTTP__
     server {
         listen 443 ssl;
         server_name __EDGE_HOST__;
@@ -1662,6 +1748,7 @@ __GEO_LINES__
             if ($ws_target_allowed = 0) {
                 return 403;
             }
+__SOURCE_LIMIT_LOCATION__
             proxy_pass http://$ws_target_ip:$ws_target_port;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
@@ -1681,6 +1768,27 @@ __GEO_LINES__
 }
 '@).Replace('__GEO_LINES__', $geoLines).Replace('__EDGE_HOST__', $EdgeHost).Replace('__PATH_PREFIX__', $contract.WsEdgePathPrefix).Replace('__PORTS__', ($ports -join '|'))
 	$nginxConf = ConvertTo-ClientEntryLf -Text $nginxConf
+
+	# 按来源限速(缺省不开)。经边缘进来的连接,gate / battle 看到的来源是边缘 Pod 的内网地址,它们自己的按来源限速只管公网源地址
+	# (core accept_admission.h),所以这部分连接要限只能在边缘限:只有边缘看得到玩家的真实地址(Service 是 externalTrafficPolicy: Local)。
+	# 口径照 gate 的按来源限速:IPv4 按 /24 聚合(CGNAT、校园网出口后面是成片的真玩家),限新建速率、不限总量,桶深 = 速率 × 握手期限。
+	# 不同的一点:nginx 不知道后端是否承压,开了就一直生效,所以缺省关闭,被打的时候再开。限速排在目标校验(403)之后,目标不合法的请求不消耗名额。
+	# 关闭时两处占位行整行去掉,生成的配置与没有这个参数时逐字相同(不触发 ws-edge 滚动)。
+	$sourceLimitHttp = ''
+	$sourceLimitLocation = ''
+	if ($SourceRatePerSecond -gt 0) {
+		$sourceLimitHttp = (@(
+			'    map $remote_addr $ws_source_prefix {'
+			'        ~^(?<ws_source_24>\d+\.\d+\.\d+)\.\d+$ $ws_source_24;'
+			'        default $remote_addr;'
+			'    }'
+			"    limit_req_zone `$ws_source_prefix zone=ws_source:32m rate=${SourceRatePerSecond}r/s;"
+			'    limit_req_status 429;'
+			''
+		) -join "`n") + "`n"
+		$sourceLimitLocation = "            limit_req zone=ws_source burst=$($SourceRatePerSecond * $contract.WsEdgeSourceBurstSeconds) nodelay;`n"
+	}
+	$nginxConf = $nginxConf.Replace("__SOURCE_LIMIT_HTTP__`n", $sourceLimitHttp).Replace("__SOURCE_LIMIT_LOCATION__`n", $sourceLimitLocation)
 
 	$sha256 = [System.Security.Cryptography.SHA256]::Create()
 	try {

@@ -28,8 +28,8 @@ func getSessionDetailsForAction(ctx context.Context, action string) (*login_prot
 // cleanupLoginSessionState 删本条 gate 连接的登录态(按 loginsession.RefOf 的连接身份,不按裸 session_id)。
 func cleanupLoginSessionState(ctx context.Context, svcCtx *svc.ServiceContext, ref loginsession.Ref, logicTag string) {
 	loginsession.Cleanup(ctx, svcCtx.LoginRedis, ref, logicTag)
-	// 会话到此结束:取走防沉迷记录,我们自己实名的会话报一条下线(docs/design/real-name-anti-addiction.md §5.5)。
-	endAntiAddictionSession(ctx, svcCtx, ref)
+	// 会话到此结束:从防沉迷会话账本里收尾,上报的会话排一条下线(docs/design/real-name-anti-addiction.md §5.5)。
+	endWatchedSession(ctx, svcCtx, ref)
 }
 
 // logMissingConnectionIdentity 记一条「经 gate 转发的请求没有完整连接身份」。gate 每条连接都带实例号与会话代次,

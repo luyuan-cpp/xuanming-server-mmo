@@ -39,6 +39,10 @@ public final class RewardErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kRewardAlreadyClaimed = 12000;</code>
      */
     kRewardAlreadyClaimed(12000),
+    /**
+     * <code>kRewardPeriodEnded = 12001;</code>
+     */
+    kRewardPeriodEnded(12001),
     UNRECOGNIZED(-1),
     ;
 
@@ -59,6 +63,10 @@ public final class RewardErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kRewardAlreadyClaimed = 12000;</code>
      */
     public static final int kRewardAlreadyClaimed_VALUE = 12000;
+    /**
+     * <code>kRewardPeriodEnded = 12001;</code>
+     */
+    public static final int kRewardPeriodEnded_VALUE = 12001;
 
 
     public final int getNumber() {
@@ -87,6 +95,7 @@ public final class RewardErrorTip extends com.google.protobuf.GeneratedFile {
       switch (value) {
         case 0: return kReward_errorOK;
         case 12000: return kRewardAlreadyClaimed;
+        case 12001: return kRewardPeriodEnded;
         default: return null;
       }
     }
@@ -152,10 +161,10 @@ public final class RewardErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\026reward_error_tip.proto*?\n\014reward_error" +
+      "\n\026reward_error_tip.proto*X\n\014reward_error" +
       "\022\023\n\017kReward_errorOK\020\000\022\032\n\025kRewardAlreadyC" +
-      "laimed\020\340]B$\n\016com.game.tableZ\022generated/p" +
-      "b/tableb\006proto3"
+      "laimed\020\340]\022\027\n\022kRewardPeriodEnded\020\341]B$\n\016co" +
+      "m.game.tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

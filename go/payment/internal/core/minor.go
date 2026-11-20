@@ -124,16 +124,14 @@ func (s *Service) insertIntent(ctx context.Context, rec *paymentpb.PaymentIntent
 	return stored, inserted, err
 }
 
-// spendLimit 是 age 周岁的未成年人在 at 所在的北京自然月、自然日的额度。age 只会是建意图时记下的 8–17。
+// spendLimit 是 age 周岁的未成年人在 at 所在的北京自然月、自然日的额度。age 只会是建意图时记下的 8–17;
+// 月、日的数字都取 shared/antiaddiction,不在这里另配。
 func (s *Service) spendLimit(age uint32, at time.Time) data.SpendLimit {
-	daily := s.opts.DailyLimitFenAge16To18
-	if age < 16 {
-		daily = s.opts.DailyLimitFenAge8To16
-	}
+	limit := antiaddiction.SpendLimitAt(int(age))
 	b := at.In(antiaddiction.Beijing)
 	month := time.Date(b.Year(), b.Month(), 1, 0, 0, 0, 0, antiaddiction.Beijing)
 	day := time.Date(b.Year(), b.Month(), b.Day(), 0, 0, 0, 0, antiaddiction.Beijing)
-	return data.SpendLimit{MonthlyFen: antiaddiction.SpendLimitAt(int(age)).MonthlyFen, DailyFen: daily,
+	return data.SpendLimit{MonthlyFen: limit.MonthlyFen, DailyFen: limit.DailyFen,
 		MonthStartMs: uint64(month.UnixMilli()), DayStartMs: uint64(day.UnixMilli())}
 }
 

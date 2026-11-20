@@ -31,4 +31,6 @@ enum mail_error {
 
   kMailAttachmentNotOpen = 17010;
 
+  kMailRecipientDeleted = 17011;
+
 };

@@ -179,7 +179,6 @@ uint32_t PlayerMissionSystem::Accept(entt::entity player, uint32_t scope,
     MissionFollowUps followUps;
     const auto result = MissionSystem::AcceptMission(event, missions, MissionConfig::GetSingleton());
     if (result == kSuccess) {
-        (*missions.GetMutableMissionList().mutable_mission_begin_time())[missionId] = nowMs;
         // 带等级条件的任务已在 CheckAccept 确认 LevelComp 在;不带等级条件的任务这条事件本来推不动,缺组件时不发也一样。
         if (const auto* level = tlsEcs.actorRegistry.try_get<LevelComp>(player); level != nullptr) {
             // 等级条件与其他玩法同口径,按生效等级判(超上限的存储等级按上限,0 按 1,player_level_rules.h)
@@ -203,7 +202,6 @@ uint32_t PlayerMissionSystem::Accept(entt::entity player, uint32_t scope,
                 if (condition->condition1().empty()) {
                     for (const auto& [completedId, bit] : MissionBitMap)
                         if (missions.IsComplete(completedId)) relevantCompleted.insert(completedId);
-                    relevantCompleted.insert(missions.GetUnmappedCompletedIds().begin(), missions.GetUnmappedCompletedIds().end());
                 } else {
                     for (const uint32_t completedId : condition->condition1())
                         if (missions.IsComplete(completedId)) relevantCompleted.insert(completedId);

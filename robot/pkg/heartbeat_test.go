@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luyuancpp/muduoclient/muduo"
 	"google.golang.org/protobuf/proto"
 
 	"proto/battle"
@@ -24,7 +23,7 @@ import (
 )
 
 type sentHeartbeat struct {
-	conn *muduo.Client
+	conn *wireConn
 	seq  uint64
 }
 
@@ -44,10 +43,7 @@ func newHeartbeatHarness(t *testing.T) *heartbeatHarness {
 	}
 	t.Cleanup(func() { _ = ln.Close() })
 	port := ln.Addr().(*net.TCPAddr).Port
-	c, err := muduo.NewClient("127.0.0.1", port, &muduo.TcpCodec{})
-	if err != nil {
-		t.Fatalf("muduo client: %v", err)
-	}
+	c := newTCPWireConn("127.0.0.1", port)
 	h := &heartbeatHarness{
 		gc:    &GameClient{client: c, gateIP: "127.0.0.1", gatePort: port, Account: "heartbeat-test"},
 		port:  port,
@@ -55,7 +51,7 @@ func newHeartbeatHarness(t *testing.T) *heartbeatHarness {
 		ticks: make(chan time.Time, 8),
 		waits: make(chan time.Duration, 64),
 	}
-	h.gc.heartbeatSend = func(conn *muduo.Client, request *base.ClientHeartbeatRequest) {
+	h.gc.heartbeatSend = func(conn *wireConn, request *base.ClientHeartbeatRequest) {
 		h.sent <- sentHeartbeat{conn: conn, seq: request.GetSeq()}
 	}
 	h.gc.heartbeatAfter = func(d time.Duration) <-chan time.Time {
@@ -336,10 +332,7 @@ func TestRecvOneSkipsHeartbeatRepliesDuringTheHandshake(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = ln.Close() })
 	port := ln.Addr().(*net.TCPAddr).Port
-	c, err := muduo.NewClient("127.0.0.1", port, &muduo.TcpCodec{})
-	if err != nil {
-		t.Fatalf("muduo client: %v", err)
-	}
+	c := newTCPWireConn("127.0.0.1", port)
 	gc := &GameClient{client: c, gateIP: "127.0.0.1", gatePort: port, Account: "heartbeat-recv-test"}
 	t.Cleanup(gc.Close)
 

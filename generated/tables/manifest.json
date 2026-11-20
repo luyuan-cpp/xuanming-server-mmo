@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "version": 43,
-  "content_digest": "e7e5a35282a7bd41ae648900c4e46e817dc5c94fbfcf8f38af18aedba5b9938a",
-  "generated_at": "2026-11-18T06:11:05Z",
+  "version": 44,
+  "content_digest": "1f2db95c3d41d7f0c24f2f6ef0f6c127abc96282675b836002cb0c7fc793e3b1",
+  "generated_at": "2026-11-20T07:22:27Z",
   "source_rev": {
-    "commit": "4aaf5e646e0c44c39160b38fd7993f56738fb289",
+    "commit": "ccf2840b2e126aba36d09b6223286e9cfba4f3a9",
     "data_dirty": true
   },
-  "table_count": 53,
+  "table_count": 54,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -121,6 +121,29 @@
           "file": "actoractionstate.pb",
           "size": 58,
           "sha256": "d585219ab1a168f089b170680c53fee1662a69dfb774d5cd8a2b9bc3926c346c"
+        }
+      ]
+    },
+    {
+      "name": "AfkPassRule",
+      "rows": 1,
+      "source": {
+        "file": "AfkPassRule.xlsx",
+        "size": 5302,
+        "sha256": "2f8d64370ef8f74fcf92d4e23faf52488677f215242b518b2df42c9bd402a0c9"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "afkpassrule.json",
+          "size": 211,
+          "sha256": "f0e6556040bbcc3bfa8107371d856110aa9622609c69c130d97db42c019be2fc"
+        },
+        {
+          "kind": "binary",
+          "file": "afkpassrule.pb",
+          "size": 50,
+          "sha256": "5dbd31d065af0c3432da64d94c29c3e2749d27f83888123e9f6c1eaf35c74dd0"
         }
       ]
     },
@@ -267,8 +290,8 @@
       "rows": 98,
       "source": {
         "file": "Buff.xlsx",
-        "size": 12246,
-        "sha256": "a98b880c8b29d84b37a38dce682499c131012702f8ee8fabc2db27effb6abde0"
+        "size": 12143,
+        "sha256": "e96131dc3c52576faa1d74e770fe75e5f019fa12e727d1ada8577ca184b3eb03"
       },
       "artifacts": [
         {

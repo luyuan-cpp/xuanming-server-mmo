@@ -37,6 +37,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::BuffComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::SavedBuffComp
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::DamageEventComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::BuffNoDamageOrSkillHitInLastSecondsComp
@@ -44,6 +46,162 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
 };
 }  // namespace
 #endif
+class SavedBuffComp::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SavedBuffComp>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_._has_bits_);
+};
+
+constexpr SavedBuffComp::ParseTableT_ SavedBuffComp::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SavedBuffComp>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 buff_table_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavedBuffComp, _impl_.buff_table_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.buff_table_id_)}},
+      // uint32 layer = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavedBuffComp, _impl_.layer_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.layer_)}},
+      // uint64 expire_at_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavedBuffComp, _impl_.expire_at_ms_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.expire_at_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 buff_table_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.buff_table_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 layer = 2;
+      {PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.layer_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 expire_at_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.expire_at_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SavedBuffComp::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        buff_table_id_{0u},
+        layer_{0u},
+        expire_at_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr SavedBuffComp::SavedBuffComp(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SavedBuffComp::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SavedBuffComp(arena);
+}
+constexpr auto SavedBuffComp::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SavedBuffComp), alignof(SavedBuffComp));
+}
+constexpr auto SavedBuffComp::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SavedBuffComp::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SavedBuffComp>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SavedBuffComp::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SavedBuffComp>(), &SavedBuffComp::ByteSizeLong,
+              &SavedBuffComp::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SavedBuffCompGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SavedBuffCompGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SavedBuffComp_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SavedBuffComp::InternalGenerateClassData_(
+            _default, &SavedBuffComp_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SavedBuffComp>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SavedBuffCompGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SavedBuffComp _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SavedBuffComp>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SavedBuffCompGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SavedBuffCompGlobalsTypeInternal SavedBuffComp_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SavedBuffComp_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SavedBuffComp_globals_.GetClassData();
+#else
+  return SavedBuffComp_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class DamageEventComp::_Internal {
  public:
   using HasBits = decltype(::std::declval<DamageEventComp>()._impl_._has_bits_);
@@ -165,7 +323,7 @@ constexpr auto DamageEventComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto,
@@ -454,7 +612,7 @@ constexpr auto BuffNoDamageOrSkillHitInLastSecondsComp::InternalGenerateClassDat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto,
@@ -1066,6 +1224,15 @@ const ::uint32_t
         11,
         10,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SavedBuffComp, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SavedBuffComp, _impl_.buff_table_id_),
+        PROTOBUF_FIELD_OFFSET(::SavedBuffComp, _impl_.layer_),
+        PROTOBUF_FIELD_OFFSET(::SavedBuffComp, _impl_.expire_at_ms_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::DamageEventComp, _impl_._has_bits_),
         8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::DamageEventComp, _impl_.skill_id_),
@@ -1091,8 +1258,9 @@ static const ::_pbi::MigrationSchema
         {5, sizeof(::BuffPeriodicBuffComp)},
         {12, sizeof(::BuffComp_SubBuffListIdEntry_DoNotUse)},
         {19, sizeof(::BuffComp)},
-        {46, sizeof(::DamageEventComp)},
-        {59, sizeof(::BuffNoDamageOrSkillHitInLastSecondsComp)},
+        {46, sizeof(::SavedBuffComp)},
+        {55, sizeof(::DamageEventComp)},
+        {68, sizeof(::BuffNoDamageOrSkillHitInLastSecondsComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1100,6 +1268,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::BuffPeriodicBuffComp_globals_,
         &::BuffComp_SubBuffListIdEntry_DoNotUse_globals_,
         &::BuffComp_globals_,
+        &::SavedBuffComp_globals_,
         &::DamageEventComp_globals_,
         &::BuffNoDamageOrSkillHitInLastSecondsComp_globals_,
 };
@@ -1117,24 +1286,26 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2e
     "BuffPeriodicBuffComp\0226\n\020sub_buff_list_id"
     "\030\013 \003(\0132\034.BuffComp.SubBuffListIdEntry\022\032\n\022"
     "has_added_sub_buff\030\014 \001(\010\0324\n\022SubBuffListI"
-    "dEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\010:\0028\001\"m"
-    "\n\017DamageEventComp\022\020\n\010skill_id\030\001 \001(\004\022\023\n\013a"
-    "ttacker_id\030\002 \001(\004\022\016\n\006target\030\003 \001(\004\022\016\n\006dama"
-    "ge\030\004 \001(\001\022\023\n\013damage_type\030\005 \001(\r\"<\n\'BuffNoD"
-    "amageOrSkillHitInLastSecondsComp\022\021\n\tlast"
-    "_time\030\001 \001(\004B\022Z\020common/componentb\006proto3"
+    "dEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\010:\0028\001\"K"
+    "\n\rSavedBuffComp\022\025\n\rbuff_table_id\030\001 \001(\r\022\r"
+    "\n\005layer\030\002 \001(\r\022\024\n\014expire_at_ms\030\003 \001(\004\"m\n\017D"
+    "amageEventComp\022\020\n\010skill_id\030\001 \001(\004\022\023\n\013atta"
+    "cker_id\030\002 \001(\004\022\016\n\006target\030\003 \001(\004\022\016\n\006damage\030"
+    "\004 \001(\001\022\023\n\013damage_type\030\005 \001(\r\"<\n\'BuffNoDama"
+    "geOrSkillHitInLastSecondsComp\022\021\n\tlast_ti"
+    "me\030\001 \001(\004B\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto = {
     false,
     false,
-    719,
+    796,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto,
     "proto/common/component/buff_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto_once,
     nullptr,
     0,
-    6,
+    7,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fbuff_5fcomp_2eproto::offsets,
@@ -2111,6 +2282,255 @@ void BuffComp::InternalSwap(BuffComp* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
 }
 
 ::google::protobuf::Metadata BuffComp::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SavedBuffComp::SavedBuffComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavedBuffComp_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SavedBuffComp)
+}
+SavedBuffComp::SavedBuffComp(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SavedBuffComp& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavedBuffComp_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SavedBuffComp::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SavedBuffComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, buff_table_id_),
+           0,
+           offsetof(Impl_, expire_at_ms_) -
+               offsetof(Impl_, buff_table_id_) +
+               sizeof(Impl_::expire_at_ms_));
+}
+SavedBuffComp::~SavedBuffComp() {
+  // @@protoc_insertion_point(destructor:SavedBuffComp)
+  SharedDtor(*this);
+}
+inline void SavedBuffComp::SharedDtor(MessageLite& self) {
+  SavedBuffComp& this_ = static_cast<SavedBuffComp&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SavedBuffComp_class_data_ =
+        SavedBuffComp::InternalGenerateClassData_(SavedBuffComp_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavedBuffComp::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavedBuffComp_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SavedBuffComp_class_data_.tc_table);
+  return SavedBuffComp_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavedBuffComp::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavedBuffComp_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SavedBuffComp_globals_));
+  return SavedBuffComp_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SavedBuffComp::ParseTableT_
+    SavedBuffComp::_table_ =
+        SavedBuffComp::InternalGenerateParseTable_(SavedBuffComp_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SavedBuffComp::Clear() {
+// @@protoc_insertion_point(message_clear_start:SavedBuffComp)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.buff_table_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.expire_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.buff_table_id_)) + sizeof(_impl_.expire_at_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SavedBuffComp::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SavedBuffComp& this_ = static_cast<const SavedBuffComp&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SavedBuffComp::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SavedBuffComp& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SavedBuffComp)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 buff_table_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_buff_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_buff_table_id(), target);
+    }
+  }
+
+  // uint32 layer = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_layer() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_layer(), target);
+    }
+  }
+
+  // uint64 expire_at_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_expire_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_expire_at_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SavedBuffComp)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SavedBuffComp::ByteSizeLong(const MessageLite& base) {
+  const SavedBuffComp& this_ = static_cast<const SavedBuffComp&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SavedBuffComp::ByteSizeLong() const {
+  const SavedBuffComp& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SavedBuffComp)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint32 buff_table_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_buff_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_buff_table_id());
+      }
+    }
+    // uint32 layer = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_layer() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_layer());
+      }
+    }
+    // uint64 expire_at_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_expire_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expire_at_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SavedBuffComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SavedBuffComp*>(&to_msg);
+  auto& from = static_cast<const SavedBuffComp&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SavedBuffComp)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_buff_table_id() != 0) {
+        _this->_impl_.buff_table_id_ = from._impl_.buff_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_layer() != 0) {
+        _this->_impl_.layer_ = from._impl_.layer_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_expire_at_ms() != 0) {
+        _this->_impl_.expire_at_ms_ = from._impl_.expire_at_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SavedBuffComp::CopyFrom(const SavedBuffComp& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SavedBuffComp)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SavedBuffComp::InternalSwap(SavedBuffComp* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.expire_at_ms_)
+      + sizeof(SavedBuffComp::_impl_.expire_at_ms_)
+      - PROTOBUF_FIELD_OFFSET(SavedBuffComp, _impl_.buff_table_id_)>(
+          reinterpret_cast<char*>(&_impl_.buff_table_id_),
+          reinterpret_cast<char*>(&other->_impl_.buff_table_id_));
+}
+
+::google::protobuf::Metadata SavedBuffComp::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

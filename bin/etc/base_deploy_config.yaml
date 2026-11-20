@@ -208,6 +208,13 @@ GrpcClient:
     MailNodeService: 6000              # go/mail/etc/mail.yaml 的 zrpc Timeout 3500 + 2000 + 500;scene 寄待寄邮件失败只退避(battle-overflow-mail.md)
     ContentGuardNodeService: 3500      # go/content_guard/etc/content_guard.yaml 的 zrpc Timeout 1000 + 2000 + 500;scene 送检名字,超时按不可用回可重试的提示(rename-and-content-safety.md §6.6)
 
+# 内容安全(go/content_guard)对 scene 是否可有可无(docs/design/rename-and-content-safety.md §6.6)。
+# 缺省(不写这一段)= 必须可达:发现不到实例或调用失败时,玩家填写的名字(角色改名、宠物名)一律不放行。
+# 本机写 true:内容安全没起时不送检、原样放行并打 ERROR,免得本机不起它就改不了名。
+# K8s 的 node-config 不写这一段(k8s_deploy.ps1 的模板里没有它),集群上永远是严格的。
+ContentGuard:
+  Optional: true
+
 # span 导出(docs/design/distributed-tracing.md §10.3,阶段三):C++ 节点把接缝处产生的 span 经 OTLP/HTTP(protobuf)
 # 送本机 Alloy(deploy/docker-compose.observability.yml,dev.bat obs 起),Alloy 尾部采样后存进 Tempo。
 # 地址原样使用;删掉这一键或写空串 = 不导出,不起导出线程。Alloy 没起时导出线程按 1~60 秒退避、丢批并计数,不影响业务。

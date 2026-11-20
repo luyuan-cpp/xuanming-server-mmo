@@ -56,6 +56,7 @@ set(SOURCE_FILES
     log/system/console_log.cpp
     message_limiter/message_limiter.cpp
     network/codec/codec.cpp
+    network/codec/websocket.cpp
     async/loop_task_scope.cpp
     network/rpc_channel.cpp
     network/rpc_channel_stats.cpp

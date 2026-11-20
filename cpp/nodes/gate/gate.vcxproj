@@ -32,6 +32,7 @@
     <ClCompile Include="handler\rpc\connection_admission.cpp" />
     <ClCompile Include="handler\rpc\drain_migration.cpp" />
     <ClCompile Include="handler\rpc\login_session_renewal.cpp" />
+    <ClCompile Include="handler\rpc\minor_play_deadline.cpp" />
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp" />
     <ClCompile Include="handler\rpc\router_subset.cpp" />
     <ClCompile Include="handler\rpc\rpc_reply_bridge.cpp" />
@@ -65,6 +66,7 @@
     <ClInclude Include="handler\rpc\connection_admission.h" />
     <ClInclude Include="handler\rpc\drain_migration.h" />
     <ClInclude Include="handler\rpc\login_session_renewal.h" />
+    <ClInclude Include="handler\rpc\minor_play_deadline.h" />
     <ClInclude Include="handler\rpc\router_muduo_forward.h" />
     <ClInclude Include="handler\rpc\router_subset.h" />
     <ClInclude Include="handler\rpc\router_subset_policy.h" />

@@ -10,6 +10,7 @@ import (
 	"chat/internal/config"
 	dspb "proto/data_service"
 	"shared/authoritysql"
+	"shared/contentguard"
 	"shared/dbplacement"
 	"shared/rolefence"
 
@@ -90,7 +91,13 @@ func OpenAuthorityWithPermission(ctx context.Context, c config.Config, migrate b
 		}
 		return db, nil, nil
 	}
-	store, err := authority.New(ctx, db, states, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, SensitiveWords: c.SensitiveWords, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds, WorldHistoryCacheMs: c.WorldHistoryCacheMs, WorldChannelCooldownMs: c.WorldChannelCooldownMs})
+	// 正文送检(docs/design/rename-and-content-safety.md §6.6):没配目标又不是本机的 Optional 时拒启。
+	guard, err := contentguard.New("chat", c.ContentGuard)
+	if err != nil {
+		db.Close()
+		return nil, nil, err
+	}
+	store, err := authority.New(ctx, db, states, backend, authority.Rules{MaxContentBytes: c.MaxContentBytes, RateLimitPerSecond: c.RateLimitPerSecond, HistoryMaxEntries: c.HistoryMaxEntries, HistoryTTLSeconds: c.HistoryTTLSeconds, HistoryDefaultLimit: c.HistoryDefaultLimit, HistoryMaxLimit: c.HistoryMaxLimit, ActorVerifyTTLSeconds: c.ActorVerifyTTLSeconds, WorldHistoryCacheMs: c.WorldHistoryCacheMs, WorldChannelCooldownMs: c.WorldChannelCooldownMs}, authority.WithContentGuard(guard))
 	if err != nil {
 		db.Close()
 		return nil, nil, err

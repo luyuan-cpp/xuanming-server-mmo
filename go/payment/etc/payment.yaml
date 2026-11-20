@@ -54,11 +54,9 @@ Payment:
   # 合规闸(docs/design/real-name-anti-addiction.md §5.6):none = 不接实名,生产模式下 App 渠道拒启;
   # realname = 建意图前按账号目录的实名执行未成年人充值限额(要 DataServiceRpc 与 MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT),App 渠道才能在生产开;
   # overseas = 部署在中国大陆以外,不读实名,App 渠道照开。
+  # 未成年人的单次、每日、每月额度是规则,写在 shared/antiaddiction,不在这里配。
   Compliance:
     MinorSpendingGate: none
-    # 未成年人单日累计上限(分),0 = 不设;数字待负责人定(充值设计 §18 第 7 条)。
-    DailyLimitFenAge8To16: 0
-    DailyLimitFenAge16To18: 0
   DevPay:
     Enabled: true
     SecretEnv: PAYMENT_DEVPAY_SECRET

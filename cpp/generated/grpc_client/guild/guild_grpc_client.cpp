@@ -29,6 +29,7 @@ namespace guildpb {
 #pragma region GuildServiceCreateGuild
 namespace {
 void QueueLocalGuildServiceCreateGuildFailure(GrpcDone<::guildpb::CreateGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceCreateGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendGuildServiceCreateGuildErased(entt::registry& registry, entt::entity no
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.CreateGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceCreateGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendGuildServiceCreateGuildErased(entt::registry& registry, entt::entity no
     const auto* typedRequest = dynamic_cast<const ::guildpb::CreateGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.CreateGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceCreateGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendGuildServiceCreateGuildErased(entt::registry& registry, entt::entity no
 #pragma region GuildServiceGetGuild
 namespace {
 void QueueLocalGuildServiceGetGuildFailure(GrpcDone<::guildpb::GetGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendGuildServiceGetGuildErased(entt::registry& registry, entt::entity nodeE
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.GetGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendGuildServiceGetGuildErased(entt::registry& registry, entt::entity nodeE
     const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.GetGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendGuildServiceGetGuildErased(entt::registry& registry, entt::entity nodeE
 #pragma region GuildServiceGetPlayerGuild
 namespace {
 void QueueLocalGuildServiceGetPlayerGuildFailure(GrpcDone<::guildpb::GetPlayerGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetPlayerGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendGuildServiceGetPlayerGuildErased(entt::registry& registry, entt::entity
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.GetPlayerGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetPlayerGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendGuildServiceGetPlayerGuildErased(entt::registry& registry, entt::entity
     const auto* typedRequest = dynamic_cast<const ::guildpb::GetPlayerGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.GetPlayerGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetPlayerGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendGuildServiceGetPlayerGuildErased(entt::registry& registry, entt::entity
 #pragma region GuildServiceLeaveGuild
 namespace {
 void QueueLocalGuildServiceLeaveGuildFailure(GrpcDone<::guildpb::LeaveGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceLeaveGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendGuildServiceLeaveGuildErased(entt::registry& registry, entt::entity nod
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.LeaveGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceLeaveGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendGuildServiceLeaveGuildErased(entt::registry& registry, entt::entity nod
     const auto* typedRequest = dynamic_cast<const ::guildpb::LeaveGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.LeaveGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceLeaveGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendGuildServiceLeaveGuildErased(entt::registry& registry, entt::entity nod
 #pragma region GuildServiceDisbandGuild
 namespace {
 void QueueLocalGuildServiceDisbandGuildFailure(GrpcDone<::guildpb::DisbandGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceDisbandGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendGuildServiceDisbandGuildErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.DisbandGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceDisbandGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendGuildServiceDisbandGuildErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::guildpb::DisbandGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.DisbandGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceDisbandGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendGuildServiceDisbandGuildErased(entt::registry& registry, entt::entity n
 #pragma region GuildServiceSetAnnouncement
 namespace {
 void QueueLocalGuildServiceSetAnnouncementFailure(GrpcDone<::guildpb::SetAnnouncementResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceSetAnnouncementGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendGuildServiceSetAnnouncementErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.SetAnnouncement: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceSetAnnouncementGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendGuildServiceSetAnnouncementErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::guildpb::SetAnnouncementRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.SetAnnouncement: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceSetAnnouncementGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +575,7 @@ void SendGuildServiceSetAnnouncementErased(entt::registry& registry, entt::entit
 #pragma region GuildServiceSetGuildMemberRole
 namespace {
 void QueueLocalGuildServiceSetGuildMemberRoleFailure(GrpcDone<::guildpb::SetGuildMemberRoleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceSetGuildMemberRoleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +643,7 @@ void SendGuildServiceSetGuildMemberRoleErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.SetGuildMemberRole: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceSetGuildMemberRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +653,7 @@ void SendGuildServiceSetGuildMemberRoleErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::guildpb::SetGuildMemberRoleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.SetGuildMemberRole: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceSetGuildMemberRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -645,6 +666,7 @@ void SendGuildServiceSetGuildMemberRoleErased(entt::registry& registry, entt::en
 #pragma region GuildServiceKickGuildMember
 namespace {
 void QueueLocalGuildServiceKickGuildMemberFailure(GrpcDone<::guildpb::KickGuildMemberResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceKickGuildMemberGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -712,6 +734,7 @@ void SendGuildServiceKickGuildMemberErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.KickGuildMember: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceKickGuildMemberGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -721,6 +744,7 @@ void SendGuildServiceKickGuildMemberErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::guildpb::KickGuildMemberRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.KickGuildMember: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceKickGuildMemberGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -733,6 +757,7 @@ void SendGuildServiceKickGuildMemberErased(entt::registry& registry, entt::entit
 #pragma region GuildServiceTransferGuildLeader
 namespace {
 void QueueLocalGuildServiceTransferGuildLeaderFailure(GrpcDone<::guildpb::TransferGuildLeaderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceTransferGuildLeaderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -800,6 +825,7 @@ void SendGuildServiceTransferGuildLeaderErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.TransferGuildLeader: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceTransferGuildLeaderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -809,6 +835,7 @@ void SendGuildServiceTransferGuildLeaderErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::guildpb::TransferGuildLeaderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.TransferGuildLeader: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceTransferGuildLeaderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -821,6 +848,7 @@ void SendGuildServiceTransferGuildLeaderErased(entt::registry& registry, entt::e
 #pragma region GuildServiceApplyJoinGuild
 namespace {
 void QueueLocalGuildServiceApplyJoinGuildFailure(GrpcDone<::guildpb::ApplyJoinGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceApplyJoinGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -888,6 +916,7 @@ void SendGuildServiceApplyJoinGuildErased(entt::registry& registry, entt::entity
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.ApplyJoinGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceApplyJoinGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -897,6 +926,7 @@ void SendGuildServiceApplyJoinGuildErased(entt::registry& registry, entt::entity
     const auto* typedRequest = dynamic_cast<const ::guildpb::ApplyJoinGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.ApplyJoinGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceApplyJoinGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -909,6 +939,7 @@ void SendGuildServiceApplyJoinGuildErased(entt::registry& registry, entt::entity
 #pragma region GuildServiceCancelGuildApplication
 namespace {
 void QueueLocalGuildServiceCancelGuildApplicationFailure(GrpcDone<::guildpb::CancelGuildApplicationResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceCancelGuildApplicationGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -976,6 +1007,7 @@ void SendGuildServiceCancelGuildApplicationErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.CancelGuildApplication: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceCancelGuildApplicationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -985,6 +1017,7 @@ void SendGuildServiceCancelGuildApplicationErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::guildpb::CancelGuildApplicationRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.CancelGuildApplication: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceCancelGuildApplicationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -997,6 +1030,7 @@ void SendGuildServiceCancelGuildApplicationErased(entt::registry& registry, entt
 #pragma region GuildServiceListMyGuildApplications
 namespace {
 void QueueLocalGuildServiceListMyGuildApplicationsFailure(GrpcDone<::guildpb::ListMyGuildApplicationsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceListMyGuildApplicationsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1064,6 +1098,7 @@ void SendGuildServiceListMyGuildApplicationsErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.ListMyGuildApplications: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceListMyGuildApplicationsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1073,6 +1108,7 @@ void SendGuildServiceListMyGuildApplicationsErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::guildpb::ListMyGuildApplicationsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.ListMyGuildApplications: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceListMyGuildApplicationsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1085,6 +1121,7 @@ void SendGuildServiceListMyGuildApplicationsErased(entt::registry& registry, ent
 #pragma region GuildServiceListGuildApplications
 namespace {
 void QueueLocalGuildServiceListGuildApplicationsFailure(GrpcDone<::guildpb::ListGuildApplicationsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceListGuildApplicationsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1152,6 +1189,7 @@ void SendGuildServiceListGuildApplicationsErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.ListGuildApplications: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceListGuildApplicationsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1161,6 +1199,7 @@ void SendGuildServiceListGuildApplicationsErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::guildpb::ListGuildApplicationsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.ListGuildApplications: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceListGuildApplicationsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1173,6 +1212,7 @@ void SendGuildServiceListGuildApplicationsErased(entt::registry& registry, entt:
 #pragma region GuildServiceReviewGuildApplication
 namespace {
 void QueueLocalGuildServiceReviewGuildApplicationFailure(GrpcDone<::guildpb::ReviewGuildApplicationResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceReviewGuildApplicationGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1240,6 +1280,7 @@ void SendGuildServiceReviewGuildApplicationErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.ReviewGuildApplication: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceReviewGuildApplicationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1249,6 +1290,7 @@ void SendGuildServiceReviewGuildApplicationErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::guildpb::ReviewGuildApplicationRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.ReviewGuildApplication: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceReviewGuildApplicationGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1261,6 +1303,7 @@ void SendGuildServiceReviewGuildApplicationErased(entt::registry& registry, entt
 #pragma region GuildServiceNotifyGuildChanged
 namespace {
 void QueueLocalGuildServiceNotifyGuildChangedFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceNotifyGuildChangedGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1328,6 +1371,7 @@ void SendGuildServiceNotifyGuildChangedErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.NotifyGuildChanged: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceNotifyGuildChangedGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1337,6 +1381,7 @@ void SendGuildServiceNotifyGuildChangedErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::guildpb::GuildChangedS2C*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.NotifyGuildChanged: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceNotifyGuildChangedGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1349,6 +1394,7 @@ void SendGuildServiceNotifyGuildChangedErased(entt::registry& registry, entt::en
 #pragma region GuildServiceUpdateGuildScore
 namespace {
 void QueueLocalGuildServiceUpdateGuildScoreFailure(GrpcDone<::guildpb::UpdateGuildScoreResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceUpdateGuildScoreGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1416,6 +1462,7 @@ void SendGuildServiceUpdateGuildScoreErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.UpdateGuildScore: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceUpdateGuildScoreGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1425,6 +1472,7 @@ void SendGuildServiceUpdateGuildScoreErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::guildpb::UpdateGuildScoreRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.UpdateGuildScore: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceUpdateGuildScoreGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1437,6 +1485,7 @@ void SendGuildServiceUpdateGuildScoreErased(entt::registry& registry, entt::enti
 #pragma region GuildServiceGetGuildRank
 namespace {
 void QueueLocalGuildServiceGetGuildRankFailure(GrpcDone<::guildpb::GetGuildRankResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildRankGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1504,6 +1553,7 @@ void SendGuildServiceGetGuildRankErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.GetGuildRank: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildRankGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1513,6 +1563,7 @@ void SendGuildServiceGetGuildRankErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildRankRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.GetGuildRank: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildRankGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1525,6 +1576,7 @@ void SendGuildServiceGetGuildRankErased(entt::registry& registry, entt::entity n
 #pragma region GuildServiceGetGuildRankByGuild
 namespace {
 void QueueLocalGuildServiceGetGuildRankByGuildFailure(GrpcDone<::guildpb::GetGuildRankByGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildRankByGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1592,6 +1644,7 @@ void SendGuildServiceGetGuildRankByGuildErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.GetGuildRankByGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildRankByGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1601,6 +1654,7 @@ void SendGuildServiceGetGuildRankByGuildErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildRankByGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.GetGuildRankByGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildRankByGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1613,6 +1667,7 @@ void SendGuildServiceGetGuildRankByGuildErased(entt::registry& registry, entt::e
 #pragma region GuildServiceGetGuildDonateOptions
 namespace {
 void QueueLocalGuildServiceGetGuildDonateOptionsFailure(GrpcDone<::guildpb::GetGuildDonateOptionsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildDonateOptionsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1680,6 +1735,7 @@ void SendGuildServiceGetGuildDonateOptionsErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.GetGuildDonateOptions: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildDonateOptionsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1689,6 +1745,7 @@ void SendGuildServiceGetGuildDonateOptionsErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildDonateOptionsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.GetGuildDonateOptions: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildDonateOptionsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1701,6 +1758,7 @@ void SendGuildServiceGetGuildDonateOptionsErased(entt::registry& registry, entt:
 #pragma region GuildServiceDonateToGuild
 namespace {
 void QueueLocalGuildServiceDonateToGuildFailure(GrpcDone<::guildpb::DonateToGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceDonateToGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1768,6 +1826,7 @@ void SendGuildServiceDonateToGuildErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.DonateToGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceDonateToGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1777,6 +1836,7 @@ void SendGuildServiceDonateToGuildErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::guildpb::DonateToGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.DonateToGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceDonateToGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1789,6 +1849,7 @@ void SendGuildServiceDonateToGuildErased(entt::registry& registry, entt::entity 
 #pragma region GuildServiceUpgradeGuild
 namespace {
 void QueueLocalGuildServiceUpgradeGuildFailure(GrpcDone<::guildpb::UpgradeGuildResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceUpgradeGuildGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1856,6 +1917,7 @@ void SendGuildServiceUpgradeGuildErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.UpgradeGuild: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceUpgradeGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1865,6 +1927,7 @@ void SendGuildServiceUpgradeGuildErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::guildpb::UpgradeGuildRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.UpgradeGuild: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceUpgradeGuildGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1877,6 +1940,7 @@ void SendGuildServiceUpgradeGuildErased(entt::registry& registry, entt::entity n
 #pragma region GuildServiceGetGuildShop
 namespace {
 void QueueLocalGuildServiceGetGuildShopFailure(GrpcDone<::guildpb::GetGuildShopResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildShopGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1944,6 +2008,7 @@ void SendGuildServiceGetGuildShopErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.GetGuildShop: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildShopGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1953,6 +2018,7 @@ void SendGuildServiceGetGuildShopErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildShopRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.GetGuildShop: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildShopGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1965,6 +2031,7 @@ void SendGuildServiceGetGuildShopErased(entt::registry& registry, entt::entity n
 #pragma region GuildServiceBuyGuildShopGoods
 namespace {
 void QueueLocalGuildServiceBuyGuildShopGoodsFailure(GrpcDone<::guildpb::BuyGuildShopGoodsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceBuyGuildShopGoodsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2032,6 +2099,7 @@ void SendGuildServiceBuyGuildShopGoodsErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.BuyGuildShopGoods: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceBuyGuildShopGoodsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2041,6 +2109,7 @@ void SendGuildServiceBuyGuildShopGoodsErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::guildpb::BuyGuildShopGoodsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.BuyGuildShopGoods: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceBuyGuildShopGoodsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2053,6 +2122,7 @@ void SendGuildServiceBuyGuildShopGoodsErased(entt::registry& registry, entt::ent
 #pragma region GuildServiceGetGuildActivities
 namespace {
 void QueueLocalGuildServiceGetGuildActivitiesFailure(GrpcDone<::guildpb::GetGuildActivitiesResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceGetGuildActivitiesGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2120,6 +2190,7 @@ void SendGuildServiceGetGuildActivitiesErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.GetGuildActivities: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildActivitiesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2129,6 +2200,7 @@ void SendGuildServiceGetGuildActivitiesErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::guildpb::GetGuildActivitiesRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.GetGuildActivities: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceGetGuildActivitiesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2141,6 +2213,7 @@ void SendGuildServiceGetGuildActivitiesErased(entt::registry& registry, entt::en
 #pragma region GuildServiceLightGuildLantern
 namespace {
 void QueueLocalGuildServiceLightGuildLanternFailure(GrpcDone<::guildpb::LightGuildLanternResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceLightGuildLanternGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2208,6 +2281,7 @@ void SendGuildServiceLightGuildLanternErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.LightGuildLantern: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceLightGuildLanternGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2217,6 +2291,7 @@ void SendGuildServiceLightGuildLanternErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::guildpb::LightGuildLanternRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.LightGuildLantern: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceLightGuildLanternGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2229,6 +2304,7 @@ void SendGuildServiceLightGuildLanternErased(entt::registry& registry, entt::ent
 #pragma region GuildServiceClaimGuildReunion
 namespace {
 void QueueLocalGuildServiceClaimGuildReunionFailure(GrpcDone<::guildpb::ClaimGuildReunionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildReunionGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2296,6 +2372,7 @@ void SendGuildServiceClaimGuildReunionErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.ClaimGuildReunion: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildReunionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2305,6 +2382,7 @@ void SendGuildServiceClaimGuildReunionErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::guildpb::ClaimGuildReunionRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.ClaimGuildReunion: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceClaimGuildReunionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2317,6 +2395,7 @@ void SendGuildServiceClaimGuildReunionErased(entt::registry& registry, entt::ent
 #pragma region GuildServiceStartGuildTrial
 namespace {
 void QueueLocalGuildServiceStartGuildTrialFailure(GrpcDone<::guildpb::StartGuildTrialResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceStartGuildTrialGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2384,6 +2463,7 @@ void SendGuildServiceStartGuildTrialErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.StartGuildTrial: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceStartGuildTrialGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2393,6 +2473,7 @@ void SendGuildServiceStartGuildTrialErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::guildpb::StartGuildTrialRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.StartGuildTrial: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceStartGuildTrialGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2405,6 +2486,7 @@ void SendGuildServiceStartGuildTrialErased(entt::registry& registry, entt::entit
 #pragma region GuildServiceRespondGuildTrialInvite
 namespace {
 void QueueLocalGuildServiceRespondGuildTrialInviteFailure(GrpcDone<::guildpb::RespondGuildTrialInviteResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildServiceRespondGuildTrialInviteGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2472,6 +2554,7 @@ void SendGuildServiceRespondGuildTrialInviteErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildService.RespondGuildTrialInvite: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceRespondGuildTrialInviteGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2481,6 +2564,7 @@ void SendGuildServiceRespondGuildTrialInviteErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::guildpb::RespondGuildTrialInviteRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildService.RespondGuildTrialInvite: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildServiceRespondGuildTrialInviteGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

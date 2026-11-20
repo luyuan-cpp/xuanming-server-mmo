@@ -47,6 +47,8 @@ type AccountDirectoryStore struct {
 	stores   *PlayerStorePools // 按 storage_id 的存档库连接池,见 ConfigurePlayerStores
 	// names 是名字登记表:建角提交之后绑定名字、删角写完墓碑之后释放名字(account_role_name.go)。nil 时两步都不做,见 ConfigurePlayerNames。
 	names roleNameRegistry
+	// renames 是同一张名字登记表上改名要的几步(account_role_rename.go)。nil 时 RenameRole、ResumeRenames 回不可用。
+	renames renameNames
 	// nameCache 是名字读缓存:目录补回或删掉名字行之后删缓存,nil 时不删(account_directory_events.go,ConfigureNameCache)。
 	nameCache NameCacheInvalidator
 	// events 收「失败只记日志、不改结局」那几步的计数,nil 时只记日志(account_directory_events.go,ConfigureEvents)。
@@ -57,6 +59,8 @@ type AccountDirectoryStore struct {
 	directoryReads []readSlots
 	// removalCursor 让删角收尾逐轮换起点。
 	removalCursor atomic.Uint64
+	// renameCursor 让改名续做逐轮换起点(account_role_rename.go)。
+	renameCursor atomic.Uint64
 	// deletionCursor 让注销认领逐轮换起点(account_deletion.go)。
 	deletionCursor atomic.Uint64
 	// preparingCursor 让超时 PREPARING 的撤销逐轮换起点。

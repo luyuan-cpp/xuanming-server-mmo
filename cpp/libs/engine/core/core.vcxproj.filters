@@ -158,6 +158,7 @@
     <ClInclude Include="utils\data_structures\double_buffer_queue.h" />
     <ClInclude Include="utils\data_structures\inflight_index.h" />
     <ClInclude Include="type_define\player_guid_comp.h" />
+    <ClInclude Include="type_define\player_login_identity_comp.h" />
     <ClInclude Include="utils\registry\actor_log.h" />
     <ClInclude Include="utils\registry\describe_entity.h" />
   </ItemGroup>

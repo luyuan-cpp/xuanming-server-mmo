@@ -176,7 +176,7 @@ func logServicePoolTimeouts() {
 	logx.Infof("mysql service pool timeouts: dial=%ds read=%ds write=%ds session lock_wait_timeout=%ds innodb_lock_wait_timeout=%ds (<=0 means unset)",
 		db.DialTimeoutSeconds, db.ReadTimeoutSeconds, db.WriteTimeoutSeconds, db.SessionLockWaitSeconds, db.SessionInnodbLockWaitSeconds)
 	if db.ReadTimeoutSeconds <= 0 {
-		logx.Errorf("mysql service pool has no read timeout: a stalled MySQL will block db workers forever (Database.ReadTimeoutSeconds)")
+		logx.Errorf("mysql service pool has no read timeout: a stalled MySQL holds each call until its own context deadline, and a statement without one hangs (Database.ReadTimeoutSeconds)")
 		return
 	}
 	for name, wait := range map[string]int{
@@ -189,7 +189,7 @@ func logServicePoolTimeouts() {
 			continue
 		}
 		if wait >= db.ReadTimeoutSeconds {
-			logx.Errorf("Database.%s=%d is not below ReadTimeoutSeconds=%d: a statement queued on a lock can outlive the client timeout and take effect after the task was rescheduled",
+			logx.Errorf("Database.%s=%d is not below ReadTimeoutSeconds=%d: a statement queued on a lock can outlive the client timeout and take effect after the call has already failed and been retried",
 				name, wait, db.ReadTimeoutSeconds)
 		}
 	}
@@ -466,7 +466,7 @@ func assertDriftKeysArePhysicalNames(tables []proto.Message) error {
 // InitDB 装配本进程的写资格与逻辑库映射,不连任何库(docs/design/player-data-tidb-scaling-plan.md §7.2 A17c)。
 //
 // go/db 没有「本区主库」:存档库全部由 StoreRegistry 在第一次被指向时按需打开,打开时 Ping、核 DATABASE()、
-// 过只读 schema 闸(assertSchemaUpToDate),库不存在或缺列就报错延后,绝不建库。
+// 过只读 schema 闸(assertSchemaUpToDate),库不存在或缺列就报错(调用方重试),绝不建库。
 // 常驻进程**不跑任何 DDL**,表由部署阶段的 cmd/migrate 建(见 DDLPolicy 的注释)。
 func InitDB() error {
 	writers, err := authoritysql.LoadWriterConfigs(os.Getenv)

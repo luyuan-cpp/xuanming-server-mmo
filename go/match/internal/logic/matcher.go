@@ -33,4 +33,6 @@ func StartMatcherLoop(ctx context.Context, svcCtx *svc.ServiceContext) {
 	svcCtx.StartRelayLoop(ctx, "match.global.expired.audit", globalExpiredAuditInterval, func(ctx context.Context) { auditStrandedExpiredFormations(ctx, svcCtx) })
 	// 观战索引定期清理与意图保留期清理(global_spectator.go)。
 	startGlobalSpectateMaintenance(ctx, svcCtx, globalSpectateCleanupInterval, globalSpectatorIntentPurgeInterval)
+	// 剧本审核流水的保留期清理(battle_script_review_purge.go)。
+	startBattleScriptReviewPurge(ctx, svcCtx)
 }

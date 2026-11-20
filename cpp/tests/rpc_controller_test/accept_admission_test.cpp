@@ -1,17 +1,21 @@
 // 客户端面 accept 处准入的共享纯逻辑(cpp/libs/engine/core/network/accept_admission.h):gate 的大厅连接与 battle 的战斗直连
-// 共用的新建连接速率闸(GCRA)、缺省速率推导、环境变量解析与握手耗时直方图。
+// 共用的新建连接速率闸(GCRA)、缺省速率推导、环境变量解析、握手耗时直方图、未验签预算与按来源前缀限速。
 //
-// 这些用例 2026-11-19 从 cpp/nodes/gate/tests/connection_admission_test.cpp 挪来(逻辑挪进 core 时一起挪),断言没有改;
-// 新增的是 ResolveRateLimit 按调用方给的变量名出错误说明、HandshakeHistogram 的累计两条。
+// 速率闸与直方图的用例 2026-11-19 从 cpp/nodes/gate/tests/connection_admission_test.cpp 挪来,按来源前缀的三条 2026-11-20 挪来
+// (逻辑挪进 core 时一起挪),断言没有改;新增的是按调用方变量名出错误说明、直方图累计、只限公网来源与承压判定。
 // 各节点自己的部分(拒绝原因、判定顺序、计数与指标)在 gate 的 connection_admission_test.cpp 与
 // battle 的 cpp/nodes/battle/tests/battle_connection_admission_test.cpp。
 // 时刻全部注入,整数时长,边界值精确。
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <chrono>
+#include <cstdint>
+#include <optional>
 #include <string>
 
+#include "muduo/net/InetAddress.h"
 #include "network/accept_admission.h"
 #include "network/client_liveness.h"
 
@@ -257,6 +261,150 @@ TEST(HandshakeHistogram, ClockGoingBackwardsCountsAsZero)
 	histogram.Observe(kT0, kT0);
 	EXPECT_EQ(histogram.buckets[0], 2u);
 	EXPECT_EQ(histogram.sumMs, 0u);
+}
+
+// ---------------------------------------------------------------------------
+// 按来源前缀限速
+// ---------------------------------------------------------------------------
+
+// 来源前缀:IPv4 按 /24、IPv6 按 /64 聚合;IPv4 映射地址按 IPv4 算;IPv6 前缀与数值相同的 IPv4 前缀不是同一个来源。
+TEST(AcceptAdmissionPolicy, SourcePrefixesAggregateIpv4Slash24AndIpv6Slash64)
+{
+	EXPECT_EQ(SourcePrefixOfIpv4(0xC0A80101), SourcePrefixOfIpv4(0xC0A801FE)) << "192.168.1.1 与 192.168.1.254 同一个 /24";
+	EXPECT_NE(SourcePrefixOfIpv4(0xC0A80101), SourcePrefixOfIpv4(0xC0A80201));
+
+	const std::array<uint8_t, 16> host{0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x01, 1, 2, 3, 4, 5, 6, 7, 8};
+	std::array<uint8_t, 16> sameSlash64 = host;
+	sameSlash64[8] = 0xFF;
+	sameSlash64[15] = 0x09;
+	std::array<uint8_t, 16> otherSlash64 = host;
+	otherSlash64[7] = 0x02;
+	EXPECT_EQ(SourcePrefixOfIpv6(host), SourcePrefixOfIpv6(sameSlash64)) << "接口标识不同、/64 相同";
+	EXPECT_NE(SourcePrefixOfIpv6(host), SourcePrefixOfIpv6(otherSlash64));
+
+	const std::array<uint8_t, 16> mapped{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 192, 168, 1, 7};
+	EXPECT_EQ(SourcePrefixOfIpv6(mapped), SourcePrefixOfIpv4(0xC0A80101));
+	EXPECT_NE((SourcePrefix{true, 0xC0A801}), (SourcePrefix{false, 0xC0A801}));
+	EXPECT_NE(SourcePrefixHash{}(SourcePrefix{true, 0xC0A801}), SourcePrefixHash{}(SourcePrefix{false, 0xC0A801}));
+
+	// 从 muduo 的地址取前缀:与按字节算的同一个。
+	EXPECT_EQ(SourcePrefixOf(muduo::net::InetAddress("192.168.1.9", 40000)), SourcePrefixOfIpv4(0xC0A80109));
+	EXPECT_EQ(SourcePrefixOf(muduo::net::InetAddress("2001:db8:0:1::5", 40000, true)), SourcePrefixOfIpv6(host));
+}
+
+// 只有公网来源按来源限速:私网、回环、链路本地、运营商级 NAT 共享段、0/8,以及 IPv6 的 ::/64、唯一本地、链路本地都不限;
+// 边界两侧各取一个地址。
+TEST(AcceptAdmissionPolicy, OnlyPublicSourcesAreRateLimitedPerSource)
+{
+	const auto v4 = [](const uint8_t a, const uint8_t b, const uint8_t c, const uint8_t d)
+	{ return SourcePrefixOfIpv4((uint32_t{a} << 24) | (uint32_t{b} << 16) | (uint32_t{c} << 8) | uint32_t{d}); };
+	for (const SourcePrefix nonPublic : {v4(10, 0, 0, 1), v4(10, 255, 255, 1), v4(172, 16, 0, 1), v4(172, 31, 255, 1),
+										 v4(192, 168, 1, 1), v4(100, 64, 0, 1), v4(100, 127, 255, 1), v4(127, 0, 0, 1),
+										 v4(169, 254, 1, 1), v4(0, 1, 2, 3)})
+	{
+		EXPECT_FALSE(IsPublicSourcePrefix(nonPublic)) << "bits=" << nonPublic.bits;
+	}
+	for (const SourcePrefix isPublic : {v4(8, 8, 8, 8), v4(9, 255, 255, 1), v4(11, 0, 0, 1), v4(172, 15, 255, 1),
+										v4(172, 32, 0, 1), v4(192, 167, 1, 1), v4(192, 169, 1, 1), v4(100, 63, 255, 1),
+										v4(100, 128, 0, 1), v4(169, 253, 1, 1), v4(203, 0, 113, 7)})
+	{
+		EXPECT_TRUE(IsPublicSourcePrefix(isPublic)) << "bits=" << isPublic.bits;
+	}
+
+	const auto v6 = [](const uint16_t first, const uint16_t second)
+	{
+		std::array<uint8_t, 16> bytes{};
+		bytes[0] = static_cast<uint8_t>(first >> 8);
+		bytes[1] = static_cast<uint8_t>(first & 0xFF);
+		bytes[2] = static_cast<uint8_t>(second >> 8);
+		bytes[3] = static_cast<uint8_t>(second & 0xFF);
+		bytes[15] = 1;
+		return SourcePrefixOfIpv6(bytes);
+	};
+	EXPECT_FALSE(IsPublicSourcePrefix(v6(0x0000, 0x0000))) << "::1";
+	EXPECT_FALSE(IsPublicSourcePrefix(v6(0xFC00, 0x0000))) << "fc00::/7";
+	EXPECT_FALSE(IsPublicSourcePrefix(v6(0xFDFF, 0x1234))) << "fc00::/7 的另一半";
+	EXPECT_FALSE(IsPublicSourcePrefix(v6(0xFE80, 0x0000))) << "fe80::/10";
+	EXPECT_FALSE(IsPublicSourcePrefix(v6(0xFEBF, 0x0000))) << "fe80::/10 的末端";
+	EXPECT_TRUE(IsPublicSourcePrefix(v6(0x2001, 0x0db8)));
+	EXPECT_TRUE(IsPublicSourcePrefix(v6(0xFBFF, 0x0000))) << "fc00::/7 之前";
+	EXPECT_TRUE(IsPublicSourcePrefix(v6(0xFEC0, 0x0000))) << "fe80::/10 之后";
+
+	// 从 muduo 的地址取:公网给前缀,私网与 IPv4 映射的私网给空。
+	EXPECT_EQ(RateLimitedSourceOf(muduo::net::InetAddress("203.0.113.9", 40000)), SourcePrefixOfIpv4(0xCB007109));
+	EXPECT_FALSE(RateLimitedSourceOf(muduo::net::InetAddress("10.244.1.17", 40000)).has_value()) << "边缘 nginx 的 Pod 地址";
+	EXPECT_FALSE(RateLimitedSourceOf(muduo::net::InetAddress("::ffff:10.0.0.1", 40000, true)).has_value());
+	EXPECT_FALSE(RateLimitedSourceOf(muduo::net::InetAddress("fd00::5", 40000, true)).has_value());
+}
+
+// 每个前缀一个桶:只问不扣;一个前缀用完不影响别的前缀;按持续速率回满。
+TEST(SourceRateGate, EachPrefixHasItsOwnBucketAndAskingDoesNotSpend)
+{
+	SourceRateGate gate(RateLimit{1, 2});
+	const SourcePrefix a = SourcePrefixOfIpv4(0x0A000001);
+	const SourcePrefix b = SourcePrefixOfIpv4(0x0A000101);
+	EXPECT_TRUE(gate.WouldAdmit(a, kT0));
+	EXPECT_TRUE(gate.WouldAdmit(a, kT0)) << "只问不扣";
+	EXPECT_EQ(gate.Tracked(), 0u);
+	EXPECT_TRUE(gate.Take(a, kT0));
+	EXPECT_TRUE(gate.Take(a, kT0));
+	EXPECT_FALSE(gate.WouldAdmit(a, kT0)) << "桶深 2 用完";
+	EXPECT_TRUE(gate.WouldAdmit(b, kT0)) << "别的前缀不受影响";
+	EXPECT_FALSE(gate.WouldAdmit(a, kT0 + milliseconds(999)));
+	EXPECT_TRUE(gate.WouldAdmit(a, kT0 + seconds(1))) << "每秒回一个";
+	EXPECT_EQ(gate.Tracked(), 1u);
+}
+
+// 前缀表满:新前缀照样放行但不登记(fail-open);表满时先清掉桶已回满的前缀,每秒最多清一次。
+TEST(SourceRateGate, AFullTableAdmitsNewPrefixesUntrackedAndPrunesRefilledOnes)
+{
+	SourceRateGate gate(RateLimit{1, 1}, 2);
+	const auto prefix = [](const uint32_t index) { return SourcePrefixOfIpv4(index << 8); };
+	EXPECT_TRUE(gate.Take(prefix(1), kT0));
+	EXPECT_TRUE(gate.Take(prefix(2), kT0));
+	EXPECT_TRUE(gate.WouldAdmit(prefix(3), kT0)) << "没登记过的前缀放行";
+	EXPECT_FALSE(gate.Take(prefix(3), kT0)) << "表满、两个桶都还没回满:不登记";
+	EXPECT_EQ(gate.Tracked(), 2u);
+	// 1 秒后两个桶都回满了:清掉它们,给新前缀腾位置。
+	EXPECT_TRUE(gate.Take(prefix(3), kT0 + seconds(1)));
+	EXPECT_EQ(gate.Tracked(), 1u);
+}
+
+// 承压:池到了早拒起点,或全局速率闸在最近一个握手期限内拒过连接;两样都没有就不承压。
+TEST(AcceptAdmissionPolicy, PerSourceLimitingEngagesOnlyUnderPressure)
+{
+	const PreAuthBudget budget{500, 1000};
+	EXPECT_FALSE(SourceRateUnderPressure(499, budget, std::nullopt, kT0));
+	EXPECT_TRUE(SourceRateUnderPressure(500, budget, std::nullopt, kT0)) << "池到早拒起点";
+	EXPECT_TRUE(SourceRateUnderPressure(0, budget, kT0, kT0 + seconds(9))) << "握手期限内拒过";
+	EXPECT_FALSE(SourceRateUnderPressure(0, budget, kT0, kT0 + seconds(10))) << "满一个握手期限之后不再算";
+}
+
+// 两个开关变量:不设 = 关闭;设了速率才开,桶深缺省是速率 × 握手期限;只设桶深、写 0、越界都拒;错误说明点名调用方的变量名。
+TEST(AcceptAdmissionPolicy, SourceRateResolvesFromTheCallersEnvNames)
+{
+	const SourceRateEnvNames names{"X_SOURCE_RATE", "X_SOURCE_BURST"};
+	std::optional<RateLimit> limit = RateLimit{1, 1};
+	std::string error;
+	EXPECT_TRUE(ResolveSourceRateLimit(names, nullptr, nullptr, limit, error));
+	EXPECT_FALSE(limit.has_value()) << "不设 = 关闭";
+	EXPECT_TRUE(ResolveSourceRateLimit(names, "20", nullptr, limit, error));
+	EXPECT_EQ(limit, (RateLimit{20, 200}));
+	EXPECT_TRUE(ResolveSourceRateLimit(names, "20", "50", limit, error));
+	EXPECT_EQ(limit, (RateLimit{20, 50}));
+	EXPECT_TRUE(error.empty()) << error;
+
+	EXPECT_FALSE(ResolveSourceRateLimit(names, nullptr, "50", limit, error)) << "只设桶深不设速率";
+	EXPECT_NE(error.find("X_SOURCE_BURST is set but X_SOURCE_RATE is not"), std::string::npos) << error;
+	error.clear();
+	EXPECT_FALSE(ResolveSourceRateLimit(names, "0", nullptr, limit, error)) << "没有「0 = 关闭」,关闭就是不设";
+	EXPECT_NE(error.find("X_SOURCE_RATE must be an integer"), std::string::npos) << error;
+	error.clear();
+	EXPECT_FALSE(ResolveSourceRateLimit(names, "20", "1000001", limit, error)) << "桶深超过上界";
+	EXPECT_NE(error.find("X_SOURCE_BURST must be an integer"), std::string::npos) << error;
+
+	EXPECT_EQ(DefaultSourceRateLimit(20000), (RateLimit{20, 200}));
+	EXPECT_EQ(DefaultSourceRateLimit(50), (RateLimit{10, 100})) << "全局取下限 100 时";
 }
 
 } // namespace

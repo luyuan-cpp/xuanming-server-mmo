@@ -47,6 +47,26 @@ constexpr uint32_t LoginPreGateGetZoneRoleCountMessageId = 395;
 constexpr uint32_t LoginPreGateGetZoneRoleCountIndex = 2;
 #define LoginPreGateGetZoneRoleCountMethod  ::LoginPreGate_Stub::descriptor()->method(2)
 
+constexpr uint32_t LoginPreGateSubmitRealNameMessageId = 423;
+constexpr uint32_t LoginPreGateSubmitRealNameIndex = 3;
+#define LoginPreGateSubmitRealNameMethod  ::LoginPreGate_Stub::descriptor()->method(3)
+
+constexpr uint32_t LoginPreGateRequestAccountDeletionMessageId = 424;
+constexpr uint32_t LoginPreGateRequestAccountDeletionIndex = 4;
+#define LoginPreGateRequestAccountDeletionMethod  ::LoginPreGate_Stub::descriptor()->method(4)
+
+constexpr uint32_t LoginPreGateCancelAccountDeletionMessageId = 425;
+constexpr uint32_t LoginPreGateCancelAccountDeletionIndex = 5;
+#define LoginPreGateCancelAccountDeletionMethod  ::LoginPreGate_Stub::descriptor()->method(5)
+
 constexpr uint32_t LoginAdminRemovePlayersFromAccountsMessageId = 111;
 constexpr uint32_t LoginAdminRemovePlayersFromAccountsIndex = 0;
 #define LoginAdminRemovePlayersFromAccountsMethod  ::LoginAdmin_Stub::descriptor()->method(0)
+
+constexpr uint32_t LoginAdminScheduleAccountDeletionMessageId = 426;
+constexpr uint32_t LoginAdminScheduleAccountDeletionIndex = 1;
+#define LoginAdminScheduleAccountDeletionMethod  ::LoginAdmin_Stub::descriptor()->method(1)
+
+constexpr uint32_t LoginAdminResetAccountRealNameMessageId = 427;
+constexpr uint32_t LoginAdminResetAccountRealNameIndex = 2;
+#define LoginAdminResetAccountRealNameMethod  ::LoginAdmin_Stub::descriptor()->method(2)

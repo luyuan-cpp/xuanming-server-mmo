@@ -29,6 +29,7 @@ namespace guildpb {
 #pragma region GuildInternalListAppliedAssetOpsSince
 namespace {
 void QueueLocalGuildInternalListAppliedAssetOpsSinceFailure(GrpcDone<::guildpb::ListAppliedAssetOpsSinceResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kGuildInternalListAppliedAssetOpsSinceGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendGuildInternalListAppliedAssetOpsSinceErased(entt::registry& registry, e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC GuildInternal.ListAppliedAssetOpsSince: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildInternalListAppliedAssetOpsSinceGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendGuildInternalListAppliedAssetOpsSinceErased(entt::registry& registry, e
     const auto* typedRequest = dynamic_cast<const ::guildpb::ListAppliedAssetOpsSinceRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC GuildInternal.ListAppliedAssetOpsSince: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kGuildInternalListAppliedAssetOpsSinceGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

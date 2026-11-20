@@ -29,6 +29,7 @@ namespace teampb {
 #pragma region TeamAuthorityReadMembership
 namespace {
 void QueueLocalTeamAuthorityReadMembershipFailure(GrpcDone<::teampb::ReadTeamMembershipResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kTeamAuthorityReadMembershipGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendTeamAuthorityReadMembershipErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC TeamAuthority.ReadMembership: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTeamAuthorityReadMembershipGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendTeamAuthorityReadMembershipErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::teampb::ReadTeamMembershipRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC TeamAuthority.ReadMembership: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kTeamAuthorityReadMembershipGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

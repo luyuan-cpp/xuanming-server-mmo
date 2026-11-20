@@ -22,7 +22,7 @@ public static partial class BuffTableReflection {
   static BuffTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChBidWZmX3RhYmxlLnByb3RvIoQLCglCdWZmVGFibGUSCgoCaWQYASABKA0S",
+          "ChBidWZmX3RhYmxlLnByb3RvIpwLCglCdWZmVGFibGUSCgoCaWQYASABKA0S",
           "EQoJbm9fY2FzdGVyGAIgASgNEhEKCWJ1ZmZfdHlwZRgDIAEoDRIgCgN0YWcY",
           "BCADKAsyEy5CdWZmVGFibGUuVGFnRW50cnkSLQoKaW1tdW5lX3RhZxgFIAMo",
           "CzIZLkJ1ZmZUYWJsZS5JbW11bmVUYWdFbnRyeRItCgpkaXNwZWxfdGFnGAYg",
@@ -50,17 +50,17 @@ public static partial class BuffTableReflection {
           "cmVmcmVzaF9wb2xpY3kYLyABKA0SFQoNa2VlcF9vbl9kZWF0aBgwIAEoDRIX",
           "Cg9lZmZlY3RfcHJpb3JpdHkYMSABKA0SEwoLc3RhcnRfcm91bmQYMiABKA0S",
           "EwoLc3RhY2tfbGltaXQYMyABKA0SHQoVcmVxdWlyZV9saXZpbmdfY2FzdGVy",
-          "GDQgASgNEhUKDXRpY2tfb25fYXBwbHkYNSABKA0aKgoIVGFnRW50cnkSCwoD",
-          "a2V5GAEgASgJEg0KBXZhbHVlGAIgASgIOgI4ARowCg5JbW11bmVUYWdFbnRy",
-          "eRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAg6AjgBGjAKDkRpc3BlbFRh",
-          "Z0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCDoCOAEiKQoNQnVm",
-          "ZlRhYmxlRGF0YRIYCgRkYXRhGAEgAygLMgouQnVmZlRhYmxlQjsKDmNvbS5n",
-          "YW1lLnRhYmxlQhNCdWZmVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9w",
-          "Yi90YWJsZWIGcHJvdG8z"));
+          "GDQgASgNEhUKDXRpY2tfb25fYXBwbHkYNSABKA0SFgoOa2VlcF9vbl9sb2dv",
+          "dXQYNiABKA0aKgoIVGFnRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIg",
+          "ASgIOgI4ARowCg5JbW11bmVUYWdFbnRyeRILCgNrZXkYASABKAkSDQoFdmFs",
+          "dWUYAiABKAg6AjgBGjAKDkRpc3BlbFRhZ0VudHJ5EgsKA2tleRgBIAEoCRIN",
+          "CgV2YWx1ZRgCIAEoCDoCOAEiKQoNQnVmZlRhYmxlRGF0YRIYCgRkYXRhGAEg",
+          "AygLMgouQnVmZlRhYmxlQjsKDmNvbS5nYW1lLnRhYmxlQhNCdWZmVGFibGVP",
+          "dXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::BuffTable), global::BuffTable.Parser, new[]{ "Id", "NoCaster", "BuffType", "Tag", "ImmuneTag", "DispelTag", "Level", "MaxLayer", "InfiniteDuration", "Duration", "ForceInterrupt", "Interval", "IntervalCount", "IntervalEffect", "MovementSpeedBoost", "MovementSpeedReduction", "HealthRegeneration", "SubBuff", "TargetSubBuff", "CombatIdleSeconds", "Time", "BonusDamage", "BattleOp", "TriggerEvent", "EffectTarget", "FlatValue", "PerLevel", "Ratio", "ValueBasis", "DamageFilter", "DurationRounds", "TickCount", "TriggerChance", "PerRoundLimit", "HitLimit", "ModifierStat", "StateKind", "ApplicationChance", "RequiredTag", "SecondRequiredTag", "ConditionalBonus", "SecondaryRatio", "EffectCount", "TargetCount", "PetTargetCount", "StackKey", "RefreshPolicy", "KeepOnDeath", "EffectPriority", "StartRound", "StackLimit", "RequireLivingCaster", "TickOnApply" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, null, null, }),
+          new pbr::GeneratedClrTypeInfo(typeof(global::BuffTable), global::BuffTable.Parser, new[]{ "Id", "NoCaster", "BuffType", "Tag", "ImmuneTag", "DispelTag", "Level", "MaxLayer", "InfiniteDuration", "Duration", "ForceInterrupt", "Interval", "IntervalCount", "IntervalEffect", "MovementSpeedBoost", "MovementSpeedReduction", "HealthRegeneration", "SubBuff", "TargetSubBuff", "CombatIdleSeconds", "Time", "BonusDamage", "BattleOp", "TriggerEvent", "EffectTarget", "FlatValue", "PerLevel", "Ratio", "ValueBasis", "DamageFilter", "DurationRounds", "TickCount", "TriggerChance", "PerRoundLimit", "HitLimit", "ModifierStat", "StateKind", "ApplicationChance", "RequiredTag", "SecondRequiredTag", "ConditionalBonus", "SecondaryRatio", "EffectCount", "TargetCount", "PetTargetCount", "StackKey", "RefreshPolicy", "KeepOnDeath", "EffectPriority", "StartRound", "StackLimit", "RequireLivingCaster", "TickOnApply", "KeepOnLogout" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, null, null, }),
           new pbr::GeneratedClrTypeInfo(typeof(global::BuffTableData), global::BuffTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -156,6 +156,7 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     stackLimit_ = other.stackLimit_;
     requireLivingCaster_ = other.requireLivingCaster_;
     tickOnApply_ = other.tickOnApply_;
+    keepOnLogout_ = other.keepOnLogout_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -795,6 +796,18 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     }
   }
 
+  /// <summary>Field number for the "keep_on_logout" field.</summary>
+  public const int KeepOnLogoutFieldNumber = 54;
+  private uint keepOnLogout_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint KeepOnLogout {
+    get { return keepOnLogout_; }
+    set {
+      keepOnLogout_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -863,6 +876,7 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     if (StackLimit != other.StackLimit) return false;
     if (RequireLivingCaster != other.RequireLivingCaster) return false;
     if (TickOnApply != other.TickOnApply) return false;
+    if (KeepOnLogout != other.KeepOnLogout) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -923,6 +937,7 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     if (StackLimit != 0) hash ^= StackLimit.GetHashCode();
     if (RequireLivingCaster != 0) hash ^= RequireLivingCaster.GetHashCode();
     if (TickOnApply != 0) hash ^= TickOnApply.GetHashCode();
+    if (KeepOnLogout != 0) hash ^= KeepOnLogout.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -1135,6 +1150,10 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
       output.WriteRawTag(168, 3);
       output.WriteUInt32(TickOnApply);
     }
+    if (KeepOnLogout != 0) {
+      output.WriteRawTag(176, 3);
+      output.WriteUInt32(KeepOnLogout);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -1339,6 +1358,10 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
       output.WriteRawTag(168, 3);
       output.WriteUInt32(TickOnApply);
     }
+    if (KeepOnLogout != 0) {
+      output.WriteRawTag(176, 3);
+      output.WriteUInt32(KeepOnLogout);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -1495,6 +1518,9 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     }
     if (TickOnApply != 0) {
       size += 2 + pb::CodedOutputStream.ComputeUInt32Size(TickOnApply);
+    }
+    if (KeepOnLogout != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(KeepOnLogout);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -1654,6 +1680,9 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
     }
     if (other.TickOnApply != 0) {
       TickOnApply = other.TickOnApply;
+    }
+    if (other.KeepOnLogout != 0) {
+      KeepOnLogout = other.KeepOnLogout;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -1889,6 +1918,10 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
           TickOnApply = input.ReadUInt32();
           break;
         }
+        case 432: {
+          KeepOnLogout = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -2121,6 +2154,10 @@ public sealed partial class BuffTable : pb::IMessage<BuffTable>
         }
         case 424: {
           TickOnApply = input.ReadUInt32();
+          break;
+        }
+        case 432: {
+          KeepOnLogout = input.ReadUInt32();
           break;
         }
       }

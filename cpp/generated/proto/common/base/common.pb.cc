@@ -356,11 +356,11 @@ constexpr NodeInfo::ParseTableT_ NodeInfo::InternalGenerateParseTable_(const ::_
     {
       PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_._has_bits_),
       0, // no _extensions_
-      16, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294901760,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      16,  // num_field_entries
+      17,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -370,105 +370,126 @@ constexpr NodeInfo::ParseTableT_ NodeInfo::InternalGenerateParseTable_(const ::_
       ::_pbi::TcParser::GetTable<::NodeInfo>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string build = 16;
-      {::_pbi::TcParser::FastUS2,
-       {386, 2, 0,
-        PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.build_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 node_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.node_id_), 6>(),
-       {8, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.node_id_), 7>(),
+       {8, 7, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_id_)}},
       // uint32 node_type = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.node_type_), 7>(),
-       {16, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.node_type_), 8>(),
+       {16, 8, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_type_)}},
       // uint64 launch_time = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(NodeInfo, _impl_.launch_time_), 8>(),
-       {24, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(NodeInfo, _impl_.launch_time_), 9>(),
+       {24, 9, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.launch_time_)}},
       // uint32 scene_node_type = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.scene_node_type_), 9>(),
-       {32, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.scene_node_type_), 10>(),
+       {32, 10, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.scene_node_type_)}},
       // .EndpointComp endpoint = 5;
       {::_pbi::TcParser::FastMtS1,
-       {42, 3, 0,
+       {42, 4, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.endpoint_)}},
       // uint32 zone_id = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.zone_id_), 10>(),
-       {48, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.zone_id_), 11>(),
+       {48, 11, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.zone_id_)}},
       // uint32 protocol_type = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.protocol_type_), 11>(),
-       {56, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.protocol_type_), 12>(),
+       {56, 12, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.protocol_type_)}},
       // string node_uuid = 8;
       {::_pbi::TcParser::FastUS1,
        {66, 0, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_uuid_)}},
       // uint32 player_count = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.player_count_), 12>(),
-       {72, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.player_count_), 13>(),
+       {72, 13, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.player_count_)}},
       // .EndpointComp grpc_endpoint = 10;
       {::_pbi::TcParser::FastMtS1,
-       {82, 4, 1,
+       {82, 5, 1,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.grpc_endpoint_)}},
       // .EndpointComp client_endpoint = 11;
       {::_pbi::TcParser::FastMtS1,
-       {90, 5, 2,
+       {90, 6, 2,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.client_endpoint_)}},
       // uint32 physical_region = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.physical_region_), 13>(),
-       {96, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.physical_region_), 14>(),
+       {96, 14, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.physical_region_)}},
       // uint32 max_connections = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.max_connections_), 14>(),
-       {104, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.max_connections_), 15>(),
+       {104, 15, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.max_connections_)}},
       // .NodeAdmission admission = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.admission_), 15>(),
-       {112, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeInfo, _impl_.admission_), 16>(),
+       {112, 16, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.admission_)}},
       // string release_track = 15;
       {::_pbi::TcParser::FastUS1,
        {122, 1, 0,
         PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.release_track_)}},
+      // string build = 16;
+      {::_pbi::TcParser::FastUS2,
+       {386, 2, 0,
+        PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.build_)}},
+      // string client_ws_url = 17;
+      {::_pbi::TcParser::FastUS2,
+       {394, 3, 0,
+        PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.client_ws_url_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 node_id = 1;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 node_type = 2;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_type_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_type_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 launch_time = 3;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.launch_time_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.launch_time_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 scene_node_type = 4;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.scene_node_type_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.scene_node_type_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .EndpointComp endpoint = 5;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.endpoint_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.endpoint_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 zone_id = 6;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.zone_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.zone_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 protocol_type = 7;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.protocol_type_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.protocol_type_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string node_uuid = 8;
       {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.node_uuid_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 player_count = 9;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.player_count_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.player_count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .EndpointComp grpc_endpoint = 10;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.grpc_endpoint_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.grpc_endpoint_), _Internal::kHasBitsOffset + 5, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .EndpointComp client_endpoint = 11;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.client_endpoint_), _Internal::kHasBitsOffset + 5, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.client_endpoint_), _Internal::kHasBitsOffset + 6, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 physical_region = 12;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.physical_region_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.physical_region_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_connections = 13;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.max_connections_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.max_connections_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .NodeAdmission admission = 14;
-      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.admission_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.admission_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // string release_track = 15;
       {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.release_track_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string build = 16;
       {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.build_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string client_ws_url = 17;
+      {PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.client_ws_url_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -488,11 +509,12 @@ constexpr NodeInfo::ParseTableT_ NodeInfo::InternalGenerateParseTable_(const ::_
         #endif
     }},
     {{
-      "\10\0\0\0\0\0\0\0\11\0\0\0\0\0\0\15\5\0\0\0\0\0\0\0"
+      "\10\0\0\0\0\0\0\0\11\0\0\0\0\0\0\15\5\15\0\0\0\0\0\0"
       "NodeInfo"
       "node_uuid"
       "release_track"
       "build"
+      "client_ws_url"
     }},
   };
 }
@@ -509,6 +531,9 @@ inline constexpr NodeInfo::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         build_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        client_ws_url_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         endpoint_{nullptr},
@@ -633,7 +658,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_._has_bits_),
-        19, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_.node_id_),
         PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_.node_type_),
         PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_.launch_time_),
@@ -650,22 +675,24 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_.admission_),
         PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_.release_track_),
         PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_.build_),
-        6,
+        PROTOBUF_FIELD_OFFSET(::NodeInfo, _impl_.client_ws_url_),
         7,
         8,
         9,
-        3,
         10,
-        11,
-        0,
-        12,
         4,
-        5,
+        11,
+        12,
+        0,
         13,
+        5,
+        6,
         14,
         15,
+        16,
         1,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::NetworkAddress, _impl_._has_bits_),
         5, // hasbit index offset
@@ -679,7 +706,7 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::EndpointComp)},
         {7, sizeof(::NodeInfo)},
-        {42, sizeof(::NetworkAddress)},
+        {44, sizeof(::NetworkAddress)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -690,7 +717,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fbase_2fcommon_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\036proto/common/base/common.proto\"(\n\014Endp"
-    "ointComp\022\n\n\002ip\030\001 \001(\t\022\014\n\004port\030\002 \001(\r\"\227\003\n\010N"
+    "ointComp\022\n\n\002ip\030\001 \001(\t\022\014\n\004port\030\002 \001(\r\"\256\003\n\010N"
     "odeInfo\022\017\n\007node_id\030\001 \001(\r\022\021\n\tnode_type\030\002 "
     "\001(\r\022\023\n\013launch_time\030\003 \001(\004\022\027\n\017scene_node_t"
     "ype\030\004 \001(\r\022\037\n\010endpoint\030\005 \001(\0132\r.EndpointCo"
@@ -701,17 +728,17 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fcommon_2eproto[] AB
     "p\022\027\n\017physical_region\030\014 \001(\r\022\027\n\017max_connec"
     "tions\030\r \001(\r\022!\n\tadmission\030\016 \001(\0162\016.NodeAdm"
     "ission\022\025\n\rrelease_track\030\017 \001(\t\022\r\n\005build\030\020"
-    " \001(\t\"*\n\016NetworkAddress\022\n\n\002ip\030\001 \001(\t\022\014\n\004po"
-    "rt\030\002 \001(\r*c\n\rNodeAdmission\022\036\n\032NODE_ADMISS"
-    "ION_UNSPECIFIED\020\000\022\027\n\023NODE_ADMISSION_OPEN"
-    "\020\001\022\031\n\025NODE_ADMISSION_CLOSED\020\002B\rZ\013common/"
-    "baseb\006proto3"
+    " \001(\t\022\025\n\rclient_ws_url\030\021 \001(\t\"*\n\016NetworkAd"
+    "dress\022\n\n\002ip\030\001 \001(\t\022\014\n\004port\030\002 \001(\r*c\n\rNodeA"
+    "dmission\022\036\n\032NODE_ADMISSION_UNSPECIFIED\020\000"
+    "\022\027\n\023NODE_ADMISSION_OPEN\020\001\022\031\n\025NODE_ADMISS"
+    "ION_CLOSED\020\002B\rZ\013common/baseb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fcommon_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fcommon_2eproto = {
     false,
     false,
-    652,
+    675,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fcommon_2eproto,
     "proto/common/base/common.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fcommon_2eproto_once,
@@ -992,7 +1019,8 @@ PROTOBUF_NDEBUG_INLINE NodeInfo::Impl_::Impl_(
         _cached_size_{0},
         node_uuid_(arena, from.node_uuid_),
         release_track_(arena, from.release_track_),
-        build_(arena, from.build_) {}
+        build_(arena, from.build_),
+        client_ws_url_(arena, from.client_ws_url_) {}
 
 NodeInfo::NodeInfo(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -1009,13 +1037,13 @@ NodeInfo::NodeInfo(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.endpoint_ = (CheckHasBit(cached_has_bits, 0x00000008U))
+  _impl_.endpoint_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.endpoint_)
                 : nullptr;
-  _impl_.grpc_endpoint_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+  _impl_.grpc_endpoint_ = (CheckHasBit(cached_has_bits, 0x00000020U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.grpc_endpoint_)
                 : nullptr;
-  _impl_.client_endpoint_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+  _impl_.client_endpoint_ = (CheckHasBit(cached_has_bits, 0x00000040U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.client_endpoint_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -1034,7 +1062,8 @@ PROTOBUF_NDEBUG_INLINE NodeInfo::Impl_::Impl_(
       : _cached_size_{0},
         node_uuid_(arena),
         release_track_(arena),
-        build_(arena) {}
+        build_(arena),
+        client_ws_url_(arena) {}
 
 inline void NodeInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -1059,6 +1088,7 @@ inline void NodeInfo::SharedDtor(MessageLite& self) {
   this_._impl_.node_uuid_.Destroy();
   this_._impl_.release_track_.Destroy();
   this_._impl_.build_.Destroy();
+  this_._impl_.client_ws_url_.Destroy();
   delete this_._impl_.endpoint_;
   delete this_._impl_.grpc_endpoint_;
   delete this_._impl_.client_endpoint_;
@@ -1099,7 +1129,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.node_uuid_.ClearNonDefaultToEmpty();
     }
@@ -1110,28 +1140,28 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
       _impl_.build_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.client_ws_url_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(_impl_.endpoint_ != nullptr);
       _impl_.endpoint_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       ABSL_DCHECK(_impl_.grpc_endpoint_ != nullptr);
       _impl_.grpc_endpoint_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       ABSL_DCHECK(_impl_.client_endpoint_ != nullptr);
       _impl_.client_endpoint_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
-    ::memset(&_impl_.node_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.node_type_) -
-        reinterpret_cast<char*>(&_impl_.node_id_)) + sizeof(_impl_.node_type_));
-  }
+  _impl_.node_id_ = 0u;
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.launch_time_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.admission_) -
-        reinterpret_cast<char*>(&_impl_.launch_time_)) + sizeof(_impl_.admission_));
+    ::memset(&_impl_.node_type_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.max_connections_) -
+        reinterpret_cast<char*>(&_impl_.node_type_)) + sizeof(_impl_.max_connections_));
   }
+  _impl_.admission_ = 0;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1156,7 +1186,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 node_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_node_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1165,7 +1195,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // uint32 node_type = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_node_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1174,7 +1204,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // uint64 launch_time = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_launch_time() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1183,7 +1213,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // uint32 scene_node_type = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_scene_node_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1192,14 +1222,14 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // .EndpointComp endpoint = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         5, *this_._impl_.endpoint_, this_._impl_.endpoint_->GetCachedSize(), target,
         stream);
   }
 
   // uint32 zone_id = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1208,7 +1238,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // uint32 protocol_type = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_protocol_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1227,7 +1257,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // uint32 player_count = 9;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_player_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1236,21 +1266,21 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // .EndpointComp grpc_endpoint = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         10, *this_._impl_.grpc_endpoint_, this_._impl_.grpc_endpoint_->GetCachedSize(), target,
         stream);
   }
 
   // .EndpointComp client_endpoint = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         11, *this_._impl_.client_endpoint_, this_._impl_.client_endpoint_->GetCachedSize(), target,
         stream);
   }
 
   // uint32 physical_region = 12;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_physical_region() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1259,7 +1289,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // uint32 max_connections = 13;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_max_connections() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1268,7 +1298,7 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
   }
 
   // .NodeAdmission admission = 14;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_admission() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -1293,6 +1323,16 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "NodeInfo.build");
       target = stream->WriteStringMaybeAliased(16, _s, target);
+    }
+  }
+
+  // string client_ws_url = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_client_ws_url().empty()) {
+      const ::std::string& _s = this_._internal_client_ws_url();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "NodeInfo.client_ws_url");
+      target = stream->WriteStringMaybeAliased(17, _s, target);
     }
   }
 
@@ -1343,88 +1383,97 @@ PROTOBUF_NOINLINE void NodeInfo::Clear() {
                                         this_._internal_build());
       }
     }
-    // .EndpointComp endpoint = 5;
+    // string client_ws_url = 17;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_client_ws_url().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_client_ws_url());
+      }
+    }
+    // .EndpointComp endpoint = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.endpoint_);
     }
     // .EndpointComp grpc_endpoint = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.grpc_endpoint_);
     }
     // .EndpointComp client_endpoint = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.client_endpoint_);
     }
     // uint32 node_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_node_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_node_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 node_type = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_node_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_node_type());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 launch_time = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_launch_time() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_launch_time());
       }
     }
     // uint32 scene_node_type = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_scene_node_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_scene_node_type());
       }
     }
     // uint32 zone_id = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_zone_id());
       }
     }
     // uint32 protocol_type = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_protocol_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_protocol_type());
       }
     }
     // uint32 player_count = 9;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_player_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_player_count());
       }
     }
     // uint32 physical_region = 12;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_physical_region() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_physical_region());
       }
     }
     // uint32 max_connections = 13;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_max_connections() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_connections());
       }
     }
+  }
+   {
     // .NodeAdmission admission = 14;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_admission() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_admission());
@@ -1478,6 +1527,15 @@ void NodeInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_client_ws_url().empty()) {
+        _this->_internal_set_client_ws_url(from._internal_client_ws_url());
+      } else {
+        if (_this->_impl_.client_ws_url_.IsDefault()) {
+          _this->_internal_set_client_ws_url("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(from._impl_.endpoint_ != nullptr);
       if (_this->_impl_.endpoint_ == nullptr) {
         _this->_impl_.endpoint_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.endpoint_);
@@ -1485,7 +1543,7 @@ void NodeInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.endpoint_->MergeFrom(*from._impl_.endpoint_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       ABSL_DCHECK(from._impl_.grpc_endpoint_ != nullptr);
       if (_this->_impl_.grpc_endpoint_ == nullptr) {
         _this->_impl_.grpc_endpoint_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.grpc_endpoint_);
@@ -1493,7 +1551,7 @@ void NodeInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.grpc_endpoint_->MergeFrom(*from._impl_.grpc_endpoint_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       ABSL_DCHECK(from._impl_.client_endpoint_ != nullptr);
       if (_this->_impl_.client_endpoint_ == nullptr) {
         _this->_impl_.client_endpoint_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.client_endpoint_);
@@ -1501,57 +1559,57 @@ void NodeInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.client_endpoint_->MergeFrom(*from._impl_.client_endpoint_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_node_id() != 0) {
         _this->_impl_.node_id_ = from._impl_.node_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_node_type() != 0) {
-        _this->_impl_.node_type_ = from._impl_.node_type_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_node_type() != 0) {
+        _this->_impl_.node_type_ = from._impl_.node_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_launch_time() != 0) {
         _this->_impl_.launch_time_ = from._impl_.launch_time_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_scene_node_type() != 0) {
         _this->_impl_.scene_node_type_ = from._impl_.scene_node_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_zone_id() != 0) {
         _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_protocol_type() != 0) {
         _this->_impl_.protocol_type_ = from._impl_.protocol_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_player_count() != 0) {
         _this->_impl_.player_count_ = from._impl_.player_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_physical_region() != 0) {
         _this->_impl_.physical_region_ = from._impl_.physical_region_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_max_connections() != 0) {
         _this->_impl_.max_connections_ = from._impl_.max_connections_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
-      if (from._internal_admission() != 0) {
-        _this->_impl_.admission_ = from._impl_.admission_;
-      }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_admission() != 0) {
+      _this->_impl_.admission_ = from._impl_.admission_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1576,6 +1634,7 @@ void NodeInfo::InternalSwap(NodeInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.node_uuid_, &other->_impl_.node_uuid_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.release_track_, &other->_impl_.release_track_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.build_, &other->_impl_.build_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.client_ws_url_, &other->_impl_.client_ws_url_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(NodeInfo, _impl_.admission_)
       + sizeof(NodeInfo::_impl_.admission_)

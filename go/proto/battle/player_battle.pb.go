@@ -1273,8 +1273,11 @@ type BattleAssignedS2C struct {
 	TokenSignature []byte            `protobuf:"bytes,5,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"` // 原样放进 BattleTokenVerifyRequest.signature
 	ExpireAtMs     uint64            `protobuf:"varint,6,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`          // 票据 / 房间作废期限(Unix 毫秒)
 	Role           EBattleTicketRole `protobuf:"varint,7,opt,name=role,proto3,enum=EBattleTicketRole" json:"role,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 同一台 battle 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url):小游戏客户端连它,原生客户端仍连 host / port;
+	// 空串 = 这台 battle 不接小游戏(docs/design/minigame-websocket-gate.md W7、W9)。
+	WsUrl         string `protobuf:"bytes,8,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BattleAssignedS2C) Reset() {
@@ -1354,6 +1357,13 @@ func (x *BattleAssignedS2C) GetRole() EBattleTicketRole {
 		return x.Role
 	}
 	return EBattleTicketRole_BATTLE_TICKET_ROLE_NONE
+}
+
+func (x *BattleAssignedS2C) GetWsUrl() string {
+	if x != nil {
+		return x.WsUrl
+	}
+	return ""
 }
 
 // 客户端丢票(冷启动 / 换设备)时经大厅通道补签(D25)。请求 / 响应由 MatchService.RequestBattleTicket
@@ -1743,7 +1753,7 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1b\n" +
 	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x122\n" +
 	"\x15heartbeat_interval_ms\x18\x04 \x01(\rR\x13heartbeatIntervalMs\x120\n" +
-	"\x14heartbeat_timeout_ms\x18\x05 \x01(\rR\x12heartbeatTimeoutMs\"\xf0\x01\n" +
+	"\x14heartbeat_timeout_ms\x18\x05 \x01(\rR\x12heartbeatTimeoutMs\"\x87\x02\n" +
 	"\x11BattleAssignedS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x12\n" +
@@ -1752,7 +1762,8 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x0ftoken_signature\x18\x05 \x01(\fR\x0etokenSignature\x12 \n" +
 	"\fexpire_at_ms\x18\x06 \x01(\x04R\n" +
 	"expireAtMs\x12&\n" +
-	"\x04role\x18\a \x01(\x0e2\x12.eBattleTicketRoleR\x04role\"9\n" +
+	"\x04role\x18\a \x01(\x0e2\x12.eBattleTicketRoleR\x04role\x12\x15\n" +
+	"\x06ws_url\x18\b \x01(\tR\x05wsUrl\"9\n" +
 	"\x1aRequestBattleTicketRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"\x87\x01\n" +
 	"\x1bRequestBattleTicketResponse\x124\n" +

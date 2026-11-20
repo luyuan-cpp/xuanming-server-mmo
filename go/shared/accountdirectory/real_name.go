@@ -37,6 +37,21 @@ func (c *Client) SetRealName(ctx context.Context, account, pi string) (string, e
 	return out.RealNamePi, nil
 }
 
+// ResetRealName 清掉账号行上的 pi(客服重置),返回清之前有没有。幂等。
+func (c *Client) ResetRealName(ctx context.Context, account string) (bool, error) {
+	in := &dspb.ResetAccountRealNameRequest{Account: account}
+	call, cancel, err := c.prepare(ctx, "ResetAccountRealName", in)
+	if err != nil {
+		return false, err
+	}
+	defer cancel()
+	out, err := c.rpc.ResetAccountRealName(call, in)
+	if err != nil {
+		return false, classify(err)
+	}
+	return out.GetHadRealName(), nil
+}
+
 // RealNameClient 给 go/payment 按玩家查实名。与 login 的目录客户端分开装配:payment 的证明只能调这一个只读方法。
 type RealNameClient struct {
 	rpc    dspb.DataServiceClient

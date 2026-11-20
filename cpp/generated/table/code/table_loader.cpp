@@ -12,6 +12,7 @@
 #include "activityvitalityrule_table.h"
 #include "actoractioncombatstate_table.h"
 #include "actoractionstate_table.h"
+#include "afkpassrule_table.h"
 #include "attributeallocratio_table.h"
 #include "attributeautoplan_table.h"
 #include "attributedimension_table.h"
@@ -75,6 +76,8 @@ void LoadTables() {
     ActorActionCombatStateTableManager::Instance().Load();
 
     ActorActionStateTableManager::Instance().Load();
+
+    AfkPassRuleTableManager::Instance().Load();
 
     AttributeAllocRatioTableManager::Instance().Load();
 
@@ -184,6 +187,8 @@ void LoadTables() {
 
     ActorActionStateTableManager::Instance().LoadSuccess();
 
+    AfkPassRuleTableManager::Instance().LoadSuccess();
+
     AttributeAllocRatioTableManager::Instance().LoadSuccess();
 
     AttributeAutoPlanTableManager::Instance().LoadSuccess();
@@ -288,7 +293,7 @@ void LoadTables() {
 
 namespace {
 
-constexpr std::size_t kTableCount = 53;
+constexpr std::size_t kTableCount = 54;
 
 // 按序号加载一张表,序号与上面 LoadTables() 的顺序一致。
 void LoadTableAt(std::size_t index) {
@@ -298,54 +303,55 @@ void LoadTableAt(std::size_t index) {
     case 2: ActivityVitalityRuleTableManager::Instance().Load(); break;
     case 3: ActorActionCombatStateTableManager::Instance().Load(); break;
     case 4: ActorActionStateTableManager::Instance().Load(); break;
-    case 5: AttributeAllocRatioTableManager::Instance().Load(); break;
-    case 6: AttributeAutoPlanTableManager::Instance().Load(); break;
-    case 7: AttributeDimensionTableManager::Instance().Load(); break;
-    case 8: AttributePoolTableManager::Instance().Load(); break;
-    case 9: AttributeRuleTableManager::Instance().Load(); break;
-    case 10: BaseSceneTableManager::Instance().Load(); break;
-    case 11: BuffTableManager::Instance().Load(); break;
-    case 12: ClassTableManager::Instance().Load(); break;
-    case 13: ConditionTableManager::Instance().Load(); break;
-    case 14: CooldownTableManager::Instance().Load(); break;
-    case 15: DungeonTableManager::Instance().Load(); break;
-    case 16: EquipAffixPoolTableManager::Instance().Load(); break;
-    case 17: EquipAffixRuleTableManager::Instance().Load(); break;
-    case 18: EquipArtifactTableManager::Instance().Load(); break;
-    case 19: EquipAttributeTableManager::Instance().Load(); break;
-    case 20: EquipAttributeCapTableManager::Instance().Load(); break;
-    case 21: EquipEnhanceTableManager::Instance().Load(); break;
-    case 22: EquipGemTableManager::Instance().Load(); break;
-    case 23: EquipGemSocketTableManager::Instance().Load(); break;
-    case 24: EquipSlotTableManager::Instance().Load(); break;
-    case 25: EquipV1AffixTableManager::Instance().Load(); break;
-    case 26: GlobalVariableTableManager::Instance().Load(); break;
-    case 27: GuildActivityTableManager::Instance().Load(); break;
-    case 28: GuildDonateTableManager::Instance().Load(); break;
-    case 29: GuildLevelTableManager::Instance().Load(); break;
-    case 30: GuildRuleTableManager::Instance().Load(); break;
-    case 31: GuildShopTableManager::Instance().Load(); break;
-    case 32: ItemTableManager::Instance().Load(); break;
-    case 33: MessageLimiterTableManager::Instance().Load(); break;
-    case 34: MirrorTableManager::Instance().Load(); break;
-    case 35: MissionTableManager::Instance().Load(); break;
-    case 36: MonsterTableManager::Instance().Load(); break;
-    case 37: MysteryMerchantGoodsTableManager::Instance().Load(); break;
-    case 38: MysteryMerchantRuleTableManager::Instance().Load(); break;
-    case 39: MysteryMerchantSpotTableManager::Instance().Load(); break;
-    case 40: PetTableManager::Instance().Load(); break;
-    case 41: PetEntryTableManager::Instance().Load(); break;
-    case 42: PetRuleTableManager::Instance().Load(); break;
-    case 43: PetTierTableManager::Instance().Load(); break;
-    case 44: PlayModeTableManager::Instance().Load(); break;
-    case 45: RewardTableManager::Instance().Load(); break;
-    case 46: RoleNameRuleTableManager::Instance().Load(); break;
-    case 47: SkillTableManager::Instance().Load(); break;
-    case 48: SkillPermissionTableManager::Instance().Load(); break;
-    case 49: TestTableManager::Instance().Load(); break;
-    case 50: TestMultiKeyTableManager::Instance().Load(); break;
-    case 51: WorldTableManager::Instance().Load(); break;
-    case 52: ZoneGroupTableManager::Instance().Load(); break;
+    case 5: AfkPassRuleTableManager::Instance().Load(); break;
+    case 6: AttributeAllocRatioTableManager::Instance().Load(); break;
+    case 7: AttributeAutoPlanTableManager::Instance().Load(); break;
+    case 8: AttributeDimensionTableManager::Instance().Load(); break;
+    case 9: AttributePoolTableManager::Instance().Load(); break;
+    case 10: AttributeRuleTableManager::Instance().Load(); break;
+    case 11: BaseSceneTableManager::Instance().Load(); break;
+    case 12: BuffTableManager::Instance().Load(); break;
+    case 13: ClassTableManager::Instance().Load(); break;
+    case 14: ConditionTableManager::Instance().Load(); break;
+    case 15: CooldownTableManager::Instance().Load(); break;
+    case 16: DungeonTableManager::Instance().Load(); break;
+    case 17: EquipAffixPoolTableManager::Instance().Load(); break;
+    case 18: EquipAffixRuleTableManager::Instance().Load(); break;
+    case 19: EquipArtifactTableManager::Instance().Load(); break;
+    case 20: EquipAttributeTableManager::Instance().Load(); break;
+    case 21: EquipAttributeCapTableManager::Instance().Load(); break;
+    case 22: EquipEnhanceTableManager::Instance().Load(); break;
+    case 23: EquipGemTableManager::Instance().Load(); break;
+    case 24: EquipGemSocketTableManager::Instance().Load(); break;
+    case 25: EquipSlotTableManager::Instance().Load(); break;
+    case 26: EquipV1AffixTableManager::Instance().Load(); break;
+    case 27: GlobalVariableTableManager::Instance().Load(); break;
+    case 28: GuildActivityTableManager::Instance().Load(); break;
+    case 29: GuildDonateTableManager::Instance().Load(); break;
+    case 30: GuildLevelTableManager::Instance().Load(); break;
+    case 31: GuildRuleTableManager::Instance().Load(); break;
+    case 32: GuildShopTableManager::Instance().Load(); break;
+    case 33: ItemTableManager::Instance().Load(); break;
+    case 34: MessageLimiterTableManager::Instance().Load(); break;
+    case 35: MirrorTableManager::Instance().Load(); break;
+    case 36: MissionTableManager::Instance().Load(); break;
+    case 37: MonsterTableManager::Instance().Load(); break;
+    case 38: MysteryMerchantGoodsTableManager::Instance().Load(); break;
+    case 39: MysteryMerchantRuleTableManager::Instance().Load(); break;
+    case 40: MysteryMerchantSpotTableManager::Instance().Load(); break;
+    case 41: PetTableManager::Instance().Load(); break;
+    case 42: PetEntryTableManager::Instance().Load(); break;
+    case 43: PetRuleTableManager::Instance().Load(); break;
+    case 44: PetTierTableManager::Instance().Load(); break;
+    case 45: PlayModeTableManager::Instance().Load(); break;
+    case 46: RewardTableManager::Instance().Load(); break;
+    case 47: RoleNameRuleTableManager::Instance().Load(); break;
+    case 48: SkillTableManager::Instance().Load(); break;
+    case 49: SkillPermissionTableManager::Instance().Load(); break;
+    case 50: TestTableManager::Instance().Load(); break;
+    case 51: TestMultiKeyTableManager::Instance().Load(); break;
+    case 52: WorldTableManager::Instance().Load(); break;
+    case 53: ZoneGroupTableManager::Instance().Load(); break;
     }
 }
 
@@ -387,6 +393,8 @@ void LoadTablesAsync() {
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 
     ActorActionStateTableManager::Instance().LoadSuccess();
+
+    AfkPassRuleTableManager::Instance().LoadSuccess();
 
     AttributeAllocRatioTableManager::Instance().LoadSuccess();
 

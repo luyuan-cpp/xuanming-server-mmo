@@ -131,6 +131,9 @@
     [string]$GatewayIngressTlsSecret = "",
     # 逗号分隔的 CIDR,原样透传。
     [string]$GatewayTrustedProxies = "",
+    # 支付服务的渠道配置文件(只含顶层 Payment 段,不放密钥值),原样透传给 k8s_deploy.ps1 的同名参数。只对部署全局 Go 服务的
+    # k8s-infra-up / k8s-all-up 有效;k8s-zone-up 带上它由 k8s_deploy.ps1 在写操作之前拒绝。留空不透传 = 用缺省段。
+    [string]$PaymentConfigPath = "",
     # 小游戏客户端(微信 / 抖音)的 WebSocket 边缘,透传给 k8s_deploy.ps1 同名参数(语义见那边的参数注释与
     # docs/design/minigame-websocket-gate.md W8)。字符串留空、数值取「未指定」时不透传,用 k8s_deploy.ps1 自己的默认值。
     # 不粘滞:以 -WsEdgeHost 运行的环境每次 zone-up / infra-up / 发布都要再传同一组参数。
@@ -145,6 +148,8 @@
     # -1 = 未指定。
     [int]$WsEdgeNodePort = -1,
     [string]$WsEdgeImage = "",
+    # 边缘的按来源限速(每个来源 /24 每秒新建的连接数)。0 = 未指定,即不限。
+    [int]$WsEdgeSourceRatePerSecond = 0,
     # 集群内 login 的开发口令认证(DevPasswordAuth),只允许 -ReleaseProfile dev,由 k8s_deploy.ps1 校验;
     # switch 只在被指定时透传,共享密钥走环境变量 / Secret,不经参数。不粘滞:dev zone 依赖开发口令登录时重新部署要照传,
     # 漏传则生成的 login 没有任何认证配置。
@@ -374,7 +379,15 @@
     [string]$LoginAntiAddictionExtraPlayDays = "",
     [string]$LoginNppaCheckUrl = "",
     [string]$LoginNppaQueryUrl = "",
-    [string]$LoginNppaLoginoutUrl = ""
+    [string]$LoginNppaLoginoutUrl = "",
+    # 把 domain-service-secrets 里托管的内部密钥改成全集群统一值并重启读它们的 Pod,透传给 k8s_deploy.ps1 同名开关(k8s-zone-up /
+    # k8s-all-up / k8s-infra-up),只在被指定时透传;k8s-image-* / k8s-release-* 给了即拒绝。追加在末尾,理由同上。
+    [switch]$ResyncDomainServiceSecrets,
+    # 客户端面连接准入的覆盖变量(逗号分隔的「名字=值」,如 GATE_ACCEPT_RATE_PER_SECOND=2000),透传给 k8s_deploy.ps1
+    # -ConnectionAdmissionEnv(k8s-infra-up / k8s-zone-up / k8s-all-up)与 k8s_image.ps1(k8s-release-*)。名单、取值与覆盖范围见
+    # k8s_deploy.ps1 同名参数注释,校验在下游(k8s_image.ps1 在构建镜像之前就校验)。留空 = 不透传。不粘滞,同 -NodeOpenFileLimitMode。
+    # 追加在末尾,理由同上。
+    [string[]]$ConnectionAdmissionEnv = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -849,6 +862,10 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode)) {
         $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
     }
+    # 连接准入覆盖变量同一口径:留空不传,k8s_deploy.ps1 留空即一个都不写(进程按推导缺省)。
+    if ($ConnectionAdmissionEnv) {
+        $args.ConnectionAdmissionEnv = $ConnectionAdmissionEnv
+    }
     # 集群外入口参数同一口径:字符串非空才传,GateNodePortBase 非 -1 才传,switch 只在被指定时传。
     # 不抽成共用函数:契约测试按 AST 单独取出本函数执行,依赖外部函数会让它找不到命令。
     if (-not [string]::IsNullOrWhiteSpace($ClientEntryMode)) { $args.ClientEntryMode = $ClientEntryMode }
@@ -865,10 +882,12 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($WsEdgeServiceType)) { $args.WsEdgeServiceType = $WsEdgeServiceType }
     if ($WsEdgeNodePort -ne -1) { $args.WsEdgeNodePort = $WsEdgeNodePort }
     if (-not [string]::IsNullOrWhiteSpace($WsEdgeImage)) { $args.WsEdgeImage = $WsEdgeImage }
+    if ($WsEdgeSourceRatePerSecond -gt 0) { $args.WsEdgeSourceRatePerSecond = $WsEdgeSourceRatePerSecond }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressHost)) { $args.GatewayIngressHost = $GatewayIngressHost }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressClassName)) { $args.GatewayIngressClassName = $GatewayIngressClassName }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret)) { $args.GatewayIngressTlsSecret = $GatewayIngressTlsSecret }
     if (-not [string]::IsNullOrWhiteSpace($GatewayTrustedProxies)) { $args.GatewayTrustedProxies = $GatewayTrustedProxies }
+    if (-not [string]::IsNullOrWhiteSpace($PaymentConfigPath)) { $args.PaymentConfigPath = $PaymentConfigPath }
     if ($LoginDevPasswordAuth) { $args.LoginDevPasswordAuth = $true }
     if ($LoginPasswordAuth) { $args.LoginPasswordAuth = $true }
     # login 第三方登录(微信 / QQ)同一口径:字符串非空才传,switch 只在被指定时传。漏传的防误关闸在 k8s_deploy.ps1
@@ -900,6 +919,8 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaCheckUrl)) { $args.LoginNppaCheckUrl = $LoginNppaCheckUrl }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaQueryUrl)) { $args.LoginNppaQueryUrl = $LoginNppaQueryUrl }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaLoginoutUrl)) { $args.LoginNppaLoginoutUrl = $LoginNppaLoginoutUrl }
+    # 托管内部密钥的修复开关,同一口径:只在被指定时传。
+    if ($ResyncDomainServiceSecrets) { $args.ResyncDomainServiceSecrets = $true }
     if ($ConfirmLoginAuthProviderChange) { $args.ConfirmLoginAuthProviderChange = $true }
     if (-not [string]::IsNullOrWhiteSpace($RequireClientEndpoint)) { $args.RequireClientEndpoint = $RequireClientEndpoint }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
@@ -1068,6 +1089,7 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressClassName)) { $notForwarded += '-GatewayIngressClassName' }
     if (-not [string]::IsNullOrWhiteSpace($GatewayIngressTlsSecret)) { $notForwarded += '-GatewayIngressTlsSecret' }
     if (-not [string]::IsNullOrWhiteSpace($GatewayTrustedProxies)) { $notForwarded += '-GatewayTrustedProxies' }
+    if (-not [string]::IsNullOrWhiteSpace($PaymentConfigPath)) { $notForwarded += '-PaymentConfigPath' }
     # login 第三方登录(微信 / QQ)与它的确认开关同 -LoginDevPasswordAuth:只落在 login 上,k8s_image.ps1 不部署 login、也不声明它们。
     # 经这条路发布反过来也关不掉线上的第三方登录(不重写 login ConfigMap、不碰 Secret login-oauth),不需要防误关。
     if (-not [string]::IsNullOrWhiteSpace($LoginWeChatAppId)) { $notForwarded += '-LoginWeChatAppId' }
@@ -1094,6 +1116,7 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaCheckUrl)) { $notForwarded += '-LoginNppaCheckUrl' }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaQueryUrl)) { $notForwarded += '-LoginNppaQueryUrl' }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaLoginoutUrl)) { $notForwarded += '-LoginNppaLoginoutUrl' }
+    if ($ResyncDomainServiceSecrets) { $notForwarded += '-ResyncDomainServiceSecrets' }
     if ($ConfirmLoginAuthProviderChange) { $notForwarded += '-ConfirmLoginAuthProviderChange' }
     if ($notForwarded.Count -gt 0) {
         throw "k8s-image-* / k8s-release-* 不支持 $($notForwarded -join ', '):k8s_image.ps1 不部署 Go / Java 服务,也不支持 Agones 高密度 / FleetAutoscaler。请改用 k8s-infra-up / k8s-zone-up / k8s-all-up(直接调 k8s_deploy.ps1)。"
@@ -1159,6 +1182,10 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode)) {
         $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
     }
+    # 连接准入覆盖变量同一口径:留空不传。
+    if ($ConnectionAdmissionEnv) {
+        $args.ConnectionAdmissionEnv = $ConnectionAdmissionEnv
+    }
     # 集群外入口参数,口径同 Invoke-K8sDeploy(k8s_image.ps1 原样转给 k8s_deploy.ps1)。
     # -Gateway* / -LoginDevPasswordAuth / -LoginPasswordAuth / 第三方登录的 -Login* 与 -ConfirmLoginAuthProviderChange 不在此列,已在函数开头拒绝
     # (k8s_image.ps1 也不声明它们)。
@@ -1176,6 +1203,7 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($WsEdgeServiceType)) { $args.WsEdgeServiceType = $WsEdgeServiceType }
     if ($WsEdgeNodePort -ne -1) { $args.WsEdgeNodePort = $WsEdgeNodePort }
     if (-not [string]::IsNullOrWhiteSpace($WsEdgeImage)) { $args.WsEdgeImage = $WsEdgeImage }
+    if ($WsEdgeSourceRatePerSecond -gt 0) { $args.WsEdgeSourceRatePerSecond = $WsEdgeSourceRatePerSecond }
     # release-zone / release-all 同样重新生成 gate(release-all 还有 battle),切换形态的确认闸同一口径透传。
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     # release-all(不带 -SkipInfra)会 infra-up,共享 Redis 重启闸的确认同一口径透传。

@@ -29,6 +29,10 @@ namespace _fl = ::google::protobuf::internal::field_layout;
 namespace {
 PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
+        // ::rolefence::PurgeRemovedRoleRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto, /* tracker*/ nullptr,},
+        // ::rolefence::PurgeRemovedRoleResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto, /* tracker*/ nullptr,},
         // ::rolefence::RoleFenceState
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto, /* tracker*/ nullptr,},
         // ::rolefence::PrepareRoleFreezeRequest
@@ -181,7 +185,7 @@ constexpr auto RoleFenceState::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[0],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto,
@@ -228,6 +232,147 @@ const ::_pbi::ClassData* RoleFenceState_get_class_data() {
   return RoleFenceState_globals_.GetClassData();
 #else
   return RoleFenceState_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PurgeRemovedRoleResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PurgeRemovedRoleResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleResponse, _impl_._has_bits_);
+};
+
+constexpr PurgeRemovedRoleResponse::ParseTableT_ PurgeRemovedRoleResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::rolefence::PurgeRemovedRoleResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool retry = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PurgeRemovedRoleResponse, _impl_.retry_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleResponse, _impl_.retry_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool retry = 1;
+      {PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleResponse, _impl_.retry_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PurgeRemovedRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        retry_{false} {}
+
+template <typename>
+constexpr PurgeRemovedRoleResponse::PurgeRemovedRoleResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PurgeRemovedRoleResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PurgeRemovedRoleResponse(arena);
+}
+constexpr auto PurgeRemovedRoleResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PurgeRemovedRoleResponse), alignof(PurgeRemovedRoleResponse));
+}
+constexpr auto PurgeRemovedRoleResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PurgeRemovedRoleResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PurgeRemovedRoleResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PurgeRemovedRoleResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PurgeRemovedRoleResponse>(), &PurgeRemovedRoleResponse::ByteSizeLong,
+              &PurgeRemovedRoleResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PurgeRemovedRoleResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PurgeRemovedRoleResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PurgeRemovedRoleResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PurgeRemovedRoleResponse::InternalGenerateClassData_(
+            _default, &PurgeRemovedRoleResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PurgeRemovedRoleResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PurgeRemovedRoleResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PurgeRemovedRoleResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PurgeRemovedRoleResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PurgeRemovedRoleResponseGlobalsTypeInternal PurgeRemovedRoleResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PurgeRemovedRoleResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PurgeRemovedRoleResponse_globals_.GetClassData();
+#else
+  return PurgeRemovedRoleResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -348,7 +493,7 @@ constexpr auto PrepareRoleFreezeResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[4],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto,
@@ -489,7 +634,7 @@ constexpr auto ApplyRoleFenceResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto,
@@ -536,6 +681,165 @@ const ::_pbi::ClassData* ApplyRoleFenceResponse_get_class_data() {
   return ApplyRoleFenceResponse_globals_.GetClassData();
 #else
   return ApplyRoleFenceResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PurgeRemovedRoleRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PurgeRemovedRoleRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_._has_bits_);
+};
+
+constexpr PurgeRemovedRoleRequest::ParseTableT_ PurgeRemovedRoleRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::rolefence::PurgeRemovedRoleRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_.auth_)}},
+      // .rolefence.RoleFenceState state = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_.state_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .rolefence.RoleFenceState state = 1;
+      {PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_.state_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .common.base.ServiceCallAuth auth = 2;
+      {PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_.auth_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::rolefence::RoleFenceState>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::rolefence::RoleFenceState_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PurgeRemovedRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        state_{nullptr},
+        auth_{nullptr} {}
+
+template <typename>
+constexpr PurgeRemovedRoleRequest::PurgeRemovedRoleRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PurgeRemovedRoleRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PurgeRemovedRoleRequest(arena);
+}
+constexpr auto PurgeRemovedRoleRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(PurgeRemovedRoleRequest), alignof(PurgeRemovedRoleRequest));
+}
+constexpr auto PurgeRemovedRoleRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PurgeRemovedRoleRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PurgeRemovedRoleRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PurgeRemovedRoleRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PurgeRemovedRoleRequest>(), &PurgeRemovedRoleRequest::ByteSizeLong,
+              &PurgeRemovedRoleRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[0],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PurgeRemovedRoleRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PurgeRemovedRoleRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PurgeRemovedRoleRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PurgeRemovedRoleRequest::InternalGenerateClassData_(
+            _default, &PurgeRemovedRoleRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PurgeRemovedRoleRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PurgeRemovedRoleRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PurgeRemovedRoleRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PurgeRemovedRoleRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PurgeRemovedRoleRequestGlobalsTypeInternal PurgeRemovedRoleRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PurgeRemovedRoleRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PurgeRemovedRoleRequest_globals_.GetClassData();
+#else
+  return PurgeRemovedRoleRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -656,7 +960,7 @@ constexpr auto PrepareRoleFreezeRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto,
@@ -815,7 +1119,7 @@ constexpr auto ApplyRoleFenceRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto,
@@ -875,6 +1179,18 @@ const ::uint32_t
     TableStruct_proto_2frole_5ffence_2frole_5ffence_2eproto::offsets[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
         protodesc_cold) = {
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::rolefence::PurgeRemovedRoleRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::rolefence::PurgeRemovedRoleRequest, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::rolefence::PurgeRemovedRoleRequest, _impl_.auth_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::rolefence::PurgeRemovedRoleResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::rolefence::PurgeRemovedRoleResponse, _impl_.retry_),
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rolefence::RoleFenceState, _impl_._has_bits_),
         10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::rolefence::RoleFenceState, _impl_.player_id_),
@@ -927,14 +1243,18 @@ const ::uint32_t
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-        {0, sizeof(::rolefence::RoleFenceState)},
-        {17, sizeof(::rolefence::PrepareRoleFreezeRequest)},
-        {26, sizeof(::rolefence::PrepareRoleFreezeResponse)},
-        {37, sizeof(::rolefence::ApplyRoleFenceRequest)},
-        {44, sizeof(::rolefence::ApplyRoleFenceResponse)},
+        {0, sizeof(::rolefence::PurgeRemovedRoleRequest)},
+        {7, sizeof(::rolefence::PurgeRemovedRoleResponse)},
+        {12, sizeof(::rolefence::RoleFenceState)},
+        {29, sizeof(::rolefence::PrepareRoleFreezeRequest)},
+        {38, sizeof(::rolefence::PrepareRoleFreezeResponse)},
+        {49, sizeof(::rolefence::ApplyRoleFenceRequest)},
+        {56, sizeof(::rolefence::ApplyRoleFenceResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
+        &::rolefence::PurgeRemovedRoleRequest_globals_,
+        &::rolefence::PurgeRemovedRoleResponse_globals_,
         &::rolefence::RoleFenceState_globals_,
         &::rolefence::PrepareRoleFreezeRequest_globals_,
         &::rolefence::PrepareRoleFreezeResponse_globals_,
@@ -945,26 +1265,33 @@ const char descriptor_table_protodef_proto_2frole_5ffence_2frole_5ffence_2eproto
     protodesc_cold) = {
     "\n!proto/role_fence/role_fence.proto\022\trol"
     "efence\032)proto/common/base/service_call_a"
-    "uth.proto\"\234\001\n\016RoleFenceState\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\022\026\n\016owner_revisi"
-    "on\030\003 \001(\004\022\024\n\014freeze_token\030\004 \001(\004\022\017\n\007versio"
-    "n\030\005 \001(\004\022\021\n\thome_zone\030\006 \001(\r\022\024\n\014freeze_fin"
-    "al\030\007 \001(\010\"\201\001\n\030PrepareRoleFreezeRequest\022(\n"
-    "\005state\030\001 \001(\0132\031.rolefence.RoleFenceState\022"
-    "*\n\004auth\030\002 \001(\0132\034.common.base.ServiceCallA"
-    "uth\022\017\n\007dry_run\030\003 \001(\010\"Y\n\031PrepareRoleFreez"
-    "eResponse\022\r\n\005clean\030\001 \001(\010\022\017\n\007blocker\030\002 \001("
-    "\t\022\r\n\005stale\030\003 \001(\010\022\r\n\005retry\030\004 \001(\010\"m\n\025Apply"
-    "RoleFenceRequest\022(\n\005state\030\001 \001(\0132\031.rolefe"
-    "nce.RoleFenceState\022*\n\004auth\030\002 \001(\0132\034.commo"
-    "n.base.ServiceCallAuth\"\'\n\026ApplyRoleFence"
-    "Response\022\r\n\005retry\030\001 \001(\0102\321\001\n\024RoleFencePar"
-    "ticipant\022`\n\021PrepareRoleFreeze\022#.rolefenc"
-    "e.PrepareRoleFreezeRequest\032$.rolefence.P"
-    "repareRoleFreezeResponse\"\000\022W\n\016ApplyRoleF"
-    "ence\022 .rolefence.ApplyRoleFenceRequest\032!"
-    ".rolefence.ApplyRoleFenceResponse\"\000B\032Z\025r"
-    "ole_fence/role_fence\200\001\000b\006proto3"
+    "uth.proto\"o\n\027PurgeRemovedRoleRequest\022(\n\005"
+    "state\030\001 \001(\0132\031.rolefence.RoleFenceState\022*"
+    "\n\004auth\030\002 \001(\0132\034.common.base.ServiceCallAu"
+    "th\")\n\030PurgeRemovedRoleResponse\022\r\n\005retry\030"
+    "\001 \001(\010\"\234\001\n\016RoleFenceState\022\021\n\tplayer_id\030\001 "
+    "\001(\004\022\017\n\007account\030\002 \001(\t\022\026\n\016owner_revision\030\003"
+    " \001(\004\022\024\n\014freeze_token\030\004 \001(\004\022\017\n\007version\030\005 "
+    "\001(\004\022\021\n\thome_zone\030\006 \001(\r\022\024\n\014freeze_final\030\007"
+    " \001(\010\"\201\001\n\030PrepareRoleFreezeRequest\022(\n\005sta"
+    "te\030\001 \001(\0132\031.rolefence.RoleFenceState\022*\n\004a"
+    "uth\030\002 \001(\0132\034.common.base.ServiceCallAuth\022"
+    "\017\n\007dry_run\030\003 \001(\010\"Y\n\031PrepareRoleFreezeRes"
+    "ponse\022\r\n\005clean\030\001 \001(\010\022\017\n\007blocker\030\002 \001(\t\022\r\n"
+    "\005stale\030\003 \001(\010\022\r\n\005retry\030\004 \001(\010\"m\n\025ApplyRole"
+    "FenceRequest\022(\n\005state\030\001 \001(\0132\031.rolefence."
+    "RoleFenceState\022*\n\004auth\030\002 \001(\0132\034.common.ba"
+    "se.ServiceCallAuth\"\'\n\026ApplyRoleFenceResp"
+    "onse\022\r\n\005retry\030\001 \001(\0102\260\002\n\024RoleFencePartici"
+    "pant\022`\n\021PrepareRoleFreeze\022#.rolefence.Pr"
+    "epareRoleFreezeRequest\032$.rolefence.Prepa"
+    "reRoleFreezeResponse\"\000\022W\n\016ApplyRoleFence"
+    "\022 .rolefence.ApplyRoleFenceRequest\032!.rol"
+    "efence.ApplyRoleFenceResponse\"\000\022]\n\020Purge"
+    "RemovedRole\022\".rolefence.PurgeRemovedRole"
+    "Request\032#.rolefence.PurgeRemovedRoleResp"
+    "onse\"\000B\032Z\025role_fence/role_fence\200\001\000b\006prot"
+    "o3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto_deps[1] = {
@@ -974,13 +1301,13 @@ static ::absl::once_flag descriptor_table_proto_2frole_5ffence_2frole_5ffence_2e
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto = {
     false,
     false,
-    871,
+    1122,
     descriptor_table_protodef_proto_2frole_5ffence_2frole_5ffence_2eproto,
     "proto/role_fence/role_fence.proto",
     &descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto_once,
     descriptor_table_proto_2frole_5ffence_2frole_5ffence_2eproto_deps,
     1,
-    5,
+    7,
     schemas,
     file_message_globals,
     TableStruct_proto_2frole_5ffence_2frole_5ffence_2eproto::offsets,
@@ -988,6 +1315,453 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2frole_5
     file_level_service_descriptors_proto_2frole_5ffence_2frole_5ffence_2eproto,
 };
 namespace rolefence {
+// ===================================================================
+
+void PurgeRemovedRoleRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+PurgeRemovedRoleRequest::PurgeRemovedRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PurgeRemovedRoleRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:rolefence.PurgeRemovedRoleRequest)
+}
+PROTOBUF_NDEBUG_INLINE PurgeRemovedRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::rolefence::PurgeRemovedRoleRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+PurgeRemovedRoleRequest::PurgeRemovedRoleRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PurgeRemovedRoleRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PurgeRemovedRoleRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PurgeRemovedRoleRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
+                : nullptr;
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:rolefence.PurgeRemovedRoleRequest)
+}
+PROTOBUF_NDEBUG_INLINE PurgeRemovedRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PurgeRemovedRoleRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, state_),
+           0,
+           offsetof(Impl_, auth_) -
+               offsetof(Impl_, state_) +
+               sizeof(Impl_::auth_));
+}
+PurgeRemovedRoleRequest::~PurgeRemovedRoleRequest() {
+  // @@protoc_insertion_point(destructor:rolefence.PurgeRemovedRoleRequest)
+  SharedDtor(*this);
+}
+inline void PurgeRemovedRoleRequest::SharedDtor(MessageLite& self) {
+  PurgeRemovedRoleRequest& this_ = static_cast<PurgeRemovedRoleRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.state_;
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PurgeRemovedRoleRequest_class_data_ =
+        PurgeRemovedRoleRequest::InternalGenerateClassData_(PurgeRemovedRoleRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PurgeRemovedRoleRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PurgeRemovedRoleRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PurgeRemovedRoleRequest_class_data_.tc_table);
+  return PurgeRemovedRoleRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PurgeRemovedRoleRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PurgeRemovedRoleRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PurgeRemovedRoleRequest_globals_));
+  return PurgeRemovedRoleRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PurgeRemovedRoleRequest::ParseTableT_
+    PurgeRemovedRoleRequest::_table_ =
+        PurgeRemovedRoleRequest::InternalGenerateParseTable_(PurgeRemovedRoleRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PurgeRemovedRoleRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:rolefence.PurgeRemovedRoleRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.state_ != nullptr);
+      _impl_.state_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PurgeRemovedRoleRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PurgeRemovedRoleRequest& this_ = static_cast<const PurgeRemovedRoleRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PurgeRemovedRoleRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PurgeRemovedRoleRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:rolefence.PurgeRemovedRoleRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .rolefence.RoleFenceState state = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .common.base.ServiceCallAuth auth = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:rolefence.PurgeRemovedRoleRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PurgeRemovedRoleRequest::ByteSizeLong(const MessageLite& base) {
+  const PurgeRemovedRoleRequest& this_ = static_cast<const PurgeRemovedRoleRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PurgeRemovedRoleRequest::ByteSizeLong() const {
+  const PurgeRemovedRoleRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:rolefence.PurgeRemovedRoleRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .rolefence.RoleFenceState state = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
+    }
+    // .common.base.ServiceCallAuth auth = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PurgeRemovedRoleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PurgeRemovedRoleRequest*>(&to_msg);
+  auto& from = static_cast<const PurgeRemovedRoleRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:rolefence.PurgeRemovedRoleRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.state_ != nullptr);
+      if (_this->_impl_.state_ == nullptr) {
+        _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
+      } else {
+        _this->_impl_.state_->MergeFrom(*from._impl_.state_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PurgeRemovedRoleRequest::CopyFrom(const PurgeRemovedRoleRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:rolefence.PurgeRemovedRoleRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PurgeRemovedRoleRequest::InternalSwap(PurgeRemovedRoleRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_.auth_)
+      + sizeof(PurgeRemovedRoleRequest::_impl_.auth_)
+      - PROTOBUF_FIELD_OFFSET(PurgeRemovedRoleRequest, _impl_.state_)>(
+          reinterpret_cast<char*>(&_impl_.state_),
+          reinterpret_cast<char*>(&other->_impl_.state_));
+}
+
+::google::protobuf::Metadata PurgeRemovedRoleRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PurgeRemovedRoleResponse::PurgeRemovedRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PurgeRemovedRoleResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:rolefence.PurgeRemovedRoleResponse)
+}
+PurgeRemovedRoleResponse::PurgeRemovedRoleResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PurgeRemovedRoleResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PurgeRemovedRoleResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE PurgeRemovedRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void PurgeRemovedRoleResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.retry_ = {};
+}
+PurgeRemovedRoleResponse::~PurgeRemovedRoleResponse() {
+  // @@protoc_insertion_point(destructor:rolefence.PurgeRemovedRoleResponse)
+  SharedDtor(*this);
+}
+inline void PurgeRemovedRoleResponse::SharedDtor(MessageLite& self) {
+  PurgeRemovedRoleResponse& this_ = static_cast<PurgeRemovedRoleResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PurgeRemovedRoleResponse_class_data_ =
+        PurgeRemovedRoleResponse::InternalGenerateClassData_(PurgeRemovedRoleResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PurgeRemovedRoleResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PurgeRemovedRoleResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PurgeRemovedRoleResponse_class_data_.tc_table);
+  return PurgeRemovedRoleResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PurgeRemovedRoleResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PurgeRemovedRoleResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PurgeRemovedRoleResponse_globals_));
+  return PurgeRemovedRoleResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PurgeRemovedRoleResponse::ParseTableT_
+    PurgeRemovedRoleResponse::_table_ =
+        PurgeRemovedRoleResponse::InternalGenerateParseTable_(PurgeRemovedRoleResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PurgeRemovedRoleResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:rolefence.PurgeRemovedRoleResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.retry_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PurgeRemovedRoleResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PurgeRemovedRoleResponse& this_ = static_cast<const PurgeRemovedRoleResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PurgeRemovedRoleResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PurgeRemovedRoleResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:rolefence.PurgeRemovedRoleResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool retry = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_retry() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_retry(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:rolefence.PurgeRemovedRoleResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PurgeRemovedRoleResponse::ByteSizeLong(const MessageLite& base) {
+  const PurgeRemovedRoleResponse& this_ = static_cast<const PurgeRemovedRoleResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PurgeRemovedRoleResponse::ByteSizeLong() const {
+  const PurgeRemovedRoleResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:rolefence.PurgeRemovedRoleResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // bool retry = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_retry() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PurgeRemovedRoleResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PurgeRemovedRoleResponse*>(&to_msg);
+  auto& from = static_cast<const PurgeRemovedRoleResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:rolefence.PurgeRemovedRoleResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_retry() != 0) {
+      _this->_impl_.retry_ = from._impl_.retry_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PurgeRemovedRoleResponse::CopyFrom(const PurgeRemovedRoleResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:rolefence.PurgeRemovedRoleResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PurgeRemovedRoleResponse::InternalSwap(PurgeRemovedRoleResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.retry_, other->_impl_.retry_);
+}
+
+::google::protobuf::Metadata PurgeRemovedRoleResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
 // ===================================================================
 
 RoleFenceState::RoleFenceState(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)

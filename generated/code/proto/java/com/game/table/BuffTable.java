@@ -1021,6 +1021,17 @@ private static final long serialVersionUID = 0L;
     return tickOnApply_;
   }
 
+  public static final int KEEP_ON_LOGOUT_FIELD_NUMBER = 54;
+  private int keepOnLogout_ = 0;
+  /**
+   * <code>uint32 keep_on_logout = 54;</code>
+   * @return The keepOnLogout.
+   */
+  @java.lang.Override
+  public int getKeepOnLogout() {
+    return keepOnLogout_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -1215,6 +1226,9 @@ private static final long serialVersionUID = 0L;
     }
     if (tickOnApply_ != 0) {
       output.writeUInt32(53, tickOnApply_);
+    }
+    if (keepOnLogout_ != 0) {
+      output.writeUInt32(54, keepOnLogout_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -1477,6 +1491,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(53, tickOnApply_);
     }
+    if (keepOnLogout_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(54, keepOnLogout_);
+    }
     return size;
   }
   @java.lang.Override
@@ -1620,6 +1638,8 @@ private static final long serialVersionUID = 0L;
         != other.getRequireLivingCaster()) return false;
     if (getTickOnApply()
         != other.getTickOnApply()) return false;
+    if (getKeepOnLogout()
+        != other.getKeepOnLogout()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -1761,6 +1781,8 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getRequireLivingCaster();
     hash = (37 * hash) + TICK_ON_APPLY_FIELD_NUMBER;
     hash = (53 * hash) + getTickOnApply();
+    hash = (37 * hash) + KEEP_ON_LOGOUT_FIELD_NUMBER;
+    hash = (53 * hash) + getKeepOnLogout();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -1976,6 +1998,7 @@ private static final long serialVersionUID = 0L;
       stackLimit_ = 0;
       requireLivingCaster_ = 0;
       tickOnApply_ = 0;
+      keepOnLogout_ = 0;
       return this;
     }
 
@@ -2178,6 +2201,9 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField1_ & 0x00100000) != 0)) {
         result.tickOnApply_ = tickOnApply_;
+      }
+      if (((from_bitField1_ & 0x00200000) != 0)) {
+        result.keepOnLogout_ = keepOnLogout_;
       }
     }
 
@@ -2383,6 +2409,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getTickOnApply() != 0) {
         setTickOnApply(other.getTickOnApply());
+      }
+      if (other.getKeepOnLogout() != 0) {
+        setKeepOnLogout(other.getKeepOnLogout());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -2721,6 +2750,11 @@ private static final long serialVersionUID = 0L;
               bitField1_ |= 0x00100000;
               break;
             } // case 424
+            case 432: {
+              keepOnLogout_ = input.readUInt32();
+              bitField1_ |= 0x00200000;
+              break;
+            } // case 432
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -5032,6 +5066,38 @@ private static final long serialVersionUID = 0L;
     public Builder clearTickOnApply() {
       bitField1_ = (bitField1_ & ~0x00100000);
       tickOnApply_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int keepOnLogout_ ;
+    /**
+     * <code>uint32 keep_on_logout = 54;</code>
+     * @return The keepOnLogout.
+     */
+    @java.lang.Override
+    public int getKeepOnLogout() {
+      return keepOnLogout_;
+    }
+    /**
+     * <code>uint32 keep_on_logout = 54;</code>
+     * @param value The keepOnLogout to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKeepOnLogout(int value) {
+
+      keepOnLogout_ = value;
+      bitField1_ |= 0x00200000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 keep_on_logout = 54;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKeepOnLogout() {
+      bitField1_ = (bitField1_ & ~0x00200000);
+      keepOnLogout_ = 0;
       onChanged();
       return this;
     }

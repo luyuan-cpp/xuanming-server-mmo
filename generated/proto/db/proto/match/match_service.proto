@@ -139,7 +139,9 @@ message GetQueueStatusResponse {
   uint64 battle_id = 5;
   uint32 selected_region = 6;
   uint32 retry_after_ms = 7;
-  bool request_cancelled = 8; // 对上述 request_id 的 SQL 撤销墓碑已提交；NOT_QUEUED 单独不构成此证据。
+  // 上述 request_id 不会再入队：它的 SQL 撤销墓碑已提交，或它的原件属于角色此前的归属（过户前留下，现主人不能沿它入队）。
+  // NOT_QUEUED 单独不构成此证据。
+  bool request_cancelled = 8;
 }
 
 enum QueueState {
@@ -152,7 +154,8 @@ enum QueueState {
 }
 
 // ----- 场景发起 PK(切磋) -----
-// challenge_id 由 match 服务从发号器领号(biz_tag=battle,与 battle_id / team_id 共用号段;只当身份用,不能解析);挑战记录存 Redis(TTL 60s),超时自动作废。
+// challenge_id 由 match 服务从发号器领号(biz_tag=battle,与 battle_id / team_id 共用号段;只当身份用,不能解析);挑战记录存 match 的 SQL 表 match_challenge_invitation,
+// 有效期 ChallengeTTLSeconds(默认 60 秒),过了 expires_ms(按库时钟判)自动作废。
 // 应战成功后与队列匹配共用 gather 开局管线(PrepareBattle -> CreateBattle),
 // 双方 battle:lock 校验在应战时刻做(发起时只做咨询性检查)。
 
@@ -194,7 +197,7 @@ message ChallengeResultS2C {
 }
 
 // ----- 二期:观战匹配(设计文档 §10) -----
-// 活跃战斗索引由 match 维护:gather 开局成功后 ZADD spectate:battles:active(观战记录由 SQL 成局组出);
+// 活跃战斗索引由 match 维护:gather 开局成功后 ZADD 本局所在的桶 spectate:battles:active:{sba:<battle_id % 16>}(观战记录由 SQL 成局组出);
 // 清理靠到期剔除 + 观战失败(battle 节点报房间不存在)时懒剔除,battle 节点不碰 Redis。
 
 message WatchBattleRequest {
@@ -243,7 +246,7 @@ message SpectateBattleRecord {
   BattleWatchSummary summary = 1;
   uint32 battle_node_id = 2;
   // 与 CreateBattleRequest.spectate_visibility 同值(建房原件冻结)。非 PUBLIC 的记录
-  // 只用来给丢票补签定位 battle 节点,不进 spectate:battles:active,也不能被 WatchBattle 指定观战。
+  // 只用来给丢票补签定位 battle 节点,不进观战活跃索引 spectate:battles:active:{sba:<k>},也不能被 WatchBattle 指定观战。
   eSpectateVisibility visibility = 3;
   // 以下三项由 match 在观战准入时维护(§15.6):档位以独立键 spectate:tier:{id} 为准(Lua 只升不降),
   // 这里只是建房时的初值;实例与期限来自 battle 的 AttachRelayGate / PromoteSpectateBroadcast 回包。

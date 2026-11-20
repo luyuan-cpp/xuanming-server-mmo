@@ -2963,6 +2963,12 @@ Test-Case '内容安全:node-config 与 bin/etc 都含 ContentGuardNodeService.r
     $deadline = [int](Get-EtcValue -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'GrpcClient.CallDeadlineMs.ContentGuardNodeService')
     $timeout = [int](Get-EtcValue -RelativePath 'go/content_guard/etc/content_guard.yaml' -KeyPath 'Timeout')
     Assert-True -Condition ($deadline -ge $timeout + 2000) -Because "scene 的 deadline($deadline)要不小于内容安全服务的 zrpc Timeout($timeout)+ 2000:下游先超时,scene 才收得到带真实错误码的应答"
+    # 「内容安全可有可无」只是本机的写法:本机 bin/etc 写 ContentGuard.Optional: true,K8s 的 node-config(各档位)都不带这一段。
+    Assert-Equal -Expected 'true' -Actual (Get-EtcValue -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'ContentGuard.Optional') -Because '本机不起内容安全时 scene 照样能改名'
+    foreach ($nodeConfig in @((Select-ManifestByName -Output $devOut -Name 'node-config'), (Select-ManifestByName -Output $prodRun.Output -Name 'node-config'))) {
+        Assert-True -Condition ($null -ne $nodeConfig) -Because 'DryRun 产物里应当有 node-config'
+        Assert-True -Condition ($nodeConfig -notmatch '(?m)^\s*ContentGuard:' -and $nodeConfig -notmatch '(?m)^\s+Optional:') -Because '集群上内容安全必须可达:node-config 一旦带上 ContentGuard.Optional,没检过的名字就会被放行'
+    }
 }
 
 Test-Case '玩家收件箱:-PlayerInboxConsumer 只核对、不改值 —— 与 yaml 一致时放行且渲染值仍取 yaml;不一致时在任何写操作之前拒绝并指向 yaml' {
@@ -6065,7 +6071,7 @@ Test-Case 'match-alerts.yaml:PrometheusRule 形状;规则引用的 match_* 指�
         Assert-Match -Text $poolGo -Pattern ('(?m)^\s*PoolClaim\w+\s*=\s*"{0}"' -f [regex]::Escape($outcome)) -Because "outcome=$outcome 必须是 pool.go 的成局结果常量"
     }
     $ruleCount = [regex]::Matches($alerts, '(?m)^\s+- alert: ').Count
-    Assert-Equal -Expected 5 -Actual $ruleCount -Because '规则名单:MatchPoolsUnowned / MatchPoolRoundSlow / MatchPoolNoBattleNode / MatchPoolGatherSlotsFull / MatchBackgroundLoopStalled(后台循环活性的形状与阈值在 loop_liveness_alerts_contract.tests.ps1)'
+    Assert-Equal -Expected 7 -Actual $ruleCount -Because '规则名单:MatchPoolsUnowned / MatchPoolRoundSlow / MatchPoolNoBattleNode / MatchPoolGatherSlotsFull / MatchBackgroundLoopStalled / MatchRetentionPurgeFailing / MatchRetentionBehind(后台循环活性、保留期清理的形状与阈值在 loop_liveness_alerts_contract.tests.ps1)'
     foreach ($field in @('for:', 'severity:', 'summary:', 'description:')) {
         Assert-Equal -Expected $ruleCount -Actual ([regex]::Matches($alerts, ('(?m)^\s+{0}' -f [regex]::Escape($field))).Count) -Because "每条规则都要有 $field"
     }
@@ -6643,6 +6649,33 @@ Test-Case 'content-guard:目录、镜像名、清单端口对得上;dev 档 Conf
     # 非 dev 档:Mode 固定 pro、必须有词库。两个变量的缺省值就是非 dev 档的值,只有 dev 档才改成服务 yaml 的值。
     Assert-Match -Text $deployScript -Pattern "(?m)^\s*\`$contentGuardMode\s*=\s*'pro'\s*$" -Because '非 dev 档 Mode 固定 pro'
     Assert-Match -Text $deployScript -Pattern "(?m)^\s*\`$contentGuardRequireLexicon\s*=\s*'true'\s*$" -Because '非 dev 档必须要求词库:只凭内置的几个词对外判定等于没有屏蔽字'
+}
+
+Test-Case '内容安全调用端:login / guild / chat 的 ConfigMap 都带 ContentGuard 段,发现键等于服务端注册的键;本机的 Optional 不上集群' {
+    Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
+    $serverKey = Get-EtcValue -RelativePath 'go/content_guard/etc/content_guard.yaml' -KeyPath 'Etcd.Key'
+    foreach ($case in @(
+            @{ Output = $devOut;               ConfigMap = 'go-svc-login-config'; File = 'login.yaml'; Source = 'go/login/etc/login.yaml' }
+            @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-guild-config'; File = 'guild.yaml'; Source = 'go/guild/etc/guild.yaml' }
+            @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-chat-config';  File = 'chat.yaml';  Source = 'go/chat/etc/chat.yaml' }
+        )) {
+        $block = Select-ManifestByName -Output $case.Output -Name $case.ConfigMap
+        Assert-True -Condition ($null -ne $block) -Because "DryRun 产物里应当有 $($case.ConfigMap)"
+        $embedded = Get-ConfigMapEmbeddedText -Block $block -FileName $case.File
+        $section = [regex]::Match($embedded, '(?m)^ContentGuard:\s*\r?\n(?:[ \t]+\S.*\r?\n?)+')
+        Assert-True -Condition $section.Success -Because "$($case.ConfigMap) 必须带 ContentGuard 段:缺了这个服务就不送检"
+        Assert-Match -Text $section.Value -Pattern '(?m)^        - "etcd\.[^"]+:2379"\s*$' -Because 'etcd 地址要改成集群内的,不能把服务 yaml 的 127.0.0.1 搬上集群'
+        Assert-Match -Text $section.Value -Pattern ("(?m)^      Key: {0}\s*$" -f [regex]::Escape($serverKey)) -Because '调用端的发现键必须等于内容安全服务端注册的键,否则永远找不到实例'
+        Assert-Equal -Expected $serverKey -Actual (Get-EtcValue -RelativePath $case.Source -KeyPath 'ContentGuard.Rpc.Etcd.Key') -Because '服务 yaml 里的发现键同样要对得上(本机路径)'
+        Assert-Equal -Expected 'true' -Actual (Get-EtcValue -RelativePath $case.Source -KeyPath 'ContentGuard.Optional') -Because '本机 yaml 显式写 Optional: true:内容安全没起时本机照样能建角、聊天'
+        Assert-True -Condition ($section.Value -notmatch 'Optional') -Because '调用端缺省严格;本机的 Optional 一旦上了集群,内容安全不可达时文字就不检直接放行'
+        Assert-Match -Text $section.Value -Pattern '(?m)^  TimeoutMs: \d+\s*$' -Because '删 Optional 那一行不能连带删掉后面的键'
+    }
+    # prod 档同样带这一段、同样没有 Optional。
+    $prodLogin = Get-ConfigMapEmbeddedText -Block (Select-ManifestByName -Output $prodRun.Output -Name 'go-svc-login-config') -FileName 'login.yaml'
+    $prodSection = [regex]::Match($prodLogin, '(?m)^ContentGuard:\s*\r?\n(?:[ \t]+\S.*\r?\n?)+')
+    Assert-True -Condition $prodSection.Success -Because 'prod 档的 login ConfigMap 必须带 ContentGuard 段'
+    Assert-True -Condition ($prodSection.Value -notmatch 'Optional') -Because 'prod 档不许带 Optional'
 }
 
 Test-Case 'content-guard 的 gRPC 口准入(infra namespace):只放行收玩家文字的服务,开放端口覆盖清单声明的其它端口' {
@@ -9797,6 +9830,97 @@ Test-Case '负向:-NodeOpenFileLimitMode 只收小写 enforce / warn,大写与�
         $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc', '-NodeOpenFileLimitMode', $bad))
         Assert-True -Condition ($run.ExitCode -ne 0) -Because "'$bad' 必须在脚本入口被拒:C++ 只认小写 enforce / warn,其余值按 enforce 处理,原样写进 env 等于运维以为开了豁免、进程照样拒启"
         Assert-Match -Text $run.Output -Pattern 'NodeOpenFileLimitMode' -Because '不能把其他执行错误误判为参数校验成功'
+        Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl' -Because '参数校验必须先于任何资源变更'
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 连接准入覆盖变量(2026-11-20):-ConnectionAdmissionEnv 接线
+# ─────────────────────────────────────────────────────────────────
+# 进程侧是 gate connection_admission.h 与 battle battle_connection_admission.h 的 k*Env(写错拒启;名单与 C++ 一致由
+# k8s_client_entry_contract.tests.ps1 核对)。生成侧钉住:不传时五套 C++ 模板一个都不写;给了就按角色分组 —— GATE_* 只进 gate
+# (Deployment / external StatefulSet),BATTLE_* 只进 battle(Deployment / hostPort / Agones Fleet),scene 一个都不进;
+# 每个只写一次、值原样、按契约名单顺序(与命令行先后无关);拼错在入口就拒。默认值复用上文的五次 DryRun。
+$AdmissionEnvArg = 'GATE_SOURCE_BURST=40,BATTLE_PREAUTH_BUDGET=600,GATE_ACCEPT_RATE_PER_SECOND=2000,BATTLE_ACCEPT_BURST=300'
+$AdmissionExpected = @{ gate = 'GATE_ACCEPT_RATE_PER_SECOND=2000,GATE_SOURCE_BURST=40'; battle = 'BATTLE_ACCEPT_BURST=300,BATTLE_PREAUTH_BUDGET=600'; scene = '' }
+$AdmissionNone = @{ gate = ''; battle = ''; scene = '' }
+$admZoneRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc', '-ConnectionAdmissionEnv', $AdmissionEnvArg))
+$admZoneEntryRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc', '-SceneOrchestrator', 'agones',
+    '-ClientEntryMode', 'external', '-GateServiceType', 'NodePort', '-GateNodePortBase', '30000', '-ClientPublicHost', '127.0.0.1', '-ConnectionAdmissionEnv', $AdmissionEnvArg))
+$admBattleRun = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-ConnectionAdmissionEnv', $AdmissionEnvArg)) -Env $BattleTestEnv
+$admBattleHostPortRun = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-ClientEntryMode', 'external', '-ConnectionAdmissionEnv', $AdmissionEnvArg)) -Env $BattleTestEnv
+$admBattleFleetRun = Invoke-DeployDryRun -Arguments ($BattleInfraArgs + @('-BattleOrchestrator', 'agones', '-ClientEntryMode', 'external',
+    '-ClientPublicHost', '127.0.0.1', '-ConnectionAdmissionEnv', $AdmissionEnvArg)) -Env $BattleTestEnv
+$AdmissionEnvNamePattern = '(?:GATE|BATTLE)_(?:ACCEPT|PREAUTH|SOURCE)_[A-Z_]+'
+
+# 工作负载里连接准入变量的「名字=值」,按出现顺序逗号拼接;名字出现的次数必须等于按「- name / value」成对写出的次数。
+function Get-ConnectionAdmissionEnvPairs {
+    param(
+        [Parameter(Mandatory = $true)][string]$Block,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $pairs = [regex]::Matches($Block, '(?m)^[ ]+- name: (?<n>' + $AdmissionEnvNamePattern + ')[ ]*\n[ ]+value: "(?<v>[^"\n]*)"[ ]*$')
+    $mentions = [regex]::Matches($Block, $AdmissionEnvNamePattern).Count
+    if ($mentions -ne $pairs.Count) { throw "${Label}:连接准入变量出现 $mentions 处,按「- name / value」成对写出的只有 $($pairs.Count) 处" }
+    return (@($pairs | ForEach-Object { '{0}={1}' -f $_.Groups['n'].Value, $_.Groups['v'].Value }) -join ',')
+}
+
+# 一次 DryRun 的每个 C++ 工作负载只带本角色那一组(-Expected:角色 → 期望的「名字=值」串,空串 = 一个都不写),
+# 并且恰好覆盖预期的那几套模板;非 C++ 工作负载一个都不带。
+function Assert-ConnectionAdmissionRendered {
+    param(
+        [Parameter(Mandatory = $true)]$Run,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string[]]$ExpectedWorkloads,
+        [Parameter(Mandatory = $true)][hashtable]$Expected
+    )
+    Assert-Equal -Expected 0 -Actual $Run.ExitCode -Because "${Label}:DryRun 应当成功。输出: $($Run.Output)"
+    $workloads = @(Get-CppWorkloadBlocks -Output $Run.Output)
+    Assert-Equal -Expected ((@($ExpectedWorkloads) | Sort-Object) -join ',') -Actual ((@($workloads | ForEach-Object { $_.Key }) | Sort-Object -Unique) -join ',') -Because "${Label}:这次 DryRun 要覆盖的 C++ 模板(夹具前提)"
+    foreach ($workload in $workloads) {
+        $role = $workload.Key.Split('/')[1]
+        $actual = Get-ConnectionAdmissionEnvPairs -Block $workload.Block -Label "$Label $($workload.Key)"
+        Assert-Equal -Expected ([string]$Expected[$role]) -Actual $actual -Because "${Label} $($workload.Key):只写本角色那一组、每个一次、值原样、按契约名单顺序(漏了这一套模板,运维以为改了阈值,这种形态仍按推导缺省跑)"
+    }
+    foreach ($block in (Get-ManifestBlocks -Output $Run.Output)) {
+        if ($block -match 'mountPath: /app/bin/etc') { continue }
+        Assert-NotMatch -Text $block -Pattern $AdmissionEnvNamePattern -Because "${Label}:只有 gate / battle 进程读这些变量,其它工作负载不写"
+    }
+}
+
+Test-Case '连接准入:不传 -ConnectionAdmissionEnv 时五套 C++ 模板都不写准入变量,也不打覆盖提示' {
+    foreach ($case in @(
+        @{ Label = 'zone-up 缺省'; Run = $devRun; Expected = @('Deployment/gate', 'Deployment/scene') }
+        @{ Label = 'zone-up external gate + Agones scene'; Run = $zoneRedisEntryRun; Expected = @('StatefulSet/gate', 'Fleet/scene') }
+        @{ Label = 'infra-up battle Deployment'; Run = $battleInfraRun; Expected = @('Deployment/battle') }
+        @{ Label = 'infra-up battle Agones Fleet'; Run = $battleZoneRedisFleetRun; Expected = @('Fleet/battle') }
+    )) {
+        Assert-ConnectionAdmissionRendered -Run $case.Run -Label $case.Label -ExpectedWorkloads $case.Expected -Expected $AdmissionNone
+        Assert-NotMatch -Text $case.Run.Output -Pattern '\[connection-admission\]' -Because "$($case.Label):没给覆盖就不打覆盖提示"
+    }
+}
+
+Test-Case '连接准入:-ConnectionAdmissionEnv 按角色分组写进五套 C++ 模板(gate 只有 GATE_*、battle 只有 BATTLE_*、scene 没有),顺序按契约名单;每次部署打出实际写进去的值' {
+    foreach ($case in @(
+        @{ Label = 'zone-up'; Run = $admZoneRun; Expected = @('Deployment/gate', 'Deployment/scene') }
+        @{ Label = 'zone-up external gate + Agones scene'; Run = $admZoneEntryRun; Expected = @('StatefulSet/gate', 'Fleet/scene') }
+        @{ Label = 'infra-up battle Deployment'; Run = $admBattleRun; Expected = @('Deployment/battle') }
+        @{ Label = 'infra-up battle hostPort'; Run = $admBattleHostPortRun; Expected = @('Deployment/battle') }
+        @{ Label = 'infra-up battle Agones Fleet'; Run = $admBattleFleetRun; Expected = @('Fleet/battle') }
+    )) {
+        Assert-ConnectionAdmissionRendered -Run $case.Run -Label $case.Label -ExpectedWorkloads $case.Expected -Expected $AdmissionExpected
+        Assert-Match -Text $case.Run.Output -Pattern '\[connection-admission\] gate overrides: GATE_ACCEPT_RATE_PER_SECOND=2000, GATE_SOURCE_BURST=40 \(not sticky' -Because "$($case.Label):参数不粘滞,部署输出要看得出这次带了什么"
+        Assert-Match -Text $case.Run.Output -Pattern '\[connection-admission\] battle overrides: BATTLE_ACCEPT_BURST=300, BATTLE_PREAUTH_BUDGET=600 \(not sticky' -Because "$($case.Label):两组都打"
+    }
+    $hostPort = Select-CppWorkloadBlock -Output $admBattleHostPortRun.Output -Kind 'Deployment' -Name 'battle' -Label 'infra-up battle hostPort'
+    Assert-Match -Text $hostPort -Pattern 'hostPort: 20000' -Because '夹具前提:external + deployment 渲染的是 hostPort 形态,不是 New-NodeDeploymentYaml 的 battle'
+}
+
+Test-Case '负向:-ConnectionAdmissionEnv 拼错名字、值不是规范十进制正整数或同名给两次,在入口被拒、先于任何资源变更' {
+    foreach ($bad in @('GATE_ACCEPT_RATE=2000', 'gate_accept_burst=10', 'GATE_ACCEPT_BURST=0', 'GATE_ACCEPT_BURST=010', 'GATE_ACCEPT_BURST=10,GATE_ACCEPT_BURST=20')) {
+        $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SkipGoSvc', '-SkipJavaSvc', '-ConnectionAdmissionEnv', $bad))
+        Assert-True -Condition ($run.ExitCode -ne 0) -Because "'$bad' 必须在脚本入口被拒:C++ 按原名 getenv,拼错的名字静默不生效,写错的值让 Pod 拒启"
+        Assert-Match -Text $run.Output -Pattern 'ConnectionAdmissionEnv' -Because '不能把其他执行错误误判为参数校验成功'
         Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl' -Because '参数校验必须先于任何资源变更'
     }
 }

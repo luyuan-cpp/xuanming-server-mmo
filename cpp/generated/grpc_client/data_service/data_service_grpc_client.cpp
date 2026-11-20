@@ -29,6 +29,7 @@ namespace data_service {
 #pragma region DataServiceReadAccountDirectory
 namespace {
 void QueueLocalDataServiceReadAccountDirectoryFailure(GrpcDone<::data_service::AccountDirectoryResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceReadAccountDirectoryGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendDataServiceReadAccountDirectoryErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ReadAccountDirectory: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReadAccountDirectoryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendDataServiceReadAccountDirectoryErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::data_service::ReadAccountDirectoryRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ReadAccountDirectory: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReadAccountDirectoryGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendDataServiceReadAccountDirectoryErased(entt::registry& registry, entt::e
 #pragma region DataServiceCreateAccountRole
 namespace {
 void QueueLocalDataServiceCreateAccountRoleFailure(GrpcDone<::data_service::AccountDirectoryResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceCreateAccountRoleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendDataServiceCreateAccountRoleErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.CreateAccountRole: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCreateAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendDataServiceCreateAccountRoleErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::CreateAccountRoleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.CreateAccountRole: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCreateAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendDataServiceCreateAccountRoleErased(entt::registry& registry, entt::enti
 #pragma region DataServiceLookupAccountRole
 namespace {
 void QueueLocalDataServiceLookupAccountRoleFailure(GrpcDone<::data_service::AccountRoleOwnership> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceLookupAccountRoleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendDataServiceLookupAccountRoleErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.LookupAccountRole: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceLookupAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendDataServiceLookupAccountRoleErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::LookupAccountRoleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.LookupAccountRole: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceLookupAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendDataServiceLookupAccountRoleErased(entt::registry& registry, entt::enti
 #pragma region DataServiceRepairAccountRole
 namespace {
 void QueueLocalDataServiceRepairAccountRoleFailure(GrpcDone<::data_service::AccountDirectoryResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceRepairAccountRoleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendDataServiceRepairAccountRoleErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.RepairAccountRole: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRepairAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendDataServiceRepairAccountRoleErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::RepairAccountRoleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.RepairAccountRole: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRepairAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendDataServiceRepairAccountRoleErased(entt::registry& registry, entt::enti
 #pragma region DataServiceRemoveAccountRoles
 namespace {
 void QueueLocalDataServiceRemoveAccountRolesFailure(GrpcDone<::google::protobuf::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceRemoveAccountRolesGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendDataServiceRemoveAccountRolesErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.RemoveAccountRoles: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRemoveAccountRolesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendDataServiceRemoveAccountRolesErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::data_service::RemoveAccountRolesRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.RemoveAccountRoles: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRemoveAccountRolesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -466,9 +481,283 @@ void SendDataServiceRemoveAccountRolesErased(entt::registry& registry, entt::ent
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::google::protobuf::Empty* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region DataServiceSetAccountRealName
+namespace {
+void QueueLocalDataServiceSetAccountRealNameFailure(GrpcDone<::data_service::SetAccountRealNameResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceSetAccountRealNameGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceSetAccountRealNameCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::SetAccountRealNameRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::SetAccountRealNameResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.SetAccountRealName requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceSetAccountRealNameGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceSetAccountRealNameFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceSetAccountRealNameFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::SetAccountRealNameResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.SetAccountRealName response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceSetAccountRealName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::SetAccountRealNameRequest& request,
+                                            GrpcDone<::data_service::SetAccountRealNameResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceSetAccountRealNameCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceSetAccountRealNameErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.SetAccountRealName requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::SetAccountRealNameRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.SetAccountRealName: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceSetAccountRealNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::SetAccountRealNameRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.SetAccountRealName: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceSetAccountRealNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceSetAccountRealNameCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::SetAccountRealNameResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region DataServiceGetAccountRealName
+namespace {
+void QueueLocalDataServiceGetAccountRealNameFailure(GrpcDone<::data_service::GetAccountRealNameResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetAccountRealNameGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceGetAccountRealNameCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetAccountRealNameRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::GetAccountRealNameResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.GetAccountRealName requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceGetAccountRealNameGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceGetAccountRealNameFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceGetAccountRealNameFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::GetAccountRealNameResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.GetAccountRealName response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceGetAccountRealName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::GetAccountRealNameRequest& request,
+                                            GrpcDone<::data_service::GetAccountRealNameResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceGetAccountRealNameCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceGetAccountRealNameErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.GetAccountRealName requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::GetAccountRealNameRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.GetAccountRealName: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetAccountRealNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::GetAccountRealNameRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.GetAccountRealName: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetAccountRealNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceGetAccountRealNameCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::GetAccountRealNameResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region DataServiceResetAccountRealName
+namespace {
+void QueueLocalDataServiceResetAccountRealNameFailure(GrpcDone<::data_service::ResetAccountRealNameResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceResetAccountRealNameGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceResetAccountRealNameCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ResetAccountRealNameRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::ResetAccountRealNameResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.ResetAccountRealName requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceResetAccountRealNameGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceResetAccountRealNameFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceResetAccountRealNameFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::ResetAccountRealNameResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.ResetAccountRealName response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceResetAccountRealName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ResetAccountRealNameRequest& request,
+                                            GrpcDone<::data_service::ResetAccountRealNameResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceResetAccountRealNameCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceResetAccountRealNameErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.ResetAccountRealName requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::ResetAccountRealNameRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.ResetAccountRealName: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceResetAccountRealNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::ResetAccountRealNameRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.ResetAccountRealName: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceResetAccountRealNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceResetAccountRealNameCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::ResetAccountRealNameResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region DataServiceBeginAccountRoleTrade
 namespace {
 void QueueLocalDataServiceBeginAccountRoleTradeFailure(GrpcDone<::data_service::AccountRoleTradeReceipt> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceBeginAccountRoleTradeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +825,7 @@ void SendDataServiceBeginAccountRoleTradeErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.BeginAccountRoleTrade: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBeginAccountRoleTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +835,7 @@ void SendDataServiceBeginAccountRoleTradeErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::data_service::BeginAccountRoleTradeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.BeginAccountRoleTrade: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBeginAccountRoleTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +848,7 @@ void SendDataServiceBeginAccountRoleTradeErased(entt::registry& registry, entt::
 #pragma region DataServiceConfirmAccountRoleTradeFreeze
 namespace {
 void QueueLocalDataServiceConfirmAccountRoleTradeFreezeFailure(GrpcDone<::data_service::AccountRoleTradeReceipt> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceConfirmAccountRoleTradeFreezeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +916,7 @@ void SendDataServiceConfirmAccountRoleTradeFreezeErased(entt::registry& registry
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ConfirmAccountRoleTradeFreeze: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceConfirmAccountRoleTradeFreezeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +926,7 @@ void SendDataServiceConfirmAccountRoleTradeFreezeErased(entt::registry& registry
     const auto* typedRequest = dynamic_cast<const ::data_service::ConfirmAccountRoleTradeFreezeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ConfirmAccountRoleTradeFreeze: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceConfirmAccountRoleTradeFreezeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -645,6 +939,7 @@ void SendDataServiceConfirmAccountRoleTradeFreezeErased(entt::registry& registry
 #pragma region DataServiceCancelAccountRoleTrade
 namespace {
 void QueueLocalDataServiceCancelAccountRoleTradeFailure(GrpcDone<::data_service::AccountRoleTradeReceipt> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceCancelAccountRoleTradeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -712,6 +1007,7 @@ void SendDataServiceCancelAccountRoleTradeErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.CancelAccountRoleTrade: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCancelAccountRoleTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -721,6 +1017,7 @@ void SendDataServiceCancelAccountRoleTradeErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::data_service::CancelAccountRoleTradeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.CancelAccountRoleTrade: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCancelAccountRoleTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -733,6 +1030,7 @@ void SendDataServiceCancelAccountRoleTradeErased(entt::registry& registry, entt:
 #pragma region DataServiceTransferAccountRole
 namespace {
 void QueueLocalDataServiceTransferAccountRoleFailure(GrpcDone<::data_service::AccountRoleTransferReceipt> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceTransferAccountRoleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -800,6 +1098,7 @@ void SendDataServiceTransferAccountRoleErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.TransferAccountRole: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceTransferAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -809,6 +1108,7 @@ void SendDataServiceTransferAccountRoleErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::data_service::TransferAccountRoleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.TransferAccountRole: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceTransferAccountRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -821,6 +1121,7 @@ void SendDataServiceTransferAccountRoleErased(entt::registry& registry, entt::en
 #pragma region DataServiceCheckAccountRoleSlot
 namespace {
 void QueueLocalDataServiceCheckAccountRoleSlotFailure(GrpcDone<::data_service::CheckAccountRoleSlotResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceCheckAccountRoleSlotGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -888,6 +1189,7 @@ void SendDataServiceCheckAccountRoleSlotErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.CheckAccountRoleSlot: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCheckAccountRoleSlotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -897,6 +1199,7 @@ void SendDataServiceCheckAccountRoleSlotErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::data_service::CheckAccountRoleSlotRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.CheckAccountRoleSlot: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCheckAccountRoleSlotGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -909,6 +1212,7 @@ void SendDataServiceCheckAccountRoleSlotErased(entt::registry& registry, entt::e
 #pragma region DataServiceGetRoleFenceState
 namespace {
 void QueueLocalDataServiceGetRoleFenceStateFailure(GrpcDone<::data_service::GetRoleFenceStateResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetRoleFenceStateGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -976,6 +1280,7 @@ void SendDataServiceGetRoleFenceStateErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetRoleFenceState: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetRoleFenceStateGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -985,6 +1290,7 @@ void SendDataServiceGetRoleFenceStateErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::GetRoleFenceStateRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetRoleFenceState: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetRoleFenceStateGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -997,6 +1303,7 @@ void SendDataServiceGetRoleFenceStateErased(entt::registry& registry, entt::enti
 #pragma region DataServiceVerifyRoleAdmission
 namespace {
 void QueueLocalDataServiceVerifyRoleAdmissionFailure(GrpcDone<::data_service::VerifyRoleAdmissionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceVerifyRoleAdmissionGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1064,6 +1371,7 @@ void SendDataServiceVerifyRoleAdmissionErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.VerifyRoleAdmission: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceVerifyRoleAdmissionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1073,6 +1381,7 @@ void SendDataServiceVerifyRoleAdmissionErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::data_service::VerifyRoleAdmissionRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.VerifyRoleAdmission: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceVerifyRoleAdmissionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1085,6 +1394,7 @@ void SendDataServiceVerifyRoleAdmissionErased(entt::registry& registry, entt::en
 #pragma region DataServiceRegisterRoleAdmission
 namespace {
 void QueueLocalDataServiceRegisterRoleAdmissionFailure(GrpcDone<::data_service::RegisterRoleAdmissionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceRegisterRoleAdmissionGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1152,6 +1462,7 @@ void SendDataServiceRegisterRoleAdmissionErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.RegisterRoleAdmission: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRegisterRoleAdmissionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1161,6 +1472,7 @@ void SendDataServiceRegisterRoleAdmissionErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::data_service::RegisterRoleAdmissionRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.RegisterRoleAdmission: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRegisterRoleAdmissionGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1173,6 +1485,7 @@ void SendDataServiceRegisterRoleAdmissionErased(entt::registry& registry, entt::
 #pragma region DataServiceCloseRoleAdmissions
 namespace {
 void QueueLocalDataServiceCloseRoleAdmissionsFailure(GrpcDone<::data_service::CloseRoleAdmissionsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceCloseRoleAdmissionsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1240,6 +1553,7 @@ void SendDataServiceCloseRoleAdmissionsErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.CloseRoleAdmissions: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCloseRoleAdmissionsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1249,6 +1563,7 @@ void SendDataServiceCloseRoleAdmissionsErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::data_service::CloseRoleAdmissionsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.CloseRoleAdmissions: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCloseRoleAdmissionsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1261,6 +1576,7 @@ void SendDataServiceCloseRoleAdmissionsErased(entt::registry& registry, entt::en
 #pragma region DataServiceAckRoleTradeDrain
 namespace {
 void QueueLocalDataServiceAckRoleTradeDrainFailure(GrpcDone<::google::protobuf::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceAckRoleTradeDrainGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1328,6 +1644,7 @@ void SendDataServiceAckRoleTradeDrainErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.AckRoleTradeDrain: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceAckRoleTradeDrainGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1337,6 +1654,7 @@ void SendDataServiceAckRoleTradeDrainErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::AckRoleTradeDrainRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.AckRoleTradeDrain: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceAckRoleTradeDrainGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1346,9 +1664,374 @@ void SendDataServiceAckRoleTradeDrainErased(entt::registry& registry, entt::enti
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::google::protobuf::Empty* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region DataServiceRequestAccountDeletion
+namespace {
+void QueueLocalDataServiceRequestAccountDeletionFailure(GrpcDone<::data_service::AccountDeletionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceRequestAccountDeletionGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceRequestAccountDeletionCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RequestAccountDeletionRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::AccountDeletionResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.RequestAccountDeletion requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceRequestAccountDeletionGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceRequestAccountDeletionFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceRequestAccountDeletionFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::AccountDeletionResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.RequestAccountDeletion response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceRequestAccountDeletion(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RequestAccountDeletionRequest& request,
+                                            GrpcDone<::data_service::AccountDeletionResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceRequestAccountDeletionCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceRequestAccountDeletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.RequestAccountDeletion requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::RequestAccountDeletionRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.RequestAccountDeletion: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRequestAccountDeletionGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::RequestAccountDeletionRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.RequestAccountDeletion: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRequestAccountDeletionGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceRequestAccountDeletionCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::AccountDeletionResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region DataServiceCancelAccountDeletion
+namespace {
+void QueueLocalDataServiceCancelAccountDeletionFailure(GrpcDone<::data_service::AccountDeletionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceCancelAccountDeletionGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceCancelAccountDeletionCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::CancelAccountDeletionRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::AccountDeletionResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.CancelAccountDeletion requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceCancelAccountDeletionGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceCancelAccountDeletionFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceCancelAccountDeletionFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::AccountDeletionResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.CancelAccountDeletion response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceCancelAccountDeletion(entt::registry& registry, entt::entity nodeEntity, const ::data_service::CancelAccountDeletionRequest& request,
+                                            GrpcDone<::data_service::AccountDeletionResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceCancelAccountDeletionCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceCancelAccountDeletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.CancelAccountDeletion requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::CancelAccountDeletionRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.CancelAccountDeletion: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCancelAccountDeletionGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::CancelAccountDeletionRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.CancelAccountDeletion: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCancelAccountDeletionGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceCancelAccountDeletionCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::AccountDeletionResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region DataServiceClaimAccountDeletions
+namespace {
+void QueueLocalDataServiceClaimAccountDeletionsFailure(GrpcDone<::data_service::ClaimAccountDeletionsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceClaimAccountDeletionsGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceClaimAccountDeletionsCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ClaimAccountDeletionsRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::ClaimAccountDeletionsResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.ClaimAccountDeletions requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceClaimAccountDeletionsGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceClaimAccountDeletionsFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceClaimAccountDeletionsFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::ClaimAccountDeletionsResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.ClaimAccountDeletions response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceClaimAccountDeletions(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ClaimAccountDeletionsRequest& request,
+                                            GrpcDone<::data_service::ClaimAccountDeletionsResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceClaimAccountDeletionsCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceClaimAccountDeletionsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.ClaimAccountDeletions requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::ClaimAccountDeletionsRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.ClaimAccountDeletions: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceClaimAccountDeletionsGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::ClaimAccountDeletionsRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.ClaimAccountDeletions: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceClaimAccountDeletionsGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceClaimAccountDeletionsCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::ClaimAccountDeletionsResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region DataServiceFinishAccountDeletion
+namespace {
+void QueueLocalDataServiceFinishAccountDeletionFailure(GrpcDone<::data_service::FinishAccountDeletionResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceFinishAccountDeletionGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceFinishAccountDeletionCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::FinishAccountDeletionRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::FinishAccountDeletionResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.FinishAccountDeletion requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceFinishAccountDeletionGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceFinishAccountDeletionFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceFinishAccountDeletionFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::FinishAccountDeletionResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.FinishAccountDeletion response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceFinishAccountDeletion(entt::registry& registry, entt::entity nodeEntity, const ::data_service::FinishAccountDeletionRequest& request,
+                                            GrpcDone<::data_service::FinishAccountDeletionResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceFinishAccountDeletionCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceFinishAccountDeletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.FinishAccountDeletion requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::FinishAccountDeletionRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.FinishAccountDeletion: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceFinishAccountDeletionGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::FinishAccountDeletionRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.FinishAccountDeletion: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceFinishAccountDeletionGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceFinishAccountDeletionCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::FinishAccountDeletionResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region DataServiceReleaseDeadPlayerStoreHolder
 namespace {
 void QueueLocalDataServiceReleaseDeadPlayerStoreHolderFailure(GrpcDone<::google::protobuf::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceReleaseDeadPlayerStoreHolderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1416,6 +2099,7 @@ void SendDataServiceReleaseDeadPlayerStoreHolderErased(entt::registry& registry,
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ReleaseDeadPlayerStoreHolder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReleaseDeadPlayerStoreHolderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1425,6 +2109,7 @@ void SendDataServiceReleaseDeadPlayerStoreHolderErased(entt::registry& registry,
     const auto* typedRequest = dynamic_cast<const ::data_service::ReleaseDeadPlayerStoreHolderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ReleaseDeadPlayerStoreHolder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReleaseDeadPlayerStoreHolderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1437,6 +2122,7 @@ void SendDataServiceReleaseDeadPlayerStoreHolderErased(entt::registry& registry,
 #pragma region DataServiceReadPlayerStoreHolder
 namespace {
 void QueueLocalDataServiceReadPlayerStoreHolderFailure(GrpcDone<::data_service::ReadPlayerStoreHolderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceReadPlayerStoreHolderGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1504,6 +2190,7 @@ void SendDataServiceReadPlayerStoreHolderErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ReadPlayerStoreHolder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReadPlayerStoreHolderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1513,6 +2200,7 @@ void SendDataServiceReadPlayerStoreHolderErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::data_service::ReadPlayerStoreHolderRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ReadPlayerStoreHolder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReadPlayerStoreHolderGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1525,6 +2213,7 @@ void SendDataServiceReadPlayerStoreHolderErased(entt::registry& registry, entt::
 #pragma region DataServiceRegisterPlayerZone
 namespace {
 void QueueLocalDataServiceRegisterPlayerZoneFailure(GrpcDone<::google::protobuf::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceRegisterPlayerZoneGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1592,6 +2281,7 @@ void SendDataServiceRegisterPlayerZoneErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.RegisterPlayerZone: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRegisterPlayerZoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1601,6 +2291,7 @@ void SendDataServiceRegisterPlayerZoneErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::data_service::RegisterPlayerZoneRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.RegisterPlayerZone: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRegisterPlayerZoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1613,6 +2304,7 @@ void SendDataServiceRegisterPlayerZoneErased(entt::registry& registry, entt::ent
 #pragma region DataServiceGetPlayerHomeZone
 namespace {
 void QueueLocalDataServiceGetPlayerHomeZoneFailure(GrpcDone<::data_service::GetPlayerHomeZoneResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetPlayerHomeZoneGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1680,6 +2372,7 @@ void SendDataServiceGetPlayerHomeZoneErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetPlayerHomeZone: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerHomeZoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1689,6 +2382,7 @@ void SendDataServiceGetPlayerHomeZoneErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::GetPlayerHomeZoneRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetPlayerHomeZone: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerHomeZoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1701,6 +2395,7 @@ void SendDataServiceGetPlayerHomeZoneErased(entt::registry& registry, entt::enti
 #pragma region DataServiceBatchGetPlayerHomeZone
 namespace {
 void QueueLocalDataServiceBatchGetPlayerHomeZoneFailure(GrpcDone<::data_service::BatchGetPlayerHomeZoneResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerHomeZoneGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1768,6 +2463,7 @@ void SendDataServiceBatchGetPlayerHomeZoneErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.BatchGetPlayerHomeZone: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerHomeZoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1777,6 +2473,7 @@ void SendDataServiceBatchGetPlayerHomeZoneErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::data_service::BatchGetPlayerHomeZoneRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.BatchGetPlayerHomeZone: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerHomeZoneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1789,6 +2486,7 @@ void SendDataServiceBatchGetPlayerHomeZoneErased(entt::registry& registry, entt:
 #pragma region DataServiceGetMergedZones
 namespace {
 void QueueLocalDataServiceGetMergedZonesFailure(GrpcDone<::data_service::GetMergedZonesResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetMergedZonesGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1856,6 +2554,7 @@ void SendDataServiceGetMergedZonesErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetMergedZones: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetMergedZonesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1865,6 +2564,7 @@ void SendDataServiceGetMergedZonesErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::google::protobuf::Empty*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetMergedZones: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetMergedZonesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1877,6 +2577,7 @@ void SendDataServiceGetMergedZonesErased(entt::registry& registry, entt::entity 
 #pragma region DataServiceCountZoneRoles
 namespace {
 void QueueLocalDataServiceCountZoneRolesFailure(GrpcDone<::data_service::CountZoneRolesResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceCountZoneRolesGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -1944,6 +2645,7 @@ void SendDataServiceCountZoneRolesErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.CountZoneRoles: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCountZoneRolesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1953,6 +2655,7 @@ void SendDataServiceCountZoneRolesErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::data_service::CountZoneRolesRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.CountZoneRoles: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCountZoneRolesGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -1965,6 +2668,7 @@ void SendDataServiceCountZoneRolesErased(entt::registry& registry, entt::entity 
 #pragma region DataServiceGetPlayerRoute
 namespace {
 void QueueLocalDataServiceGetPlayerRouteFailure(GrpcDone<::data_service::GetPlayerRouteResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetPlayerRouteGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2032,6 +2736,7 @@ void SendDataServiceGetPlayerRouteErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetPlayerRoute: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerRouteGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2041,6 +2746,7 @@ void SendDataServiceGetPlayerRouteErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::data_service::GetPlayerRouteRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetPlayerRoute: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerRouteGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2053,6 +2759,7 @@ void SendDataServiceGetPlayerRouteErased(entt::registry& registry, entt::entity 
 #pragma region DataServiceListPlayerSnapshots
 namespace {
 void QueueLocalDataServiceListPlayerSnapshotsFailure(GrpcDone<::data_service::ListPlayerSnapshotsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceListPlayerSnapshotsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2120,6 +2827,7 @@ void SendDataServiceListPlayerSnapshotsErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ListPlayerSnapshots: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceListPlayerSnapshotsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2129,6 +2837,7 @@ void SendDataServiceListPlayerSnapshotsErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::data_service::ListPlayerSnapshotsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ListPlayerSnapshots: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceListPlayerSnapshotsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2141,6 +2850,7 @@ void SendDataServiceListPlayerSnapshotsErased(entt::registry& registry, entt::en
 #pragma region DataServiceBatchRecallItems
 namespace {
 void QueueLocalDataServiceBatchRecallItemsFailure(GrpcDone<::data_service::BatchRecallItemsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceBatchRecallItemsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2208,6 +2918,7 @@ void SendDataServiceBatchRecallItemsErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.BatchRecallItems: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchRecallItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2217,6 +2928,7 @@ void SendDataServiceBatchRecallItemsErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::data_service::BatchRecallItemsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.BatchRecallItems: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchRecallItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2229,6 +2941,7 @@ void SendDataServiceBatchRecallItemsErased(entt::registry& registry, entt::entit
 #pragma region DataServiceGetRecallBatch
 namespace {
 void QueueLocalDataServiceGetRecallBatchFailure(GrpcDone<::data_service::BatchRecallItemsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetRecallBatchGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2296,6 +3009,7 @@ void SendDataServiceGetRecallBatchErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetRecallBatch: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetRecallBatchGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2305,6 +3019,7 @@ void SendDataServiceGetRecallBatchErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::data_service::GetRecallBatchRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetRecallBatch: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetRecallBatchGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2317,6 +3032,7 @@ void SendDataServiceGetRecallBatchErased(entt::registry& registry, entt::entity 
 #pragma region DataServiceCancelRecallBatch
 namespace {
 void QueueLocalDataServiceCancelRecallBatchFailure(GrpcDone<::data_service::BatchRecallItemsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceCancelRecallBatchGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2384,6 +3100,7 @@ void SendDataServiceCancelRecallBatchErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.CancelRecallBatch: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCancelRecallBatchGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2393,6 +3110,7 @@ void SendDataServiceCancelRecallBatchErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::CancelRecallBatchRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.CancelRecallBatch: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceCancelRecallBatchGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2405,6 +3123,7 @@ void SendDataServiceCancelRecallBatchErased(entt::registry& registry, entt::enti
 #pragma region DataServiceResolveRecallOp
 namespace {
 void QueueLocalDataServiceResolveRecallOpFailure(GrpcDone<::data_service::ResolveRecallOpResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceResolveRecallOpGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2472,6 +3191,7 @@ void SendDataServiceResolveRecallOpErased(entt::registry& registry, entt::entity
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ResolveRecallOp: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceResolveRecallOpGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2481,6 +3201,7 @@ void SendDataServiceResolveRecallOpErased(entt::registry& registry, entt::entity
     const auto* typedRequest = dynamic_cast<const ::data_service::ResolveRecallOpRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ResolveRecallOp: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceResolveRecallOpGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2493,6 +3214,7 @@ void SendDataServiceResolveRecallOpErased(entt::registry& registry, entt::entity
 #pragma region DataServiceRegisterRecallReviewHandled
 namespace {
 void QueueLocalDataServiceRegisterRecallReviewHandledFailure(GrpcDone<::data_service::RegisterRecallReviewHandledResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceRegisterRecallReviewHandledGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2560,6 +3282,7 @@ void SendDataServiceRegisterRecallReviewHandledErased(entt::registry& registry, 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.RegisterRecallReviewHandled: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRegisterRecallReviewHandledGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2569,6 +3292,7 @@ void SendDataServiceRegisterRecallReviewHandledErased(entt::registry& registry, 
     const auto* typedRequest = dynamic_cast<const ::data_service::RegisterRecallReviewHandledRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.RegisterRecallReviewHandled: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRegisterRecallReviewHandledGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2581,6 +3305,7 @@ void SendDataServiceRegisterRecallReviewHandledErased(entt::registry& registry, 
 #pragma region DataServiceQueryTransactionLog
 namespace {
 void QueueLocalDataServiceQueryTransactionLogFailure(GrpcDone<::data_service::QueryTransactionLogResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceQueryTransactionLogGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2648,6 +3373,7 @@ void SendDataServiceQueryTransactionLogErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.QueryTransactionLog: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceQueryTransactionLogGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2657,6 +3383,7 @@ void SendDataServiceQueryTransactionLogErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::data_service::QueryTransactionLogRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.QueryTransactionLog: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceQueryTransactionLogGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2669,6 +3396,7 @@ void SendDataServiceQueryTransactionLogErased(entt::registry& registry, entt::en
 #pragma region DataServiceAllocateIdSegment
 namespace {
 void QueueLocalDataServiceAllocateIdSegmentFailure(GrpcDone<::data_service::AllocateIdSegmentResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceAllocateIdSegmentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2736,6 +3464,7 @@ void SendDataServiceAllocateIdSegmentErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.AllocateIdSegment: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceAllocateIdSegmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2745,6 +3474,7 @@ void SendDataServiceAllocateIdSegmentErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::AllocateIdSegmentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.AllocateIdSegment: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceAllocateIdSegmentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2757,6 +3487,7 @@ void SendDataServiceAllocateIdSegmentErased(entt::registry& registry, entt::enti
 #pragma region DataServiceReservePlayerName
 namespace {
 void QueueLocalDataServiceReservePlayerNameFailure(GrpcDone<::data_service::ReservePlayerNameResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceReservePlayerNameGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2824,6 +3555,7 @@ void SendDataServiceReservePlayerNameErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ReservePlayerName: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReservePlayerNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2833,6 +3565,7 @@ void SendDataServiceReservePlayerNameErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::ReservePlayerNameRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ReservePlayerName: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReservePlayerNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2845,6 +3578,7 @@ void SendDataServiceReservePlayerNameErased(entt::registry& registry, entt::enti
 #pragma region DataServiceReleasePlayerName
 namespace {
 void QueueLocalDataServiceReleasePlayerNameFailure(GrpcDone<::google::protobuf::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceReleasePlayerNameGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -2912,6 +3646,7 @@ void SendDataServiceReleasePlayerNameErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.ReleasePlayerName: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReleasePlayerNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2921,6 +3656,7 @@ void SendDataServiceReleasePlayerNameErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::data_service::ReleasePlayerNameRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.ReleasePlayerName: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceReleasePlayerNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -2933,6 +3669,7 @@ void SendDataServiceReleasePlayerNameErased(entt::registry& registry, entt::enti
 #pragma region DataServiceBatchGetPlayerName
 namespace {
 void QueueLocalDataServiceBatchGetPlayerNameFailure(GrpcDone<::data_service::BatchGetPlayerNameResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerNameGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -3000,6 +3737,7 @@ void SendDataServiceBatchGetPlayerNameErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.BatchGetPlayerName: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3009,6 +3747,7 @@ void SendDataServiceBatchGetPlayerNameErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::data_service::BatchGetPlayerNameRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.BatchGetPlayerName: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerNameGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3018,9 +3757,101 @@ void SendDataServiceBatchGetPlayerNameErased(entt::registry& registry, entt::ent
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::BatchGetPlayerNameResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region DataServiceRenameRole
+namespace {
+void QueueLocalDataServiceRenameRoleFailure(GrpcDone<::data_service::RenameRoleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceRenameRoleGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartDataServiceRenameRoleCall(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RenameRoleRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::data_service::RenameRoleResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.RenameRole requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kDataServiceRenameRoleGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalDataServiceRenameRoleFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalDataServiceRenameRoleFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::data_service::RenameRoleResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the DataService.RenameRole response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendDataServiceRenameRole(entt::registry& registry, entt::entity nodeEntity, const ::data_service::RenameRoleRequest& request,
+                                            GrpcDone<::data_service::RenameRoleResponse> done, const GrpcCallOptions& options) {
+    StartDataServiceRenameRoleCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendDataServiceRenameRoleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC DataService.RenameRole requires a done callback";
+    }
+    if (message.GetDescriptor() != ::data_service::RenameRoleRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC DataService.RenameRole: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRenameRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::data_service::RenameRoleRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC DataService.RenameRole: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceRenameRoleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartDataServiceRenameRoleCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::data_service::RenameRoleResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 #pragma region DataServiceBatchGetPlayerDisplay
 namespace {
 void QueueLocalDataServiceBatchGetPlayerDisplayFailure(GrpcDone<::data_service::BatchGetPlayerDisplayResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerDisplayGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -3088,6 +3919,7 @@ void SendDataServiceBatchGetPlayerDisplayErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.BatchGetPlayerDisplay: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerDisplayGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3097,6 +3929,7 @@ void SendDataServiceBatchGetPlayerDisplayErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::data_service::BatchGetPlayerDisplayRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.BatchGetPlayerDisplay: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceBatchGetPlayerDisplayGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3109,6 +3942,7 @@ void SendDataServiceBatchGetPlayerDisplayErased(entt::registry& registry, entt::
 #pragma region DataServiceGetPlayerAssetOpLedger
 namespace {
 void QueueLocalDataServiceGetPlayerAssetOpLedgerFailure(GrpcDone<::data_service::GetPlayerAssetOpLedgerResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetPlayerAssetOpLedgerGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -3176,6 +4010,7 @@ void SendDataServiceGetPlayerAssetOpLedgerErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetPlayerAssetOpLedger: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerAssetOpLedgerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3185,6 +4020,7 @@ void SendDataServiceGetPlayerAssetOpLedgerErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::data_service::GetPlayerAssetOpLedgerRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetPlayerAssetOpLedger: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerAssetOpLedgerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3197,6 +4033,7 @@ void SendDataServiceGetPlayerAssetOpLedgerErased(entt::registry& registry, entt:
 #pragma region DataServiceGetPlayerInboxLedger
 namespace {
 void QueueLocalDataServiceGetPlayerInboxLedgerFailure(GrpcDone<::data_service::GetPlayerInboxLedgerResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetPlayerInboxLedgerGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -3264,6 +4101,7 @@ void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetPlayerInboxLedger: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerInboxLedgerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3273,6 +4111,7 @@ void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::data_service::GetPlayerInboxLedgerRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetPlayerInboxLedger: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerInboxLedgerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3285,6 +4124,7 @@ void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& registry, entt::e
 #pragma region DataServiceGetPlayerItemGainBlock
 namespace {
 void QueueLocalDataServiceGetPlayerItemGainBlockFailure(GrpcDone<::data_service::GetPlayerItemGainBlockResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kDataServiceGetPlayerItemGainBlockGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -3352,6 +4192,7 @@ void SendDataServiceGetPlayerItemGainBlockErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC DataService.GetPlayerItemGainBlock: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerItemGainBlockGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -3361,6 +4202,7 @@ void SendDataServiceGetPlayerItemGainBlockErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::data_service::GetPlayerItemGainBlockRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC DataService.GetPlayerItemGainBlock: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kDataServiceGetPlayerItemGainBlockGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

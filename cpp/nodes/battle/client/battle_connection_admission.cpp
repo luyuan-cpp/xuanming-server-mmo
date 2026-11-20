@@ -2,6 +2,8 @@
 
 #include <random>
 
+#include "network/codec/websocket.h"
+
 namespace battle_connection_admission
 {
 
@@ -25,9 +27,15 @@ void SetEarlyDropRandomForTesting(const UniformBelow uniformBelow)
     tlsUniformBelow = uniformBelow != nullptr ? uniformBelow : &RandomBelow;
 }
 
-Verdict Admission::Admit(const size_t currentConnections, const size_t maxConnections, const uint64_t unauthenticated,
+Verdict Admission::Admit(const muduo::net::InetAddress &peer, const size_t currentConnections,
+                         const size_t maxConnections, const uint64_t unauthenticated,
                          const std::optional<SteadyTime::duration> oldestUnauthenticatedAge, const SteadyTime now)
 {
+    // 按来源限速:开启且承压时才问这条直连所在前缀的桶;非公网来源(代理、边缘 nginx、集群内)认不出真实玩家,不按来源限。
+    sourceRateActive_ = sourceRate_.has_value() &&
+                        accept_admission::SourceRateUnderPressure(unauthenticated, preAuthBudget_, lastAcceptRateRejectAt_, now);
+    const std::optional<SourcePrefix> source =
+        sourceRateActive_ ? accept_admission::RateLimitedSourceOf(peer) : std::nullopt;
     const AdmissionState state{
         .sourceClosed = sourceClosed_,
         .currentConnections = currentConnections,
@@ -35,11 +43,23 @@ Verdict Admission::Admit(const size_t currentConnections, const size_t maxConnec
         .unauthenticated = unauthenticated,
         .oldestUnauthenticatedAge = oldestUnauthenticatedAge,
         .preAuthBudget = preAuthBudget_,
+        .sourceOverRate = source && !sourceRate_->WouldAdmit(*source, now),
     };
-    const Verdict verdict = Decide(state, rateGate_, now, tlsUniformBelow);
+    Verdict verdict = Decide(state, rateGate_, now, tlsUniformBelow);
     if (verdict.rejected)
     {
+        if (*verdict.rejected == RejectReason::kAcceptRate)
+        {
+            lastAcceptRateRejectAt_ = now;
+        }
         ++counters_.rejected[static_cast<size_t>(*verdict.rejected)];
+        return verdict;
+    }
+    // 所有闸都放行了,这时才给来源前缀记一笔:被别的闸拒掉的直连不消耗这个前缀的名额。
+    if (source && !sourceRate_->Take(*source, now))
+    {
+        ++counters_.sourceUntracked;
+        verdict.sourceUntracked = true;
     }
     return verdict;
 }
@@ -148,6 +168,48 @@ void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t cur
                        "How long an unauthenticated direct connection must have been open before it can be evicted.",
                        MetricType::kGauge);
     writer.Sample({}, static_cast<uint64_t>(preAuthBudget_.minEvictableAge.count()));
+
+    const std::optional<RateLimit> sourceLimit = CurrentSourceRateLimit();
+    writer.BeginFamily("battle_source_rate_limit_per_second",
+                       "Sustained new-connection rate allowed per public source prefix (IPv4 /24, IPv6 /64) while the "
+                       "battle node is under pressure; 0 when per-source limiting is off.",
+                       MetricType::kGauge);
+    writer.Sample({}, sourceLimit ? sourceLimit->perSecond : 0);
+
+    writer.BeginFamily("battle_source_burst",
+                       "New direct connections one source prefix may open at once while under pressure; 0 when off.",
+                       MetricType::kGauge);
+    writer.Sample({}, sourceLimit ? sourceLimit->burst : 0);
+
+    writer.BeginFamily("battle_source_rate_active",
+                       "1 when per-source limiting applied to the most recent admission decision (enabled and under "
+                       "pressure), else 0.",
+                       MetricType::kGauge);
+    writer.Sample({}, sourceRateActive_ ? 1 : 0);
+
+    writer.BeginFamily("battle_source_tracked", "Source prefixes currently tracked by the per-source rate gate.",
+                       MetricType::kGauge);
+    writer.Sample({}, sourceRate_ ? sourceRate_->Tracked() : 0);
+
+    writer.BeginFamily("battle_source_untracked_total",
+                       "Direct connections admitted without per-source accounting because the source prefix table was full.",
+                       MetricType::kCounter);
+    writer.Sample({}, counters_.sourceUntracked);
+
+    // 小游戏直连(WebSocket)的握手与协议错误(network/codec/websocket.h),与 gate 的两族同义。计数是本线程累计的,
+    // 直连都在 battle 主 loop 上;连接数已经算在上面的 battle_connections_current 里。
+    const websocket::Counters &webSocket = websocket::GetCounters();
+    writer.BeginFamily("battle_websocket_handshakes_total",
+                       "WebSocket upgrade requests on the direct port since process start (mini-game clients).",
+                       MetricType::kCounter);
+    writer.Sample({{"result", "accepted"}}, webSocket.accepted);
+    writer.Sample({{"result", "rejected"}}, webSocket.rejected);
+
+    writer.BeginFamily("battle_websocket_protocol_closed_total",
+                       "WebSocket connections closed by this battle node because a frame violated the protocol "
+                       "(text frame, unmasked frame, oversized frame, bad fragmentation).",
+                       MetricType::kCounter);
+    writer.Sample({}, webSocket.protocolClosed);
 }
 
 } // namespace battle_connection_admission

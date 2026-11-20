@@ -220,7 +220,7 @@ func (w *WechatPay) do(ctx context.Context, method, pathAndQuery string, body []
 	}
 	request.Header.Set("User-Agent", "mmorpg-payment/1")
 	request.Header.Set("Wechatpay-Serial", w.cfg.PlatformKeyID)
-	response, err := w.cfg.HTTP.Do(request)
+	response, err := send(w.cfg.HTTP, request)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -339,7 +339,7 @@ func (w *WechatPay) Query(ctx context.Context, req QueryRequest) (QueryResult, e
 	}
 }
 
-// Close 关闭未付订单。订单不存在也算关好了。已付时微信回错,调用方关单后总会再查一次。
+// Close 关闭未付订单。订单不存在、已经关闭(ORDER_CLOSED)都算关好了。已付时微信回错,调用方关单后总会再查一次。
 func (w *WechatPay) Close(ctx context.Context, outTradeNo string) error {
 	body, err := json.Marshal(map[string]string{"mchid": w.cfg.MchID})
 	if err != nil {
@@ -349,10 +349,11 @@ func (w *WechatPay) Close(ctx context.Context, outTradeNo string) error {
 	if err != nil {
 		return err
 	}
-	if status == http.StatusNoContent || status == http.StatusOK || wechatErrorCode(raw) == "ORDER_NOT_EXIST" {
+	code := wechatErrorCode(raw)
+	if status == http.StatusNoContent || status == http.StatusOK || code == "ORDER_NOT_EXIST" || code == "ORDER_CLOSED" {
 		return nil
 	}
-	return &CallError{Channel: NameWechatPay, Op: "close", Status: status, Code: wechatErrorCode(raw)}
+	return &CallError{Channel: NameWechatPay, Op: "close", Status: status, Code: code}
 }
 
 type wechatRefundRequest struct {

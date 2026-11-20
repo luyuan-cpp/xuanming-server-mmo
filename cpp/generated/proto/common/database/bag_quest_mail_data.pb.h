@@ -104,14 +104,6 @@ extern const ::google::protobuf::internal::ClassDataFull QuestAllData_class_data
 #else
 extern const QuestAllDataGlobalsTypeInternal QuestAllData_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
-class QuestEntry;
-struct QuestEntryGlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern QuestEntryGlobalsTypeInternal QuestEntry_globals_;
-extern const ::google::protobuf::internal::ClassDataFull QuestEntry_class_data_;
-#else
-extern const QuestEntryGlobalsTypeInternal QuestEntry_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
 class QuestScopeData;
 struct QuestScopeDataGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -129,243 +121,6 @@ namespace protobuf {
 // ===================================================================
 
 
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestEntry final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:QuestEntry) */ {
- public:
-  inline QuestEntry() : QuestEntry(nullptr) {}
-  ~QuestEntry() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(QuestEntry* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(QuestEntry));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr QuestEntry(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline QuestEntry(const QuestEntry& from) : QuestEntry(nullptr, from) {}
-  inline QuestEntry(QuestEntry&& from) noexcept : QuestEntry(nullptr, ::std::move(from)) {}
-  inline QuestEntry& operator=(const QuestEntry& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline QuestEntry& operator=(QuestEntry&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const QuestEntry& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<QuestEntry>(&QuestEntry_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 3;
-  friend void swap(QuestEntry& a, QuestEntry& b) { a.Swap(&b); }
-  inline void Swap(QuestEntry* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(QuestEntry* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] QuestEntry* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<QuestEntry>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const QuestEntry& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const QuestEntry& from) { QuestEntry::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(QuestEntry* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "QuestEntry"; }
-
-  explicit QuestEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  QuestEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const QuestEntry& from);
-  QuestEntry(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, QuestEntry&& from) noexcept
-      : QuestEntry(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kConfigIdFieldNumber = 1,
-    kProgressFieldNumber = 2,
-    kAcceptedAtMsFieldNumber = 4,
-    kStateFieldNumber = 3,
-  };
-  // uint32 config_id = 1;
-  void clear_config_id() ;
-  [[nodiscard]] ::uint32_t config_id() const;
-  void set_config_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_config_id() const;
-  void _internal_set_config_id(::uint32_t value);
-
-  public:
-  // uint32 progress = 2;
-  void clear_progress() ;
-  [[nodiscard]] ::uint32_t progress() const;
-  void set_progress(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_progress() const;
-  void _internal_set_progress(::uint32_t value);
-
-  public:
-  // uint64 accepted_at_ms = 4;
-  void clear_accepted_at_ms() ;
-  [[nodiscard]] ::uint64_t accepted_at_ms() const;
-  void set_accepted_at_ms(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_accepted_at_ms() const;
-  void _internal_set_accepted_at_ms(::uint64_t value);
-
-  public:
-  // uint32 state = 3;
-  void clear_state() ;
-  [[nodiscard]] ::uint32_t state() const;
-  void set_state(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_state() const;
-  void _internal_set_state(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:QuestEntry)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          0, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const QuestEntry& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint32_t config_id_;
-    ::uint32_t progress_;
-    ::uint64_t accepted_at_ms_;
-    ::uint32_t state_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fcommon_2fdatabase_2fbag_5fquest_5fmail_5fdata_2eproto;
-};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestScopeData final : public ::google::protobuf::Message
@@ -424,7 +179,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestScopeData final : public ::goo
   [[nodiscard]] static const QuestScopeData& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<QuestScopeData>(&QuestScopeData_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(QuestScopeData& a, QuestScopeData& b) { a.Swap(&b); }
   inline void Swap(QuestScopeData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -516,31 +271,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestScopeData final : public ::goo
 
   // accessors -------------------------------------------------------
   enum : int {
-    kCompletedMissionIdsFieldNumber = 3,
     kClaimableMissionIdsFieldNumber = 4,
     kMissionListFieldNumber = 2,
     kScopeFieldNumber = 1,
   };
-  // repeated uint32 completed_mission_ids = 3;
-  [[nodiscard]] int completed_mission_ids_size()
-      const;
-  private:
-  int _internal_completed_mission_ids_size() const;
-
-  public:
-  void clear_completed_mission_ids() ;
-  [[nodiscard]] ::uint32_t completed_mission_ids(int index) const;
-  void set_completed_mission_ids(int index, ::uint32_t value);
-  void add_completed_mission_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& completed_mission_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_completed_mission_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_completed_mission_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_completed_mission_ids();
-
-  public:
   // repeated uint32 claimable_mission_ids = 4;
   [[nodiscard]] int claimable_mission_ids_size()
       const;
@@ -591,7 +325,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestScopeData final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -620,8 +354,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestScopeData final : public ::goo
         const QuestScopeData& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> completed_mission_ids_;
-    ::google::protobuf::internal::CachedSize _completed_mission_ids_cached_byte_size_;
     ::google::protobuf::RepeatedField<::uint32_t> claimable_mission_ids_;
     ::google::protobuf::internal::CachedSize _claimable_mission_ids_cached_byte_size_;
     ::MissionListComp* PROTOBUF_NULLABLE mission_list_;
@@ -986,7 +718,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestAllData final : public ::googl
   [[nodiscard]] static const QuestAllData& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<QuestAllData>(&QuestAllData_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(QuestAllData& a, QuestAllData& b) { a.Swap(&b); }
   inline void Swap(QuestAllData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1078,52 +810,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestAllData final : public ::googl
 
   // accessors -------------------------------------------------------
   enum : int {
-    kActiveFieldNumber = 1,
-    kCompletedFieldNumber = 2,
     kScopesFieldNumber = 3,
-    kScopedStatePresentFieldNumber = 4,
   };
-  // repeated .QuestEntry active = 1 [(.OptionPersistUncarried) = true];
-  [[nodiscard]] int active_size()
-      const;
-  private:
-  int _internal_active_size() const;
-
-  public:
-  void clear_active() ;
-  [[nodiscard]] const ::QuestEntry& active(int index) const;
-  [[nodiscard]] ::QuestEntry* PROTOBUF_NONNULL mutable_active(int index);
-  ::QuestEntry* PROTOBUF_NONNULL add_active();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::QuestEntry>&
-  active() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::QuestEntry>* PROTOBUF_NONNULL
-  mutable_active();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::QuestEntry>& _internal_active() const;
-  ::google::protobuf::RepeatedPtrField<::QuestEntry>* PROTOBUF_NONNULL _internal_mutable_active();
-
-  public:
-  // repeated uint32 completed = 2;
-  [[nodiscard]] int completed_size()
-      const;
-  private:
-  int _internal_completed_size() const;
-
-  public:
-  void clear_completed() ;
-  [[nodiscard]] ::uint32_t completed(int index) const;
-  void set_completed(int index, ::uint32_t value);
-  void add_completed(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& completed()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_completed();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_completed() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_completed();
-
-  public:
   // repeated .QuestScopeData scopes = 3;
   [[nodiscard]] int scopes_size()
       const;
@@ -1145,22 +833,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestAllData final : public ::googl
   ::google::protobuf::RepeatedPtrField<::QuestScopeData>* PROTOBUF_NONNULL _internal_mutable_scopes();
 
   public:
-  // bool scoped_state_present = 4;
-  void clear_scoped_state_present() ;
-  [[nodiscard]] bool scoped_state_present() const;
-  void set_scoped_state_present(bool value);
-
-  private:
-  bool _internal_scoped_state_present() const;
-  void _internal_set_scoped_state_present(bool value);
-
-  public:
   // @@protoc_insertion_point(class_scope:QuestAllData)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          2, 0,
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1188,11 +866,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuestAllData final : public ::googl
         const QuestAllData& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::QuestEntry > active_;
-    ::google::protobuf::RepeatedField<::uint32_t> completed_;
-    ::google::protobuf::internal::CachedSize _completed_cached_byte_size_;
     ::google::protobuf::RepeatedPtrField< ::QuestScopeData > scopes_;
-    bool scoped_state_present_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1256,7 +930,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailEntry final : public ::google::
   [[nodiscard]] static const MailEntry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailEntry>(&MailEntry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(MailEntry& a, MailEntry& b) { a.Swap(&b); }
   inline void Swap(MailEntry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1844,7 +1518,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailAllData final : public ::google
   [[nodiscard]] static const MailAllData& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailAllData>(&MailAllData_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(MailAllData& a, MailAllData& b) { a.Swap(&b); }
   inline void Swap(MailAllData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2902,113 +2576,13 @@ BagAllData::_internal_mutable_dynamic_bags() {
 
 // -------------------------------------------------------------------
 
-// QuestEntry
-
-// uint32 config_id = 1;
-inline void QuestEntry::clear_config_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint32_t QuestEntry::config_id() const {
-  // @@protoc_insertion_point(field_get:QuestEntry.config_id)
-  return _internal_config_id();
-}
-inline void QuestEntry::set_config_id(::uint32_t value) {
-  _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_set:QuestEntry.config_id)
-}
-inline ::uint32_t QuestEntry::_internal_config_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.config_id_;
-}
-inline void QuestEntry::_internal_set_config_id(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.config_id_ = value;
-}
-
-// uint32 progress = 2;
-inline void QuestEntry::clear_progress() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.progress_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint32_t QuestEntry::progress() const {
-  // @@protoc_insertion_point(field_get:QuestEntry.progress)
-  return _internal_progress();
-}
-inline void QuestEntry::set_progress(::uint32_t value) {
-  _internal_set_progress(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:QuestEntry.progress)
-}
-inline ::uint32_t QuestEntry::_internal_progress() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.progress_;
-}
-inline void QuestEntry::_internal_set_progress(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.progress_ = value;
-}
-
-// uint32 state = 3;
-inline void QuestEntry::clear_state() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-}
-inline ::uint32_t QuestEntry::state() const {
-  // @@protoc_insertion_point(field_get:QuestEntry.state)
-  return _internal_state();
-}
-inline void QuestEntry::set_state(::uint32_t value) {
-  _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  // @@protoc_insertion_point(field_set:QuestEntry.state)
-}
-inline ::uint32_t QuestEntry::_internal_state() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.state_;
-}
-inline void QuestEntry::_internal_set_state(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.state_ = value;
-}
-
-// uint64 accepted_at_ms = 4;
-inline void QuestEntry::clear_accepted_at_ms() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.accepted_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint64_t QuestEntry::accepted_at_ms() const {
-  // @@protoc_insertion_point(field_get:QuestEntry.accepted_at_ms)
-  return _internal_accepted_at_ms();
-}
-inline void QuestEntry::set_accepted_at_ms(::uint64_t value) {
-  _internal_set_accepted_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:QuestEntry.accepted_at_ms)
-}
-inline ::uint64_t QuestEntry::_internal_accepted_at_ms() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.accepted_at_ms_;
-}
-inline void QuestEntry::_internal_set_accepted_at_ms(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.accepted_at_ms_ = value;
-}
-
-// -------------------------------------------------------------------
-
 // QuestScopeData
 
 // uint32 scope = 1;
 inline void QuestScopeData::clear_scope() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scope_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t QuestScopeData::scope() const {
   // @@protoc_insertion_point(field_get:QuestScopeData.scope)
@@ -3016,7 +2590,7 @@ inline ::uint32_t QuestScopeData::scope() const {
 }
 inline void QuestScopeData::set_scope(::uint32_t value) {
   _internal_set_scope(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:QuestScopeData.scope)
 }
 inline ::uint32_t QuestScopeData::_internal_scope() const {
@@ -3030,7 +2604,7 @@ inline void QuestScopeData::_internal_set_scope(::uint32_t value) {
 
 // .MissionListComp mission_list = 2;
 inline bool QuestScopeData::has_mission_list() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.mission_list_ != nullptr);
   return value;
 }
@@ -3051,16 +2625,16 @@ inline void QuestScopeData::unsafe_arena_set_allocated_mission_list(
   }
   _impl_.mission_list_ = reinterpret_cast<::MissionListComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:QuestScopeData.mission_list)
 }
 inline ::MissionListComp* PROTOBUF_NULLABLE QuestScopeData::release_mission_list() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::MissionListComp* released = _impl_.mission_list_;
   _impl_.mission_list_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3080,7 +2654,7 @@ inline ::MissionListComp* PROTOBUF_NULLABLE QuestScopeData::unsafe_arena_release
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:QuestScopeData.mission_list)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::MissionListComp* temp = _impl_.mission_list_;
   _impl_.mission_list_ = nullptr;
   return temp;
@@ -3095,7 +2669,7 @@ inline ::MissionListComp* PROTOBUF_NONNULL QuestScopeData::_internal_mutable_mis
 }
 inline ::MissionListComp* PROTOBUF_NONNULL QuestScopeData::mutable_mission_list()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::MissionListComp* _msg = _internal_mutable_mission_list();
   // @@protoc_insertion_point(field_mutable:QuestScopeData.mission_list)
   return _msg;
@@ -3112,64 +2686,13 @@ inline void QuestScopeData::set_allocated_mission_list(::MissionListComp* PROTOB
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.mission_list_ = reinterpret_cast<::MissionListComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:QuestScopeData.mission_list)
-}
-
-// repeated uint32 completed_mission_ids = 3;
-inline int QuestScopeData::_internal_completed_mission_ids_size() const {
-  return _internal_completed_mission_ids().size();
-}
-inline int QuestScopeData::completed_mission_ids_size() const {
-  return _internal_completed_mission_ids_size();
-}
-inline void QuestScopeData::clear_completed_mission_ids() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.completed_mission_ids_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline ::uint32_t QuestScopeData::completed_mission_ids(int index) const {
-  // @@protoc_insertion_point(field_get:QuestScopeData.completed_mission_ids)
-  return _internal_completed_mission_ids().Get(index);
-}
-inline void QuestScopeData::set_completed_mission_ids(int index, ::uint32_t value) {
-  _internal_mutable_completed_mission_ids()->Set(index, value);
-  // @@protoc_insertion_point(field_set:QuestScopeData.completed_mission_ids)
-}
-inline void QuestScopeData::add_completed_mission_ids(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _internal_mutable_completed_mission_ids()
-      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
-          internal_visibility(), this, value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add:QuestScopeData.completed_mission_ids)
-}
-inline const ::google::protobuf::RepeatedField<::uint32_t>& QuestScopeData::completed_mission_ids() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:QuestScopeData.completed_mission_ids)
-  return _internal_completed_mission_ids();
-}
-inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL QuestScopeData::mutable_completed_mission_ids()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_mutable_list:QuestScopeData.completed_mission_ids)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_completed_mission_ids();
-}
-inline const ::google::protobuf::RepeatedField<::uint32_t>&
-QuestScopeData::_internal_completed_mission_ids() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.completed_mission_ids_;
-}
-inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
-QuestScopeData::_internal_mutable_completed_mission_ids() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.completed_mission_ids_;
 }
 
 // repeated uint32 claimable_mission_ids = 4;
@@ -3182,7 +2705,7 @@ inline int QuestScopeData::claimable_mission_ids_size() const {
 inline void QuestScopeData::clear_claimable_mission_ids() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claimable_mission_ids_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline ::uint32_t QuestScopeData::claimable_mission_ids(int index) const {
   // @@protoc_insertion_point(field_get:QuestScopeData.claimable_mission_ids)
@@ -3197,7 +2720,7 @@ inline void QuestScopeData::add_claimable_mission_ids(::uint32_t value) {
   _internal_mutable_claimable_mission_ids()
       ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
           internal_visibility(), this, value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_add:QuestScopeData.claimable_mission_ids)
 }
 inline const ::google::protobuf::RepeatedField<::uint32_t>& QuestScopeData::claimable_mission_ids() const
@@ -3207,7 +2730,7 @@ inline const ::google::protobuf::RepeatedField<::uint32_t>& QuestScopeData::clai
 }
 inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL QuestScopeData::mutable_claimable_mission_ids()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_mutable_list:QuestScopeData.claimable_mission_ids)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_claimable_mission_ids();
@@ -3227,112 +2750,6 @@ QuestScopeData::_internal_mutable_claimable_mission_ids() {
 
 // QuestAllData
 
-// repeated .QuestEntry active = 1 [(.OptionPersistUncarried) = true];
-inline int QuestAllData::_internal_active_size() const {
-  return _internal_active().size();
-}
-inline int QuestAllData::active_size() const {
-  return _internal_active_size();
-}
-inline void QuestAllData::clear_active() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.active_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline const ::QuestEntry& QuestAllData::active(int index) const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:QuestAllData.active)
-  return _internal_active().Get(index);
-}
-inline ::QuestEntry* PROTOBUF_NONNULL QuestAllData::mutable_active(int index)
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_mutable:QuestAllData.active)
-  return _internal_mutable_active()->Mutable(index);
-}
-inline ::QuestEntry* PROTOBUF_NONNULL QuestAllData::add_active()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::QuestEntry* _add =
-      _internal_mutable_active()->InternalAddWithArena(
-          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_add:QuestAllData.active)
-  return _add;
-}
-inline const ::google::protobuf::RepeatedPtrField<::QuestEntry>& QuestAllData::active() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:QuestAllData.active)
-  return _internal_active();
-}
-inline ::google::protobuf::RepeatedPtrField<::QuestEntry>* PROTOBUF_NONNULL
-QuestAllData::mutable_active() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  // @@protoc_insertion_point(field_mutable_list:QuestAllData.active)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_active();
-}
-inline const ::google::protobuf::RepeatedPtrField<::QuestEntry>&
-QuestAllData::_internal_active() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.active_;
-}
-inline ::google::protobuf::RepeatedPtrField<::QuestEntry>* PROTOBUF_NONNULL
-QuestAllData::_internal_mutable_active() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.active_;
-}
-
-// repeated uint32 completed = 2;
-inline int QuestAllData::_internal_completed_size() const {
-  return _internal_completed().size();
-}
-inline int QuestAllData::completed_size() const {
-  return _internal_completed_size();
-}
-inline void QuestAllData::clear_completed() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.completed_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint32_t QuestAllData::completed(int index) const {
-  // @@protoc_insertion_point(field_get:QuestAllData.completed)
-  return _internal_completed().Get(index);
-}
-inline void QuestAllData::set_completed(int index, ::uint32_t value) {
-  _internal_mutable_completed()->Set(index, value);
-  // @@protoc_insertion_point(field_set:QuestAllData.completed)
-}
-inline void QuestAllData::add_completed(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _internal_mutable_completed()
-      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
-          internal_visibility(), this, value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_add:QuestAllData.completed)
-}
-inline const ::google::protobuf::RepeatedField<::uint32_t>& QuestAllData::completed() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_list:QuestAllData.completed)
-  return _internal_completed();
-}
-inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL QuestAllData::mutable_completed()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_mutable_list:QuestAllData.completed)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _internal_mutable_completed();
-}
-inline const ::google::protobuf::RepeatedField<::uint32_t>&
-QuestAllData::_internal_completed() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.completed_;
-}
-inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
-QuestAllData::_internal_mutable_completed() {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return &_impl_.completed_;
-}
-
 // repeated .QuestScopeData scopes = 3;
 inline int QuestAllData::_internal_scopes_size() const {
   return _internal_scopes().size();
@@ -3343,7 +2760,7 @@ inline int QuestAllData::scopes_size() const {
 inline void QuestAllData::clear_scopes() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scopes_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
 inline const ::QuestScopeData& QuestAllData::scopes(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3361,7 +2778,7 @@ inline ::QuestScopeData* PROTOBUF_NONNULL QuestAllData::add_scopes()
   ::QuestScopeData* _add =
       _internal_mutable_scopes()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_add:QuestAllData.scopes)
   return _add;
 }
@@ -3372,7 +2789,7 @@ inline const ::google::protobuf::RepeatedPtrField<::QuestScopeData>& QuestAllDat
 }
 inline ::google::protobuf::RepeatedPtrField<::QuestScopeData>* PROTOBUF_NONNULL
 QuestAllData::mutable_scopes() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_mutable_list:QuestAllData.scopes)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_scopes();
@@ -3386,30 +2803,6 @@ inline ::google::protobuf::RepeatedPtrField<::QuestScopeData>* PROTOBUF_NONNULL
 QuestAllData::_internal_mutable_scopes() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.scopes_;
-}
-
-// bool scoped_state_present = 4;
-inline void QuestAllData::clear_scoped_state_present() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.scoped_state_present_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-}
-inline bool QuestAllData::scoped_state_present() const {
-  // @@protoc_insertion_point(field_get:QuestAllData.scoped_state_present)
-  return _internal_scoped_state_present();
-}
-inline void QuestAllData::set_scoped_state_present(bool value) {
-  _internal_set_scoped_state_present(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  // @@protoc_insertion_point(field_set:QuestAllData.scoped_state_present)
-}
-inline bool QuestAllData::_internal_scoped_state_present() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.scoped_state_present_;
-}
-inline void QuestAllData::_internal_set_scoped_state_present(bool value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.scoped_state_present_ = value;
 }
 
 // -------------------------------------------------------------------

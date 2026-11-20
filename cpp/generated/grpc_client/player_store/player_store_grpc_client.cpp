@@ -29,6 +29,7 @@ namespace playerstore {
 #pragma region PlayerStoreLoadAndClaim
 namespace {
 void QueueLocalPlayerStoreLoadAndClaimFailure(GrpcDone<::playerstore::LoadAndClaimResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerStoreLoadAndClaimGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendPlayerStoreLoadAndClaimErased(entt::registry& registry, entt::entity no
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerStore.LoadAndClaim: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerStoreLoadAndClaimGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendPlayerStoreLoadAndClaimErased(entt::registry& registry, entt::entity no
     const auto* typedRequest = dynamic_cast<const ::playerstore::LoadAndClaimRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerStore.LoadAndClaim: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerStoreLoadAndClaimGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendPlayerStoreLoadAndClaimErased(entt::registry& registry, entt::entity no
 #pragma region PlayerStoreSavePlayer
 namespace {
 void QueueLocalPlayerStoreSavePlayerFailure(GrpcDone<::playerstore::SavePlayerResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerStoreSavePlayerGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendPlayerStoreSavePlayerErased(entt::registry& registry, entt::entity node
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerStore.SavePlayer: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerStoreSavePlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendPlayerStoreSavePlayerErased(entt::registry& registry, entt::entity node
     const auto* typedRequest = dynamic_cast<const ::playerstore::SavePlayerRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerStore.SavePlayer: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerStoreSavePlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

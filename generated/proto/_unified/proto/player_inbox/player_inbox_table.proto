@@ -56,7 +56,7 @@ message player_inbox_item_row {
   option(OptionTableName) = "player_inbox_item";
   option(OptionPrimaryKey) = "shard,player_id,domain,seq";
   option(OptionUniqueKey) = "shard,player_id,producer_kind,request_id";  // 全表唯一的 UNIQUE = 幂等键(IB-2)
-  option(OptionIndex) = "shard,state,updated_ms;shard,player_id,state";    // 清理/对账；角色首锁内挂起域查询
+  option(OptionIndex) = "shard,state,updated_ms;shard,player_id,state";    // 对账的终结窗口(RecentlyFinalized)；角色首锁内挂起域查询
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;

@@ -47,6 +47,8 @@
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
 #include "proto/common/component/player_mail_outbox_comp.pb.h"
+#include "proto/common/component/time_comp.pb.h"
+#include "proto/common/component/buff_comp.pb.h"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -2522,6 +2524,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
 
   // accessors -------------------------------------------------------
   enum : int {
+    kSavedBuffsFieldNumber = 29,
     kTransformFieldNumber = 2,
     kUint64PbComponentFieldNumber = 3,
     kSkillListFieldNumber = 4,
@@ -2543,9 +2546,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kClientRequestLedgerFieldNumber = 25,
     kItemHoldsFieldNumber = 26,
     kMailOutboxFieldNumber = 27,
+    kSkillCooldownsFieldNumber = 28,
     kPlayerIdFieldNumber = 1,
     kPersistSchemaGenFieldNumber = 21,
   };
+  // repeated .SavedBuffComp saved_buffs = 29 [(.OptionPersistGroup) = 6];
+  [[nodiscard]] int saved_buffs_size()
+      const;
+  private:
+  int _internal_saved_buffs_size() const;
+
+  public:
+  void clear_saved_buffs() ;
+  [[nodiscard]] const ::SavedBuffComp& saved_buffs(int index) const;
+  [[nodiscard]] ::SavedBuffComp* PROTOBUF_NONNULL mutable_saved_buffs(int index);
+  ::SavedBuffComp* PROTOBUF_NONNULL add_saved_buffs();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SavedBuffComp>&
+  saved_buffs() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SavedBuffComp>* PROTOBUF_NONNULL
+  mutable_saved_buffs();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SavedBuffComp>& _internal_saved_buffs() const;
+  ::google::protobuf::RepeatedPtrField<::SavedBuffComp>* PROTOBUF_NONNULL _internal_mutable_saved_buffs();
+
+  public:
   // .Transform transform = 2 [(.OptionPersistGroup) = 9];
   [[nodiscard]] bool has_transform()
       const;
@@ -2882,6 +2907,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::PlayerMailOutboxComp* PROTOBUF_NONNULL _internal_mutable_mail_outbox();
 
   public:
+  // .CooldownTimeListComp skill_cooldowns = 28 [(.OptionPersistGroup) = 6];
+  [[nodiscard]] bool has_skill_cooldowns()
+      const;
+  void clear_skill_cooldowns() ;
+  [[nodiscard]] const ::CooldownTimeListComp& skill_cooldowns() const;
+  [[nodiscard]] ::CooldownTimeListComp* PROTOBUF_NULLABLE release_skill_cooldowns();
+  ::CooldownTimeListComp* PROTOBUF_NONNULL mutable_skill_cooldowns();
+  void set_allocated_skill_cooldowns(::CooldownTimeListComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_skill_cooldowns(::CooldownTimeListComp* PROTOBUF_NULLABLE value);
+  ::CooldownTimeListComp* PROTOBUF_NULLABLE unsafe_arena_release_skill_cooldowns();
+
+  private:
+  const ::CooldownTimeListComp& _internal_skill_cooldowns() const;
+  ::CooldownTimeListComp* PROTOBUF_NONNULL _internal_mutable_skill_cooldowns();
+
+  public:
   // uint64 player_id = 1 [(.OptionPersistGroup) = 0];
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2906,8 +2947,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          21, 0,
+      ::google::protobuf::internal::TcParseTable<5, 25,
+                          23, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2935,6 +2976,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
         const player_database& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::SavedBuffComp > saved_buffs_;
     ::Transform* PROTOBUF_NULLABLE transform_;
     ::PlayerUint64Comp* PROTOBUF_NULLABLE uint64_pb_component_;
     ::PlayerSkillListComp* PROTOBUF_NULLABLE skill_list_;
@@ -2956,6 +2998,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::ClientRequestLedgerComp* PROTOBUF_NULLABLE client_request_ledger_;
     ::PlayerItemHoldComp* PROTOBUF_NULLABLE item_holds_;
     ::PlayerMailOutboxComp* PROTOBUF_NULLABLE mail_outbox_;
+    ::CooldownTimeListComp* PROTOBUF_NULLABLE skill_cooldowns_;
     ::uint64_t player_id_;
     ::uint32_t persist_schema_gen_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3974,7 +4017,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -3982,7 +4025,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -3996,7 +4039,7 @@ inline void player_database::_internal_set_player_id(::uint64_t value) {
 
 // .Transform transform = 2 [(.OptionPersistGroup) = 9];
 inline bool player_database::has_transform() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.transform_ != nullptr);
   return value;
 }
@@ -4017,16 +4060,16 @@ inline void player_database::unsafe_arena_set_allocated_transform(
   }
   _impl_.transform_ = reinterpret_cast<::Transform*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.transform)
 }
 inline ::Transform* PROTOBUF_NULLABLE player_database::release_transform() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Transform* released = _impl_.transform_;
   _impl_.transform_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4046,7 +4089,7 @@ inline ::Transform* PROTOBUF_NULLABLE player_database::unsafe_arena_release_tran
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.transform)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Transform* temp = _impl_.transform_;
   _impl_.transform_ = nullptr;
   return temp;
@@ -4061,7 +4104,7 @@ inline ::Transform* PROTOBUF_NONNULL player_database::_internal_mutable_transfor
 }
 inline ::Transform* PROTOBUF_NONNULL player_database::mutable_transform()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::Transform* _msg = _internal_mutable_transform();
   // @@protoc_insertion_point(field_mutable:player_database.transform)
   return _msg;
@@ -4078,9 +4121,9 @@ inline void player_database::set_allocated_transform(::Transform* PROTOBUF_NULLA
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.transform_ = reinterpret_cast<::Transform*>(value);
@@ -4089,7 +4132,7 @@ inline void player_database::set_allocated_transform(::Transform* PROTOBUF_NULLA
 
 // .PlayerUint64Comp uint64_pb_component = 3 [(.OptionPersistGroup) = 4];
 inline bool player_database::has_uint64_pb_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.uint64_pb_component_ != nullptr);
   return value;
 }
@@ -4110,16 +4153,16 @@ inline void player_database::unsafe_arena_set_allocated_uint64_pb_component(
   }
   _impl_.uint64_pb_component_ = reinterpret_cast<::PlayerUint64Comp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.uint64_pb_component)
 }
 inline ::PlayerUint64Comp* PROTOBUF_NULLABLE player_database::release_uint64_pb_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::PlayerUint64Comp* released = _impl_.uint64_pb_component_;
   _impl_.uint64_pb_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4139,7 +4182,7 @@ inline ::PlayerUint64Comp* PROTOBUF_NULLABLE player_database::unsafe_arena_relea
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.uint64_pb_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::PlayerUint64Comp* temp = _impl_.uint64_pb_component_;
   _impl_.uint64_pb_component_ = nullptr;
   return temp;
@@ -4154,7 +4197,7 @@ inline ::PlayerUint64Comp* PROTOBUF_NONNULL player_database::_internal_mutable_u
 }
 inline ::PlayerUint64Comp* PROTOBUF_NONNULL player_database::mutable_uint64_pb_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::PlayerUint64Comp* _msg = _internal_mutable_uint64_pb_component();
   // @@protoc_insertion_point(field_mutable:player_database.uint64_pb_component)
   return _msg;
@@ -4171,9 +4214,9 @@ inline void player_database::set_allocated_uint64_pb_component(::PlayerUint64Com
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.uint64_pb_component_ = reinterpret_cast<::PlayerUint64Comp*>(value);
@@ -4182,7 +4225,7 @@ inline void player_database::set_allocated_uint64_pb_component(::PlayerUint64Com
 
 // .PlayerSkillListComp skill_list = 4 [(.OptionPersistGroup) = 3];
 inline bool player_database::has_skill_list() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.skill_list_ != nullptr);
   return value;
 }
@@ -4203,16 +4246,16 @@ inline void player_database::unsafe_arena_set_allocated_skill_list(
   }
   _impl_.skill_list_ = reinterpret_cast<::PlayerSkillListComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.skill_list)
 }
 inline ::PlayerSkillListComp* PROTOBUF_NULLABLE player_database::release_skill_list() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::PlayerSkillListComp* released = _impl_.skill_list_;
   _impl_.skill_list_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4232,7 +4275,7 @@ inline ::PlayerSkillListComp* PROTOBUF_NULLABLE player_database::unsafe_arena_re
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.skill_list)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::PlayerSkillListComp* temp = _impl_.skill_list_;
   _impl_.skill_list_ = nullptr;
   return temp;
@@ -4247,7 +4290,7 @@ inline ::PlayerSkillListComp* PROTOBUF_NONNULL player_database::_internal_mutabl
 }
 inline ::PlayerSkillListComp* PROTOBUF_NONNULL player_database::mutable_skill_list()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::PlayerSkillListComp* _msg = _internal_mutable_skill_list();
   // @@protoc_insertion_point(field_mutable:player_database.skill_list)
   return _msg;
@@ -4264,9 +4307,9 @@ inline void player_database::set_allocated_skill_list(::PlayerSkillListComp* PRO
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.skill_list_ = reinterpret_cast<::PlayerSkillListComp*>(value);
@@ -4275,7 +4318,7 @@ inline void player_database::set_allocated_skill_list(::PlayerSkillListComp* PRO
 
 // .PlayerUint32Comp uint32_pb_component = 5 [(.OptionPersistGroup) = 4];
 inline bool player_database::has_uint32_pb_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
   PROTOBUF_ASSUME(!value || _impl_.uint32_pb_component_ != nullptr);
   return value;
 }
@@ -4296,16 +4339,16 @@ inline void player_database::unsafe_arena_set_allocated_uint32_pb_component(
   }
   _impl_.uint32_pb_component_ = reinterpret_cast<::PlayerUint32Comp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.uint32_pb_component)
 }
 inline ::PlayerUint32Comp* PROTOBUF_NULLABLE player_database::release_uint32_pb_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::PlayerUint32Comp* released = _impl_.uint32_pb_component_;
   _impl_.uint32_pb_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4325,7 +4368,7 @@ inline ::PlayerUint32Comp* PROTOBUF_NULLABLE player_database::unsafe_arena_relea
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.uint32_pb_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::PlayerUint32Comp* temp = _impl_.uint32_pb_component_;
   _impl_.uint32_pb_component_ = nullptr;
   return temp;
@@ -4340,7 +4383,7 @@ inline ::PlayerUint32Comp* PROTOBUF_NONNULL player_database::_internal_mutable_u
 }
 inline ::PlayerUint32Comp* PROTOBUF_NONNULL player_database::mutable_uint32_pb_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::PlayerUint32Comp* _msg = _internal_mutable_uint32_pb_component();
   // @@protoc_insertion_point(field_mutable:player_database.uint32_pb_component)
   return _msg;
@@ -4357,9 +4400,9 @@ inline void player_database::set_allocated_uint32_pb_component(::PlayerUint32Com
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
 
   _impl_.uint32_pb_component_ = reinterpret_cast<::PlayerUint32Comp*>(value);
@@ -4368,7 +4411,7 @@ inline void player_database::set_allocated_uint32_pb_component(::PlayerUint32Com
 
 // .BaseAttributesComp derived_attributes_component = 6 [(.OptionPersistGroup) = 6];
 inline bool player_database::has_derived_attributes_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
   PROTOBUF_ASSUME(!value || _impl_.derived_attributes_component_ != nullptr);
   return value;
 }
@@ -4389,16 +4432,16 @@ inline void player_database::unsafe_arena_set_allocated_derived_attributes_compo
   }
   _impl_.derived_attributes_component_ = reinterpret_cast<::BaseAttributesComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.derived_attributes_component)
 }
 inline ::BaseAttributesComp* PROTOBUF_NULLABLE player_database::release_derived_attributes_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::BaseAttributesComp* released = _impl_.derived_attributes_component_;
   _impl_.derived_attributes_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4418,7 +4461,7 @@ inline ::BaseAttributesComp* PROTOBUF_NULLABLE player_database::unsafe_arena_rel
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.derived_attributes_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::BaseAttributesComp* temp = _impl_.derived_attributes_component_;
   _impl_.derived_attributes_component_ = nullptr;
   return temp;
@@ -4433,7 +4476,7 @@ inline ::BaseAttributesComp* PROTOBUF_NONNULL player_database::_internal_mutable
 }
 inline ::BaseAttributesComp* PROTOBUF_NONNULL player_database::mutable_derived_attributes_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::BaseAttributesComp* _msg = _internal_mutable_derived_attributes_component();
   // @@protoc_insertion_point(field_mutable:player_database.derived_attributes_component)
   return _msg;
@@ -4450,9 +4493,9 @@ inline void player_database::set_allocated_derived_attributes_component(::BaseAt
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
 
   _impl_.derived_attributes_component_ = reinterpret_cast<::BaseAttributesComp*>(value);
@@ -4461,7 +4504,7 @@ inline void player_database::set_allocated_derived_attributes_component(::BaseAt
 
 // .LevelComp level_component = 7 [(.OptionPersistGroup) = 6];
 inline bool player_database::has_level_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
   PROTOBUF_ASSUME(!value || _impl_.level_component_ != nullptr);
   return value;
 }
@@ -4482,16 +4525,16 @@ inline void player_database::unsafe_arena_set_allocated_level_component(
   }
   _impl_.level_component_ = reinterpret_cast<::LevelComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.level_component)
 }
 inline ::LevelComp* PROTOBUF_NULLABLE player_database::release_level_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::LevelComp* released = _impl_.level_component_;
   _impl_.level_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4511,7 +4554,7 @@ inline ::LevelComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_leve
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.level_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::LevelComp* temp = _impl_.level_component_;
   _impl_.level_component_ = nullptr;
   return temp;
@@ -4526,7 +4569,7 @@ inline ::LevelComp* PROTOBUF_NONNULL player_database::_internal_mutable_level_co
 }
 inline ::LevelComp* PROTOBUF_NONNULL player_database::mutable_level_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::LevelComp* _msg = _internal_mutable_level_component();
   // @@protoc_insertion_point(field_mutable:player_database.level_component)
   return _msg;
@@ -4543,9 +4586,9 @@ inline void player_database::set_allocated_level_component(::LevelComp* PROTOBUF
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
 
   _impl_.level_component_ = reinterpret_cast<::LevelComp*>(value);
@@ -4554,7 +4597,7 @@ inline void player_database::set_allocated_level_component(::LevelComp* PROTOBUF
 
 // .CurrencyComp currency = 8 [(.OptionPersistGroup) = 7];
 inline bool player_database::has_currency() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
   PROTOBUF_ASSUME(!value || _impl_.currency_ != nullptr);
   return value;
 }
@@ -4575,16 +4618,16 @@ inline void player_database::unsafe_arena_set_allocated_currency(
   }
   _impl_.currency_ = reinterpret_cast<::CurrencyComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.currency)
 }
 inline ::CurrencyComp* PROTOBUF_NULLABLE player_database::release_currency() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::CurrencyComp* released = _impl_.currency_;
   _impl_.currency_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4604,7 +4647,7 @@ inline ::CurrencyComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_c
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.currency)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::CurrencyComp* temp = _impl_.currency_;
   _impl_.currency_ = nullptr;
   return temp;
@@ -4619,7 +4662,7 @@ inline ::CurrencyComp* PROTOBUF_NONNULL player_database::_internal_mutable_curre
 }
 inline ::CurrencyComp* PROTOBUF_NONNULL player_database::mutable_currency()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::CurrencyComp* _msg = _internal_mutable_currency();
   // @@protoc_insertion_point(field_mutable:player_database.currency)
   return _msg;
@@ -4636,9 +4679,9 @@ inline void player_database::set_allocated_currency(::CurrencyComp* PROTOBUF_NUL
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
 
   _impl_.currency_ = reinterpret_cast<::CurrencyComp*>(value);
@@ -4647,7 +4690,7 @@ inline void player_database::set_allocated_currency(::CurrencyComp* PROTOBUF_NUL
 
 // .PlayerStressTestProbe stress_test_probe = 9 [(.OptionPersistUncarried) = true, (.OptionPersistGroup) = 4];
 inline bool player_database::has_stress_test_probe() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
   PROTOBUF_ASSUME(!value || _impl_.stress_test_probe_ != nullptr);
   return value;
 }
@@ -4668,16 +4711,16 @@ inline void player_database::unsafe_arena_set_allocated_stress_test_probe(
   }
   _impl_.stress_test_probe_ = reinterpret_cast<::PlayerStressTestProbe*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.stress_test_probe)
 }
 inline ::PlayerStressTestProbe* PROTOBUF_NULLABLE player_database::release_stress_test_probe() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PlayerStressTestProbe* released = _impl_.stress_test_probe_;
   _impl_.stress_test_probe_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4697,7 +4740,7 @@ inline ::PlayerStressTestProbe* PROTOBUF_NULLABLE player_database::unsafe_arena_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.stress_test_probe)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PlayerStressTestProbe* temp = _impl_.stress_test_probe_;
   _impl_.stress_test_probe_ = nullptr;
   return temp;
@@ -4712,7 +4755,7 @@ inline ::PlayerStressTestProbe* PROTOBUF_NONNULL player_database::_internal_muta
 }
 inline ::PlayerStressTestProbe* PROTOBUF_NONNULL player_database::mutable_stress_test_probe()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PlayerStressTestProbe* _msg = _internal_mutable_stress_test_probe();
   // @@protoc_insertion_point(field_mutable:player_database.stress_test_probe)
   return _msg;
@@ -4729,9 +4772,9 @@ inline void player_database::set_allocated_stress_test_probe(::PlayerStressTestP
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
 
   _impl_.stress_test_probe_ = reinterpret_cast<::PlayerStressTestProbe*>(value);
@@ -4740,7 +4783,7 @@ inline void player_database::set_allocated_stress_test_probe(::PlayerStressTestP
 
 // .PlayerAttributeComp attribute_component = 11 [(.OptionPersistGroup) = 3];
 inline bool player_database::has_attribute_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
   PROTOBUF_ASSUME(!value || _impl_.attribute_component_ != nullptr);
   return value;
 }
@@ -4761,16 +4804,16 @@ inline void player_database::unsafe_arena_set_allocated_attribute_component(
   }
   _impl_.attribute_component_ = reinterpret_cast<::PlayerAttributeComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.attribute_component)
 }
 inline ::PlayerAttributeComp* PROTOBUF_NULLABLE player_database::release_attribute_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::PlayerAttributeComp* released = _impl_.attribute_component_;
   _impl_.attribute_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4790,7 +4833,7 @@ inline ::PlayerAttributeComp* PROTOBUF_NULLABLE player_database::unsafe_arena_re
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.attribute_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::PlayerAttributeComp* temp = _impl_.attribute_component_;
   _impl_.attribute_component_ = nullptr;
   return temp;
@@ -4805,7 +4848,7 @@ inline ::PlayerAttributeComp* PROTOBUF_NONNULL player_database::_internal_mutabl
 }
 inline ::PlayerAttributeComp* PROTOBUF_NONNULL player_database::mutable_attribute_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   ::PlayerAttributeComp* _msg = _internal_mutable_attribute_component();
   // @@protoc_insertion_point(field_mutable:player_database.attribute_component)
   return _msg;
@@ -4822,9 +4865,9 @@ inline void player_database::set_allocated_attribute_component(::PlayerAttribute
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
   }
 
   _impl_.attribute_component_ = reinterpret_cast<::PlayerAttributeComp*>(value);
@@ -4833,7 +4876,7 @@ inline void player_database::set_allocated_attribute_component(::PlayerAttribute
 
 // .PlayerPetComp pet_component = 12 [(.OptionPersistGroup) = 3];
 inline bool player_database::has_pet_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
   PROTOBUF_ASSUME(!value || _impl_.pet_component_ != nullptr);
   return value;
 }
@@ -4854,16 +4897,16 @@ inline void player_database::unsafe_arena_set_allocated_pet_component(
   }
   _impl_.pet_component_ = reinterpret_cast<::PlayerPetComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.pet_component)
 }
 inline ::PlayerPetComp* PROTOBUF_NULLABLE player_database::release_pet_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::PlayerPetComp* released = _impl_.pet_component_;
   _impl_.pet_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4883,7 +4926,7 @@ inline ::PlayerPetComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.pet_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::PlayerPetComp* temp = _impl_.pet_component_;
   _impl_.pet_component_ = nullptr;
   return temp;
@@ -4898,7 +4941,7 @@ inline ::PlayerPetComp* PROTOBUF_NONNULL player_database::_internal_mutable_pet_
 }
 inline ::PlayerPetComp* PROTOBUF_NONNULL player_database::mutable_pet_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::PlayerPetComp* _msg = _internal_mutable_pet_component();
   // @@protoc_insertion_point(field_mutable:player_database.pet_component)
   return _msg;
@@ -4915,9 +4958,9 @@ inline void player_database::set_allocated_pet_component(::PlayerPetComp* PROTOB
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   }
 
   _impl_.pet_component_ = reinterpret_cast<::PlayerPetComp*>(value);
@@ -4926,7 +4969,7 @@ inline void player_database::set_allocated_pet_component(::PlayerPetComp* PROTOB
 
 // .BagAllData bag_component = 13 [(.OptionPersistGroup) = 8];
 inline bool player_database::has_bag_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
   PROTOBUF_ASSUME(!value || _impl_.bag_component_ != nullptr);
   return value;
 }
@@ -4947,16 +4990,16 @@ inline void player_database::unsafe_arena_set_allocated_bag_component(
   }
   _impl_.bag_component_ = reinterpret_cast<::BagAllData*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.bag_component)
 }
 inline ::BagAllData* PROTOBUF_NULLABLE player_database::release_bag_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::BagAllData* released = _impl_.bag_component_;
   _impl_.bag_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4976,7 +5019,7 @@ inline ::BagAllData* PROTOBUF_NULLABLE player_database::unsafe_arena_release_bag
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.bag_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::BagAllData* temp = _impl_.bag_component_;
   _impl_.bag_component_ = nullptr;
   return temp;
@@ -4991,7 +5034,7 @@ inline ::BagAllData* PROTOBUF_NONNULL player_database::_internal_mutable_bag_com
 }
 inline ::BagAllData* PROTOBUF_NONNULL player_database::mutable_bag_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::BagAllData* _msg = _internal_mutable_bag_component();
   // @@protoc_insertion_point(field_mutable:player_database.bag_component)
   return _msg;
@@ -5008,9 +5051,9 @@ inline void player_database::set_allocated_bag_component(::BagAllData* PROTOBUF_
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
 
   _impl_.bag_component_ = reinterpret_cast<::BagAllData*>(value);
@@ -5019,7 +5062,7 @@ inline void player_database::set_allocated_bag_component(::BagAllData* PROTOBUF_
 
 // .QuestAllData mission_component = 14 [(.OptionPersistGroup) = 3];
 inline bool player_database::has_mission_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
   PROTOBUF_ASSUME(!value || _impl_.mission_component_ != nullptr);
   return value;
 }
@@ -5040,16 +5083,16 @@ inline void player_database::unsafe_arena_set_allocated_mission_component(
   }
   _impl_.mission_component_ = reinterpret_cast<::QuestAllData*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.mission_component)
 }
 inline ::QuestAllData* PROTOBUF_NULLABLE player_database::release_mission_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::QuestAllData* released = _impl_.mission_component_;
   _impl_.mission_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5069,7 +5112,7 @@ inline ::QuestAllData* PROTOBUF_NULLABLE player_database::unsafe_arena_release_m
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.mission_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::QuestAllData* temp = _impl_.mission_component_;
   _impl_.mission_component_ = nullptr;
   return temp;
@@ -5084,7 +5127,7 @@ inline ::QuestAllData* PROTOBUF_NONNULL player_database::_internal_mutable_missi
 }
 inline ::QuestAllData* PROTOBUF_NONNULL player_database::mutable_mission_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::QuestAllData* _msg = _internal_mutable_mission_component();
   // @@protoc_insertion_point(field_mutable:player_database.mission_component)
   return _msg;
@@ -5101,9 +5144,9 @@ inline void player_database::set_allocated_mission_component(::QuestAllData* PRO
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
 
   _impl_.mission_component_ = reinterpret_cast<::QuestAllData*>(value);
@@ -5112,7 +5155,7 @@ inline void player_database::set_allocated_mission_component(::QuestAllData* PRO
 
 // .PlayerProfileComp profile_component = 15 [(.OptionPersistGroup) = 4];
 inline bool player_database::has_profile_component() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00002000U);
   PROTOBUF_ASSUME(!value || _impl_.profile_component_ != nullptr);
   return value;
 }
@@ -5133,16 +5176,16 @@ inline void player_database::unsafe_arena_set_allocated_profile_component(
   }
   _impl_.profile_component_ = reinterpret_cast<::PlayerProfileComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.profile_component)
 }
 inline ::PlayerProfileComp* PROTOBUF_NULLABLE player_database::release_profile_component() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   ::PlayerProfileComp* released = _impl_.profile_component_;
   _impl_.profile_component_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5162,7 +5205,7 @@ inline ::PlayerProfileComp* PROTOBUF_NULLABLE player_database::unsafe_arena_rele
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.profile_component)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   ::PlayerProfileComp* temp = _impl_.profile_component_;
   _impl_.profile_component_ = nullptr;
   return temp;
@@ -5177,7 +5220,7 @@ inline ::PlayerProfileComp* PROTOBUF_NONNULL player_database::_internal_mutable_
 }
 inline ::PlayerProfileComp* PROTOBUF_NONNULL player_database::mutable_profile_component()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   ::PlayerProfileComp* _msg = _internal_mutable_profile_component();
   // @@protoc_insertion_point(field_mutable:player_database.profile_component)
   return _msg;
@@ -5194,9 +5237,9 @@ inline void player_database::set_allocated_profile_component(::PlayerProfileComp
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
   }
 
   _impl_.profile_component_ = reinterpret_cast<::PlayerProfileComp*>(value);
@@ -5205,7 +5248,7 @@ inline void player_database::set_allocated_profile_component(::PlayerProfileComp
 
 // .PlayerAssetOpLedgerComp asset_op_ledger = 16 [(.OptionPersistGroup) = 7];
 inline bool player_database::has_asset_op_ledger() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00002000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00004000U);
   PROTOBUF_ASSUME(!value || _impl_.asset_op_ledger_ != nullptr);
   return value;
 }
@@ -5226,16 +5269,16 @@ inline void player_database::unsafe_arena_set_allocated_asset_op_ledger(
   }
   _impl_.asset_op_ledger_ = reinterpret_cast<::PlayerAssetOpLedgerComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.asset_op_ledger)
 }
 inline ::PlayerAssetOpLedgerComp* PROTOBUF_NULLABLE player_database::release_asset_op_ledger() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
   ::PlayerAssetOpLedgerComp* released = _impl_.asset_op_ledger_;
   _impl_.asset_op_ledger_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5255,7 +5298,7 @@ inline ::PlayerAssetOpLedgerComp* PROTOBUF_NULLABLE player_database::unsafe_aren
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.asset_op_ledger)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
   ::PlayerAssetOpLedgerComp* temp = _impl_.asset_op_ledger_;
   _impl_.asset_op_ledger_ = nullptr;
   return temp;
@@ -5270,7 +5313,7 @@ inline ::PlayerAssetOpLedgerComp* PROTOBUF_NONNULL player_database::_internal_mu
 }
 inline ::PlayerAssetOpLedgerComp* PROTOBUF_NONNULL player_database::mutable_asset_op_ledger()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   ::PlayerAssetOpLedgerComp* _msg = _internal_mutable_asset_op_ledger();
   // @@protoc_insertion_point(field_mutable:player_database.asset_op_ledger)
   return _msg;
@@ -5287,9 +5330,9 @@ inline void player_database::set_allocated_asset_op_ledger(::PlayerAssetOpLedger
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
   }
 
   _impl_.asset_op_ledger_ = reinterpret_cast<::PlayerAssetOpLedgerComp*>(value);
@@ -5298,7 +5341,7 @@ inline void player_database::set_allocated_asset_op_ledger(::PlayerAssetOpLedger
 
 // .PlayerInboxLedgerComp inbox_ledger = 20 [(.OptionPersistGroup) = 7];
 inline bool player_database::has_inbox_ledger() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00004000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00008000U);
   PROTOBUF_ASSUME(!value || _impl_.inbox_ledger_ != nullptr);
   return value;
 }
@@ -5319,16 +5362,16 @@ inline void player_database::unsafe_arena_set_allocated_inbox_ledger(
   }
   _impl_.inbox_ledger_ = reinterpret_cast<::PlayerInboxLedgerComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.inbox_ledger)
 }
 inline ::PlayerInboxLedgerComp* PROTOBUF_NULLABLE player_database::release_inbox_ledger() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
   ::PlayerInboxLedgerComp* released = _impl_.inbox_ledger_;
   _impl_.inbox_ledger_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5348,7 +5391,7 @@ inline ::PlayerInboxLedgerComp* PROTOBUF_NULLABLE player_database::unsafe_arena_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.inbox_ledger)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
   ::PlayerInboxLedgerComp* temp = _impl_.inbox_ledger_;
   _impl_.inbox_ledger_ = nullptr;
   return temp;
@@ -5363,7 +5406,7 @@ inline ::PlayerInboxLedgerComp* PROTOBUF_NONNULL player_database::_internal_muta
 }
 inline ::PlayerInboxLedgerComp* PROTOBUF_NONNULL player_database::mutable_inbox_ledger()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   ::PlayerInboxLedgerComp* _msg = _internal_mutable_inbox_ledger();
   // @@protoc_insertion_point(field_mutable:player_database.inbox_ledger)
   return _msg;
@@ -5380,9 +5423,9 @@ inline void player_database::set_allocated_inbox_ledger(::PlayerInboxLedgerComp*
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
   }
 
   _impl_.inbox_ledger_ = reinterpret_cast<::PlayerInboxLedgerComp*>(value);
@@ -5393,7 +5436,7 @@ inline void player_database::set_allocated_inbox_ledger(::PlayerInboxLedgerComp*
 inline void player_database::clear_persist_schema_gen() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.persist_schema_gen_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t player_database::persist_schema_gen() const {
   // @@protoc_insertion_point(field_get:player_database.persist_schema_gen)
@@ -5401,7 +5444,7 @@ inline ::uint32_t player_database::persist_schema_gen() const {
 }
 inline void player_database::set_persist_schema_gen(::uint32_t value) {
   _internal_set_persist_schema_gen(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:player_database.persist_schema_gen)
 }
 inline ::uint32_t player_database::_internal_persist_schema_gen() const {
@@ -5415,7 +5458,7 @@ inline void player_database::_internal_set_persist_schema_gen(::uint32_t value) 
 
 // .PlayerMysteryMerchantComp mystery_merchant = 22 [(.OptionPersistGroup) = 7];
 inline bool player_database::has_mystery_merchant() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00008000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00010000U);
   PROTOBUF_ASSUME(!value || _impl_.mystery_merchant_ != nullptr);
   return value;
 }
@@ -5436,16 +5479,16 @@ inline void player_database::unsafe_arena_set_allocated_mystery_merchant(
   }
   _impl_.mystery_merchant_ = reinterpret_cast<::PlayerMysteryMerchantComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.mystery_merchant)
 }
 inline ::PlayerMysteryMerchantComp* PROTOBUF_NULLABLE player_database::release_mystery_merchant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
   ::PlayerMysteryMerchantComp* released = _impl_.mystery_merchant_;
   _impl_.mystery_merchant_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5465,7 +5508,7 @@ inline ::PlayerMysteryMerchantComp* PROTOBUF_NULLABLE player_database::unsafe_ar
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.mystery_merchant)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
   ::PlayerMysteryMerchantComp* temp = _impl_.mystery_merchant_;
   _impl_.mystery_merchant_ = nullptr;
   return temp;
@@ -5480,7 +5523,7 @@ inline ::PlayerMysteryMerchantComp* PROTOBUF_NONNULL player_database::_internal_
 }
 inline ::PlayerMysteryMerchantComp* PROTOBUF_NONNULL player_database::mutable_mystery_merchant()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   ::PlayerMysteryMerchantComp* _msg = _internal_mutable_mystery_merchant();
   // @@protoc_insertion_point(field_mutable:player_database.mystery_merchant)
   return _msg;
@@ -5497,9 +5540,9 @@ inline void player_database::set_allocated_mystery_merchant(::PlayerMysteryMerch
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
   }
 
   _impl_.mystery_merchant_ = reinterpret_cast<::PlayerMysteryMerchantComp*>(value);
@@ -5508,7 +5551,7 @@ inline void player_database::set_allocated_mystery_merchant(::PlayerMysteryMerch
 
 // .PlayerBattleResultComp battle_results = 23 [(.OptionPersistGroup) = 4];
 inline bool player_database::has_battle_results() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00010000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00020000U);
   PROTOBUF_ASSUME(!value || _impl_.battle_results_ != nullptr);
   return value;
 }
@@ -5529,16 +5572,16 @@ inline void player_database::unsafe_arena_set_allocated_battle_results(
   }
   _impl_.battle_results_ = reinterpret_cast<::PlayerBattleResultComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.battle_results)
 }
 inline ::PlayerBattleResultComp* PROTOBUF_NULLABLE player_database::release_battle_results() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
   ::PlayerBattleResultComp* released = _impl_.battle_results_;
   _impl_.battle_results_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5558,7 +5601,7 @@ inline ::PlayerBattleResultComp* PROTOBUF_NULLABLE player_database::unsafe_arena
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.battle_results)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
   ::PlayerBattleResultComp* temp = _impl_.battle_results_;
   _impl_.battle_results_ = nullptr;
   return temp;
@@ -5573,7 +5616,7 @@ inline ::PlayerBattleResultComp* PROTOBUF_NONNULL player_database::_internal_mut
 }
 inline ::PlayerBattleResultComp* PROTOBUF_NONNULL player_database::mutable_battle_results()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   ::PlayerBattleResultComp* _msg = _internal_mutable_battle_results();
   // @@protoc_insertion_point(field_mutable:player_database.battle_results)
   return _msg;
@@ -5590,9 +5633,9 @@ inline void player_database::set_allocated_battle_results(::PlayerBattleResultCo
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
   }
 
   _impl_.battle_results_ = reinterpret_cast<::PlayerBattleResultComp*>(value);
@@ -5601,7 +5644,7 @@ inline void player_database::set_allocated_battle_results(::PlayerBattleResultCo
 
 // .PlayerItemGainBlockComp item_gain_block = 24 [(.OptionPersistGroup) = 4];
 inline bool player_database::has_item_gain_block() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00020000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00040000U);
   PROTOBUF_ASSUME(!value || _impl_.item_gain_block_ != nullptr);
   return value;
 }
@@ -5622,16 +5665,16 @@ inline void player_database::unsafe_arena_set_allocated_item_gain_block(
   }
   _impl_.item_gain_block_ = reinterpret_cast<::PlayerItemGainBlockComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.item_gain_block)
 }
 inline ::PlayerItemGainBlockComp* PROTOBUF_NULLABLE player_database::release_item_gain_block() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
   ::PlayerItemGainBlockComp* released = _impl_.item_gain_block_;
   _impl_.item_gain_block_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5651,7 +5694,7 @@ inline ::PlayerItemGainBlockComp* PROTOBUF_NULLABLE player_database::unsafe_aren
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.item_gain_block)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
   ::PlayerItemGainBlockComp* temp = _impl_.item_gain_block_;
   _impl_.item_gain_block_ = nullptr;
   return temp;
@@ -5666,7 +5709,7 @@ inline ::PlayerItemGainBlockComp* PROTOBUF_NONNULL player_database::_internal_mu
 }
 inline ::PlayerItemGainBlockComp* PROTOBUF_NONNULL player_database::mutable_item_gain_block()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   ::PlayerItemGainBlockComp* _msg = _internal_mutable_item_gain_block();
   // @@protoc_insertion_point(field_mutable:player_database.item_gain_block)
   return _msg;
@@ -5683,9 +5726,9 @@ inline void player_database::set_allocated_item_gain_block(::PlayerItemGainBlock
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
   }
 
   _impl_.item_gain_block_ = reinterpret_cast<::PlayerItemGainBlockComp*>(value);
@@ -5694,7 +5737,7 @@ inline void player_database::set_allocated_item_gain_block(::PlayerItemGainBlock
 
 // .ClientRequestLedgerComp client_request_ledger = 25 [(.OptionPersistGroup) = 7];
 inline bool player_database::has_client_request_ledger() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00040000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00080000U);
   PROTOBUF_ASSUME(!value || _impl_.client_request_ledger_ != nullptr);
   return value;
 }
@@ -5715,16 +5758,16 @@ inline void player_database::unsafe_arena_set_allocated_client_request_ledger(
   }
   _impl_.client_request_ledger_ = reinterpret_cast<::ClientRequestLedgerComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.client_request_ledger)
 }
 inline ::ClientRequestLedgerComp* PROTOBUF_NULLABLE player_database::release_client_request_ledger() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
   ::ClientRequestLedgerComp* released = _impl_.client_request_ledger_;
   _impl_.client_request_ledger_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5744,7 +5787,7 @@ inline ::ClientRequestLedgerComp* PROTOBUF_NULLABLE player_database::unsafe_aren
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.client_request_ledger)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
   ::ClientRequestLedgerComp* temp = _impl_.client_request_ledger_;
   _impl_.client_request_ledger_ = nullptr;
   return temp;
@@ -5759,7 +5802,7 @@ inline ::ClientRequestLedgerComp* PROTOBUF_NONNULL player_database::_internal_mu
 }
 inline ::ClientRequestLedgerComp* PROTOBUF_NONNULL player_database::mutable_client_request_ledger()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   ::ClientRequestLedgerComp* _msg = _internal_mutable_client_request_ledger();
   // @@protoc_insertion_point(field_mutable:player_database.client_request_ledger)
   return _msg;
@@ -5776,9 +5819,9 @@ inline void player_database::set_allocated_client_request_ledger(::ClientRequest
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
   }
 
   _impl_.client_request_ledger_ = reinterpret_cast<::ClientRequestLedgerComp*>(value);
@@ -5787,7 +5830,7 @@ inline void player_database::set_allocated_client_request_ledger(::ClientRequest
 
 // .PlayerItemHoldComp item_holds = 26 [(.OptionPersistGroup) = 4];
 inline bool player_database::has_item_holds() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00080000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00100000U);
   PROTOBUF_ASSUME(!value || _impl_.item_holds_ != nullptr);
   return value;
 }
@@ -5808,16 +5851,16 @@ inline void player_database::unsafe_arena_set_allocated_item_holds(
   }
   _impl_.item_holds_ = reinterpret_cast<::PlayerItemHoldComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.item_holds)
 }
 inline ::PlayerItemHoldComp* PROTOBUF_NULLABLE player_database::release_item_holds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
   ::PlayerItemHoldComp* released = _impl_.item_holds_;
   _impl_.item_holds_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5837,7 +5880,7 @@ inline ::PlayerItemHoldComp* PROTOBUF_NULLABLE player_database::unsafe_arena_rel
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.item_holds)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
   ::PlayerItemHoldComp* temp = _impl_.item_holds_;
   _impl_.item_holds_ = nullptr;
   return temp;
@@ -5852,7 +5895,7 @@ inline ::PlayerItemHoldComp* PROTOBUF_NONNULL player_database::_internal_mutable
 }
 inline ::PlayerItemHoldComp* PROTOBUF_NONNULL player_database::mutable_item_holds()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   ::PlayerItemHoldComp* _msg = _internal_mutable_item_holds();
   // @@protoc_insertion_point(field_mutable:player_database.item_holds)
   return _msg;
@@ -5869,9 +5912,9 @@ inline void player_database::set_allocated_item_holds(::PlayerItemHoldComp* PROT
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
   }
 
   _impl_.item_holds_ = reinterpret_cast<::PlayerItemHoldComp*>(value);
@@ -5880,7 +5923,7 @@ inline void player_database::set_allocated_item_holds(::PlayerItemHoldComp* PROT
 
 // .PlayerMailOutboxComp mail_outbox = 27 [(.OptionPersistGroup) = 7];
 inline bool player_database::has_mail_outbox() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00100000U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00200000U);
   PROTOBUF_ASSUME(!value || _impl_.mail_outbox_ != nullptr);
   return value;
 }
@@ -5901,16 +5944,16 @@ inline void player_database::unsafe_arena_set_allocated_mail_outbox(
   }
   _impl_.mail_outbox_ = reinterpret_cast<::PlayerMailOutboxComp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.mail_outbox)
 }
 inline ::PlayerMailOutboxComp* PROTOBUF_NULLABLE player_database::release_mail_outbox() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
   ::PlayerMailOutboxComp* released = _impl_.mail_outbox_;
   _impl_.mail_outbox_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -5930,7 +5973,7 @@ inline ::PlayerMailOutboxComp* PROTOBUF_NULLABLE player_database::unsafe_arena_r
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:player_database.mail_outbox)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
   ::PlayerMailOutboxComp* temp = _impl_.mail_outbox_;
   _impl_.mail_outbox_ = nullptr;
   return temp;
@@ -5945,7 +5988,7 @@ inline ::PlayerMailOutboxComp* PROTOBUF_NONNULL player_database::_internal_mutab
 }
 inline ::PlayerMailOutboxComp* PROTOBUF_NONNULL player_database::mutable_mail_outbox()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   ::PlayerMailOutboxComp* _msg = _internal_mutable_mail_outbox();
   // @@protoc_insertion_point(field_mutable:player_database.mail_outbox)
   return _msg;
@@ -5962,13 +6005,156 @@ inline void player_database::set_allocated_mail_outbox(::PlayerMailOutboxComp* P
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+    SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
   }
 
   _impl_.mail_outbox_ = reinterpret_cast<::PlayerMailOutboxComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.mail_outbox)
+}
+
+// .CooldownTimeListComp skill_cooldowns = 28 [(.OptionPersistGroup) = 6];
+inline bool player_database::has_skill_cooldowns() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00400000U);
+  PROTOBUF_ASSUME(!value || _impl_.skill_cooldowns_ != nullptr);
+  return value;
+}
+inline const ::CooldownTimeListComp& player_database::_internal_skill_cooldowns() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::CooldownTimeListComp* p = _impl_.skill_cooldowns_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::CooldownTimeListComp>(&::CooldownTimeListComp_globals_);
+}
+inline const ::CooldownTimeListComp& player_database::skill_cooldowns() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.skill_cooldowns)
+  return _internal_skill_cooldowns();
+}
+inline void player_database::unsafe_arena_set_allocated_skill_cooldowns(
+    ::CooldownTimeListComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.skill_cooldowns_);
+  }
+  _impl_.skill_cooldowns_ = reinterpret_cast<::CooldownTimeListComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.skill_cooldowns)
+}
+inline ::CooldownTimeListComp* PROTOBUF_NULLABLE player_database::release_skill_cooldowns() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ::CooldownTimeListComp* released = _impl_.skill_cooldowns_;
+  _impl_.skill_cooldowns_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::CooldownTimeListComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_skill_cooldowns() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.skill_cooldowns)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ::CooldownTimeListComp* temp = _impl_.skill_cooldowns_;
+  _impl_.skill_cooldowns_ = nullptr;
+  return temp;
+}
+inline ::CooldownTimeListComp* PROTOBUF_NONNULL player_database::_internal_mutable_skill_cooldowns() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.skill_cooldowns_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::CooldownTimeListComp>(GetArena());
+    _impl_.skill_cooldowns_ = reinterpret_cast<::CooldownTimeListComp*>(p);
+  }
+  return _impl_.skill_cooldowns_;
+}
+inline ::CooldownTimeListComp* PROTOBUF_NONNULL player_database::mutable_skill_cooldowns()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ::CooldownTimeListComp* _msg = _internal_mutable_skill_cooldowns();
+  // @@protoc_insertion_point(field_mutable:player_database.skill_cooldowns)
+  return _msg;
+}
+inline void player_database::set_allocated_skill_cooldowns(::CooldownTimeListComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.skill_cooldowns_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  }
+
+  _impl_.skill_cooldowns_ = reinterpret_cast<::CooldownTimeListComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.skill_cooldowns)
+}
+
+// repeated .SavedBuffComp saved_buffs = 29 [(.OptionPersistGroup) = 6];
+inline int player_database::_internal_saved_buffs_size() const {
+  return _internal_saved_buffs().size();
+}
+inline int player_database::saved_buffs_size() const {
+  return _internal_saved_buffs_size();
+}
+inline const ::SavedBuffComp& player_database::saved_buffs(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.saved_buffs)
+  return _internal_saved_buffs().Get(index);
+}
+inline ::SavedBuffComp* PROTOBUF_NONNULL player_database::mutable_saved_buffs(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:player_database.saved_buffs)
+  return _internal_mutable_saved_buffs()->Mutable(index);
+}
+inline ::SavedBuffComp* PROTOBUF_NONNULL player_database::add_saved_buffs()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::SavedBuffComp* _add =
+      _internal_mutable_saved_buffs()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:player_database.saved_buffs)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBuffComp>& player_database::saved_buffs() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:player_database.saved_buffs)
+  return _internal_saved_buffs();
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBuffComp>* PROTOBUF_NONNULL
+player_database::mutable_saved_buffs() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:player_database.saved_buffs)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_saved_buffs();
+}
+inline const ::google::protobuf::RepeatedPtrField<::SavedBuffComp>&
+player_database::_internal_saved_buffs() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.saved_buffs_;
+}
+inline ::google::protobuf::RepeatedPtrField<::SavedBuffComp>* PROTOBUF_NONNULL
+player_database::_internal_mutable_saved_buffs() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.saved_buffs_;
 }
 
 // -------------------------------------------------------------------

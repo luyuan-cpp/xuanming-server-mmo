@@ -36,6 +36,10 @@
 #include "modules/gain_block/gain_block_service.h"
 #include "proto/battle/battle_data.pb.h"
 #include "table/code/item_table.h"
+#include "table/code/buff_table.h"
+#include "combat/buff/comp/buff_comp.h" // 参战 Buff 的剩余回合按 BuffEntry::expireAtMs 换算
+#include "services/battle/constants/turn_battle_constants.h"
+#include "engine/core/time/system/time.h"
 #include "table/code/pet_table.h"
 #include "table/code/petrule_table.h"
 #include "table/code/attributedimension_table.h"
@@ -3614,6 +3618,42 @@ TEST_F(PlayerBattleSettlementTest, SnapshotItemsExcludeQuantitiesHeldByAnotherBa
     ASSERT_EQ(1, snapshot.items_size()) << "11 全被押着,不进副本";
     EXPECT_EQ(10u, snapshot.items(0).item_table_id());
     EXPECT_EQ(2u, snapshot.items(0).count()) << "5 瓶里押着 3 瓶,副本只带 2 瓶";
+}
+
+// 参战 Buff 的回合数按这条自己剩下的时间换算,不按表里的全量时长(docs/design/realtime-cooldown-buff-persistence.md);
+// 已到点、到期回调还没跑的不带。11103 是 buff.json 里 12 秒的防御提升(非控制类,表里的全量时长折 2 回合)。
+TEST_F(PlayerBattleSettlementTest, SnapshotBuffRoundsFollowTheRemainingTime) {
+    BuffTableManager::Instance().Load();
+    const auto* buffRow = BuffTableManager::Instance().FindByIdSilent(11103).first;
+    ASSERT_NE(nullptr, buffRow);
+    ASSERT_EQ(0u, buffRow->infinite_duration());
+    ASSERT_EQ(2u, turnbattle::RoundsFromSeconds(buffRow->duration())) << "夹具前提:全量时长折 2 回合";
+    auto& registry = tlsEcs.actorRegistry;
+    registry.emplace<LevelComp>(player).set_level(10);
+    registry.emplace<PlayerUint32Comp>(player);
+    registry.emplace<PlayerProfileComp>(player);
+    registry.emplace<PlayerSkillListComp>(player);
+    registry.emplace<PlayerPetComp>(player);
+    registry.emplace<PlayerBagsComp>(player);
+    registry.emplace<PlayerSessionSnapshotComp>(player).set_gate_session_id(kSnapshotLevelSessionId);
+    auto& buffs = registry.emplace<BuffListComp>(player);
+    // 5 秒折 1 回合,留足组快照之前的余量;12 秒的全量时长折 2 回合。
+    for (const auto [buffId, expireAtMs] : {std::pair<uint64_t, uint64_t>{1, TimeSystem::NowMillisecondsUTC() + 5000},
+                                            std::pair<uint64_t, uint64_t>{2, 1}}) {
+        BuffEntry entry;
+        entry.buffPb.set_buff_id(buffId);
+        entry.buffPb.set_buff_table_id(11103);
+        entry.buffPb.set_layer(1);
+        entry.expireAtMs = expireAtMs;
+        buffs.emplace(buffId, std::move(entry));
+    }
+
+    BattlePlayerSnapshot snapshot;
+    uint32_t errorTipId = kSuccess;
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Snapshot(player, snapshot, errorTipId)) << "tip " << errorTipId;
+    ASSERT_EQ(1, snapshot.buffs_size()) << "已到点的不带";
+    EXPECT_EQ(1u, snapshot.buffs(0).buff_id());
+    EXPECT_EQ(1u, snapshot.buffs(0).remain_rounds()) << "还剩不到 5 秒折 1 回合,不按表里的 12 秒折 2 回合";
 }
 
 }  // namespace

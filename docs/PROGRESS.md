@@ -3738,3 +3738,83 @@
 - **行为差异**:`[RelocateConfirm]` 的 `push_*` 分类有一处变化:记着实例、那个进程已不在、同一 node_id 上另一个进程没连上时,原来计 `push_gate_gone`,现在计 `push_gate_replaced`。推不推不变。
 - **未验证**:全部没有编译、没有运行。
 - **Java 版(AGENTS §12)**:对应 Java 版本 `0.1.0-SNAPSHOT`,待做,本轮不写 Java 代码,只在 Java 仓 `PARITY.md` 末尾登记(Java 网关回推是否按会话所在的网关实例投递待核实)。
+
+## 2026-11-20 Gemini:「组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登」全线(11-06~11-20 共 20 条)首轮验证回执(导表、协议、Go 单测、C++ 预检与 gate 通过;本线客户端查出 1 处文案空格缺陷待切最高档修;scene.lib 与客户端全仓受其他会话阻塞;Java 0.1.0-SNAPSHOT 待做)
+
+- **验证范围**:按交接单 `docs/handoff/team-follow-afk-hosting-handoff-20261120.md` §2~§4 执行本线 20 条条目:
+  - 11-06「组队跟随改为服务器沿队长轨迹驱动队员」「组队跟随补『离线的队员也跟』」「开通挂机的玩家断线后离线托管、照常组队跟随」;
+  - 11-10「组队跟随:入场后补推跟随状态」「离线托管的队员跟着队长跨场景、跨节点」;
+  - 11-11「组队跟随客户端补齐用例与兼容说明」「离线托管队员跟随的兜底重试」;
+  - 11-12「组队跟随遗留三项收尾」「离线托管角色随排空 / 疏散搬走」「托管归位」,11-13「托管归位补一处」;
+  - 11-19「组队跟随间距放大到 3 倍」「组队跟随间距改定 3 米」「组队跟随与离线托管本线遗留项清零」「组队跟随合并广播的发送层补单测」「实时技能冷却与 Buff 跨重登保留」「挂机月卡开通入口」;
+  - 11-20「挂机月卡复核补齐」「实时冷却与 Buff 跨重登保留·复核补」「实时冷却与 Buff 跨重登保留·独立评审后再补」。
+- **顺手完成与规范落盘**(都在各自 `main` 工作区,未建分支、未 commit):
+  - 按交接单 §4 修正 `robot/team_follow_smoke_scenario.go` 与 `robot/etc/team_follow_smoke.yaml` 的旧阈值注释(拉开距离 `12 -> 60` 分步每步 16、停步间距 `1.4 -> 3`)。
+  - 按负责人指令在三仓 `AGENTS.md` 写入强制模型档位规定(服务端 `AGENTS.md` §10.3、客户端 `AGENTS.md` 末节、Java 仓 `AGENTS.md` §6):修改代码必须用各软件最高档模型(`Fable 5.2 Max` / `Gemini 4 Neon Extra` / `GPT 6.2 Astral Ultra`),编译测试用低档(`Carbon Medium` / `6.1 Sol Ultra` / `Opus 5 High`)。
+- **已执行并通过的步骤**(日志目录 `build/verification/team-follow-afk-hosting-20261120/`):
+  1. **数据预检与 xlsx(第 1~2 步)**:`data/` 工作区干净;`python tools/scripts/afk_pass_xlsx_patch.py new-tables` 产出 `data/AfkPassRule.xlsx`(7 列 1 行),`tip-codes` 在 `data/tip/Tip.xlsx` 追加 `//afk_pass_error base=32000 width=1000`(5 个码 `32000..32004`)。
+  2. **导表与协议生成(第 3~4 步)**:`dev.bat gen`、`py tools/data_table_exporter/tools/gen_schema_index.py`(`--check` 绿)、客户端 `gen_proto.ps1` 与 `gen_messageids.ps1` 全部退出码 0。核对通过:`afkpassrule_table.*` 与 `afk_pass_error_tip.pb.*` 生成,`buff_table` 含 `keep_on_logout`(`data/AGENTS.md` 为 64 列 54 字段,新增 `AfkPassRule` 行),`go/shared/generated/tip/{segments,faults}.go` 含 `afk_pass` 段与 `AfkPassUnavailable(32004)`,消息号 `381/382` 不变、新增 `SceneAfkPassClientPlayer` 三个方法 `430/431/432`,`proto/persist_schema_gen.txt` 纯追加(`PlayerUint64Comp#2`、`CooldownTime*`、`SavedBuffComp#1..3`、`player_database#28/#29`),`EnterSceneRequest.hosted_placement`、`PlayerHostedPlacementEvent(53)`、`ReleasePlayerRequest.keep_held` 均在列,客户端生成 `PlayerAfkPass.cs`、`AfkPassErrorTip.cs` 与 `MessageIds.cs`(`GetAfkPass=430`、`BuyAfkPass=431`)。
+  3. **Go 检查与单测(第 5 步,`GOTOOLCHAIN=local GOPROXY=off`)**:
+     - `go/shared`:`go vet ./redisslot/...` 与 `go test ./redisslot/ -count=1` 全部 PASS(`gofmt -l` 仅报其他会话的 `control_keys_test.go`)。
+     - `go/match`:`gofmt` 无输出,`go vet ./internal/team/...` 与 `go test ./internal/team/ -count=1` 全部 PASS(含 `TestLeaderChangeRefreshesEveryRemainingMember`)。
+     - `go/player_locator`:`gofmt` 无输出,`go vet ./...`、定向 12 个顶层用例与全量 `go test ./... -count=1` 全部 PASS。
+     - `go/scene_manager`:`gofmt -l internal/logic` 无输出,`go build ./...`、`go vet ./...` 0 错误,本线 36 条定向用例全部 PASS;全量 `go test ./... -count=1` 有 3 条非本线失败(见下)。
+     - `robot`:本线 4 个文件 `gofmt` 无输出;因其他会话新增 `golang.org/x/net/websocket` 未刷新 `vendor/`,默认 `-mod=vendor` 报缺包,改 `-mod=readonly` 执行 `go build ./...`、`go vet ./...`、`go test ./config/... -count=1` 全部 PASS(含 `TestEveryDispatchedModePassesWhitelist`)。
+  4. **C++ 预检、Linux CMake 生成与可编工程(第 6~9 步部分)**:
+     - `test_cpp_no_raw_pointer_member.py`(10/10 OK)、`test_cpp_thread_sources.py`(5/5 OK)、`check_log_text_english.py` 全部通过。
+     - `python tools/archived/vcxproj2cmake.py` 退出码 0,确认生成的 `CMakeLists.txt` 包含 `afk_pass.cpp`、`actor_move_broadcast.cpp`、`player_afk_pass_handler.cpp`、`player_placement_event_handler.cpp`、`afkpassrule_table.*`、`afk_pass_error_tip.pb.cc`。
+     - `msbuild /m:1`:`proto.lib`、`table.lib`、`core.lib`、`modules.lib`、`gate.lib`、`battle.lib`、`battle.exe`、`cpp/nodes/gate/gate.vcxproj`(`gate.exe`,裸指针门禁 PASSED)全部 0 错误编过;`configuration_table_test` 63/63 PASS。
+     - 对本线全部 30 个 C++ 翻译单元(15 个 `scene` 库 `.cpp` + 5 个 `nodes/scene` `.cpp` + 10 个单测 `.cpp`)单独跑只读 `cl.exe /Zs /std:c++latest` 语法与 `static_assert` 校验:退出码 0,0 个编译错误。
+- **本线查出的真实缺陷(1 处,按 `AGENTS.md` §10.3 在 `Carbon Medium` 下保留原文停下,待切最高档模型修复)**:
+  - 客户端独立 NUnit 运行本线 3 个纯 C# 测试集(`TeamFollowDeclarationTests` 17/17 PASS、`TeamRegroupPolicyTests` 5/5 PASS、`AfkPassClientTests` 10/11 PASS,共 32/33 PASS),唯一失败原文:
+    `FAIL: AfkPassClientTests.FormatRemaining_CoversEveryShape -> NUnit.Framework.AssertionException: Expected string length 9 but was 10. Strings differ at index 2. Expected: "剩余不到 1 分钟" But was: "剩余 不到 1 分钟"`
+  - 根因:`D:\luyuan\mmorpg-client\Assets\Scripts\Game\AfkPass\AfkPassClient.cs:50` 写死 `"剩余 " + FormatDuration(remainingSeconds)`,当 `< 60s` 返回 `"不到 1 分钟"` 时多拼了一个空格。
+- **跨会话阻塞与既有非本线失败(按规矩原样记录,未改他人文件)**:
+  1. **阻塞 `scene.lib` / `scene.exe` / 7 个 scene 单测工程 / Linux 构建 / 冒烟**:
+     `D:\luyuan\xuanming-server-mmo-cpp\cpp\libs\services\scene\player\system\player_pet.cpp(1025,36): error G13DA7946: use of undeclared identifier 'kPetNameSensitive' [D:\luyuan\xuanming-server-mmo-cpp\cpp\libs\services\scene\scene.vcxproj]`(来自提交 `55eae6be3`「改名与内容安全」批次,`data/tip/Tip.xlsx` 未加 `PetNameSensitive`,`lib/scene.lib` 仍停留在 `2026-11-18`)。
+  2. **阻塞客户端全仓编译(`client_compile_check.ps1` 退出码 1,共 14 错;本线客户端文件 0 错)与 Unity EditMode**:
+     - `Assets\Scripts\Game\Jubaozhai\PaymentClient.cs(140..153): error CS0103: The name 'payment_error' does not exist in the current context`
+     - `Assets\Scripts\Game\PlayerFeatures\PlayerFeaturesClient.Activities.cs(245,32): error CS0117: 'reward_error' does not contain a definition for 'KRewardPeriodEnded'`(同仓 `activity_vitality_xlsx_patch.py` 尚未执行)。
+  3. **其他非本线失败**:
+     - `go/scene_manager` 全量:`TestControlRedisHandleContract_NoGoZeroRedisInModule`(`control_zone_keys_contract_test.go:113`)、`TestOwnsControlZoneSkipsForeignMembership`(`foreign_zone_registry_test.go:266: ERR no such key`)、`TestIsNodeAliveTreatsRedisOutageAsAlive`(`scene_keys_contract_test.go:216` miniredis cleanup nil panic)。
+     - `turn_battle_engine_test`:前 345 条全 PASS,到 `TableBattleDataProviderTest` 报 `FATAL readBaseDeployConfig: Etcd.Hosts in etc/base_deploy_config.yaml must list exactly one load-balanced etcd address ..., got 2; refusing to start`。
+- **待续项**:(1) 切最高档模型修掉 `AfkPassClient.cs:50` 空格问题;(2) 待对应会话补齐 `kPetNameSensitive` 与客户端 `payment_error` / `KRewardPeriodEnded` 后,切回低档模型续跑 `scene.lib`/`scene.exe` 整解、7 个 C++ 单测工程(`aoi_test`、`aoi_delivery_test`、`cross_zone_test`、`bag_test`、`currency_test`、`buff_test`、`skill_test`)、Linux 构建、Unity EditMode 全集、robot 两条冒烟及联机/压测验收。
+- **Java 版(AGENTS §12)**:`0.1.0-SNAPSHOT` 维持 `PARITY.md` 既有待做登记,本轮未写 Java 代码。
+
+## 2026-11-20 Gemini（Neon Extra）：「组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登」全线深度审计与 6 处代码缺陷修复（未编译、未跑测试；交低档模型 / Codex 续跑验证）
+
+- **审计与修复清单**（全部在 `main` 工作区修改，未触碰任何其他会话的未提交文件，未提交）：
+  1. **客户端 `AfkPassClient.cs` 剩余不足 1 分钟文案多余空格（修复首轮单测唯一红项）**：
+     - 改动：`mmorpg-client/Assets/Scripts/Game/AfkPass/AfkPassClient.cs`（抽取 `FormatRemainingPhrase`，`< 60s` 返回 `"剩余不到 1 分钟"`，同时修掉 `FormatRemaining` 与 `ReminderText` 两处）；`mmorpg-client/Assets/Tests/EditMode/Tianyong/AfkPassClientTests.cs` 补 `ReminderText(59)` 回归断言。
+  2. **客户端 `AfkPassUiRoot.cs` 二次确认窗口热更调价防呆**：
+     - 改动：`mmorpg-client/Assets/Scripts/UI/Ugui/Gameplay/AfkPassUiRoot.cs` 记录 `_armedCurrency` / `_armedPrice`，5 秒二次确认窗口内若服务端刷新出不同币种或价格则自动撤回确认，避免按玩家未确认过的新价扣费。
+  3. **服务端 `team_follow_system.cpp` 队长瞬移重建队形误瞬移战斗中队员**：
+     - 根因：`TeamFollowSystem::Update` 在 `SetSuspended` 之前进入 `RestartFormation`，对挂着 `InBattleComp`（`IsHeldStill`）的队员照常调 `PlaceMember` → `TeleportIntoSlot`，把战斗中队员瞬移走。
+     - 改动：`cpp/libs/services/scene/player/system/team_follow_system.cpp` 在 `RestartFormation` 对 `IsHeldStill` 队员只调 `StopMotion` 并以 `suspended=true, needsPlacement=true` 留名次，战后下一 tick 自动放进新槽位；`cpp/tests/cross_zone_test/player_team_follow_test.cpp` 补 `TeamFollowDriveTest.LeaderJumpDoesNotTeleportFollowerInBattle`。
+  4. **服务端 `team_follow_system.cpp` 重建队形不瞬移时丢失停步广播**：
+     - 根因：`PlaceMember` 每次都以默认 `TeamFollowerComp{}` 覆盖原组件，清空 `broadcastMoving` 却未发停步广播；若重建走 `snap` / `walk`（不瞬移）且下一 tick `moved == 0` 或瞬移被严格导航拒绝，`StopMotion` 见 `broadcastMoving == false` 跳过广播，观察者与本人客户端会持续外推移动。
+     - 改动：`PlaceMember` 对同队长重建沿用原 `TeamFollowerComp` 广播状态（`TeleportIntoSlot` 成功时照旧清零，`!teleport` 与瞬移被拒后的 `ReleaseFollower` 均保留状态）；`cpp/tests/cross_zone_test/player_team_follow_test.cpp` 补 `TeamFollowDriveTest.LeaderJumpWithoutTeleportKeepsBroadcastStateUntilFollowerStops`。
+  5. **服务端 `actor_move_broadcast.cpp` 与 `view.cpp` 广播列表未过滤已置无效会话的断线保留 / 离线托管观察者**：
+     - 根因：`RemovePlayerSession` 与托管落点 `EnterScene` 将 `PlayerSessionSnapshotComp.gate_session_id` 置为 `kInvalidSessionId` 但保留组件；`CollectMoveReceivers` 仅对 `includeSelf` 判 `kInvalidSessionId`，未过滤 AOI 观察者（`ViewSystem::BroadcastMessageToVisiblePlayers` 同病），导致移动合批为离线托管者多拆组并每 250ms 在 `BroadcastToPlayerClients` 刷 `Gate node not found` ERROR 日志。
+     - 改动：`cpp/libs/services/scene/spatial/system/actor_move_broadcast.cpp` 与 `cpp/libs/services/scene/spatial/system/view.cpp` 过滤 `session == nullptr || session->gate_session_id() == kInvalidSessionId`（保持 `aoi_delivery_test` 默认 `gate_session_id == 0` 兼容）；`cpp/tests/aoi_delivery_test/aoi_delivery_test.cpp` 补 `AoiDeliveryTest.BroadcastsSkipObserversWhoseSessionWasInvalidated`。
+- **深度审计其余已核对模块（无新缺口）**：`buff.cpp` / `buff_comp.h`（`SaveKeptBuffs`、`RestoreSavedBuffs`、`OnBuffRefresh`、`SavedBuffRemainingMs`）、`player_battle.cpp`（剩余时长换算回合）、`skill.cpp`（`StartCooldown` / `RestoreCooldowns`）、`player_database_loader.cpp`、`player_lifecycle.cpp`（托管落点、断线保留、存盘提交投影、看护重试、在场心跳、`keep_held`）、`afk_pass.cpp`、`afk_hosting.cpp`、`team_follow_formation.{h,cpp}`、`facing.h`、`go/scene_manager` 托管落点与释放门、`go/player_locator` 租约续期与托管归位、客户端 `GameClient.TeamFollow.cs` / `TeamFollowDriver.cs` / `TeamFollowDeclaration.cs` / `TeamFollowUiRoot.cs` / `WorldHudNavigation.cs`。
+- **已跑只读预检**（按 `AGENTS.md §10.3`，最高档模型不执行编译与运行测试）：
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：10/10 OK；
+  - `python tools/scripts/tests/test_cpp_thread_sources.py`：5/5 OK；
+  - `python tools/scripts/check_log_text_english.py`：0 violations。
+- **未验证（交低档模型 Gemini `Carbon Medium` 或 Codex `6.1 Sol Ultra` 执行）**：
+  - 本次修改涉及的 C++ / C# 全部未编译、未运行测试。
+  - 待跨会话阻塞解决后（服务端 `player_pet.cpp:1025` `kPetNameSensitive`；客户端 `PaymentClient.cs` `payment_error` 与 `PlayerFeaturesClient.Activities.cs` `KRewardPeriodEnded`），按以下顺序验证：
+    1. 客户端：`pwsh -File tools/client_compile_check.ps1` + Unity EditMode 全集（含 `AfkPassClientTests` 11/11、`TeamFollowDeclarationTests` 17/17、`TeamRegroupPolicyTests` 5/5；也可先用独立 NUnit 复测 33/33）；
+    2. 服务端 Windows 串行构建：`msbuild /m:1 cpp/libs/services/scene/scene.vcxproj` → `msbuild /m:1 cpp/nodes/scene/scene.vcxproj`；
+    3. 服务端 C++ 单测：`pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter "aoi_delivery|cross_zone|aoi|bag|currency|buff|skill"`（重点核对新增 3 条：`LeaderJumpDoesNotTeleportFollowerInBattle`、`LeaderJumpWithoutTeleportKeepsBroadcastStateUntilFollowerStops`、`BroadcastsSkipObserversWhoseSessionWasInvalidated`）；
+    4. 服务端 Linux：`tools/scripts/build_linux.sh`；
+    5. 冒烟：起服后运行 `robot -mode=team_follow_smoke` 与 `robot -mode=afk_pass_follow_smoke`（若 `vendor/` 尚未同步 `golang.org/x/net/websocket`，加 `-mod=readonly`）。
+- **Java 版（AGENTS §12）**：`0.1.0-SNAPSHOT` 维持 `PARITY.md` 既有待做登记，本轮未写 Java 代码。
+
+## 2026-11-20 Claude：真钱支付接入的剩余工作交给 Gemini（交接单）
+
+- 负责人 2026-11-20 定：支付这条线剩下的代码与全部验证交给 Gemini。交接单 `docs/handoff/payment-integration-handoff-20261120.md`。
+- 剩下的代码：渠道复核收尾（中断的复核改了 6 个源文件、写了 4 个测试文件，还缺苹果、谷歌、抖音的测试，抖音协议要对官方文档）、安卓微信支付回调页与两家 SDK 依赖、商城健康检查改成 HTTP、Unity IAP 编译后的修正。
+- 验证：导表与协议生成、四种语言的构建与单测、部署脚本测试、Unity、devpay 本机冒烟、kind 冒烟。全部没跑过。
+- Java 独立仓（AGENTS §12）：只登记待做，`PARITY.md` 已有条目。

@@ -71,6 +71,18 @@ func TestCheckSendsSceneTextAndPlayer(t *testing.T) {
 	}
 }
 
+// Optional(本机开发)的客户端在服务不可达时放行;服务回了明确的拒绝仍然照拒。
+func TestOptionalClientPassesOnlyWhenTheGuardIsUnreachable(t *testing.T) {
+	unreachable := &Client{rpc: &fakeRPC{err: errors.New("connection refused")}, timeout: time.Second, optional: true}
+	if got := unreachable.Check(context.Background(), cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, 1, "hello"); got.Verdict != Pass {
+		t.Fatalf("optional + unreachable: %+v, want Pass", got)
+	}
+	rejecting := &Client{rpc: &fakeRPC{out: &cgpb.CheckTextResponse{Verdict: cgpb.TextVerdict_TEXT_VERDICT_REJECT}}, timeout: time.Second, optional: true}
+	if got := rejecting.Check(context.Background(), cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, 1, "hello"); got.Verdict != Reject {
+		t.Fatalf("optional + explicit reject: %+v, want Reject", got)
+	}
+}
+
 func TestCheckFailsClosedOnErrorsAndTimeouts(t *testing.T) {
 	failing := NewWithClient(&fakeRPC{err: errors.New("connection refused")}, time.Second)
 	if got := failing.Check(context.Background(), cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, 1, "hello"); got.Verdict != Unavailable || got.Usable() {
@@ -128,11 +140,12 @@ func TestConfValidate(t *testing.T) {
 	if (Conf{}).Configured() {
 		t.Fatalf("empty conf must not count as configured")
 	}
-	if err := (Conf{}).Validate(); err != nil {
-		t.Fatalf("empty conf is valid for local development: %v", err)
+	// 缺省严格:没配目标就是配置错误;只有显式 Optional 才允许不配。
+	if err := (Conf{}).Validate(); err == nil {
+		t.Fatalf("a conf without a target must be rejected unless Optional is set")
 	}
-	if err := (Conf{Required: true}).Validate(); err == nil {
-		t.Fatalf("Required without a target must be rejected")
+	if err := (Conf{Optional: true}).Validate(); err != nil {
+		t.Fatalf("Optional without a target is valid for local development: %v", err)
 	}
 	for _, timeout := range []int64{0, 19, 5001} {
 		bad := configured
@@ -153,12 +166,12 @@ func TestConfValidate(t *testing.T) {
 	}
 }
 
-func TestNewWithoutTargetReturnsPassThroughClient(t *testing.T) {
-	client, err := New("test", Conf{})
+func TestNewWithoutTargetNeedsOptional(t *testing.T) {
+	client, err := New("test", Conf{Optional: true})
 	if err != nil || client == nil || client.Enabled() {
-		t.Fatalf("New without a target: client=%v err=%v", client, err)
+		t.Fatalf("New with Optional and no target: client=%v err=%v", client, err)
 	}
-	if _, err = New("test", Conf{Required: true}); err == nil {
-		t.Fatalf("New must refuse Required without a target")
+	if _, err = New("test", Conf{}); err == nil {
+		t.Fatalf("New must refuse a conf without a target unless Optional is set")
 	}
 }

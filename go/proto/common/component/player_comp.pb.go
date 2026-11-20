@@ -225,8 +225,12 @@ func (x *UnregisterPlayer) GetLogoutInitiatedMs() int64 {
 type PlayerUint64Comp struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	RegistrationTimestamp uint64                 `protobuf:"varint,1,opt,name=registration_timestamp,json=registrationTimestamp,proto3" json:"registration_timestamp,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// 挂机月卡到期的 Unix 秒(docs/design/afk-monthly-card.md §3)。0 = 从未开通或已清除;<= 现在 = 已到期。
+	// 事实源就是这一份(存档 PROFILE 行):唯一写入方 AfkPassSystem(灵石开通、GM),其余代码只读;
+	// 玩家域 Redis 的 player:afk_pass:{<player_id>} 只是它提交之后的投影。
+	AfkPassExpiresAt uint64 `protobuf:"varint,2,opt,name=afk_pass_expires_at,json=afkPassExpiresAt,proto3" json:"afk_pass_expires_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PlayerUint64Comp) Reset() {
@@ -262,6 +266,13 @@ func (*PlayerUint64Comp) Descriptor() ([]byte, []int) {
 func (x *PlayerUint64Comp) GetRegistrationTimestamp() uint64 {
 	if x != nil {
 		return x.RegistrationTimestamp
+	}
+	return 0
+}
+
+func (x *PlayerUint64Comp) GetAfkPassExpiresAt() uint64 {
+	if x != nil {
+		return x.AfkPassExpiresAt
 	}
 	return 0
 }
@@ -314,16 +325,22 @@ func (x *PlayerUint32Comp) GetClass() uint32 {
 // 真源是 data_service 全局库的 player_name 表(全服唯一,docs/design/guild-phase2/03-names.md §3.0);
 // 这里是随 player_database 一起走的只读副本,由 login 首次入场补齐
 // (go/login/.../player_class_backfill.go backfillPlayerIdentity)。
-// scene 只读、只原样存回:战斗快照 player_battle.cpp 取的就是这一份,
-// 组件缺失 / name 为空时快照留空,battle 照常结算(名字是展示数据,fail-open)。
-// v1 无改名,所以副本内容不会变;但副本可能缺失(self-heal 恢复出的空记录、
-// 早于首次入场的回档快照),任何"要拿到名字"的读侧都必须能回源 BatchGetPlayerName。
+// 战斗快照 player_battle.cpp 取的就是这一份,组件缺失 / name 为空时快照留空,battle 照常结算(名字是展示数据,fail-open)。
+// 副本可能缺失(self-heal 恢复出的空记录、早于首次入场的回档快照),任何"要拿到名字"的读侧都必须能回源 BatchGetPlayerName。
+// 角色改名(docs/design/rename-and-content-safety.md §4)之后 scene 是 name 的写者:data_service 回了「已提交」才改写,
+// 改名的进度也记在这里(rename_op),和背包、物品预留同一笔存盘。其余字段 scene 仍然只读、原样存回。
 type PlayerProfileComp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// 随存档原样往返；login 首次入场从账号补空，scene/战斗/队伍只读。
-	AppearanceId  string `protobuf:"bytes,2,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
-	Gender        uint32 `protobuf:"varint,3,opt,name=gender,proto3" json:"gender,omitempty"` // 1=男 2=女；0=旧存档未补齐，与外观 ID 独立。
+	AppearanceId string `protobuf:"bytes,2,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	Gender       uint32 `protobuf:"varint,3,opt,name=gender,proto3" json:"gender,omitempty"` // 1=男 2=女；0=旧存档未补齐，与外观 ID 独立。
+	// 最近一次发出的改名流水号(RenameRoleRequest.seq)。只增不减;data_service 回 STALE_SEQ 时追到它记的号。
+	RenameSeq uint64 `protobuf:"varint,4,opt,name=rename_seq,json=renameSeq,proto3" json:"rename_seq,omitempty"`
+	// 上一次改名成功的时刻 Unix 毫秒,0 = 没改过。只用来在本地预判冷却、少发一次无用请求;真正的判定在 data_service。
+	RenamedMs uint64 `protobuf:"varint,5,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"`
+	// 进行中的改名;没有这个字段 = 没有改名在进行。
+	RenameOp      *PlayerRenameOp `protobuf:"bytes,6,opt,name=rename_op,json=renameOp,proto3" json:"rename_op,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -379,6 +396,116 @@ func (x *PlayerProfileComp) GetGender() uint32 {
 	return 0
 }
 
+func (x *PlayerProfileComp) GetRenameSeq() uint64 {
+	if x != nil {
+		return x.RenameSeq
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetRenamedMs() uint64 {
+	if x != nil {
+		return x.RenamedMs
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetRenameOp() *PlayerRenameOp {
+	if x != nil {
+		return x.RenameOp
+	}
+	return nil
+}
+
+// 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:
+// 下次入场按同一个 seq 重发,拿到结局再扣卡、改名或解除占用。
+type PlayerRenameOp struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Seq   uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	// 新名原文(已经过内容安全送检)。
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// 占住改名卡的那份物品预留的号(PlayerItemHoldComp,种类 rename)。改名成功时释放预留并扣卡,不成时只释放。
+	HoldId uint64 `protobuf:"varint,3,opt,name=hold_id,json=holdId,proto3" json:"hold_id,omitempty"`
+	// 占住的改名卡:配置号与数量(发起时配表 RoleNameRule 的值,之后配表改了也按这一份结算)。
+	CardItemId    uint32 `protobuf:"varint,4,opt,name=card_item_id,json=cardItemId,proto3" json:"card_item_id,omitempty"`
+	CardCount     uint32 `protobuf:"varint,5,opt,name=card_count,json=cardCount,proto3" json:"card_count,omitempty"`
+	StartedMs     uint64 `protobuf:"varint,6,opt,name=started_ms,json=startedMs,proto3" json:"started_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerRenameOp) Reset() {
+	*x = PlayerRenameOp{}
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerRenameOp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerRenameOp) ProtoMessage() {}
+
+func (x *PlayerRenameOp) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerRenameOp.ProtoReflect.Descriptor instead.
+func (*PlayerRenameOp) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *PlayerRenameOp) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *PlayerRenameOp) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PlayerRenameOp) GetHoldId() uint64 {
+	if x != nil {
+		return x.HoldId
+	}
+	return 0
+}
+
+func (x *PlayerRenameOp) GetCardItemId() uint32 {
+	if x != nil {
+		return x.CardItemId
+	}
+	return 0
+}
+
+func (x *PlayerRenameOp) GetCardCount() uint32 {
+	if x != nil {
+		return x.CardCount
+	}
+	return 0
+}
+
+func (x *PlayerRenameOp) GetStartedMs() uint64 {
+	if x != nil {
+		return x.StartedMs
+	}
+	return 0
+}
+
 // Stress-test instrumentation for player-data persistence.
 //
 // Stamped by the producer (Scene's SavePlayer when an env-var probe
@@ -403,7 +530,7 @@ type PlayerStressTestProbe struct {
 
 func (x *PlayerStressTestProbe) Reset() {
 	*x = PlayerStressTestProbe{}
-	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -415,7 +542,7 @@ func (x *PlayerStressTestProbe) String() string {
 func (*PlayerStressTestProbe) ProtoMessage() {}
 
 func (x *PlayerStressTestProbe) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -428,7 +555,7 @@ func (x *PlayerStressTestProbe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerStressTestProbe.ProtoReflect.Descriptor instead.
 func (*PlayerStressTestProbe) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{8}
+	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PlayerStressTestProbe) GetTestSeq() uint64 {
@@ -457,15 +584,31 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\aAccount\x12\x18\n" +
 	"\aaccount\x18\x01 \x01(\tR\aaccount\"B\n" +
 	"\x10UnregisterPlayer\x12.\n" +
-	"\x13logout_initiated_ms\x18\x01 \x01(\x03R\x11logoutInitiatedMs\"I\n" +
+	"\x13logout_initiated_ms\x18\x01 \x01(\x03R\x11logoutInitiatedMs\"x\n" +
 	"\x10PlayerUint64Comp\x125\n" +
-	"\x16registration_timestamp\x18\x01 \x01(\x04R\x15registrationTimestamp\"(\n" +
+	"\x16registration_timestamp\x18\x01 \x01(\x04R\x15registrationTimestamp\x12-\n" +
+	"\x13afk_pass_expires_at\x18\x02 \x01(\x04R\x10afkPassExpiresAt\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"d\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"\xd0\x01\n" +
 	"\x11PlayerProfileComp\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x16\n" +
-	"\x06gender\x18\x03 \x01(\rR\x06gender\"M\n" +
+	"\x06gender\x18\x03 \x01(\rR\x06gender\x12\x1d\n" +
+	"\n" +
+	"rename_seq\x18\x04 \x01(\x04R\trenameSeq\x12\x1d\n" +
+	"\n" +
+	"renamed_ms\x18\x05 \x01(\x04R\trenamedMs\x12,\n" +
+	"\trename_op\x18\x06 \x01(\v2\x0f.PlayerRenameOpR\brenameOp\"\xaf\x01\n" +
+	"\x0ePlayerRenameOp\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
+	"\ahold_id\x18\x03 \x01(\x04R\x06holdId\x12 \n" +
+	"\fcard_item_id\x18\x04 \x01(\rR\n" +
+	"cardItemId\x12\x1d\n" +
+	"\n" +
+	"card_count\x18\x05 \x01(\rR\tcardCount\x12\x1d\n" +
+	"\n" +
+	"started_ms\x18\x06 \x01(\x04R\tstartedMs\"M\n" +
 	"\x15PlayerStressTestProbe\x12\x19\n" +
 	"\btest_seq\x18\x01 \x01(\x04R\atestSeq\x12\x19\n" +
 	"\btest_sig\x18\x02 \x01(\fR\atestSigB\x18Z\x16proto/common/componentb\x06proto3"
@@ -482,7 +625,7 @@ func file_proto_common_component_player_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(*NormalLogin)(nil),           // 0: NormalLogin
 	(*CoverLogin)(nil),            // 1: CoverLogin
@@ -492,14 +635,16 @@ var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(*PlayerUint64Comp)(nil),      // 5: PlayerUint64Comp
 	(*PlayerUint32Comp)(nil),      // 6: PlayerUint32Comp
 	(*PlayerProfileComp)(nil),     // 7: PlayerProfileComp
-	(*PlayerStressTestProbe)(nil), // 8: PlayerStressTestProbe
+	(*PlayerRenameOp)(nil),        // 8: PlayerRenameOp
+	(*PlayerStressTestProbe)(nil), // 9: PlayerStressTestProbe
 }
 var file_proto_common_component_player_comp_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	8, // 0: PlayerProfileComp.rename_op:type_name -> PlayerRenameOp
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_comp_proto_init() }
@@ -513,7 +658,7 @@ func file_proto_common_component_player_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_comp_proto_rawDesc), len(file_proto_common_component_player_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

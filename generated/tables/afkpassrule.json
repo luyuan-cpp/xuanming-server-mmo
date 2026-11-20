@@ -1,0 +1,13 @@
+{
+ "data": [
+  {
+   "desc": "挂机月卡全局规则(单行)",
+   "id": 1,
+   "max_remaining_days": 180,
+   "period_days": 30,
+   "price": 300,
+   "price_currency_type": 1,
+   "remind_before_hours": 72
+  }
+ ]
+}

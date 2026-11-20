@@ -84,11 +84,11 @@ func TestCheckTextSkipsEmptyTextAndMissingGuard(t *testing.T) {
 func TestContentTipsAreDistinct(t *testing.T) {
 	codes := map[uint32]string{}
 	for name, code := range map[string]uint32{
-		"ErrGuildNameSensitive":   constants.ErrGuildNameSensitive,
+		"ErrGuildNameSensitive":    constants.ErrGuildNameSensitive,
 		"ErrAnnouncementSensitive": constants.ErrAnnouncementSensitive,
-		"ErrTextCheckUnavailable": constants.ErrTextCheckUnavailable,
-		"ErrGuildNameInvalid":     constants.ErrGuildNameInvalid,
-		"ErrGuildNameTaken":       constants.ErrGuildNameTaken,
+		"ErrTextCheckUnavailable":  constants.ErrTextCheckUnavailable,
+		"ErrGuildNameInvalid":      constants.ErrGuildNameInvalid,
+		"ErrGuildNameTaken":        constants.ErrGuildNameTaken,
 	} {
 		if other, dup := codes[code]; dup {
 			t.Errorf("%s and %s share tip code %d", name, other, code)

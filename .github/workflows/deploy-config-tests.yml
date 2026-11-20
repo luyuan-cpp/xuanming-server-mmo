@@ -55,6 +55,7 @@ on:
       - "go/login/internal/logic/pkg/auth/password_schema.go"
       - "go/mail/internal/metrics/**"
       - "go/rank/internal/metrics/**"
+      - "go/payment/internal/core/workers.go"
       - "go/match/internal/metrics/**"
       - "go/data_service/data_service.go"
       - "go/data_service/internal/routetoolcli/cli.go"
@@ -166,6 +167,7 @@ on:
       - "go/mail/internal/metrics/**"
       # 排行榜告警同理(「rank-alerts.yaml」用例):rank_* 读 go/rank 的 metrics.go,match_rating_snapshot_* 读 go/match 的
       - "go/rank/internal/metrics/**"
+      - "go/payment/internal/core/workers.go"
       - "go/match/internal/metrics/**"
       # 路由运维工具的契约用例直接读的源码:k8s_route_tool.tests.ps1 读 data_service.go 的 -route-tool flag 与 routetoolcli/cli.go 的
       # 子命令集合(白名单要与它逐个对上)。只改这几个 Go 文件时不重跑,新增子命令被 k8s_route_tool.ps1 白名单拒,要到用时才发现

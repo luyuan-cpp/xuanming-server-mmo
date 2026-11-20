@@ -473,11 +473,20 @@ namespace
 		}
 		formation.Add(member);
 
-		auto& driven = registry.emplace_or_replace<TeamFollowerComp>(follower);
-		driven = TeamFollowerComp{};
-		driven.leader = leader;
-		driven.leaderPlayerId = GuidOf(leader);
-		driven.broadcastFrame = tlsFrameTimeManager.frameTime.current_frame();
+		const auto* previous = registry.try_get<TeamFollowerComp>(follower);
+		TeamFollowerComp next;
+		if (previous != nullptr && previous->leader == leader)
+		{
+			// 重建队形(RestartFormation)沿用原广播状态:没瞬移而下一 tick 停步或瞬移被拒时,StopMotion 才知道要补停步广播。
+			next = *previous;
+		}
+		else
+		{
+			next.broadcastFrame = tlsFrameTimeManager.frameTime.current_frame();
+		}
+		next.leader = leader;
+		next.leaderPlayerId = GuidOf(leader);
+		auto& driven = registry.emplace_or_replace<TeamFollowerComp>(follower, next);
 		if (teleport)
 		{
 			if (!TeleportIntoSlot(follower, driven, leader, formation.Trail().PointAt(member.cursorOdo)))
@@ -498,7 +507,8 @@ namespace
 	}
 
 	// 队长不连续(被瞬移、被裁决拉回到远处):轨迹从新位置重来,全体按加入规则重新落位。
-	void RestartFormation(entt::entity leader, TeamFollowFormationComp& comp, const FollowPoint& leaderPosition)
+	void RestartFormation(entt::entity leader, TeamFollowFormationComp& comp, const FollowPoint& leaderPosition,
+		ActorMoveBatch& moves)
 	{
 		auto& registry = tlsEcs.actorRegistry;
 		const auto members = comp.formation.Members();
@@ -507,9 +517,23 @@ namespace
 		{
 			const auto follower = LivePlayer(member.playerId);
 			const auto* transform = follower != entt::null ? registry.try_get<Transform>(follower) : nullptr;
-			if (transform == nullptr || registry.try_get<TeamFollowerComp>(follower) == nullptr)
+			auto* driven = follower != entt::null ? registry.try_get<TeamFollowerComp>(follower) : nullptr;
+			if (transform == nullptr || driven == nullptr)
 			{
 				continue; // 下面的孤儿清理会收尾
+			}
+			if (IsHeldStill(follower))
+			{
+				// 战斗中的队员原地留名次,绝不在战斗中瞬移;战后下一 tick 按 needsPlacement 放进槽位。
+				StopMotion(follower, *driven, moves);
+				TeamFollowMember held;
+				held.playerId = member.playerId;
+				held.joinSeq = JoinSeqOf(follower);
+				held.cursorOdo = 0.0;
+				held.suspended = true;
+				held.needsPlacement = true;
+				comp.formation.Add(held);
+				continue;
 			}
 			const bool withinWalkDistance =
 				FollowHorizontalDistance(ToFollowPoint(transform->location()), leaderPosition) <= kTeamFollowMaxApproachPath * 0.5;
@@ -600,7 +624,8 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 		const FollowPoint leaderPosition = ToFollowPoint(registry.get<Transform>(leader).location());
 		if (FollowHorizontalDistance(formation.Trail().Head(), leaderPosition) > kTeamFollowMaxLeaderJump)
 		{
-			RestartFormation(leader, comp, leaderPosition);
+			RestartFormation(leader, comp, leaderPosition, moves);
+			moves.Flush();
 			continue;
 		}
 

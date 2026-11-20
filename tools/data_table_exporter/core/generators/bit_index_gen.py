@@ -26,7 +26,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from core.config_loader import ExporterConfig
-from core.excel_reader import open_worksheet, read_id_column
+from core.excel_reader import read_id_column
 from core.file_utils import ensure_dirs, write_file
 from core.schema import TableSchema
 
@@ -71,7 +71,7 @@ def generate_bit_indexes(cfg: ExporterConfig, tables: list[TableSchema]) -> None
         id_to_index = dict(sorted(id_to_index.items(), key=lambda kv: kv[1]))
         _save_mapping(mapping_file, id_to_index)
 
-        bitmap_capacity = _resolve_bitmap_capacity(schema, cfg, id_to_index)
+        bitmap_capacity = _bitmap_capacity(id_to_index)
 
         if cfg.cpp.enabled:
             _gen_cpp(schema.name, id_to_index, bitmap_capacity, env, cfg)
@@ -195,36 +195,15 @@ def _update_mapping(table_name: str, ids: list[int], existing: dict[int, int]) -
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _read_max_bit_index_column_value(schema: TableSchema, cfg: ExporterConfig) -> int:
-    """读取带 bit_index 标记列的最大 ID，保留历史容量计算下限。"""
-    marked_column_index = schema.bit_index_columns[0].excel_index
-    ws = open_worksheet(schema)
-    max_id = 0
-    for row in ws.iter_rows(min_row=cfg.data_begin_row, values_only=True):
-        cell_value = row[marked_column_index] if marked_column_index < len(row) else None
-        if isinstance(cell_value, (int, float)):
-            max_id = max(max_id, int(cell_value))
-    return max_id
+def _bitmap_capacity(mapping: dict[int, int]) -> int:
+    """位图容量 = 已分配的最大位 + 1。
 
-
-def _resolve_bitmap_capacity(schema: TableSchema, cfg: ExporterConfig, mapping: dict[int, int]) -> int:
-    """位图容量 = max(表里 bit_index 列的最大值, 已分配的最大位 + 1)。
-
-    ``_read_max_bit_index_column_value`` 取的是**当前表数据**里 bit_index 列的最大值(实际就是最大 ID),
-    这只在 ID 从 1 起连续、且从没删过行时才恰好等于所需位数。一旦最大的那个 ID 被删掉,
-    它的位序仍在 mapping 里占位(见 ``_update_mapping``),表数据的最大值却掉了下去,
-    ``std::bitset<kXxxBitmapCapacity>`` 就会小于实际用到的位数 → 越界。
-    保留表 ID 上限决定容量的历史口径,同时确保覆盖全部已分配位序。
+    位图按位序下标(消费方一律经 ``<Sheet>BitMap`` 把 ID 换成位序),与 ID 的数值大小无关。2026-11-20 之前
+    取的是 ``max(表里最大 ID, 最大位 + 1)``:ID 稀疏或很大(例如 100001 起编)时,每个玩家内存里的
+    ``std::bitset`` 会按最大 ID 开到几十 KB,实际只用到前几位。退休 ID 的位仍在 mapping 里占位,
+    所以这样算出的容量也覆盖它们。
     """
-    table_id_upper_bound = _read_max_bit_index_column_value(schema, cfg)
-    mapped_bit_capacity = max(mapping.values(), default=-1) + 1
-    if mapped_bit_capacity > table_id_upper_bound:
-        logger.warning(
-            "[%s] Bitmap capacity is set to the mapped bit capacity %d (table ID upper bound gives %d); this usually means the largest ID was removed while its bit index remains reserved.",
-            schema.name, mapped_bit_capacity, table_id_upper_bound,
-        )
-        return mapped_bit_capacity
-    return table_id_upper_bound
+    return max(mapping.values(), default=-1) + 1
 
 
 # ---------------------------------------------------------------------------

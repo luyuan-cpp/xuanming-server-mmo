@@ -346,6 +346,29 @@ class RpcStartupTest(unittest.TestCase):
         self.assertEqual(set(result['signatureMigrations']), {'bridge'})
         self.assertEqual(len(self.start_calls), 1)
 
+    def test_refresh_upstreams_advances_verified_rebuilt_upstreams_and_rejects_mismatch(self):
+        original = self.evidence_bytes()
+        self.rows['data-service']['Id'] = 'rebuilt-data-id'
+        self.rows['data-service']['Image'] = 'sha256:rebuilt-data'
+        self.rows['player-locator']['Id'] = 'rebuilt-locator-id'
+        self.rows['player-locator']['Image'] = 'sha256:rebuilt-locator'
+        mismatched = {'passed': True, 'contract': {'project': startup.PROJECT,
+            'ids': {'data-service': 'other-id', 'player-locator': 'rebuilt-locator-id'},
+            'images': {'data-service': 'sha256:rebuilt-data', 'player-locator': 'sha256:rebuilt-locator'}}}
+        with self.assertRaisesRegex(RuntimeError, 'verified game contract'):
+            gm.refresh_upstreams(self.root, self.evidence, lambda: mismatched)
+        self.assertEqual(self.evidence_bytes(), original)
+        verified = {'passed': True, 'contract': {'project': startup.PROJECT,
+            'ids': {'data-service': 'rebuilt-data-id', 'player-locator': 'rebuilt-locator-id'},
+            'images': {'data-service': 'sha256:rebuilt-data', 'player-locator': 'sha256:rebuilt-locator'}}}
+        result = gm.refresh_upstreams(self.root, self.evidence, lambda: verified)
+        self.assertTrue(result['passed'] and result['receiptRefreshed'])
+        self.assertEqual((self.evidence / 'gm-rpc-ready.before.json').read_bytes(), original[0])
+        module, ready, _, _ = gm.load(self.root)
+        self.assertEqual(module.verify_ready(), gm.TARGETS)
+        self.assertEqual(ready['upstreams']['data-service']['id'], 'rebuilt-data-id')
+        self.assertEqual(ready['bridge']['id'], 'bridge-id')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
+	"time"
 
 	battlepb "proto/battle"
 	pb "proto/match"
@@ -12,7 +14,7 @@ import (
 // 战斗剧本的存储(docs/design/battle-script.md §6)。match 是剧本的唯一写者,三张表都在本库:
 //
 //	match_battle_script          玩家剧本:当前提交版 + 审核通过版两份正文
-//	match_battle_script_review   审核流水:与剧本行的状态变更同一事务写入,只增不改
+//	match_battle_script_review   审核流水:与剧本行的状态变更同一事务写入,只增不改;过了保留期按 reviewed_ms 分批删(§6.4)
 //	match_battle_script_loadout  玩家的选用:(玩家, 模式, 副本) → 官方剧本 id 或本人剧本 id
 //
 // 并发:玩家的写入(提交、删除、选用)先锁本人的 role_fence,同一玩家的写入串行,份数与条目上限在锁内数,
@@ -209,7 +211,7 @@ func (s *Store) submitBattleScriptOnce(ctx context.Context, in BattleScriptSubmi
 	return current, tx.Commit()
 }
 
-// DeleteBattleScript 删除本人的一份剧本,并在同一事务清掉本人指向它的选用。审核流水保留(审计)
+// DeleteBattleScript 删除本人的一份剧本,并在同一事务清掉本人指向它的选用。审核流水保留(审计),到保留期由 PurgeExpiredBattleScriptReviews 删
 func (s *Store) DeleteBattleScript(ctx context.Context, player, scriptID uint64, expectedRevision uint32) error {
 	return s.Fenced(ctx, func() error { return s.deleteBattleScriptOnce(ctx, player, scriptID, expectedRevision) })
 }
@@ -385,4 +387,86 @@ func (s *Store) ReviewBattleScript(ctx context.Context, in BattleScriptReview) e
 		return err
 	}
 	return tx.Commit()
+}
+
+// BattleScriptReviewCursor 是审核流水保留期清理的翻页位置,零值 = 从头。
+type BattleScriptReviewCursor struct {
+	ReviewedMs, ScriptID uint64
+	Revision             uint32
+}
+
+// PurgeExpiredBattleScriptReviews 读一页 reviewed_ms 早于「match 库当前时刻 − retention」的审核流水并按主键删掉,
+// 返回下一页的位置与本轮删除行数(docs/design/battle-script.md §6.4)。不满一页说明到期的行已扫完,位置回到零值,下一轮从头扫。
+// 按游标翻页、不每轮从头删前 N 条:TiDB 删掉的行在 GC 之前仍留在索引前端,每轮从头读都要先跨过上一轮的删除标记。
+//
+// 幂等,多副本同时跑无害:流水只增不改,一个 (script_id, revision) 只审一次(审核要求这一版仍待审,审过再改就是新版本),
+// 删掉的行不会以同一主键再写回来;DELETE 上再带一次 reviewed_ms 条件,只删到期的行。不碰剧本行,不与审核、删角收尾争锁。
+func (s *Store) PurgeExpiredBattleScriptReviews(ctx context.Context, retention time.Duration, after BattleScriptReviewCursor, limit int) (BattleScriptReviewCursor, int64, error) {
+	if retention <= 0 {
+		// 保留期 0 等于删光全部流水:只可能是装配错了,不删。
+		return after, 0, errors.New("battle script review purge: retention must be positive")
+	}
+	retentionMs := uint64(retention.Milliseconds())
+	stamp, err := s.Now(ctx)
+	if err != nil {
+		return after, 0, err
+	}
+	if stamp < retentionMs {
+		return BattleScriptReviewCursor{}, 0, nil
+	}
+	cutoff := stamp - retentionMs
+	// reviewed_ms>= 是给优化器的范围下界,元组比较才是精确的翻页条件(同 closedSpectatorIntentPage)。
+	rows, err := s.DB.QueryContext(ctx, "SELECT reviewed_ms,script_id,revision FROM match_battle_script_review"+
+		" WHERE reviewed_ms<? AND reviewed_ms>=? AND (reviewed_ms,script_id,revision)>(?,?,?) ORDER BY reviewed_ms,script_id,revision LIMIT ?",
+		cutoff, after.ReviewedMs, after.ReviewedMs, after.ScriptID, after.Revision, limit)
+	if err != nil {
+		return after, 0, err
+	}
+	var page []BattleScriptReviewCursor
+	for rows.Next() {
+		var row BattleScriptReviewCursor
+		if err = rows.Scan(&row.ReviewedMs, &row.ScriptID, &row.Revision); err != nil {
+			rows.Close()
+			return after, 0, err
+		}
+		page = append(page, row)
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return after, 0, err
+	}
+	if len(page) == 0 {
+		return BattleScriptReviewCursor{}, 0, nil
+	}
+	placeholders := make([]string, 0, len(page))
+	args := make([]any, 0, 2*len(page)+1)
+	for _, row := range page {
+		placeholders = append(placeholders, "(?,?)")
+		args = append(args, row.ScriptID, row.Revision)
+	}
+	args = append(args, cutoff)
+	result, err := s.DB.ExecContext(ctx, "DELETE FROM match_battle_script_review WHERE (script_id,revision) IN ("+strings.Join(placeholders, ",")+") AND reviewed_ms<?", args...)
+	if err != nil {
+		return after, 0, err
+	}
+	deleted, err := result.RowsAffected()
+	if err != nil {
+		return after, 0, err
+	}
+	var next BattleScriptReviewCursor
+	if len(page) == limit {
+		next = page[len(page)-1]
+	}
+	return next, deleted, nil
+}
+
+// OldestBattleScriptReviewMs 回审核流水里现存最老一行的 reviewed_ms;表是空的回 match 库当前时刻(没有比现在更老的行)。
+// 只读 (reviewed_ms, 主键) 索引的第一项。清理循环每轮读一次,报给逾期告警(docs/design/battle-script.md §6.4):
+// 清理在跑但没删掉时,只有它看得出来。
+func (s *Store) OldestBattleScriptReviewMs(ctx context.Context) (uint64, error) {
+	var oldest uint64
+	err := s.DB.QueryRowContext(ctx, "SELECT reviewed_ms FROM match_battle_script_review ORDER BY reviewed_ms LIMIT 1").Scan(&oldest)
+	if errors.Is(err, sql.ErrNoRows) {
+		return s.Now(ctx)
+	}
+	return oldest, err
 }

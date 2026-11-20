@@ -3801,6 +3801,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceLeg final : public ::g
     kOpIdFieldNumber = 5,
     kStreamFieldNumber = 3,
     kOutcomeFieldNumber = 7,
+    kEscrowOwnerIdFieldNumber = 9,
   };
   // string role = 1;
   void clear_role() ;
@@ -3904,11 +3905,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceLeg final : public ::g
   void _internal_set_outcome(::uint32_t value);
 
   public:
+  // uint64 escrow_owner_id = 9;
+  void clear_escrow_owner_id() ;
+  [[nodiscard]] ::uint64_t escrow_owner_id() const;
+  void set_escrow_owner_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_escrow_owner_id() const;
+  void _internal_set_escrow_owner_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:trade.TradeCommerceLeg)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           2, 56,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3945,6 +3956,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceLeg final : public ::g
     ::uint64_t op_id_;
     ::uint32_t stream_;
     ::uint32_t outcome_;
+    ::uint64_t escrow_owner_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -11424,6 +11436,30 @@ inline void TradeCommerceLeg::set_allocated_superseded_by(::std::string* PROTOBU
     _impl_.superseded_by_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:trade.TradeCommerceLeg.superseded_by)
+}
+
+// uint64 escrow_owner_id = 9;
+inline void TradeCommerceLeg::clear_escrow_owner_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.escrow_owner_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t TradeCommerceLeg::escrow_owner_id() const {
+  // @@protoc_insertion_point(field_get:trade.TradeCommerceLeg.escrow_owner_id)
+  return _internal_escrow_owner_id();
+}
+inline void TradeCommerceLeg::set_escrow_owner_id(::uint64_t value) {
+  _internal_set_escrow_owner_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:trade.TradeCommerceLeg.escrow_owner_id)
+}
+inline ::uint64_t TradeCommerceLeg::_internal_escrow_owner_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.escrow_owner_id_;
+}
+inline void TradeCommerceLeg::_internal_set_escrow_owner_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.escrow_owner_id_ = value;
 }
 
 #ifdef __GNUC__

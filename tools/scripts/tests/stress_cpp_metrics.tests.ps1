@@ -7,9 +7,9 @@
       - lib/cpp_metrics_ports.ps1 的端口规则(cpp_nodes.ps1 起进程与 stress_snap.ps1 抓取共用):固定样例与非法输入;
       - stress_snap.ps1 -CppMetricsBasePort 按 PID 文件推出的抓取地址(只断言 job.log 的「cpp endpoints:」行,
         不依赖端口上有没有进程在听);PID 文件缺失、Endpoints 键用 cpp_ 前缀都在抓取之前拒绝;
-      - stress_summarize.ps1 的 $cppCommandTargets / $cppFanoutKinds / $cppReleaseStages 与 C++ 源码里写出的 label 取值、
-        指标族名一致(C++ 侧没有 Go 那样的钉名测试,只能按源码文本对);
-      - 用一组最小快照跑 stress_summarize.ps1,A1 / Q1 / N1 三张表的行按预期出数。
+      - stress_summarize.ps1 的 $cppCommandTargets / $cppFanoutKinds / $cppReleaseStages,以及 N2(连接准入,2026-11-20)的
+        $cppGateRejectReasons / $cppBattleRejectReasons 与 C++ 源码里写出的 label 取值、指标族名一致(C++ 侧没有 Go 那样的钉名测试,只能按源码文本对);
+      - 用一组最小快照跑 stress_summarize.ps1,A1 / Q1 / N1 / N2 四张表的行按预期出数。
 .EXAMPLE
     pwsh -NoProfile -File tools/scripts/tests/stress_cpp_metrics.tests.ps1
 #>
@@ -129,12 +129,29 @@ try {
         foreach ($family in @('node_command_consumed_total', 'scene_broadcast_gate_fanout')) {
             Assert-Match -Text $summarize -Pattern ("'" + $family + "'") -Because "N1 读 $family"
         }
+        # N2(连接准入):两组 reason 与 C++ kRejectReasonNames 同序;N2 读的族 gate / battle 两边都写。
+        foreach ($side in @(
+            @{ Node = 'gate'; List = 'cppGateRejectReasons'; Header = 'cpp/nodes/gate/handler/rpc/connection_admission.h'; Source = 'cpp/nodes/gate/handler/rpc/connection_admission.cpp' }
+            @{ Node = 'battle'; List = 'cppBattleRejectReasons'; Header = 'cpp/nodes/battle/client/battle_connection_admission.h'; Source = 'cpp/nodes/battle/client/battle_connection_admission.cpp' }
+        )) {
+            $table = [regex]::Match((Read-RepoText $side.Header), '(?s)kRejectReasonNames = std::to_array<std::string_view>\(\{(?<body>.*?)\}\);')
+            Assert-True -Condition $table.Success -Because "$($side.Header) 里找得到 kRejectReasonNames"
+            $cppReasons = @([regex]::Matches($table.Groups['body'].Value, '"([a-z_]+)"') | ForEach-Object { $_.Groups[1].Value })
+            Assert-Equal -Expected ($cppReasons -join ',') -Actual ((Get-SummarizeList $side.List) -join ',') -Because "N2 的 `$$($side.List) 与 $($side.Header) 的 kRejectReasonNames 同序(C++ 加了拒绝原因而这里没加,它的计数在 N2 里哪一列都不出现)"
+            $source = Read-RepoText $side.Source
+            foreach ($suffix in @('connections_current', 'connections_max', 'unauthenticated_connections', 'preauth_early_drop_start', 'preauth_budget',
+                    'accepted_total', 'rejected_total', 'preauth_evicted_total', 'preauth_reaped_total', 'handshake_duration_ms',
+                    'source_rate_active', 'source_tracked', 'source_untracked_total')) {
+                Assert-Match -Text $source -Pattern ('BeginFamily\("' + $side.Node + '_' + $suffix + '"') -Because "C++ 写出 $($side.Node)_$suffix"
+                Assert-Match -Text $summarize -Pattern ([regex]::Escape('"${node}_' + $suffix + '"')) -Because "N2 读 <node>_$suffix"
+            }
+        }
         $snap = Read-RepoText 'tools/scripts/stress_snap.ps1'
         Assert-Match -Text $snap -Pattern ([regex]::Escape('"${tag}_cpp_${key}.txt"')) -Because 'stress_snap 写 t<N>m_cpp_<实例键>.txt'
         Assert-Match -Text $summarize -Pattern ([regex]::Escape("'^t\d+m_cpp_[a-z0-9_]+$'")) -Because 'stress_summarize 按同一个文件名形状认 C++ 快照'
     }
 
-    Test-Case 'stress_summarize:最小快照下 A1 / Q1 / N1 按预期出数,C++ 快照不被当成 login 快照' {
+    Test-Case 'stress_summarize:最小快照下 A1 / Q1 / N1 / N2 按预期出数,C++ 快照不被当成 login 快照' {
         $runDir = New-TempDir
         Set-Content -LiteralPath (Join-Path $runDir 'robot.stderr') -Value '' -Encoding UTF8
         $snapDir = Join-Path $runDir 'prom-snapshots'
@@ -184,12 +201,43 @@ try {
             'scene_ownership_release_deferred_scenes 0'
             'scene_ownership_superseded 0'
         )
+        # N2 用的 gate 快照:数都小于 1000,单元格不带千分位,断言与区域设置无关。
+        Set-Content -LiteralPath (Join-Path $snapDir 't5m_cpp_gate.txt') -Encoding UTF8 -Value @(
+            'gate_connections_current 120'
+            'gate_connections_max 900'
+            'gate_unauthenticated_connections 30'
+            'gate_accepted_total 500'
+            'gate_rejected_total{reason="capacity"} 1'
+            'gate_rejected_total{reason="accept_rate"} 2'
+            'gate_rejected_total{reason="shutting_down"} 3'
+            'gate_rejected_total{reason="not_ready"} 4'
+            'gate_rejected_total{reason="no_token_secret"} 0'
+            'gate_rejected_total{reason="preauth_budget"} 5'
+            'gate_rejected_total{reason="preauth_early_drop"} 6'
+            'gate_rejected_total{reason="source_rate"} 7'
+            'gate_preauth_evicted_total 8'
+            'gate_preauth_reaped_total 9'
+            'gate_preauth_budget 600'
+            'gate_preauth_early_drop_start 300'
+            'gate_handshake_duration_ms_bucket{le="10"} 300'
+            'gate_handshake_duration_ms_bucket{le="100"} 490'
+            'gate_handshake_duration_ms_bucket{le="+Inf"} 500'
+            'gate_handshake_duration_ms_sum 9000'
+            'gate_handshake_duration_ms_count 500'
+            'gate_source_rate_active 1'
+            'gate_source_tracked 12'
+            'gate_source_untracked_total 0'
+        )
 
         $out = & $summarizeScript -RunDir $runDir -KafkaContainer '' 6>&1 | Out-String
         Assert-Match -Text $out -Pattern 't5m_ds\s+\|\s+transaction_log\s+\|\s+13\s+10\s+2\s+1\s+\|\s+13\s+200\s+\S+\s+\|\s+7\s+0\s+\|\s+42\s+0' -Because 'A1:msgs 13 = 10 + 2 + 1;bad = decode_error;b_avg = 2600 / 13;lag_max、gap、del、del_err 原样'
         Assert-Match -Text $out -Pattern 't5m_ds\s+\|\s+player_snapshot\s+\|\s+n/a' -Because 'A1:这一条流整族没有序列打 n/a'
         Assert-Match -Text $out -Pattern 't5m_login\s+\|\s+500\s+5\s+900\s+\|\s+120\s+\|\s+0\s+0\s+0\s+0\s+3\s+0\s+\|\s+120\s+' -Because 'Q1:size 跨 zone 求和;expired 族在、缺的 reason 记 0;w_n = 120'
         Assert-Match -Text $out -Pattern 't5m_cpp_scene_1\s+\|\s+scene\s+\|\s+40\s+120\s+3\.0\s+\|\s+40\s+\S+\s+\S+\s+\|\s+2\s+1\s+\|\s+12\s+1\s+0\s+0' -Because 'N1:只数 -cmd 的 topic(广播 topic 的 999 不算);for/own = 3.0'
+        # N2:other = shutting_down 3 + not_ready 4 + no_token_secret 0;握手 p50 在第一个桶里插值(250 / 300 × 10 ms),p99 落在 +Inf 桶记「>100」。
+        Assert-Match -Text $out -Pattern 't5m_cpp_gate\s+\|\s+gate\s+\|\s+120\s+900\s+\|\s+30\s+300\s+600\s+\|\s+500\s+\|\s+1\s+2\s+5\s+6\s+7\s+7\s+\|\s+8\s+9\s+\|\s+500\s+8\.3\s+>100\.0\s+\|\s+1\s+12\s+0' -Because 'N2:gate 一行按列出数'
+        $n2Lines = @($out -split "`n" | Where-Object { $_ -match '^\s+t5m_cpp_' -and $_ -match '\|\s+(?:gate|scene)\s+\|' })
+        Assert-Equal -Expected 3 -Actual $n2Lines.Count -Because "gate 快照在 N1、N2 各一行,scene 快照只在 N1(N2 只出 gate / battle)(实际:$($n2Lines -join ' / '))"
 
         # 没有任何 _login 快照时,不带已知后缀的 txt 才按 legacy 当 login 快照:C++ 快照不能被卷进去,只该出现在 N1 那一行。
         $cppOnly = New-TempDir

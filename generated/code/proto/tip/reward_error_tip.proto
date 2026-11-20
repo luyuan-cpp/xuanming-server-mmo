@@ -11,4 +11,6 @@ enum reward_error {
 
   kRewardAlreadyClaimed = 12000;
 
+  kRewardPeriodEnded = 12001;
+
 };

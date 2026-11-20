@@ -18,6 +18,8 @@ import "proto/common/component/player_item_gain_block_comp.proto";
 import "proto/common/component/client_request_ledger_comp.proto";
 import "proto/common/component/player_item_hold_comp.proto";
 import "proto/common/component/player_mail_outbox_comp.proto";
+import "proto/common/component/time_comp.proto";
+import "proto/common/component/buff_comp.proto";
 import "proto/common/database/bag_quest_mail_data.proto";
 
 // ------------------- User basic info table -------------------
@@ -104,7 +106,7 @@ message player_centre_database
 // 玩家存档的内存形状:没有 OptionTableName,不建表。落库的是 player_store 里按行投影出来的片段
 // (docs/design/player-save-direct-commit.md §1.1)。每个字段都用 OptionPersistGroup 声明属于哪一行,
 // 取值是 playerstore.PlayerStoreKind 的数值:
-//   9 = LOCATION(位置,只顺带写)  6 = CHARACTER(等级、基础属性与当前血蓝)  7 = WALLET(货币与账本)
+//   9 = LOCATION(位置,只顺带写)  6 = CHARACTER(等级、基础属性与当前血蓝、技能冷却、下线保留的 Buff)  7 = WALLET(货币与账本)
 //   8 = BAG(背包)  3 = GROWTH(技能、加点、宠物、任务)  4 = PROFILE(职业、注册时间、身份等小而少变的字段)
 //   0 = 元数据,不进片段。
 // 新字段不标、标到退役的 1 / 2 / 5 或不存在的行,scene 都拒绝启动。
@@ -200,6 +202,14 @@ message player_database
   // 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
   // 取下一个空闲号 27;下一个新字段从 28 起。
   PlayerMailOutboxComp mail_outbox = 27 [(OptionPersistGroup) = 7];  // WALLET
+  // 实时技能冷却与下线保留的 Buff(docs/design/realtime-cooldown-buff-persistence.md):换节点、跨 zone、重登都从存档重建实体,
+  // 不存就会丢,玩家能靠重登清掉长冷却。两者都按 UTC 毫秒的绝对时刻存,离线期间照常走。
+  // 冷却是运行时组件 CooldownTimeListComp 原样(按冷却组覆盖写,条数不超过冷却组数,到点的记录不删);
+  // Buff 只存 Buff 表 keep_on_logout = 1 的条目,按 buff_id 排序写出。
+  // 按需状态:旧存档没有这两个字段 = 没有冷却、没有要恢复的 Buff,合法;存盘缺组件写空,不补建。
+  // 放 CHARACTER 行:与当前血蓝一样,是战斗中会变的小数据。取下一个空闲号 28、29;下一个新字段从 30 起。
+  CooldownTimeListComp skill_cooldowns = 28 [(OptionPersistGroup) = 6];  // CHARACTER
+  repeated SavedBuffComp saved_buffs = 29 [(OptionPersistGroup) = 6];  // CHARACTER
 }
 
 // 玩家存档的新表(docs/design/player-save-direct-commit.md §1)。同一玩家的所有行挨在一起:

@@ -107,6 +107,8 @@ param(
     # -1 = 未指定。
     [int]$WsEdgeNodePort = -1,
     [string]$WsEdgeImage = "",
+    # 边缘的按来源限速(每个来源 /24 每秒新建的连接数)。0 = 未指定,即不限。
+    [int]$WsEdgeSourceRatePerSecond = 0,
     # 确认本次就是要切换入口形态(-ClientEntryMode / -BattleOrchestrator 换值)或改 gate / battle 的客户端地址来源
     # (会踢人、在打的战斗作废),透传给 k8s_deploy.ps1 同名参数,语义见那边参数注释;switch 只在被指定时透传,
     # 只在维护窗口里显式加。release-zone 只重建 gate,release-all(不带 -SkipInfra)还有 battle。
@@ -163,7 +165,11 @@ param(
     [string]$ControlRedisStorage = "",
     # 共享基础设施所在 namespace,透传给 k8s_deploy.ps1 同名参数;留空 = 用那边的缺省(mmorpg-infra)。以前不透传,
     # release-all 在别的 infra namespace 上也会去 mmorpg-infra 部署、过重启闸。追加在末尾,理由同上方"新参数一律追加在末尾"。
-    [string]$InfraNamespace = ""
+    [string]$InfraNamespace = "",
+    # 客户端面连接准入的覆盖变量(逗号分隔的「名字=值」),透传给 k8s_deploy.ps1 -ConnectionAdmissionEnv,名单、取值与覆盖范围见那边参数注释
+    # (release-zone 改 gate;release-all 不带 -SkipInfra 时还有 battle)。留空 = 不透传。本脚本在构建镜像之前用同一个库函数先校验一次,
+    # 拼错不等镜像推送完才由下游拒。不粘滞,同 -NodeOpenFileLimitMode。追加在末尾,理由同上方"新参数一律追加在末尾"。
+    [string[]]$ConnectionAdmissionEnv = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -173,6 +179,9 @@ $ScriptDir = $PSScriptRoot
 $RepoRoot = (Resolve-Path (Split-Path -Parent (Split-Path -Parent $ScriptDir))).Path
 
 . (Join-Path $ScriptDir "lib" "release_common.ps1")
+# 连接准入覆盖变量在构建镜像之前先校验一次,与 k8s_deploy.ps1 同一个库函数(纯函数,不读本脚本的变量);透传的仍是原值,下游再解析。
+. (Join-Path $ScriptDir "lib" "k8s_client_entry.ps1")
+$null = Resolve-ClientEntryConnectionAdmissionEnv -Entries $ConnectionAdmissionEnv
 
 # ─────────────────────────────────────────────────────────────────
 # 发布版本号 + 不可变版本戳
@@ -477,6 +486,10 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($NodeOpenFileLimitMode)) {
         $args.NodeOpenFileLimitMode = $NodeOpenFileLimitMode
     }
+    # 连接准入覆盖变量同一口径:留空不传,k8s_deploy.ps1 留空即一个都不写。
+    if ($ConnectionAdmissionEnv) {
+        $args.ConnectionAdmissionEnv = $ConnectionAdmissionEnv
+    }
     # 集群外入口参数同一口径:字符串非空才传,GateNodePortBase 非 -1 才传。
     if (-not [string]::IsNullOrWhiteSpace($ClientEntryMode)) { $args.ClientEntryMode = $ClientEntryMode }
     if (-not [string]::IsNullOrWhiteSpace($ClientPublicHost)) { $args.ClientPublicHost = $ClientPublicHost }
@@ -492,6 +505,7 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($WsEdgeServiceType)) { $args.WsEdgeServiceType = $WsEdgeServiceType }
     if ($WsEdgeNodePort -ne -1) { $args.WsEdgeNodePort = $WsEdgeNodePort }
     if (-not [string]::IsNullOrWhiteSpace($WsEdgeImage)) { $args.WsEdgeImage = $WsEdgeImage }
+    if ($WsEdgeSourceRatePerSecond -gt 0) { $args.WsEdgeSourceRatePerSecond = $WsEdgeSourceRatePerSecond }
     if ($AllowDisruptiveSwitch) { $args.AllowDisruptiveSwitch = $true }
     if ($ConfirmRedisCoreRestart) { $args.ConfirmRedisCoreRestart = $true }
     # 玩家域与控制两套 Redis Cluster:非 0 / 非空才传。

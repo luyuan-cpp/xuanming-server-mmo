@@ -39,6 +39,63 @@ message LoginResponse
   string refresh_token = 4;          // Opaque refresh token (30d TTL), use RefreshToken RPC to renew
   int64 access_token_expire = 5;     // Unix seconds when access_token expires
   int64 refresh_token_expire = 6;    // Unix seconds when refresh_token expires
+  // 账号注销(docs/design/account-deletion.md §4.3、§4.5)。0 正常、1 冷静期(只能撤销,不能进游戏)、2 执行中。
+  uint32 account_deletion_state = 7;
+  int64 account_deletion_execute_after = 8; // 冷静期满的时刻,Unix 秒;状态 0 时为 0
+  int64 previous_account_deleted_at = 9;    // 这次登录建了新账号,而同一身份以前注销完成过:完成时刻,Unix 秒;其余 0
+  // 防沉迷(docs/design/real-name-anti-addiction.md §5.3)。部署没开防沉迷时不填。
+  AntiAddictionStatus anti_addiction = 10;
+}
+
+// 防沉迷状态。/api/login 的应答只用来让客户端决定下一步;拦截在 gate 上的 Login(绑定会话)。
+message AntiAddictionStatus
+{
+  bool real_name_required = 1;  // 本次登录的渠道要游戏方实名,而账号还没实名:先调 /api/real-name
+  bool minor = 2;               // 已实名且未满 18 周岁
+  uint64 play_deadline_ms = 3;  // 未成年人本次能玩到的时刻(Unix 毫秒,到点服务端踢线);0 = 不限,或现在不在可玩时段
+}
+
+// 实名提交(/api/real-name,docs/design/real-name-anti-addiction.md §5.2)。姓名和身份证号只用于这一次核验,服务端不存、不进日志。
+message SubmitRealNameRequest
+{
+  string access_token = 1;  // /api/login 签发的 access token
+  string name = 2;
+  string id_number = 3;     // 18 位居民身份证号
+}
+
+message SubmitRealNameResponse
+{
+  TipInfoMessage error_message = 1;      // 认证中、信息有误、次数用完、服务故障时的 tip;成功为空
+  AntiAddictionStatus anti_addiction = 2; // 提交之后的状态
+}
+
+// 申请注销(docs/design/account-deletion.md §4.2)。凭据字段与 LoginRequest 同义:注销要求重新认证,不收 access token。
+message AccountDeletionRequest
+{
+  string account = 1;
+  string password = 2;
+  string auth_type = 3;
+  string auth_token = 4;
+  string authorization_code = 5; // 只有 Apple:重新授权时一并拿到的授权码,login 换票后立刻撤销(§8)
+}
+
+message AccountDeletionBlocker
+{
+  uint64 player_id = 1;
+  string reason = 2;             // 低基数枚举串(guild_leader、team_membership、role_listed 等),客户端映射成文案
+}
+
+message AccountDeletionResponse
+{
+  TipInfoMessage error_message = 1;               // 拒绝时的 tip;成功为空
+  uint32 state = 2;                               // 0 / 1 / 2,同 LoginResponse.account_deletion_state
+  int64 execute_after = 3;                        // 冷静期满的时刻,Unix 秒
+  repeated AccountDeletionBlocker blockers = 4;   // 预检没过(tip = kLoginAccountDeletionBlocked)时的挂起清单
+}
+
+message CancelAccountDeletionRequest
+{
+  string access_token = 1;                        // 冷静期内 /api/login 签发的 access token
 }
 
 message TestResponse
@@ -84,6 +141,11 @@ message EnterGameResponse
 
   // 3 / 4 是合服一次性提示:合服不再碰玩家数据,这两个字段没有来源,已删除。
   reserved 3, 4;
+
+  // 受理时这名角色的归属修订号(账号目录的 owner_revision,过户一次加一)。只在受理(error_message 为空)时填。
+  // 客户端把它记在本机待确认记录上:修订号变了说明角色换过主人,此前的待确认记录作废、不再恢复或重发
+  // (docs/design/cross-zone-matchmaking.md §13.2)。0 = 未知(旧服务端),客户端按没有这项信息处理。
+  uint64 owner_revision = 5;
 }
 
 message LeaveGameRequest
@@ -92,8 +154,8 @@ message LeaveGameRequest
 
 message LoginNodeDisconnectRequest
 {
-  // 只做一致性核对:login 以 gate 签名的会话头 SessionDetails.session_id 为准,这里填了且与会话头不同就整条拒绝
-  // (InvalidArgument)。gate 合成时填同一个值;0 = 没填,按会话头处理(docs/design/client-request-ordering.md §6.2)。
+  // 只做一致性核对:login 以 gate 签名的会话头 SessionDetails.session_id 为准,这里填了且与会话头不同时记 CRITICAL、
+  // 照常按会话头收尾(不拒绝:断线通知只发一次)。gate 合成时填同一个值;0 = 没填(docs/design/client-request-ordering.md §6.2)。
   uint32 session_id = 1;
 }
 
@@ -142,6 +204,7 @@ message GateMigrationResponse
   bytes  token_payload = 4;     // 序列化的 GateTokenPayload
   bytes  token_signature = 5;   // HMAC-SHA256 签名(小写 hex)
   int64  token_deadline = 6;    // 票据到期时刻,Unix 秒
+  string target_gate_ws_url = 7; // 目标 gate 的 WebSocket 地址(NodeInfo.client_ws_url),gate 原样放进 msg 124;空串 = 不接小游戏
 }
 
 // gate 为仍然连着的连接续租它在 login 的按连接记录(docs/design/gate-online-identity.md §10.4):
@@ -203,6 +266,9 @@ message AssignGateRequest {
 //   3 = EXPIRED   (queue_token expired or unknown — client must restart from /assign-gate)
 //   4 = UNAUTHENTICATED (AssignGate only: access_token invalid, or missing while anonymous assignment is off —
 //                        client must log in again; never returned by QueryQueueStatus)
+//   5 = QUEUE_FULL (AssignGate only: the zone queue is at its length limit, nothing was enqueued and there is no
+//                   queue_token; retry_after_ms says when to call AssignGate again. The gateway turns it into the
+//                   same retry hint as its own rate limiter, so clients need no extra branch)
 
 message AssignGateResponse {
   string ip = 1;
@@ -220,6 +286,9 @@ message AssignGateResponse {
   uint32 queue_rank = 9;      // 0-based position; 0 = "you are next"
   uint32 queue_total = 10;    // total queue length for this zone (for UI)
   uint32 retry_after_ms = 11; // suggested poll interval (e.g. 2000)
+  // 同一台 gate 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url);空串 = 这台 gate 不接小游戏。
+  // 小游戏客户端连它,原生客户端仍连 ip / port(docs/design/minigame-websocket-gate.md W7)。
+  string ws_url = 12;
 }
 
 message QueryQueueStatusRequest {
@@ -240,6 +309,8 @@ message QueryQueueStatusResponse {
   uint32 retry_after_ms = 9;
   // status=3 or any error
   string error = 10;
+  // status=0:同 AssignGateResponse.ws_url。
+  string ws_url = 11;
 }
 
 service LoginPreGate {
@@ -258,6 +329,11 @@ service LoginPreGate {
   // 本区一共建过多少角色(转问 data_service.CountZoneRoles)。网关里每个区的负责副本按区服目录的角色上限
   // (zone_config.role_capacity)定时来问,到了就关上本区的创角开关(docs/design/zone-full-handling.md §6)。只读,可重试。
   rpc GetZoneRoleCount (ZoneRoleCountRequest) returns (ZoneRoleCountResponse);
+  // 实名提交,网关 POST /api/real-name 调;凭 access token 鉴权(docs/design/real-name-anti-addiction.md §5.2)。
+  rpc SubmitRealName (SubmitRealNameRequest) returns (SubmitRealNameResponse);
+  // 账号注销(docs/design/account-deletion.md §4.2、§4.4),网关 POST /api/account/delete 与 /api/account/delete/cancel 调。
+  rpc RequestAccountDeletion (AccountDeletionRequest) returns (AccountDeletionResponse);
+  rpc CancelAccountDeletion (CancelAccountDeletionRequest) returns (AccountDeletionResponse);
 }
 
 message ZoneRoleCountRequest {
@@ -302,9 +378,33 @@ message RemovePlayersFromAccountsResponse {
   repeated RemovePlayerResult results = 5; // 按请求去重后的顺序
 }
 
+// 客服代办注销(Google Play 要求的网页入口,docs/design/account-deletion.md §4.6):按角色找到账号,走与本人申请同一套预检与冷静期。
+// 客服先在系统外核实身份;操作人、理由、对端地址只进日志,data_service 的回执记 source=2。
+message ScheduleAccountDeletionRequest {
+  uint64 player_id = 1;   // 账号下任一角色
+  string operator = 2;    // 必填,≤ 64 字节
+  string reason = 3;      // 必填,≤ 256 字节
+}
+
+// 客服重置实名(docs/design/real-name-anti-addiction.md §5.2 末):玩家填错了身份信息、客服在系统外核实之后,清掉账号上的实名,
+// 玩家下次登录重新提交。player_id 与 account 恰好填一个:填错身份证号的账号可能一个角色都建不了,所以也能按账号找。
+message ResetAccountRealNameRequest {
+  uint64 player_id = 1;   // 账号下任一角色
+  string account = 2;     // 或者直接给账号
+  string operator = 3;    // 必填,≤ 64 字节
+  string reason = 4;      // 必填,≤ 256 字节
+}
+
+message ResetAccountRealNameResponse {
+  TipInfoMessage error_message = 1; // 角色或账号不存在:kLoginAccountNotFound
+  bool had_real_name = 2;           // 重置之前有没有实名;false = 本来就没有(重放也落在这里)
+}
+
 service LoginAdmin {
   // 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
   // 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
   // (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
   rpc RemovePlayersFromAccounts (RemovePlayersFromAccountsRequest) returns (RemovePlayersFromAccountsResponse);
+  rpc ScheduleAccountDeletion (ScheduleAccountDeletionRequest) returns (AccountDeletionResponse);
+  rpc ResetAccountRealName (ResetAccountRealNameRequest) returns (ResetAccountRealNameResponse);
 }

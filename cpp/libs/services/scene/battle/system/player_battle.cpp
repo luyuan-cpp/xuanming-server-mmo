@@ -1048,15 +1048,8 @@ namespace
 		}
 		out.sessionId = sessionPB->gate_session_id();
 		out.gateNodeId = GetGateNodeId(sessionPB->gate_session_id());
-		// node_id 不是 entt 实体句柄(network_utils.h 禁令),必须走 ResolveLocalZoneGateEntity
-		if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(sessionPB->gate_session_id()))
-		{
-			auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-			if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
-			{
-				out.gateInstanceId = gateNodeInfo->node_uuid();
-			}
-		}
+		// 会话所在的 gate 进程:记下了实例就用它,不换成同一 node_id 上的另一个进程(scene-enter-chain-residuals.md §14.6)
+		out.gateInstanceId = BoundGateInstanceId(player, sessionPB->gate_session_id());
 		return true;
 	}
 } // namespace
@@ -1165,9 +1158,8 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 			{
 				continue;
 			}
-			// 控制类不带进战斗(G5)。理由是时长口径:场景里只剩半秒的眩晕,这里
-			// 按表全量时长换算会变成整整几个回合,玩家开局就被跳过好几手;
-			// 而 PVP 里对手可以在应战前挂个控制再进局。控制的归属应当是战斗内产生的。
+			// 控制类不带进战斗(G5):PVP 里对手可以在应战前挂个控制再进局,控制的归属应当是战斗内产生的。
+			// (原先另一条理由是按表全量时长换算回合;2026-11-19 起按剩余时长换算,见下。)
 			const uint32_t buffType = buffRow->buff_type();
 			if (buffType == kBuffTypeStun || buffType == kBuffTypeFreeze ||
 				buffType == kBuffTypeSilence)
@@ -1179,6 +1171,18 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 			if (buffRow->infinite_duration() == 0 && buffRow->duration() <= 0)
 			{
 				continue;
+			}
+			// 剩余时长按这条自己的到期时刻(BuffEntry::expireAtMs,UTC 毫秒)换算回合:rounds = max(1, ceil(ms / 6000))。
+			// 已到点、到期回调还没跑的不带。没有到期时刻的有限行记 0,引擎按表里的全量时长夹(TurnBattleEngine 入场夹取)。
+			uint32_t remainRounds = 0; // 0 = 无限持续
+			if (buffRow->infinite_duration() == 0 && entry.expireAtMs != 0)
+			{
+				const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
+				if (entry.expireAtMs <= nowMs)
+				{
+					continue;
+				}
+				remainRounds = turnbattle::RoundsFromMilliseconds(entry.expireAtMs - nowMs);
 			}
 			auto* buffEntry = snapshot.add_buffs();
 			buffEntry->set_buff_id(buffId);
@@ -1196,18 +1200,7 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 				casterActorId = playerId;
 			}
 			buffEntry->set_caster_id(casterActorId);
-			// 剩余时长拿不到(TimerTaskComp 设计上不暴露 deadline,BuffComp 也没有到期字段),
-			// 仍按表全量时长换算回合:rounds = max(1, ceil(ms / 6000))。
-			// 这对增益是偏宽、对减益是偏严,但控制类已被上面剔除,剩下的都是周期效果类,
-			// 影响有界。要精确剩余时长必须给 BuffComp 加到期时间字段(另开任务)。
-			if (buffRow->infinite_duration() != 0)
-			{
-				buffEntry->set_remain_rounds(0); // 0 = 无限持续
-			}
-			else
-			{
-				buffEntry->set_remain_rounds(turnbattle::RoundsFromSeconds(buffRow->duration()));
-			}
+			buffEntry->set_remain_rounds(remainRounds);
 		}
 	}
 

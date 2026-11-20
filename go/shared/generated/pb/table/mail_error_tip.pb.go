@@ -36,6 +36,7 @@ const (
 	MailError_kMailAttachmentProtected MailError = 17008
 	MailError_kMailClaimNotOpen        MailError = 17009
 	MailError_kMailAttachmentNotOpen   MailError = 17010
+	MailError_kMailRecipientDeleted    MailError = 17011
 )
 
 // Enum value maps for MailError.
@@ -53,6 +54,7 @@ var (
 		17008: "kMailAttachmentProtected",
 		17009: "kMailClaimNotOpen",
 		17010: "kMailAttachmentNotOpen",
+		17011: "kMailRecipientDeleted",
 	}
 	MailError_value = map[string]int32{
 		"kMail_errorOK":            0,
@@ -67,6 +69,7 @@ var (
 		"kMailAttachmentProtected": 17008,
 		"kMailClaimNotOpen":        17009,
 		"kMailAttachmentNotOpen":   17010,
+		"kMailRecipientDeleted":    17011,
 	}
 )
 
@@ -101,7 +104,7 @@ var File_mail_error_tip_proto protoreflect.FileDescriptor
 
 const file_mail_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x14mail_error_tip.proto*\xc3\x02\n" +
+	"\x14mail_error_tip.proto*\xe0\x02\n" +
 	"\n" +
 	"mail_error\x12\x11\n" +
 	"\rkMail_errorOK\x10\x00\x12\x13\n" +
@@ -115,7 +118,8 @@ const file_mail_error_tip_proto_rawDesc = "" +
 	"\x10kMailClaimManual\x10\xef\x84\x01\x12\x1e\n" +
 	"\x18kMailAttachmentProtected\x10\xf0\x84\x01\x12\x17\n" +
 	"\x11kMailClaimNotOpen\x10\xf1\x84\x01\x12\x1c\n" +
-	"\x16kMailAttachmentNotOpen\x10\xf2\x84\x01B$\n" +
+	"\x16kMailAttachmentNotOpen\x10\xf2\x84\x01\x12\x1b\n" +
+	"\x15kMailRecipientDeleted\x10\xf3\x84\x01B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

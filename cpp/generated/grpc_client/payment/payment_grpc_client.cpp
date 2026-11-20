@@ -29,6 +29,7 @@ namespace paymentpb {
 #pragma region ClientPlayerPaymentListPayChannels
 namespace {
 void QueueLocalClientPlayerPaymentListPayChannelsFailure(GrpcDone<::paymentpb::ListPayChannelsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerPaymentListPayChannelsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendClientPlayerPaymentListPayChannelsErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerPayment.ListPayChannels: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentListPayChannelsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendClientPlayerPaymentListPayChannelsErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::paymentpb::ListPayChannelsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerPayment.ListPayChannels: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentListPayChannelsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendClientPlayerPaymentListPayChannelsErased(entt::registry& registry, entt
 #pragma region ClientPlayerPaymentCreatePayIntent
 namespace {
 void QueueLocalClientPlayerPaymentCreatePayIntentFailure(GrpcDone<::paymentpb::CreatePayIntentResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerPaymentCreatePayIntentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerPayment.CreatePayIntent: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentCreatePayIntentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::paymentpb::CreatePayIntentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerPayment.CreatePayIntent: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentCreatePayIntentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& registry, entt
 #pragma region ClientPlayerPaymentGetPayIntent
 namespace {
 void QueueLocalClientPlayerPaymentGetPayIntentFailure(GrpcDone<::paymentpb::GetPayIntentResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerPaymentGetPayIntentGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendClientPlayerPaymentGetPayIntentErased(entt::registry& registry, entt::e
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerPayment.GetPayIntent: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentGetPayIntentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendClientPlayerPaymentGetPayIntentErased(entt::registry& registry, entt::e
     const auto* typedRequest = dynamic_cast<const ::paymentpb::GetPayIntentRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerPayment.GetPayIntent: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentGetPayIntentGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendClientPlayerPaymentGetPayIntentErased(entt::registry& registry, entt::e
 #pragma region ClientPlayerPaymentSubmitPurchase
 namespace {
 void QueueLocalClientPlayerPaymentSubmitPurchaseFailure(GrpcDone<::paymentpb::SubmitPurchaseResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerPaymentSubmitPurchaseGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendClientPlayerPaymentSubmitPurchaseErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerPayment.SubmitPurchase: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentSubmitPurchaseGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendClientPlayerPaymentSubmitPurchaseErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::paymentpb::SubmitPurchaseRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerPayment.SubmitPurchase: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerPaymentSubmitPurchaseGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

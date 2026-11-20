@@ -407,7 +407,9 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 ### 交接说明(`handoff/`)
 
+- [account-deletion-handoff-20261120.md](handoff/account-deletion-handoff-20261120.md) — 账号注销与 Apple / Google 登录:剩余代码与全部验证交接(2026-11-20,交 Gemini)
 - [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接:战报回放的客户端细节(2026-11-06)
+- [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余代码与全部验证交接(2026-11-20,交 Gemini)
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
 - [team-follow-afk-hosting-handoff-20261120.md](handoff/team-follow-afk-hosting-handoff-20261120.md) — 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini)

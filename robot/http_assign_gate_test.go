@@ -276,14 +276,54 @@ func TestAssignGateWithQueue(t *testing.T) {
 			wantErr: "code=410",
 		},
 		{
-			name: "queue-status and the re-entry both fail",
+			// 2026-11-20 前红:重入网络失败直接返回 re-entry failed,token 随之丢弃(§11.5 第 6 条改定前的口径)。
+			// 现在保票:重入失败算进同一串连续失败,等待按 2s、4s 退避后回到 queue-status,成功一次复位。
+			name: "queue-status and the re-entry both fail, the token is kept and polling backs off",
 			steps: []queueCall{
 				{"assign-gate", "", loginQueued("T1", 0, 2000), nil},
 				{"queue-status", "T1", nil, errNet},
 				{"assign-gate", "T1", nil, errNet},
+				{"queue-status", "T1", nil, errNet},
+				{"assign-gate", "T1", nil, errNet},
+				{"queue-status", "T1", loginQueued("T1", 0, 2000), nil},
+				{"queue-status", "T1", admittedResponse(), nil},
 			},
-			wantWaits: []time.Duration{2 * time.Second},
-			wantErr:   "re-entry failed",
+			wantWaits: []time.Duration{2 * time.Second, 2 * time.Second, 4 * time.Second, 2 * time.Second},
+		},
+		{
+			// 2026-11-20 前红:重入回 500(重入到了 login 而 login 仍不可用)落进 default 直接返回,token 随之丢弃。
+			name: "re-entry 500 keeps the token and backs off",
+			steps: []queueCall{
+				{"assign-gate", "", loginQueued("T1", 1, 2000), nil},
+				{"queue-status", "T1", codeResponse(500, "login_unavailable"), nil},
+				{"assign-gate", "T1", codeResponse(500, "login_unavailable"), nil},
+				{"queue-status", "T1", codeResponse(500, "login_unavailable"), nil},
+				{"assign-gate", "T1", codeResponse(500, "login_unavailable"), nil},
+				{"queue-status", "T1", admittedResponse(), nil},
+			},
+			wantWaits: []time.Duration{2 * time.Second, 2 * time.Second, 4 * time.Second},
+		},
+		{
+			// 2026-11-20 前红在第三次等待:410 换票时不清连续失败数,新 token 的首次等待沿用旧的 4s 退避。
+			name: "410 after failed re-entries resets the backoff for the new token",
+			steps: []queueCall{
+				{"assign-gate", "", loginQueued("T1", 1, 2000), nil},
+				{"queue-status", "T1", codeResponse(500, "login_unavailable"), nil},
+				{"assign-gate", "T1", codeResponse(500, "login_unavailable"), nil},
+				{"queue-status", "T1", codeResponse(500, "login_unavailable"), nil},
+				{"assign-gate", "T1", codeResponse(410, "queue_token_expired"), nil},
+				{"assign-gate", "", loginQueued("T2", 0, 2000), nil},
+				{"queue-status", "T2", admittedResponse(), nil},
+			},
+			wantWaits: []time.Duration{2 * time.Second, 2 * time.Second, 2 * time.Second},
+		},
+		{
+			// 钉住 500 只在持 token 时保票:首调就回 500 仍交外层,不在这里重试。
+			name: "without a token, 500 is left to the outer retry loop",
+			steps: []queueCall{
+				{"assign-gate", "", codeResponse(500, "login_unavailable"), nil},
+			},
+			wantErr: "code=500",
 		},
 	}
 
@@ -437,6 +477,32 @@ func TestAssignGateWithQueue_NoRequestAfterBudgetExpiresInFlight(t *testing.T) {
 	}
 }
 
+// TestAssignGateWithQueue_ReentryFailureStopsAtBudget:重入自身失败后保票等待(2026-11-20 起),预算恰在这次重入途中
+// 到期时停在等待处返回,不再查 queue-status。脚本不留后续步,多发任何请求都会以 script exhausted 判失败。
+func TestAssignGateWithQueue_ReentryFailureStopsAtBudget(t *testing.T) {
+	errNet := errors.New("dial tcp: connection refused")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	inner := &scriptedGateway{t: t, steps: []queueCall{
+		{"assign-gate", "", loginQueued("T1", 7, 2000), nil},
+		{"queue-status", "T1", nil, errNet},
+		{"assign-gate", "T1", nil, errNet},
+	}}
+	gw := &budgetExpiresDuring{inner: inner, at: 3, cancel: cancel}
+	var waits []time.Duration
+	_, err := AssignGateWithQueue(ctx, gw, &httpAssignGateRequest{ZoneID: 1}, nil, recordSleeps(&waits), zeroJitter)
+	if err == nil || !strings.Contains(err.Error(), "queue budget exceeded") {
+		t.Fatalf("err = %v, want queue budget exceeded", err)
+	}
+	if len(inner.steps) != 0 {
+		t.Fatalf("%d scripted calls never made", len(inner.steps))
+	}
+	// 首次排队后一次;重入失败后进入的那次等待因预算已到期立即返回(recordSleeps 照样记下),之后不再发请求。
+	if want := []time.Duration{2 * time.Second, 2 * time.Second}; !slices.Equal(waits, want) {
+		t.Fatalf("waits = %v, want %v", waits, want)
+	}
+}
+
 // TestSleepCtx_ExpiredBudgetNeverReturnsNil:排队预算已用完时 sleepCtx 必须返回错误,即使计时器同时到点。
 // 修复前红(几乎必然):d=0 的计时器与已取消的 ctx 同时就绪,select 随机选一支,每次一半概率走计时器分支返回 nil;
 // 64 次全部侥幸走 ctx 分支的概率是 2^-64。修复后计时器分支再查 ctx,结果确定。不真等待,不依赖墙钟。
@@ -469,7 +535,7 @@ func TestAssignGateWithQueue_Jitter(t *testing.T) {
 				{"queue-status", "T1", nil, errNet},
 				{"assign-gate", "T1", codeResponse(429, "IP_RATE_LIMIT"), nil}, // 连续失败 1 次,基础 2s
 				{"queue-status", "T1", codeResponse(500, "login_unavailable"), nil},
-				{"assign-gate", "T1", rateLimitQueued(1), nil}, // 连续失败 2 次,基础 4s
+				{"assign-gate", "T1", rateLimitQueued(1), nil},          // 连续失败 2 次,基础 4s
 				{"queue-status", "T1", loginQueued("T1", 1, 5000), nil}, // 成功复位,基础取 retry_after 5s
 				{"queue-status", "T1", admittedResponse(), nil},
 			},

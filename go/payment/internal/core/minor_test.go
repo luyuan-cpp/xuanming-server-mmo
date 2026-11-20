@@ -65,6 +65,7 @@ type gateStore struct {
 	reserved   []data.SpendLimit
 	revives    []bool // 每次 ReviveMinorIntent 的 force
 	marked     int
+	closed     int
 	states     []uint32
 }
 
@@ -106,8 +107,13 @@ func (s *gateStore) Txn(_ context.Context, ch uint32, hi, lo uint64) (*paymentpb
 	return nil, data.ErrNotFound
 }
 
+// InsertTxn 同真库:同一笔已记过就回已有的那一行与 false。
 func (s *gateStore) InsertTxn(_ context.Context, rec *paymentpb.PaymentTxnRecord) (*paymentpb.PaymentTxnRecord, bool, error) {
-	s.txns[[3]uint64{uint64(rec.Channel), rec.TxnHi, rec.TxnLo}] = rec
+	key := [3]uint64{uint64(rec.Channel), rec.TxnHi, rec.TxnLo}
+	if existing, ok := s.txns[key]; ok {
+		return existing, false, nil
+	}
+	s.txns[key] = rec
 	return rec, true, nil
 }
 
@@ -155,8 +161,8 @@ func gateService(t *testing.T, names RealNames, store *gateStore, amount uint64,
 	platforms := map[paymentpb.PayClientPlatform][]paymentpb.PayChannel{
 		paymentpb.PayClientPlatform_PAY_CLIENT_PLATFORM_ANDROID_APP: {paymentpb.PayChannel_PAY_CHANNEL_DEVPAY, paymentpb.PayChannel_PAY_CHANNEL_DOUYIN_MINIGAME},
 	}
-	svc, err := New(store, gateMall{order: order}, []channel.Channel{devpay, douyinStub{devpay}, appleStub{devpay}}, platforms,
-		Options{RealNames: names, DailyLimitFenAge8To16: 10000, DailyLimitFenAge16To18: 20000})
+	svc, err := New(store, gateMall{order: order}, []channel.Channel{devpay, douyinStub{devpay}, appleStub{devpay}, googleStub{devpay}}, platforms,
+		Options{RealNames: names})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,8 +245,8 @@ func TestCreateIntentReservesAgainstTheBuyersAgeBracket(t *testing.T) {
 		age    uint32
 		limit  data.SpendLimit
 	}{
-		{piBorn(2011, 6, 1), 5000, 15, data.SpendLimit{MonthlyFen: 20000, DailyFen: 10000, MonthStartMs: monthStart, DayStartMs: dayStart}},
-		{piBorn(2009, 6, 1), 10000, 17, data.SpendLimit{MonthlyFen: 40000, DailyFen: 20000, MonthStartMs: monthStart, DayStartMs: dayStart}},
+		{piBorn(2011, 6, 1), 5000, 15, data.SpendLimit{MonthlyFen: 20000, DailyFen: 5000, MonthStartMs: monthStart, DayStartMs: dayStart}},
+		{piBorn(2009, 6, 1), 10000, 17, data.SpendLimit{MonthlyFen: 40000, DailyFen: 10000, MonthStartMs: monthStart, DayStartMs: dayStart}},
 	} {
 		store := newGateStore()
 		if err := createGateIntent(gateService(t, &gateNames{pi: c.pi, found: true}, store, c.amount, "CNY"), paymentpb.PayChannel_PAY_CHANNEL_DEVPAY); err != nil {

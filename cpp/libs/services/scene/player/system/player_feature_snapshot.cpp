@@ -264,7 +264,6 @@ uint32_t PlayerMissionReadSystem::BuildList(entt::entity player, GetMissionListR
         for (const auto& [id, mission] : missions.GetMissionList().missions()) keys.emplace(scope, id);
         for (const auto& [id, bitIndex] : MissionBitMap)
             if (missions.IsComplete(id) || missions.IsClaimable(id)) keys.emplace(scope, id);
-        for (const auto id : missions.GetUnmappedCompletedIds()) keys.emplace(scope, id);
         for (const auto id : missions.GetUnmappedClaimableIds()) keys.emplace(scope, id);
     }
     for (const auto& [scope, id] : keys)

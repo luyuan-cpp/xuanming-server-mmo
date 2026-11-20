@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <memory>
+#include <string>
 #include "../../nodes/scene/handler/rpc/player/player_activity_handler.h"
 #include "core/type_define/player_guid_comp.h"
 #include "modules/bag/comp/player_bags_comp.h"
@@ -204,11 +205,39 @@ TEST_F(PlayerActivitySystemTest, AnotherRoleCannotRecoverOrReadOriginalPlayersCl
 }
 
 TEST_F(PlayerActivitySystemTest, NewPeriodRejectsOldRequestButDoesNotInheritPoints) {
-    Points(); EXPECT_EQ(kInvalidParameter, Claim(1100)); EXPECT_EQ(0u, Count());
+    // 跨日边界上发出的旧周期请求:单列「本期已结束」,客户端据此清掉待确认记录、刷新活动。
+    Points(); EXPECT_EQ(kRewardPeriodEnded, Claim(1100)); EXPECT_EQ(0u, Count());
     request.set_period_id(1100); EXPECT_EQ(kInvalidParameter, Claim(1100));
     PlayerActivityVitalitySnapshot snapshot;
     ASSERT_EQ(kSuccess, PlayerActivitySystem::BuildVitality(player, 1100, snapshot));
     EXPECT_EQ(0u, snapshot.points()); EXPECT_FALSE(snapshot.rewards(0).can_claim());
+}
+
+TEST_F(PlayerActivitySystemTest, ClaimAtFullBudgetPrunesEndedPeriodsOfCurrentRuleAndKeepsReplayWindow) {
+    const auto seed = [&](uint32_t ruleId, uint64_t period, const std::string& id) {
+        auto* claim = Ledger().add_claims(); claim->set_rule_id(ruleId); claim->set_configuration_revision(2);
+        claim->set_period_id(period); claim->set_threshold_id(7); claim->set_request_id(id);
+        claim->set_reward_id(1); claim->set_claimed_at_ms(period + 1);
+    };
+    // 账本正好满预算(4096):别的规则 1 条 + 当前规则已结束周期 4095 条。裁剪之前这里永远回 kServiceUnavailable。
+    seed(48, 1000, "other-rule");
+    for (uint64_t i = 0; i < 4095; ++i) seed(47, 1000 + 100 * i, "old-" + std::to_string(i));
+    Points(8, 500000); request.set_period_id(500000);
+    ASSERT_EQ(kSuccess, Claim(500050)); EXPECT_EQ(4u, Count());
+    // 留下:别的规则那条、已结束周期里最新的 64 条(old-4031 ~ old-4094)、刚领的这条。
+    ASSERT_EQ(66, Ledger().claims_size());
+    EXPECT_EQ("other-rule", Ledger().claims(0).request_id());
+    EXPECT_EQ("old-4031", Ledger().claims(1).request_id());
+    EXPECT_EQ("old-4094", Ledger().claims(64).request_id());
+    EXPECT_EQ("intent-a", Ledger().claims(65).request_id());
+    // 窗口内的原请求照常重放;窗口外的按「不是当前周期」拒绝,不再发一份。
+    request.set_period_id(1000 + 100 * 4094); request.set_request_id("old-4094");
+    ASSERT_EQ(kSuccess, Claim(500050)); EXPECT_TRUE(response.replayed());
+    request.set_period_id(1000); request.set_request_id("old-0");
+    EXPECT_EQ(kRewardPeriodEnded, Claim(500050));
+    // 当前周期那一档仍然只能领一次。
+    request.set_period_id(500000); request.set_request_id("intent-b");
+    EXPECT_EQ(kRewardAlreadyClaimed, Claim(500050)); EXPECT_EQ(4u, Count());
 }
 
 TEST_F(PlayerActivitySystemTest, FrozenUnfencedAndBattlePlayersCannotClaimOrAcknowledgeDurable) {
@@ -251,6 +280,34 @@ TEST_F(PlayerActivitySystemTest, OnlyCompletedServerMissionSourceCreditsOnceAcro
     PlayerActivitySystem::OnMissionCompleted(player, 0, 15, 1100);
     EXPECT_EQ(1, Ledger().sources_size()); EXPECT_EQ(1000u, Ledger().sources(0).period_id());
     *editable = original;
+}
+
+TEST_F(PlayerActivitySystemTest, EndedPeriodSourcesArePrunedWhileCreditedBitsStillBlockRecredit) {
+    const auto [row15, error15] = ActivityScheduleTableManager::Instance().FindByIdSilent(15);
+    const auto [row16, error16] = ActivityScheduleTableManager::Instance().FindByIdSilent(16);
+    ASSERT_NE(nullptr, row15); ASSERT_NE(nullptr, row16);
+    const auto original15 = *row15; const auto original16 = *row16;
+    const_cast<ActivityScheduleTable*>(row15)->set_vitality_points(8);
+    const_cast<ActivityScheduleTable*>(row16)->set_vitality_points(3);
+    auto& missions = tlsEcs.actorRegistry.get<MissionsContainerComp>(player).map.at(0);
+    missions.RestoreCompleted(15); missions.RestoreCompleted(16);
+
+    PlayerActivitySystem::OnMissionCompleted(player, 0, 15, 1050);
+    ASSERT_EQ(1, Ledger().sources_size()); EXPECT_EQ(1000u, Ledger().sources(0).period_id());
+    // 下一周期记新来源时,上一周期的来源被删掉:积分只按当前周期算。
+    PlayerActivitySystem::OnMissionCompleted(player, 0, 16, 1150);
+    ASSERT_EQ(1, Ledger().sources_size());
+    EXPECT_EQ(16u, Ledger().sources(0).mission_id()); EXPECT_EQ(1100u, Ledger().sources(0).period_id());
+    // 任务 15 的来源已经删了,同一任务的完成通知再来也不会在本周期再记一次。
+    PlayerActivitySystem::OnMissionCompleted(player, 0, 15, 1150);
+    EXPECT_EQ(1, Ledger().sources_size());
+    EXPECT_TRUE(TestPackedBit(Ledger().credited_missions(), MissionBitMap.at(15)));
+    EXPECT_TRUE(TestPackedBit(Ledger().credited_missions(), MissionBitMap.at(16)));
+    PlayerActivityVitalitySnapshot snapshot;
+    ASSERT_EQ(kSuccess, PlayerActivitySystem::BuildVitality(player, 1150, snapshot));
+    EXPECT_EQ(3u, snapshot.points());
+    *const_cast<ActivityScheduleTable*>(row15) = original15;
+    *const_cast<ActivityScheduleTable*>(row16) = original16;
 }
 
 TEST_F(PlayerActivitySystemTest, CompletedFactsAreNotLostWhenAssetsAreTemporarilyUnfencedOrRewardsInvalid) {

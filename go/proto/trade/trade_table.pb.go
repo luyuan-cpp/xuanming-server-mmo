@@ -1912,7 +1912,11 @@ type TradeCommerceLeg struct {
 	Snapshot *asset.AssetSnapshot   `protobuf:"bytes,6,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
 	Outcome  uint32                 `protobuf:"varint,7,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	// 被人工补发取代时是补发腿的名字,被整单退回取代时是 "refund"。取代后不再算作最终发放(commerce.finalCredits)。
-	SupersededBy  string `protobuf:"bytes,8,opt,name=superseded_by,json=supersededBy,proto3" json:"superseded_by,omitempty"`
+	SupersededBy string `protobuf:"bytes,8,opt,name=superseded_by,json=supersededBy,proto3" json:"superseded_by,omitempty"`
+	// 发放腿付出的是谁托管的资产:扣出它的那个角色,建腿时记下,补发照抄,人工改绑只换收件人不换它。
+	// 退回腿只有付回给这个角色时才算「退回本人托管的资产」、不判获取封禁(commerce.legTxType);改绑到同账号的另一名角色之后
+	// 收件人不再是它,按成交所得判(2026-11-20)。0 = 本合同不记:扣出腿、官方发货,以及拍品的卖家所得(货款托管在出价合同里)。
+	EscrowOwnerId uint64 `protobuf:"varint,9,opt,name=escrow_owner_id,json=escrowOwnerId,proto3" json:"escrow_owner_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2001,6 +2005,13 @@ func (x *TradeCommerceLeg) GetSupersededBy() string {
 		return x.SupersededBy
 	}
 	return ""
+}
+
+func (x *TradeCommerceLeg) GetEscrowOwnerId() uint64 {
+	if x != nil {
+		return x.EscrowOwnerId
+	}
+	return 0
 }
 
 var File_proto_trade_trade_table_proto protoreflect.FileDescriptor
@@ -2200,7 +2211,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x11client_request_id\x18\x0e \x01(\tR\x0fclientRequestId\x12H\n" +
 	"\x12registered_listing\x18\x0f \x01(\v2\x19.trade.RmbConsignmentViewR\x11registeredListing\x12'\n" +
 	"\x0fdelivery_digest\x18\x10 \x01(\fR\x0edeliveryDigest\x120\n" +
-	"\x14buyer_owner_revision\x18\x11 \x01(\x04R\x12buyerOwnerRevision\"\x81\x02\n" +
+	"\x14buyer_owner_revision\x18\x11 \x01(\x04R\x12buyerOwnerRevision\"\xa9\x02\n" +
 	"\x10TradeCommerceLeg\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
@@ -2209,7 +2220,8 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x05op_id\x18\x05 \x01(\x04R\x04opId\x12*\n" +
 	"\bsnapshot\x18\x06 \x01(\v2\x0e.AssetSnapshotR\bsnapshot\x12\x18\n" +
 	"\aoutcome\x18\a \x01(\rR\aoutcome\x12#\n" +
-	"\rsuperseded_by\x18\b \x01(\tR\fsupersededBy*\xfb\x01\n" +
+	"\rsuperseded_by\x18\b \x01(\tR\fsupersededBy\x12&\n" +
+	"\x0fescrow_owner_id\x18\t \x01(\x04R\rescrowOwnerId*\xfb\x01\n" +
 	"\rListingStatus\x12\x1e\n" +
 	"\x1aLISTING_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18LISTING_STATUS_ESCROWING\x10\x01\x12\x19\n" +

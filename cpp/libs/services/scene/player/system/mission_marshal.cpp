@@ -11,7 +11,6 @@
 namespace mission_marshal {
 void Marshal(entt::entity player, QuestAllData& out) {
     out.Clear();
-    out.set_scoped_state_present(true);
     const auto* container = tlsEcs.actorRegistry.try_get<MissionsContainerComp>(player);
     if (container == nullptr) return;
     // 固定输出顺序，避免 unordered_map 迭代序让相同业务状态被误判为变更。
@@ -24,15 +23,12 @@ void Marshal(entt::entity player, QuestAllData& out) {
         data->set_scope(scope);
         data->mutable_mission_list()->CopyFrom(missions.GetMissionList());
         data->mutable_mission_list()->set_type(scope);
-        // 新存档按任务稳定 ID 保存，旧位图字符串不再写，防止生成位序被误解。
-        data->mutable_mission_list()->clear_complete_missions();
-        std::set<uint32_t> completed(missions.GetUnmappedCompletedIds().begin(), missions.GetUnmappedCompletedIds().end());
+        // 已完成按位序位图落盘,每个任务 1 位(格式见 MissionsComp::CompletedBitsForSave)。
+        data->mutable_mission_list()->set_complete_missions(missions.CompletedBitsForSave());
+        // 待领取的很少,存任务 ID;本二进制不认识的 ID 原样带回。
         std::set<uint32_t> claimable(missions.GetUnmappedClaimableIds().begin(), missions.GetUnmappedClaimableIds().end());
-        for (const auto& [id, index] : MissionBitMap) {
-            if (missions.IsComplete(static_cast<uint32_t>(id))) completed.insert(static_cast<uint32_t>(id));
+        for (const auto& [id, index] : MissionBitMap)
             if (missions.IsClaimable(static_cast<uint32_t>(id))) claimable.insert(static_cast<uint32_t>(id));
-        }
-        for (const auto id : completed) data->add_completed_mission_ids(id);
         for (const auto id : claimable) data->add_claimable_mission_ids(id);
     }
 }
@@ -41,61 +37,24 @@ void Unmarshal(entt::entity player, const QuestAllData& in) {
     if (!tlsEcs.actorRegistry.valid(player)) return;
     auto& container = tlsEcs.actorRegistry.get_or_emplace<MissionsContainerComp>(player);
     container.map.clear();
-    if (in.scoped_state_present() || !in.scopes().empty()) {
-        std::set<uint32_t> seenScopes;
-        for (const auto& scope : in.scopes()) {
-            // 重复 scope 合并保留状态；同 ID 的首份活动进度获胜，不重置成后续默认值。
-            auto& missions = container.GetOrCreate(scope.scope());
-            auto& list = missions.GetMutableMissionList();
-            // MissionListComp 本层的未知字段(新版本加的字段)随运行时列表携带,存盘时由 Marshal 的 CopyFrom 原样带回
-            // (docs/design/mixed-version-persist-field-protection.md §4.2 L3)。只取首份:与「首份获胜」同口径,
-            // 重复 scope 再并一次会让重复字段翻倍。
-            if (seenScopes.insert(scope.scope()).second) {
-                list.mutable_unknown_fields()->MergeFrom(scope.mission_list().unknown_fields());
-                if (scope.mission_list().has_activity_ledger())
-                    list.mutable_activity_ledger()->CopyFrom(scope.mission_list().activity_ledger());
-            }
-            list.set_type(scope.scope());
-            for (const auto& [id, mission] : scope.mission_list().missions())
-                list.mutable_missions()->insert({id, mission});
-            for (const auto& [id, time] : scope.mission_list().mission_begin_time())
-                list.mutable_mission_begin_time()->insert({id, time});
-            for (const auto id : scope.completed_mission_ids()) missions.RestoreCompleted(id);
-            for (const auto id : scope.claimable_mission_ids()) missions.RestoreClaimable(id);
-        }
-    } else {
-        // 兼容原占位协议：progress 只覆盖首目标，其余填 0；绝不由旧完成记录推定未领奖。
-        auto& missions = container.GetOrCreate(MissionListComp::kPlayerMission);
+    std::set<uint32_t> seenScopes;
+    for (const auto& scope : in.scopes()) {
+        // 重复 scope 合并保留状态；同 ID 的首份活动进度获胜，不重置成后续默认值。
+        auto& missions = container.GetOrCreate(scope.scope());
         auto& list = missions.GetMutableMissionList();
-        list.set_type(MissionListComp::kPlayerMission);
-        // 旧 repeated 允许同一配置 ID 重复；显式已完成/已交付优先，不能再导入待领权。
-        std::set<uint32_t> finished;
-        for (const auto& entry : in.active())
-            if (entry.state() == 3) finished.insert(entry.config_id());
-        for (const auto& entry : in.active()) {
-            if (finished.contains(entry.config_id())) {
-                missions.RestoreCompleted(entry.config_id());
-                missions.ClearClaimable(entry.config_id());
-                continue;
-            }
-            if (entry.state() == 2) {
-                missions.RestoreCompleted(entry.config_id());
-                missions.RestoreClaimable(entry.config_id());
-                list.mutable_missions()->erase(entry.config_id());
-                (*list.mutable_mission_begin_time())[entry.config_id()] = entry.accepted_at_ms();
-                continue;
-            }
-            // 首份活动进度获胜；不能把后来的副本追加成多余目标槽。
-            if (missions.IsComplete(entry.config_id()) || list.missions().find(entry.config_id()) != list.missions().end()) continue;
-            auto& active = (*list.mutable_missions())[entry.config_id()];
-            active.set_id(entry.config_id());
-            active.add_progress(entry.progress());
-            const auto [row, error] = MissionTableManager::Instance().FindByIdSilent(entry.config_id());
-            if (row != nullptr)
-                while (active.progress_size() < row->condition_id_size()) active.add_progress(0);
-            (*list.mutable_mission_begin_time())[entry.config_id()] = entry.accepted_at_ms();
+        // MissionListComp 本层的未知字段(新版本加的字段)随运行时列表携带,存盘时由 Marshal 的 CopyFrom 原样带回
+        // (docs/design/mixed-version-persist-field-protection.md §4.2 L3)。只取首份:与「首份获胜」同口径,
+        // 重复 scope 再并一次会让重复字段翻倍。
+        if (seenScopes.insert(scope.scope()).second) {
+            list.mutable_unknown_fields()->MergeFrom(scope.mission_list().unknown_fields());
+            if (scope.mission_list().has_activity_ledger())
+                list.mutable_activity_ledger()->CopyFrom(scope.mission_list().activity_ledger());
         }
-        for (const auto id : in.completed()) missions.RestoreCompleted(id);
+        list.set_type(scope.scope());
+        for (const auto& [id, mission] : scope.mission_list().missions())
+            list.mutable_missions()->insert({id, mission});
+        missions.RestoreCompletedBits(scope.mission_list().complete_missions());
+        for (const auto id : scope.claimable_mission_ids()) missions.RestoreClaimable(id);
     }
     for (auto& [scope, missions] : container.map) missions.RebuildIndexes(MissionConfig::GetSingleton());
     (void)PlayerMissionSystem::Initialize(player);

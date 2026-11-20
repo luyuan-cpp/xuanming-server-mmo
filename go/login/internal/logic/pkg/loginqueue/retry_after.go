@@ -1,6 +1,9 @@
 package loginqueue
 
-import "time"
+import (
+	"math/rand/v2"
+	"time"
+)
 
 // 排队轮询间隔按名次拉长(缺口清单第 14 条,2026-11-11 定案;规则与 redis-cluster-all-domains-20261110.md §4.3 相同,
 // 原排在第 34 条第 4 批,提前在这里落)。
@@ -27,6 +30,13 @@ const (
 	// MaxRetryAfterMs:按名次拉长的上限。
 	MaxRetryAfterMs = 30000
 )
+
+// RetryAfterWhenFull 回给「排队已满」(StatusQueueFull)的客户端的重试间隔(毫秒):MaxRetryAfterMs 再加
+// [0, MaxRetryAfterMs/3) 的随机量,即 30~40 秒。队列满了,马上再来也进不了队;随机量把同一时刻被拒的一批人摊开,
+// 免得他们在同一秒一起回来。
+func RetryAfterWhenFull() uint32 {
+	return MaxRetryAfterMs + rand.Uint32N(MaxRetryAfterMs/3)
+}
 
 // RetryAfterForRank 回给排队中的客户端的轮询间隔(毫秒)。rank 是 0 基名次(EnqueueResult.Rank、QueueState.Rank),
 // baseMs 是配置的 DefaultRetryAfterMs,admitTTL 是配置的 AdmitTTL。baseMs 为 0 时原样回 0(客户端按自己的缺省间隔)。

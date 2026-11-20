@@ -251,6 +251,21 @@ func (s *DataServiceServer) SetAccountRealName(ctx context.Context, in *dspb.Set
 	return &dspb.SetAccountRealNameResponse{RealNamePi: stored}, nil
 }
 
+// ResetAccountRealName 清掉账号行上的 pi(客服重置,§5.2 末),幂等,只认 login。
+func (s *DataServiceServer) ResetAccountRealName(ctx context.Context, in *dspb.ResetAccountRealNameRequest) (*dspb.ResetAccountRealNameResponse, error) {
+	if err := s.admitDirectory(ctx, "ResetAccountRealName", in); err != nil {
+		return nil, err
+	}
+	if s.svcCtx.AccountRealNames == nil {
+		return nil, status.Error(codes.Unavailable, "account real name store not configured")
+	}
+	had, err := s.svcCtx.AccountRealNames.ResetRealName(ctx, in.Account)
+	if err != nil {
+		return nil, directoryError(err)
+	}
+	return &dspb.ResetAccountRealNameResponse{HadRealName: had}, nil
+}
+
 // GetAccountRealName 给充值限额闸按玩家查实名,只读,只认 payment(§5.6)。
 func (s *DataServiceServer) GetAccountRealName(ctx context.Context, in *dspb.GetAccountRealNameRequest) (*dspb.GetAccountRealNameResponse, error) {
 	if s.svcCtx.AccountRealNames == nil || s.svcCtx.PaymentDirectoryAuth == nil {

@@ -230,3 +230,75 @@ def ensure_started(root, evidence_dir, plan):
             'receiptRefreshed': changed, 'backupPath': str(before_path) if changed else None,
             'signatureMigrations': compatibility,
             'targets': dict(TARGETS), 'sceneConfigurationChanged': False, 'containerRecreated': False}
+
+
+def refresh_upstreams(root, evidence_dir, preflight_fn):
+    """上游容器经正式重编替换后，在核验原桥与现役游戏合同不变的前提下前移只读桥回执。"""
+    root, evidence_dir = Path(root).resolve(), Path(evidence_dir).resolve()
+    require(evidence_dir.is_relative_to(root / 'build') and evidence_dir.is_dir(),
+            'GM RPC refresh evidence directory is invalid')
+    module, ready, raw, seal = load(root)
+    game = preflight_fn()
+    require(game.get('passed') is True and game.get('contract', {}).get('project') == module.startup.PROJECT,
+            'Game runtime preflight is not verified')
+    bridge_row = module.startup.inspect([ready['bridge']['id']])[0]
+    bridge_sig, bridge_migration = signature_compatibility(module, bridge_row, ready['bridge']['signature'])
+    bridge = module.bridge_snapshot(bridge_row)
+    require(bridge['id'] == ready['bridge']['id'] and bridge['imageId'] == ready['bridge']['imageId']
+            and bridge['signature'] == bridge_sig, 'GM RPC immutable bridge identity changed')
+    upstreams = module.upstreams()
+    require(set(upstreams) == set(ready['upstreams']), 'GM RPC upstream inventory changed')
+    for name, prior in ready['upstreams'].items():
+        actual = upstreams[name]
+        require(actual['id'] == game['contract']['ids'].get(name)
+                and actual['imageId'] == game['contract']['images'].get(name)
+                and actual['name'] == prior['name'] and actual['endpoint'] == prior['endpoint'],
+                'GM RPC upstream does not match the verified game contract: ' + name)
+    for port in (2356, 2357):
+        with socket.create_connection(('127.0.0.1', port), timeout=3):
+            pass
+    refreshed = deepcopy(ready)
+    refreshed['upstreams'], refreshed['bridge'] = upstreams, bridge
+    changed = refreshed != ready
+    before_path = evidence_dir / 'gm-rpc-ready.before.json'
+    if changed:
+        with before_path.open('xb') as output:
+            output.write(raw)
+        with (evidence_dir / 'gm-rpc-ready.before.sha256').open('xb') as output:
+            output.write(seal)
+        replacement = (json.dumps(refreshed, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+        out = root / RELATIVE
+        atomic_replace(out / 'ready.json', raw, replacement, module.protect)
+        atomic_replace(out / 'private/ready.sha256', seal, (digest(replacement) + '\n').encode('ascii'), module.protect)
+    require(module.verify_ready() == TARGETS, 'GM RPC refreshed bridge verification failed')
+    return {'passed': True, 'receiptRefreshed': changed, 'bridgeId': bridge['id'],
+            'bridgeMigration': bridge_migration, 'upstreams': {k: v['id'] for k, v in upstreams.items()},
+            'previousReceiptSha256': digest(raw), 'receiptSha256': digest(read_file(root / RELATIVE / 'ready.json')),
+            'backupPath': str(before_path) if changed else None, 'targets': dict(TARGETS)}
+
+
+def main():
+    import argparse
+    from datetime import datetime, timezone
+    import sys
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', choices=('refresh-upstreams',))
+    parser.add_argument('--execute', action='store_true')
+    args = parser.parse_args()
+    require(args.execute, 'Refresh requires the explicit --execute flag')
+    scripts = str(Path(__file__).resolve().parent)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import start_docker_debug as startup
+
+    out = startup.ROOT / 'build/verification' / ('gm-rpc-refresh-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'))
+    out.mkdir(parents=True, exist_ok=False)
+    with startup.startup_lock():
+        result = refresh_upstreams(startup.ROOT, out, startup.preflight)
+    (out / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    print('GM RPC bridge upstream receipt refreshed and verified. Evidence: ' + str(out))
+
+
+if __name__ == '__main__':
+    main()

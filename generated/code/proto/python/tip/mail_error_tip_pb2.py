@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18tip/mail_error_tip.proto*\xc3\x02\n\nmail_error\x12\x11\n\rkMail_errorOK\x10\x00\x12\x13\n\rkMailNotFound\x10\xe8\x84\x01\x12\x12\n\x0ckMailExpired\x10\xe9\x84\x01\x12\x1b\n\x15kMailRecipientBoxFull\x10\xea\x84\x01\x12\x1c\n\x16kMailAttachmentInvalid\x10\xeb\x84\x01\x12\x1a\n\x14kMailRequestConflict\x10\xec\x84\x01\x12\x1a\n\x14kMailSystemMailLimit\x10\xed\x84\x01\x12\x17\n\x11kMailClaimPending\x10\xee\x84\x01\x12\x16\n\x10kMailClaimManual\x10\xef\x84\x01\x12\x1e\n\x18kMailAttachmentProtected\x10\xf0\x84\x01\x12\x17\n\x11kMailClaimNotOpen\x10\xf1\x84\x01\x12\x1c\n\x16kMailAttachmentNotOpen\x10\xf2\x84\x01\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18tip/mail_error_tip.proto*\xe0\x02\n\nmail_error\x12\x11\n\rkMail_errorOK\x10\x00\x12\x13\n\rkMailNotFound\x10\xe8\x84\x01\x12\x12\n\x0ckMailExpired\x10\xe9\x84\x01\x12\x1b\n\x15kMailRecipientBoxFull\x10\xea\x84\x01\x12\x1c\n\x16kMailAttachmentInvalid\x10\xeb\x84\x01\x12\x1a\n\x14kMailRequestConflict\x10\xec\x84\x01\x12\x1a\n\x14kMailSystemMailLimit\x10\xed\x84\x01\x12\x17\n\x11kMailClaimPending\x10\xee\x84\x01\x12\x16\n\x10kMailClaimManual\x10\xef\x84\x01\x12\x1e\n\x18kMailAttachmentProtected\x10\xf0\x84\x01\x12\x17\n\x11kMailClaimNotOpen\x10\xf1\x84\x01\x12\x1c\n\x16kMailAttachmentNotOpen\x10\xf2\x84\x01\x12\x1b\n\x15kMailRecipientDeleted\x10\xf3\x84\x01\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_MAIL_ERROR']._serialized_start=29
-  _globals['_MAIL_ERROR']._serialized_end=352
+  _globals['_MAIL_ERROR']._serialized_end=381
 # @@protoc_insertion_point(module_scope)

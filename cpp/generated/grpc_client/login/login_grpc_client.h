@@ -95,6 +95,30 @@ void SendLoginPreGateGetZoneRoleCount(entt::registry& registry, entt::entity nod
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendLoginPreGateGetZoneRoleCountErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region LoginPreGateSubmitRealName
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kLoginPreGateSubmitRealNameGrpcPath = "/loginpb.LoginPreGate/SubmitRealName";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendLoginPreGateSubmitRealName(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::SubmitRealNameRequest& request, GrpcDone<::loginpb::SubmitRealNameResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendLoginPreGateSubmitRealNameErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region LoginPreGateRequestAccountDeletion
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kLoginPreGateRequestAccountDeletionGrpcPath = "/loginpb.LoginPreGate/RequestAccountDeletion";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendLoginPreGateRequestAccountDeletion(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::AccountDeletionRequest& request, GrpcDone<::loginpb::AccountDeletionResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendLoginPreGateRequestAccountDeletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region LoginPreGateCancelAccountDeletion
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kLoginPreGateCancelAccountDeletionGrpcPath = "/loginpb.LoginPreGate/CancelAccountDeletion";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendLoginPreGateCancelAccountDeletion(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::CancelAccountDeletionRequest& request, GrpcDone<::loginpb::AccountDeletionResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendLoginPreGateCancelAccountDeletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region LoginAdminRemovePlayersFromAccounts
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kLoginAdminRemovePlayersFromAccountsGrpcPath = "/loginpb.LoginAdmin/RemovePlayersFromAccounts";
@@ -102,6 +126,22 @@ inline constexpr std::string_view kLoginAdminRemovePlayersFromAccountsGrpcPath =
 void SendLoginAdminRemovePlayersFromAccounts(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::RemovePlayersFromAccountsRequest& request, GrpcDone<::loginpb::RemovePlayersFromAccountsResponse> done, const GrpcCallOptions& options = {});
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendLoginAdminRemovePlayersFromAccountsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region LoginAdminScheduleAccountDeletion
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kLoginAdminScheduleAccountDeletionGrpcPath = "/loginpb.LoginAdmin/ScheduleAccountDeletion";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendLoginAdminScheduleAccountDeletion(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::ScheduleAccountDeletionRequest& request, GrpcDone<::loginpb::AccountDeletionResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendLoginAdminScheduleAccountDeletionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region LoginAdminResetAccountRealName
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kLoginAdminResetAccountRealNameGrpcPath = "/loginpb.LoginAdmin/ResetAccountRealName";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendLoginAdminResetAccountRealName(entt::registry& registry, entt::entity nodeEntity, const ::loginpb::ResetAccountRealNameRequest& request, GrpcDone<::loginpb::ResetAccountRealNameResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendLoginAdminResetAccountRealNameErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetLoginCallDeadline(std::chrono::milliseconds deadline);

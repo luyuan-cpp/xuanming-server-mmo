@@ -44,7 +44,7 @@ func TestInitLoginQueue_AdmitPipelineUsesTheUnguardedClient(t *testing.T) {
 		t.Fatal("Queue.Enabled=true 必须装好排队")
 	}
 	for i := 0; i < 4; i++ {
-		if _, err := s.LoginQueue.Enqueue(ctx, 7, "acct", "dev"); err != nil {
+		if _, err := s.LoginQueue.Enqueue(ctx, 7, "", "dev"); err != nil {
 			t.Fatalf("Enqueue #%d: %v", i, err)
 		}
 	}

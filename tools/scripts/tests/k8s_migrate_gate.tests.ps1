@@ -589,48 +589,165 @@ Test-Case 'mail 的迁移门禁与 trade 同链路,只引用现役预置生产�
     Assert-Match -Text $content -Pattern 'name: mail-pdb' -Because 'PDB 随主 manifest 一起 apply'
 }
 
-# 跨 namespace 共享密钥表($script:SharedDomainServiceSecrets)是脚本级赋值:按 AST 取右边的字面量求值,不执行脚本入口。
-function Get-SharedDomainServiceSecretTable {
-    $assign = $deployAst.Find({ param($a) $a -is [Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:SharedDomainServiceSecrets' }, $true)
-    if ($null -eq $assign) { throw '部署脚本缺少 $script:SharedDomainServiceSecrets' }
-    return @(& ([scriptblock]::Create($assign.Right.Extent.Text)))
+# 托管内部密钥表($script:ManagedDomainServiceSecrets)与 Go 服务目录($GoSvcCatalogue)都是脚本级赋值:按 AST 取右边的字面量求值,不执行脚本入口。
+function Get-DeployScriptLiteral([string]$Left) {
+    $assign = $deployAst.Find({ param($a) $a -is [Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq $Left }, $false)
+    if ($null -eq $assign) { throw "部署脚本缺少 $Left" }
+    return & ([scriptblock]::Create($assign.Right.Extent.Text))
+}
+function Get-ManagedDomainServiceSecretTable { return @(Get-DeployScriptLiteral '$script:ManagedDomainServiceSecrets') }
+
+# 每把一个独特的合格值(超过 32 字节)。
+function Get-ManagedSecretFixtureValue([string]$Key) { "$Key-contract-value-0123456789abcdef" }
+
+function ConvertTo-FixtureBase64([string]$Value) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value)) }
+
+# 一组键各取独特值;-Set 改几把($null = 去掉这把)。
+function Get-ManagedSecretFixtureValues([string[]]$Keys, [hashtable]$Set = @{}) {
+    $values = @{}
+    foreach ($key in $Keys) { $values[$key] = Get-ManagedSecretFixtureValue $key }
+    foreach ($key in $Set.Keys) { if ($null -eq $Set[$key]) { $values.Remove($key) } else { $values[$key] = $Set[$key] } }
+    return $values
 }
 
-Test-Case '跨 namespace 共享密钥:每个 namespace 只读一次;缺键、过短、两把同值、与 infra 不同、Secret 不存在、读失败、base64 不合法都拒绝并点名键,报错里不带值;DryRun 不连集群' {
-    foreach ($name in @('Read-DomainServiceSecretDigests', 'Assert-SharedDomainServiceSecretsForRun', 'Build-KubectlBaseArgs', 'Get-ZoneNamespace', 'Test-GlobalGoSvcDeployed', 'Test-ZoneDbDeployed')) {
+# Read-DomainServiceSecretEntries 的结果形状;-Missing = 这个 namespace 没有这个 Secret。用前先恢复 New-DomainServiceSecretEntry。
+function New-ManagedSecretState([hashtable]$Values = @{}, [switch]$Missing) {
+    $entries = [ordered]@{}
+    if ($Missing) { return [pscustomobject]@{ Exists = $false; Entries = $entries } }
+    foreach ($key in $Values.Keys) { $entries[$key] = New-DomainServiceSecretEntry -Base64 (ConvertTo-FixtureBase64 ([string]$Values[$key])) }
+    return [pscustomobject]@{ Exists = $true; Entries = $entries }
+}
+
+Test-Case '托管内部密钥的写入计划:缺的从 infra 复制、沿用各 zone 一致的值或生成,已有的沿用;值不同、过短、两把同值、infra 没有而各 zone 不一致都记错且不带值;-Resync 改成统一值,只重启读到改写键的 Pod' {
+    foreach ($name in @('Get-ManagedDomainServiceSecretPlan', 'New-DomainServiceSecretEntry')) { Restore-ProductionFunction $name }
+    $table = Get-ManagedDomainServiceSecretTable
+    $keys = @('account-directory-payment', 'account-directory-login', 'player-store-scene')
+    $infraNs = 'mmorpg-infra'
+    $zoneA = 'mmorpg-zone-a'
+    $zoneB = 'mmorpg-zone-b'
+    $script:GeneratedCount = 0
+    $newValue = { $script:GeneratedCount++; "generated-$($script:GeneratedCount)-0123456789abcdef0123456789abcdef" }
+    $plan = {
+        param($Infra, [System.Collections.IDictionary]$Zones, [bool]$Resync = $false)
+        Get-ManagedDomainServiceSecretPlan -Table $table -Keys $keys -InfraNamespace $infraNs -Infra $Infra -Zones $Zones `
+            -ScopeZones @($zoneA) -ZoneKeys $keys -Resync $Resync -NewValue $newValue
+    }
+
+    # 全新集群:infra 与 zone 都没有这个 Secret。每把生成一次,infra 存规范值,本次部署的 zone 拿同一份;没部署的 zone 不碰。
+    $fresh = & $plan (New-ManagedSecretState -Missing) ([ordered]@{ $zoneA = (New-ManagedSecretState -Missing); $zoneB = (New-ManagedSecretState -Missing) })
+    Assert-Equal -Expected 0 -Actual $fresh.Errors.Count -Because "全新集群没有可冲突的值(实际:$($fresh.Errors -join ' | '))"
+    Assert-Equal -Expected "$infraNs,$zoneA" -Actual (@($fresh.Writes.Keys) -join ',') -Because '只写 infra 与本次部署的 zone'
+    foreach ($key in $keys) {
+        Assert-True -Condition ($fresh.Writes[$infraNs][$key] -ceq $fresh.Writes[$zoneA][$key]) -Because "$key 在 infra 与 zone 里是同一个值"
+    }
+    Assert-Equal -Expected 3 -Actual @($keys | ForEach-Object { $fresh.Writes[$infraNs][$_] } | Select-Object -Unique).Count -Because '每把各生成一个值,互不相同'
+    Assert-Equal -Expected 3 -Actual $script:GeneratedCount -Because '只生成缺的三把'
+    Assert-Equal -Expected 0 -Actual $fresh.Restarts.Count -Because '只补缺不用重启:缺键的 Pod 本来就起不来,键到了 kubelet 自己重试'
+    Assert-True -Condition (-not $fresh.Exists[$infraNs] -and -not $fresh.Exists[$zoneA]) -Because '没有这个 Secret 的 namespace 记下来,写入时 create'
+
+    # infra 齐全:zone 缺的原样复制 infra 的原文;已有的不动;没部署的 zone 缺键不补。
+    $infraFull = New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys)
+    $copy = & $plan $infraFull ([ordered]@{
+            $zoneA = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'account-directory-login' = $null }))
+            $zoneB = (New-ManagedSecretState -Missing) })
+    Assert-Equal -Expected 0 -Actual $copy.Errors.Count -Because "只缺不冲突(实际:$($copy.Errors -join ' | '))"
+    Assert-Equal -Expected $zoneA -Actual (@($copy.Writes.Keys) -join ',') -Because 'infra 齐全不写;没部署的 zone 不碰'
+    Assert-Equal -Expected 'account-directory-login' -Actual (@($copy.Writes[$zoneA].Keys) -join ',') -Because '只补缺的那把'
+    Assert-Equal -Expected (ConvertTo-FixtureBase64 (Get-ManagedSecretFixtureValue 'account-directory-login')) -Actual $copy.Writes[$zoneA]['account-directory-login'] -Because '原样复制 infra 的原文'
+
+    # infra 没有、各 zone 一致:沿用 zone 的值写进 infra,不生成。
+    $script:GeneratedCount = 0
+    $adopt = & $plan (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'player-store-scene' = $null })) ([ordered]@{
+            $zoneA = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys))
+            $zoneB = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys)) })
+    Assert-Equal -Expected 0 -Actual $adopt.Errors.Count -Because "各 zone 一致就沿用(实际:$($adopt.Errors -join ' | '))"
+    Assert-Equal -Expected (ConvertTo-FixtureBase64 (Get-ManagedSecretFixtureValue 'player-store-scene')) -Actual $adopt.Writes[$infraNs]['player-store-scene'] -Because 'infra 存的规范值就是各 zone 那个'
+    Assert-Equal -Expected 0 -Actual $script:GeneratedCount -Because '沿用不生成'
+
+    # 判不了的四种:报错点键名与 namespace,不带值;-Resync 改成统一值,只在改写了已有值的 namespace 重启读到这些键的 Pod。
+    $cases = @(
+        @{ Why = '没部署的 zone 值不同'; Infra = $infraFull
+            Zones = [ordered]@{
+                $zoneA = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys))
+                $zoneB = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'account-directory-payment' = 'zone-b-payment-value-0123456789abcdef' })) }
+            Pattern = 'account-directory-payment in namespace mmorpg-zone-b differs from the cluster-wide value'
+            Restarts = @{ 'mmorpg-zone-b' = 'data-service' } }
+        @{ Why = 'infra 那份过短'; Infra = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'account-directory-payment' = 'too-short' }))
+            Zones = [ordered]@{ $zoneA = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys)) }
+            Pattern = 'account-directory-payment in namespace mmorpg-infra is shorter than 32 bytes'
+            Restarts = @{ 'mmorpg-infra' = 'payment,payment-canary'; 'mmorpg-zone-a' = 'data-service' } }
+        @{ Why = '两把同值'; Infra = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'player-store-scene' = (Get-ManagedSecretFixtureValue 'account-directory-login') }))
+            Zones = [ordered]@{ $zoneA = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'player-store-scene' = (Get-ManagedSecretFixtureValue 'account-directory-login') })) }
+            Pattern = 'account-directory-login and player-store-scene hold the same value'
+            Restarts = @{ 'mmorpg-zone-a' = 'scene,scene-world,scene-instance,db' } }
+        @{ Why = 'infra 没有而各 zone 不一致'; Infra = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'account-directory-login' = $null }))
+            Zones = [ordered]@{
+                $zoneA = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys))
+                $zoneB = (New-ManagedSecretState -Values (Get-ManagedSecretFixtureValues $keys -Set @{ 'account-directory-login' = 'zone-b-login-value-0123456789abcdef' })) }
+            Pattern = 'account-directory-login is missing in namespace mmorpg-infra and the zone namespaces hold different or short values'
+            Restarts = @{ 'mmorpg-zone-a' = 'login,data-service'; 'mmorpg-zone-b' = 'login,data-service' } }
+    )
+    foreach ($case in $cases) {
+        $refused = & $plan $case.Infra $case.Zones
+        $errorText = $refused.Errors -join "`n"
+        Assert-Equal -Expected 1 -Actual $refused.Errors.Count -Because "$($case.Why):记一条错(实际:$errorText)"
+        Assert-Match -Text $errorText -Pattern $case.Pattern -Because "$($case.Why):点名键与 namespace"
+        $leaked = @($keys | Where-Object { $errorText.Contains((Get-ManagedSecretFixtureValue $_)) }).Count -gt 0 -or $errorText.Contains('too-short') -or $errorText.Contains('zone-b-')
+        Assert-True -Condition (-not $leaked) -Because "$($case.Why):报错里不带值"
+        $resynced = & $plan $case.Infra $case.Zones $true
+        Assert-Equal -Expected 0 -Actual $resynced.Errors.Count -Because "$($case.Why):-Resync 之后没有错(实际:$($resynced.Errors -join ' | '))"
+        Assert-Equal -Expected (@($case.Restarts.Keys | Sort-Object) -join ',') -Actual (@($resynced.Restarts.Keys | Sort-Object) -join ',') -Because "$($case.Why):只在改写了已有值的 namespace 重启"
+        foreach ($ns in $case.Restarts.Keys) {
+            Assert-Equal -Expected $case.Restarts[$ns] -Actual (@($resynced.Restarts[$ns]) -join ',') -Because "$($case.Why):$ns 只重启读到改写键的 Pod(scene 是三种场景节点,infra 的服务带上金丝雀)"
+        }
+        foreach ($key in $keys) {
+            $written = @($resynced.Writes.Keys | ForEach-Object { $resynced.Writes[$_][$key] } | Where-Object { $_ } | Select-Object -Unique)
+            Assert-True -Condition ($written.Count -le 1) -Because "$($case.Why):$key 写出去的只有一个值"
+        }
+    }
+}
+
+Test-Case '托管内部密钥的门禁:DryRun 只打一行、不连集群;真跑时一次列出全集群的这个 Secret,比 infra 与每个 <前缀>-* namespace(含本次没部署、zones.json 也没列的),别的前缀不算;判不了就在任何写操作之前拒绝且不带值,判得了才存下计划;全新集群用脚本自己的生成器' {
+    foreach ($name in @('Initialize-ManagedDomainServiceSecrets', 'Get-ManagedDomainServiceSecretPlan', 'Read-DomainServiceSecretEntries', 'New-DomainServiceSecretEntry',
+            'Get-ZoneNamespace', 'Test-GlobalGoSvcDeployed', 'Test-ZoneDbDeployed', 'Resolve-ZonesConfigPath', 'Get-ZonesFromJson')) {
         Restore-ProductionFunction $name
     }
-    $script:SharedDomainServiceSecrets = Get-SharedDomainServiceSecretTable
-    $allKeys = @($script:SharedDomainServiceSecrets | ForEach-Object { $_.Key })
-    $sceneKeys = @($script:SharedDomainServiceSecrets | Where-Object { $_.ZoneConsumers -contains 'scene' } | ForEach-Object { $_.Key })
-    Assert-Equal -Expected 'mail-producer-battle,account-directory-trade,account-directory-scene' -Actual ($sceneKeys -join ',') -Because 'scene 读的三把:只发 C++ 节点时 zone 侧也要核'
+    $script:ManagedDomainServiceSecrets = Get-ManagedDomainServiceSecretTable
+    $allKeys = @($script:ManagedDomainServiceSecrets | ForEach-Object { $_.Key })
+    $sceneKeys = @($script:ManagedDomainServiceSecrets | Where-Object { $_.ZoneConsumers -contains 'scene' } | ForEach-Object { $_.Key })
+    $infraKeys = @($script:ManagedDomainServiceSecrets | Where-Object { @($_.InfraConsumers).Count -gt 0 } | ForEach-Object { $_.Key })
+    Assert-Equal -Expected 16 -Actual $allKeys.Count -Because 'zone 工作负载引用的 16 把'
+    Assert-Equal -Expected 'mail-producer-battle,account-directory-trade,account-directory-scene,player-store-scene' -Actual ($sceneKeys -join ',') -Because 'scene 读的四把:只发 C++ 节点时也要维护'
 
+    # 线上状态:namespace → 这个 Secret 的 data(键 → base64)。Read-DomainServiceSecretEntries 经 Invoke-ClientEntryKubectl 一次列出;
+    # $script:SecretStubRawStdout 不为空时原样当作 kubectl 的输出。
     $script:SecretStubCalls = [System.Collections.Generic.List[string]]::new()
-    $script:SecretStubByNamespace = @{}
+    $script:SecretStubCluster = [ordered]@{}
     $script:SecretStubExitCode = 0
-    Set-Item -Path 'Function:script:kubectl' -Value {
-        $script:SecretStubCalls.Add(($args -join ' '))
-        $global:LASTEXITCODE = $script:SecretStubExitCode
-        $ns = [string]$args[([array]::IndexOf($args, '-n') + 1)]
-        if ($script:SecretStubByNamespace.ContainsKey($ns)) { return $script:SecretStubByNamespace[$ns] }
-        return ''
+    $script:SecretStubRawStdout = $null
+    $savedListFunction = (Get-Command -Name Invoke-ClientEntryKubectl -CommandType Function -ErrorAction SilentlyContinue).ScriptBlock
+    Set-Item -Path 'Function:script:Invoke-ClientEntryKubectl' -Value {
+        param([string[]]$KubectlArgs, [AllowEmptyString()][string]$KubeContext, [AllowEmptyString()][string]$KubeConfig, [switch]$AllowFailure, [switch]$CaptureOutput)
+        $script:SecretStubCalls.Add($KubectlArgs -join ' ')
+        $items = @(foreach ($ns in $script:SecretStubCluster.Keys) { [ordered]@{ metadata = [ordered]@{ name = 'domain-service-secrets'; namespace = $ns }; data = $script:SecretStubCluster[$ns] } })
+        $stdout = if ($null -ne $script:SecretStubRawStdout) { $script:SecretStubRawStdout } else { ConvertTo-Json -InputObject @{ items = $items } -Depth 6 -Compress }
+        $stderr = if ($script:SecretStubExitCode -ne 0) { 'Error from server (Forbidden)' } else { '' }
+        return [pscustomobject]@{ ExitCode = $script:SecretStubExitCode; Stdout = $stdout; Stderr = $stderr }
     }
-    # 每把一个独特的值(都超过 32 字节)。-Set 改几把的值($null = 删掉这个键),-Raw 直接给 base64 原文。
-    $valueOf = { param([string]$Key) "$Key-contract-value-0123456789abcdef" }
-    $secretWith = {
+    $secretData = {
         param([hashtable]$Set = @{}, [hashtable]$Raw = @{})
         $data = [ordered]@{ 'other-key' = 'eA==' }
-        foreach ($key in $allKeys) { $data[$key] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((& $valueOf $key))) }
-        foreach ($key in $Set.Keys) {
-            if ($null -eq $Set[$key]) { $data.Remove($key) }
-            else { $data[$key] = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$Set[$key])) }
-        }
+        foreach ($key in $allKeys) { $data[$key] = ConvertTo-FixtureBase64 (Get-ManagedSecretFixtureValue $key) }
+        foreach ($key in $Set.Keys) { $data[$key] = ConvertTo-FixtureBase64 ([string]$Set[$key]) }
         foreach ($key in $Raw.Keys) { $data[$key] = $Raw[$key] }
-        ConvertTo-Json -InputObject @{ data = $data } -Depth 4 -Compress
+        return $data
     }
-    $thrownBy = { param([scriptblock]$Action) try { & $Action | Out-Null; return '' } catch { return $_.Exception.Message } }
-    # Reset-MigrateFixture 与其它用例共用这些脚本变量(如 InfraNamespace、GoSvcRegistry),这里改完必须原样还原。
-    $wiringNames = @('Command', 'ZoneName', 'InfraNamespace', 'NamespacePrefix', 'SkipInfra', 'SkipGoSvc', 'GoSvcRegistry', 'DryRun')
+    $thrownBy = { param([scriptblock]$Action) try { & $Action 6>&1 | Out-Null; return '' } catch { return $_.Exception.Message } }
+    # zones.json 只决定 all-up 部署哪些 zone;比对范围看集群。
+    $zonesFile = Join-Path ([IO.Path]::GetTempPath()) ('mmorpg-managed-secrets-zones-' + [guid]::NewGuid().ToString('N') + '.json')
+    Set-Content -LiteralPath $zonesFile -Encoding utf8 -Value '{"zones":[{"name":"alpha","zoneId":101,"replicas":{"centre":1,"gate":1,"scene":1}},{"name":"beta","zoneId":102,"replicas":{"centre":1,"gate":1,"scene":1}}]}'
+    # Reset-MigrateFixture 与其它用例共用这些脚本变量,这里改完必须原样还原。
+    $wiringNames = @('Command', 'ZoneName', 'InfraNamespace', 'NamespacePrefix', 'SkipInfra', 'SkipGoSvc', 'GoSvcRegistry', 'DryRun', 'ZonesConfigPath', 'ResyncDomainServiceSecrets')
     $wiringBefore = @{}
     foreach ($v in $wiringNames) { $wiringBefore[$v] = Get-Variable -Name $v -Scope Script -ValueOnly -ErrorAction SilentlyContinue }
     $script:NamespacePrefix = 'mmorpg-zone'
@@ -639,106 +756,195 @@ Test-Case '跨 namespace 共享密钥:每个 namespace 只读一次;缺键、过
     $script:SkipInfra = $false
     $script:SkipGoSvc = $false
     $script:GoSvcRegistry = 'registry.example'
+    $script:ZonesConfigPath = $zonesFile
+    $script:ResyncDomainServiceSecrets = [switch]$false
     try {
-        # DryRun:每个 namespace 打一行将要核对什么,一次 kubectl 都不调。
+        $across = ', with one value per key across namespace mmorpg-infra and every mmorpg-zone-\* namespace'
         $script:DryRun = $true
         $script:Command = 'zone-up'
-        $printed = (Assert-SharedDomainServiceSecretsForRun 6>&1 | Out-String)
-        Assert-Match -Text $printed -Pattern ('namespace mmorpg-zone-alpha has ' + [regex]::Escape($allKeys -join ', ') + ' \(each at least 32 bytes, all different, each equal to the same key in namespace mmorpg-infra\)') `
-            -Because 'zone-up 部署 zone 的 Go 服务:全表都核,并与 infra 比'
-        Assert-NotMatch -Text $printed -Pattern 'namespace mmorpg-infra has' -Because 'zone-up 不核 infra 侧本身,那是 infra-up 的事'
+        $printed = (Initialize-ManagedDomainServiceSecrets 6>&1 | Out-String)
+        Assert-Match -Text $printed -Pattern ('in namespace\(s\) mmorpg-infra, mmorpg-zone-alpha holds ' + [regex]::Escape($allKeys -join ', ') + $across) -Because 'zone-up 部署 zone 的 Go 服务:全表,写到 infra 与本 zone'
         $script:SkipGoSvc = $true
-        $printed = (Assert-SharedDomainServiceSecretsForRun 6>&1 | Out-String)
-        Assert-Match -Text $printed -Pattern ('namespace mmorpg-zone-alpha has ' + [regex]::Escape($sceneKeys -join ', ') + ' \(') -Because '只发 C++ 节点:zone 侧只核 scene 读的三把'
-        Assert-NotMatch -Text $printed -Pattern 'account-directory-payment|role-fence-' -Because '不部署 data-service 就不核只有它读的键'
+        $printed = (Initialize-ManagedDomainServiceSecrets 6>&1 | Out-String)
+        Assert-Match -Text $printed -Pattern ('in namespace\(s\) mmorpg-infra, mmorpg-zone-alpha holds ' + [regex]::Escape($sceneKeys -join ', ') + $across) -Because '只发 C++ 节点:只维护 scene 读的四把'
         $script:SkipGoSvc = $false
+        $script:Command = 'all-up'
+        $printed = (Initialize-ManagedDomainServiceSecrets 6>&1 | Out-String)
+        Assert-Match -Text $printed -Pattern ('in namespace\(s\) mmorpg-infra, mmorpg-zone-alpha, mmorpg-zone-beta holds ' + [regex]::Escape($allKeys -join ', ') + $across) -Because 'all-up:zones.json 里每个 zone 都要有全表'
         $script:Command = 'infra-up'
-        $printed = (Assert-SharedDomainServiceSecretsForRun 6>&1 | Out-String)
-        Assert-Match -Text $printed -Pattern ('namespace mmorpg-infra has ' + [regex]::Escape($allKeys -join ', ') + ' \(each at least 32 bytes, all different\)') -Because 'infra-up 部署全局 Go 服务:核 infra 侧全表'
-        Assert-NotMatch -Text $printed -Pattern 'mmorpg-zone-' -Because 'infra-up 不核 zone'
+        $printed = (Initialize-ManagedDomainServiceSecrets 6>&1 | Out-String)
+        Assert-Match -Text $printed -Pattern ('in namespace\(s\) mmorpg-infra holds ' + [regex]::Escape($infraKeys -join ', ') + $across) -Because 'infra-up:只维护 infra 侧有用者的那些'
         $script:SkipGoSvc = $true
-        $printed = (Assert-SharedDomainServiceSecretsForRun 6>&1 | Out-String)
-        Assert-Equal -Expected '' -Actual ([string]$printed).Trim() -Because '不部署全局 Go 服务就不核 infra 侧'
+        $printed = (Initialize-ManagedDomainServiceSecrets 6>&1 | Out-String)
+        Assert-Equal -Expected '' -Actual ([string]$printed).Trim() -Because 'infra-up 不部署全局 Go 服务就什么都不维护'
         Assert-Equal -Expected 0 -Actual $script:SecretStubCalls.Count -Because 'DryRun 一次 kubectl 都不调'
+        Assert-True -Condition ($null -eq $script:ManagedDomainServiceSecretPlan) -Because 'DryRun 不存计划'
 
-        # 真跑:两侧齐、同值、互不相同就放行,infra 与 zone 各只读一次 domain-service-secrets。
+        # 真跑:infra、本 zone、zones.json 里本次没部署的 beta、zones.json 也没列的 gamma 都一致,放行;另一套环境(别的前缀)值不同也不算。
         $script:DryRun = $false
         $script:SkipGoSvc = $false
         $script:Command = 'zone-up'
-        $script:SecretStubByNamespace = @{ 'mmorpg-infra' = (& $secretWith); 'mmorpg-zone-alpha' = (& $secretWith) }
-        $message = & $thrownBy { Assert-SharedDomainServiceSecretsForRun }
-        Assert-Equal -Expected '' -Actual $message -Because '两侧都齐、同值、互不相同:放行'
-        Assert-Equal -Expected 'get secret domain-service-secrets -n mmorpg-infra --ignore-not-found -o json|get secret domain-service-secrets -n mmorpg-zone-alpha --ignore-not-found -o json' `
-            -Actual ($script:SecretStubCalls -join '|') -Because 'infra 与 zone 各只读一次这一个 Secret'
-
-        $cases = @(
-            @{ Why = 'zone 与 infra 不同'; Zone = (& $secretWith -Set @{ 'account-directory-payment' = 'zone-payment-differs-0123456789abcdef' }); Pattern = 'differs from namespace mmorpg-infra for account-directory-payment \(zone alpha\)'; Secret = 'zone-payment-differs-0123456789abcdef' }
-            @{ Why = 'zone 缺两把'; Zone = (& $secretWith -Set @{ 'role-fence-chat' = $null; 'mail-producer-battle' = $null }); Pattern = 'lacks the key\(s\) mail-producer-battle, role-fence-chat' }
-            @{ Why = '过短'; Zone = (& $secretWith -Set @{ 'role-fence-guild' = 'too-short' }); Pattern = 'role-fence-guild in namespace mmorpg-zone-alpha are shorter than 32 bytes'; Secret = 'too-short' }
-            @{ Why = '两把同值'; Zone = (& $secretWith -Set @{ 'role-fence-trade' = (& $valueOf 'account-directory-trade') }); Pattern = 'account-directory-trade and role-fence-trade in namespace mmorpg-zone-alpha hold the same value' }
-            @{ Why = 'Secret 不存在'; Zone = ''; Pattern = 'is missing in namespace mmorpg-zone-alpha' }
-            @{ Why = 'base64 不合法'; Zone = (& $secretWith -Raw @{ 'account-directory-scene' = '%%%' }); Pattern = 'account-directory-scene in namespace mmorpg-zone-alpha is not valid base64' }
-        )
-        foreach ($case in $cases) {
-            $script:SecretStubByNamespace = @{ 'mmorpg-infra' = (& $secretWith); 'mmorpg-zone-alpha' = $case.Zone }
-            $message = & $thrownBy { Assert-SharedDomainServiceSecretsForRun }
-            Assert-Match -Text $message -Pattern $case.Pattern -Because "$($case.Why)时必须拒绝并点名键"
-            Assert-Match -Text $message -Pattern 'Nothing was written for this step\.$' -Because "$($case.Why)时写明这一步什么都没写"
-            foreach ($key in $allKeys) {
-                Assert-True -Condition (-not $message.Contains((& $valueOf $key))) -Because "$($case.Why)时报错里不带 $key 的值"
-            }
-            if ($case.Secret) { Assert-True -Condition (-not $message.Contains($case.Secret)) -Because "$($case.Why)时报错里不带改过的那个值" }
+        $script:SecretStubCluster = [ordered]@{
+            'mmorpg-infra'             = (& $secretData)
+            'mmorpg-zone-alpha'        = (& $secretData)
+            'mmorpg-zone-beta'         = (& $secretData)
+            'mmorpg-zone-gamma'        = (& $secretData)
+            'mmorpg-stress-zone-alpha' = (& $secretData -Set @{ 'role-fence-guild' = 'stress-guild-value-0123456789abcdef' })
         }
+        $printed = (Initialize-ManagedDomainServiceSecrets 6>&1 | Out-String)
+        Assert-Match -Text $printed -Pattern 'agree across namespace mmorpg-infra and 3 zone namespace\(s\); to write: nothing' -Because 'alpha、beta、gamma 都比了(gamma 不在 zones.json 里),别的前缀不算'
+        Assert-Equal -Expected 'get secrets --all-namespaces --field-selector metadata.name=domain-service-secrets -o json' -Actual ($script:SecretStubCalls -join '|') -Because '一次列出全集群的这个 Secret'
+        Assert-Equal -Expected 0 -Actual $script:ManagedDomainServiceSecretPlan.Writes.Count -Because '都齐、都一致:没有要写的'
 
-        # infra 侧:部署全局 Go 服务时全表都核,缺一把就拒绝。
-        $script:Command = 'infra-up'
-        $script:SecretStubByNamespace = @{ 'mmorpg-infra' = (& $secretWith -Set @{ 'account-directory-payment' = $null }) }
-        $message = & $thrownBy { Assert-SharedDomainServiceSecretsForRun }
-        Assert-Match -Text $message -Pattern 'namespace mmorpg-infra lacks the key\(s\) account-directory-payment' -Because 'infra-up 部署 payment 之前就要有它查实名的密钥'
-
-        $script:Command = 'zone-up'
-        $script:SecretStubByNamespace = @{ 'mmorpg-infra' = (& $secretWith); 'mmorpg-zone-alpha' = (& $secretWith) }
+        # 读失败、输出不是 JSON、base64 不合法:拒绝,点名 namespace 与键,不带值。
+        $script:SecretStubCluster['mmorpg-zone-gamma'] = (& $secretData -Raw @{ 'account-directory-scene' = '%%%' })
+        $message = & $thrownBy { Initialize-ManagedDomainServiceSecrets }
+        Assert-Match -Text $message -Pattern 'The key account-directory-scene in namespace mmorpg-zone-gamma is not valid base64\. Nothing was written\.' -Because 'base64 不合法时拒绝并点名键'
+        $script:SecretStubCluster['mmorpg-zone-gamma'] = (& $secretData)
         $script:SecretStubExitCode = 1
-        $message = & $thrownBy { Assert-SharedDomainServiceSecretsForRun }
-        Assert-Match -Text $message -Pattern 'Cannot read Secret domain-service-secrets' -Because 'kubectl 读失败时拒绝'
+        $message = & $thrownBy { Initialize-ManagedDomainServiceSecrets }
+        Assert-Match -Text $message -Pattern 'Cannot list Secret domain-service-secrets across namespaces \(kubectl exit code 1\): Error from server \(Forbidden\)\. Nothing was written\.' -Because 'kubectl 读失败时拒绝:读不到不等于没有'
         $script:SecretStubExitCode = 0
+        $script:SecretStubRawStdout = '{"items":[{"metadata":{"namespace":"mmorpg-infra"},"data":{"role-fence-guild":"c2VjcmV0LXZhbHVl'
+        $message = & $thrownBy { Initialize-ManagedDomainServiceSecrets }
+        Assert-Match -Text $message -Pattern 'The kubectl output for Secret domain-service-secrets is not valid JSON\. Nothing was written\.$' -Because '输出不是 JSON 时拒绝'
+        Assert-True -Condition (-not $message.Contains('c2VjcmV0')) -Because '解析错误不带 Secret 的片段'
+        $script:SecretStubRawStdout = $null
+
+        # gamma(本次没部署、zones.json 也没列)的值不同:在任何写操作之前拒绝,点名键与 namespace、不带值,也不存计划;
+        # -ResyncDomainServiceSecrets 放行并记下改写与重启,另一套环境的 namespace 仍不碰。
+        $script:SecretStubCluster['mmorpg-zone-gamma'] = (& $secretData -Set @{ 'role-fence-guild' = 'gamma-guild-value-0123456789abcdef' })
+        $message = & $thrownBy { Initialize-ManagedDomainServiceSecrets }
+        Assert-Match -Text $message -Pattern 'domain-service-secrets check failed \(1 problem\(s\)\); nothing was written\. Rerun with -ResyncDomainServiceSecrets' -Because '在任何写操作之前拒绝,并写明怎么修'
+        Assert-Match -Text $message -Pattern 'role-fence-guild in namespace mmorpg-zone-gamma differs' -Because '点名键与 namespace'
+        Assert-True -Condition (-not $message.Contains('gamma-guild-value') -and -not $message.Contains((Get-ManagedSecretFixtureValue 'role-fence-guild'))) -Because '报错里不带值'
+        Assert-True -Condition ($null -eq $script:ManagedDomainServiceSecretPlan) -Because '拒绝时不存计划,后面的写入步骤什么都不做'
+        $script:ResyncDomainServiceSecrets = [switch]$true
+        $message = & $thrownBy { Initialize-ManagedDomainServiceSecrets }
+        Assert-Equal -Expected '' -Actual $message -Because '-ResyncDomainServiceSecrets 放行'
+        Assert-Equal -Expected 'mmorpg-zone-gamma' -Actual (@($script:ManagedDomainServiceSecretPlan.Writes.Keys) -join ',') -Because '只改 gamma;另一套环境的 namespace 不碰'
+        Assert-Equal -Expected 'role-fence-guild' -Actual (@($script:ManagedDomainServiceSecretPlan.Writes['mmorpg-zone-gamma'].Keys) -join ',') -Because 'gamma 只改那一把'
+        Assert-Equal -Expected 'data-service' -Actual (@($script:ManagedDomainServiceSecretPlan.Restarts['mmorpg-zone-gamma']) -join ',') -Because '改写了 role-fence-guild,重启读它的 data-service'
+        $script:ResyncDomainServiceSecrets = [switch]$false
+
+        # 全新集群:哪个 namespace 都没有这个 Secret。用部署脚本自己的生成器:每把 32 字节随机数的 64 位小写十六进制,互不相同。
+        $script:SecretStubCluster = [ordered]@{}
+        $message = & $thrownBy { Initialize-ManagedDomainServiceSecrets }
+        Assert-Equal -Expected '' -Actual $message -Because '全新集群:放行并生成'
+        $fresh = $script:ManagedDomainServiceSecretPlan
+        Assert-Equal -Expected 'mmorpg-infra,mmorpg-zone-alpha' -Actual (@($fresh.Writes.Keys | Sort-Object) -join ',') -Because '写 infra 与本次部署的 zone'
+        $generated = @($allKeys | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($fresh.Writes['mmorpg-infra'][$_])) })
+        Assert-Equal -Expected 16 -Actual @($generated | Where-Object { $_ -cmatch '^[0-9a-f]{64}$' }).Count -Because '生成的是 32 字节随机数的 64 位小写十六进制'
+        Assert-Equal -Expected 16 -Actual @($generated | Select-Object -Unique).Count -Because '每把各不相同'
+        Assert-True -Condition (-not $fresh.Exists['mmorpg-infra'] -and -not $fresh.Exists['mmorpg-zone-alpha']) -Because '没有这个 Secret:写入时 create'
     }
     finally {
-        Remove-Item -Path 'Function:script:kubectl' -ErrorAction SilentlyContinue
+        if ($savedListFunction) { Set-Item -Path 'Function:script:Invoke-ClientEntryKubectl' -Value $savedListFunction } else { Remove-Item -Path 'Function:script:Invoke-ClientEntryKubectl' -ErrorAction SilentlyContinue }
+        Remove-Item -LiteralPath $zonesFile -Force -ErrorAction SilentlyContinue
+        $script:ManagedDomainServiceSecretPlan = $null
+        $script:SecretStubRawStdout = $null
         foreach ($v in $wiringNames) { Set-Variable -Name $v -Scope Script -Value $wiringBefore[$v] }
     }
-
-    # 写路径门禁早于 switch ($Command):任何集群写操作之前核对。
-    $text = ([IO.File]::ReadAllText($script:DeployScript)) -replace "`r`n", "`n"
-    $gateAt = $text.IndexOf("`n`tAssert-SharedDomainServiceSecretsForRun`n", [StringComparison]::Ordinal)
-    $switchAt = $text.IndexOf("`nswitch (`$Command) {", [StringComparison]::Ordinal)
-    Assert-True -Condition ($gateAt -gt 0 -and $switchAt -gt $gateAt) -Because '共享密钥门禁在 switch ($Command) 之前'
 }
 
-Test-Case '跨 namespace 共享密钥表与清单一致:zone 侧与 infra 侧都以 optional: false 引用的键恰好是表里的键,每行的两侧用法与清单逐个对上' {
+Test-Case '托管内部密钥的写入:已有 Secret 用 merge patch 只增改计划里的键(值经临时文件,用完即删),没有的先建 namespace 再 create;改写过的 namespace 删读这些键的 Pod;DryRun 与没有计划时什么都不做' {
+    Restore-ProductionFunction 'Sync-ManagedDomainServiceSecrets'
+    $script:SyncKubectl = [System.Collections.Generic.List[string]]::new()
+    $script:SyncPatchFiles = [System.Collections.Generic.List[string]]::new()
+    $script:SyncPatchContents = [System.Collections.Generic.List[string]]::new()
+    $script:SyncCreates = [System.Collections.Generic.List[object]]::new()
+    $script:SyncNamespaces = [System.Collections.Generic.List[string]]::new()
+    $stubbed = @('Invoke-Kubectl', 'Invoke-KubectlWithInputFile', 'Ensure-Namespace')
+    $saved = @{}
+    foreach ($name in $stubbed) { $saved[$name] = (Get-Command -Name $name -CommandType Function -ErrorAction SilentlyContinue).ScriptBlock }
+    Set-Item -Path 'Function:script:Invoke-Kubectl' -Value {
+        param([string[]]$Args, [switch]$AllowFailure)
+        $script:SyncKubectl.Add($Args -join ' ')
+        $at = [array]::IndexOf($Args, '--patch-file')
+        if ($at -ge 0) {
+            $script:SyncPatchFiles.Add($Args[$at + 1])
+            $script:SyncPatchContents.Add([IO.File]::ReadAllText($Args[$at + 1]))
+        }
+    }
+    Set-Item -Path 'Function:script:Invoke-KubectlWithInputFile' -Value {
+        param([string[]]$Args, [string]$InputContent)
+        $script:SyncCreates.Add([pscustomobject]@{ Args = ($Args -join ' '); Content = $InputContent })
+    }
+    Set-Item -Path 'Function:script:Ensure-Namespace' -Value { param([string]$Namespace) $script:SyncNamespaces.Add($Namespace) }
+    $savedDryRun = $script:DryRun
+    try {
+        $script:ManagedDomainServiceSecretPlan = [pscustomobject]@{
+            Errors   = [string[]]@()
+            Writes   = [ordered]@{ 'mmorpg-infra' = [ordered]@{ 'account-directory-payment' = 'cGF5bWVudA==' }; 'mmorpg-zone-a' = [ordered]@{ 'account-directory-login' = 'bG9naW4='; 'role-fence-db' = 'ZGI=' } }
+            Restarts = [ordered]@{ 'mmorpg-zone-a' = [System.Collections.Generic.List[string]]@('login', 'data-service') }
+            Exists   = [ordered]@{ 'mmorpg-infra' = $true; 'mmorpg-zone-a' = $false }
+        }
+        $script:DryRun = $true
+        Sync-ManagedDomainServiceSecrets 6>&1 | Out-Null
+        Assert-Equal -Expected 0 -Actual ($script:SyncKubectl.Count + $script:SyncCreates.Count + $script:SyncNamespaces.Count) -Because 'DryRun 什么都不写(门禁那一步已经打过说明)'
+
+        $script:DryRun = $false
+        Sync-ManagedDomainServiceSecrets 6>&1 | Out-Null
+        Assert-Match -Text $script:SyncKubectl[0] -Pattern '^patch secret domain-service-secrets -n mmorpg-infra --type merge --patch-file .+$' -Because '已有的 Secret 用 merge patch:只增改计划里的键,不删别的键'
+        Assert-Equal -Expected '{"data":{"account-directory-payment":"cGF5bWVudA=="}}' -Actual $script:SyncPatchContents[0] -Because 'patch 里只有计划里的键'
+        Assert-True -Condition (-not (Test-Path -LiteralPath $script:SyncPatchFiles[0])) -Because '临时文件用完即删'
+        Assert-Equal -Expected 'mmorpg-zone-a' -Actual ($script:SyncNamespaces -join ',') -Because '没有 Secret 的 namespace 先建 namespace(新 zone 第一次部署)'
+        Assert-Equal -Expected 'create -n mmorpg-zone-a' -Actual $script:SyncCreates[0].Args -Because '没有的 Secret 用 create'
+        foreach ($line in @('kind: Secret', '  name: domain-service-secrets', '  account-directory-login: bG9naW4=', '  role-fence-db: ZGI=')) {
+            Assert-True -Condition ($script:SyncCreates[0].Content -split "`n" -ccontains $line) -Because "create 的 Secret 里有这一行:$line"
+        }
+        Assert-Equal -Expected 'delete pod -n mmorpg-zone-a -l app in (login,data-service) --wait=false' -Actual $script:SyncKubectl[$script:SyncKubectl.Count - 1] -Because '改写过的 namespace 删读这些键的 Pod,由控制器重建'
+        Assert-Equal -Expected 2 -Actual $script:SyncKubectl.Count -Because '一个 patch、一个删 Pod'
+
+        $script:SyncKubectl.Clear()
+        $script:ManagedDomainServiceSecretPlan = $null
+        Sync-ManagedDomainServiceSecrets 6>&1 | Out-Null
+        Assert-Equal -Expected 0 -Actual $script:SyncKubectl.Count -Because '没有计划(本次不维护任何键,或门禁拒绝了)就什么都不做'
+    }
+    finally {
+        foreach ($name in $stubbed) {
+            if ($saved[$name]) { Set-Item -Path "Function:script:$name" -Value $saved[$name] } else { Remove-Item -Path "Function:script:$name" -ErrorAction SilentlyContinue }
+        }
+        $script:ManagedDomainServiceSecretPlan = $null
+        $script:DryRun = $savedDryRun
+    }
+}
+
+Test-Case '托管内部密钥的接入位置:只读门禁在写路径入口;写入是门禁块的最后一步(所有只读门禁之后),紧接着才进 switch ($Command)' {
+    $text = ([IO.File]::ReadAllText($script:DeployScript)) -replace "`r`n", "`n"
+    $gateAt = $text.IndexOf("`n`tInitialize-ManagedDomainServiceSecrets`n", [StringComparison]::Ordinal)
+    $syncToken = "`n`tSync-ManagedDomainServiceSecrets"
+    $syncAt = $text.IndexOf($syncToken + "`n", [StringComparison]::Ordinal)
+    $switchAt = $text.IndexOf("`nswitch (`$Command) {", [StringComparison]::Ordinal)
+    Assert-True -Condition ($gateAt -gt 0 -and $syncAt -gt $gateAt -and $switchAt -gt $syncAt) -Because '门禁 → 写入 → switch'
+    Assert-Equal -Expected "`n}`n" -Actual $text.Substring($syncAt + $syncToken.Length, $switchAt - $syncAt - $syncToken.Length) -Because '写入是门禁块的最后一条语句:在它之后再没有只读门禁,也没有别的写操作抢在它前面'
+}
+
+Test-Case '托管内部密钥表与清单一致:恰好是 zone 工作负载以 optional: false 引用的全部键,每行的两侧用法与清单逐个对上' {
     Restore-ProductionFunction 'Get-SceneAccountDirectoryEnvLines'
-    $table = Get-SharedDomainServiceSecretTable
+    $table = Get-ManagedDomainServiceSecretTable
+    $catalogue = Get-DeployScriptLiteral '$GoSvcCatalogue'
     $refsOf = {
         param([string]$Text)
         @([regex]::Matches($Text, 'secretKeyRef: \{name: domain-service-secrets, key: (?<k>[a-z0-9-]+), optional: false\}') | ForEach-Object { $_.Groups['k'].Value })
     }
     $manifestDir = Join-Path $script:RepoRoot 'deploy/k8s/manifests/go-svc'
-    # zone 侧:随 zone 部署的 Go 服务与 C++ scene(scene 的这几行由部署脚本生成,不在清单文件里);infra 侧:全局池 Go 服务。
+    # 按 Go 服务目录分两侧:不带 Global 的随 zone 部署,再加 C++ scene(它的这几行由部署脚本生成,不在清单文件里);带 Global 的是全局池,在 infra。
     $zoneRefs = [ordered]@{}
-    foreach ($svc in @('data-service', 'db', 'login', 'scene-manager', 'player-locator')) { $zoneRefs[$svc] = @(& $refsOf ([IO.File]::ReadAllText((Join-Path $manifestDir "$svc.yaml")))) }
-    $zoneRefs['scene'] = @(& $refsOf ((Get-SceneAccountDirectoryEnvLines -Indent '') -join "`n"))
     $infraRefs = [ordered]@{}
-    foreach ($svc in @('chat', 'client-rpc-router', 'friend', 'guild', 'mail', 'match', 'payment', 'player-inbox', 'rank', 'trade')) {
-        $infraRefs[$svc] = @(& $refsOf ([IO.File]::ReadAllText((Join-Path $manifestDir "$svc.yaml"))))
+    foreach ($svc in @($catalogue.Keys | Sort-Object)) {
+        $refs = @(& $refsOf ([IO.File]::ReadAllText((Join-Path $manifestDir $catalogue[$svc].Manifest))))
+        if ($catalogue[$svc].Global) { $infraRefs[$svc] = $refs } else { $zoneRefs[$svc] = $refs }
     }
+    $zoneRefs['scene'] = @(& $refsOf ((Get-SceneAccountDirectoryEnvLines -Indent '') -join "`n"))
+    Assert-True -Condition ($zoneRefs.Contains('data-service') -and $infraRefs.Contains('payment')) -Because '服务目录取到了两侧的服务'
     $zoneKeys = @($zoneRefs.Values | ForEach-Object { $_ } | Sort-Object -Unique)
-    $infraKeys = @($infraRefs.Values | ForEach-Object { $_ } | Sort-Object -Unique)
-    $shared = @($zoneKeys | Where-Object { $infraKeys -contains $_ } | Sort-Object)
-    Assert-Equal -Expected ($shared -join ',') -Actual (@($table | ForEach-Object { $_.Key } | Sort-Object) -join ',') -Because '两侧都引用的键都要在表里(否则写前不核),表里也不该有只在一侧用的键'
+    Assert-Equal -Expected ($zoneKeys -join ',') -Actual (@($table | ForEach-Object { $_.Key } | Sort-Object) -join ',') `
+        -Because 'zone 有多份副本、又被全局池跨 zone 调用:zone 引用的每把都要由部署维护;只在 infra 用的只有一份,不在表里'
     foreach ($row in $table) {
         $zoneUsers = @($zoneRefs.Keys | Where-Object { $zoneRefs[$_] -contains $row.Key } | Sort-Object)
         $infraUsers = @($infraRefs.Keys | Where-Object { $infraRefs[$_] -contains $row.Key } | Sort-Object)
-        Assert-Equal -Expected ($zoneUsers -join ',') -Actual (@($row.ZoneConsumers | Sort-Object) -join ',') -Because "$($row.Key) 的 zone 侧用法与清单一致(决定只发 C++ 节点时核不核)"
+        Assert-Equal -Expected ($zoneUsers -join ',') -Actual (@($row.ZoneConsumers | Sort-Object) -join ',') -Because "$($row.Key) 的 zone 侧用法与清单一致(决定只发 C++ 节点时维护不维护、resync 时重启谁)"
         Assert-Equal -Expected ($infraUsers -join ',') -Actual (@($row.InfraConsumers | Sort-Object) -join ',') -Because "$($row.Key) 的 infra 侧用法与清单一致"
     }
 }

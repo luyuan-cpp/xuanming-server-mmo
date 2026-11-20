@@ -68,7 +68,19 @@
         "RoleNameSensitive": 2034,
         "LoginAuthProviderUnavailable": 2035,
         "LoginTokenIssueFailed": 2036,
-        "LoginZoneCreateRoleClosed": 2037
+        "LoginZoneCreateRoleClosed": 2037,
+        "LoginAccountDeletionPending": 2038,
+        "LoginAccountDeletionBlocked": 2039,
+        "LoginAccountDeletionInProgress": 2040,
+        "LoginAccountDeletionReauthRequired": 2041,
+        "LoginRealNameRequired": 2042,
+        "LoginRealNameInvalid": 2043,
+        "LoginRealNamePending": 2044,
+        "LoginRealNameTooManyAttempts": 2045,
+        "LoginRealNameAlreadyBound": 2046,
+        "LoginRealNameServiceUnavailable": 2047,
+        "LoginMinorNotInPlayTime": 2048,
+        "LoginMinorPlayTimeOver": 2049
       }
     },
     "scene_error": {
@@ -235,7 +247,8 @@
       "base": 12000,
       "width": 1000,
       "ids": {
-        "RewardAlreadyClaimed": 12000
+        "RewardAlreadyClaimed": 12000,
+        "RewardPeriodEnded": 12001
       }
     },
     "cross_server_error": {
@@ -495,7 +508,8 @@
         "MailClaimManual": 17007,
         "MailAttachmentProtected": 17008,
         "MailClaimNotOpen": 17009,
-        "MailAttachmentNotOpen": 17010
+        "MailAttachmentNotOpen": 17010,
+        "MailRecipientDeleted": 17011
       }
     },
     "rank_error": {
@@ -524,6 +538,36 @@
         "MysteryMerchantInvalidCount": 30009,
         "MysteryMerchantItemBlocked": 30010,
         "MysteryMerchantInternalError": 30011
+      }
+    },
+    "payment_error": {
+      "base": 31000,
+      "width": 1000,
+      "ids": {
+        "PaymentChannelUnavailable": 31000,
+        "PaymentOrderNotFound": 31001,
+        "PaymentOrderNotPayable": 31002,
+        "PaymentOrderExpired": 31003,
+        "PaymentChannelMismatch": 31004,
+        "PaymentCurrencyUnsupported": 31005,
+        "PaymentBusy": 31006,
+        "PaymentLoginRequired": 31007,
+        "PaymentRealNameRequired": 31008,
+        "PaymentMinorNotAllowed": 31009,
+        "PaymentMinorSingleLimit": 31010,
+        "PaymentMinorDailyLimit": 31011,
+        "PaymentMinorMonthlyLimit": 31012
+      }
+    },
+    "afk_pass_error": {
+      "base": 32000,
+      "width": 1000,
+      "ids": {
+        "AfkPassPriceChanged": 32000,
+        "AfkPassCurrencyNotEnough": 32001,
+        "AfkPassStackLimit": 32002,
+        "AfkPassFrozen": 32003,
+        "AfkPassUnavailable": 32004
       }
     }
   },

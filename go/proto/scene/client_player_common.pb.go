@@ -83,8 +83,11 @@ type RedirectToGateNotify struct {
 	TokenPayload   []byte                 `protobuf:"bytes,3,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`       // serialized GateTokenPayload for target gate
 	TokenSignature []byte                 `protobuf:"bytes,4,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"` // HMAC-SHA256 signature
 	TokenDeadline  int64                  `protobuf:"varint,5,opt,name=token_deadline,json=tokenDeadline,proto3" json:"token_deadline,omitempty"`   // unix seconds
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 目标 gate 的 WebSocket 地址:小游戏客户端连它,原生客户端仍连 target_ip / target_port;空串 = 目标 gate 不接小游戏
+	// (docs/design/minigame-websocket-gate.md W7)。
+	TargetWsUrl   string `protobuf:"bytes,6,opt,name=target_ws_url,json=targetWsUrl,proto3" json:"target_ws_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RedirectToGateNotify) Reset() {
@@ -152,6 +155,166 @@ func (x *RedirectToGateNotify) GetTokenDeadline() int64 {
 	return 0
 }
 
+func (x *RedirectToGateNotify) GetTargetWsUrl() string {
+	if x != nil {
+		return x.TargetWsUrl
+	}
+	return ""
+}
+
+// 角色改名(docs/design/rename-and-content-safety.md §4.3)。应答只表示「已受理」或「立即拒绝」:
+// error_message 为空 = 已受理,最终结局经 NotifyPlayerRenamed 推送(名字要送内容安全、再到全服名字表登记,等不了一个回包)。
+// 需要背包里有改名卡(配表 RoleNameRule.rename_item_id);受理后这张卡被占住,改名成功才扣,不成原样还给玩家。
+type RenamePlayerRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenamePlayerRequest) Reset() {
+	*x = RenamePlayerRequest{}
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenamePlayerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenamePlayerRequest) ProtoMessage() {}
+
+func (x *RenamePlayerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenamePlayerRequest.ProtoReflect.Descriptor instead.
+func (*RenamePlayerRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_client_player_common_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RenamePlayerRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type RenamePlayerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenamePlayerResponse) Reset() {
+	*x = RenamePlayerResponse{}
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenamePlayerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenamePlayerResponse) ProtoMessage() {}
+
+func (x *RenamePlayerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenamePlayerResponse.ProtoReflect.Descriptor instead.
+func (*RenamePlayerResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_client_player_common_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *RenamePlayerResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+// 改名的最终结局。error_message 为空 = 成功,name 是新名(规范化后的写法),next_rename_time 是最早可以再改的时刻(Unix 秒)。
+// 失败时 error_message 是原因,name 为空;改名卡已经解除占用。
+type PlayerRenamedNotify struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage   *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	NextRenameTime uint64                 `protobuf:"varint,3,opt,name=next_rename_time,json=nextRenameTime,proto3" json:"next_rename_time,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PlayerRenamedNotify) Reset() {
+	*x = PlayerRenamedNotify{}
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerRenamedNotify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerRenamedNotify) ProtoMessage() {}
+
+func (x *PlayerRenamedNotify) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerRenamedNotify.ProtoReflect.Descriptor instead.
+func (*PlayerRenamedNotify) Descriptor() ([]byte, []int) {
+	return file_proto_scene_client_player_common_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PlayerRenamedNotify) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *PlayerRenamedNotify) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PlayerRenamedNotify) GetNextRenameTime() uint64 {
+	if x != nil {
+		return x.NextRenameTime
+	}
+	return 0
+}
+
 var File_proto_scene_client_player_common_proto protoreflect.FileDescriptor
 
 const file_proto_scene_client_player_common_proto_rawDesc = "" +
@@ -159,19 +322,30 @@ const file_proto_scene_client_player_common_proto_rawDesc = "" +
 	"&proto/scene/client_player_common.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\"\\\n" +
 	"\x15GameKickPlayerRequest\x12'\n" +
 	"\x06reason\x18\x01 \x01(\v2\x0f.TipInfoMessageR\x06reason\x12\x1a\n" +
-	"\boperator\x18\x02 \x01(\tR\boperator\"\xc9\x01\n" +
+	"\boperator\x18\x02 \x01(\tR\boperator\"\xed\x01\n" +
 	"\x14RedirectToGateNotify\x12\x1b\n" +
 	"\ttarget_ip\x18\x01 \x01(\tR\btargetIp\x12\x1f\n" +
 	"\vtarget_port\x18\x02 \x01(\rR\n" +
 	"targetPort\x12#\n" +
 	"\rtoken_payload\x18\x03 \x01(\fR\ftokenPayload\x12'\n" +
 	"\x0ftoken_signature\x18\x04 \x01(\fR\x0etokenSignature\x12%\n" +
-	"\x0etoken_deadline\x18\x05 \x01(\x03R\rtokenDeadline2\xc5\x01\n" +
+	"\x0etoken_deadline\x18\x05 \x01(\x03R\rtokenDeadline\x12\"\n" +
+	"\rtarget_ws_url\x18\x06 \x01(\tR\vtargetWsUrl\")\n" +
+	"\x13RenamePlayerRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"L\n" +
+	"\x14RenamePlayerResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"\x89\x01\n" +
+	"\x13PlayerRenamedNotify\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12(\n" +
+	"\x10next_rename_time\x18\x03 \x01(\x04R\x0enextRenameTime2\xbe\x02\n" +
 	"\x17SceneClientPlayerCommon\x121\n" +
 	"\x0fSendTipToClient\x12\x0f.TipInfoMessage\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x123\n" +
 	"\n" +
 	"KickPlayer\x12\x16.GameKickPlayerRequest\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x126\n" +
-	"\x0eRedirectToGate\x12\x15.RedirectToGateNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\n" +
+	"\x0eRedirectToGate\x12\x15.RedirectToGateNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12;\n" +
+	"\fRenamePlayer\x12\x14.RenamePlayerRequest\x1a\x15.RenamePlayerResponse\x12:\n" +
+	"\x13NotifyPlayerRenamed\x12\x14.PlayerRenamedNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -186,26 +360,35 @@ func file_proto_scene_client_player_common_proto_rawDescGZIP() []byte {
 	return file_proto_scene_client_player_common_proto_rawDescData
 }
 
-var file_proto_scene_client_player_common_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_scene_client_player_common_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_scene_client_player_common_proto_goTypes = []any{
 	(*GameKickPlayerRequest)(nil), // 0: GameKickPlayerRequest
 	(*RedirectToGateNotify)(nil),  // 1: RedirectToGateNotify
-	(*base.TipInfoMessage)(nil),   // 2: TipInfoMessage
-	(*base.Empty)(nil),            // 3: Empty
+	(*RenamePlayerRequest)(nil),   // 2: RenamePlayerRequest
+	(*RenamePlayerResponse)(nil),  // 3: RenamePlayerResponse
+	(*PlayerRenamedNotify)(nil),   // 4: PlayerRenamedNotify
+	(*base.TipInfoMessage)(nil),   // 5: TipInfoMessage
+	(*base.Empty)(nil),            // 6: Empty
 }
 var file_proto_scene_client_player_common_proto_depIdxs = []int32{
-	2, // 0: GameKickPlayerRequest.reason:type_name -> TipInfoMessage
-	2, // 1: SceneClientPlayerCommon.SendTipToClient:input_type -> TipInfoMessage
-	0, // 2: SceneClientPlayerCommon.KickPlayer:input_type -> GameKickPlayerRequest
-	1, // 3: SceneClientPlayerCommon.RedirectToGate:input_type -> RedirectToGateNotify
-	3, // 4: SceneClientPlayerCommon.SendTipToClient:output_type -> Empty
-	3, // 5: SceneClientPlayerCommon.KickPlayer:output_type -> Empty
-	3, // 6: SceneClientPlayerCommon.RedirectToGate:output_type -> Empty
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	5, // 0: GameKickPlayerRequest.reason:type_name -> TipInfoMessage
+	5, // 1: RenamePlayerResponse.error_message:type_name -> TipInfoMessage
+	5, // 2: PlayerRenamedNotify.error_message:type_name -> TipInfoMessage
+	5, // 3: SceneClientPlayerCommon.SendTipToClient:input_type -> TipInfoMessage
+	0, // 4: SceneClientPlayerCommon.KickPlayer:input_type -> GameKickPlayerRequest
+	1, // 5: SceneClientPlayerCommon.RedirectToGate:input_type -> RedirectToGateNotify
+	2, // 6: SceneClientPlayerCommon.RenamePlayer:input_type -> RenamePlayerRequest
+	4, // 7: SceneClientPlayerCommon.NotifyPlayerRenamed:input_type -> PlayerRenamedNotify
+	6, // 8: SceneClientPlayerCommon.SendTipToClient:output_type -> Empty
+	6, // 9: SceneClientPlayerCommon.KickPlayer:output_type -> Empty
+	6, // 10: SceneClientPlayerCommon.RedirectToGate:output_type -> Empty
+	3, // 11: SceneClientPlayerCommon.RenamePlayer:output_type -> RenamePlayerResponse
+	6, // 12: SceneClientPlayerCommon.NotifyPlayerRenamed:output_type -> Empty
+	8, // [8:13] is the sub-list for method output_type
+	3, // [3:8] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_client_player_common_proto_init() }
@@ -219,7 +402,7 @@ func file_proto_scene_client_player_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_client_player_common_proto_rawDesc), len(file_proto_scene_client_player_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

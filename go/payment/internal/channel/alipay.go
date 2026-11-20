@@ -190,7 +190,7 @@ func (a *Alipay) call(ctx context.Context, method string, biz any) ([]byte, erro
 		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
-	response, err := a.cfg.HTTP.Do(request)
+	response, err := send(a.cfg.HTTP, request)
 	if err != nil {
 		return nil, err
 	}

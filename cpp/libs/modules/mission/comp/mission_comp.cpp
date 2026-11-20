@@ -25,12 +25,32 @@ std::size_t MissionsComp::CanGetRewardSize() const
 void MissionsComp::AbandonMission(uint32_t missionId)
 {
     SetBit(MissionBitMap, completedMissions_, missionId, false);
-    unmappedCompletedIds_.erase(missionId);
 }
 
 void MissionsComp::RestoreCompleted(uint32_t missionId)
 {
-    if (!SetBit(MissionBitMap, completedMissions_, missionId)) unmappedCompletedIds_.insert(missionId);
+    SetBit(MissionBitMap, completedMissions_, missionId);
+}
+
+std::string MissionsComp::CompletedBitsForSave() const
+{
+    // 从带回的未知位起步:它是 SetPackedBit 写出来的,末尾没有全 0 字节;下面也只在置位时加长。
+    std::string bits = unknownCompletedBits_;
+    for (std::size_t index = 0; index < completedMissions_.size(); ++index)
+    {
+        if (completedMissions_[index]) SetPackedBit(bits, index);
+    }
+    return bits;
+}
+
+void MissionsComp::RestoreCompletedBits(std::string_view bits)
+{
+    for (std::size_t index = 0; index < bits.size() * 8; ++index)
+    {
+        if (!TestPackedBit(bits, index)) continue;
+        if (index < completedMissions_.size()) completedMissions_.set(index);
+        else SetPackedBit(unknownCompletedBits_, index);
+    }
 }
 
 void MissionsComp::RestoreClaimable(uint32_t missionId)

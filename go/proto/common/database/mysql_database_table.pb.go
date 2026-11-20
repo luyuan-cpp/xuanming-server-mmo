@@ -453,7 +453,7 @@ func (x *PlayerCentreDatabase) GetSceneInfo() *component.PlayerSceneContextComp 
 // (docs/design/player-save-direct-commit.md §1.1)。每个字段都用 OptionPersistGroup 声明属于哪一行,
 // 取值是 playerstore.PlayerStoreKind 的数值:
 //
-//	9 = LOCATION(位置,只顺带写)  6 = CHARACTER(等级、基础属性与当前血蓝)  7 = WALLET(货币与账本)
+//	9 = LOCATION(位置,只顺带写)  6 = CHARACTER(等级、基础属性与当前血蓝、技能冷却、下线保留的 Buff)  7 = WALLET(货币与账本)
 //	8 = BAG(背包)  3 = GROWTH(技能、加点、宠物、任务)  4 = PROFILE(职业、注册时间、身份等小而少变的字段)
 //	0 = 元数据,不进片段。
 //
@@ -546,9 +546,17 @@ type PlayerDatabase struct {
 	// inbox_ledger 一样放 WALLET 行。正常为空,只在改投与寄出时变。
 	// 加载时无条件挂组件、存盘时缺它整份拒存(持久数据,ecs-component-access-rules.md)。
 	// 取下一个空闲号 27;下一个新字段从 28 起。
-	MailOutbox    *component.PlayerMailOutboxComp `protobuf:"bytes,27,opt,name=mail_outbox,json=mailOutbox,proto3" json:"mail_outbox,omitempty"` // WALLET
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MailOutbox *component.PlayerMailOutboxComp `protobuf:"bytes,27,opt,name=mail_outbox,json=mailOutbox,proto3" json:"mail_outbox,omitempty"` // WALLET
+	// 实时技能冷却与下线保留的 Buff(docs/design/realtime-cooldown-buff-persistence.md):换节点、跨 zone、重登都从存档重建实体,
+	// 不存就会丢,玩家能靠重登清掉长冷却。两者都按 UTC 毫秒的绝对时刻存,离线期间照常走。
+	// 冷却是运行时组件 CooldownTimeListComp 原样(按冷却组覆盖写,条数不超过冷却组数,到点的记录不删);
+	// Buff 只存 Buff 表 keep_on_logout = 1 的条目,按 buff_id 排序写出。
+	// 按需状态:旧存档没有这两个字段 = 没有冷却、没有要恢复的 Buff,合法;存盘缺组件写空,不补建。
+	// 放 CHARACTER 行:与当前血蓝一样,是战斗中会变的小数据。取下一个空闲号 28、29;下一个新字段从 30 起。
+	SkillCooldowns *component.CooldownTimeListComp `protobuf:"bytes,28,opt,name=skill_cooldowns,json=skillCooldowns,proto3" json:"skill_cooldowns,omitempty"` // CHARACTER
+	SavedBuffs     []*component.SavedBuffComp      `protobuf:"bytes,29,rep,name=saved_buffs,json=savedBuffs,proto3" json:"saved_buffs,omitempty"`             // CHARACTER
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -738,6 +746,20 @@ func (x *PlayerDatabase) GetItemHolds() *component.PlayerItemHoldComp {
 func (x *PlayerDatabase) GetMailOutbox() *component.PlayerMailOutboxComp {
 	if x != nil {
 		return x.MailOutbox
+	}
+	return nil
+}
+
+func (x *PlayerDatabase) GetSkillCooldowns() *component.CooldownTimeListComp {
+	if x != nil {
+		return x.SkillCooldowns
+	}
+	return nil
+}
+
+func (x *PlayerDatabase) GetSavedBuffs() []*component.SavedBuffComp {
+	if x != nil {
+		return x.SavedBuffs
 	}
 	return nil
 }
@@ -955,7 +977,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a4proto/common/component/player_mail_outbox_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a6proto/common/component/player_battle_result_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a9proto/common/component/player_mystery_merchant_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a7proto/common/component/client_request_ledger_comp.proto\x1a2proto/common/component/player_item_hold_comp.proto\x1a4proto/common/component/player_mail_outbox_comp.proto\x1a&proto/common/component/time_comp.proto\x1a&proto/common/component/buff_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -995,7 +1017,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xac\f\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xab\r\n" +
 	"\x0fplayer_database\x12\"\n" +
 	"\tplayer_id\x18\x01 \x01(\x04B\x05\xc8\xfe\xa4\x02\x00R\bplayerId\x12/\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -1025,7 +1047,10 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
 	"item_holds\x18\x1a \x01(\v2\x13.PlayerItemHoldCompB\x05\xc8\xfe\xa4\x02\x04R\titemHolds\x12=\n" +
 	"\vmail_outbox\x18\x1b \x01(\v2\x15.PlayerMailOutboxCompB\x05\xc8\xfe\xa4\x02\aR\n" +
-	"mailOutbox:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
+	"mailOutbox\x12E\n" +
+	"\x0fskill_cooldowns\x18\x1c \x01(\v2\x15.CooldownTimeListCompB\x05\xc8\xfe\xa4\x02\x06R\x0eskillCooldowns\x126\n" +
+	"\vsaved_buffs\x18\x1d \x03(\v2\x0e.SavedBuffCompB\x05\xc8\xfe\xa4\x02\x06R\n" +
+	"savedBuffs:\x05\xe8\x92\xf4\x01\x01J\x04\b\n" +
 	"\x10\vJ\x04\b\x11\x10\x12J\x04\b\x12\x10\x13J\x04\b\x13\x10\x14\"\xbc\x02\n" +
 	"\fplayer_store\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
@@ -1096,6 +1121,8 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*component.ClientRequestLedgerComp)(nil),   // 30: ClientRequestLedgerComp
 	(*component.PlayerItemHoldComp)(nil),        // 31: PlayerItemHoldComp
 	(*component.PlayerMailOutboxComp)(nil),      // 32: PlayerMailOutboxComp
+	(*component.CooldownTimeListComp)(nil),      // 33: CooldownTimeListComp
+	(*component.SavedBuffComp)(nil),             // 34: SavedBuffComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	10, // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -1121,11 +1148,13 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	30, // 20: player_database.client_request_ledger:type_name -> ClientRequestLedgerComp
 	31, // 21: player_database.item_holds:type_name -> PlayerItemHoldComp
 	32, // 22: player_database.mail_outbox:type_name -> PlayerMailOutboxComp
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	33, // 23: player_database.skill_cooldowns:type_name -> CooldownTimeListComp
+	34, // 24: player_database.saved_buffs:type_name -> SavedBuffComp
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

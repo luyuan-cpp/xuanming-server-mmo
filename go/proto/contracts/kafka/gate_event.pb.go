@@ -197,8 +197,11 @@ type KickPlayerEvent struct {
 	PlayerId uint64 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	// 发起踢线、已提交的那条登录链的代次。会话已见过不小于它的代次时不踢;0 = 不比较。只经 payload 下发。
 	LoginGeneration uint64 `protobuf:"varint,3,opt,name=login_generation,json=loginGeneration,proto3" json:"login_generation,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 踢线原因,gate 原样填进给客户端的 GameKickPlayerRequest.reason。0 = 账号在别处登录(kLoginBeKickByAnOtherAccount)。
+	// 防沉迷到点下线填 kLoginMinorPlayTimeOver(docs/design/real-name-anti-addiction.md §5.4)。
+	ReasonTip     uint32 `protobuf:"varint,4,opt,name=reason_tip,json=reasonTip,proto3" json:"reason_tip,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *KickPlayerEvent) Reset() {
@@ -248,6 +251,13 @@ func (x *KickPlayerEvent) GetPlayerId() uint64 {
 func (x *KickPlayerEvent) GetLoginGeneration() uint64 {
 	if x != nil {
 		return x.LoginGeneration
+	}
+	return 0
+}
+
+func (x *KickPlayerEvent) GetReasonTip() uint32 {
+	if x != nil {
+		return x.ReasonTip
 	}
 	return 0
 }
@@ -525,8 +535,11 @@ type RedirectToGateEvent struct {
 	TokenPayload   []byte                 `protobuf:"bytes,5,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`       // serialized GateTokenPayload for target gate
 	TokenSignature []byte                 `protobuf:"bytes,6,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"` // HMAC-SHA256 signature
 	TokenDeadline  int64                  `protobuf:"varint,7,opt,name=token_deadline,json=tokenDeadline,proto3" json:"token_deadline,omitempty"`   // unix seconds
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 目标 gate 的 WebSocket 地址(NodeInfo.client_ws_url),gate 原样放进 msg 124;空串 = 不接小游戏
+	// (docs/design/minigame-websocket-gate.md W7)。
+	TargetGateWsUrl string `protobuf:"bytes,8,opt,name=target_gate_ws_url,json=targetGateWsUrl,proto3" json:"target_gate_ws_url,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RedirectToGateEvent) Reset() {
@@ -606,6 +619,13 @@ func (x *RedirectToGateEvent) GetTokenDeadline() int64 {
 		return x.TokenDeadline
 	}
 	return 0
+}
+
+func (x *RedirectToGateEvent) GetTargetGateWsUrl() string {
+	if x != nil {
+		return x.TargetGateWsUrl
+	}
+	return ""
 }
 
 // login 发给正在排空的 gate:按给定速率把本 gate 上已登录的连接迁到同 zone 的其他 gate
@@ -1059,12 +1079,14 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\vowner_epoch\x18\x06 \x01(\x04R\n" +
 	"ownerEpoch\x12)\n" +
 	"\x10login_generation\x18\a \x01(\x04R\x0floginGeneration\x12%\n" +
-	"\x0eowner_revision\x18\b \x01(\x04R\rownerRevision:\x05\x88\xe6\xd5\x02\x01\"\x7f\n" +
+	"\x0eowner_revision\x18\b \x01(\x04R\rownerRevision:\x05\x88\xe6\xd5\x02\x01\"\x9e\x01\n" +
 	"\x0fKickPlayerEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
-	"\x10login_generation\x18\x03 \x01(\x04R\x0floginGeneration:\x05\x88\xe6\xd5\x02\x01\"\x98\x01\n" +
+	"\x10login_generation\x18\x03 \x01(\x04R\x0floginGeneration\x12\x1d\n" +
+	"\n" +
+	"reason_tip\x18\x04 \x01(\rR\treasonTip:\x05\x88\xe6\xd5\x02\x01\"\x98\x01\n" +
 	"\x17PlayerDisconnectedEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
@@ -1088,7 +1110,7 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\x10login_generation\x18\x05 \x01(\x04R\x0floginGeneration\x123\n" +
 	"\x15authenticated_account\x18\x06 \x01(\tR\x14authenticatedAccount\x12/\n" +
 	"\x13session_incarnation\x18\a \x01(\x04R\x12sessionIncarnation\x12%\n" +
-	"\x0eowner_revision\x18\b \x01(\x04R\rownerRevision:\x05\x88\xe6\xd5\x02\x01\"\x9d\x02\n" +
+	"\x0eowner_revision\x18\b \x01(\x04R\rownerRevision:\x05\x88\xe6\xd5\x02\x01\"\xca\x02\n" +
 	"\x13RedirectToGateEvent\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -1097,7 +1119,8 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\x10target_gate_port\x18\x04 \x01(\rR\x0etargetGatePort\x12#\n" +
 	"\rtoken_payload\x18\x05 \x01(\fR\ftokenPayload\x12'\n" +
 	"\x0ftoken_signature\x18\x06 \x01(\fR\x0etokenSignature\x12%\n" +
-	"\x0etoken_deadline\x18\a \x01(\x03R\rtokenDeadline:\x05\x88\xe6\xd5\x02\x01\"\x8b\x01\n" +
+	"\x0etoken_deadline\x18\a \x01(\x03R\rtokenDeadline\x12+\n" +
+	"\x12target_gate_ws_url\x18\b \x01(\tR\x0ftargetGateWsUrl:\x05\x88\xe6\xd5\x02\x01\"\x8b\x01\n" +
 	"\x17GateDrainMigrationEvent\x12&\n" +
 	"\x0fdrain_marked_at\x18\x01 \x01(\x03R\rdrainMarkedAt\x12&\n" +
 	"\x0frate_per_second\x18\x02 \x01(\rR\rratePerSecond\x12\x19\n" +

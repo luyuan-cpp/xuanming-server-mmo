@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <boost/any.hpp>
 #include <ctime>
 #include <sstream>
 #include <limits>
@@ -849,6 +850,22 @@ bool RpcChannel::IsBoundTo(const TcpConnectionPtr &connection) const
     return connection && connection_.lock() == connection;
 }
 
+bool RpcChannel::RecordHandshakePeer(const TcpConnectionPtr &connection, const std::string &peerNodeUuid)
+{
+    if (!connection)
+    {
+        return false;
+    }
+    const auto *channel = boost::any_cast<RpcChannelPtr>(&connection->getContext());
+    if (channel == nullptr || !*channel)
+    {
+        return false;
+    }
+    (*channel)->loop_.assertInLoopThread();
+    (*channel)->handshakePeerUuid_ = peerNodeUuid;
+    return true;
+}
+
 TcpConnectionPtr RpcChannel::LockConnectedConnection() const
 {
     auto locked = connection_.lock();
@@ -1221,7 +1238,8 @@ void RpcChannel::CallServiceMethod(const TcpConnectionPtr &connection, const Gam
     // (见 network/rpc_controller.h)。要在返回后完成,用 done:RpcDoneCallback::Adopt(done)。
     // 规则:handler 内不得同步释放本连接所属 RpcClient 的最后一个引用 —— 回调期间 muduo 的 tie_ 守卫与这个
     // 栈对象各持一份强引用,~TcpClient 会因 use_count>1 跳过 forceClose;节点摘除必须经 queueInLoop 延后。
-    RpcController controller(connection);
+    // 握手身份按引用交给 ctx:本 channel 活过这次派发(连接的 context 持有它,连接销毁排在之后的 loop 轮次)。
+    RpcController controller(connection, handshakePeerUuid_);
     DoneClosure done(*this, message, request, response, controller, operation);
     service->CallMethod(method, &controller, request.get(), response.get(), &done);
     done.CompleteIfPending();

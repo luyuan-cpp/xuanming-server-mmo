@@ -960,9 +960,11 @@ func setSessionProbeConfirmsCommit(record *sessionmanager.PlayerSession, session
 //     不能先踢掉旧设备再失败。
 //  3. 会话号相同、实例号相同 → skip_same_session:同一连接重登。本链的 Bind 在踢线之后才发,本连接的 gate 会话
 //     仍绑着上一次的更小代次,ClassifyKick 会判 kKick,所以必须在这里拦住自踢。
-//  4. 会话号相同、两边实例号都非空且不同(gate 以同一 node_id 重启,同号落到新实例)→ skip_cross_instance:
-//     按 §12.3 定论只计数不踢。踢旧实例会让它关闭旧连接时立刻向 scene 发 ExitGame(同号同玩家),晚于新会话的
-//     入场到达就会退掉新实体;方案 C(scene 按 (gate 实例, session_id) 认会话)落地后再打开。
+//  4. 会话号相同、两边实例号都非空且不同(同一 node_id 上的老 gate 进程还没关停、新进程发出了同号)→ 踢旧实例上的
+//     旧连接,结局 sent / send_failed。target_instance_id 限定旧实例,新实例按防僵尸过滤丢弃这条命令。
+//     旧实例关闭旧连接时会向 scene 发同号同玩家的 ExitGame、向 login 发 Disconnect:scene 按 (gate 实例, session_id)
+//     认会话(scene-enter-chain-residuals.md §14),出自旧实例连接的 ExitGame 不派发;player_locator 按实例号忽略那条
+//     断线上报(§6.2)。两者都是这一行的前提,发布顺序见设计稿 §0。
 //  5. 会话号不同 → 踢,结局 sent / send_failed。
 //
 // 被踢会话所属玩家取本链玩家:会话记录按玩家键存取,被替换的就是本玩家的会话。不用记录里的 PlayerID,
@@ -974,13 +976,8 @@ func kickReplacedSession(ctx context.Context, kicker replacedSessionKicker, exis
 	if state.gateInstanceID == "" {
 		return kickResultSkipNoTarget
 	}
-	if existing.SessionID == state.sessionID {
-		if existing.GateInstanceID == state.gateInstanceID {
-			return kickResultSkipSameSession
-		}
-		logx.Infof("[login-kick] replaced session shares the session id on another gate instance, not kicking (counted only): player=%d session=%d old_gate=%s old_instance=%s new_instance=%s generation=%d",
-			state.playerID, existing.SessionID, existing.GateID, existing.GateInstanceID, state.gateInstanceID, loginGeneration)
-		return kickResultSkipCrossInstance
+	if existing.SessionID == state.sessionID && existing.GateInstanceID == state.gateInstanceID {
+		return kickResultSkipSameSession
 	}
 
 	if err := kicker.KickSessionOnGate(ctx, existing.GateID, existing.GateInstanceID, existing.SessionID, state.playerID, loginGeneration); err != nil {
@@ -988,7 +985,7 @@ func kickReplacedSession(ctx context.Context, kicker replacedSessionKicker, exis
 			state.playerID, existing.SessionID, existing.GateID, existing.GateInstanceID, loginGeneration, err)
 		return kickResultSendFailed
 	}
-	logx.Infof("[login-kick] kicked replaced session after commit: player=%d old_session=%d old_gate=%s old_instance=%s new_session=%d generation=%d",
-		state.playerID, existing.SessionID, existing.GateID, existing.GateInstanceID, state.sessionID, loginGeneration)
+	logx.Infof("[login-kick] kicked replaced session after commit: player=%d old_session=%d old_gate=%s old_instance=%s new_session=%d new_instance=%s generation=%d",
+		state.playerID, existing.SessionID, existing.GateID, existing.GateInstanceID, state.sessionID, state.gateInstanceID, loginGeneration)
 	return kickResultSent
 }

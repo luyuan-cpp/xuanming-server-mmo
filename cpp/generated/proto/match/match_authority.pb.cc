@@ -67,6 +67,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
         // ::match::MatchRankOutboxRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
+        // ::match::MatchRankRemovalRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
         // ::match::MatchBattleCompletionRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto, /* tracker*/ nullptr,},
         // ::match::MatchBattleSettlementSourceRecord
@@ -1414,6 +1416,162 @@ const ::_pbi::ClassData* MatchRankSourceRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class MatchRankRemovalRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MatchRankRemovalRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_._has_bits_);
+};
+
+constexpr MatchRankRemovalRecord::ParseTableT_ MatchRankRemovalRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::match::MatchRankRemovalRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 mode = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MatchRankRemovalRecord, _impl_.mode_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.mode_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchRankRemovalRecord, _impl_.player_id_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.player_id_)}},
+      // uint64 created_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchRankRemovalRecord, _impl_.created_ms_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.created_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 mode = 1;
+      {PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.mode_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 created_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr MatchRankRemovalRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_id_{::uint64_t{0u}},
+        created_ms_{::uint64_t{0u}},
+        mode_{0u} {}
+
+template <typename>
+constexpr MatchRankRemovalRecord::MatchRankRemovalRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MatchRankRemovalRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MatchRankRemovalRecord(arena);
+}
+constexpr auto MatchRankRemovalRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(MatchRankRemovalRecord), alignof(MatchRankRemovalRecord));
+}
+constexpr auto MatchRankRemovalRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MatchRankRemovalRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MatchRankRemovalRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MatchRankRemovalRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MatchRankRemovalRecord>(), &MatchRankRemovalRecord::ByteSizeLong,
+              &MatchRankRemovalRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[19],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MatchRankRemovalRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MatchRankRemovalRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MatchRankRemovalRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MatchRankRemovalRecord::InternalGenerateClassData_(
+            _default, &MatchRankRemovalRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MatchRankRemovalRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MatchRankRemovalRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MatchRankRemovalRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MatchRankRemovalRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MatchRankRemovalRecordGlobalsTypeInternal MatchRankRemovalRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MatchRankRemovalRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MatchRankRemovalRecord_globals_.GetClassData();
+#else
+  return MatchRankRemovalRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class MatchRankOutboxRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<MatchRankOutboxRecord>()._impl_._has_bits_);
@@ -1860,7 +2018,7 @@ constexpr auto MatchPlayerBattleReportRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3032,7 +3190,7 @@ constexpr auto MatchBattleSettlementSourceRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3232,7 +3390,7 @@ constexpr auto MatchBattleScriptReviewRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3451,7 +3609,7 @@ constexpr auto MatchBattleScriptRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3635,7 +3793,7 @@ constexpr auto MatchBattleScriptLoadoutRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[27],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -3823,7 +3981,7 @@ constexpr auto MatchBattleReportRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -4078,7 +4236,7 @@ constexpr auto MatchBattleCompletionRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -4622,7 +4780,7 @@ constexpr auto MatchManualResolutionRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto,
@@ -5991,6 +6149,15 @@ const ::uint32_t
         4,
         5,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::match::MatchRankRemovalRecord, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::match::MatchRankRemovalRecord, _impl_.mode_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchRankRemovalRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchRankRemovalRecord, _impl_.created_ms_),
+        2,
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchBattleCompletionRecord, _impl_._has_bits_),
         18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::MatchBattleCompletionRecord, _impl_.battle_id_),
@@ -6187,14 +6354,15 @@ static const ::_pbi::MigrationSchema
         {318, sizeof(::match::MatchRatingAppliedRecord)},
         {327, sizeof(::match::MatchRankSourceRecord)},
         {344, sizeof(::match::MatchRankOutboxRecord)},
-        {359, sizeof(::match::MatchBattleCompletionRecord)},
-        {392, sizeof(::match::MatchBattleSettlementSourceRecord)},
-        {419, sizeof(::match::MatchManualResolutionRecord)},
-        {446, sizeof(::match::MatchBattleReportRecord)},
-        {463, sizeof(::match::MatchPlayerBattleReportRecord)},
-        {474, sizeof(::match::MatchBattleScriptRecord)},
-        {497, sizeof(::match::MatchBattleScriptReviewRecord)},
-        {516, sizeof(::match::MatchBattleScriptLoadoutRecord)},
+        {359, sizeof(::match::MatchRankRemovalRecord)},
+        {368, sizeof(::match::MatchBattleCompletionRecord)},
+        {401, sizeof(::match::MatchBattleSettlementSourceRecord)},
+        {428, sizeof(::match::MatchManualResolutionRecord)},
+        {455, sizeof(::match::MatchBattleReportRecord)},
+        {472, sizeof(::match::MatchPlayerBattleReportRecord)},
+        {483, sizeof(::match::MatchBattleScriptRecord)},
+        {506, sizeof(::match::MatchBattleScriptReviewRecord)},
+        {525, sizeof(::match::MatchBattleScriptLoadoutRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -6217,6 +6385,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::match::MatchRatingAppliedRecord_globals_,
         &::match::MatchRankSourceRecord_globals_,
         &::match::MatchRankOutboxRecord_globals_,
+        &::match::MatchRankRemovalRecord_globals_,
         &::match::MatchBattleCompletionRecord_globals_,
         &::match::MatchBattleSettlementSourceRecord_globals_,
         &::match::MatchManualResolutionRecord_globals_,
@@ -6361,87 +6530,91 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "ource_cursor\030\002 \001(\004\022\022\n\nrequest_id\030\003 \001(\004\022\017"
     "\n\007entries\030\004 \001(\014\022\r\n\005shard\030\005 \001(\r\022\014\n\004mode\030\006"
     " \001(\r:@\212\222\364\001\021match_rank_outbox\222\222\364\001%source_"
-    "epoch,mode,shard,source_cursor\"\257\004\n\033Match"
-    "BattleCompletionRecord\022\021\n\tbattle_id\030\001 \001("
-    "\004\022\023\n\013raw_payload\030\002 \001(\014\022\026\n\016payload_digest"
-    "\030\003 \001(\014\022\026\n\016format_version\030\004 \001(\r\022\023\n\013archiv"
-    "ed_ms\030\005 \001(\004\022\024\n\014source_topic\030\006 \001(\t\022\030\n\020sou"
-    "rce_partition\030\007 \001(\005\022\025\n\rsource_offset\030\010 \001"
-    "(\003\022.\n\010decision\030\t \001(\0162\034.match.BattleOutco"
-    "meDecision\022;\n\013source_kind\030\n \001(\0162&.match."
-    "MatchBattleCompletionSourceKind\022\036\n\026place"
-    "ment_operation_id\030\013 \001(\t\022\032\n\022target_instan"
-    "ce_id\030\014 \001(\t\022 \n\030outcome_protocol_version\030"
-    "\r \001(\r\022\030\n\020result_published\030\016 \001(\010\022\025\n\rnext_"
-    "retry_ms\030\017 \001(\004:`\212\222\364\001\027match_battle_comple"
-    "tion\222\222\364\001\tbattle_id\332\222\364\0011decision,result_p"
-    "ublished,next_retry_ms,battle_id\"\236\003\n!Mat"
-    "chBattleSettlementSourceRecord\022\021\n\tbattle"
-    "_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\030\n\020settleme"
-    "nt_proto\030\003 \001(\014\022\026\n\016payload_digest\030\004 \001(\014\022\023"
-    "\n\013archived_ms\030\005 \001(\004\022\025\n\rowner_account\030\006 \001"
-    "(\t\022\026\n\016owner_revision\030\007 \001(\004\022\024\n\014issued_at_"
-    "ms\030\010 \001(\004\022\021\n\tinbox_seq\030\t \001(\004\022\023\n\013inbox_sta"
-    "te\030\n \001(\r\022\026\n\016dispatch_state\030\013 \001(\r\022\025\n\rnext"
-    "_retry_ms\030\014 \001(\004:p\212\222\364\001\036match_battle_settl"
-    "ement_source\222\222\364\001\023battle_id,player_id\332\222\364\001"
-    "0dispatch_state,next_retry_ms,battle_id,"
-    "player_id\"\303\003\n\033MatchManualResolutionRecor"
-    "d\022\021\n\tbattle_id\030\001 \001(\004\022,\n\006action\030\002 \001(\0162\034.m"
-    "atch.StrandedFormationMode\0226\n\017formation_"
-    "class\030\003 \001(\0162\035.match.StrandedFormationCla"
-    "ss\022\024\n\014failed_check\030\004 \001(\t\022\025\n\roperator_nam"
-    "e\030\005 \001(\t\022\016\n\006reason\030\006 \001(\t\022\023\n\013resolved_ms\030\007"
-    " \001(\004\022\037\n\027formation_digest_before\030\010 \001(\t\022\030\n"
-    "\020formation_before\030\t \001(\014\0229\n\016tickets_befor"
-    "e\030\n \003(\0132!.match.MatchAuthorityTicketReco"
-    "rd\022\035\n\025effective_deadline_ms\030\013 \001(\004\022\030\n\020rep"
-    "lica_instance\030\014 \001(\t:*\212\222\364\001\027match_manual_r"
-    "esolution\222\222\364\001\tbattle_id\"\324\001\n\027MatchBattleR"
-    "eportRecord\022\021\n\tbattle_id\030\001 \001(\004\022\022\n\ncreate"
-    "d_ms\030\002 \001(\004\022\022\n\nmatch_mode\030\003 \001(\r\022\030\n\020battle"
-    "_config_id\030\004 \001(\r\022\020\n\010envelope\030\005 \001(\014\022\027\n\017en"
-    "velope_digest\030\006 \001(\014\022\021\n\tref_count\030\007 \001(\r:&"
-    "\212\222\364\001\023match_battle_report\222\222\364\001\tbattle_id\"\256"
-    "\001\n\035MatchPlayerBattleReportRecord\022\021\n\tplay"
-    "er_id\030\001 \001(\004\022\022\n\ncreated_ms\030\002 \001(\004\022\021\n\tbattl"
-    "e_id\030\003 \001(\004\022\017\n\007summary\030\004 \001(\014:B\212\222\364\001\032match_"
-    "player_battle_report\222\222\364\001\036player_id,creat"
-    "ed_ms,battle_id\"\337\002\n\027MatchBattleScriptRec"
-    "ord\022\021\n\tscript_id\030\001 \001(\004\022\027\n\017owner_player_i"
-    "d\030\002 \001(\004\022\020\n\010revision\030\003 \001(\r\022\017\n\007content\030\004 \001"
-    "(\014\022\024\n\014review_state\030\005 \001(\r\022\031\n\021approved_rev"
-    "ision\030\006 \001(\r\022\030\n\020approved_content\030\007 \001(\014\022\025\n"
-    "\rreject_reason\030\010 \001(\t\022\024\n\014submitted_ms\030\t \001"
-    "(\004\022\023\n\013reviewed_ms\030\n \001(\004:h\212\222\364\001\023match_batt"
-    "le_script\222\222\364\001\tscript_id\332\222\364\001=owner_player"
-    "_id,script_id;review_state,submitted_ms,"
-    "script_id\"\357\001\n\035MatchBattleScriptReviewRec"
-    "ord\022\021\n\tscript_id\030\001 \001(\004\022\020\n\010revision\030\002 \001(\r"
-    "\022\027\n\017owner_player_id\030\003 \001(\004\022\020\n\010approved\030\004 "
-    "\001(\010\022\020\n\010reviewer\030\005 \001(\t\022\016\n\006reason\030\006 \001(\t\022\023\n"
-    "\013reviewed_ms\030\007 \001(\004\022\017\n\007content\030\010 \001(\014:6\212\222\364"
-    "\001\032match_battle_script_review\222\222\364\001\022script_"
-    "id,revision\"\207\002\n\036MatchBattleScriptLoadout"
-    "Record\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nmatch_mode\030"
-    "\002 \001(\r\022\030\n\020battle_config_id\030\003 \001(\r\022\016\n\006origi"
-    "n\030\004 \001(\r\022\032\n\022official_script_id\030\005 \001(\r\022\030\n\020p"
-    "layer_script_id\030\006 \001(\004\022\022\n\nupdated_ms\030\007 \001("
-    "\004:J\212\222\364\001\033match_battle_script_loadout\222\222\364\001%"
-    "player_id,match_mode,battle_config_id*\314\003"
-    "\n\037MatchBattleCompletionSourceKind\022.\n*MAT"
-    "CH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\020"
-    "\000\022(\n$MATCH_BATTLE_COMPLETION_SOURCE_KAFK"
-    "A\020\001\022-\n)MATCH_BATTLE_COMPLETION_SOURCE_BA"
-    "TTLE_RPC\020\002\0227\n3MATCH_BATTLE_COMPLETION_SO"
-    "URCE_MATCH_DEADLINE_ABORT\020\003\0226\n2MATCH_BAT"
-    "TLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABOR"
-    "T\020\004\022/\n+MATCH_BATTLE_COMPLETION_SOURCE_MA"
-    "NUAL_ABORT\020\005\022@\n<MATCH_BATTLE_COMPLETION_"
-    "SOURCE_MATCH_REJECTED_ORIGINAL_ABORT\020\006\022<"
-    "\n8MATCH_BATTLE_COMPLETION_SOURCE_MATCH_I"
-    "NSTANCE_GONE_ABORT\020\007B\rZ\013match/matchb\006pro"
-    "to3"
+    "epoch,mode,shard,source_cursor\"y\n\026MatchR"
+    "ankRemovalRecord\022\014\n\004mode\030\001 \001(\r\022\021\n\tplayer"
+    "_id\030\002 \001(\004\022\022\n\ncreated_ms\030\003 \001(\004:*\212\222\364\001\022matc"
+    "h_rank_removal\222\222\364\001\016mode,player_id\"\257\004\n\033Ma"
+    "tchBattleCompletionRecord\022\021\n\tbattle_id\030\001"
+    " \001(\004\022\023\n\013raw_payload\030\002 \001(\014\022\026\n\016payload_dig"
+    "est\030\003 \001(\014\022\026\n\016format_version\030\004 \001(\r\022\023\n\013arc"
+    "hived_ms\030\005 \001(\004\022\024\n\014source_topic\030\006 \001(\t\022\030\n\020"
+    "source_partition\030\007 \001(\005\022\025\n\rsource_offset\030"
+    "\010 \001(\003\022.\n\010decision\030\t \001(\0162\034.match.BattleOu"
+    "tcomeDecision\022;\n\013source_kind\030\n \001(\0162&.mat"
+    "ch.MatchBattleCompletionSourceKind\022\036\n\026pl"
+    "acement_operation_id\030\013 \001(\t\022\032\n\022target_ins"
+    "tance_id\030\014 \001(\t\022 \n\030outcome_protocol_versi"
+    "on\030\r \001(\r\022\030\n\020result_published\030\016 \001(\010\022\025\n\rne"
+    "xt_retry_ms\030\017 \001(\004:`\212\222\364\001\027match_battle_com"
+    "pletion\222\222\364\001\tbattle_id\332\222\364\0011decision,resul"
+    "t_published,next_retry_ms,battle_id\"\236\003\n!"
+    "MatchBattleSettlementSourceRecord\022\021\n\tbat"
+    "tle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\030\n\020settl"
+    "ement_proto\030\003 \001(\014\022\026\n\016payload_digest\030\004 \001("
+    "\014\022\023\n\013archived_ms\030\005 \001(\004\022\025\n\rowner_account\030"
+    "\006 \001(\t\022\026\n\016owner_revision\030\007 \001(\004\022\024\n\014issued_"
+    "at_ms\030\010 \001(\004\022\021\n\tinbox_seq\030\t \001(\004\022\023\n\013inbox_"
+    "state\030\n \001(\r\022\026\n\016dispatch_state\030\013 \001(\r\022\025\n\rn"
+    "ext_retry_ms\030\014 \001(\004:p\212\222\364\001\036match_battle_se"
+    "ttlement_source\222\222\364\001\023battle_id,player_id\332"
+    "\222\364\0010dispatch_state,next_retry_ms,battle_"
+    "id,player_id\"\303\003\n\033MatchManualResolutionRe"
+    "cord\022\021\n\tbattle_id\030\001 \001(\004\022,\n\006action\030\002 \001(\0162"
+    "\034.match.StrandedFormationMode\0226\n\017formati"
+    "on_class\030\003 \001(\0162\035.match.StrandedFormation"
+    "Class\022\024\n\014failed_check\030\004 \001(\t\022\025\n\roperator_"
+    "name\030\005 \001(\t\022\016\n\006reason\030\006 \001(\t\022\023\n\013resolved_m"
+    "s\030\007 \001(\004\022\037\n\027formation_digest_before\030\010 \001(\t"
+    "\022\030\n\020formation_before\030\t \001(\014\0229\n\016tickets_be"
+    "fore\030\n \003(\0132!.match.MatchAuthorityTicketR"
+    "ecord\022\035\n\025effective_deadline_ms\030\013 \001(\004\022\030\n\020"
+    "replica_instance\030\014 \001(\t:*\212\222\364\001\027match_manua"
+    "l_resolution\222\222\364\001\tbattle_id\"\324\001\n\027MatchBatt"
+    "leReportRecord\022\021\n\tbattle_id\030\001 \001(\004\022\022\n\ncre"
+    "ated_ms\030\002 \001(\004\022\022\n\nmatch_mode\030\003 \001(\r\022\030\n\020bat"
+    "tle_config_id\030\004 \001(\r\022\020\n\010envelope\030\005 \001(\014\022\027\n"
+    "\017envelope_digest\030\006 \001(\014\022\021\n\tref_count\030\007 \001("
+    "\r:&\212\222\364\001\023match_battle_report\222\222\364\001\tbattle_i"
+    "d\"\256\001\n\035MatchPlayerBattleReportRecord\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\022\n\ncreated_ms\030\002 \001(\004\022\021\n\tba"
+    "ttle_id\030\003 \001(\004\022\017\n\007summary\030\004 \001(\014:B\212\222\364\001\032mat"
+    "ch_player_battle_report\222\222\364\001\036player_id,cr"
+    "eated_ms,battle_id\"\337\002\n\027MatchBattleScript"
+    "Record\022\021\n\tscript_id\030\001 \001(\004\022\027\n\017owner_playe"
+    "r_id\030\002 \001(\004\022\020\n\010revision\030\003 \001(\r\022\017\n\007content\030"
+    "\004 \001(\014\022\024\n\014review_state\030\005 \001(\r\022\031\n\021approved_"
+    "revision\030\006 \001(\r\022\030\n\020approved_content\030\007 \001(\014"
+    "\022\025\n\rreject_reason\030\010 \001(\t\022\024\n\014submitted_ms\030"
+    "\t \001(\004\022\023\n\013reviewed_ms\030\n \001(\004:h\212\222\364\001\023match_b"
+    "attle_script\222\222\364\001\tscript_id\332\222\364\001=owner_pla"
+    "yer_id,script_id;review_state,submitted_"
+    "ms,script_id\"\222\002\n\035MatchBattleScriptReview"
+    "Record\022\021\n\tscript_id\030\001 \001(\004\022\020\n\010revision\030\002 "
+    "\001(\r\022\027\n\017owner_player_id\030\003 \001(\004\022\020\n\010approved"
+    "\030\004 \001(\010\022\020\n\010reviewer\030\005 \001(\t\022\016\n\006reason\030\006 \001(\t"
+    "\022\023\n\013reviewed_ms\030\007 \001(\004\022\017\n\007content\030\010 \001(\014:Y"
+    "\212\222\364\001\032match_battle_script_review\222\222\364\001\022scri"
+    "pt_id,revision\332\222\364\001\036reviewed_ms,script_id"
+    ",revision\"\207\002\n\036MatchBattleScriptLoadoutRe"
+    "cord\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nmatch_mode\030\002 "
+    "\001(\r\022\030\n\020battle_config_id\030\003 \001(\r\022\016\n\006origin\030"
+    "\004 \001(\r\022\032\n\022official_script_id\030\005 \001(\r\022\030\n\020pla"
+    "yer_script_id\030\006 \001(\004\022\022\n\nupdated_ms\030\007 \001(\004:"
+    "J\212\222\364\001\033match_battle_script_loadout\222\222\364\001%pl"
+    "ayer_id,match_mode,battle_config_id*\314\003\n\037"
+    "MatchBattleCompletionSourceKind\022.\n*MATCH"
+    "_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\020\000\022"
+    "(\n$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\020"
+    "\001\022-\n)MATCH_BATTLE_COMPLETION_SOURCE_BATT"
+    "LE_RPC\020\002\0227\n3MATCH_BATTLE_COMPLETION_SOUR"
+    "CE_MATCH_DEADLINE_ABORT\020\003\0226\n2MATCH_BATTL"
+    "E_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT\020"
+    "\004\022/\n+MATCH_BATTLE_COMPLETION_SOURCE_MANU"
+    "AL_ABORT\020\005\022@\n<MATCH_BATTLE_COMPLETION_SO"
+    "URCE_MATCH_REJECTED_ORIGINAL_ABORT\020\006\022<\n8"
+    "MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INS"
+    "TANCE_GONE_ABORT\020\007B\rZ\013match/matchb\006proto"
+    "3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps[3] = {
@@ -6453,13 +6626,13 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fauthority_2epr
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto = {
     false,
     false,
-    8523,
+    8681,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto,
     "proto/match/match_authority.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_once,
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps,
     3,
-    27,
+    28,
     schemas,
     file_message_globals,
     TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto::offsets,
@@ -14122,6 +14295,255 @@ void MatchRankOutboxRecord::InternalSwap(MatchRankOutboxRecord* PROTOBUF_RESTRIC
 }
 
 ::google::protobuf::Metadata MatchRankOutboxRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+MatchRankRemovalRecord::MatchRankRemovalRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchRankRemovalRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:match.MatchRankRemovalRecord)
+}
+MatchRankRemovalRecord::MatchRankRemovalRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchRankRemovalRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MatchRankRemovalRecord_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE MatchRankRemovalRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void MatchRankRemovalRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, mode_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::mode_));
+}
+MatchRankRemovalRecord::~MatchRankRemovalRecord() {
+  // @@protoc_insertion_point(destructor:match.MatchRankRemovalRecord)
+  SharedDtor(*this);
+}
+inline void MatchRankRemovalRecord::SharedDtor(MessageLite& self) {
+  MatchRankRemovalRecord& this_ = static_cast<MatchRankRemovalRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MatchRankRemovalRecord_class_data_ =
+        MatchRankRemovalRecord::InternalGenerateClassData_(MatchRankRemovalRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchRankRemovalRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchRankRemovalRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MatchRankRemovalRecord_class_data_.tc_table);
+  return MatchRankRemovalRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MatchRankRemovalRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MatchRankRemovalRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MatchRankRemovalRecord_globals_));
+  return MatchRankRemovalRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MatchRankRemovalRecord::ParseTableT_
+    MatchRankRemovalRecord::_table_ =
+        MatchRankRemovalRecord::InternalGenerateParseTable_(MatchRankRemovalRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MatchRankRemovalRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:match.MatchRankRemovalRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.mode_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.mode_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MatchRankRemovalRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MatchRankRemovalRecord& this_ = static_cast<const MatchRankRemovalRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MatchRankRemovalRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MatchRankRemovalRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:match.MatchRankRemovalRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 mode = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_mode(), target);
+    }
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint64 created_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_created_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_created_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:match.MatchRankRemovalRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MatchRankRemovalRecord::ByteSizeLong(const MessageLite& base) {
+  const MatchRankRemovalRecord& this_ = static_cast<const MatchRankRemovalRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MatchRankRemovalRecord::ByteSizeLong() const {
+  const MatchRankRemovalRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:match.MatchRankRemovalRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 created_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_created_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_ms());
+      }
+    }
+    // uint32 mode = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_mode() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_mode());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MatchRankRemovalRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MatchRankRemovalRecord*>(&to_msg);
+  auto& from = static_cast<const MatchRankRemovalRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:match.MatchRankRemovalRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_created_ms() != 0) {
+        _this->_impl_.created_ms_ = from._impl_.created_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_mode() != 0) {
+        _this->_impl_.mode_ = from._impl_.mode_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MatchRankRemovalRecord::CopyFrom(const MatchRankRemovalRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:match.MatchRankRemovalRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MatchRankRemovalRecord::InternalSwap(MatchRankRemovalRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.mode_)
+      + sizeof(MatchRankRemovalRecord::_impl_.mode_)
+      - PROTOBUF_FIELD_OFFSET(MatchRankRemovalRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata MatchRankRemovalRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

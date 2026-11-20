@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"chat/internal/constants"
-	"chat/internal/textfilter"
 	chatpb "proto/chat"
 	"shared/accountdirectory"
 	"shared/authoritysql"
+	"shared/contentguard"
 	"shared/rolefence"
 
 	"github.com/go-sql-driver/mysql"
@@ -46,7 +46,6 @@ type Rules struct {
 	HistoryTTLSeconds   int
 	HistoryDefaultLimit int
 	HistoryMaxLimit     int
-	SensitiveWords      []string
 	// ActorVerifyTTLSeconds 是身份校验结果的进程内缓存秒数,0 = 每次都校验(actor_verify.go)。
 	// 刻意不进 policyBytes:它只影响本进程读权威行的频率,不改变已登记原件的判定,副本之间可以不同,滚动改它不该被当成规则漂移。
 	ActorVerifyTTLSeconds int
@@ -80,7 +79,8 @@ type Store struct {
 	db     *sql.DB
 	states rolefence.StateReader
 	rules  Rules
-	filter *textfilter.Filter
+	// guard 是正文送检的接缝(content_review.go)。nil = 不送检,只有单测这样装。
+	guard  contentguard.Checker
 	clock  func(context.Context, *sql.Tx) (uint64, error)
 	actors *actorVerifyCache
 	world  *worldWindow // nil = 世界频道直读
@@ -104,7 +104,19 @@ type role struct {
 	revision uint64
 }
 
-func New(ctx context.Context, db *sql.DB, states rolefence.StateReader, backend authoritysql.Backend, rules Rules) (*Store, error) {
+// Option 调整 Store 的可选依赖。
+type Option func(*Store)
+
+// WithContentGuard 装上正文送检(内容安全服务的客户端)。传 nil 被忽略。
+func WithContentGuard(guard contentguard.Checker) Option {
+	return func(s *Store) {
+		if guard != nil {
+			s.guard = guard
+		}
+	}
+}
+
+func New(ctx context.Context, db *sql.DB, states rolefence.StateReader, backend authoritysql.Backend, rules Rules, opts ...Option) (*Store, error) {
 	if db == nil || states == nil || rules.MaxContentBytes <= 0 || rules.RateLimitPerSecond <= 0 || rules.HistoryMaxEntries <= 0 || rules.HistoryDefaultLimit <= 0 || rules.HistoryMaxLimit < rules.HistoryDefaultLimit || rules.HistoryMaxLimit > constants.MaxHistoryPullLimit || rules.HistoryTTLSeconds <= 0 || uint64(rules.HistoryTTLSeconds) > math.MaxUint64/1000 || rules.ActorVerifyTTLSeconds < 0 || rules.ActorVerifyTTLSeconds > constants.MaxActorVerifyTTLSeconds || rules.WorldHistoryCacheMs < 0 || rules.WorldHistoryCacheMs > constants.MaxWorldHistoryCacheMs {
 		return nil, ErrInvalid
 	}
@@ -121,17 +133,15 @@ func New(ctx context.Context, db *sql.DB, states rolefence.StateReader, backend 
 	if err := CheckSchema(ctx, db); err != nil {
 		return nil, err
 	}
-	filter, err := textfilter.New(rules.SensitiveWords)
-	if err != nil {
-		return nil, err
-	}
-	rules.SensitiveWords = append([]string(nil), rules.SensitiveWords...)
-	s := &Store{db: db, states: states, rules: rules, filter: filter, clock: databaseNow,
+	s := &Store{db: db, states: states, rules: rules, clock: databaseNow,
 		actors: newActorVerifyCache(time.Duration(rules.ActorVerifyTTLSeconds)*time.Second, actorVerifyMaxEntries, monotonicSinceStart())}
+	for _, opt := range opts {
+		opt(s)
+	}
 	if rules.WorldHistoryCacheMs > 0 {
 		s.world = newWorldWindow(time.Duration(rules.WorldHistoryCacheMs)*time.Millisecond, monotonicSinceStart(), s.loadWorldSnapshot)
 	}
-	if err = s.ensurePolicy(ctx); err != nil {
+	if err := s.ensurePolicy(ctx); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -188,11 +198,9 @@ func policyBytes(r Rules) []byte {
 	for _, n := range []int{r.MaxContentBytes, r.RateLimitPerSecond, r.HistoryMaxEntries, r.HistoryTTLSeconds, r.HistoryDefaultLimit, r.HistoryMaxLimit, constants.WorldStreamShards, constants.OriginalRetentionDays} {
 		put(uint64(n))
 	}
-	put(uint64(len(r.SensitiveWords)))
-	for _, word := range r.SensitiveWords {
-		put(uint64(len(word)))
-		out.WriteString(word)
-	}
+	// 这 8 个字节以前是本地屏蔽词表的条数,后面跟着各词。词表 2026-11-20 搬到内容安全服务(可热更新,不属于聊天的全局规则),
+	// 这里固定写 0:与「空词表」时的字节逐位相同,已登记的策略行不用迁移。
+	put(0)
 	return out.Bytes()
 }
 
@@ -274,11 +282,6 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 	if peer == actor {
 		return SendResult{}, ErrInvalid
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		return SendResult{}, err
-	}
-	defer tx.Rollback()
 	replay := func(r *receipt) (SendResult, error) {
 		if string(r.account) != owned.account || r.revision != owned.revision {
 			return SendResult{}, ErrOriginal
@@ -287,12 +290,30 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 			return SendResult{}, ErrConflict
 		}
 		message := &chatpb.ChatMessage{}
-		// 重放只信首次已接受的显示原件，不重新过滤或刷新时间。
+		// 重放只信首次已接受的显示原件，不重新送检或刷新时间。
 		if !bytes.Equal(r.stream, []byte(streamKey(actor, peer))) || proto.Unmarshal(r.message, message) != nil || message.SenderPlayerId != actor || message.TargetPlayerId != peer || message.Channel != in.Message.Channel || message.SendTimeMs != int64(r.acceptedMs) || strings.TrimSpace(message.Content) == "" {
 			return SendResult{}, errors.New("聊天永久显示原件与原接受决定不符")
 		}
 		return SendResult{Tip: r.tip, Duplicate: true}, nil
 	}
+	// 正文送检在事务之外、任何写入之前(content_review.go):事务里不做远程调用。
+	content, rejectTip := s.review(ctx, in.Message.Channel, actor, strings.TrimSpace(in.Message.Content))
+	if rejectTip != 0 {
+		// 没过之前先看是不是重放:首次已接受的原件不因词库后来变了、或内容安全服务此刻不可达而改口。
+		winner, readErr := scanReceipt(s.db.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID)))
+		if readErr == nil {
+			return replay(winner)
+		}
+		if !errors.Is(readErr, sql.ErrNoRows) {
+			return SendResult{}, readErr
+		}
+		return SendResult{Tip: rejectTip}, nil
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	if err != nil {
+		return SendResult{}, err
+	}
+	defer tx.Rollback()
 	r, err := scanReceipt(tx.QueryRowContext(ctx, receiptSelectSQL, actor, []byte(requestID)))
 	if err == nil {
 		return replay(r)
@@ -338,7 +359,7 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		}
 	}
 	var payload []byte
-	message := &chatpb.ChatMessage{SenderPlayerId: actor, TargetPlayerId: peer, Channel: in.Message.Channel, Content: s.filter.Mask(strings.TrimSpace(in.Message.Content)), SendTimeMs: int64(now)}
+	message := &chatpb.ChatMessage{SenderPlayerId: actor, TargetPlayerId: peer, Channel: in.Message.Channel, Content: content, SendTimeMs: int64(now)}
 	payload, err = (proto.MarshalOptions{Deterministic: true}).Marshal(message)
 	if err != nil {
 		return SendResult{}, err

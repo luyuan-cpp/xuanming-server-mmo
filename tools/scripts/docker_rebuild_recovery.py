@@ -89,6 +89,12 @@ def verify(startup, rows, authored_input, document):
             require(row['Id'] == original[name]['Id'] and row['Image'] == original[name]['Image']
                     and startup.signature(row) == original[name]['_signature'],
                     'Rebuild recovery infrastructure identity changed')
+    from gm_scene_promotion import is_post_rebuild, verify_post_rebuild
+    env = startup.env_values(startup.ENV.read_bytes())
+    if is_post_rebuild(startup.ROOT, env):
+        config, _ = startup.compose_contract(authored_input)
+        active_authored, _ = startup.authored_selection(rows)
+        verify_post_rebuild(startup.ROOT, env, document, rows, config, startup.signature, active_authored)
     combined = json.loads(authored_input) if authored_input else {'services': {}}
     for name, service in expected['services'].items():
         combined['services'].setdefault(name, {}).update(service)

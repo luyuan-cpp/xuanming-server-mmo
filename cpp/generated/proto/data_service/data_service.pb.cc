@@ -31,6 +31,36 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::data_service::AccountDirectoryResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::SetAccountRealNameRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::SetAccountRealNameResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::GetAccountRealNameRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::GetAccountRealNameResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::ResetAccountRealNameRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::ResetAccountRealNameResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::AccountLifecycle
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::AccountDeletionBlocker
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::AccountDeletionResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::RequestAccountDeletionRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::CancelAccountDeletionRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::ClaimAccountDeletionsRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::ClaimAccountDeletionsResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::FinishAccountDeletionRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::FinishAccountDeletionResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::AccountRoleOwnership
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::AccountRoleVersion
@@ -156,6 +186,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         // ::data_service::ReservePlayerNameResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::ReleasePlayerNameRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::RenameRoleRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::RenameRoleResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::BatchGetPlayerNameRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
@@ -284,7 +318,7 @@ constexpr auto VerifyRoleAdmissionResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[40],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -523,7 +557,7 @@ constexpr auto TransactionLogRow::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[57],
+      &file_reflection_data[72],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -740,7 +774,7 @@ constexpr auto SnapshotInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[44],
+      &file_reflection_data[59],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -787,6 +821,152 @@ const ::_pbi::ClassData* SnapshotInfo_get_class_data() {
   return SnapshotInfo_globals_.GetClassData();
 #else
   return SnapshotInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SetAccountRealNameResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SetAccountRealNameResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SetAccountRealNameResponse, _impl_._has_bits_);
+};
+
+constexpr SetAccountRealNameResponse::ParseTableT_ SetAccountRealNameResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SetAccountRealNameResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::SetAccountRealNameResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string real_name_pi = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SetAccountRealNameResponse, _impl_.real_name_pi_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string real_name_pi = 1;
+      {PROTOBUF_FIELD_OFFSET(SetAccountRealNameResponse, _impl_.real_name_pi_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\47\14\0\0\0\0\0\0"
+      "data_service.SetAccountRealNameResponse"
+      "real_name_pi"
+    }},
+  };
+}
+
+
+inline constexpr SetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        real_name_pi_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+constexpr SetAccountRealNameResponse::SetAccountRealNameResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SetAccountRealNameResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SetAccountRealNameResponse(arena);
+}
+constexpr auto SetAccountRealNameResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SetAccountRealNameResponse), alignof(SetAccountRealNameResponse));
+}
+constexpr auto SetAccountRealNameResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SetAccountRealNameResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SetAccountRealNameResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SetAccountRealNameResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SetAccountRealNameResponse>(), &SetAccountRealNameResponse::ByteSizeLong,
+              &SetAccountRealNameResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SetAccountRealNameResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[2],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SetAccountRealNameResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SetAccountRealNameResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SetAccountRealNameResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SetAccountRealNameResponse::InternalGenerateClassData_(
+            _default, &SetAccountRealNameResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SetAccountRealNameResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SetAccountRealNameResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SetAccountRealNameResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SetAccountRealNameResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SetAccountRealNameResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SetAccountRealNameResponseGlobalsTypeInternal SetAccountRealNameResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SetAccountRealNameResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SetAccountRealNameResponse_globals_.GetClassData();
+#else
+  return SetAccountRealNameResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -907,7 +1087,7 @@ constexpr auto ResolveRecallOpResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[53],
+      &file_reflection_data[68],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1077,7 +1257,7 @@ constexpr auto ResolveRecallOpRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[52],
+      &file_reflection_data[67],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1124,6 +1304,147 @@ const ::_pbi::ClassData* ResolveRecallOpRequest_get_class_data() {
   return ResolveRecallOpRequest_globals_.GetClassData();
 #else
   return ResolveRecallOpRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ResetAccountRealNameResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ResetAccountRealNameResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ResetAccountRealNameResponse, _impl_._has_bits_);
+};
+
+constexpr ResetAccountRealNameResponse::ParseTableT_ ResetAccountRealNameResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ResetAccountRealNameResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::ResetAccountRealNameResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool had_real_name = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ResetAccountRealNameResponse, _impl_.had_real_name_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ResetAccountRealNameResponse, _impl_.had_real_name_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool had_real_name = 1;
+      {PROTOBUF_FIELD_OFFSET(ResetAccountRealNameResponse, _impl_.had_real_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ResetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        had_real_name_{false} {}
+
+template <typename>
+constexpr ResetAccountRealNameResponse::ResetAccountRealNameResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ResetAccountRealNameResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ResetAccountRealNameResponse(arena);
+}
+constexpr auto ResetAccountRealNameResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ResetAccountRealNameResponse), alignof(ResetAccountRealNameResponse));
+}
+constexpr auto ResetAccountRealNameResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ResetAccountRealNameResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ResetAccountRealNameResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ResetAccountRealNameResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ResetAccountRealNameResponse>(), &ResetAccountRealNameResponse::ByteSizeLong,
+              &ResetAccountRealNameResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ResetAccountRealNameResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ResetAccountRealNameResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ResetAccountRealNameResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ResetAccountRealNameResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ResetAccountRealNameResponse::InternalGenerateClassData_(
+            _default, &ResetAccountRealNameResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ResetAccountRealNameResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ResetAccountRealNameResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ResetAccountRealNameResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ResetAccountRealNameResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ResetAccountRealNameResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ResetAccountRealNameResponseGlobalsTypeInternal ResetAccountRealNameResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ResetAccountRealNameResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ResetAccountRealNameResponse_globals_.GetClassData();
+#else
+  return ResetAccountRealNameResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1225,7 +1546,7 @@ constexpr auto ReservePlayerNameResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[62],
+      &file_reflection_data[77],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1378,7 +1699,7 @@ constexpr auto ReservePlayerNameRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[61],
+      &file_reflection_data[76],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1425,6 +1746,183 @@ const ::_pbi::ClassData* ReservePlayerNameRequest_get_class_data() {
   return ReservePlayerNameRequest_globals_.GetClassData();
 #else
   return ReservePlayerNameRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class RenameRoleResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RenameRoleResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_._has_bits_);
+};
+
+constexpr RenameRoleResponse::ParseTableT_ RenameRoleResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::RenameRoleResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .data_service.RenameRoleResult result = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RenameRoleResponse, _impl_.result_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.result_)}},
+      // uint64 current_seq = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RenameRoleResponse, _impl_.current_seq_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.current_seq_)}},
+      // string name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.name_)}},
+      // uint64 renamed_ms = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RenameRoleResponse, _impl_.renamed_ms_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.renamed_ms_)}},
+      // uint64 next_allowed_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RenameRoleResponse, _impl_.next_allowed_ms_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.next_allowed_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .data_service.RenameRoleResult result = 1;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.result_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 current_seq = 2;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.current_seq_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string name = 3;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 renamed_ms = 4;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.renamed_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 next_allowed_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.next_allowed_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\37\0\0\4\0\0\0\0"
+      "data_service.RenameRoleResponse"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr RenameRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        current_seq_{::uint64_t{0u}},
+        renamed_ms_{::uint64_t{0u}},
+        next_allowed_ms_{::uint64_t{0u}},
+        result_{static_cast< ::data_service::RenameRoleResult >(0)} {}
+
+template <typename>
+constexpr RenameRoleResponse::RenameRoleResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RenameRoleResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RenameRoleResponse(arena);
+}
+constexpr auto RenameRoleResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RenameRoleResponse), alignof(RenameRoleResponse));
+}
+constexpr auto RenameRoleResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RenameRoleResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RenameRoleResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RenameRoleResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RenameRoleResponse>(), &RenameRoleResponse::ByteSizeLong,
+              &RenameRoleResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[80],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RenameRoleResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RenameRoleResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RenameRoleResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RenameRoleResponse::InternalGenerateClassData_(
+            _default, &RenameRoleResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RenameRoleResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RenameRoleResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RenameRoleResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RenameRoleResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RenameRoleResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RenameRoleResponseGlobalsTypeInternal RenameRoleResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RenameRoleResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RenameRoleResponse_globals_.GetClassData();
+#else
+  return RenameRoleResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1540,7 +2038,7 @@ constexpr auto RegisterRecallReviewHandledResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[55],
+      &file_reflection_data[70],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1757,7 +2255,7 @@ constexpr auto RegisterRecallReviewHandledRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[54],
+      &file_reflection_data[69],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -1913,7 +2411,7 @@ constexpr auto RegisterPlayerZoneRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[31],
+      &file_reflection_data[46],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2103,7 +2601,7 @@ constexpr auto RecallReviewRow::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[49],
+      &file_reflection_data[64],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2324,7 +2822,7 @@ constexpr auto RecallResult::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[47],
+      &file_reflection_data[62],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2519,7 +3017,7 @@ constexpr auto QueryTransactionLogRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[56],
+      &file_reflection_data[71],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2677,7 +3175,7 @@ constexpr auto PlayerStoreHolder::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -2857,7 +3355,7 @@ constexpr auto PlayerDisplay::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[68],
+      &file_reflection_data[85],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3013,7 +3511,7 @@ constexpr auto ListPlayerSnapshotsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[43],
+      &file_reflection_data[58],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3154,7 +3652,7 @@ constexpr auto GetRecallBatchRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[50],
+      &file_reflection_data[65],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3316,7 +3814,7 @@ constexpr auto GetPlayerRouteResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[42],
+      &file_reflection_data[57],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3457,7 +3955,7 @@ constexpr auto GetPlayerItemGainBlockRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[75],
+      &file_reflection_data[92],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3598,7 +4096,7 @@ constexpr auto GetPlayerInboxLedgerRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[73],
+      &file_reflection_data[90],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3739,7 +4237,7 @@ constexpr auto GetPlayerHomeZoneResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[48],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -3880,7 +4378,7 @@ constexpr auto GetPlayerHomeZoneRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[32],
+      &file_reflection_data[47],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4021,7 +4519,7 @@ constexpr auto GetPlayerAssetOpLedgerRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[71],
+      &file_reflection_data[88],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4154,7 +4652,7 @@ constexpr auto GetMergedZonesResponse_MergedIntoEntry_DoNotUse::InternalGenerate
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[37],
+      &file_reflection_data[52],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4201,6 +4699,307 @@ const ::_pbi::ClassData* GetMergedZonesResponse_MergedIntoEntry_DoNotUse_get_cla
   return GetMergedZonesResponse_MergedIntoEntry_DoNotUse_globals_.GetClassData();
 #else
   return GetMergedZonesResponse_MergedIntoEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetAccountRealNameResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetAccountRealNameResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponse, _impl_._has_bits_);
+};
+
+constexpr GetAccountRealNameResponse::ParseTableT_ GetAccountRealNameResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::GetAccountRealNameResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string real_name_pi = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponse, _impl_.real_name_pi_)}},
+      // bool found = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetAccountRealNameResponse, _impl_.found_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponse, _impl_.found_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool found = 1;
+      {PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponse, _impl_.found_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // string real_name_pi = 2;
+      {PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponse, _impl_.real_name_pi_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\47\0\14\0\0\0\0\0"
+      "data_service.GetAccountRealNameResponse"
+      "real_name_pi"
+    }},
+  };
+}
+
+
+inline constexpr GetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        real_name_pi_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        found_{false} {}
+
+template <typename>
+constexpr GetAccountRealNameResponse::GetAccountRealNameResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetAccountRealNameResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetAccountRealNameResponse(arena);
+}
+constexpr auto GetAccountRealNameResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetAccountRealNameResponse), alignof(GetAccountRealNameResponse));
+}
+constexpr auto GetAccountRealNameResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetAccountRealNameResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetAccountRealNameResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetAccountRealNameResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetAccountRealNameResponse>(), &GetAccountRealNameResponse::ByteSizeLong,
+              &GetAccountRealNameResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetAccountRealNameResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetAccountRealNameResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetAccountRealNameResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetAccountRealNameResponse::InternalGenerateClassData_(
+            _default, &GetAccountRealNameResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetAccountRealNameResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetAccountRealNameResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetAccountRealNameResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetAccountRealNameResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetAccountRealNameResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetAccountRealNameResponseGlobalsTypeInternal GetAccountRealNameResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetAccountRealNameResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetAccountRealNameResponse_globals_.GetClassData();
+#else
+  return GetAccountRealNameResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class FinishAccountDeletionResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<FinishAccountDeletionResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_._has_bits_);
+};
+
+constexpr FinishAccountDeletionResponse::ParseTableT_ FinishAccountDeletionResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::FinishAccountDeletionResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 remaining_refs = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(FinishAccountDeletionResponse, _impl_.remaining_refs_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_.remaining_refs_)}},
+      // bool done = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(FinishAccountDeletionResponse, _impl_.done_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_.done_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool done = 1;
+      {PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_.done_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 remaining_refs = 2;
+      {PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_.remaining_refs_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr FinishAccountDeletionResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        done_{false},
+        remaining_refs_{0u} {}
+
+template <typename>
+constexpr FinishAccountDeletionResponse::FinishAccountDeletionResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL FinishAccountDeletionResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) FinishAccountDeletionResponse(arena);
+}
+constexpr auto FinishAccountDeletionResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(FinishAccountDeletionResponse), alignof(FinishAccountDeletionResponse));
+}
+constexpr auto FinishAccountDeletionResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &FinishAccountDeletionResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<FinishAccountDeletionResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &FinishAccountDeletionResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<FinishAccountDeletionResponse>(), &FinishAccountDeletionResponse::ByteSizeLong,
+              &FinishAccountDeletionResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[15],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct FinishAccountDeletionResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr FinishAccountDeletionResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 FinishAccountDeletionResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(FinishAccountDeletionResponse::InternalGenerateClassData_(
+            _default, &FinishAccountDeletionResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<FinishAccountDeletionResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~FinishAccountDeletionResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) FinishAccountDeletionResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<FinishAccountDeletionResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST FinishAccountDeletionResponseGlobalsTypeInternal FinishAccountDeletionResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* FinishAccountDeletionResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return FinishAccountDeletionResponse_globals_.GetClassData();
+#else
+  return FinishAccountDeletionResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4295,7 +5094,7 @@ constexpr auto CountZoneRolesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[40],
+      &file_reflection_data[55],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4436,7 +5235,7 @@ constexpr auto CountZoneRolesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[39],
+      &file_reflection_data[54],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4577,7 +5376,7 @@ constexpr auto CloseRoleAdmissionsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[44],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4624,6 +5423,154 @@ const ::_pbi::ClassData* CloseRoleAdmissionsResponse_get_class_data() {
   return CloseRoleAdmissionsResponse_globals_.GetClassData();
 #else
   return CloseRoleAdmissionsResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimAccountDeletionsResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimAccountDeletionsResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsResponse, _impl_._has_bits_);
+};
+
+constexpr ClaimAccountDeletionsResponse::ParseTableT_ ClaimAccountDeletionsResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::ClaimAccountDeletionsResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // repeated string accounts = 1;
+      {::_pbi::TcParser::FastUR1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsResponse, _impl_.accounts_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // repeated string accounts = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsResponse, _impl_.accounts_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kUtf8String | ::_fl::kRepSString)},
+    }},
+    // no aux_entries
+    {{
+      "\52\10\0\0\0\0\0\0"
+      "data_service.ClaimAccountDeletionsResponse"
+      "accounts"
+    }},
+  };
+}
+
+
+inline constexpr ClaimAccountDeletionsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        accounts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::data_service::ClaimAccountDeletionsResponse,
+            PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsResponse, _impl_.accounts_)>()
+         }
+     {}
+
+template <typename>
+constexpr ClaimAccountDeletionsResponse::ClaimAccountDeletionsResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimAccountDeletionsResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimAccountDeletionsResponse(arena);
+}
+constexpr auto ClaimAccountDeletionsResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ClaimAccountDeletionsResponse), alignof(ClaimAccountDeletionsResponse));
+}
+constexpr auto ClaimAccountDeletionsResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimAccountDeletionsResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimAccountDeletionsResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimAccountDeletionsResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimAccountDeletionsResponse>(), &ClaimAccountDeletionsResponse::ByteSizeLong,
+              &ClaimAccountDeletionsResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[13],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimAccountDeletionsResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimAccountDeletionsResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimAccountDeletionsResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimAccountDeletionsResponse::InternalGenerateClassData_(
+            _default, &ClaimAccountDeletionsResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimAccountDeletionsResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimAccountDeletionsResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimAccountDeletionsResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimAccountDeletionsResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimAccountDeletionsResponseGlobalsTypeInternal ClaimAccountDeletionsResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimAccountDeletionsResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimAccountDeletionsResponse_globals_.GetClassData();
+#else
+  return ClaimAccountDeletionsResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4725,7 +5672,7 @@ constexpr auto CheckAccountRoleSlotResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[36],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -4889,7 +5836,7 @@ constexpr auto CancelRecallBatchRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[51],
+      &file_reflection_data[66],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5132,7 +6079,7 @@ constexpr auto BatchRecallItemsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[46],
+      &file_reflection_data[61],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5268,7 +6215,7 @@ constexpr auto BatchGetPlayerNameResponse_NamesEntry_DoNotUse::InternalGenerateC
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[65],
+      &file_reflection_data[82],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5414,7 +6361,7 @@ constexpr auto BatchGetPlayerNameRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[64],
+      &file_reflection_data[81],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5547,7 +6494,7 @@ constexpr auto BatchGetPlayerHomeZoneResponse_PlayerZoneMapEntry_DoNotUse::Inter
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[35],
+      &file_reflection_data[50],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5693,7 +6640,7 @@ constexpr auto BatchGetPlayerHomeZoneRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[49],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5839,7 +6786,7 @@ constexpr auto BatchGetPlayerDisplayRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[67],
+      &file_reflection_data[84],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -5995,7 +6942,7 @@ constexpr auto AllocateIdSegmentResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[60],
+      &file_reflection_data[75],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -6148,7 +7095,7 @@ constexpr auto AllocateIdSegmentRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[59],
+      &file_reflection_data[74],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -6296,7 +7243,7 @@ constexpr auto AccountRoleVersion::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -6482,7 +7429,7 @@ constexpr auto AccountRoleFreezeEvidence::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[27],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -6529,6 +7476,315 @@ const ::_pbi::ClassData* AccountRoleFreezeEvidence_get_class_data() {
   return AccountRoleFreezeEvidence_globals_.GetClassData();
 #else
   return AccountRoleFreezeEvidence_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AccountLifecycle::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AccountLifecycle>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_._has_bits_);
+};
+
+constexpr AccountLifecycle::ParseTableT_ AccountLifecycle::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::AccountLifecycle>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .data_service.AccountDeletionState deletion_state = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountLifecycle, _impl_.deletion_state_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.deletion_state_)}},
+      // uint64 deletion_execute_after_ms = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AccountLifecycle, _impl_.deletion_execute_after_ms_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.deletion_execute_after_ms_)}},
+      // uint64 previous_deleted_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AccountLifecycle, _impl_.previous_deleted_ms_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.previous_deleted_ms_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .data_service.AccountDeletionState deletion_state = 1;
+      {PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.deletion_state_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 deletion_execute_after_ms = 2;
+      {PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.deletion_execute_after_ms_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 previous_deleted_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.previous_deleted_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AccountLifecycle::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        deletion_execute_after_ms_{::uint64_t{0u}},
+        previous_deleted_ms_{::uint64_t{0u}},
+        deletion_state_{static_cast< ::data_service::AccountDeletionState >(0)} {}
+
+template <typename>
+constexpr AccountLifecycle::AccountLifecycle(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AccountLifecycle::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AccountLifecycle(arena);
+}
+constexpr auto AccountLifecycle::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AccountLifecycle), alignof(AccountLifecycle));
+}
+constexpr auto AccountLifecycle::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AccountLifecycle::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AccountLifecycle>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AccountLifecycle::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AccountLifecycle>(), &AccountLifecycle::ByteSizeLong,
+              &AccountLifecycle::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AccountLifecycleGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AccountLifecycleGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AccountLifecycle_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AccountLifecycle::InternalGenerateClassData_(
+            _default, &AccountLifecycle_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AccountLifecycle>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AccountLifecycleGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AccountLifecycle _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AccountLifecycle>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AccountLifecycleGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AccountLifecycleGlobalsTypeInternal AccountLifecycle_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AccountLifecycle_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AccountLifecycle_globals_.GetClassData();
+#else
+  return AccountLifecycle_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AccountDeletionBlocker::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AccountDeletionBlocker>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AccountDeletionBlocker, _impl_._has_bits_);
+};
+
+constexpr AccountDeletionBlocker::ParseTableT_ AccountDeletionBlocker::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AccountDeletionBlocker, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::AccountDeletionBlocker>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string reason = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AccountDeletionBlocker, _impl_.reason_)}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AccountDeletionBlocker, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AccountDeletionBlocker, _impl_.player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(AccountDeletionBlocker, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string reason = 2;
+      {PROTOBUF_FIELD_OFFSET(AccountDeletionBlocker, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\43\0\6\0\0\0\0\0"
+      "data_service.AccountDeletionBlocker"
+      "reason"
+    }},
+  };
+}
+
+
+inline constexpr AccountDeletionBlocker::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr AccountDeletionBlocker::AccountDeletionBlocker(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AccountDeletionBlocker::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AccountDeletionBlocker(arena);
+}
+constexpr auto AccountDeletionBlocker::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AccountDeletionBlocker), alignof(AccountDeletionBlocker));
+}
+constexpr auto AccountDeletionBlocker::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AccountDeletionBlocker::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AccountDeletionBlocker>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AccountDeletionBlocker::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AccountDeletionBlocker>(), &AccountDeletionBlocker::ByteSizeLong,
+              &AccountDeletionBlocker::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AccountDeletionBlocker, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[8],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AccountDeletionBlockerGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AccountDeletionBlockerGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AccountDeletionBlocker_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AccountDeletionBlocker::InternalGenerateClassData_(
+            _default, &AccountDeletionBlocker_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AccountDeletionBlocker>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AccountDeletionBlockerGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AccountDeletionBlocker _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AccountDeletionBlocker>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AccountDeletionBlockerGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AccountDeletionBlockerGlobalsTypeInternal AccountDeletionBlocker_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AccountDeletionBlocker_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AccountDeletionBlocker_globals_.GetClassData();
+#else
+  return AccountDeletionBlocker_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -6641,7 +7897,7 @@ constexpr auto VerifyRoleAdmissionRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[39],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -6839,7 +8095,7 @@ constexpr auto TransferAccountRoleRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -6886,6 +8142,502 @@ const ::_pbi::ClassData* TransferAccountRoleRequest_get_class_data() {
   return TransferAccountRoleRequest_globals_.GetClassData();
 #else
   return TransferAccountRoleRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SetAccountRealNameRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SetAccountRealNameRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_._has_bits_);
+};
+
+constexpr SetAccountRealNameRequest::ParseTableT_ SetAccountRealNameRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::SetAccountRealNameRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // string account = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_.account_)}},
+      // string real_name_pi = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_.real_name_pi_)}},
+      // .common.base.ServiceCallAuth auth = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_.auth_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string account = 1;
+      {PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_.account_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string real_name_pi = 2;
+      {PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_.real_name_pi_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 3;
+      {PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_.auth_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\46\7\14\0\0\0\0\0"
+      "data_service.SetAccountRealNameRequest"
+      "account"
+      "real_name_pi"
+    }},
+  };
+}
+
+
+inline constexpr SetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        real_name_pi_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr} {}
+
+template <typename>
+constexpr SetAccountRealNameRequest::SetAccountRealNameRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SetAccountRealNameRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SetAccountRealNameRequest(arena);
+}
+constexpr auto SetAccountRealNameRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SetAccountRealNameRequest), alignof(SetAccountRealNameRequest));
+}
+constexpr auto SetAccountRealNameRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SetAccountRealNameRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SetAccountRealNameRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SetAccountRealNameRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SetAccountRealNameRequest>(), &SetAccountRealNameRequest::ByteSizeLong,
+              &SetAccountRealNameRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SetAccountRealNameRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SetAccountRealNameRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SetAccountRealNameRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SetAccountRealNameRequest::InternalGenerateClassData_(
+            _default, &SetAccountRealNameRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SetAccountRealNameRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SetAccountRealNameRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SetAccountRealNameRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SetAccountRealNameRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SetAccountRealNameRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SetAccountRealNameRequestGlobalsTypeInternal SetAccountRealNameRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SetAccountRealNameRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SetAccountRealNameRequest_globals_.GetClassData();
+#else
+  return SetAccountRealNameRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ResetAccountRealNameRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ResetAccountRealNameRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequest, _impl_._has_bits_);
+};
+
+constexpr ResetAccountRealNameRequest::ParseTableT_ ResetAccountRealNameRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::ResetAccountRealNameRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequest, _impl_.auth_)}},
+      // string account = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequest, _impl_.account_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string account = 1;
+      {PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequest, _impl_.account_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 2;
+      {PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequest, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\50\7\0\0\0\0\0\0"
+      "data_service.ResetAccountRealNameRequest"
+      "account"
+    }},
+  };
+}
+
+
+inline constexpr ResetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr} {}
+
+template <typename>
+constexpr ResetAccountRealNameRequest::ResetAccountRealNameRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ResetAccountRealNameRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ResetAccountRealNameRequest(arena);
+}
+constexpr auto ResetAccountRealNameRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ResetAccountRealNameRequest), alignof(ResetAccountRealNameRequest));
+}
+constexpr auto ResetAccountRealNameRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ResetAccountRealNameRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ResetAccountRealNameRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ResetAccountRealNameRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ResetAccountRealNameRequest>(), &ResetAccountRealNameRequest::ByteSizeLong,
+              &ResetAccountRealNameRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[5],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ResetAccountRealNameRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ResetAccountRealNameRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ResetAccountRealNameRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ResetAccountRealNameRequest::InternalGenerateClassData_(
+            _default, &ResetAccountRealNameRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ResetAccountRealNameRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ResetAccountRealNameRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ResetAccountRealNameRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ResetAccountRealNameRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ResetAccountRealNameRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ResetAccountRealNameRequestGlobalsTypeInternal ResetAccountRealNameRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ResetAccountRealNameRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ResetAccountRealNameRequest_globals_.GetClassData();
+#else
+  return ResetAccountRealNameRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class RequestAccountDeletionRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RequestAccountDeletionRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_._has_bits_);
+};
+
+constexpr RequestAccountDeletionRequest::ParseTableT_ RequestAccountDeletionRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::RequestAccountDeletionRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // string account = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.account_)}},
+      // uint32 source = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RequestAccountDeletionRequest, _impl_.source_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.source_)}},
+      // .common.base.ServiceCallAuth auth = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.auth_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string account = 1;
+      {PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.account_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 source = 2;
+      {PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.source_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .common.base.ServiceCallAuth auth = 3;
+      {PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\52\7\0\0\0\0\0\0"
+      "data_service.RequestAccountDeletionRequest"
+      "account"
+    }},
+  };
+}
+
+
+inline constexpr RequestAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr},
+        source_{0u} {}
+
+template <typename>
+constexpr RequestAccountDeletionRequest::RequestAccountDeletionRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RequestAccountDeletionRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RequestAccountDeletionRequest(arena);
+}
+constexpr auto RequestAccountDeletionRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RequestAccountDeletionRequest), alignof(RequestAccountDeletionRequest));
+}
+constexpr auto RequestAccountDeletionRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RequestAccountDeletionRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RequestAccountDeletionRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RequestAccountDeletionRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RequestAccountDeletionRequest>(), &RequestAccountDeletionRequest::ByteSizeLong,
+              &RequestAccountDeletionRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RequestAccountDeletionRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RequestAccountDeletionRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RequestAccountDeletionRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RequestAccountDeletionRequest::InternalGenerateClassData_(
+            _default, &RequestAccountDeletionRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RequestAccountDeletionRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RequestAccountDeletionRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RequestAccountDeletionRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RequestAccountDeletionRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RequestAccountDeletionRequestGlobalsTypeInternal RequestAccountDeletionRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RequestAccountDeletionRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RequestAccountDeletionRequest_globals_.GetClassData();
+#else
+  return RequestAccountDeletionRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -7017,7 +8769,7 @@ constexpr auto RepairAccountRoleRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -7064,6 +8816,207 @@ const ::_pbi::ClassData* RepairAccountRoleRequest_get_class_data() {
   return RepairAccountRoleRequest_globals_.GetClassData();
 #else
   return RepairAccountRoleRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class RenameRoleRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RenameRoleRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_._has_bits_);
+};
+
+constexpr RenameRoleRequest::ParseTableT_ RenameRoleRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      8, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967040,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      8,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::RenameRoleRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 max_chars = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RenameRoleRequest, _impl_.max_chars_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.max_chars_)}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RenameRoleRequest, _impl_.player_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.player_id_)}},
+      // uint64 seq = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RenameRoleRequest, _impl_.seq_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.seq_)}},
+      // string name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.name_)}},
+      // uint32 cooldown_seconds = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RenameRoleRequest, _impl_.cooldown_seconds_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.cooldown_seconds_)}},
+      // uint32 hold_seconds = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RenameRoleRequest, _impl_.hold_seconds_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.hold_seconds_)}},
+      // .common.base.ServiceCallAuth auth = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.auth_)}},
+      // uint32 min_chars = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RenameRoleRequest, _impl_.min_chars_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.min_chars_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 seq = 2;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.seq_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string name = 3;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 cooldown_seconds = 4;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.cooldown_seconds_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 hold_seconds = 5;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.hold_seconds_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .common.base.ServiceCallAuth auth = 6;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 min_chars = 7;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.min_chars_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_chars = 8;
+      {PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.max_chars_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\36\0\0\4\0\0\0\0\0\0\0\0\0\0\0\0"
+      "data_service.RenameRoleRequest"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr RenameRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr},
+        player_id_{::uint64_t{0u}},
+        seq_{::uint64_t{0u}},
+        cooldown_seconds_{0u},
+        hold_seconds_{0u},
+        min_chars_{0u},
+        max_chars_{0u} {}
+
+template <typename>
+constexpr RenameRoleRequest::RenameRoleRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RenameRoleRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RenameRoleRequest(arena);
+}
+constexpr auto RenameRoleRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RenameRoleRequest), alignof(RenameRoleRequest));
+}
+constexpr auto RenameRoleRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RenameRoleRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RenameRoleRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RenameRoleRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RenameRoleRequest>(), &RenameRoleRequest::ByteSizeLong,
+              &RenameRoleRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[79],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RenameRoleRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RenameRoleRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RenameRoleRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RenameRoleRequest::InternalGenerateClassData_(
+            _default, &RenameRoleRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RenameRoleRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RenameRoleRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RenameRoleRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RenameRoleRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RenameRoleRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RenameRoleRequestGlobalsTypeInternal RenameRoleRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RenameRoleRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RenameRoleRequest_globals_.GetClassData();
+#else
+  return RenameRoleRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -7193,7 +9146,7 @@ constexpr auto RemoveAccountRolesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -7360,7 +9313,7 @@ constexpr auto ReleasePlayerNameRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[63],
+      &file_reflection_data[78],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -7533,7 +9486,7 @@ constexpr auto ReleaseDeadPlayerStoreHolderRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -7687,7 +9640,7 @@ constexpr auto RegisterRoleAdmissionResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[27],
+      &file_reflection_data[42],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -7846,7 +9799,7 @@ constexpr auto RegisterRoleAdmissionRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[41],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8000,7 +9953,7 @@ constexpr auto ReadPlayerStoreHolderResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8154,7 +10107,7 @@ constexpr auto ReadPlayerStoreHolderRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8321,7 +10274,7 @@ constexpr auto ReadAccountDirectoryRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8487,7 +10440,7 @@ constexpr auto QueryTransactionLogResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[58],
+      &file_reflection_data[73],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8550,11 +10503,11 @@ constexpr LookupAccountRoleRequest::ParseTableT_ LookupAccountRoleRequest::Inter
     {
       PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -8564,14 +10517,19 @@ constexpr LookupAccountRoleRequest::ParseTableT_ LookupAccountRoleRequest::Inter
       ::_pbi::TcParser::GetTable<::data_service::LookupAccountRoleRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .common.base.ServiceCallAuth auth = 2;
-      {::_pbi::TcParser::FastMtS1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.auth_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(LookupAccountRoleRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.player_id_)}},
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.auth_)}},
+      // bool include_account_state = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(LookupAccountRoleRequest, _impl_.include_account_state_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.include_account_state_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -8579,6 +10537,8 @@ constexpr LookupAccountRoleRequest::ParseTableT_ LookupAccountRoleRequest::Inter
       {PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .common.base.ServiceCallAuth auth = 2;
       {PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.auth_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool include_account_state = 3;
+      {PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.include_account_state_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -8598,7 +10558,8 @@ inline constexpr LookupAccountRoleRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         auth_{nullptr},
-        player_id_{::uint64_t{0u}} {}
+        player_id_{::uint64_t{0u}},
+        include_account_state_{false} {}
 
 template <typename>
 constexpr LookupAccountRoleRequest::LookupAccountRoleRequest(::_pbi::ConstantInitialized,
@@ -8641,7 +10602,7 @@ constexpr auto LookupAccountRoleRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8799,7 +10760,7 @@ constexpr auto ListPlayerSnapshotsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[45],
+      &file_reflection_data[60],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -8961,7 +10922,7 @@ constexpr auto GetRoleFenceStateResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[38],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -9115,7 +11076,7 @@ constexpr auto GetRoleFenceStateRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[37],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -9269,7 +11230,7 @@ constexpr auto GetPlayerRouteRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[41],
+      &file_reflection_data[56],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -9423,7 +11384,7 @@ constexpr auto GetPlayerItemGainBlockResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[76],
+      &file_reflection_data[93],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -9568,7 +11529,7 @@ constexpr auto GetMergedZonesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[38],
+      &file_reflection_data[53],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -9615,6 +11576,319 @@ const ::_pbi::ClassData* GetMergedZonesResponse_get_class_data() {
   return GetMergedZonesResponse_globals_.GetClassData();
 #else
   return GetMergedZonesResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetAccountRealNameRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetAccountRealNameRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_._has_bits_);
+};
+
+constexpr GetAccountRealNameRequest::ParseTableT_ GetAccountRealNameRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::GetAccountRealNameRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_.auth_)}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetAccountRealNameRequest, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_.player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .common.base.ServiceCallAuth auth = 2;
+      {PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_.auth_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        auth_{nullptr},
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GetAccountRealNameRequest::GetAccountRealNameRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetAccountRealNameRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetAccountRealNameRequest(arena);
+}
+constexpr auto GetAccountRealNameRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetAccountRealNameRequest), alignof(GetAccountRealNameRequest));
+}
+constexpr auto GetAccountRealNameRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetAccountRealNameRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetAccountRealNameRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetAccountRealNameRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetAccountRealNameRequest>(), &GetAccountRealNameRequest::ByteSizeLong,
+              &GetAccountRealNameRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[3],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetAccountRealNameRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetAccountRealNameRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetAccountRealNameRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetAccountRealNameRequest::InternalGenerateClassData_(
+            _default, &GetAccountRealNameRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetAccountRealNameRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetAccountRealNameRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetAccountRealNameRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetAccountRealNameRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetAccountRealNameRequestGlobalsTypeInternal GetAccountRealNameRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetAccountRealNameRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetAccountRealNameRequest_globals_.GetClassData();
+#else
+  return GetAccountRealNameRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class FinishAccountDeletionRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<FinishAccountDeletionRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequest, _impl_._has_bits_);
+};
+
+constexpr FinishAccountDeletionRequest::ParseTableT_ FinishAccountDeletionRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::FinishAccountDeletionRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequest, _impl_.auth_)}},
+      // string account = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequest, _impl_.account_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string account = 1;
+      {PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequest, _impl_.account_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 2;
+      {PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequest, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\51\7\0\0\0\0\0\0"
+      "data_service.FinishAccountDeletionRequest"
+      "account"
+    }},
+  };
+}
+
+
+inline constexpr FinishAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr} {}
+
+template <typename>
+constexpr FinishAccountDeletionRequest::FinishAccountDeletionRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL FinishAccountDeletionRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) FinishAccountDeletionRequest(arena);
+}
+constexpr auto FinishAccountDeletionRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(FinishAccountDeletionRequest), alignof(FinishAccountDeletionRequest));
+}
+constexpr auto FinishAccountDeletionRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &FinishAccountDeletionRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<FinishAccountDeletionRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &FinishAccountDeletionRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<FinishAccountDeletionRequest>(), &FinishAccountDeletionRequest::ByteSizeLong,
+              &FinishAccountDeletionRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[14],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct FinishAccountDeletionRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr FinishAccountDeletionRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 FinishAccountDeletionRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(FinishAccountDeletionRequest::InternalGenerateClassData_(
+            _default, &FinishAccountDeletionRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<FinishAccountDeletionRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~FinishAccountDeletionRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) FinishAccountDeletionRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<FinishAccountDeletionRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(FinishAccountDeletionRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST FinishAccountDeletionRequestGlobalsTypeInternal FinishAccountDeletionRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* FinishAccountDeletionRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return FinishAccountDeletionRequest_globals_.GetClassData();
+#else
+  return FinishAccountDeletionRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -9740,7 +12014,7 @@ constexpr auto CreateAccountRoleRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -9923,7 +12197,7 @@ constexpr auto ConfirmAccountRoleTradeFreezeRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -10118,7 +12392,7 @@ constexpr auto CloseRoleAdmissionsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[43],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -10165,6 +12439,160 @@ const ::_pbi::ClassData* CloseRoleAdmissionsRequest_get_class_data() {
   return CloseRoleAdmissionsRequest_globals_.GetClassData();
 #else
   return CloseRoleAdmissionsRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ClaimAccountDeletionsRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ClaimAccountDeletionsRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_._has_bits_);
+};
+
+constexpr ClaimAccountDeletionsRequest::ParseTableT_ ClaimAccountDeletionsRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::ClaimAccountDeletionsRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_.auth_)}},
+      // uint32 limit = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimAccountDeletionsRequest, _impl_.limit_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_.limit_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 limit = 1;
+      {PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_.limit_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .common.base.ServiceCallAuth auth = 2;
+      {PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_.auth_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr ClaimAccountDeletionsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        auth_{nullptr},
+        limit_{0u} {}
+
+template <typename>
+constexpr ClaimAccountDeletionsRequest::ClaimAccountDeletionsRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ClaimAccountDeletionsRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ClaimAccountDeletionsRequest(arena);
+}
+constexpr auto ClaimAccountDeletionsRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimAccountDeletionsRequest), alignof(ClaimAccountDeletionsRequest));
+}
+constexpr auto ClaimAccountDeletionsRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ClaimAccountDeletionsRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<ClaimAccountDeletionsRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ClaimAccountDeletionsRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<ClaimAccountDeletionsRequest>(), &ClaimAccountDeletionsRequest::ByteSizeLong,
+              &ClaimAccountDeletionsRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[12],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ClaimAccountDeletionsRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ClaimAccountDeletionsRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ClaimAccountDeletionsRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ClaimAccountDeletionsRequest::InternalGenerateClassData_(
+            _default, &ClaimAccountDeletionsRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ClaimAccountDeletionsRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ClaimAccountDeletionsRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ClaimAccountDeletionsRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ClaimAccountDeletionsRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ClaimAccountDeletionsRequestGlobalsTypeInternal ClaimAccountDeletionsRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ClaimAccountDeletionsRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ClaimAccountDeletionsRequest_globals_.GetClassData();
+#else
+  return ClaimAccountDeletionsRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -10277,7 +12705,7 @@ constexpr auto CheckAccountRoleSlotRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[35],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -10460,7 +12888,7 @@ constexpr auto CancelAccountRoleTradeRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -10507,6 +12935,165 @@ const ::_pbi::ClassData* CancelAccountRoleTradeRequest_get_class_data() {
   return CancelAccountRoleTradeRequest_globals_.GetClassData();
 #else
   return CancelAccountRoleTradeRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CancelAccountDeletionRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CancelAccountDeletionRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequest, _impl_._has_bits_);
+};
+
+constexpr CancelAccountDeletionRequest::ParseTableT_ CancelAccountDeletionRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::CancelAccountDeletionRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .common.base.ServiceCallAuth auth = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequest, _impl_.auth_)}},
+      // string account = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequest, _impl_.account_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string account = 1;
+      {PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequest, _impl_.account_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 2;
+      {PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequest, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\51\7\0\0\0\0\0\0"
+      "data_service.CancelAccountDeletionRequest"
+      "account"
+    }},
+  };
+}
+
+
+inline constexpr CancelAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr} {}
+
+template <typename>
+constexpr CancelAccountDeletionRequest::CancelAccountDeletionRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CancelAccountDeletionRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CancelAccountDeletionRequest(arena);
+}
+constexpr auto CancelAccountDeletionRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CancelAccountDeletionRequest), alignof(CancelAccountDeletionRequest));
+}
+constexpr auto CancelAccountDeletionRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CancelAccountDeletionRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CancelAccountDeletionRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CancelAccountDeletionRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CancelAccountDeletionRequest>(), &CancelAccountDeletionRequest::ByteSizeLong,
+              &CancelAccountDeletionRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[11],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CancelAccountDeletionRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CancelAccountDeletionRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CancelAccountDeletionRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CancelAccountDeletionRequest::InternalGenerateClassData_(
+            _default, &CancelAccountDeletionRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CancelAccountDeletionRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CancelAccountDeletionRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CancelAccountDeletionRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CancelAccountDeletionRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CancelAccountDeletionRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CancelAccountDeletionRequestGlobalsTypeInternal CancelAccountDeletionRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CancelAccountDeletionRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CancelAccountDeletionRequest_globals_.GetClassData();
+#else
+  return CancelAccountDeletionRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -10643,7 +13230,7 @@ constexpr auto BeginAccountRoleTradeRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -10907,7 +13494,7 @@ constexpr auto BatchRecallItemsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[48],
+      &file_reflection_data[63],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11055,7 +13642,7 @@ constexpr auto BatchGetPlayerNameResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[66],
+      &file_reflection_data[83],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11200,7 +13787,7 @@ constexpr auto BatchGetPlayerHomeZoneResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[36],
+      &file_reflection_data[51],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11339,7 +13926,7 @@ constexpr auto BatchGetPlayerDisplayResponse_PlayersEntry_DoNotUse::InternalGene
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[69],
+      &file_reflection_data[86],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11512,7 +14099,7 @@ constexpr auto AckRoleTradeDrainRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[45],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11730,7 +14317,7 @@ constexpr auto AccountRoleTransferReceipt::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11884,7 +14471,7 @@ constexpr auto AccountRoleTradeHolder::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[28],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -11947,11 +14534,11 @@ constexpr AccountRoleOwnership::ParseTableT_ AccountRoleOwnership::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      7,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -11986,7 +14573,10 @@ constexpr AccountRoleOwnership::ParseTableT_ AccountRoleOwnership::InternalGener
       {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AccountRoleOwnership, _impl_.initial_player_commit_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.initial_player_commit_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .data_service.AccountDeletionState account_deletion_state = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountRoleOwnership, _impl_.account_deletion_state_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.account_deletion_state_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -12002,6 +14592,8 @@ constexpr AccountRoleOwnership::ParseTableT_ AccountRoleOwnership::InternalGener
       {PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.prepare_token_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool initial_player_commit = 6;
       {PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.initial_player_commit_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .data_service.AccountDeletionState account_deletion_state = 7;
+      {PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.account_deletion_state_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -12030,7 +14622,8 @@ inline constexpr AccountRoleOwnership::Impl_::Impl_(
         owner_revision_{::uint64_t{0u}},
         trade_listing_id_{::uint64_t{0u}},
         prepare_token_{::uint64_t{0u}},
-        initial_player_commit_{false} {}
+        initial_player_commit_{false},
+        account_deletion_state_{static_cast< ::data_service::AccountDeletionState >(0)} {}
 
 template <typename>
 constexpr AccountRoleOwnership::AccountRoleOwnership(::_pbi::ConstantInitialized,
@@ -12073,7 +14666,7 @@ constexpr auto AccountRoleOwnership::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -12120,6 +14713,177 @@ const ::_pbi::ClassData* AccountRoleOwnership_get_class_data() {
   return AccountRoleOwnership_globals_.GetClassData();
 #else
   return AccountRoleOwnership_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AccountDeletionResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AccountDeletionResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_._has_bits_);
+};
+
+constexpr AccountDeletionResponse::ParseTableT_ AccountDeletionResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::AccountDeletionResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .data_service.AccountDeletionOutcome outcome = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountDeletionResponse, _impl_.outcome_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.outcome_)}},
+      // .data_service.AccountLifecycle lifecycle = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.lifecycle_)}},
+      // repeated .data_service.AccountDeletionBlocker blockers = 3;
+      {::_pbi::TcParser::FastMtR1,
+       {26, 0, 1,
+        PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.blockers_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .data_service.AccountDeletionOutcome outcome = 1;
+      {PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.outcome_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // .data_service.AccountLifecycle lifecycle = 2;
+      {PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.lifecycle_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .data_service.AccountDeletionBlocker blockers = 3;
+      {PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.blockers_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::data_service::AccountLifecycle>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::data_service::AccountLifecycle_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::data_service::AccountDeletionBlocker>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::data_service::AccountDeletionBlocker_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AccountDeletionResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        blockers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::data_service::AccountDeletionResponse,
+            PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionResponse, _impl_.blockers_)>()
+         }
+        ,
+        lifecycle_{nullptr},
+        outcome_{static_cast< ::data_service::AccountDeletionOutcome >(0)} {}
+
+template <typename>
+constexpr AccountDeletionResponse::AccountDeletionResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AccountDeletionResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AccountDeletionResponse(arena);
+}
+constexpr auto AccountDeletionResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AccountDeletionResponse), alignof(AccountDeletionResponse));
+}
+constexpr auto AccountDeletionResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AccountDeletionResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AccountDeletionResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AccountDeletionResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AccountDeletionResponse>(), &AccountDeletionResponse::ByteSizeLong,
+              &AccountDeletionResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[9],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AccountDeletionResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AccountDeletionResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AccountDeletionResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AccountDeletionResponse::InternalGenerateClassData_(
+            _default, &AccountDeletionResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AccountDeletionResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AccountDeletionResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AccountDeletionResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AccountDeletionResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AccountDeletionResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AccountDeletionResponseGlobalsTypeInternal AccountDeletionResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AccountDeletionResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AccountDeletionResponse_globals_.GetClassData();
+#else
+  return AccountDeletionResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -12223,7 +14987,7 @@ constexpr auto BatchGetPlayerDisplayResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[70],
+      &file_reflection_data[87],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -12427,7 +15191,7 @@ constexpr auto AccountRoleTradeReceipt::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[29],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -12490,12 +15254,12 @@ constexpr AccountDirectoryResponse::ParseTableT_ AccountDirectoryResponse::Inter
     {
       PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
-      1,  // num_aux_entries
+      3,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -12504,15 +15268,28 @@ constexpr AccountDirectoryResponse::ParseTableT_ AccountDirectoryResponse::Inter
       ::_pbi::TcParser::GetTable<::data_service::AccountDirectoryResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
       // .AccountSimplePlayerList players = 1;
       {::_pbi::TcParser::FastMtS1,
-       {10, 0, 0,
+       {10, 1, 0,
         PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_)}},
+      // .data_service.AccountLifecycle lifecycle = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 2, 1,
+        PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.lifecycle_)}},
+      // string real_name_pi = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.real_name_pi_)}},
     }}, {{
       65535, 65535
     }}, {{
       // .AccountSimplePlayerList players = 1;
-      {PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .data_service.AccountLifecycle lifecycle = 2;
+      {PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.lifecycle_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string real_name_pi = 3;
+      {PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.real_name_pi_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -12520,8 +15297,16 @@ constexpr AccountDirectoryResponse::ParseTableT_ AccountDirectoryResponse::Inter
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::AccountSimplePlayerList_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::data_service::AccountLifecycle>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::data_service::AccountLifecycle_globals_},
+        #endif
     }},
     {{
+      "\45\0\0\14\0\0\0\0"
+      "data_service.AccountDirectoryResponse"
+      "real_name_pi"
     }},
   };
 }
@@ -12531,7 +15316,11 @@ inline constexpr AccountDirectoryResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        players_{nullptr} {}
+        real_name_pi_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        players_{nullptr},
+        lifecycle_{nullptr} {}
 
 template <typename>
 constexpr AccountDirectoryResponse::AccountDirectoryResponse(::_pbi::ConstantInitialized,
@@ -12549,7 +15338,7 @@ inline void* PROTOBUF_NONNULL AccountDirectoryResponse::PlacementNew_(
   return ::new (mem) AccountDirectoryResponse(arena);
 }
 constexpr auto AccountDirectoryResponse::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AccountDirectoryResponse), alignof(AccountDirectoryResponse));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AccountDirectoryResponse), alignof(AccountDirectoryResponse));
 }
 constexpr auto AccountDirectoryResponse::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -12728,7 +15517,7 @@ constexpr auto GetPlayerInboxLedgerResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[74],
+      &file_reflection_data[91],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -12890,7 +15679,7 @@ constexpr auto GetPlayerAssetOpLedgerResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[72],
+      &file_reflection_data[89],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
@@ -12943,7 +15732,7 @@ const ::_pbi::ClassData* GetPlayerAssetOpLedgerResponse_get_class_data() {
 #endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace data_service
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[5];
+    file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[8];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto = nullptr;
 const ::uint32_t
@@ -12951,24 +15740,137 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::AccountDirectoryResponse, _impl_._has_bits_),
-        4, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::AccountDirectoryResponse, _impl_.players_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDirectoryResponse, _impl_.lifecycle_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDirectoryResponse, _impl_.real_name_pi_),
+        1,
+        2,
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::SetAccountRealNameRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::SetAccountRealNameRequest, _impl_.account_),
+        PROTOBUF_FIELD_OFFSET(::data_service::SetAccountRealNameRequest, _impl_.real_name_pi_),
+        PROTOBUF_FIELD_OFFSET(::data_service::SetAccountRealNameRequest, _impl_.auth_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::SetAccountRealNameResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::SetAccountRealNameResponse, _impl_.real_name_pi_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::GetAccountRealNameRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::GetAccountRealNameRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::GetAccountRealNameRequest, _impl_.auth_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::GetAccountRealNameResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::GetAccountRealNameResponse, _impl_.found_),
+        PROTOBUF_FIELD_OFFSET(::data_service::GetAccountRealNameResponse, _impl_.real_name_pi_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::ResetAccountRealNameRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::ResetAccountRealNameRequest, _impl_.account_),
+        PROTOBUF_FIELD_OFFSET(::data_service::ResetAccountRealNameRequest, _impl_.auth_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::ResetAccountRealNameResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::ResetAccountRealNameResponse, _impl_.had_real_name_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountLifecycle, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountLifecycle, _impl_.deletion_state_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountLifecycle, _impl_.deletion_execute_after_ms_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountLifecycle, _impl_.previous_deleted_ms_),
+        2,
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionBlocker, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionBlocker, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionBlocker, _impl_.reason_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionResponse, _impl_.outcome_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionResponse, _impl_.lifecycle_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionResponse, _impl_.blockers_),
+        2,
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::RequestAccountDeletionRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::RequestAccountDeletionRequest, _impl_.account_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RequestAccountDeletionRequest, _impl_.source_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RequestAccountDeletionRequest, _impl_.auth_),
+        0,
+        2,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::CancelAccountDeletionRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::CancelAccountDeletionRequest, _impl_.account_),
+        PROTOBUF_FIELD_OFFSET(::data_service::CancelAccountDeletionRequest, _impl_.auth_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsRequest, _impl_.limit_),
+        PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsRequest, _impl_.auth_),
+        1,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsResponse, _impl_.accounts_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::FinishAccountDeletionRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::FinishAccountDeletionRequest, _impl_.account_),
+        PROTOBUF_FIELD_OFFSET(::data_service::FinishAccountDeletionRequest, _impl_.auth_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::FinishAccountDeletionResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::FinishAccountDeletionResponse, _impl_.done_),
+        PROTOBUF_FIELD_OFFSET(::data_service::FinishAccountDeletionResponse, _impl_.remaining_refs_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_.account_),
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_.role_),
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_.owner_revision_),
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_.trade_listing_id_),
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_.prepare_token_),
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_.initial_player_commit_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleOwnership, _impl_.account_deletion_state_),
         0,
         1,
         2,
         3,
         4,
         5,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::AccountRoleVersion, _impl_._has_bits_),
         5, // hasbit index offset
@@ -12996,11 +15898,13 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::LookupAccountRoleRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::LookupAccountRoleRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::data_service::LookupAccountRoleRequest, _impl_.auth_),
+        PROTOBUF_FIELD_OFFSET(::data_service::LookupAccountRoleRequest, _impl_.include_account_state_),
         1,
         0,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::ReleaseDeadPlayerStoreHolderRequest, _impl_._has_bits_),
         7, // hasbit index offset
@@ -13648,6 +16552,38 @@ const ::uint32_t
         0,
         1,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_._has_bits_),
+        11, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.seq_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.cooldown_seconds_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.hold_seconds_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.auth_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.min_chars_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleRequest, _impl_.max_chars_),
+        2,
+        3,
+        0,
+        4,
+        5,
+        1,
+        6,
+        7,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleResponse, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleResponse, _impl_.result_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleResponse, _impl_.current_seq_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleResponse, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleResponse, _impl_.renamed_ms_),
+        PROTOBUF_FIELD_OFFSET(::data_service::RenameRoleResponse, _impl_.next_allowed_ms_),
+        4,
+        1,
+        0,
+        2,
+        3,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::BatchGetPlayerNameRequest, _impl_._has_bits_),
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::BatchGetPlayerNameRequest, _impl_.player_ids_),
@@ -13737,86 +16673,118 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::data_service::AccountDirectoryResponse)},
-        {5, sizeof(::data_service::AccountRoleOwnership)},
-        {20, sizeof(::data_service::AccountRoleVersion)},
-        {27, sizeof(::data_service::ReadAccountDirectoryRequest)},
-        {36, sizeof(::data_service::CreateAccountRoleRequest)},
-        {45, sizeof(::data_service::LookupAccountRoleRequest)},
-        {52, sizeof(::data_service::ReleaseDeadPlayerStoreHolderRequest)},
-        {63, sizeof(::data_service::PlayerStoreHolder)},
-        {72, sizeof(::data_service::ReadPlayerStoreHolderRequest)},
-        {79, sizeof(::data_service::ReadPlayerStoreHolderResponse)},
-        {86, sizeof(::data_service::RepairAccountRoleRequest)},
-        {97, sizeof(::data_service::RemoveAccountRolesRequest)},
-        {106, sizeof(::data_service::AccountRoleFreezeEvidence)},
-        {123, sizeof(::data_service::AccountRoleTradeHolder)},
-        {130, sizeof(::data_service::AccountRoleTradeReceipt)},
-        {147, sizeof(::data_service::AccountRoleTransferReceipt)},
-        {168, sizeof(::data_service::BeginAccountRoleTradeRequest)},
-        {181, sizeof(::data_service::ConfirmAccountRoleTradeFreezeRequest)},
-        {194, sizeof(::data_service::CancelAccountRoleTradeRequest)},
-        {207, sizeof(::data_service::TransferAccountRoleRequest)},
-        {224, sizeof(::data_service::CheckAccountRoleSlotRequest)},
-        {231, sizeof(::data_service::CheckAccountRoleSlotResponse)},
-        {238, sizeof(::data_service::GetRoleFenceStateRequest)},
-        {245, sizeof(::data_service::GetRoleFenceStateResponse)},
-        {254, sizeof(::data_service::VerifyRoleAdmissionRequest)},
-        {261, sizeof(::data_service::VerifyRoleAdmissionResponse)},
-        {268, sizeof(::data_service::RegisterRoleAdmissionRequest)},
-        {275, sizeof(::data_service::RegisterRoleAdmissionResponse)},
-        {282, sizeof(::data_service::CloseRoleAdmissionsRequest)},
-        {299, sizeof(::data_service::CloseRoleAdmissionsResponse)},
-        {304, sizeof(::data_service::AckRoleTradeDrainRequest)},
-        {315, sizeof(::data_service::RegisterPlayerZoneRequest)},
-        {324, sizeof(::data_service::GetPlayerHomeZoneRequest)},
-        {329, sizeof(::data_service::GetPlayerHomeZoneResponse)},
-        {334, sizeof(::data_service::BatchGetPlayerHomeZoneRequest)},
-        {339, sizeof(::data_service::BatchGetPlayerHomeZoneResponse_PlayerZoneMapEntry_DoNotUse)},
-        {346, sizeof(::data_service::BatchGetPlayerHomeZoneResponse)},
-        {351, sizeof(::data_service::GetMergedZonesResponse_MergedIntoEntry_DoNotUse)},
-        {358, sizeof(::data_service::GetMergedZonesResponse)},
-        {363, sizeof(::data_service::CountZoneRolesRequest)},
-        {368, sizeof(::data_service::CountZoneRolesResponse)},
-        {373, sizeof(::data_service::GetPlayerRouteRequest)},
-        {380, sizeof(::data_service::GetPlayerRouteResponse)},
-        {391, sizeof(::data_service::ListPlayerSnapshotsRequest)},
-        {400, sizeof(::data_service::SnapshotInfo)},
-        {421, sizeof(::data_service::ListPlayerSnapshotsResponse)},
-        {428, sizeof(::data_service::BatchRecallItemsRequest)},
-        {455, sizeof(::data_service::RecallResult)},
-        {480, sizeof(::data_service::BatchRecallItemsResponse)},
-        {513, sizeof(::data_service::RecallReviewRow)},
-        {532, sizeof(::data_service::GetRecallBatchRequest)},
-        {537, sizeof(::data_service::CancelRecallBatchRequest)},
-        {546, sizeof(::data_service::ResolveRecallOpRequest)},
-        {557, sizeof(::data_service::ResolveRecallOpResponse)},
-        {568, sizeof(::data_service::RegisterRecallReviewHandledRequest)},
-        {589, sizeof(::data_service::RegisterRecallReviewHandledResponse)},
-        {600, sizeof(::data_service::QueryTransactionLogRequest)},
-        {619, sizeof(::data_service::TransactionLogRow)},
-        {650, sizeof(::data_service::QueryTransactionLogResponse)},
-        {659, sizeof(::data_service::AllocateIdSegmentRequest)},
-        {666, sizeof(::data_service::AllocateIdSegmentResponse)},
-        {675, sizeof(::data_service::ReservePlayerNameRequest)},
-        {682, sizeof(::data_service::ReservePlayerNameResponse)},
-        {689, sizeof(::data_service::ReleasePlayerNameRequest)},
-        {698, sizeof(::data_service::BatchGetPlayerNameRequest)},
-        {703, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
-        {710, sizeof(::data_service::BatchGetPlayerNameResponse)},
-        {715, sizeof(::data_service::BatchGetPlayerDisplayRequest)},
-        {720, sizeof(::data_service::PlayerDisplay)},
-        {733, sizeof(::data_service::BatchGetPlayerDisplayResponse_PlayersEntry_DoNotUse)},
-        {740, sizeof(::data_service::BatchGetPlayerDisplayResponse)},
-        {745, sizeof(::data_service::GetPlayerAssetOpLedgerRequest)},
-        {750, sizeof(::data_service::GetPlayerAssetOpLedgerResponse)},
-        {759, sizeof(::data_service::GetPlayerInboxLedgerRequest)},
-        {764, sizeof(::data_service::GetPlayerInboxLedgerResponse)},
-        {771, sizeof(::data_service::GetPlayerItemGainBlockRequest)},
-        {776, sizeof(::data_service::GetPlayerItemGainBlockResponse)},
+        {9, sizeof(::data_service::SetAccountRealNameRequest)},
+        {18, sizeof(::data_service::SetAccountRealNameResponse)},
+        {23, sizeof(::data_service::GetAccountRealNameRequest)},
+        {30, sizeof(::data_service::GetAccountRealNameResponse)},
+        {37, sizeof(::data_service::ResetAccountRealNameRequest)},
+        {44, sizeof(::data_service::ResetAccountRealNameResponse)},
+        {49, sizeof(::data_service::AccountLifecycle)},
+        {58, sizeof(::data_service::AccountDeletionBlocker)},
+        {65, sizeof(::data_service::AccountDeletionResponse)},
+        {74, sizeof(::data_service::RequestAccountDeletionRequest)},
+        {83, sizeof(::data_service::CancelAccountDeletionRequest)},
+        {90, sizeof(::data_service::ClaimAccountDeletionsRequest)},
+        {97, sizeof(::data_service::ClaimAccountDeletionsResponse)},
+        {102, sizeof(::data_service::FinishAccountDeletionRequest)},
+        {109, sizeof(::data_service::FinishAccountDeletionResponse)},
+        {116, sizeof(::data_service::AccountRoleOwnership)},
+        {133, sizeof(::data_service::AccountRoleVersion)},
+        {140, sizeof(::data_service::ReadAccountDirectoryRequest)},
+        {149, sizeof(::data_service::CreateAccountRoleRequest)},
+        {158, sizeof(::data_service::LookupAccountRoleRequest)},
+        {167, sizeof(::data_service::ReleaseDeadPlayerStoreHolderRequest)},
+        {178, sizeof(::data_service::PlayerStoreHolder)},
+        {187, sizeof(::data_service::ReadPlayerStoreHolderRequest)},
+        {194, sizeof(::data_service::ReadPlayerStoreHolderResponse)},
+        {201, sizeof(::data_service::RepairAccountRoleRequest)},
+        {212, sizeof(::data_service::RemoveAccountRolesRequest)},
+        {221, sizeof(::data_service::AccountRoleFreezeEvidence)},
+        {238, sizeof(::data_service::AccountRoleTradeHolder)},
+        {245, sizeof(::data_service::AccountRoleTradeReceipt)},
+        {262, sizeof(::data_service::AccountRoleTransferReceipt)},
+        {283, sizeof(::data_service::BeginAccountRoleTradeRequest)},
+        {296, sizeof(::data_service::ConfirmAccountRoleTradeFreezeRequest)},
+        {309, sizeof(::data_service::CancelAccountRoleTradeRequest)},
+        {322, sizeof(::data_service::TransferAccountRoleRequest)},
+        {339, sizeof(::data_service::CheckAccountRoleSlotRequest)},
+        {346, sizeof(::data_service::CheckAccountRoleSlotResponse)},
+        {353, sizeof(::data_service::GetRoleFenceStateRequest)},
+        {360, sizeof(::data_service::GetRoleFenceStateResponse)},
+        {369, sizeof(::data_service::VerifyRoleAdmissionRequest)},
+        {376, sizeof(::data_service::VerifyRoleAdmissionResponse)},
+        {383, sizeof(::data_service::RegisterRoleAdmissionRequest)},
+        {390, sizeof(::data_service::RegisterRoleAdmissionResponse)},
+        {397, sizeof(::data_service::CloseRoleAdmissionsRequest)},
+        {414, sizeof(::data_service::CloseRoleAdmissionsResponse)},
+        {419, sizeof(::data_service::AckRoleTradeDrainRequest)},
+        {430, sizeof(::data_service::RegisterPlayerZoneRequest)},
+        {439, sizeof(::data_service::GetPlayerHomeZoneRequest)},
+        {444, sizeof(::data_service::GetPlayerHomeZoneResponse)},
+        {449, sizeof(::data_service::BatchGetPlayerHomeZoneRequest)},
+        {454, sizeof(::data_service::BatchGetPlayerHomeZoneResponse_PlayerZoneMapEntry_DoNotUse)},
+        {461, sizeof(::data_service::BatchGetPlayerHomeZoneResponse)},
+        {466, sizeof(::data_service::GetMergedZonesResponse_MergedIntoEntry_DoNotUse)},
+        {473, sizeof(::data_service::GetMergedZonesResponse)},
+        {478, sizeof(::data_service::CountZoneRolesRequest)},
+        {483, sizeof(::data_service::CountZoneRolesResponse)},
+        {488, sizeof(::data_service::GetPlayerRouteRequest)},
+        {495, sizeof(::data_service::GetPlayerRouteResponse)},
+        {506, sizeof(::data_service::ListPlayerSnapshotsRequest)},
+        {515, sizeof(::data_service::SnapshotInfo)},
+        {536, sizeof(::data_service::ListPlayerSnapshotsResponse)},
+        {543, sizeof(::data_service::BatchRecallItemsRequest)},
+        {570, sizeof(::data_service::RecallResult)},
+        {595, sizeof(::data_service::BatchRecallItemsResponse)},
+        {628, sizeof(::data_service::RecallReviewRow)},
+        {647, sizeof(::data_service::GetRecallBatchRequest)},
+        {652, sizeof(::data_service::CancelRecallBatchRequest)},
+        {661, sizeof(::data_service::ResolveRecallOpRequest)},
+        {672, sizeof(::data_service::ResolveRecallOpResponse)},
+        {683, sizeof(::data_service::RegisterRecallReviewHandledRequest)},
+        {704, sizeof(::data_service::RegisterRecallReviewHandledResponse)},
+        {715, sizeof(::data_service::QueryTransactionLogRequest)},
+        {734, sizeof(::data_service::TransactionLogRow)},
+        {765, sizeof(::data_service::QueryTransactionLogResponse)},
+        {774, sizeof(::data_service::AllocateIdSegmentRequest)},
+        {781, sizeof(::data_service::AllocateIdSegmentResponse)},
+        {790, sizeof(::data_service::ReservePlayerNameRequest)},
+        {797, sizeof(::data_service::ReservePlayerNameResponse)},
+        {804, sizeof(::data_service::ReleasePlayerNameRequest)},
+        {813, sizeof(::data_service::RenameRoleRequest)},
+        {832, sizeof(::data_service::RenameRoleResponse)},
+        {845, sizeof(::data_service::BatchGetPlayerNameRequest)},
+        {850, sizeof(::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse)},
+        {857, sizeof(::data_service::BatchGetPlayerNameResponse)},
+        {862, sizeof(::data_service::BatchGetPlayerDisplayRequest)},
+        {867, sizeof(::data_service::PlayerDisplay)},
+        {880, sizeof(::data_service::BatchGetPlayerDisplayResponse_PlayersEntry_DoNotUse)},
+        {887, sizeof(::data_service::BatchGetPlayerDisplayResponse)},
+        {892, sizeof(::data_service::GetPlayerAssetOpLedgerRequest)},
+        {897, sizeof(::data_service::GetPlayerAssetOpLedgerResponse)},
+        {906, sizeof(::data_service::GetPlayerInboxLedgerRequest)},
+        {911, sizeof(::data_service::GetPlayerInboxLedgerResponse)},
+        {918, sizeof(::data_service::GetPlayerItemGainBlockRequest)},
+        {923, sizeof(::data_service::GetPlayerItemGainBlockResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::data_service::AccountDirectoryResponse_globals_,
+        &::data_service::SetAccountRealNameRequest_globals_,
+        &::data_service::SetAccountRealNameResponse_globals_,
+        &::data_service::GetAccountRealNameRequest_globals_,
+        &::data_service::GetAccountRealNameResponse_globals_,
+        &::data_service::ResetAccountRealNameRequest_globals_,
+        &::data_service::ResetAccountRealNameResponse_globals_,
+        &::data_service::AccountLifecycle_globals_,
+        &::data_service::AccountDeletionBlocker_globals_,
+        &::data_service::AccountDeletionResponse_globals_,
+        &::data_service::RequestAccountDeletionRequest_globals_,
+        &::data_service::CancelAccountDeletionRequest_globals_,
+        &::data_service::ClaimAccountDeletionsRequest_globals_,
+        &::data_service::ClaimAccountDeletionsResponse_globals_,
+        &::data_service::FinishAccountDeletionRequest_globals_,
+        &::data_service::FinishAccountDeletionResponse_globals_,
         &::data_service::AccountRoleOwnership_globals_,
         &::data_service::AccountRoleVersion_globals_,
         &::data_service::ReadAccountDirectoryRequest_globals_,
@@ -13880,6 +16848,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::data_service::ReservePlayerNameRequest_globals_,
         &::data_service::ReservePlayerNameResponse_globals_,
         &::data_service::ReleasePlayerNameRequest_globals_,
+        &::data_service::RenameRoleRequest_globals_,
+        &::data_service::RenameRoleResponse_globals_,
         &::data_service::BatchGetPlayerNameRequest_globals_,
         &::data_service::BatchGetPlayerNameResponse_NamesEntry_DoNotUse_globals_,
         &::data_service::BatchGetPlayerNameResponse_globals_,
@@ -13906,370 +16876,456 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "proto\032)proto/common/base/service_call_au"
     "th.proto\032&proto/common/base/role_admissi"
     "on.proto\032!proto/role_fence/role_fence.pr"
-    "oto\"E\n\030AccountDirectoryResponse\022)\n\007playe"
-    "rs\030\001 \001(\0132\030.AccountSimplePlayerList\"\263\001\n\024A"
-    "ccountRoleOwnership\022\017\n\007account\030\001 \001(\t\022\"\n\004"
-    "role\030\002 \001(\0132\024.AccountSimplePlayer\022\026\n\016owne"
-    "r_revision\030\003 \001(\004\022\030\n\020trade_listing_id\030\004 \001"
-    "(\004\022\025\n\rprepare_token\030\005 \001(\004\022\035\n\025initial_pla"
-    "yer_commit\030\006 \001(\010\"\?\n\022AccountRoleVersion\022\021"
-    "\n\tplayer_id\030\001 \001(\004\022\026\n\016owner_revision\030\002 \001("
-    "\004\"u\n\033ReadAccountDirectoryRequest\022\017\n\007acco"
-    "unt\030\001 \001(\t\022\031\n\021create_if_missing\030\002 \001(\010\022*\n\004"
-    "auth\030\003 \001(\0132\034.common.base.ServiceCallAuth"
-    "\"{\n\030CreateAccountRoleRequest\022\017\n\007account\030"
-    "\001 \001(\t\022\"\n\004role\030\002 \001(\0132\024.AccountSimplePlaye"
-    "r\022*\n\004auth\030\003 \001(\0132\034.common.base.ServiceCal"
-    "lAuth\"Y\n\030LookupAccountRoleRequest\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base"
-    ".ServiceCallAuth\"\250\001\n#ReleaseDeadPlayerSt"
-    "oreHolderRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013o"
-    "wner_epoch\030\002 \001(\004\022*\n\004auth\030\003 \001(\0132\034.common."
-    "base.ServiceCallAuth\022-\n\004seen\030\004 \001(\0132\037.dat"
-    "a_service.PlayerStoreHolder\"T\n\021PlayerSto"
-    "reHolder\022\023\n\013owner_epoch\030\001 \001(\004\022\027\n\017holder_"
-    "instance\030\002 \001(\014\022\021\n\tclaim_seq\030\003 \001(\004\"]\n\034Rea"
-    "dPlayerStoreHolderRequest\022\021\n\tplayer_id\030\001"
-    " \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base.Service"
-    "CallAuth\"_\n\035ReadPlayerStoreHolderRespons"
-    "e\022\r\n\005found\030\001 \001(\010\022/\n\006holder\030\002 \001(\0132\037.data_"
-    "service.PlayerStoreHolder\"\234\001\n\030RepairAcco"
-    "untRoleRequest\022\017\n\007account\030\001 \001(\t\022\"\n\004role\030"
-    "\002 \001(\0132\024.AccountSimplePlayer\022\037\n\027expected_"
-    "owner_revision\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.com"
-    "mon.base.ServiceCallAuth\"\211\001\n\031RemoveAccou"
-    "ntRolesRequest\022\017\n\007account\030\001 \001(\t\022/\n\005roles"
-    "\030\002 \003(\0132 .data_service.AccountRoleVersion"
+    "oto\"\216\001\n\030AccountDirectoryResponse\022)\n\007play"
+    "ers\030\001 \001(\0132\030.AccountSimplePlayerList\0221\n\tl"
+    "ifecycle\030\002 \001(\0132\036.data_service.AccountLif"
+    "ecycle\022\024\n\014real_name_pi\030\003 \001(\t\"n\n\031SetAccou"
+    "ntRealNameRequest\022\017\n\007account\030\001 \001(\t\022\024\n\014re"
+    "al_name_pi\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.common."
+    "base.ServiceCallAuth\"2\n\032SetAccountRealNa"
+    "meResponse\022\024\n\014real_name_pi\030\001 \001(\t\"Z\n\031GetA"
+    "ccountRealNameRequest\022\021\n\tplayer_id\030\001 \001(\004"
+    "\022*\n\004auth\030\002 \001(\0132\034.common.base.ServiceCall"
+    "Auth\"A\n\032GetAccountRealNameResponse\022\r\n\005fo"
+    "und\030\001 \001(\010\022\024\n\014real_name_pi\030\002 \001(\t\"Z\n\033Reset"
+    "AccountRealNameRequest\022\017\n\007account\030\001 \001(\t\022"
+    "*\n\004auth\030\002 \001(\0132\034.common.base.ServiceCallA"
+    "uth\"5\n\034ResetAccountRealNameResponse\022\025\n\rh"
+    "ad_real_name\030\001 \001(\010\"\216\001\n\020AccountLifecycle\022"
+    ":\n\016deletion_state\030\001 \001(\0162\".data_service.A"
+    "ccountDeletionState\022!\n\031deletion_execute_"
+    "after_ms\030\002 \001(\004\022\033\n\023previous_deleted_ms\030\003 "
+    "\001(\004\";\n\026AccountDeletionBlocker\022\021\n\tplayer_"
+    "id\030\001 \001(\004\022\016\n\006reason\030\002 \001(\t\"\273\001\n\027AccountDele"
+    "tionResponse\0225\n\007outcome\030\001 \001(\0162$.data_ser"
+    "vice.AccountDeletionOutcome\0221\n\tlifecycle"
+    "\030\002 \001(\0132\036.data_service.AccountLifecycle\0226"
+    "\n\010blockers\030\003 \003(\0132$.data_service.AccountD"
+    "eletionBlocker\"l\n\035RequestAccountDeletion"
+    "Request\022\017\n\007account\030\001 \001(\t\022\016\n\006source\030\002 \001(\r"
     "\022*\n\004auth\030\003 \001(\0132\034.common.base.ServiceCall"
-    "Auth\"\326\001\n\031AccountRoleFreezeEvidence\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\022\n\nlisting_id\030\002 \001(\004\022\026\n\016own"
-    "er_revision\030\003 \001(\004\022\023\n\013owner_epoch\030\004 \001(\004\022\020"
-    "\n\010save_seq\030\005 \001(\004\022\030\n\020persisted_digest\030\006 \001"
-    "(\014\0229\n\004kind\030\007 \001(\0162+.data_service.AccountR"
-    "oleFreezeEvidenceKind\"S\n\026AccountRoleTrad"
-    "eHolder\022(\n\004seal\030\001 \001(\0132\032.common.base.Role"
-    "TradeSeal\022\017\n\007drained\030\002 \001(\010\"\244\002\n\027AccountRo"
-    "leTradeReceipt\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tpl"
-    "ayer_id\030\002 \001(\004\022\026\n\016seller_account\030\003 \001(\t\022\035\n"
-    "\025seller_owner_revision\030\004 \001(\004\0222\n\005state\030\005 "
-    "\001(\0162#.data_service.AccountRoleTradeState"
-    "\022@\n\017freeze_evidence\030\006 \001(\0132\'.data_service"
-    ".AccountRoleFreezeEvidence\0225\n\007holders\030\007 "
-    "\003(\0132$.data_service.AccountRoleTradeHolde"
-    "r\"\366\001\n\032AccountRoleTransferReceipt\022\r\n\005tx_i"
-    "d\030\001 \001(\004\022\022\n\nlisting_id\030\002 \001(\004\022\021\n\tplayer_id"
-    "\030\003 \001(\004\022\026\n\016seller_account\030\004 \001(\t\022\025\n\rbuyer_"
-    "account\030\005 \001(\t\022\035\n\025seller_owner_revision\030\006"
-    " \001(\004\022\034\n\024buyer_owner_revision\030\007 \001(\004\022\"\n\004ro"
-    "le\030\010 \001(\0132\024.AccountSimplePlayer\022\022\n\ncreate"
-    "d_ms\030\t \001(\004\"\252\001\n\034BeginAccountRoleTradeRequ"
-    "est\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001"
-    "(\004\022\026\n\016seller_account\030\003 \001(\t\022\037\n\027expected_o"
-    "wner_revision\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.comm"
-    "on.base.ServiceCallAuth\"\262\001\n$ConfirmAccou"
-    "ntRoleTradeFreezeRequest\022\022\n\nlisting_id\030\001"
-    " \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller_accoun"
-    "t\030\003 \001(\t\022\037\n\027expected_owner_revision\030\004 \001(\004"
-    "\022*\n\004auth\030\005 \001(\0132\034.common.base.ServiceCall"
-    "Auth\"\253\001\n\035CancelAccountRoleTradeRequest\022\022"
-    "\n\nlisting_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n"
-    "\016seller_account\030\003 \001(\t\022\037\n\027expected_owner_"
-    "revision\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common.ba"
-    "se.ServiceCallAuth\"\316\001\n\032TransferAccountRo"
-    "leRequest\022\r\n\005tx_id\030\001 \001(\004\022\022\n\nlisting_id\030\002"
-    " \001(\004\022\021\n\tplayer_id\030\003 \001(\004\022\026\n\016seller_accoun"
-    "t\030\004 \001(\t\022\025\n\rbuyer_account\030\005 \001(\t\022\037\n\027expect"
-    "ed_owner_revision\030\006 \001(\004\022*\n\004auth\030\007 \001(\0132\034."
-    "common.base.ServiceCallAuth\"Z\n\033CheckAcco"
-    "untRoleSlotRequest\022\017\n\007account\030\001 \001(\t\022*\n\004a"
+    "Auth\"[\n\034CancelAccountDeletionRequest\022\017\n\007"
+    "account\030\001 \001(\t\022*\n\004auth\030\002 \001(\0132\034.common.bas"
+    "e.ServiceCallAuth\"Y\n\034ClaimAccountDeletio"
+    "nsRequest\022\r\n\005limit\030\001 \001(\r\022*\n\004auth\030\002 \001(\0132\034"
+    ".common.base.ServiceCallAuth\"1\n\035ClaimAcc"
+    "ountDeletionsResponse\022\020\n\010accounts\030\001 \003(\t\""
+    "[\n\034FinishAccountDeletionRequest\022\017\n\007accou"
+    "nt\030\001 \001(\t\022*\n\004auth\030\002 \001(\0132\034.common.base.Ser"
+    "viceCallAuth\"E\n\035FinishAccountDeletionRes"
+    "ponse\022\014\n\004done\030\001 \001(\010\022\026\n\016remaining_refs\030\002 "
+    "\001(\r\"\367\001\n\024AccountRoleOwnership\022\017\n\007account\030"
+    "\001 \001(\t\022\"\n\004role\030\002 \001(\0132\024.AccountSimplePlaye"
+    "r\022\026\n\016owner_revision\030\003 \001(\004\022\030\n\020trade_listi"
+    "ng_id\030\004 \001(\004\022\025\n\rprepare_token\030\005 \001(\004\022\035\n\025in"
+    "itial_player_commit\030\006 \001(\010\022B\n\026account_del"
+    "etion_state\030\007 \001(\0162\".data_service.Account"
+    "DeletionState\"\?\n\022AccountRoleVersion\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\026\n\016owner_revision\030\002 \001(\004\"u"
+    "\n\033ReadAccountDirectoryRequest\022\017\n\007account"
+    "\030\001 \001(\t\022\031\n\021create_if_missing\030\002 \001(\010\022*\n\004aut"
+    "h\030\003 \001(\0132\034.common.base.ServiceCallAuth\"{\n"
+    "\030CreateAccountRoleRequest\022\017\n\007account\030\001 \001"
+    "(\t\022\"\n\004role\030\002 \001(\0132\024.AccountSimplePlayer\022*"
+    "\n\004auth\030\003 \001(\0132\034.common.base.ServiceCallAu"
+    "th\"x\n\030LookupAccountRoleRequest\022\021\n\tplayer"
+    "_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base.Se"
+    "rviceCallAuth\022\035\n\025include_account_state\030\003"
+    " \001(\010\"\250\001\n#ReleaseDeadPlayerStoreHolderReq"
+    "uest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013owner_epoch\030\002"
+    " \001(\004\022*\n\004auth\030\003 \001(\0132\034.common.base.Service"
+    "CallAuth\022-\n\004seen\030\004 \001(\0132\037.data_service.Pl"
+    "ayerStoreHolder\"T\n\021PlayerStoreHolder\022\023\n\013"
+    "owner_epoch\030\001 \001(\004\022\027\n\017holder_instance\030\002 \001"
+    "(\014\022\021\n\tclaim_seq\030\003 \001(\004\"]\n\034ReadPlayerStore"
+    "HolderRequest\022\021\n\tplayer_id\030\001 \001(\004\022*\n\004auth"
+    "\030\002 \001(\0132\034.common.base.ServiceCallAuth\"_\n\035"
+    "ReadPlayerStoreHolderResponse\022\r\n\005found\030\001"
+    " \001(\010\022/\n\006holder\030\002 \001(\0132\037.data_service.Play"
+    "erStoreHolder\"\234\001\n\030RepairAccountRoleReque"
+    "st\022\017\n\007account\030\001 \001(\t\022\"\n\004role\030\002 \001(\0132\024.Acco"
+    "untSimplePlayer\022\037\n\027expected_owner_revisi"
+    "on\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common.base.Ser"
+    "viceCallAuth\"\211\001\n\031RemoveAccountRolesReque"
+    "st\022\017\n\007account\030\001 \001(\t\022/\n\005roles\030\002 \003(\0132 .dat"
+    "a_service.AccountRoleVersion\022*\n\004auth\030\003 \001"
+    "(\0132\034.common.base.ServiceCallAuth\"\326\001\n\031Acc"
+    "ountRoleFreezeEvidence\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\022\n\nlisting_id\030\002 \001(\004\022\026\n\016owner_revision\030"
+    "\003 \001(\004\022\023\n\013owner_epoch\030\004 \001(\004\022\020\n\010save_seq\030\005"
+    " \001(\004\022\030\n\020persisted_digest\030\006 \001(\014\0229\n\004kind\030\007"
+    " \001(\0162+.data_service.AccountRoleFreezeEvi"
+    "denceKind\"S\n\026AccountRoleTradeHolder\022(\n\004s"
+    "eal\030\001 \001(\0132\032.common.base.RoleTradeSeal\022\017\n"
+    "\007drained\030\002 \001(\010\"\244\002\n\027AccountRoleTradeRecei"
+    "pt\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001("
+    "\004\022\026\n\016seller_account\030\003 \001(\t\022\035\n\025seller_owne"
+    "r_revision\030\004 \001(\004\0222\n\005state\030\005 \001(\0162#.data_s"
+    "ervice.AccountRoleTradeState\022@\n\017freeze_e"
+    "vidence\030\006 \001(\0132\'.data_service.AccountRole"
+    "FreezeEvidence\0225\n\007holders\030\007 \003(\0132$.data_s"
+    "ervice.AccountRoleTradeHolder\"\366\001\n\032Accoun"
+    "tRoleTransferReceipt\022\r\n\005tx_id\030\001 \001(\004\022\022\n\nl"
+    "isting_id\030\002 \001(\004\022\021\n\tplayer_id\030\003 \001(\004\022\026\n\016se"
+    "ller_account\030\004 \001(\t\022\025\n\rbuyer_account\030\005 \001("
+    "\t\022\035\n\025seller_owner_revision\030\006 \001(\004\022\034\n\024buye"
+    "r_owner_revision\030\007 \001(\004\022\"\n\004role\030\010 \001(\0132\024.A"
+    "ccountSimplePlayer\022\022\n\ncreated_ms\030\t \001(\004\"\252"
+    "\001\n\034BeginAccountRoleTradeRequest\022\022\n\nlisti"
+    "ng_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller"
+    "_account\030\003 \001(\t\022\037\n\027expected_owner_revisio"
+    "n\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common.base.Serv"
+    "iceCallAuth\"\262\001\n$ConfirmAccountRoleTradeF"
+    "reezeRequest\022\022\n\nlisting_id\030\001 \001(\004\022\021\n\tplay"
+    "er_id\030\002 \001(\004\022\026\n\016seller_account\030\003 \001(\t\022\037\n\027e"
+    "xpected_owner_revision\030\004 \001(\004\022*\n\004auth\030\005 \001"
+    "(\0132\034.common.base.ServiceCallAuth\"\253\001\n\035Can"
+    "celAccountRoleTradeRequest\022\022\n\nlisting_id"
+    "\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016seller_acco"
+    "unt\030\003 \001(\t\022\037\n\027expected_owner_revision\030\004 \001"
+    "(\004\022*\n\004auth\030\005 \001(\0132\034.common.base.ServiceCa"
+    "llAuth\"\316\001\n\032TransferAccountRoleRequest\022\r\n"
+    "\005tx_id\030\001 \001(\004\022\022\n\nlisting_id\030\002 \001(\004\022\021\n\tplay"
+    "er_id\030\003 \001(\004\022\026\n\016seller_account\030\004 \001(\t\022\025\n\rb"
+    "uyer_account\030\005 \001(\t\022\037\n\027expected_owner_rev"
+    "ision\030\006 \001(\004\022*\n\004auth\030\007 \001(\0132\034.common.base."
+    "ServiceCallAuth\"Z\n\033CheckAccountRoleSlotR"
+    "equest\022\017\n\007account\030\001 \001(\t\022*\n\004auth\030\002 \001(\0132\034."
+    "common.base.ServiceCallAuth\";\n\034CheckAcco"
+    "untRoleSlotResponse\022\014\n\004full\030\001 \001(\010\022\r\n\005ret"
+    "ry\030\002 \001(\010\"Y\n\030GetRoleFenceStateRequest\022\021\n\t"
+    "player_id\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.b"
+    "ase.ServiceCallAuth\"c\n\031GetRoleFenceState"
+    "Response\022\r\n\005found\030\001 \001(\010\022(\n\005state\030\002 \001(\0132\031"
+    ".rolefence.RoleFenceState\022\r\n\005retry\030\003 \001(\010"
+    "\"\177\n\032VerifyRoleAdmissionRequest\0225\n\tadmiss"
+    "ion\030\001 \001(\0132\".common.base.RoleAdmissionIde"
+    "ntity\022*\n\004auth\030\002 \001(\0132\034.common.base.Servic"
+    "eCallAuth\";\n\033VerifyRoleAdmissionResponse"
+    "\022\r\n\005valid\030\001 \001(\010\022\r\n\005retry\030\002 \001(\010\"\200\001\n\034Regis"
+    "terRoleAdmissionRequest\0224\n\010identity\030\001 \001("
+    "\0132\".common.base.RoleAdmissionIdentity\022*\n"
+    "\004auth\030\002 \001(\0132\034.common.base.ServiceCallAut"
+    "h\"m\n\035RegisterRoleAdmissionResponse\0224\n\010id"
+    "entity\030\001 \001(\0132\".common.base.RoleAdmission"
+    "Identity\022\026\n\016closed_through\030\002 \001(\004\"\343\001\n\032Clo"
+    "seRoleAdmissionsRequest\022\021\n\tplayer_id\030\001 \001"
+    "(\004\022\031\n\021scene_instance_id\030\002 \001(\t\022\026\n\016owner_r"
+    "evision\030\003 \001(\004\022\032\n\022through_generation\030\004 \001("
+    "\004\022\034\n\024required_owner_epoch\030\005 \001(\004\022\031\n\021requi"
+    "red_save_seq\030\006 \001(\004\022*\n\004auth\030\007 \001(\0132\034.commo"
+    "n.base.ServiceCallAuth\"5\n\033CloseRoleAdmis"
+    "sionsResponse\022\026\n\016closed_through\030\001 \001(\004\"\251\001"
+    "\n\030AckRoleTradeDrainRequest\022(\n\004seal\030\001 \001(\013"
+    "2\032.common.base.RoleTradeSeal\022\034\n\024required"
+    "_owner_epoch\030\002 \001(\004\022\031\n\021required_save_seq\030"
+    "\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common.base.Servic"
+    "eCallAuth\"X\n\031RegisterPlayerZoneRequest\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022\024\n\014home_zone_id\030\002 \001(\r\022"
+    "\022\n\nstorage_id\030\003 \001(\r\"-\n\030GetPlayerHomeZone"
+    "Request\022\021\n\tplayer_id\030\001 \001(\004\"7\n\031GetPlayerH"
+    "omeZoneResponse\022\024\n\014home_zone_id\030\001 \001(\rJ\004\010"
+    "\002\020\003\"3\n\035BatchGetPlayerHomeZoneRequest\022\022\n\n"
+    "player_ids\030\001 \003(\004\"\260\001\n\036BatchGetPlayerHomeZ"
+    "oneResponse\022X\n\017player_zone_map\030\002 \003(\0132\?.d"
+    "ata_service.BatchGetPlayerHomeZoneRespon"
+    "se.PlayerZoneMapEntry\0324\n\022PlayerZoneMapEn"
+    "try\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\r:\0028\001\"\226\001\n\026"
+    "GetMergedZonesResponse\022I\n\013merged_into\030\001 "
+    "\003(\01324.data_service.GetMergedZonesRespons"
+    "e.MergedIntoEntry\0321\n\017MergedIntoEntry\022\013\n\003"
+    "key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"(\n\025CountZon"
+    "eRolesRequest\022\017\n\007zone_id\030\001 \001(\r\"\'\n\026CountZ"
+    "oneRolesResponse\022\r\n\005roles\030\001 \001(\004\"V\n\025GetPl"
+    "ayerRouteRequest\022\021\n\tplayer_id\030\001 \001(\004\022*\n\004a"
     "uth\030\002 \001(\0132\034.common.base.ServiceCallAuth\""
-    ";\n\034CheckAccountRoleSlotResponse\022\014\n\004full\030"
-    "\001 \001(\010\022\r\n\005retry\030\002 \001(\010\"Y\n\030GetRoleFenceStat"
-    "eRequest\022\021\n\tplayer_id\030\001 \001(\004\022*\n\004auth\030\002 \001("
-    "\0132\034.common.base.ServiceCallAuth\"c\n\031GetRo"
-    "leFenceStateResponse\022\r\n\005found\030\001 \001(\010\022(\n\005s"
-    "tate\030\002 \001(\0132\031.rolefence.RoleFenceState\022\r\n"
-    "\005retry\030\003 \001(\010\"\177\n\032VerifyRoleAdmissionReque"
-    "st\0225\n\tadmission\030\001 \001(\0132\".common.base.Role"
-    "AdmissionIdentity\022*\n\004auth\030\002 \001(\0132\034.common"
-    ".base.ServiceCallAuth\";\n\033VerifyRoleAdmis"
-    "sionResponse\022\r\n\005valid\030\001 \001(\010\022\r\n\005retry\030\002 \001"
-    "(\010\"\200\001\n\034RegisterRoleAdmissionRequest\0224\n\010i"
-    "dentity\030\001 \001(\0132\".common.base.RoleAdmissio"
-    "nIdentity\022*\n\004auth\030\002 \001(\0132\034.common.base.Se"
-    "rviceCallAuth\"m\n\035RegisterRoleAdmissionRe"
-    "sponse\0224\n\010identity\030\001 \001(\0132\".common.base.R"
-    "oleAdmissionIdentity\022\026\n\016closed_through\030\002"
-    " \001(\004\"\343\001\n\032CloseRoleAdmissionsRequest\022\021\n\tp"
-    "layer_id\030\001 \001(\004\022\031\n\021scene_instance_id\030\002 \001("
-    "\t\022\026\n\016owner_revision\030\003 \001(\004\022\032\n\022through_gen"
-    "eration\030\004 \001(\004\022\034\n\024required_owner_epoch\030\005 "
-    "\001(\004\022\031\n\021required_save_seq\030\006 \001(\004\022*\n\004auth\030\007"
-    " \001(\0132\034.common.base.ServiceCallAuth\"5\n\033Cl"
-    "oseRoleAdmissionsResponse\022\026\n\016closed_thro"
-    "ugh\030\001 \001(\004\"\251\001\n\030AckRoleTradeDrainRequest\022("
-    "\n\004seal\030\001 \001(\0132\032.common.base.RoleTradeSeal"
-    "\022\034\n\024required_owner_epoch\030\002 \001(\004\022\031\n\021requir"
-    "ed_save_seq\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common"
-    ".base.ServiceCallAuth\"X\n\031RegisterPlayerZ"
-    "oneRequest\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014home_zo"
-    "ne_id\030\002 \001(\r\022\022\n\nstorage_id\030\003 \001(\r\"-\n\030GetPl"
-    "ayerHomeZoneRequest\022\021\n\tplayer_id\030\001 \001(\004\"7"
-    "\n\031GetPlayerHomeZoneResponse\022\024\n\014home_zone"
-    "_id\030\001 \001(\rJ\004\010\002\020\003\"3\n\035BatchGetPlayerHomeZon"
-    "eRequest\022\022\n\nplayer_ids\030\001 \003(\004\"\260\001\n\036BatchGe"
-    "tPlayerHomeZoneResponse\022X\n\017player_zone_m"
-    "ap\030\002 \003(\0132\?.data_service.BatchGetPlayerHo"
-    "meZoneResponse.PlayerZoneMapEntry\0324\n\022Pla"
-    "yerZoneMapEntry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 "
-    "\001(\r:\0028\001\"\226\001\n\026GetMergedZonesResponse\022I\n\013me"
-    "rged_into\030\001 \003(\01324.data_service.GetMerged"
-    "ZonesResponse.MergedIntoEntry\0321\n\017MergedI"
-    "ntoEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001"
-    "\"(\n\025CountZoneRolesRequest\022\017\n\007zone_id\030\001 \001"
-    "(\r\"\'\n\026CountZoneRolesResponse\022\r\n\005roles\030\001 "
-    "\001(\004\"V\n\025GetPlayerRouteRequest\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022*\n\004auth\030\002 \001(\0132\034.common.base.Serv"
-    "iceCallAuth\"]\n\026GetPlayerRouteResponse\022\022\n"
-    "\nstorage_id\030\001 \001(\r\022\021\n\thome_zone\030\002 \001(\r\022\r\n\005"
-    "found\030\003 \001(\010\022\r\n\005retry\030\004 \001(\010\"S\n\032ListPlayer"
-    "SnapshotsRequest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013b"
-    "efore_time\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"\320\001\n\014Snap"
-    "shotInfo\022\023\n\013snapshot_id\030\001 \001(\004\022\021\n\tplayer_"
-    "id\030\002 \001(\004\022\017\n\007zone_id\030\003 \001(\r\022(\n\004type\030\004 \001(\0162"
-    "\032.data_service.SnapshotType\022\022\n\ncreated_a"
-    "t\030\005 \001(\004\022\016\n\006reason\030\006 \001(\t\022\020\n\010operator\030\007 \001("
-    "\t\022\027\n\017data_size_bytes\030\010 \001(\r\022\016\n\006fields\030\t \003"
-    "(\t\"`\n\033ListPlayerSnapshotsResponse\022\022\n\nerr"
-    "or_code\030\001 \001(\r\022-\n\tsnapshots\030\002 \003(\0132\032.data_"
-    "service.SnapshotInfo\"\250\002\n\027BatchRecallItem"
-    "sRequest\022\022\n\nplayer_ids\030\001 \003(\004\022\026\n\016item_con"
-    "fig_id\030\002 \001(\r\022\025\n\rcurrency_type\030\003 \001(\r\022\022\n\nt"
-    "ime_start\030\004 \001(\004\022\020\n\010time_end\030\005 \001(\004\022\020\n\010tx_"
-    "types\030\006 \003(\r\022\016\n\006reason\030\007 \001(\t\022\020\n\010operator\030"
-    "\010 \001(\t\022\017\n\007dry_run\030\t \001(\010\022-\n\013recall_kind\030\n "
-    "\001(\0162\030.data_service.RecallKind\022\022\n\nrequest"
-    "_id\030\013 \001(\004\022\034\n\024expected_plan_digest\030\014 \001(\t\""
-    "\334\001\n\014RecallResult\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016i"
-    "tem_config_id\030\003 \001(\r\022\016\n\006amount\030\004 \001(\004\022\017\n\007s"
-    "uccess\030\005 \001(\010\022\024\n\014error_detail\030\006 \001(\t\022\r\n\005op"
-    "_id\030\007 \001(\004\022\025\n\rcurrency_type\030\010 \001(\r\022\016\n\006stat"
-    "us\030\t \001(\r\022\r\n\005taken\030\n \001(\004\022\014\n\004debt\030\013 \001(\004\022\021\n"
-    "\tshortfall\030\014 \001(\004J\004\010\002\020\003\"\237\003\n\030BatchRecallIt"
-    "emsResponse\022\022\n\nerror_code\030\001 \001(\r\022\025\n\rtotal"
-    "_matched\030\002 \001(\r\022\026\n\016total_recalled\030\003 \001(\r\022\024"
-    "\n\014total_failed\030\004 \001(\r\022+\n\007results\030\005 \003(\0132\032."
-    "data_service.RecallResult\022\023\n\013plan_digest"
-    "\030\006 \001(\t\022\025\n\rtotal_pending\030\007 \001(\r\022\022\n\nrequest"
-    "_id\030\010 \001(\004\022\023\n\013batch_state\030\t \001(\r\022\030\n\020amount"
-    "_requested\030\n \001(\004\022\024\n\014amount_taken\030\013 \001(\004\022\023"
-    "\n\013amount_debt\030\014 \001(\004\022\030\n\020amount_shortfall\030"
-    "\r \001(\004\022\024\n\014cancelled_ms\030\016 \001(\004\0223\n\014needs_rev"
-    "iew\030\017 \003(\0132\035.data_service.RecallReviewRow"
-    "\"\304\001\n\017RecallReviewRow\022\021\n\tplayer_id\030\001 \001(\004\022"
-    "\r\n\005tx_id\030\002 \001(\004\022\026\n\016correlation_id\030\003 \001(\004\022\017"
-    "\n\007tx_type\030\004 \001(\r\022\016\n\006amount\030\005 \001(\004\022\021\n\titem_"
-    "uuid\030\006 \001(\004\022\021\n\ttimestamp\030\007 \001(\004\0220\n\006reason\030"
-    "\010 \001(\0162 .data_service.RecallReviewReason\""
-    "+\n\025GetRecallBatchRequest\022\022\n\nrequest_id\030\001"
-    " \001(\004\"P\n\030CancelRecallBatchRequest\022\022\n\nrequ"
-    "est_id\030\001 \001(\004\022\020\n\010operator\030\002 \001(\t\022\016\n\006reason"
-    "\030\003 \001(\t\"_\n\026ResolveRecallOpRequest\022\r\n\005op_i"
-    "d\030\001 \001(\004\022\024\n\014final_status\030\002 \001(\r\022\020\n\010operato"
-    "r\030\003 \001(\t\022\016\n\006reason\030\004 \001(\t\"a\n\027ResolveRecall"
-    "OpResponse\022\022\n\nerror_code\030\001 \001(\r\022\020\n\010resolv"
-    "ed\030\002 \001(\010\022\016\n\006status\030\003 \001(\r\022\020\n\010evidence\030\004 \001"
-    "(\t\"\230\002\n\"RegisterRecallReviewHandledReques"
-    "t\022-\n\013recall_kind\030\001 \001(\0162\030.data_service.Re"
-    "callKind\022\026\n\016item_config_id\030\002 \001(\r\022\025\n\rcurr"
-    "ency_type\030\003 \001(\r\022\021\n\tplayer_id\030\004 \001(\004\022\026\n\016co"
-    "rrelation_id\030\005 \001(\004\022\016\n\006tx_ids\030\006 \003(\004\0227\n\rre"
-    "view_reason\030\007 \001(\0162 .data_service.RecallR"
-    "eviewReason\022\020\n\010operator\030\010 \001(\t\022\016\n\006reason\030"
-    "\t \001(\t\"\233\001\n#RegisterRecallReviewHandledRes"
-    "ponse\022\022\n\nerror_code\030\001 \001(\r\022\022\n\nregistered\030"
-    "\002 \001(\010\022\023\n\013source_rows\030\003 \001(\r\0227\n\rreview_rea"
-    "son\030\004 \001(\0162 .data_service.RecallReviewRea"
-    "son\"\265\001\n\032QueryTransactionLogRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n\010tim"
-    "e_end\030\003 \001(\004\022\020\n\010tx_types\030\004 \003(\r\022\026\n\016item_co"
-    "nfig_id\030\005 \001(\r\022\025\n\rcurrency_type\030\006 \001(\r\022\r\n\005"
-    "limit\030\007 \001(\r\022\016\n\006offset\030\010 \001(\004\"\265\002\n\021Transact"
-    "ionLogRow\022\r\n\005tx_id\030\001 \001(\004\022\021\n\ttimestamp\030\002 "
-    "\001(\004\022\017\n\007tx_type\030\003 \001(\r\022\023\n\013from_player\030\004 \001("
-    "\004\022\021\n\tto_player\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022"
-    "\026\n\016item_config_id\030\007 \001(\r\022\025\n\ritem_quantity"
-    "\030\010 \001(\r\022\025\n\rcurrency_type\030\t \001(\r\022\026\n\016currenc"
-    "y_delta\030\n \001(\003\022\026\n\016balance_before\030\013 \001(\004\022\025\n"
-    "\rbalance_after\030\014 \001(\004\022\026\n\016correlation_id\030\r"
-    " \001(\004\022\r\n\005extra\030\016 \001(\t\"u\n\033QueryTransactionL"
-    "ogResponse\022\022\n\nerror_code\030\001 \001(\r\022-\n\004rows\030\002"
-    " \003(\0132\037.data_service.TransactionLogRow\022\023\n"
-    "\013total_count\030\003 \001(\r\"9\n\030AllocateIdSegmentR"
-    "equest\022\017\n\007biz_tag\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n"
-    "\031AllocateIdSegmentResponse\022\022\n\nerror_code"
-    "\030\001 \001(\r\022\n\n\002lo\030\002 \001(\004\022\n\n\002hi\030\003 \001(\004\";\n\030Reserv"
-    "ePlayerNameRequest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n"
-    "\004name\030\002 \001(\t\"D\n\031ReservePlayerNameResponse"
-    "\022\016\n\006result\030\001 \001(\r\022\027\n\017owner_player_id\030\002 \001("
-    "\004\"g\n\030ReleasePlayerNameRequest\022\021\n\tplayer_"
-    "id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.c"
-    "ommon.base.ServiceCallAuth\"/\n\031BatchGetPl"
-    "ayerNameRequest\022\022\n\nplayer_ids\030\001 \003(\004\"\216\001\n\032"
-    "BatchGetPlayerNameResponse\022B\n\005names\030\001 \003("
-    "\01323.data_service.BatchGetPlayerNameRespo"
-    "nse.NamesEntry\032,\n\nNamesEntry\022\013\n\003key\030\001 \001("
-    "\004\022\r\n\005value\030\002 \001(\t:\0028\001\"2\n\034BatchGetPlayerDi"
-    "splayRequest\022\022\n\nplayer_ids\030\001 \003(\004\"e\n\rPlay"
-    "erDisplay\022\014\n\004name\030\001 \001(\t\022\r\n\005level\030\002 \001(\r\022\020"
-    "\n\010class_id\030\003 \001(\r\022\016\n\006gender\030\004 \001(\r\022\025\n\rappe"
-    "arance_id\030\005 \001(\t\"\267\001\n\035BatchGetPlayerDispla"
-    "yResponse\022I\n\007players\030\001 \003(\01328.data_servic"
-    "e.BatchGetPlayerDisplayResponse.PlayersE"
-    "ntry\032K\n\014PlayersEntry\022\013\n\003key\030\001 \001(\004\022*\n\005val"
-    "ue\030\002 \001(\0132\033.data_service.PlayerDisplay:\0028"
-    "\001\"2\n\035GetPlayerAssetOpLedgerRequest\022\021\n\tpl"
-    "ayer_id\030\001 \001(\004\"r\n\036GetPlayerAssetOpLedgerR"
-    "esponse\022\r\n\005found\030\001 \001(\010\022(\n\006ledger\030\002 \001(\0132\030"
-    ".PlayerAssetOpLedgerComp\022\027\n\017player_relea"
-    "sed\030\003 \001(\010\"0\n\033GetPlayerInboxLedgerRequest"
-    "\022\021\n\tplayer_id\030\001 \001(\004\"U\n\034GetPlayerInboxLed"
-    "gerResponse\022\r\n\005found\030\001 \001(\010\022&\n\006ledger\030\002 \001"
-    "(\0132\026.PlayerInboxLedgerComp\"2\n\035GetPlayerI"
-    "temGainBlockRequest\022\021\n\tplayer_id\030\001 \001(\004\"X"
-    "\n\036GetPlayerItemGainBlockResponse\022\r\n\005foun"
-    "d\030\001 \001(\010\022\'\n\005block\030\002 \001(\0132\030.PlayerItemGainB"
-    "lockComp*\264\002\n\025AccountRoleTradeState\022(\n$AC"
-    "COUNT_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022%\n!"
-    "ACCOUNT_ROLE_TRADE_STATE_FREEZING\020\001\022#\n\037A"
-    "CCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"ACCO"
-    "UNT_ROLE_TRADE_STATE_CANCELLED\020\003\022(\n$ACCO"
-    "UNT_ROLE_TRADE_STATE_TRANSFERRED\020\004\022+\n\'AC"
-    "COUNT_ROLE_TRADE_STATE_CANCEL_PENDING\020\005\022"
-    "&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPARING\020\006*"
-    "\351\001\n\035AccountRoleFreezeEvidenceKind\0221\n-ACC"
-    "OUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFI"
-    "ED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_KIN"
-    "D_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREEZE_"
-    "EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_ROLE_FR"
-    "EEZE_EVIDENCE_KIND_INITIAL_COMMIT\020\003*\207\001\n\014"
-    "SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021SNA"
-    "PSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_MAINTEN"
-    "ANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022\022\n\016SNA"
-    "PSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027RECALL_KI"
-    "ND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CURRENCY"
-    "\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022RecallRevie"
-    "wReason\022$\n RECALL_REVIEW_REASON_UNSPECIF"
-    "IED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELATION\020\001\022"
-    "!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002\022\037\n\033RE"
-    "CALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036RECALL_RE"
-    "VIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_REVIEW"
-    "_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIEW_LEDG"
-    "ER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDGER_NOT"
-    "_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_DISAGRE"
-    "E\020\0102\315\037\n\013DataService\022k\n\024ReadAccountDirect"
-    "ory\022).data_service.ReadAccountDirectoryR"
-    "equest\032&.data_service.AccountDirectoryRe"
-    "sponse\"\000\022e\n\021CreateAccountRole\022&.data_ser"
-    "vice.CreateAccountRoleRequest\032&.data_ser"
-    "vice.AccountDirectoryResponse\"\000\022a\n\021Looku"
-    "pAccountRole\022&.data_service.LookupAccoun"
-    "tRoleRequest\032\".data_service.AccountRoleO"
-    "wnership\"\000\022e\n\021RepairAccountRole\022&.data_s"
-    "ervice.RepairAccountRoleRequest\032&.data_s"
-    "ervice.AccountDirectoryResponse\"\000\022W\n\022Rem"
-    "oveAccountRoles\022\'.data_service.RemoveAcc"
-    "ountRolesRequest\032\026.google.protobuf.Empty"
-    "\"\000\022l\n\025BeginAccountRoleTrade\022*.data_servi"
-    "ce.BeginAccountRoleTradeRequest\032%.data_s"
-    "ervice.AccountRoleTradeReceipt\"\000\022|\n\035Conf"
-    "irmAccountRoleTradeFreeze\0222.data_service"
-    ".ConfirmAccountRoleTradeFreezeRequest\032%."
-    "data_service.AccountRoleTradeReceipt\"\000\022n"
-    "\n\026CancelAccountRoleTrade\022+.data_service."
-    "CancelAccountRoleTradeRequest\032%.data_ser"
-    "vice.AccountRoleTradeReceipt\"\000\022k\n\023Transf"
-    "erAccountRole\022(.data_service.TransferAcc"
-    "ountRoleRequest\032(.data_service.AccountRo"
-    "leTransferReceipt\"\000\022o\n\024CheckAccountRoleS"
-    "lot\022).data_service.CheckAccountRoleSlotR"
-    "equest\032*.data_service.CheckAccountRoleSl"
-    "otResponse\"\000\022f\n\021GetRoleFenceState\022&.data"
-    "_service.GetRoleFenceStateRequest\032\'.data"
-    "_service.GetRoleFenceStateResponse\"\000\022l\n\023"
-    "VerifyRoleAdmission\022(.data_service.Verif"
-    "yRoleAdmissionRequest\032).data_service.Ver"
-    "ifyRoleAdmissionResponse\"\000\022r\n\025RegisterRo"
-    "leAdmission\022*.data_service.RegisterRoleA"
-    "dmissionRequest\032+.data_service.RegisterR"
-    "oleAdmissionResponse\"\000\022l\n\023CloseRoleAdmis"
-    "sions\022(.data_service.CloseRoleAdmissions"
-    "Request\032).data_service.CloseRoleAdmissio"
-    "nsResponse\"\000\022U\n\021AckRoleTradeDrain\022&.data"
-    "_service.AckRoleTradeDrainRequest\032\026.goog"
-    "le.protobuf.Empty\"\000\022k\n\034ReleaseDeadPlayer"
-    "StoreHolder\0221.data_service.ReleaseDeadPl"
-    "ayerStoreHolderRequest\032\026.google.protobuf"
-    ".Empty\"\000\022r\n\025ReadPlayerStoreHolder\022*.data"
-    "_service.ReadPlayerStoreHolderRequest\032+."
-    "data_service.ReadPlayerStoreHolderRespon"
-    "se\"\000\022W\n\022RegisterPlayerZone\022\'.data_servic"
-    "e.RegisterPlayerZoneRequest\032\026.google.pro"
-    "tobuf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&.dat"
-    "a_service.GetPlayerHomeZoneRequest\032\'.dat"
-    "a_service.GetPlayerHomeZoneResponse\"\000\022u\n"
-    "\026BatchGetPlayerHomeZone\022+.data_service.B"
-    "atchGetPlayerHomeZoneRequest\032,.data_serv"
-    "ice.BatchGetPlayerHomeZoneResponse\"\000\022P\n\016"
-    "GetMergedZones\022\026.google.protobuf.Empty\032$"
-    ".data_service.GetMergedZonesResponse\"\000\022]"
-    "\n\016CountZoneRoles\022#.data_service.CountZon"
-    "eRolesRequest\032$.data_service.CountZoneRo"
-    "lesResponse\"\000\022]\n\016GetPlayerRoute\022#.data_s"
-    "ervice.GetPlayerRouteRequest\032$.data_serv"
-    "ice.GetPlayerRouteResponse\"\000\022l\n\023ListPlay"
-    "erSnapshots\022(.data_service.ListPlayerSna"
-    "pshotsRequest\032).data_service.ListPlayerS"
-    "napshotsResponse\"\000\022c\n\020BatchRecallItems\022%"
-    ".data_service.BatchRecallItemsRequest\032&."
-    "data_service.BatchRecallItemsResponse\"\000\022"
-    "_\n\016GetRecallBatch\022#.data_service.GetReca"
-    "llBatchRequest\032&.data_service.BatchRecal"
-    "lItemsResponse\"\000\022e\n\021CancelRecallBatch\022&."
-    "data_service.CancelRecallBatchRequest\032&."
-    "data_service.BatchRecallItemsResponse\"\000\022"
-    "`\n\017ResolveRecallOp\022$.data_service.Resolv"
-    "eRecallOpRequest\032%.data_service.ResolveR"
-    "ecallOpResponse\"\000\022\204\001\n\033RegisterRecallRevi"
-    "ewHandled\0220.data_service.RegisterRecallR"
-    "eviewHandledRequest\0321.data_service.Regis"
-    "terRecallReviewHandledResponse\"\000\022l\n\023Quer"
-    "yTransactionLog\022(.data_service.QueryTran"
-    "sactionLogRequest\032).data_service.QueryTr"
-    "ansactionLogResponse\"\000\022f\n\021AllocateIdSegm"
-    "ent\022&.data_service.AllocateIdSegmentRequ"
-    "est\032\'.data_service.AllocateIdSegmentResp"
-    "onse\"\000\022f\n\021ReservePlayerName\022&.data_servi"
-    "ce.ReservePlayerNameRequest\032\'.data_servi"
-    "ce.ReservePlayerNameResponse\"\000\022U\n\021Releas"
-    "ePlayerName\022&.data_service.ReleasePlayer"
-    "NameRequest\032\026.google.protobuf.Empty\"\000\022i\n"
-    "\022BatchGetPlayerName\022\'.data_service.Batch"
-    "GetPlayerNameRequest\032(.data_service.Batc"
-    "hGetPlayerNameResponse\"\000\022r\n\025BatchGetPlay"
-    "erDisplay\022*.data_service.BatchGetPlayerD"
-    "isplayRequest\032+.data_service.BatchGetPla"
-    "yerDisplayResponse\"\000\022u\n\026GetPlayerAssetOp"
-    "Ledger\022+.data_service.GetPlayerAssetOpLe"
-    "dgerRequest\032,.data_service.GetPlayerAsse"
-    "tOpLedgerResponse\"\000\022o\n\024GetPlayerInboxLed"
-    "ger\022).data_service.GetPlayerInboxLedgerR"
-    "equest\032*.data_service.GetPlayerInboxLedg"
-    "erResponse\"\000\022u\n\026GetPlayerItemGainBlock\022+"
-    ".data_service.GetPlayerItemGainBlockRequ"
-    "est\032,.data_service.GetPlayerItemGainBloc"
-    "kResponse\"\000B\033Z\031data_service/data_service"
-    "b\006proto3"
+    "]\n\026GetPlayerRouteResponse\022\022\n\nstorage_id\030"
+    "\001 \001(\r\022\021\n\thome_zone\030\002 \001(\r\022\r\n\005found\030\003 \001(\010\022"
+    "\r\n\005retry\030\004 \001(\010\"S\n\032ListPlayerSnapshotsReq"
+    "uest\022\021\n\tplayer_id\030\001 \001(\004\022\023\n\013before_time\030\002"
+    " \001(\004\022\r\n\005limit\030\003 \001(\r\"\320\001\n\014SnapshotInfo\022\023\n\013"
+    "snapshot_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\017\n\007"
+    "zone_id\030\003 \001(\r\022(\n\004type\030\004 \001(\0162\032.data_servi"
+    "ce.SnapshotType\022\022\n\ncreated_at\030\005 \001(\004\022\016\n\006r"
+    "eason\030\006 \001(\t\022\020\n\010operator\030\007 \001(\t\022\027\n\017data_si"
+    "ze_bytes\030\010 \001(\r\022\016\n\006fields\030\t \003(\t\"`\n\033ListPl"
+    "ayerSnapshotsResponse\022\022\n\nerror_code\030\001 \001("
+    "\r\022-\n\tsnapshots\030\002 \003(\0132\032.data_service.Snap"
+    "shotInfo\"\250\002\n\027BatchRecallItemsRequest\022\022\n\n"
+    "player_ids\030\001 \003(\004\022\026\n\016item_config_id\030\002 \001(\r"
+    "\022\025\n\rcurrency_type\030\003 \001(\r\022\022\n\ntime_start\030\004 "
+    "\001(\004\022\020\n\010time_end\030\005 \001(\004\022\020\n\010tx_types\030\006 \003(\r\022"
+    "\016\n\006reason\030\007 \001(\t\022\020\n\010operator\030\010 \001(\t\022\017\n\007dry"
+    "_run\030\t \001(\010\022-\n\013recall_kind\030\n \001(\0162\030.data_s"
+    "ervice.RecallKind\022\022\n\nrequest_id\030\013 \001(\004\022\034\n"
+    "\024expected_plan_digest\030\014 \001(\t\"\334\001\n\014RecallRe"
+    "sult\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016item_config_i"
+    "d\030\003 \001(\r\022\016\n\006amount\030\004 \001(\004\022\017\n\007success\030\005 \001(\010"
+    "\022\024\n\014error_detail\030\006 \001(\t\022\r\n\005op_id\030\007 \001(\004\022\025\n"
+    "\rcurrency_type\030\010 \001(\r\022\016\n\006status\030\t \001(\r\022\r\n\005"
+    "taken\030\n \001(\004\022\014\n\004debt\030\013 \001(\004\022\021\n\tshortfall\030\014"
+    " \001(\004J\004\010\002\020\003\"\237\003\n\030BatchRecallItemsResponse\022"
+    "\022\n\nerror_code\030\001 \001(\r\022\025\n\rtotal_matched\030\002 \001"
+    "(\r\022\026\n\016total_recalled\030\003 \001(\r\022\024\n\014total_fail"
+    "ed\030\004 \001(\r\022+\n\007results\030\005 \003(\0132\032.data_service"
+    ".RecallResult\022\023\n\013plan_digest\030\006 \001(\t\022\025\n\rto"
+    "tal_pending\030\007 \001(\r\022\022\n\nrequest_id\030\010 \001(\004\022\023\n"
+    "\013batch_state\030\t \001(\r\022\030\n\020amount_requested\030\n"
+    " \001(\004\022\024\n\014amount_taken\030\013 \001(\004\022\023\n\013amount_deb"
+    "t\030\014 \001(\004\022\030\n\020amount_shortfall\030\r \001(\004\022\024\n\014can"
+    "celled_ms\030\016 \001(\004\0223\n\014needs_review\030\017 \003(\0132\035."
+    "data_service.RecallReviewRow\"\304\001\n\017RecallR"
+    "eviewRow\022\021\n\tplayer_id\030\001 \001(\004\022\r\n\005tx_id\030\002 \001"
+    "(\004\022\026\n\016correlation_id\030\003 \001(\004\022\017\n\007tx_type\030\004 "
+    "\001(\r\022\016\n\006amount\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022\021"
+    "\n\ttimestamp\030\007 \001(\004\0220\n\006reason\030\010 \001(\0162 .data"
+    "_service.RecallReviewReason\"+\n\025GetRecall"
+    "BatchRequest\022\022\n\nrequest_id\030\001 \001(\004\"P\n\030Canc"
+    "elRecallBatchRequest\022\022\n\nrequest_id\030\001 \001(\004"
+    "\022\020\n\010operator\030\002 \001(\t\022\016\n\006reason\030\003 \001(\t\"_\n\026Re"
+    "solveRecallOpRequest\022\r\n\005op_id\030\001 \001(\004\022\024\n\014f"
+    "inal_status\030\002 \001(\r\022\020\n\010operator\030\003 \001(\t\022\016\n\006r"
+    "eason\030\004 \001(\t\"a\n\027ResolveRecallOpResponse\022\022"
+    "\n\nerror_code\030\001 \001(\r\022\020\n\010resolved\030\002 \001(\010\022\016\n\006"
+    "status\030\003 \001(\r\022\020\n\010evidence\030\004 \001(\t\"\230\002\n\"Regis"
+    "terRecallReviewHandledRequest\022-\n\013recall_"
+    "kind\030\001 \001(\0162\030.data_service.RecallKind\022\026\n\016"
+    "item_config_id\030\002 \001(\r\022\025\n\rcurrency_type\030\003 "
+    "\001(\r\022\021\n\tplayer_id\030\004 \001(\004\022\026\n\016correlation_id"
+    "\030\005 \001(\004\022\016\n\006tx_ids\030\006 \003(\004\0227\n\rreview_reason\030"
+    "\007 \001(\0162 .data_service.RecallReviewReason\022"
+    "\020\n\010operator\030\010 \001(\t\022\016\n\006reason\030\t \001(\t\"\233\001\n#Re"
+    "gisterRecallReviewHandledResponse\022\022\n\nerr"
+    "or_code\030\001 \001(\r\022\022\n\nregistered\030\002 \001(\010\022\023\n\013sou"
+    "rce_rows\030\003 \001(\r\0227\n\rreview_reason\030\004 \001(\0162 ."
+    "data_service.RecallReviewReason\"\265\001\n\032Quer"
+    "yTransactionLogRequest\022\021\n\tplayer_id\030\001 \001("
+    "\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n\010time_end\030\003 \001(\004\022"
+    "\020\n\010tx_types\030\004 \003(\r\022\026\n\016item_config_id\030\005 \001("
+    "\r\022\025\n\rcurrency_type\030\006 \001(\r\022\r\n\005limit\030\007 \001(\r\022"
+    "\016\n\006offset\030\010 \001(\004\"\265\002\n\021TransactionLogRow\022\r\n"
+    "\005tx_id\030\001 \001(\004\022\021\n\ttimestamp\030\002 \001(\004\022\017\n\007tx_ty"
+    "pe\030\003 \001(\r\022\023\n\013from_player\030\004 \001(\004\022\021\n\tto_play"
+    "er\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022\026\n\016item_conf"
+    "ig_id\030\007 \001(\r\022\025\n\ritem_quantity\030\010 \001(\r\022\025\n\rcu"
+    "rrency_type\030\t \001(\r\022\026\n\016currency_delta\030\n \001("
+    "\003\022\026\n\016balance_before\030\013 \001(\004\022\025\n\rbalance_aft"
+    "er\030\014 \001(\004\022\026\n\016correlation_id\030\r \001(\004\022\r\n\005extr"
+    "a\030\016 \001(\t\"u\n\033QueryTransactionLogResponse\022\022"
+    "\n\nerror_code\030\001 \001(\r\022-\n\004rows\030\002 \003(\0132\037.data_"
+    "service.TransactionLogRow\022\023\n\013total_count"
+    "\030\003 \001(\r\"9\n\030AllocateIdSegmentRequest\022\017\n\007bi"
+    "z_tag\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n\031AllocateIdS"
+    "egmentResponse\022\022\n\nerror_code\030\001 \001(\r\022\n\n\002lo"
+    "\030\002 \001(\004\022\n\n\002hi\030\003 \001(\004\";\n\030ReservePlayerNameR"
+    "equest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\""
+    "D\n\031ReservePlayerNameResponse\022\016\n\006result\030\001"
+    " \001(\r\022\027\n\017owner_player_id\030\002 \001(\004\"g\n\030Release"
+    "PlayerNameRequest\022\021\n\tplayer_id\030\001 \001(\004\022\014\n\004"
+    "name\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.common.base.S"
+    "erviceCallAuth\"\303\001\n\021RenameRoleRequest\022\021\n\t"
+    "player_id\030\001 \001(\004\022\013\n\003seq\030\002 \001(\004\022\014\n\004name\030\003 \001"
+    "(\t\022\030\n\020cooldown_seconds\030\004 \001(\r\022\024\n\014hold_sec"
+    "onds\030\005 \001(\r\022*\n\004auth\030\006 \001(\0132\034.common.base.S"
+    "erviceCallAuth\022\021\n\tmin_chars\030\007 \001(\r\022\021\n\tmax"
+    "_chars\030\010 \001(\r\"\224\001\n\022RenameRoleResponse\022.\n\006r"
+    "esult\030\001 \001(\0162\036.data_service.RenameRoleRes"
+    "ult\022\023\n\013current_seq\030\002 \001(\004\022\014\n\004name\030\003 \001(\t\022\022"
+    "\n\nrenamed_ms\030\004 \001(\004\022\027\n\017next_allowed_ms\030\005 "
+    "\001(\004\"/\n\031BatchGetPlayerNameRequest\022\022\n\nplay"
+    "er_ids\030\001 \003(\004\"\216\001\n\032BatchGetPlayerNameRespo"
+    "nse\022B\n\005names\030\001 \003(\01323.data_service.BatchG"
+    "etPlayerNameResponse.NamesEntry\032,\n\nNames"
+    "Entry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\t:\0028\001\"2\n"
+    "\034BatchGetPlayerDisplayRequest\022\022\n\nplayer_"
+    "ids\030\001 \003(\004\"e\n\rPlayerDisplay\022\014\n\004name\030\001 \001(\t"
+    "\022\r\n\005level\030\002 \001(\r\022\020\n\010class_id\030\003 \001(\r\022\016\n\006gen"
+    "der\030\004 \001(\r\022\025\n\rappearance_id\030\005 \001(\t\"\267\001\n\035Bat"
+    "chGetPlayerDisplayResponse\022I\n\007players\030\001 "
+    "\003(\01328.data_service.BatchGetPlayerDisplay"
+    "Response.PlayersEntry\032K\n\014PlayersEntry\022\013\n"
+    "\003key\030\001 \001(\004\022*\n\005value\030\002 \001(\0132\033.data_service"
+    ".PlayerDisplay:\0028\001\"2\n\035GetPlayerAssetOpLe"
+    "dgerRequest\022\021\n\tplayer_id\030\001 \001(\004\"r\n\036GetPla"
+    "yerAssetOpLedgerResponse\022\r\n\005found\030\001 \001(\010\022"
+    "(\n\006ledger\030\002 \001(\0132\030.PlayerAssetOpLedgerCom"
+    "p\022\027\n\017player_released\030\003 \001(\010\"0\n\033GetPlayerI"
+    "nboxLedgerRequest\022\021\n\tplayer_id\030\001 \001(\004\"U\n\034"
+    "GetPlayerInboxLedgerResponse\022\r\n\005found\030\001 "
+    "\001(\010\022&\n\006ledger\030\002 \001(\0132\026.PlayerInboxLedgerC"
+    "omp\"2\n\035GetPlayerItemGainBlockRequest\022\021\n\t"
+    "player_id\030\001 \001(\004\"X\n\036GetPlayerItemGainBloc"
+    "kResponse\022\r\n\005found\030\001 \001(\010\022\'\n\005block\030\002 \001(\0132"
+    "\030.PlayerItemGainBlockComp*\200\001\n\024AccountDel"
+    "etionState\022\037\n\033ACCOUNT_DELETION_STATE_NON"
+    "E\020\000\022\"\n\036ACCOUNT_DELETION_STATE_PENDING\020\001\022"
+    "#\n\037ACCOUNT_DELETION_STATE_DELETING\020\002*\374\001\n"
+    "\026AccountDeletionOutcome\022(\n$ACCOUNT_DELET"
+    "ION_OUTCOME_UNSPECIFIED\020\000\022\037\n\033ACCOUNT_DEL"
+    "ETION_OUTCOME_OK\020\001\022&\n\"ACCOUNT_DELETION_O"
+    "UTCOME_NOT_FOUND\020\002\022$\n ACCOUNT_DELETION_O"
+    "UTCOME_BLOCKED\020\003\022\"\n\036ACCOUNT_DELETION_OUT"
+    "COME_RETRY\020\004\022%\n!ACCOUNT_DELETION_OUTCOME"
+    "_TOO_LATE\020\005*\264\002\n\025AccountRoleTradeState\022(\n"
+    "$ACCOUNT_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022"
+    "%\n!ACCOUNT_ROLE_TRADE_STATE_FREEZING\020\001\022#"
+    "\n\037ACCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"A"
+    "CCOUNT_ROLE_TRADE_STATE_CANCELLED\020\003\022(\n$A"
+    "CCOUNT_ROLE_TRADE_STATE_TRANSFERRED\020\004\022+\n"
+    "\'ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING"
+    "\020\005\022&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPARING"
+    "\020\006*\351\001\n\035AccountRoleFreezeEvidenceKind\0221\n-"
+    "ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPEC"
+    "IFIED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_"
+    "KIND_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREE"
+    "ZE_EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_ROLE"
+    "_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT\020\003*\207"
+    "\001\n\014SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021"
+    "SNAPSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_MAIN"
+    "TENANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022\022\n\016"
+    "SNAPSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027RECALL"
+    "_KIND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CURRE"
+    "NCY\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022RecallRe"
+    "viewReason\022$\n RECALL_REVIEW_REASON_UNSPE"
+    "CIFIED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELATION"
+    "\020\001\022!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002\022\037\n"
+    "\033RECALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036RECALL"
+    "_REVIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_REV"
+    "IEW_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIEW_L"
+    "EDGER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDGER_"
+    "NOT_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_DISA"
+    "GREE\020\010*\254\002\n\020RenameRoleResult\022\"\n\036RENAME_RO"
+    "LE_RESULT_UNSPECIFIED\020\000\022\022\n\016RENAME_ROLE_O"
+    "K\020\001\022\025\n\021RENAME_ROLE_TAKEN\020\002\022\027\n\023RENAME_ROL"
+    "E_INVALID\020\003\022\030\n\024RENAME_ROLE_COOLDOWN\020\004\022\026\n"
+    "\022RENAME_ROLE_FROZEN\020\005\022\031\n\025RENAME_ROLE_STA"
+    "LE_SEQ\020\006\022\031\n\025RENAME_ROLE_SAME_NAME\020\007\022\031\n\025R"
+    "ENAME_ROLE_NOT_FOUND\020\010\022\027\n\023RENAME_ROLE_EX"
+    "PIRED\020\t\022\024\n\020RENAME_ROLE_BUSY\020\n2\255&\n\013DataSe"
+    "rvice\022k\n\024ReadAccountDirectory\022).data_ser"
+    "vice.ReadAccountDirectoryRequest\032&.data_"
+    "service.AccountDirectoryResponse\"\000\022e\n\021Cr"
+    "eateAccountRole\022&.data_service.CreateAcc"
+    "ountRoleRequest\032&.data_service.AccountDi"
+    "rectoryResponse\"\000\022a\n\021LookupAccountRole\022&"
+    ".data_service.LookupAccountRoleRequest\032\""
+    ".data_service.AccountRoleOwnership\"\000\022e\n\021"
+    "RepairAccountRole\022&.data_service.RepairA"
+    "ccountRoleRequest\032&.data_service.Account"
+    "DirectoryResponse\"\000\022W\n\022RemoveAccountRole"
+    "s\022\'.data_service.RemoveAccountRolesReque"
+    "st\032\026.google.protobuf.Empty\"\000\022i\n\022SetAccou"
+    "ntRealName\022\'.data_service.SetAccountReal"
+    "NameRequest\032(.data_service.SetAccountRea"
+    "lNameResponse\"\000\022i\n\022GetAccountRealName\022\'."
+    "data_service.GetAccountRealNameRequest\032("
+    ".data_service.GetAccountRealNameResponse"
+    "\"\000\022o\n\024ResetAccountRealName\022).data_servic"
+    "e.ResetAccountRealNameRequest\032*.data_ser"
+    "vice.ResetAccountRealNameResponse\"\000\022l\n\025B"
+    "eginAccountRoleTrade\022*.data_service.Begi"
+    "nAccountRoleTradeRequest\032%.data_service."
+    "AccountRoleTradeReceipt\"\000\022|\n\035ConfirmAcco"
+    "untRoleTradeFreeze\0222.data_service.Confir"
+    "mAccountRoleTradeFreezeRequest\032%.data_se"
+    "rvice.AccountRoleTradeReceipt\"\000\022n\n\026Cance"
+    "lAccountRoleTrade\022+.data_service.CancelA"
+    "ccountRoleTradeRequest\032%.data_service.Ac"
+    "countRoleTradeReceipt\"\000\022k\n\023TransferAccou"
+    "ntRole\022(.data_service.TransferAccountRol"
+    "eRequest\032(.data_service.AccountRoleTrans"
+    "ferReceipt\"\000\022o\n\024CheckAccountRoleSlot\022).d"
+    "ata_service.CheckAccountRoleSlotRequest\032"
+    "*.data_service.CheckAccountRoleSlotRespo"
+    "nse\"\000\022f\n\021GetRoleFenceState\022&.data_servic"
+    "e.GetRoleFenceStateRequest\032\'.data_servic"
+    "e.GetRoleFenceStateResponse\"\000\022l\n\023VerifyR"
+    "oleAdmission\022(.data_service.VerifyRoleAd"
+    "missionRequest\032).data_service.VerifyRole"
+    "AdmissionResponse\"\000\022r\n\025RegisterRoleAdmis"
+    "sion\022*.data_service.RegisterRoleAdmissio"
+    "nRequest\032+.data_service.RegisterRoleAdmi"
+    "ssionResponse\"\000\022l\n\023CloseRoleAdmissions\022("
+    ".data_service.CloseRoleAdmissionsRequest"
+    "\032).data_service.CloseRoleAdmissionsRespo"
+    "nse\"\000\022U\n\021AckRoleTradeDrain\022&.data_servic"
+    "e.AckRoleTradeDrainRequest\032\026.google.prot"
+    "obuf.Empty\"\000\022n\n\026RequestAccountDeletion\022+"
+    ".data_service.RequestAccountDeletionRequ"
+    "est\032%.data_service.AccountDeletionRespon"
+    "se\"\000\022l\n\025CancelAccountDeletion\022*.data_ser"
+    "vice.CancelAccountDeletionRequest\032%.data"
+    "_service.AccountDeletionResponse\"\000\022r\n\025Cl"
+    "aimAccountDeletions\022*.data_service.Claim"
+    "AccountDeletionsRequest\032+.data_service.C"
+    "laimAccountDeletionsResponse\"\000\022r\n\025Finish"
+    "AccountDeletion\022*.data_service.FinishAcc"
+    "ountDeletionRequest\032+.data_service.Finis"
+    "hAccountDeletionResponse\"\000\022k\n\034ReleaseDea"
+    "dPlayerStoreHolder\0221.data_service.Releas"
+    "eDeadPlayerStoreHolderRequest\032\026.google.p"
+    "rotobuf.Empty\"\000\022r\n\025ReadPlayerStoreHolder"
+    "\022*.data_service.ReadPlayerStoreHolderReq"
+    "uest\032+.data_service.ReadPlayerStoreHolde"
+    "rResponse\"\000\022W\n\022RegisterPlayerZone\022\'.data"
+    "_service.RegisterPlayerZoneRequest\032\026.goo"
+    "gle.protobuf.Empty\"\000\022f\n\021GetPlayerHomeZon"
+    "e\022&.data_service.GetPlayerHomeZoneReques"
+    "t\032\'.data_service.GetPlayerHomeZoneRespon"
+    "se\"\000\022u\n\026BatchGetPlayerHomeZone\022+.data_se"
+    "rvice.BatchGetPlayerHomeZoneRequest\032,.da"
+    "ta_service.BatchGetPlayerHomeZoneRespons"
+    "e\"\000\022P\n\016GetMergedZones\022\026.google.protobuf."
+    "Empty\032$.data_service.GetMergedZonesRespo"
+    "nse\"\000\022]\n\016CountZoneRoles\022#.data_service.C"
+    "ountZoneRolesRequest\032$.data_service.Coun"
+    "tZoneRolesResponse\"\000\022]\n\016GetPlayerRoute\022#"
+    ".data_service.GetPlayerRouteRequest\032$.da"
+    "ta_service.GetPlayerRouteResponse\"\000\022l\n\023L"
+    "istPlayerSnapshots\022(.data_service.ListPl"
+    "ayerSnapshotsRequest\032).data_service.List"
+    "PlayerSnapshotsResponse\"\000\022c\n\020BatchRecall"
+    "Items\022%.data_service.BatchRecallItemsReq"
+    "uest\032&.data_service.BatchRecallItemsResp"
+    "onse\"\000\022_\n\016GetRecallBatch\022#.data_service."
+    "GetRecallBatchRequest\032&.data_service.Bat"
+    "chRecallItemsResponse\"\000\022e\n\021CancelRecallB"
+    "atch\022&.data_service.CancelRecallBatchReq"
+    "uest\032&.data_service.BatchRecallItemsResp"
+    "onse\"\000\022`\n\017ResolveRecallOp\022$.data_service"
+    ".ResolveRecallOpRequest\032%.data_service.R"
+    "esolveRecallOpResponse\"\000\022\204\001\n\033RegisterRec"
+    "allReviewHandled\0220.data_service.Register"
+    "RecallReviewHandledRequest\0321.data_servic"
+    "e.RegisterRecallReviewHandledResponse\"\000\022"
+    "l\n\023QueryTransactionLog\022(.data_service.Qu"
+    "eryTransactionLogRequest\032).data_service."
+    "QueryTransactionLogResponse\"\000\022f\n\021Allocat"
+    "eIdSegment\022&.data_service.AllocateIdSegm"
+    "entRequest\032\'.data_service.AllocateIdSegm"
+    "entResponse\"\000\022f\n\021ReservePlayerName\022&.dat"
+    "a_service.ReservePlayerNameRequest\032\'.dat"
+    "a_service.ReservePlayerNameResponse\"\000\022U\n"
+    "\021ReleasePlayerName\022&.data_service.Releas"
+    "ePlayerNameRequest\032\026.google.protobuf.Emp"
+    "ty\"\000\022i\n\022BatchGetPlayerName\022\'.data_servic"
+    "e.BatchGetPlayerNameRequest\032(.data_servi"
+    "ce.BatchGetPlayerNameResponse\"\000\022Q\n\nRenam"
+    "eRole\022\037.data_service.RenameRoleRequest\032 "
+    ".data_service.RenameRoleResponse\"\000\022r\n\025Ba"
+    "tchGetPlayerDisplay\022*.data_service.Batch"
+    "GetPlayerDisplayRequest\032+.data_service.B"
+    "atchGetPlayerDisplayResponse\"\000\022u\n\026GetPla"
+    "yerAssetOpLedger\022+.data_service.GetPlaye"
+    "rAssetOpLedgerRequest\032,.data_service.Get"
+    "PlayerAssetOpLedgerResponse\"\000\022o\n\024GetPlay"
+    "erInboxLedger\022).data_service.GetPlayerIn"
+    "boxLedgerRequest\032*.data_service.GetPlaye"
+    "rInboxLedgerResponse\"\000\022u\n\026GetPlayerItemG"
+    "ainBlock\022+.data_service.GetPlayerItemGai"
+    "nBlockRequest\032,.data_service.GetPlayerIt"
+    "emGainBlockResponse\"\000B\033Z\031data_service/da"
+    "ta_serviceb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[8] = {
@@ -14286,13 +17342,13 @@ static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservic
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    14928,
+    18378,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps,
     8,
-    77,
+    94,
     schemas,
     file_message_globals,
     TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto::offsets,
@@ -14301,46 +17357,67 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5
 };
 namespace data_service {
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-AccountRoleTradeState_descriptor() {
+AccountDeletionState_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
   return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t AccountDeletionState_internal_data_[] = {
+    196608u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+AccountDeletionOutcome_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
+  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t AccountDeletionOutcome_internal_data_[] = {
+    393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+AccountRoleTradeState_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
+  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[2];
 }
 PROTOBUF_CONSTINIT const uint32_t AccountRoleTradeState_internal_data_[] = {
     458752u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 AccountRoleFreezeEvidenceKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
-  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[1];
+  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[3];
 }
 PROTOBUF_CONSTINIT const uint32_t AccountRoleFreezeEvidenceKind_internal_data_[] = {
     262144u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 SnapshotType_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
-  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[2];
+  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[4];
 }
 PROTOBUF_CONSTINIT const uint32_t SnapshotType_internal_data_[] = {
     327680u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 RecallKind_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
-  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[3];
+  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[5];
 }
 PROTOBUF_CONSTINIT const uint32_t RecallKind_internal_data_[] = {
     196608u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 RecallReviewReason_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
-  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[4];
+  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[6];
 }
 PROTOBUF_CONSTINIT const uint32_t RecallReviewReason_internal_data_[] = {
     589824u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+RenameRoleResult_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto);
+  return file_level_enum_descriptors_proto_2fdata_5fservice_2fdata_5fservice_2eproto[7];
+}
+PROTOBUF_CONSTINIT const uint32_t RenameRoleResult_internal_data_[] = {
+    720896u, 0u, };
 // ===================================================================
 
 void AccountDirectoryResponse::clear_players() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.players_ != nullptr) _impl_.players_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 AccountDirectoryResponse::AccountDirectoryResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -14356,7 +17433,8 @@ PROTOBUF_NDEBUG_INLINE AccountDirectoryResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     [[maybe_unused]] const ::data_service::AccountDirectoryResponse& from_msg)
       : _has_bits_{from._has_bits_},
-        _cached_size_{0} {}
+        _cached_size_{0},
+        real_name_pi_(arena, from.real_name_pi_) {}
 
 AccountDirectoryResponse::AccountDirectoryResponse(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -14373,8 +17451,11 @@ AccountDirectoryResponse::AccountDirectoryResponse(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.players_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+  _impl_.players_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.players_)
+                : nullptr;
+  _impl_.lifecycle_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.lifecycle_)
                 : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:data_service.AccountDirectoryResponse)
@@ -14382,11 +17463,17 @@ AccountDirectoryResponse::AccountDirectoryResponse(
 PROTOBUF_NDEBUG_INLINE AccountDirectoryResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        real_name_pi_(arena) {}
 
 inline void AccountDirectoryResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.players_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, players_),
+           0,
+           offsetof(Impl_, lifecycle_) -
+               offsetof(Impl_, players_) +
+               sizeof(Impl_::lifecycle_));
 }
 AccountDirectoryResponse::~AccountDirectoryResponse() {
   // @@protoc_insertion_point(destructor:data_service.AccountDirectoryResponse)
@@ -14399,7 +17486,9 @@ inline void AccountDirectoryResponse::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.real_name_pi_.Destroy();
   delete this_._impl_.players_;
+  delete this_._impl_.lifecycle_;
   this_._impl_.~Impl_();
 }
 
@@ -14437,9 +17526,18 @@ PROTOBUF_NOINLINE void AccountDirectoryResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.players_ != nullptr);
-    _impl_.players_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.real_name_pi_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.players_ != nullptr);
+      _impl_.players_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.lifecycle_ != nullptr);
+      _impl_.lifecycle_->Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -14465,10 +17563,27 @@ PROTOBUF_NOINLINE void AccountDirectoryResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .AccountSimplePlayerList players = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *this_._impl_.players_, this_._impl_.players_->GetCachedSize(), target,
         stream);
+  }
+
+  // .data_service.AccountLifecycle lifecycle = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.lifecycle_, this_._impl_.lifecycle_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string real_name_pi = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_real_name_pi().empty()) {
+      const ::std::string& _s = this_._internal_real_name_pi();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.AccountDirectoryResponse.real_name_pi");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -14494,12 +17609,25 @@ PROTOBUF_NOINLINE void AccountDirectoryResponse::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
-    // .AccountSimplePlayerList players = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string real_name_pi = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_real_name_pi().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_real_name_pi());
+      }
+    }
+    // .AccountSimplePlayerList players = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.players_);
+    }
+    // .data_service.AccountLifecycle lifecycle = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.lifecycle_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -14520,12 +17648,31 @@ void AccountDirectoryResponse::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(from._impl_.players_ != nullptr);
-    if (_this->_impl_.players_ == nullptr) {
-      _this->_impl_.players_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.players_);
-    } else {
-      _this->_impl_.players_->MergeFrom(*from._impl_.players_);
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_real_name_pi().empty()) {
+        _this->_internal_set_real_name_pi(from._internal_real_name_pi());
+      } else {
+        if (_this->_impl_.real_name_pi_.IsDefault()) {
+          _this->_internal_set_real_name_pi("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.players_ != nullptr);
+      if (_this->_impl_.players_ == nullptr) {
+        _this->_impl_.players_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.players_);
+      } else {
+        _this->_impl_.players_->MergeFrom(*from._impl_.players_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.lifecycle_ != nullptr);
+      if (_this->_impl_.lifecycle_ == nullptr) {
+        _this->_impl_.lifecycle_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.lifecycle_);
+      } else {
+        _this->_impl_.lifecycle_->MergeFrom(*from._impl_.lifecycle_);
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -14543,12 +17690,3742 @@ void AccountDirectoryResponse::CopyFrom(const AccountDirectoryResponse& from) {
 
 void AccountDirectoryResponse::InternalSwap(AccountDirectoryResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.players_, other->_impl_.players_);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.real_name_pi_, &other->_impl_.real_name_pi_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.lifecycle_)
+      + sizeof(AccountDirectoryResponse::_impl_.lifecycle_)
+      - PROTOBUF_FIELD_OFFSET(AccountDirectoryResponse, _impl_.players_)>(
+          reinterpret_cast<char*>(&_impl_.players_),
+          reinterpret_cast<char*>(&other->_impl_.players_));
 }
 
 ::google::protobuf::Metadata AccountDirectoryResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void SetAccountRealNameRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+SetAccountRealNameRequest::SetAccountRealNameRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetAccountRealNameRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.SetAccountRealNameRequest)
+}
+PROTOBUF_NDEBUG_INLINE SetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::SetAccountRealNameRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        account_(arena, from.account_),
+        real_name_pi_(arena, from.real_name_pi_) {}
+
+SetAccountRealNameRequest::SetAccountRealNameRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SetAccountRealNameRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetAccountRealNameRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SetAccountRealNameRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.SetAccountRealNameRequest)
+}
+PROTOBUF_NDEBUG_INLINE SetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        account_(arena),
+        real_name_pi_(arena) {}
+
+inline void SetAccountRealNameRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.auth_ = {};
+}
+SetAccountRealNameRequest::~SetAccountRealNameRequest() {
+  // @@protoc_insertion_point(destructor:data_service.SetAccountRealNameRequest)
+  SharedDtor(*this);
+}
+inline void SetAccountRealNameRequest::SharedDtor(MessageLite& self) {
+  SetAccountRealNameRequest& this_ = static_cast<SetAccountRealNameRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.account_.Destroy();
+  this_._impl_.real_name_pi_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SetAccountRealNameRequest_class_data_ =
+        SetAccountRealNameRequest::InternalGenerateClassData_(SetAccountRealNameRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetAccountRealNameRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetAccountRealNameRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SetAccountRealNameRequest_class_data_.tc_table);
+  return SetAccountRealNameRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetAccountRealNameRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetAccountRealNameRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SetAccountRealNameRequest_globals_));
+  return SetAccountRealNameRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SetAccountRealNameRequest::ParseTableT_
+    SetAccountRealNameRequest::_table_ =
+        SetAccountRealNameRequest::InternalGenerateParseTable_(SetAccountRealNameRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SetAccountRealNameRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.SetAccountRealNameRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.account_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.real_name_pi_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SetAccountRealNameRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SetAccountRealNameRequest& this_ = static_cast<const SetAccountRealNameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SetAccountRealNameRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SetAccountRealNameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.SetAccountRealNameRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string account = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_account().empty()) {
+      const ::std::string& _s = this_._internal_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.SetAccountRealNameRequest.account");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string real_name_pi = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_real_name_pi().empty()) {
+      const ::std::string& _s = this_._internal_real_name_pi();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.SetAccountRealNameRequest.real_name_pi");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.SetAccountRealNameRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SetAccountRealNameRequest::ByteSizeLong(const MessageLite& base) {
+  const SetAccountRealNameRequest& this_ = static_cast<const SetAccountRealNameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SetAccountRealNameRequest::ByteSizeLong() const {
+  const SetAccountRealNameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.SetAccountRealNameRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string account = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_account());
+      }
+    }
+    // string real_name_pi = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_real_name_pi().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_real_name_pi());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SetAccountRealNameRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SetAccountRealNameRequest*>(&to_msg);
+  auto& from = static_cast<const SetAccountRealNameRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.SetAccountRealNameRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_account().empty()) {
+        _this->_internal_set_account(from._internal_account());
+      } else {
+        if (_this->_impl_.account_.IsDefault()) {
+          _this->_internal_set_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_real_name_pi().empty()) {
+        _this->_internal_set_real_name_pi(from._internal_real_name_pi());
+      } else {
+        if (_this->_impl_.real_name_pi_.IsDefault()) {
+          _this->_internal_set_real_name_pi("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SetAccountRealNameRequest::CopyFrom(const SetAccountRealNameRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.SetAccountRealNameRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SetAccountRealNameRequest::InternalSwap(SetAccountRealNameRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.real_name_pi_, &other->_impl_.real_name_pi_, arena);
+  swap(_impl_.auth_, other->_impl_.auth_);
+}
+
+::google::protobuf::Metadata SetAccountRealNameRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SetAccountRealNameResponse::SetAccountRealNameResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetAccountRealNameResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.SetAccountRealNameResponse)
+}
+PROTOBUF_NDEBUG_INLINE SetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::SetAccountRealNameResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        real_name_pi_(arena, from.real_name_pi_) {}
+
+SetAccountRealNameResponse::SetAccountRealNameResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SetAccountRealNameResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetAccountRealNameResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SetAccountRealNameResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:data_service.SetAccountRealNameResponse)
+}
+PROTOBUF_NDEBUG_INLINE SetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        real_name_pi_(arena) {}
+
+inline void SetAccountRealNameResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+SetAccountRealNameResponse::~SetAccountRealNameResponse() {
+  // @@protoc_insertion_point(destructor:data_service.SetAccountRealNameResponse)
+  SharedDtor(*this);
+}
+inline void SetAccountRealNameResponse::SharedDtor(MessageLite& self) {
+  SetAccountRealNameResponse& this_ = static_cast<SetAccountRealNameResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.real_name_pi_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SetAccountRealNameResponse_class_data_ =
+        SetAccountRealNameResponse::InternalGenerateClassData_(SetAccountRealNameResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetAccountRealNameResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetAccountRealNameResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SetAccountRealNameResponse_class_data_.tc_table);
+  return SetAccountRealNameResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetAccountRealNameResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetAccountRealNameResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SetAccountRealNameResponse_globals_));
+  return SetAccountRealNameResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SetAccountRealNameResponse::ParseTableT_
+    SetAccountRealNameResponse::_table_ =
+        SetAccountRealNameResponse::InternalGenerateParseTable_(SetAccountRealNameResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SetAccountRealNameResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.SetAccountRealNameResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.real_name_pi_.ClearNonDefaultToEmpty();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SetAccountRealNameResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SetAccountRealNameResponse& this_ = static_cast<const SetAccountRealNameResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SetAccountRealNameResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SetAccountRealNameResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.SetAccountRealNameResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string real_name_pi = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_real_name_pi().empty()) {
+      const ::std::string& _s = this_._internal_real_name_pi();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.SetAccountRealNameResponse.real_name_pi");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.SetAccountRealNameResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SetAccountRealNameResponse::ByteSizeLong(const MessageLite& base) {
+  const SetAccountRealNameResponse& this_ = static_cast<const SetAccountRealNameResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SetAccountRealNameResponse::ByteSizeLong() const {
+  const SetAccountRealNameResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.SetAccountRealNameResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // string real_name_pi = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_real_name_pi().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_real_name_pi());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SetAccountRealNameResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SetAccountRealNameResponse*>(&to_msg);
+  auto& from = static_cast<const SetAccountRealNameResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.SetAccountRealNameResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!from._internal_real_name_pi().empty()) {
+      _this->_internal_set_real_name_pi(from._internal_real_name_pi());
+    } else {
+      if (_this->_impl_.real_name_pi_.IsDefault()) {
+        _this->_internal_set_real_name_pi("");
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SetAccountRealNameResponse::CopyFrom(const SetAccountRealNameResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.SetAccountRealNameResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SetAccountRealNameResponse::InternalSwap(SetAccountRealNameResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.real_name_pi_, &other->_impl_.real_name_pi_, arena);
+}
+
+::google::protobuf::Metadata SetAccountRealNameResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetAccountRealNameRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+GetAccountRealNameRequest::GetAccountRealNameRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetAccountRealNameRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.GetAccountRealNameRequest)
+}
+PROTOBUF_NDEBUG_INLINE GetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::GetAccountRealNameRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+GetAccountRealNameRequest::GetAccountRealNameRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetAccountRealNameRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetAccountRealNameRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetAccountRealNameRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.player_id_ = from._impl_.player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.GetAccountRealNameRequest)
+}
+PROTOBUF_NDEBUG_INLINE GetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetAccountRealNameRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, player_id_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::player_id_));
+}
+GetAccountRealNameRequest::~GetAccountRealNameRequest() {
+  // @@protoc_insertion_point(destructor:data_service.GetAccountRealNameRequest)
+  SharedDtor(*this);
+}
+inline void GetAccountRealNameRequest::SharedDtor(MessageLite& self) {
+  GetAccountRealNameRequest& this_ = static_cast<GetAccountRealNameRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetAccountRealNameRequest_class_data_ =
+        GetAccountRealNameRequest::InternalGenerateClassData_(GetAccountRealNameRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetAccountRealNameRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetAccountRealNameRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetAccountRealNameRequest_class_data_.tc_table);
+  return GetAccountRealNameRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetAccountRealNameRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetAccountRealNameRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetAccountRealNameRequest_globals_));
+  return GetAccountRealNameRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetAccountRealNameRequest::ParseTableT_
+    GetAccountRealNameRequest::_table_ =
+        GetAccountRealNameRequest::InternalGenerateParseTable_(GetAccountRealNameRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetAccountRealNameRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.GetAccountRealNameRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.auth_ != nullptr);
+    _impl_.auth_->Clear();
+  }
+  _impl_.player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetAccountRealNameRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetAccountRealNameRequest& this_ = static_cast<const GetAccountRealNameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetAccountRealNameRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetAccountRealNameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.GetAccountRealNameRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.GetAccountRealNameRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetAccountRealNameRequest::ByteSizeLong(const MessageLite& base) {
+  const GetAccountRealNameRequest& this_ = static_cast<const GetAccountRealNameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetAccountRealNameRequest::ByteSizeLong() const {
+  const GetAccountRealNameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.GetAccountRealNameRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .common.base.ServiceCallAuth auth = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetAccountRealNameRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetAccountRealNameRequest*>(&to_msg);
+  auto& from = static_cast<const GetAccountRealNameRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.GetAccountRealNameRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetAccountRealNameRequest::CopyFrom(const GetAccountRealNameRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.GetAccountRealNameRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetAccountRealNameRequest::InternalSwap(GetAccountRealNameRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_.player_id_)
+      + sizeof(GetAccountRealNameRequest::_impl_.player_id_)
+      - PROTOBUF_FIELD_OFFSET(GetAccountRealNameRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata GetAccountRealNameRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GetAccountRealNameResponse::GetAccountRealNameResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetAccountRealNameResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.GetAccountRealNameResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::GetAccountRealNameResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        real_name_pi_(arena, from.real_name_pi_) {}
+
+GetAccountRealNameResponse::GetAccountRealNameResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetAccountRealNameResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetAccountRealNameResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetAccountRealNameResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.found_ = from._impl_.found_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.GetAccountRealNameResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        real_name_pi_(arena) {}
+
+inline void GetAccountRealNameResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.found_ = {};
+}
+GetAccountRealNameResponse::~GetAccountRealNameResponse() {
+  // @@protoc_insertion_point(destructor:data_service.GetAccountRealNameResponse)
+  SharedDtor(*this);
+}
+inline void GetAccountRealNameResponse::SharedDtor(MessageLite& self) {
+  GetAccountRealNameResponse& this_ = static_cast<GetAccountRealNameResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.real_name_pi_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetAccountRealNameResponse_class_data_ =
+        GetAccountRealNameResponse::InternalGenerateClassData_(GetAccountRealNameResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetAccountRealNameResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetAccountRealNameResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetAccountRealNameResponse_class_data_.tc_table);
+  return GetAccountRealNameResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetAccountRealNameResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetAccountRealNameResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetAccountRealNameResponse_globals_));
+  return GetAccountRealNameResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetAccountRealNameResponse::ParseTableT_
+    GetAccountRealNameResponse::_table_ =
+        GetAccountRealNameResponse::InternalGenerateParseTable_(GetAccountRealNameResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetAccountRealNameResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.GetAccountRealNameResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.real_name_pi_.ClearNonDefaultToEmpty();
+  }
+  _impl_.found_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetAccountRealNameResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetAccountRealNameResponse& this_ = static_cast<const GetAccountRealNameResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetAccountRealNameResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetAccountRealNameResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.GetAccountRealNameResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool found = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_found() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_found(), target);
+    }
+  }
+
+  // string real_name_pi = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_real_name_pi().empty()) {
+      const ::std::string& _s = this_._internal_real_name_pi();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.GetAccountRealNameResponse.real_name_pi");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.GetAccountRealNameResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetAccountRealNameResponse::ByteSizeLong(const MessageLite& base) {
+  const GetAccountRealNameResponse& this_ = static_cast<const GetAccountRealNameResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetAccountRealNameResponse::ByteSizeLong() const {
+  const GetAccountRealNameResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.GetAccountRealNameResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string real_name_pi = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_real_name_pi().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_real_name_pi());
+      }
+    }
+    // bool found = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_found() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetAccountRealNameResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetAccountRealNameResponse*>(&to_msg);
+  auto& from = static_cast<const GetAccountRealNameResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.GetAccountRealNameResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_real_name_pi().empty()) {
+        _this->_internal_set_real_name_pi(from._internal_real_name_pi());
+      } else {
+        if (_this->_impl_.real_name_pi_.IsDefault()) {
+          _this->_internal_set_real_name_pi("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_found() != 0) {
+        _this->_impl_.found_ = from._impl_.found_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetAccountRealNameResponse::CopyFrom(const GetAccountRealNameResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.GetAccountRealNameResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetAccountRealNameResponse::InternalSwap(GetAccountRealNameResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.real_name_pi_, &other->_impl_.real_name_pi_, arena);
+  swap(_impl_.found_, other->_impl_.found_);
+}
+
+::google::protobuf::Metadata GetAccountRealNameResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ResetAccountRealNameRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+ResetAccountRealNameRequest::ResetAccountRealNameRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResetAccountRealNameRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.ResetAccountRealNameRequest)
+}
+PROTOBUF_NDEBUG_INLINE ResetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::ResetAccountRealNameRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        account_(arena, from.account_) {}
+
+ResetAccountRealNameRequest::ResetAccountRealNameRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ResetAccountRealNameRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResetAccountRealNameRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ResetAccountRealNameRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.ResetAccountRealNameRequest)
+}
+PROTOBUF_NDEBUG_INLINE ResetAccountRealNameRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        account_(arena) {}
+
+inline void ResetAccountRealNameRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.auth_ = {};
+}
+ResetAccountRealNameRequest::~ResetAccountRealNameRequest() {
+  // @@protoc_insertion_point(destructor:data_service.ResetAccountRealNameRequest)
+  SharedDtor(*this);
+}
+inline void ResetAccountRealNameRequest::SharedDtor(MessageLite& self) {
+  ResetAccountRealNameRequest& this_ = static_cast<ResetAccountRealNameRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.account_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ResetAccountRealNameRequest_class_data_ =
+        ResetAccountRealNameRequest::InternalGenerateClassData_(ResetAccountRealNameRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResetAccountRealNameRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResetAccountRealNameRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ResetAccountRealNameRequest_class_data_.tc_table);
+  return ResetAccountRealNameRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResetAccountRealNameRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResetAccountRealNameRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ResetAccountRealNameRequest_globals_));
+  return ResetAccountRealNameRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ResetAccountRealNameRequest::ParseTableT_
+    ResetAccountRealNameRequest::_table_ =
+        ResetAccountRealNameRequest::InternalGenerateParseTable_(ResetAccountRealNameRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ResetAccountRealNameRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.ResetAccountRealNameRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.account_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ResetAccountRealNameRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ResetAccountRealNameRequest& this_ = static_cast<const ResetAccountRealNameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ResetAccountRealNameRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ResetAccountRealNameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.ResetAccountRealNameRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string account = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_account().empty()) {
+      const ::std::string& _s = this_._internal_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.ResetAccountRealNameRequest.account");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.ResetAccountRealNameRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ResetAccountRealNameRequest::ByteSizeLong(const MessageLite& base) {
+  const ResetAccountRealNameRequest& this_ = static_cast<const ResetAccountRealNameRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ResetAccountRealNameRequest::ByteSizeLong() const {
+  const ResetAccountRealNameRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.ResetAccountRealNameRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string account = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_account());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ResetAccountRealNameRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ResetAccountRealNameRequest*>(&to_msg);
+  auto& from = static_cast<const ResetAccountRealNameRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.ResetAccountRealNameRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_account().empty()) {
+        _this->_internal_set_account(from._internal_account());
+      } else {
+        if (_this->_impl_.account_.IsDefault()) {
+          _this->_internal_set_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ResetAccountRealNameRequest::CopyFrom(const ResetAccountRealNameRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.ResetAccountRealNameRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ResetAccountRealNameRequest::InternalSwap(ResetAccountRealNameRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
+  swap(_impl_.auth_, other->_impl_.auth_);
+}
+
+::google::protobuf::Metadata ResetAccountRealNameRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ResetAccountRealNameResponse::ResetAccountRealNameResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResetAccountRealNameResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.ResetAccountRealNameResponse)
+}
+ResetAccountRealNameResponse::ResetAccountRealNameResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ResetAccountRealNameResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ResetAccountRealNameResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE ResetAccountRealNameResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ResetAccountRealNameResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.had_real_name_ = {};
+}
+ResetAccountRealNameResponse::~ResetAccountRealNameResponse() {
+  // @@protoc_insertion_point(destructor:data_service.ResetAccountRealNameResponse)
+  SharedDtor(*this);
+}
+inline void ResetAccountRealNameResponse::SharedDtor(MessageLite& self) {
+  ResetAccountRealNameResponse& this_ = static_cast<ResetAccountRealNameResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ResetAccountRealNameResponse_class_data_ =
+        ResetAccountRealNameResponse::InternalGenerateClassData_(ResetAccountRealNameResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResetAccountRealNameResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResetAccountRealNameResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ResetAccountRealNameResponse_class_data_.tc_table);
+  return ResetAccountRealNameResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ResetAccountRealNameResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ResetAccountRealNameResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ResetAccountRealNameResponse_globals_));
+  return ResetAccountRealNameResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ResetAccountRealNameResponse::ParseTableT_
+    ResetAccountRealNameResponse::_table_ =
+        ResetAccountRealNameResponse::InternalGenerateParseTable_(ResetAccountRealNameResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ResetAccountRealNameResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.ResetAccountRealNameResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.had_real_name_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ResetAccountRealNameResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ResetAccountRealNameResponse& this_ = static_cast<const ResetAccountRealNameResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ResetAccountRealNameResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ResetAccountRealNameResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.ResetAccountRealNameResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool had_real_name = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_had_real_name() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_had_real_name(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.ResetAccountRealNameResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ResetAccountRealNameResponse::ByteSizeLong(const MessageLite& base) {
+  const ResetAccountRealNameResponse& this_ = static_cast<const ResetAccountRealNameResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ResetAccountRealNameResponse::ByteSizeLong() const {
+  const ResetAccountRealNameResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.ResetAccountRealNameResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // bool had_real_name = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_had_real_name() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ResetAccountRealNameResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ResetAccountRealNameResponse*>(&to_msg);
+  auto& from = static_cast<const ResetAccountRealNameResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.ResetAccountRealNameResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_had_real_name() != 0) {
+      _this->_impl_.had_real_name_ = from._impl_.had_real_name_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ResetAccountRealNameResponse::CopyFrom(const ResetAccountRealNameResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.ResetAccountRealNameResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ResetAccountRealNameResponse::InternalSwap(ResetAccountRealNameResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.had_real_name_, other->_impl_.had_real_name_);
+}
+
+::google::protobuf::Metadata ResetAccountRealNameResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AccountLifecycle::AccountLifecycle(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AccountLifecycle_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.AccountLifecycle)
+}
+AccountLifecycle::AccountLifecycle(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AccountLifecycle& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AccountLifecycle_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE AccountLifecycle::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void AccountLifecycle::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, deletion_execute_after_ms_),
+           0,
+           offsetof(Impl_, deletion_state_) -
+               offsetof(Impl_, deletion_execute_after_ms_) +
+               sizeof(Impl_::deletion_state_));
+}
+AccountLifecycle::~AccountLifecycle() {
+  // @@protoc_insertion_point(destructor:data_service.AccountLifecycle)
+  SharedDtor(*this);
+}
+inline void AccountLifecycle::SharedDtor(MessageLite& self) {
+  AccountLifecycle& this_ = static_cast<AccountLifecycle&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AccountLifecycle_class_data_ =
+        AccountLifecycle::InternalGenerateClassData_(AccountLifecycle_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AccountLifecycle::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AccountLifecycle_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AccountLifecycle_class_data_.tc_table);
+  return AccountLifecycle_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AccountLifecycle::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AccountLifecycle_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AccountLifecycle_globals_));
+  return AccountLifecycle_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AccountLifecycle::ParseTableT_
+    AccountLifecycle::_table_ =
+        AccountLifecycle::InternalGenerateParseTable_(AccountLifecycle_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AccountLifecycle::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.AccountLifecycle)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.deletion_execute_after_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.deletion_state_) -
+        reinterpret_cast<char*>(&_impl_.deletion_execute_after_ms_)) + sizeof(_impl_.deletion_state_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AccountLifecycle::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AccountLifecycle& this_ = static_cast<const AccountLifecycle&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AccountLifecycle::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AccountLifecycle& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.AccountLifecycle)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .data_service.AccountDeletionState deletion_state = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_deletion_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_deletion_state(), target);
+    }
+  }
+
+  // uint64 deletion_execute_after_ms = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_deletion_execute_after_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_deletion_execute_after_ms(), target);
+    }
+  }
+
+  // uint64 previous_deleted_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_previous_deleted_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_previous_deleted_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.AccountLifecycle)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AccountLifecycle::ByteSizeLong(const MessageLite& base) {
+  const AccountLifecycle& this_ = static_cast<const AccountLifecycle&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AccountLifecycle::ByteSizeLong() const {
+  const AccountLifecycle& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.AccountLifecycle)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 deletion_execute_after_ms = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_deletion_execute_after_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_deletion_execute_after_ms());
+      }
+    }
+    // uint64 previous_deleted_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_previous_deleted_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_previous_deleted_ms());
+      }
+    }
+    // .data_service.AccountDeletionState deletion_state = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_deletion_state() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_deletion_state());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AccountLifecycle::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AccountLifecycle*>(&to_msg);
+  auto& from = static_cast<const AccountLifecycle&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.AccountLifecycle)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_deletion_execute_after_ms() != 0) {
+        _this->_impl_.deletion_execute_after_ms_ = from._impl_.deletion_execute_after_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_previous_deleted_ms() != 0) {
+        _this->_impl_.previous_deleted_ms_ = from._impl_.previous_deleted_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_deletion_state() != 0) {
+        _this->_impl_.deletion_state_ = from._impl_.deletion_state_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AccountLifecycle::CopyFrom(const AccountLifecycle& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.AccountLifecycle)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AccountLifecycle::InternalSwap(AccountLifecycle* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.deletion_state_)
+      + sizeof(AccountLifecycle::_impl_.deletion_state_)
+      - PROTOBUF_FIELD_OFFSET(AccountLifecycle, _impl_.deletion_execute_after_ms_)>(
+          reinterpret_cast<char*>(&_impl_.deletion_execute_after_ms_),
+          reinterpret_cast<char*>(&other->_impl_.deletion_execute_after_ms_));
+}
+
+::google::protobuf::Metadata AccountLifecycle::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AccountDeletionBlocker::AccountDeletionBlocker(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AccountDeletionBlocker_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.AccountDeletionBlocker)
+}
+PROTOBUF_NDEBUG_INLINE AccountDeletionBlocker::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::AccountDeletionBlocker& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        reason_(arena, from.reason_) {}
+
+AccountDeletionBlocker::AccountDeletionBlocker(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AccountDeletionBlocker& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AccountDeletionBlocker_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  AccountDeletionBlocker* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.player_id_ = from._impl_.player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.AccountDeletionBlocker)
+}
+PROTOBUF_NDEBUG_INLINE AccountDeletionBlocker::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        reason_(arena) {}
+
+inline void AccountDeletionBlocker::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.player_id_ = {};
+}
+AccountDeletionBlocker::~AccountDeletionBlocker() {
+  // @@protoc_insertion_point(destructor:data_service.AccountDeletionBlocker)
+  SharedDtor(*this);
+}
+inline void AccountDeletionBlocker::SharedDtor(MessageLite& self) {
+  AccountDeletionBlocker& this_ = static_cast<AccountDeletionBlocker&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.reason_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AccountDeletionBlocker_class_data_ =
+        AccountDeletionBlocker::InternalGenerateClassData_(AccountDeletionBlocker_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AccountDeletionBlocker::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AccountDeletionBlocker_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AccountDeletionBlocker_class_data_.tc_table);
+  return AccountDeletionBlocker_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AccountDeletionBlocker::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AccountDeletionBlocker_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AccountDeletionBlocker_globals_));
+  return AccountDeletionBlocker_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AccountDeletionBlocker::ParseTableT_
+    AccountDeletionBlocker::_table_ =
+        AccountDeletionBlocker::InternalGenerateParseTable_(AccountDeletionBlocker_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AccountDeletionBlocker::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.AccountDeletionBlocker)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.reason_.ClearNonDefaultToEmpty();
+  }
+  _impl_.player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AccountDeletionBlocker::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AccountDeletionBlocker& this_ = static_cast<const AccountDeletionBlocker&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AccountDeletionBlocker::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AccountDeletionBlocker& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.AccountDeletionBlocker)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string reason = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_reason().empty()) {
+      const ::std::string& _s = this_._internal_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.AccountDeletionBlocker.reason");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.AccountDeletionBlocker)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AccountDeletionBlocker::ByteSizeLong(const MessageLite& base) {
+  const AccountDeletionBlocker& this_ = static_cast<const AccountDeletionBlocker&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AccountDeletionBlocker::ByteSizeLong() const {
+  const AccountDeletionBlocker& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.AccountDeletionBlocker)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string reason = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reason());
+      }
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AccountDeletionBlocker::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AccountDeletionBlocker*>(&to_msg);
+  auto& from = static_cast<const AccountDeletionBlocker&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.AccountDeletionBlocker)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_reason().empty()) {
+        _this->_internal_set_reason(from._internal_reason());
+      } else {
+        if (_this->_impl_.reason_.IsDefault()) {
+          _this->_internal_set_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AccountDeletionBlocker::CopyFrom(const AccountDeletionBlocker& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.AccountDeletionBlocker)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AccountDeletionBlocker::InternalSwap(AccountDeletionBlocker* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  swap(_impl_.player_id_, other->_impl_.player_id_);
+}
+
+::google::protobuf::Metadata AccountDeletionBlocker::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AccountDeletionResponse::AccountDeletionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AccountDeletionResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.AccountDeletionResponse)
+}
+PROTOBUF_NDEBUG_INLINE AccountDeletionResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::AccountDeletionResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        blockers_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::data_service::AccountDeletionResponse,
+              PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionResponse, _impl_.blockers_)>()
+          , from.blockers_
+        }
+     {}
+
+AccountDeletionResponse::AccountDeletionResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AccountDeletionResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AccountDeletionResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  AccountDeletionResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.lifecycle_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.lifecycle_)
+                : nullptr;
+  _impl_.outcome_ = from._impl_.outcome_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.AccountDeletionResponse)
+}
+PROTOBUF_NDEBUG_INLINE AccountDeletionResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        blockers_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::data_service::AccountDeletionResponse,
+            PROTOBUF_FIELD_OFFSET(::data_service::AccountDeletionResponse, _impl_.blockers_)>()
+         }
+     {}
+
+inline void AccountDeletionResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, lifecycle_),
+           0,
+           offsetof(Impl_, outcome_) -
+               offsetof(Impl_, lifecycle_) +
+               sizeof(Impl_::outcome_));
+}
+AccountDeletionResponse::~AccountDeletionResponse() {
+  // @@protoc_insertion_point(destructor:data_service.AccountDeletionResponse)
+  SharedDtor(*this);
+}
+inline void AccountDeletionResponse::SharedDtor(MessageLite& self) {
+  AccountDeletionResponse& this_ = static_cast<AccountDeletionResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.lifecycle_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AccountDeletionResponse_class_data_ =
+        AccountDeletionResponse::InternalGenerateClassData_(AccountDeletionResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AccountDeletionResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AccountDeletionResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AccountDeletionResponse_class_data_.tc_table);
+  return AccountDeletionResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AccountDeletionResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AccountDeletionResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AccountDeletionResponse_globals_));
+  return AccountDeletionResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AccountDeletionResponse::ParseTableT_
+    AccountDeletionResponse::_table_ =
+        AccountDeletionResponse::InternalGenerateParseTable_(AccountDeletionResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AccountDeletionResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.AccountDeletionResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.blockers_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.lifecycle_ != nullptr);
+      _impl_.lifecycle_->Clear();
+    }
+  }
+  _impl_.outcome_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AccountDeletionResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AccountDeletionResponse& this_ = static_cast<const AccountDeletionResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AccountDeletionResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AccountDeletionResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.AccountDeletionResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .data_service.AccountDeletionOutcome outcome = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_outcome() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_outcome(), target);
+    }
+  }
+
+  // .data_service.AccountLifecycle lifecycle = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.lifecycle_, this_._impl_.lifecycle_->GetCachedSize(), target,
+        stream);
+  }
+
+  // repeated .data_service.AccountDeletionBlocker blockers = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_blockers_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_blockers().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              3, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.AccountDeletionResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AccountDeletionResponse::ByteSizeLong(const MessageLite& base) {
+  const AccountDeletionResponse& this_ = static_cast<const AccountDeletionResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AccountDeletionResponse::ByteSizeLong() const {
+  const AccountDeletionResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.AccountDeletionResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // repeated .data_service.AccountDeletionBlocker blockers = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_blockers_size();
+      for (const auto& msg : this_._internal_blockers()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .data_service.AccountLifecycle lifecycle = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.lifecycle_);
+    }
+    // .data_service.AccountDeletionOutcome outcome = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_outcome() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_outcome());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AccountDeletionResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AccountDeletionResponse*>(&to_msg);
+  auto& from = static_cast<const AccountDeletionResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.AccountDeletionResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_blockers()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_blockers());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.lifecycle_ != nullptr);
+      if (_this->_impl_.lifecycle_ == nullptr) {
+        _this->_impl_.lifecycle_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.lifecycle_);
+      } else {
+        _this->_impl_.lifecycle_->MergeFrom(*from._impl_.lifecycle_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_outcome() != 0) {
+        _this->_impl_.outcome_ = from._impl_.outcome_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AccountDeletionResponse::CopyFrom(const AccountDeletionResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.AccountDeletionResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AccountDeletionResponse::InternalSwap(AccountDeletionResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.blockers_.InternalSwap(&other->_impl_.blockers_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.outcome_)
+      + sizeof(AccountDeletionResponse::_impl_.outcome_)
+      - PROTOBUF_FIELD_OFFSET(AccountDeletionResponse, _impl_.lifecycle_)>(
+          reinterpret_cast<char*>(&_impl_.lifecycle_),
+          reinterpret_cast<char*>(&other->_impl_.lifecycle_));
+}
+
+::google::protobuf::Metadata AccountDeletionResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void RequestAccountDeletionRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+RequestAccountDeletionRequest::RequestAccountDeletionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RequestAccountDeletionRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.RequestAccountDeletionRequest)
+}
+PROTOBUF_NDEBUG_INLINE RequestAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::RequestAccountDeletionRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        account_(arena, from.account_) {}
+
+RequestAccountDeletionRequest::RequestAccountDeletionRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RequestAccountDeletionRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RequestAccountDeletionRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RequestAccountDeletionRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.source_ = from._impl_.source_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.RequestAccountDeletionRequest)
+}
+PROTOBUF_NDEBUG_INLINE RequestAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        account_(arena) {}
+
+inline void RequestAccountDeletionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, source_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::source_));
+}
+RequestAccountDeletionRequest::~RequestAccountDeletionRequest() {
+  // @@protoc_insertion_point(destructor:data_service.RequestAccountDeletionRequest)
+  SharedDtor(*this);
+}
+inline void RequestAccountDeletionRequest::SharedDtor(MessageLite& self) {
+  RequestAccountDeletionRequest& this_ = static_cast<RequestAccountDeletionRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.account_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RequestAccountDeletionRequest_class_data_ =
+        RequestAccountDeletionRequest::InternalGenerateClassData_(RequestAccountDeletionRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RequestAccountDeletionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RequestAccountDeletionRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RequestAccountDeletionRequest_class_data_.tc_table);
+  return RequestAccountDeletionRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RequestAccountDeletionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RequestAccountDeletionRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RequestAccountDeletionRequest_globals_));
+  return RequestAccountDeletionRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RequestAccountDeletionRequest::ParseTableT_
+    RequestAccountDeletionRequest::_table_ =
+        RequestAccountDeletionRequest::InternalGenerateParseTable_(RequestAccountDeletionRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RequestAccountDeletionRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.RequestAccountDeletionRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.account_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_.source_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RequestAccountDeletionRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RequestAccountDeletionRequest& this_ = static_cast<const RequestAccountDeletionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RequestAccountDeletionRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RequestAccountDeletionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.RequestAccountDeletionRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string account = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_account().empty()) {
+      const ::std::string& _s = this_._internal_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.RequestAccountDeletionRequest.account");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // uint32 source = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_source() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_source(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.RequestAccountDeletionRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RequestAccountDeletionRequest::ByteSizeLong(const MessageLite& base) {
+  const RequestAccountDeletionRequest& this_ = static_cast<const RequestAccountDeletionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RequestAccountDeletionRequest::ByteSizeLong() const {
+  const RequestAccountDeletionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.RequestAccountDeletionRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string account = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_account());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint32 source = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_source() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_source());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RequestAccountDeletionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RequestAccountDeletionRequest*>(&to_msg);
+  auto& from = static_cast<const RequestAccountDeletionRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.RequestAccountDeletionRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_account().empty()) {
+        _this->_internal_set_account(from._internal_account());
+      } else {
+        if (_this->_impl_.account_.IsDefault()) {
+          _this->_internal_set_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_source() != 0) {
+        _this->_impl_.source_ = from._impl_.source_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RequestAccountDeletionRequest::CopyFrom(const RequestAccountDeletionRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.RequestAccountDeletionRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RequestAccountDeletionRequest::InternalSwap(RequestAccountDeletionRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.source_)
+      + sizeof(RequestAccountDeletionRequest::_impl_.source_)
+      - PROTOBUF_FIELD_OFFSET(RequestAccountDeletionRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata RequestAccountDeletionRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void CancelAccountDeletionRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+CancelAccountDeletionRequest::CancelAccountDeletionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CancelAccountDeletionRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.CancelAccountDeletionRequest)
+}
+PROTOBUF_NDEBUG_INLINE CancelAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::CancelAccountDeletionRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        account_(arena, from.account_) {}
+
+CancelAccountDeletionRequest::CancelAccountDeletionRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CancelAccountDeletionRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CancelAccountDeletionRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CancelAccountDeletionRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.CancelAccountDeletionRequest)
+}
+PROTOBUF_NDEBUG_INLINE CancelAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        account_(arena) {}
+
+inline void CancelAccountDeletionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.auth_ = {};
+}
+CancelAccountDeletionRequest::~CancelAccountDeletionRequest() {
+  // @@protoc_insertion_point(destructor:data_service.CancelAccountDeletionRequest)
+  SharedDtor(*this);
+}
+inline void CancelAccountDeletionRequest::SharedDtor(MessageLite& self) {
+  CancelAccountDeletionRequest& this_ = static_cast<CancelAccountDeletionRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.account_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CancelAccountDeletionRequest_class_data_ =
+        CancelAccountDeletionRequest::InternalGenerateClassData_(CancelAccountDeletionRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CancelAccountDeletionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CancelAccountDeletionRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CancelAccountDeletionRequest_class_data_.tc_table);
+  return CancelAccountDeletionRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CancelAccountDeletionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CancelAccountDeletionRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CancelAccountDeletionRequest_globals_));
+  return CancelAccountDeletionRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CancelAccountDeletionRequest::ParseTableT_
+    CancelAccountDeletionRequest::_table_ =
+        CancelAccountDeletionRequest::InternalGenerateParseTable_(CancelAccountDeletionRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CancelAccountDeletionRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.CancelAccountDeletionRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.account_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CancelAccountDeletionRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CancelAccountDeletionRequest& this_ = static_cast<const CancelAccountDeletionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CancelAccountDeletionRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CancelAccountDeletionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.CancelAccountDeletionRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string account = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_account().empty()) {
+      const ::std::string& _s = this_._internal_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.CancelAccountDeletionRequest.account");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.CancelAccountDeletionRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CancelAccountDeletionRequest::ByteSizeLong(const MessageLite& base) {
+  const CancelAccountDeletionRequest& this_ = static_cast<const CancelAccountDeletionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CancelAccountDeletionRequest::ByteSizeLong() const {
+  const CancelAccountDeletionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.CancelAccountDeletionRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string account = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_account());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CancelAccountDeletionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CancelAccountDeletionRequest*>(&to_msg);
+  auto& from = static_cast<const CancelAccountDeletionRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.CancelAccountDeletionRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_account().empty()) {
+        _this->_internal_set_account(from._internal_account());
+      } else {
+        if (_this->_impl_.account_.IsDefault()) {
+          _this->_internal_set_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CancelAccountDeletionRequest::CopyFrom(const CancelAccountDeletionRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.CancelAccountDeletionRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CancelAccountDeletionRequest::InternalSwap(CancelAccountDeletionRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
+  swap(_impl_.auth_, other->_impl_.auth_);
+}
+
+::google::protobuf::Metadata CancelAccountDeletionRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void ClaimAccountDeletionsRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+ClaimAccountDeletionsRequest::ClaimAccountDeletionsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimAccountDeletionsRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.ClaimAccountDeletionsRequest)
+}
+PROTOBUF_NDEBUG_INLINE ClaimAccountDeletionsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::ClaimAccountDeletionsRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+ClaimAccountDeletionsRequest::ClaimAccountDeletionsRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ClaimAccountDeletionsRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimAccountDeletionsRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ClaimAccountDeletionsRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.limit_ = from._impl_.limit_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.ClaimAccountDeletionsRequest)
+}
+PROTOBUF_NDEBUG_INLINE ClaimAccountDeletionsRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void ClaimAccountDeletionsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, limit_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::limit_));
+}
+ClaimAccountDeletionsRequest::~ClaimAccountDeletionsRequest() {
+  // @@protoc_insertion_point(destructor:data_service.ClaimAccountDeletionsRequest)
+  SharedDtor(*this);
+}
+inline void ClaimAccountDeletionsRequest::SharedDtor(MessageLite& self) {
+  ClaimAccountDeletionsRequest& this_ = static_cast<ClaimAccountDeletionsRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimAccountDeletionsRequest_class_data_ =
+        ClaimAccountDeletionsRequest::InternalGenerateClassData_(ClaimAccountDeletionsRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimAccountDeletionsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimAccountDeletionsRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimAccountDeletionsRequest_class_data_.tc_table);
+  return ClaimAccountDeletionsRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimAccountDeletionsRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimAccountDeletionsRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimAccountDeletionsRequest_globals_));
+  return ClaimAccountDeletionsRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimAccountDeletionsRequest::ParseTableT_
+    ClaimAccountDeletionsRequest::_table_ =
+        ClaimAccountDeletionsRequest::InternalGenerateParseTable_(ClaimAccountDeletionsRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimAccountDeletionsRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.ClaimAccountDeletionsRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.auth_ != nullptr);
+    _impl_.auth_->Clear();
+  }
+  _impl_.limit_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimAccountDeletionsRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimAccountDeletionsRequest& this_ = static_cast<const ClaimAccountDeletionsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimAccountDeletionsRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimAccountDeletionsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.ClaimAccountDeletionsRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 limit = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_limit(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.ClaimAccountDeletionsRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimAccountDeletionsRequest::ByteSizeLong(const MessageLite& base) {
+  const ClaimAccountDeletionsRequest& this_ = static_cast<const ClaimAccountDeletionsRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimAccountDeletionsRequest::ByteSizeLong() const {
+  const ClaimAccountDeletionsRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.ClaimAccountDeletionsRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .common.base.ServiceCallAuth auth = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint32 limit = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_limit());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimAccountDeletionsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimAccountDeletionsRequest*>(&to_msg);
+  auto& from = static_cast<const ClaimAccountDeletionsRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.ClaimAccountDeletionsRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_limit() != 0) {
+        _this->_impl_.limit_ = from._impl_.limit_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimAccountDeletionsRequest::CopyFrom(const ClaimAccountDeletionsRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.ClaimAccountDeletionsRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimAccountDeletionsRequest::InternalSwap(ClaimAccountDeletionsRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_.limit_)
+      + sizeof(ClaimAccountDeletionsRequest::_impl_.limit_)
+      - PROTOBUF_FIELD_OFFSET(ClaimAccountDeletionsRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata ClaimAccountDeletionsRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ClaimAccountDeletionsResponse::ClaimAccountDeletionsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimAccountDeletionsResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.ClaimAccountDeletionsResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimAccountDeletionsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::ClaimAccountDeletionsResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        accounts_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::data_service::ClaimAccountDeletionsResponse,
+              PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsResponse, _impl_.accounts_)>()
+          , from.accounts_
+        }
+     {}
+
+ClaimAccountDeletionsResponse::ClaimAccountDeletionsResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ClaimAccountDeletionsResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, ClaimAccountDeletionsResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ClaimAccountDeletionsResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:data_service.ClaimAccountDeletionsResponse)
+}
+PROTOBUF_NDEBUG_INLINE ClaimAccountDeletionsResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        accounts_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::data_service::ClaimAccountDeletionsResponse,
+            PROTOBUF_FIELD_OFFSET(::data_service::ClaimAccountDeletionsResponse, _impl_.accounts_)>()
+         }
+     {}
+
+inline void ClaimAccountDeletionsResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+ClaimAccountDeletionsResponse::~ClaimAccountDeletionsResponse() {
+  // @@protoc_insertion_point(destructor:data_service.ClaimAccountDeletionsResponse)
+  SharedDtor(*this);
+}
+inline void ClaimAccountDeletionsResponse::SharedDtor(MessageLite& self) {
+  ClaimAccountDeletionsResponse& this_ = static_cast<ClaimAccountDeletionsResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ClaimAccountDeletionsResponse_class_data_ =
+        ClaimAccountDeletionsResponse::InternalGenerateClassData_(ClaimAccountDeletionsResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimAccountDeletionsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimAccountDeletionsResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ClaimAccountDeletionsResponse_class_data_.tc_table);
+  return ClaimAccountDeletionsResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ClaimAccountDeletionsResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ClaimAccountDeletionsResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ClaimAccountDeletionsResponse_globals_));
+  return ClaimAccountDeletionsResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ClaimAccountDeletionsResponse::ParseTableT_
+    ClaimAccountDeletionsResponse::_table_ =
+        ClaimAccountDeletionsResponse::InternalGenerateParseTable_(ClaimAccountDeletionsResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ClaimAccountDeletionsResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.ClaimAccountDeletionsResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.accounts_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ClaimAccountDeletionsResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ClaimAccountDeletionsResponse& this_ = static_cast<const ClaimAccountDeletionsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ClaimAccountDeletionsResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ClaimAccountDeletionsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.ClaimAccountDeletionsResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated string accounts = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (int i = 0, n = this_._internal_accounts_size(); i < n; ++i) {
+      const auto& s = this_._internal_accounts().Get(i);
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          s.data(), static_cast<int>(s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.ClaimAccountDeletionsResponse.accounts");
+      target = stream->WriteString(1, s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.ClaimAccountDeletionsResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ClaimAccountDeletionsResponse::ByteSizeLong(const MessageLite& base) {
+  const ClaimAccountDeletionsResponse& this_ = static_cast<const ClaimAccountDeletionsResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ClaimAccountDeletionsResponse::ByteSizeLong() const {
+  const ClaimAccountDeletionsResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.ClaimAccountDeletionsResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated string accounts = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_accounts().size());
+      for (int i = 0, n = this_._internal_accounts().size(); i < n; ++i) {
+        total_size += ::google::protobuf::internal::WireFormatLite::StringSize(
+            this_._internal_accounts().Get(i));
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ClaimAccountDeletionsResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ClaimAccountDeletionsResponse*>(&to_msg);
+  auto& from = static_cast<const ClaimAccountDeletionsResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.ClaimAccountDeletionsResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_accounts()->InternalMergeFromWithArena(
+        ::google::protobuf::MessageLite::internal_visibility(), arena,
+        from._internal_accounts());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ClaimAccountDeletionsResponse::CopyFrom(const ClaimAccountDeletionsResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.ClaimAccountDeletionsResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ClaimAccountDeletionsResponse::InternalSwap(ClaimAccountDeletionsResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.accounts_.InternalSwap(&other->_impl_.accounts_);
+}
+
+::google::protobuf::Metadata ClaimAccountDeletionsResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void FinishAccountDeletionRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+FinishAccountDeletionRequest::FinishAccountDeletionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FinishAccountDeletionRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.FinishAccountDeletionRequest)
+}
+PROTOBUF_NDEBUG_INLINE FinishAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::FinishAccountDeletionRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        account_(arena, from.account_) {}
+
+FinishAccountDeletionRequest::FinishAccountDeletionRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const FinishAccountDeletionRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FinishAccountDeletionRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  FinishAccountDeletionRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.FinishAccountDeletionRequest)
+}
+PROTOBUF_NDEBUG_INLINE FinishAccountDeletionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        account_(arena) {}
+
+inline void FinishAccountDeletionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.auth_ = {};
+}
+FinishAccountDeletionRequest::~FinishAccountDeletionRequest() {
+  // @@protoc_insertion_point(destructor:data_service.FinishAccountDeletionRequest)
+  SharedDtor(*this);
+}
+inline void FinishAccountDeletionRequest::SharedDtor(MessageLite& self) {
+  FinishAccountDeletionRequest& this_ = static_cast<FinishAccountDeletionRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.account_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull FinishAccountDeletionRequest_class_data_ =
+        FinishAccountDeletionRequest::InternalGenerateClassData_(FinishAccountDeletionRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FinishAccountDeletionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FinishAccountDeletionRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(FinishAccountDeletionRequest_class_data_.tc_table);
+  return FinishAccountDeletionRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FinishAccountDeletionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FinishAccountDeletionRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&FinishAccountDeletionRequest_globals_));
+  return FinishAccountDeletionRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const FinishAccountDeletionRequest::ParseTableT_
+    FinishAccountDeletionRequest::_table_ =
+        FinishAccountDeletionRequest::InternalGenerateParseTable_(FinishAccountDeletionRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void FinishAccountDeletionRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.FinishAccountDeletionRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.account_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL FinishAccountDeletionRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const FinishAccountDeletionRequest& this_ = static_cast<const FinishAccountDeletionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL FinishAccountDeletionRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const FinishAccountDeletionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.FinishAccountDeletionRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string account = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_account().empty()) {
+      const ::std::string& _s = this_._internal_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.FinishAccountDeletionRequest.account");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.FinishAccountDeletionRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t FinishAccountDeletionRequest::ByteSizeLong(const MessageLite& base) {
+  const FinishAccountDeletionRequest& this_ = static_cast<const FinishAccountDeletionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t FinishAccountDeletionRequest::ByteSizeLong() const {
+  const FinishAccountDeletionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.FinishAccountDeletionRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string account = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_account());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void FinishAccountDeletionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<FinishAccountDeletionRequest*>(&to_msg);
+  auto& from = static_cast<const FinishAccountDeletionRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.FinishAccountDeletionRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_account().empty()) {
+        _this->_internal_set_account(from._internal_account());
+      } else {
+        if (_this->_impl_.account_.IsDefault()) {
+          _this->_internal_set_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void FinishAccountDeletionRequest::CopyFrom(const FinishAccountDeletionRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.FinishAccountDeletionRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void FinishAccountDeletionRequest::InternalSwap(FinishAccountDeletionRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
+  swap(_impl_.auth_, other->_impl_.auth_);
+}
+
+::google::protobuf::Metadata FinishAccountDeletionRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+FinishAccountDeletionResponse::FinishAccountDeletionResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FinishAccountDeletionResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.FinishAccountDeletionResponse)
+}
+FinishAccountDeletionResponse::FinishAccountDeletionResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const FinishAccountDeletionResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, FinishAccountDeletionResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE FinishAccountDeletionResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void FinishAccountDeletionResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, done_),
+           0,
+           offsetof(Impl_, remaining_refs_) -
+               offsetof(Impl_, done_) +
+               sizeof(Impl_::remaining_refs_));
+}
+FinishAccountDeletionResponse::~FinishAccountDeletionResponse() {
+  // @@protoc_insertion_point(destructor:data_service.FinishAccountDeletionResponse)
+  SharedDtor(*this);
+}
+inline void FinishAccountDeletionResponse::SharedDtor(MessageLite& self) {
+  FinishAccountDeletionResponse& this_ = static_cast<FinishAccountDeletionResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull FinishAccountDeletionResponse_class_data_ =
+        FinishAccountDeletionResponse::InternalGenerateClassData_(FinishAccountDeletionResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FinishAccountDeletionResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FinishAccountDeletionResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(FinishAccountDeletionResponse_class_data_.tc_table);
+  return FinishAccountDeletionResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+FinishAccountDeletionResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&FinishAccountDeletionResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&FinishAccountDeletionResponse_globals_));
+  return FinishAccountDeletionResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const FinishAccountDeletionResponse::ParseTableT_
+    FinishAccountDeletionResponse::_table_ =
+        FinishAccountDeletionResponse::InternalGenerateParseTable_(FinishAccountDeletionResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void FinishAccountDeletionResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.FinishAccountDeletionResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.done_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.remaining_refs_) -
+        reinterpret_cast<char*>(&_impl_.done_)) + sizeof(_impl_.remaining_refs_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL FinishAccountDeletionResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const FinishAccountDeletionResponse& this_ = static_cast<const FinishAccountDeletionResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL FinishAccountDeletionResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const FinishAccountDeletionResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.FinishAccountDeletionResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool done = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_done() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_done(), target);
+    }
+  }
+
+  // uint32 remaining_refs = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_remaining_refs() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_remaining_refs(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.FinishAccountDeletionResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t FinishAccountDeletionResponse::ByteSizeLong(const MessageLite& base) {
+  const FinishAccountDeletionResponse& this_ = static_cast<const FinishAccountDeletionResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t FinishAccountDeletionResponse::ByteSizeLong() const {
+  const FinishAccountDeletionResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.FinishAccountDeletionResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // bool done = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_done() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 remaining_refs = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_remaining_refs() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_remaining_refs());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void FinishAccountDeletionResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<FinishAccountDeletionResponse*>(&to_msg);
+  auto& from = static_cast<const FinishAccountDeletionResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.FinishAccountDeletionResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_done() != 0) {
+        _this->_impl_.done_ = from._impl_.done_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_remaining_refs() != 0) {
+        _this->_impl_.remaining_refs_ = from._impl_.remaining_refs_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void FinishAccountDeletionResponse::CopyFrom(const FinishAccountDeletionResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.FinishAccountDeletionResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void FinishAccountDeletionResponse::InternalSwap(FinishAccountDeletionResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_.remaining_refs_)
+      + sizeof(FinishAccountDeletionResponse::_impl_.remaining_refs_)
+      - PROTOBUF_FIELD_OFFSET(FinishAccountDeletionResponse, _impl_.done_)>(
+          reinterpret_cast<char*>(&_impl_.done_),
+          reinterpret_cast<char*>(&other->_impl_.done_));
+}
+
+::google::protobuf::Metadata FinishAccountDeletionResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -14597,9 +21474,9 @@ AccountRoleOwnership::AccountRoleOwnership(
                offsetof(Impl_, owner_revision_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, owner_revision_),
-           offsetof(Impl_, initial_player_commit_) -
+           offsetof(Impl_, account_deletion_state_) -
                offsetof(Impl_, owner_revision_) +
-               sizeof(Impl_::initial_player_commit_));
+               sizeof(Impl_::account_deletion_state_));
 
   // @@protoc_insertion_point(copy_constructor:data_service.AccountRoleOwnership)
 }
@@ -14614,9 +21491,9 @@ inline void AccountRoleOwnership::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, role_),
            0,
-           offsetof(Impl_, initial_player_commit_) -
+           offsetof(Impl_, account_deletion_state_) -
                offsetof(Impl_, role_) +
-               sizeof(Impl_::initial_player_commit_));
+               sizeof(Impl_::account_deletion_state_));
 }
 AccountRoleOwnership::~AccountRoleOwnership() {
   // @@protoc_insertion_point(destructor:data_service.AccountRoleOwnership)
@@ -14677,10 +21554,10 @@ PROTOBUF_NOINLINE void AccountRoleOwnership::Clear() {
       _impl_.role_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
     ::memset(&_impl_.owner_revision_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.initial_player_commit_) -
-        reinterpret_cast<char*>(&_impl_.owner_revision_)) + sizeof(_impl_.initial_player_commit_));
+        reinterpret_cast<char*>(&_impl_.account_deletion_state_) -
+        reinterpret_cast<char*>(&_impl_.owner_revision_)) + sizeof(_impl_.account_deletion_state_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -14758,6 +21635,15 @@ PROTOBUF_NOINLINE void AccountRoleOwnership::Clear() {
     }
   }
 
+  // .data_service.AccountDeletionState account_deletion_state = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_account_deletion_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          7, this_._internal_account_deletion_state(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -14783,7 +21669,7 @@ PROTOBUF_NOINLINE void AccountRoleOwnership::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // string account = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_account().empty()) {
@@ -14823,6 +21709,13 @@ PROTOBUF_NOINLINE void AccountRoleOwnership::Clear() {
         total_size += 2;
       }
     }
+    // .data_service.AccountDeletionState account_deletion_state = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_account_deletion_state() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_account_deletion_state());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -14842,7 +21735,7 @@ void AccountRoleOwnership::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_account().empty()) {
         _this->_internal_set_account(from._internal_account());
@@ -14880,6 +21773,11 @@ void AccountRoleOwnership::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.initial_player_commit_ = from._impl_.initial_player_commit_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_account_deletion_state() != 0) {
+        _this->_impl_.account_deletion_state_ = from._impl_.account_deletion_state_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -14902,8 +21800,8 @@ void AccountRoleOwnership::InternalSwap(AccountRoleOwnership* PROTOBUF_RESTRICT 
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.initial_player_commit_)
-      + sizeof(AccountRoleOwnership::_impl_.initial_player_commit_)
+      PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.account_deletion_state_)
+      + sizeof(AccountRoleOwnership::_impl_.account_deletion_state_)
       - PROTOBUF_FIELD_OFFSET(AccountRoleOwnership, _impl_.role_)>(
           reinterpret_cast<char*>(&_impl_.role_),
           reinterpret_cast<char*>(&other->_impl_.role_));
@@ -15768,7 +22666,13 @@ LookupAccountRoleRequest::LookupAccountRoleRequest(
   _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
                 : nullptr;
-  _impl_.player_id_ = from._impl_.player_id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, include_account_state_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::include_account_state_));
 
   // @@protoc_insertion_point(copy_constructor:data_service.LookupAccountRoleRequest)
 }
@@ -15782,9 +22686,9 @@ inline void LookupAccountRoleRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, auth_),
            0,
-           offsetof(Impl_, player_id_) -
+           offsetof(Impl_, include_account_state_) -
                offsetof(Impl_, auth_) +
-               sizeof(Impl_::player_id_));
+               sizeof(Impl_::include_account_state_));
 }
 LookupAccountRoleRequest::~LookupAccountRoleRequest() {
   // @@protoc_insertion_point(destructor:data_service.LookupAccountRoleRequest)
@@ -15839,7 +22743,11 @@ PROTOBUF_NOINLINE void LookupAccountRoleRequest::Clear() {
     ABSL_DCHECK(_impl_.auth_ != nullptr);
     _impl_.auth_->Clear();
   }
-  _impl_.player_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.include_account_state_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.include_account_state_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -15879,6 +22787,15 @@ PROTOBUF_NOINLINE void LookupAccountRoleRequest::Clear() {
         stream);
   }
 
+  // bool include_account_state = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_include_account_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_include_account_state(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -15904,7 +22821,7 @@ PROTOBUF_NOINLINE void LookupAccountRoleRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // .common.base.ServiceCallAuth auth = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -15915,6 +22832,12 @@ PROTOBUF_NOINLINE void LookupAccountRoleRequest::Clear() {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
+      }
+    }
+    // bool include_account_state = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_include_account_state() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -15936,7 +22859,7 @@ void LookupAccountRoleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.auth_ != nullptr);
       if (_this->_impl_.auth_ == nullptr) {
@@ -15948,6 +22871,11 @@ void LookupAccountRoleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_include_account_state() != 0) {
+        _this->_impl_.include_account_state_ = from._impl_.include_account_state_;
       }
     }
   }
@@ -15969,8 +22897,8 @@ void LookupAccountRoleRequest::InternalSwap(LookupAccountRoleRequest* PROTOBUF_R
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.player_id_)
-      + sizeof(LookupAccountRoleRequest::_impl_.player_id_)
+      PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.include_account_state_)
+      + sizeof(LookupAccountRoleRequest::_impl_.include_account_state_)
       - PROTOBUF_FIELD_OFFSET(LookupAccountRoleRequest, _impl_.auth_)>(
           reinterpret_cast<char*>(&_impl_.auth_),
           reinterpret_cast<char*>(&other->_impl_.auth_));
@@ -32888,6 +39816,735 @@ void ReleasePlayerNameRequest::InternalSwap(ReleasePlayerNameRequest* PROTOBUF_R
 }
 
 ::google::protobuf::Metadata ReleasePlayerNameRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void RenameRoleRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+RenameRoleRequest::RenameRoleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenameRoleRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.RenameRoleRequest)
+}
+PROTOBUF_NDEBUG_INLINE RenameRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::RenameRoleRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+RenameRoleRequest::RenameRoleRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RenameRoleRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenameRoleRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RenameRoleRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, max_chars_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::max_chars_));
+
+  // @@protoc_insertion_point(copy_constructor:data_service.RenameRoleRequest)
+}
+PROTOBUF_NDEBUG_INLINE RenameRoleRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void RenameRoleRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, max_chars_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::max_chars_));
+}
+RenameRoleRequest::~RenameRoleRequest() {
+  // @@protoc_insertion_point(destructor:data_service.RenameRoleRequest)
+  SharedDtor(*this);
+}
+inline void RenameRoleRequest::SharedDtor(MessageLite& self) {
+  RenameRoleRequest& this_ = static_cast<RenameRoleRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RenameRoleRequest_class_data_ =
+        RenameRoleRequest::InternalGenerateClassData_(RenameRoleRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenameRoleRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenameRoleRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RenameRoleRequest_class_data_.tc_table);
+  return RenameRoleRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenameRoleRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenameRoleRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RenameRoleRequest_globals_));
+  return RenameRoleRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RenameRoleRequest::ParseTableT_
+    RenameRoleRequest::_table_ =
+        RenameRoleRequest::InternalGenerateParseTable_(RenameRoleRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RenameRoleRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.RenameRoleRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.max_chars_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.max_chars_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RenameRoleRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RenameRoleRequest& this_ = static_cast<const RenameRoleRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RenameRoleRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RenameRoleRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.RenameRoleRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint64 seq = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_seq(), target);
+    }
+  }
+
+  // string name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.RenameRoleRequest.name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint32 cooldown_seconds = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_cooldown_seconds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_cooldown_seconds(), target);
+    }
+  }
+
+  // uint32 hold_seconds = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_hold_seconds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_hold_seconds(), target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        6, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint32 min_chars = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_min_chars() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_min_chars(), target);
+    }
+  }
+
+  // uint32 max_chars = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_max_chars() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_max_chars(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.RenameRoleRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RenameRoleRequest::ByteSizeLong(const MessageLite& base) {
+  const RenameRoleRequest& this_ = static_cast<const RenameRoleRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RenameRoleRequest::ByteSizeLong() const {
+  const RenameRoleRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.RenameRoleRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 seq = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seq());
+      }
+    }
+    // uint32 cooldown_seconds = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_cooldown_seconds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_cooldown_seconds());
+      }
+    }
+    // uint32 hold_seconds = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_hold_seconds() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_hold_seconds());
+      }
+    }
+    // uint32 min_chars = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_min_chars() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_min_chars());
+      }
+    }
+    // uint32 max_chars = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_max_chars() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_max_chars());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RenameRoleRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RenameRoleRequest*>(&to_msg);
+  auto& from = static_cast<const RenameRoleRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.RenameRoleRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_seq() != 0) {
+        _this->_impl_.seq_ = from._impl_.seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_cooldown_seconds() != 0) {
+        _this->_impl_.cooldown_seconds_ = from._impl_.cooldown_seconds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_hold_seconds() != 0) {
+        _this->_impl_.hold_seconds_ = from._impl_.hold_seconds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_min_chars() != 0) {
+        _this->_impl_.min_chars_ = from._impl_.min_chars_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_max_chars() != 0) {
+        _this->_impl_.max_chars_ = from._impl_.max_chars_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RenameRoleRequest::CopyFrom(const RenameRoleRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.RenameRoleRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RenameRoleRequest::InternalSwap(RenameRoleRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.max_chars_)
+      + sizeof(RenameRoleRequest::_impl_.max_chars_)
+      - PROTOBUF_FIELD_OFFSET(RenameRoleRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata RenameRoleRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+RenameRoleResponse::RenameRoleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenameRoleResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.RenameRoleResponse)
+}
+PROTOBUF_NDEBUG_INLINE RenameRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::RenameRoleResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+RenameRoleResponse::RenameRoleResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RenameRoleResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenameRoleResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RenameRoleResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, current_seq_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, current_seq_),
+           offsetof(Impl_, result_) -
+               offsetof(Impl_, current_seq_) +
+               sizeof(Impl_::result_));
+
+  // @@protoc_insertion_point(copy_constructor:data_service.RenameRoleResponse)
+}
+PROTOBUF_NDEBUG_INLINE RenameRoleResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void RenameRoleResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, current_seq_),
+           0,
+           offsetof(Impl_, result_) -
+               offsetof(Impl_, current_seq_) +
+               sizeof(Impl_::result_));
+}
+RenameRoleResponse::~RenameRoleResponse() {
+  // @@protoc_insertion_point(destructor:data_service.RenameRoleResponse)
+  SharedDtor(*this);
+}
+inline void RenameRoleResponse::SharedDtor(MessageLite& self) {
+  RenameRoleResponse& this_ = static_cast<RenameRoleResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RenameRoleResponse_class_data_ =
+        RenameRoleResponse::InternalGenerateClassData_(RenameRoleResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenameRoleResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenameRoleResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RenameRoleResponse_class_data_.tc_table);
+  return RenameRoleResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenameRoleResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenameRoleResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RenameRoleResponse_globals_));
+  return RenameRoleResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RenameRoleResponse::ParseTableT_
+    RenameRoleResponse::_table_ =
+        RenameRoleResponse::InternalGenerateParseTable_(RenameRoleResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RenameRoleResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.RenameRoleResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.current_seq_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.result_) -
+        reinterpret_cast<char*>(&_impl_.current_seq_)) + sizeof(_impl_.result_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RenameRoleResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RenameRoleResponse& this_ = static_cast<const RenameRoleResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RenameRoleResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RenameRoleResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.RenameRoleResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .data_service.RenameRoleResult result = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_result() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_result(), target);
+    }
+  }
+
+  // uint64 current_seq = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_current_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_current_seq(), target);
+    }
+  }
+
+  // string name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.RenameRoleResponse.name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint64 renamed_ms = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_renamed_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_renamed_ms(), target);
+    }
+  }
+
+  // uint64 next_allowed_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_next_allowed_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_next_allowed_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.RenameRoleResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RenameRoleResponse::ByteSizeLong(const MessageLite& base) {
+  const RenameRoleResponse& this_ = static_cast<const RenameRoleResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RenameRoleResponse::ByteSizeLong() const {
+  const RenameRoleResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.RenameRoleResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint64 current_seq = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_current_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_current_seq());
+      }
+    }
+    // uint64 renamed_ms = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_renamed_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_renamed_ms());
+      }
+    }
+    // uint64 next_allowed_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_next_allowed_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_allowed_ms());
+      }
+    }
+    // .data_service.RenameRoleResult result = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_result() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_result());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RenameRoleResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RenameRoleResponse*>(&to_msg);
+  auto& from = static_cast<const RenameRoleResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.RenameRoleResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_current_seq() != 0) {
+        _this->_impl_.current_seq_ = from._impl_.current_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_renamed_ms() != 0) {
+        _this->_impl_.renamed_ms_ = from._impl_.renamed_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_next_allowed_ms() != 0) {
+        _this->_impl_.next_allowed_ms_ = from._impl_.next_allowed_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_result() != 0) {
+        _this->_impl_.result_ = from._impl_.result_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RenameRoleResponse::CopyFrom(const RenameRoleResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.RenameRoleResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RenameRoleResponse::InternalSwap(RenameRoleResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.result_)
+      + sizeof(RenameRoleResponse::_impl_.result_)
+      - PROTOBUF_FIELD_OFFSET(RenameRoleResponse, _impl_.current_seq_)>(
+          reinterpret_cast<char*>(&_impl_.current_seq_),
+          reinterpret_cast<char*>(&other->_impl_.current_seq_));
+}
+
+::google::protobuf::Metadata RenameRoleResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

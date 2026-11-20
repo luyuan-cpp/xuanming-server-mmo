@@ -62,6 +62,7 @@ message BuffTable {
 	uint32 stack_limit = 51;
 	uint32 require_living_caster = 52;
 	uint32 tick_on_apply = 53;
+	uint32 keep_on_logout = 54;
 }
 
 message BuffTableData {

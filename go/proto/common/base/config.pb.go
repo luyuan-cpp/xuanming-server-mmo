@@ -464,9 +464,13 @@ type BaseDeployConfig struct {
 	// C++ 节点 unary gRPC 调用的 deadline(见 GrpcClientConfig)。可以不写:缺席 = 全部用内置默认。
 	GrpcClient *GrpcClientConfig `protobuf:"bytes,21,opt,name=grpc_client,json=grpcClient,proto3" json:"grpc_client,omitempty"`
 	// span 导出(见 TracingConfig)。22、23 没用过但不确定历史上有无存量配置,新字段从 25 起。yaml 键 Tracing。
-	Tracing       *TracingConfig `protobuf:"bytes,25,opt,name=tracing,proto3" json:"tracing,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Tracing *TracingConfig `protobuf:"bytes,25,opt,name=tracing,proto3" json:"tracing,omitempty"`
+	// 内容安全(ContentGuardNodeService,go/content_guard)对本节点是否可有可无。yaml 键 ContentGuard.Optional。
+	// 缺省 false = 必须可达:发现不到实例或调用失败时,玩家填写的名字一律不放行(K8s 的 node-config 不写这一键)。
+	// 只有本机 bin/etc 写 true:内容安全没起时不送检、原样放行并打 ERROR(docs/design/rename-and-content-safety.md §6.6)。
+	ContentGuardOptional bool `protobuf:"varint,26,opt,name=content_guard_optional,json=contentGuardOptional,proto3" json:"content_guard_optional,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
@@ -651,6 +655,13 @@ func (x *BaseDeployConfig) GetTracing() *TracingConfig {
 		return x.Tracing
 	}
 	return nil
+}
+
+func (x *BaseDeployConfig) GetContentGuardOptional() bool {
+	if x != nil {
+		return x.ContentGuardOptional
+	}
+	return false
 }
 
 // Game config
@@ -959,7 +970,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"A\n" +
 	"\rTracingConfig\x120\n" +
-	"\x14otlp_traces_endpoint\x18\x01 \x01(\tR\x12otlpTracesEndpoint\"\xac\b\n" +
+	"\x14otlp_traces_endpoint\x18\x01 \x01(\tR\x12otlpTracesEndpoint\"\xe2\b\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -987,7 +998,8 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x122\n" +
 	"\vgrpc_client\x18\x15 \x01(\v2\x11.GrpcClientConfigR\n" +
 	"grpcClient\x12(\n" +
-	"\atracing\x18\x19 \x01(\v2\x0e.TracingConfigR\atracingJ\x04\b\x14\x10\x15R\x16audit_topic_generation\"\xec\x05\n" +
+	"\atracing\x18\x19 \x01(\v2\x0e.TracingConfigR\atracing\x124\n" +
+	"\x16content_guard_optional\x18\x1a \x01(\bR\x14contentGuardOptionalJ\x04\b\x14\x10\x15R\x16audit_topic_generation\"\xec\x05\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +

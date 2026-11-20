@@ -21,6 +21,7 @@
 // 纯函数、零状态,单独成文件是为了在 routing_identity_test 里直接测,不把会话表、连接、RPC 注册链拖进测试工程。
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "proto/common/base/message.pb.h"
@@ -50,31 +51,45 @@ inline bool IsLoginResponseSuccess(const loginpb::LoginResponse &response)
 	return !response.has_error_message() || response.error_message().id() == 0;
 }
 
-// 一条 Login 回包是否表示成功。两种转发模式的回包形状不同:
+// 成功的 Login 回包里的 LoginResponse;回包不表示成功时为空。两种转发模式的回包形状不同:
 //   路由模式:路由服回 MessageContent —— 信封 error_message 非 0(路由服或下游拒绝)即失败,否则解 body;
 //   直连模式:生成的 gRPC 客户端回的就是 LoginResponse。
 // body 解析失败或其他回包类型一律按失败(fail-closed):宁可让客户端重登,也不能凭一个看不懂的回包放行。
-inline bool IsLoginReplySuccess(const ::google::protobuf::Message &reply)
+// 调用方除了「成功与否」还要读应答里的字段时用它(未成年人的截止时刻,minor_play_deadline.h),只解一次。
+inline std::optional<loginpb::LoginResponse> SuccessfulLoginResponse(const ::google::protobuf::Message &reply)
 {
+	loginpb::LoginResponse response;
 	if (reply.GetDescriptor() == MessageContent::descriptor())
 	{
 		const auto &content = static_cast<const MessageContent &>(reply);
 		if (content.has_error_message() && content.error_message().id() != 0)
 		{
-			return false;
+			return std::nullopt;
 		}
-		loginpb::LoginResponse response;
 		if (!response.ParseFromString(content.serialized_message()))
 		{
-			return false;
+			return std::nullopt;
 		}
-		return IsLoginResponseSuccess(response);
 	}
-	if (reply.GetDescriptor() == loginpb::LoginResponse::descriptor())
+	else if (reply.GetDescriptor() == loginpb::LoginResponse::descriptor())
 	{
-		return IsLoginResponseSuccess(static_cast<const loginpb::LoginResponse &>(reply));
+		response.CopyFrom(static_cast<const loginpb::LoginResponse &>(reply));
 	}
-	return false;
+	else
+	{
+		return std::nullopt;
+	}
+	if (!IsLoginResponseSuccess(response))
+	{
+		return std::nullopt;
+	}
+	return response;
+}
+
+// 一条 Login 回包是否表示成功(判定见 SuccessfulLoginResponse)。
+inline bool IsLoginReplySuccess(const ::google::protobuf::Message &reply)
+{
+	return SuccessfulLoginResponse(reply).has_value();
 }
 
 // 只能由 gate 合成、客户端不得发起的消息号(proto 都标 CLIENT_RPC_SERVER_ONLY),不经客户端入口发出:

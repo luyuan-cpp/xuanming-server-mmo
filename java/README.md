@@ -56,6 +56,15 @@ java -jar target/mall-game-0.1.0-SNAPSHOT.jar
 
 2026-11-05 起退款两表改键、付款回执的订单列可空；2026-11-10 起 `commerce_duplicate_payment` 改名 `commerce_abnormal_payment` 并加 `reason` 列，退款待办的来源 CHECK 加了两种原因，存储合同戳随之换新（`SchemaVerifier.STORAGE_CONTRACT`）。之前安装的开发库不能就地升级（没有 V6 迁移），`SchemaVerifier` 会拒启，须按上文用 `schema.sql` 新建独立商城库重装，不要在旧库上重跑（项目未上线，库里只有测试数据）。
 
+2026-11-13 起（真钱支付接入，见 `docs/design/payment-recharge.md` §22）：
+
+- **货币发放**：SKU 的发放物二选一，物品（`item_config_id × count_per_unit`）或货币（`currency_type × currency_amount`，充值包），下单时冻结进 `commerce_order_grant`。货币种类 0 是银两，有没有货币发放看数量。交付待办的 `Intent` 多了 `currencyType`、`currencyAmount`。
+- **付款修订**：`POST /internal/payments/revision`（payment 角色）。渠道撤销付款或撤销又被撤回时，支付服务报一个只增的修订号，奇数表示已撤销。商城只接受更大的修订号，重放回当前值。官方订单绑定的付款被修订时写扣回待办，订单转 `REVERSING`；有退款待办的付款被撤销时，待办转 `REVOKED`。
+- **扣回待办**：`POST /internal/reversals/poll` 与 `POST /internal/reversals/receipt`（delivery 角色）。trade 把发放收敛到最新修订号后回执 `REVERSED`、`DELIVERED` 或 `MANUAL`。交付待办的包装里带 `paymentRevision`；交付回执多一种 `VOIDED`，表示没发过就被撤销。
+- **退款转人工**：`POST /internal/refunds/close`（payment 角色）。渠道退不了的退款待办转 `MANUAL`，不再列在待退款里。
+- **建表文件可重跑**：`schema.sql` 末尾的合同戳改成 `INSERT IGNORE`，K8s 的 `mall-schema` Job 每次部署都执行它。重跑不升级旧库，结构对不上时启动核对失败。存储合同戳已换新，之前安装的开发库要清空重装。
+- `prod` 模式拒绝把 `devpay` 或 `mock*` 配进允许的支付渠道。
+
 真实 TiDB 集成只接受本机 `4000` 端口，不接受已有库名；每例新建随机测试库，结束后只清理自己的库。测试凭证从 `COMMERCE_IT_TIDB_USER` / `COMMERCE_IT_TIDB_PASSWORD` 读取，不放进命令行：
 
 ```powershell

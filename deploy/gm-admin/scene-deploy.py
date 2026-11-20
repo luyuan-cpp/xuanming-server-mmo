@@ -26,6 +26,49 @@ MAIL = ROOT / 'build/verification/gm-admin-20261117/mail'
 AUTHORED = ROOT / 'build/verification/authored-festival-pet-acquisition-20261116'
 FILES = [*startup.COMPOSE_FILES, AUTHORED / 'compose.authored.json', startup.recovery_path()]
 SECRET_KEYS = ('MMORPG_GM_PLAYER_COMMAND_SECRET', 'MMORPG_ASSET_OP_SECRET_MAIL')
+GM_REQUIRED_SOURCES = (
+    'cpp/nodes/scene/handler/grpc/gm_player_command_security.h',
+    'proto/scene/scene_admin.proto',
+)
+
+
+def active_authored(receipt):
+    overlays = [Path(key) for key in receipt['contract']['composeSha256'] if Path(key).name == 'compose.authored.json']
+    startup.require(len(overlays) == 1, 'Expected exactly one active authored Compose overlay')
+    overlay = overlays[0]
+    startup.require(overlay.is_file() and overlay.resolve() == overlay, 'Active authored overlay is missing or redirected')
+    if overlay != startup.authored_origin_overlay():
+        startup.require(startup.authored_origin_overlay() in startup.authored_manifest_chain(overlay),
+                        'Active authored overlay lacks approved ancestry')
+    return overlay.parent
+
+
+def compose_files(authored_dir):
+    return [*startup.COMPOSE_FILES, authored_dir / 'compose.authored.json', startup.recovery_path()]
+
+
+def is_rebuilt_scene_pin(recovery, build_path, image_id, current_scene_image):
+    evidence = recovery.get('x-xuanming-rebuild')
+    if not isinstance(evidence, dict):
+        return False
+    update = evidence.get('updates', {}).get('scene', {})
+    build_sha = startup.sha(build_path.read_bytes())
+    return (update.get('build') == build_sha and build_sha in evidence.get('builds', {})
+            and recovery.get('services', {}).get('scene', {}).get('image') == image_id == current_scene_image)
+
+
+def verify_container_artifacts(row, complete, runtime_data):
+    raw = startup.run(startup.DOCKER + ['exec', row['Id'], 'cat', '/app/DEBUG_SOURCE.json'], timeout=60)
+    startup.require(json.loads(raw) == complete, 'Running Scene debug manifest differs from the verified image')
+    artifacts = source_check.runtime_table_artifacts('scene', row['Id'], complete['artifacts'], runtime_data)
+    hashes = startup.run(startup.DOCKER + ['exec', row['Id'], 'sha256sum', '--', *artifacts], timeout=60).splitlines()
+    actual = {line[66:]: line[:64] for line in hashes if len(line) > 66}
+    startup.require(actual == artifacts, 'Running Scene binary, symbol or mounted table digest differs')
+    save(OUT / 'source-check.json', {'success': True, 'services': [{
+        'service': 'scene', 'success': True, 'imageId': row['Image'], 'sourceCount': len(complete['files']),
+        'differences': [], 'artifactVerificationOnly': True, 'workspaceSourcesChecked': False,
+        'runtimeDataManifestSha256': runtime_data['manifestSha256'],
+        'officialTableManifestSha256': runtime_data['officialTableManifestSha256']}]})
 
 
 def save(path, value):
@@ -68,9 +111,9 @@ def read_mail():
     return row, local, admin
 
 
-def command():
+def command(files=None):
     result = startup.DOCKER + ['compose', '--project-name', startup.PROJECT, '--env-file', str(startup.ENV)]
-    for path in FILES:
+    for path in (FILES if files is None else files):
         result += ['-f', str(path)]
     return result + ['up', '-d', '--no-deps', '--no-build', '--pull', 'never', '--force-recreate', 'scene']
 
@@ -104,6 +147,8 @@ def prepare():
     startup.require(promotion.KEY not in startup.env_values(startup.ENV.read_bytes()), 'Scene promotion is already applied')
     free_port()
     mail, local, admin = read_mail()
+    authored_dir = active_authored(receipt)
+    files = compose_files(authored_dir)
     path = PRIVATE / 'scene.env'
     prior = startup.env_values(path.read_bytes()) if path.exists() else {}
     gm = prior.get(SECRET_KEYS[0]) or secrets.token_urlsafe(48)
@@ -114,20 +159,28 @@ def prepare():
     runtime = {'GM_SCENE_ADMIN_SECRET': gm, 'GM_SCENE_TARGETS_JSON': '{"1":"127.0.0.1:2355"}',
                'GM_MAIL_TARGET': '127.0.0.1:2354', 'GM_MAIL_ADMIN_SECRET': admin['MAIL_PRODUCER_SECRET_ADMIN']}
     private_write(PRIVATE / 'gm-runtime.env', ''.join(key + '=' + value + '\n' for key, value in runtime.items()).encode())
-    source_check.check_config_inputs(['scene'])
-    source_check.load_runtime_data_manifest(AUTHORED / 'runtime-data-manifest.json')
+    recovery = json.loads(files[-1].read_bytes())
+    rebuilt = isinstance(recovery.get('x-xuanming-rebuild'), dict)
+    if not rebuilt:
+        source_check.check_config_inputs(['scene'])
+    source_check.load_runtime_data_manifest(authored_dir / 'runtime-data-manifest.json')
     save(OUT / 'runtime-before.json', receipt)
     save(OUT / 'base-images.json', {name: receipt['contract']['images'][name] for name in builder.NODES})
     build_command = [sys.executable, '-X', 'utf8', '-B', str(ROOT / 'tools/scripts/build_docker_cpp_debug.py'),
                      '--output', str(OUT / 'cpp-build'), '--base-images', str(OUT / 'base-images.json'),
                      '--services', 'gate,scene,battle', '--jobs', '1']
+    stage_build = str(OUT / 'cpp-build/result.json')
+    if rebuilt:
+        scene_build = recovery['x-xuanming-rebuild'].get('updates', {}).get('scene', {}).get('build')
+        stage_build = recovery['x-xuanming-rebuild'].get('builds', {}).get(scene_build, {}).get('result', {}).get('path', stage_build)
     save(OUT / 'plan.json', {'schema': 1, 'preparedAt': startup.now(), 'executed': False,
+        'afterRebuild': rebuilt,
         'buildCommand': build_command, 'stageCommand': [sys.executable, str(Path(__file__).resolve()), 'stage',
-                                                      '--build-result', str(OUT / 'cpp-build/result.json')],
+                                                      '--build-result', stage_build],
         'applyCommand': [sys.executable, str(Path(__file__).resolve()), 'apply', '--execute'],
-        'composeCommand': command(), 'composeFiles': [str(path) for path in FILES],
+        'composeCommand': command(files), 'composeFiles': [str(file) for file in files],
         'affectedServices': ['scene'], 'affectedSceneContainers': 1, 'disconnectsCurrentScenePlayers': True,
-        'unchangedOtherRunningServicesRequired': 16, 'sourceSnapshotAndSdkValidationRequired': True,
+        'unchangedOtherRunningServicesRequired': 16, 'sourceSnapshotAndSdkValidationRequired': not rebuilt,
         'readinessDoesNotProvePlayerMutationOrMailClaim': True, 'mailContainerId': mail['Id'],
         'privateRuntimePath': str(PRIVATE / 'gm-runtime.env'), 'readyReceiptPath': str(OUT / 'ready.json')})
     print('Scene deployment plan prepared; no build or container change performed.')
@@ -160,9 +213,9 @@ def stage(path):
     bridge()
     promotion.verified_read_bridge(ROOT)
     read_bridge = bound(ROOT / promotion.READ_RECEIPT)
-    source_check.check_config_inputs(['scene'])
-    source_check.load_runtime_data_manifest(AUTHORED / 'runtime-data-manifest.json')
-    sdk = builder.validate_sdk()
+    authored_dir = active_authored(before)
+    files = compose_files(authored_dir)
+    source_check.load_runtime_data_manifest(authored_dir / 'runtime-data-manifest.json')
     path = path.resolve()
     startup.require(path.is_relative_to(ROOT / 'build'), 'Build receipt is outside the workspace build directory')
     build = json.loads(path.read_text('utf-8'))
@@ -172,9 +225,24 @@ def stage(path):
                         for value in build['images'].values()), 'C++ batch image identities differ')
     source_path = Path(build['manifestPaths']['scene'])
     source = json.loads(source_path.read_text('utf-8'))
-    promotion.require_table_coverage(source['files'], AUTHORED / 'tables/generated/tables')
-    startup.require(source['build']['sdkImageId'] == sdk['imageId'], 'C++ SDK identity changed')
-    builder.assert_sources(source['files'])
+    promotion.require_table_coverage(source['files'], authored_dir / 'tables/generated/tables')
+    old_recovery = files[-1].read_bytes()
+    recovery = json.loads(old_recovery)
+    after_rebuild = is_rebuilt_scene_pin(recovery, path, image, before['contract']['images']['scene'])
+    if after_rebuild:
+        startup.require(all(name in source['files'] for name in GM_REQUIRED_SOURCES),
+                        'Rebuilt Scene source manifest is missing GM player command sources')
+        sdk_image_id = source['build']['sdkImageId']
+        new_recovery = old_recovery
+    else:
+        source_check.check_config_inputs(['scene'])
+        sdk = builder.validate_sdk()
+        sdk_image_id = sdk['imageId']
+        startup.require(source['build']['sdkImageId'] == sdk_image_id, 'C++ SDK identity changed')
+        builder.assert_sources(source['files'])
+        startup.require(recovery['services']['scene']['image'] == before['contract']['images']['scene'], 'Scene baseline image changed')
+        recovery['services']['scene']['image'] = image
+        new_recovery = (json.dumps(recovery, ensure_ascii=False, indent=2) + '\n').encode()
     # 临时进程只读镜像内清单和摘要，网络关闭，既不启动节点也不连接游戏。
     raw = startup.run(startup.DOCKER + ['run', '--rm', '--network', 'none', '--entrypoint', 'cat', image,
                                       '/app/DEBUG_SOURCE.json'], timeout=60)
@@ -187,12 +255,7 @@ def stage(path):
                                          '--', *artifacts], timeout=60).splitlines()
     startup.require({line[66:]: line[:64] for line in hashes if len(line) > 66} == artifacts, 'Image artifact digest differs')
     (OUT / 'image-manifest.json').write_text(raw, encoding='utf-8')
-    old_recovery = FILES[-1].read_bytes()
-    recovery = json.loads(old_recovery)
-    startup.require(recovery['services']['scene']['image'] == before['contract']['images']['scene'], 'Scene baseline image changed')
-    recovery['services']['scene']['image'] = image
-    new_recovery = (json.dumps(recovery, ensure_ascii=False, indent=2) + '\n').encode()
-    old_compose = FILES[0].read_bytes()
+    old_compose = files[0].read_bytes()
     new_compose = proposed_compose(old_compose)
     (OUT / 'compose.game.proposed.yml').write_bytes(new_compose)
     (OUT / 'compose.recovery.proposed.json').write_bytes(new_recovery)
@@ -202,10 +265,12 @@ def stage(path):
             'id': before['contract']['ids']['scene'], 'image': before['contract']['images']['scene'],
             'signature': before['contract']['signatures']['scene']},
         'buildResult': bound(path), 'sourceManifest': bound(source_path), 'imageManifest': bound(OUT / 'image-manifest.json'),
-        'imageId': image, 'sourceSha256': source['build']['sourceSha256'], 'sdkImageId': sdk['imageId'],
-        'composeFiles': [str(file) for file in FILES], 'oldRecoverySha256': startup.sha(old_recovery),
+        'imageId': image, 'sourceSha256': source['build']['sourceSha256'], 'sdkImageId': sdk_image_id,
+        'composeFiles': [str(file) for file in files], 'oldRecoverySha256': startup.sha(old_recovery),
         'newRecoverySha256': startup.sha(new_recovery), 'oldComposeSha256': startup.sha(old_compose),
         'newComposeSha256': startup.sha(new_compose), 'deploymentScriptSha256': startup.sha(Path(__file__).read_bytes())}
+    if after_rebuild:
+        receipt['afterRebuild'] = True
     receipt['readBridge'] = read_bridge
     save(OUT / 'promotion.json', receipt)
     approval = startup.sha((OUT / 'promotion.json').read_bytes())
@@ -216,10 +281,11 @@ def stage(path):
     patch = ''.join(difflib.unified_diff(old_compose.decode().splitlines(True), new_compose.decode().splitlines(True),
                                        fromfile='a/deploy/debug/compose.game.yml', tofile='b/deploy/debug/compose.game.yml'))
     patch += ''.join(difflib.unified_diff(old_recovery.decode().splitlines(True), new_recovery.decode().splitlines(True),
-                                        fromfile='a/' + FILES[-1].relative_to(ROOT).as_posix(),
-                                        tofile='b/' + FILES[-1].relative_to(ROOT).as_posix()))
+                                        fromfile='a/' + files[-1].relative_to(ROOT).as_posix(),
+                                        tofile='b/' + files[-1].relative_to(ROOT).as_posix()))
     (OUT / 'review.patch').write_text(patch, encoding='utf-8')
-    builder.assert_sources(source['files'])
+    if not after_rebuild:
+        builder.assert_sources(source['files'])
     promotion.same_runtime(before, startup.preflight())
     promotion.read_bound(ROOT, read_bridge)
     print('Scene promotion staged with exact image, source, runtime and Compose identities; not applied.')
@@ -242,22 +308,30 @@ def apply():
     receipt = json.loads(receipt_path.read_text('utf-8'))
     startup.require(receipt['deploymentScriptSha256'] == startup.sha(Path(__file__).read_bytes()), 'Scene deployment script changed after review')
     before = promotion.read_bound(ROOT, receipt['baseline'])
+    after_rebuild = receipt.get('afterRebuild') is True
     with startup.startup_lock():
         promotion.same_runtime(before, startup.preflight())
         free_port()
         mail, _, _ = read_mail()
         promotion.read_bound(ROOT, receipt['readBridge'])
         promotion.verified_read_bridge(ROOT)
+        authored_dir = active_authored(before)
+        files = compose_files(authored_dir)
+        startup.require([str(file) for file in files] == receipt['composeFiles'], 'Staged Compose file provenance changed')
+        runtime_data = source_check.load_runtime_data_manifest(authored_dir / 'runtime-data-manifest.json')
         source = promotion.read_bound(ROOT, receipt['sourceManifest'])
-        promotion.require_table_coverage(source['files'], AUTHORED / 'tables/generated/tables')
-        sdk = builder.validate_sdk()
-        builder.assert_sources(source['files'])
+        promotion.require_table_coverage(source['files'], authored_dir / 'tables/generated/tables')
         build = promotion.read_bound(ROOT, receipt['buildResult'])
         complete = promotion.read_bound(ROOT, receipt['imageManifest'])
+        if not after_rebuild:
+            sdk = builder.validate_sdk()
+            startup.require(source['build']['sdkImageId'] == sdk['imageId'] == receipt['sdkImageId'], 'C++ SDK identity changed')
+            builder.assert_sources(source['files'])
+        else:
+            startup.require(source['build']['sdkImageId'] == receipt['sdkImageId'], 'Staged SDK identity changed')
         startup.require(build.get('success') is True and set(build.get('images', {})) == set(builder.NODES)
             and all(value['imageId'] == receipt['imageId'] for value in build['images'].values())
             and build['manifestPaths']['scene'] == receipt['sourceManifest']['path']
-            and source['build']['sdkImageId'] == sdk['imageId'] == receipt['sdkImageId']
             and source['build']['sourceSha256'] == receipt['sourceSha256']
             and complete['files'] == source['files'] and complete.get('artifacts'), 'Staged C++ build chain changed')
         startup.require(builder.image_id(receipt['imageId']) == receipt['imageId'], 'Staged Scene image changed')
@@ -271,8 +345,8 @@ def apply():
         reviewed_env = (PRIVATE / 'proposed.env').read_bytes()
         startup.require(reviewed_env == environment_bytes(original_env, private_values),
                         'Proposed private environment changed after review')
-        changes = [(FILES[0], 'oldComposeSha256', 'newComposeSha256', OUT / 'compose.game.proposed.yml'),
-                   (FILES[-1], 'oldRecoverySha256', 'newRecoverySha256', OUT / 'compose.recovery.proposed.json')]
+        changes = [(files[0], 'oldComposeSha256', 'newComposeSha256', OUT / 'compose.game.proposed.yml'),
+                   (files[-1], 'oldRecoverySha256', 'newRecoverySha256', OUT / 'compose.recovery.proposed.json')]
         reviewed = []
         for path, old_key, new_key, proposed in changes:
             old_bytes, new_bytes = path.read_bytes(), proposed.read_bytes()
@@ -280,19 +354,21 @@ def apply():
                             'Reviewed Compose inputs changed')
             reviewed.append((path, old_bytes, new_bytes))
         # SDK/快照/镜像核对可能耗时；在真正修改前再确认完整运行身份，拒绝窗口内的并发重建。
-        builder.assert_sources(source['files'])
+        if not after_rebuild:
+            builder.assert_sources(source['files'])
         promotion.same_runtime(before, startup.preflight())
         # 先留存所有原字节，再进行一次明确的 Scene-only 重建；失败保留现场，不自动重试或回滚容器。
         for path, old_bytes, _ in reviewed:
             (OUT / (path.name + '.before')).write_bytes(old_bytes)
         save(OUT / 'apply-intent.json', {'utc': startup.now(), 'promotionSha256': startup.sha(receipt_path.read_bytes()),
-                                       'oldSceneId': before['contract']['ids']['scene'], 'command': command()})
+                                       'oldSceneId': before['contract']['ids']['scene'], 'command': command(files)})
         for path, old_bytes, new_bytes in reviewed:
-            replace_exact(path, old_bytes, new_bytes)
+            if old_bytes != new_bytes:
+                replace_exact(path, old_bytes, new_bytes)
         replace_exact(startup.ENV, original_env, reviewed_env)
         env_values = startup.env_values(startup.ENV.read_bytes())
         child_env = {key: value for key, value in os.environ.items() if key not in env_values and not key.startswith('COMPOSE_')}
-        startup.run(command(), timeout=180, env=child_env)
+        startup.run(command(files), timeout=180, env=child_env)
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             row = startup.inspect(['xuanming-debug-scene'])[0]
@@ -306,8 +382,11 @@ def apply():
         after = startup.preflight()
         promotion.unchanged_other_states(before, after)
         save(OUT / 'runtime-after.json', after)
-        startup.require(source_check.check(['scene'], OUT / 'source-check.json', AUTHORED / 'runtime-data-manifest.json'),
-                        'Scene artifact/source check failed after deployment')
+        if after_rebuild:
+            verify_container_artifacts(row, complete, runtime_data)
+        else:
+            startup.require(source_check.check(['scene'], OUT / 'source-check.json', authored_dir / 'runtime-data-manifest.json'),
+                            'Scene artifact/source check failed after deployment')
         actual = dict(value.split('=', 1) for value in startup.run(startup.DOCKER + ['exec', row['Id'], 'cat', '/proc/1/environ']).split('\0') if '=' in value)
         private = startup.env_values((PRIVATE / 'scene.env').read_bytes())
         startup.require(all(actual.get(key) == private[key] for key in SECRET_KEYS), 'Scene process secret bridge mismatch')

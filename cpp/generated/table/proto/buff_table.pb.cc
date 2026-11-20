@@ -462,11 +462,11 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(BuffTable, _impl_._has_bits_),
       0, // no _extensions_
-      53, 248,  // max_field_number, fast_idx_mask
+      54, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      53,  // num_field_entries
+      54,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -595,7 +595,7 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
     }}, {{
       33, 0, 2,
       0, 32,
-      65504, 48,
+      65472, 48,
       65535, 65535
     }}, {{
       // uint32 id = 1;
@@ -704,6 +704,8 @@ constexpr BuffTable::ParseTableT_ BuffTable::InternalGenerateParseTable_(const :
       {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.require_living_caster_), _Internal::kHasBitsOffset + 51, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 tick_on_apply = 53;
       {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.tick_on_apply_), _Internal::kHasBitsOffset + 52, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 keep_on_logout = 54;
+      {PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.keep_on_logout_), _Internal::kHasBitsOffset + 53, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         {::_pbi::TcParser::GetMapAuxInfo(
@@ -818,7 +820,8 @@ inline constexpr BuffTable::Impl_::Impl_(
         start_round_{0u},
         stack_limit_{0u},
         require_living_caster_{0u},
-        tick_on_apply_{0u} {}
+        tick_on_apply_{0u},
+        keep_on_logout_{0u} {}
 
 template <typename>
 constexpr BuffTable::BuffTable(::_pbi::ConstantInitialized,
@@ -1093,7 +1096,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_._has_bits_),
-        56, // hasbit index offset
+        57, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.no_caster_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.buff_type_),
@@ -1147,6 +1150,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.stack_limit_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.require_living_caster_),
         PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.tick_on_apply_),
+        PROTOBUF_FIELD_OFFSET(::BuffTable, _impl_.keep_on_logout_),
         5,
         6,
         7,
@@ -1200,6 +1204,7 @@ const ::uint32_t
         50,
         51,
         52,
+        53,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuffTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1213,7 +1218,7 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::BuffTable_ImmuneTagEntry_DoNotUse)},
         {14, sizeof(::BuffTable_DispelTagEntry_DoNotUse)},
         {21, sizeof(::BuffTable)},
-        {130, sizeof(::BuffTableData)},
+        {132, sizeof(::BuffTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1225,7 +1230,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_buff_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\020buff_table.proto\"\204\013\n\tBuffTable\022\n\n\002id\030\001"
+    "\n\020buff_table.proto\"\234\013\n\tBuffTable\022\n\n\002id\030\001"
     " \001(\r\022\021\n\tno_caster\030\002 \001(\r\022\021\n\tbuff_type\030\003 \001"
     "(\r\022 \n\003tag\030\004 \003(\0132\023.BuffTable.TagEntry\022-\n\n"
     "immune_tag\030\005 \003(\0132\031.BuffTable.ImmuneTagEn"
@@ -1257,19 +1262,20 @@ const char descriptor_table_protodef_buff_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTI
     "th\0300 \001(\r\022\027\n\017effect_priority\0301 \001(\r\022\023\n\013sta"
     "rt_round\0302 \001(\r\022\023\n\013stack_limit\0303 \001(\r\022\035\n\025r"
     "equire_living_caster\0304 \001(\r\022\025\n\rtick_on_ap"
-    "ply\0305 \001(\r\032*\n\010TagEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005va"
-    "lue\030\002 \001(\010:\0028\001\0320\n\016ImmuneTagEntry\022\013\n\003key\030\001"
-    " \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n\016DispelTagEntr"
-    "y\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\")\n\rBuf"
-    "fTableData\022\030\n\004data\030\001 \003(\0132\n.BuffTableB;\n\016"
-    "com.game.tableB\023BuffTableOuterClassP\001Z\022g"
-    "enerated/pb/tableb\006proto3"
+    "ply\0305 \001(\r\022\026\n\016keep_on_logout\0306 \001(\r\032*\n\010Tag"
+    "Entry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 \001(\010:\0028\001\0320\n"
+    "\016ImmuneTagEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005value\030\002 "
+    "\001(\010:\0028\001\0320\n\016DispelTagEntry\022\013\n\003key\030\001 \001(\t\022\r"
+    "\n\005value\030\002 \001(\010:\0028\001\")\n\rBuffTableData\022\030\n\004da"
+    "ta\030\001 \003(\0132\n.BuffTableB;\n\016com.game.tableB\023"
+    "BuffTableOuterClassP\001Z\022generated/pb/tabl"
+    "eb\006proto3"
 };
 static ::absl::once_flag descriptor_table_buff_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_buff_5ftable_2eproto = {
     false,
     false,
-    1545,
+    1569,
     descriptor_table_protodef_buff_5ftable_2eproto,
     "buff_table.proto",
     &descriptor_table_buff_5ftable_2eproto_once,
@@ -1487,9 +1493,9 @@ BuffTable::BuffTable(
                offsetof(Impl_, trigger_chance_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, trigger_chance_),
-           offsetof(Impl_, tick_on_apply_) -
+           offsetof(Impl_, keep_on_logout_) -
                offsetof(Impl_, trigger_chance_) +
-               sizeof(Impl_::tick_on_apply_));
+               sizeof(Impl_::keep_on_logout_));
 
   // @@protoc_insertion_point(copy_constructor:BuffTable)
 }
@@ -1545,9 +1551,9 @@ inline void BuffTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, trigger_chance_),
            0,
-           offsetof(Impl_, tick_on_apply_) -
+           offsetof(Impl_, keep_on_logout_) -
                offsetof(Impl_, trigger_chance_) +
-               sizeof(Impl_::tick_on_apply_));
+               sizeof(Impl_::keep_on_logout_));
 }
 BuffTable::~BuffTable() {
   // @@protoc_insertion_point(destructor:BuffTable)
@@ -1664,10 +1670,10 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
         reinterpret_cast<char*>(&_impl_.keep_on_death_) -
         reinterpret_cast<char*>(&_impl_.effect_count_)) + sizeof(_impl_.keep_on_death_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     ::memset(&_impl_.effect_priority_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.tick_on_apply_) -
-        reinterpret_cast<char*>(&_impl_.effect_priority_)) + sizeof(_impl_.tick_on_apply_));
+        reinterpret_cast<char*>(&_impl_.keep_on_logout_) -
+        reinterpret_cast<char*>(&_impl_.effect_priority_)) + sizeof(_impl_.keep_on_logout_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2238,6 +2244,15 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
     }
   }
 
+  // uint32 keep_on_logout = 54;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_keep_on_logout() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          54, this_._internal_keep_on_logout(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2612,7 +2627,7 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     // uint32 effect_priority = 49;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_effect_priority() != 0) {
@@ -2646,6 +2661,13 @@ PROTOBUF_NOINLINE void BuffTable::Clear() {
       if (this_._internal_tick_on_apply() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_tick_on_apply());
+      }
+    }
+    // uint32 keep_on_logout = 54;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_keep_on_logout() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_keep_on_logout());
       }
     }
   }
@@ -2923,7 +2945,7 @@ void BuffTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_effect_priority() != 0) {
         _this->_impl_.effect_priority_ = from._impl_.effect_priority_;
@@ -2947,6 +2969,11 @@ void BuffTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_tick_on_apply() != 0) {
         _this->_impl_.tick_on_apply_ = from._impl_.tick_on_apply_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_keep_on_logout() != 0) {
+        _this->_impl_.keep_on_logout_ = from._impl_.keep_on_logout_;
       }
     }
   }
@@ -2987,8 +3014,8 @@ void BuffTable::InternalSwap(BuffTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.required_tag_, &other->_impl_.required_tag_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.second_required_tag_, &other->_impl_.second_required_tag_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.tick_on_apply_)
-      + sizeof(BuffTable::_impl_.tick_on_apply_)
+      PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.keep_on_logout_)
+      + sizeof(BuffTable::_impl_.keep_on_logout_)
       - PROTOBUF_FIELD_OFFSET(BuffTable, _impl_.trigger_chance_)>(
           reinterpret_cast<char*>(&_impl_.trigger_chance_),
           reinterpret_cast<char*>(&other->_impl_.trigger_chance_));

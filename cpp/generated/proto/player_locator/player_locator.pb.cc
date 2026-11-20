@@ -67,11 +67,11 @@ constexpr SetDisconnectingRequest::ParseTableT_ SetDisconnectingRequest::Interna
     {
       PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -81,10 +81,7 @@ constexpr SetDisconnectingRequest::ParseTableT_ SetDisconnectingRequest::Interna
       ::_pbi::TcParser::GetTable<::playerlocator::SetDisconnectingRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string gate_instance_id = 4;
-      {::_pbi::TcParser::FastUS1,
-       {34, 0, 0,
-        PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.gate_instance_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetDisconnectingRequest, _impl_.player_id_), 1>(),
        {8, 1, 0,
@@ -97,6 +94,16 @@ constexpr SetDisconnectingRequest::ParseTableT_ SetDisconnectingRequest::Interna
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetDisconnectingRequest, _impl_.lease_ttl_seconds_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.lease_ttl_seconds_)}},
+      // string gate_instance_id = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.gate_instance_id_)}},
+      // uint64 session_incarnation = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SetDisconnectingRequest, _impl_.session_incarnation_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.session_incarnation_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -108,6 +115,8 @@ constexpr SetDisconnectingRequest::ParseTableT_ SetDisconnectingRequest::Interna
       {PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.lease_ttl_seconds_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string gate_instance_id = 4;
       {PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.gate_instance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 session_incarnation = 5;
+      {PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.session_incarnation_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -128,7 +137,8 @@ inline constexpr SetDisconnectingRequest::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         session_id_{0u},
-        lease_ttl_seconds_{0u} {}
+        lease_ttl_seconds_{0u},
+        session_incarnation_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr SetDisconnectingRequest::SetDisconnectingRequest(::_pbi::ConstantInitialized,
@@ -234,11 +244,11 @@ constexpr ReconnectRequest::ParseTableT_ ReconnectRequest::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -254,8 +264,8 @@ constexpr ReconnectRequest::ParseTableT_ ReconnectRequest::InternalGenerateParse
        {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.player_id_)}},
       // uint32 new_session_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReconnectRequest, _impl_.new_session_id_), 8>(),
-       {16, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ReconnectRequest, _impl_.new_session_id_), 9>(),
+       {16, 9, 0,
         PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.new_session_id_)}},
       // string gate_id = 3;
       {::_pbi::TcParser::FastUS1,
@@ -285,7 +295,10 @@ constexpr ReconnectRequest::ParseTableT_ ReconnectRequest::InternalGenerateParse
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReconnectRequest, _impl_.login_generation_), 7>(),
        {72, 7, 0,
         PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.login_generation_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 session_incarnation = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ReconnectRequest, _impl_.session_incarnation_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.session_incarnation_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -297,7 +310,7 @@ constexpr ReconnectRequest::ParseTableT_ ReconnectRequest::InternalGenerateParse
       // uint64 player_id = 1;
       {PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 new_session_id = 2;
-      {PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.new_session_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.new_session_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string gate_id = 3;
       {PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.gate_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string gate_instance_id = 4;
@@ -312,6 +325,8 @@ constexpr ReconnectRequest::ParseTableT_ ReconnectRequest::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.account_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 login_generation = 9;
       {PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.login_generation_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 session_incarnation = 10;
+      {PROTOBUF_FIELD_OFFSET(ReconnectRequest, _impl_.session_incarnation_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -349,6 +364,7 @@ inline constexpr ReconnectRequest::Impl_::Impl_(
         player_id_{::uint64_t{0u}},
         token_expiry_ms_{::uint64_t{0u}},
         login_generation_{::uint64_t{0u}},
+        session_incarnation_{::uint64_t{0u}},
         new_session_id_{0u} {}
 
 template <typename>
@@ -455,11 +471,11 @@ constexpr PlayerSession::ParseTableT_ PlayerSession::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      15, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4294934528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
+      15,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -507,8 +523,8 @@ constexpr PlayerSession::ParseTableT_ PlayerSession::InternalGenerateParseTable_
        {72, 8, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.session_version_)}},
       // .playerlocator.PlayerSessionState state = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSession, _impl_.state_), 13>(),
-       {80, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSession, _impl_.state_), 14>(),
+       {80, 14, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.state_)}},
       // int64 last_active_ts = 11;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSession, _impl_.last_active_ts_), 11>(),
@@ -526,7 +542,10 @@ constexpr PlayerSession::ParseTableT_ PlayerSession::InternalGenerateParseTable_
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSession, _impl_.login_generation_), 12>(),
        {112, 12, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.login_generation_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 session_incarnation = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSession, _impl_.session_incarnation_), 13>(),
+       {120, 13, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.session_incarnation_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -549,7 +568,7 @@ constexpr PlayerSession::ParseTableT_ PlayerSession::InternalGenerateParseTable_
       // uint32 session_version = 9;
       {PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.session_version_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .playerlocator.PlayerSessionState state = 10;
-      {PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.state_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.state_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // int64 last_active_ts = 11;
       {PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.last_active_ts_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // string request_id = 12;
@@ -558,6 +577,8 @@ constexpr PlayerSession::ParseTableT_ PlayerSession::InternalGenerateParseTable_
       {PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.account_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 login_generation = 14;
       {PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.login_generation_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 session_incarnation = 15;
+      {PROTOBUF_FIELD_OFFSET(PlayerSession, _impl_.session_incarnation_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -603,6 +624,7 @@ inline constexpr PlayerSession::Impl_::Impl_(
         token_expiry_ms_{::uint64_t{0u}},
         last_active_ts_{::int64_t{0}},
         login_generation_{::uint64_t{0u}},
+        session_incarnation_{::uint64_t{0u}},
         state_{static_cast< ::playerlocator::PlayerSessionState >(0)} {}
 
 template <typename>
@@ -2027,7 +2049,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_._has_bits_),
-        17, // hasbit index offset
+        18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_.session_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_.gate_id_),
@@ -2042,6 +2064,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_.account_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_.login_generation_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerSession, _impl_.session_incarnation_),
         6,
         7,
         0,
@@ -2051,11 +2074,12 @@ const ::uint32_t
         3,
         10,
         8,
-        13,
+        14,
         11,
         4,
         5,
         12,
+        13,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerlocator::SetSessionRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -2086,18 +2110,20 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerlocator::SetDisconnectingRequest, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::playerlocator::SetDisconnectingRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::SetDisconnectingRequest, _impl_.session_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::SetDisconnectingRequest, _impl_.lease_ttl_seconds_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::SetDisconnectingRequest, _impl_.gate_instance_id_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::SetDisconnectingRequest, _impl_.session_incarnation_),
         1,
         2,
         3,
         0,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_.new_session_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_.gate_id_),
@@ -2107,8 +2133,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_.account_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_.login_generation_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectRequest, _impl_.session_incarnation_),
         5,
-        8,
+        9,
         0,
         1,
         2,
@@ -2116,6 +2143,7 @@ const ::uint32_t
         3,
         4,
         7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerlocator::ReconnectResponse, _impl_._has_bits_),
         6, // hasbit index offset
@@ -2147,14 +2175,14 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::playerlocator::PlayerLocation)},
         {17, sizeof(::playerlocator::PlayerId)},
         {22, sizeof(::playerlocator::PlayerSession)},
-        {53, sizeof(::playerlocator::SetSessionRequest)},
-        {58, sizeof(::playerlocator::GetSessionRequest)},
-        {63, sizeof(::playerlocator::GetSessionResponse)},
-        {70, sizeof(::playerlocator::MarkOfflineRequest)},
-        {81, sizeof(::playerlocator::SetDisconnectingRequest)},
-        {92, sizeof(::playerlocator::ReconnectRequest)},
-        {113, sizeof(::playerlocator::ReconnectResponse)},
-        {122, sizeof(::playerlocator::LeaseExpiredEvent)},
+        {55, sizeof(::playerlocator::SetSessionRequest)},
+        {60, sizeof(::playerlocator::GetSessionRequest)},
+        {65, sizeof(::playerlocator::GetSessionResponse)},
+        {72, sizeof(::playerlocator::MarkOfflineRequest)},
+        {83, sizeof(::playerlocator::SetDisconnectingRequest)},
+        {96, sizeof(::playerlocator::ReconnectRequest)},
+        {119, sizeof(::playerlocator::ReconnectResponse)},
+        {128, sizeof(::playerlocator::LeaseExpiredEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2178,7 +2206,7 @@ const char descriptor_table_protodef_proto_2fplayer_5flocator_2fplayer_5flocator
     "\003\022\021\n\tserver_id\030\002 \001(\t\022\016\n\006online\030\003 \001(\010\022\021\n\t"
     "migrating\030\004 \001(\010\022\020\n\010scene_id\030\005 \001(\005\022\r\n\005tok"
     "en\030\006 \001(\t\022\n\n\002ts\030\007 \001(\003\"\027\n\010PlayerId\022\013\n\003uid\030"
-    "\001 \001(\003\"\327\002\n\rPlayerSession\022\021\n\tplayer_id\030\001 \001"
+    "\001 \001(\003\"\364\002\n\rPlayerSession\022\021\n\tplayer_id\030\001 \001"
     "(\004\022\022\n\nsession_id\030\002 \001(\r\022\017\n\007gate_id\030\003 \001(\t\022"
     "\030\n\020gate_instance_id\030\004 \001(\t\022\025\n\rscene_node_"
     "id\030\005 \001(\t\022\020\n\010scene_id\030\006 \001(\004\022\020\n\010token_id\030\007"
@@ -2186,47 +2214,49 @@ const char descriptor_table_protodef_proto_2fplayer_5flocator_2fplayer_5flocator
     "_version\030\t \001(\r\0220\n\005state\030\n \001(\0162!.playerlo"
     "cator.PlayerSessionState\022\026\n\016last_active_"
     "ts\030\013 \001(\003\022\022\n\nrequest_id\030\014 \001(\t\022\017\n\007account\030"
-    "\r \001(\t\022\030\n\020login_generation\030\016 \001(\004\"B\n\021SetSe"
-    "ssionRequest\022-\n\007session\030\001 \001(\0132\034.playerlo"
-    "cator.PlayerSession\"&\n\021GetSessionRequest"
-    "\022\021\n\tplayer_id\030\001 \001(\004\"R\n\022GetSessionRespons"
-    "e\022-\n\007session\030\001 \001(\0132\034.playerlocator.Playe"
-    "rSession\022\r\n\005found\030\002 \001(\010\"\211\001\n\022MarkOfflineR"
-    "equest\022\021\n\tplayer_id\030\001 \001(\004\022\033\n\023expected_se"
-    "ssion_id\030\002 \001(\r\022 \n\030expected_session_versi"
-    "on\030\003 \001(\r\022!\n\031expected_gate_instance_id\030\004 "
-    "\001(\t\"u\n\027SetDisconnectingRequest\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\031\n\021lease_t"
-    "tl_seconds\030\003 \001(\r\022\030\n\020gate_instance_id\030\004 \001"
-    "(\t\"\322\001\n\020ReconnectRequest\022\021\n\tplayer_id\030\001 \001"
-    "(\004\022\026\n\016new_session_id\030\002 \001(\r\022\017\n\007gate_id\030\003 "
-    "\001(\t\022\030\n\020gate_instance_id\030\004 \001(\t\022\020\n\010token_i"
-    "d\030\005 \001(\t\022\027\n\017token_expiry_ms\030\006 \001(\004\022\022\n\nrequ"
-    "est_id\030\007 \001(\t\022\017\n\007account\030\010 \001(\t\022\030\n\020login_g"
-    "eneration\030\t \001(\004\"j\n\021ReconnectResponse\022\017\n\007"
-    "success\030\001 \001(\010\022-\n\007session\030\002 \001(\0132\034.playerl"
-    "ocator.PlayerSession\022\025\n\rerror_message\030\003 "
-    "\001(\t\"\216\001\n\021LeaseExpiredEvent\022\021\n\tplayer_id\030\001"
-    " \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\025\n\rscene_node_i"
-    "d\030\003 \001(\t\022\020\n\010scene_id\030\004 \001(\004\022\017\n\007gate_id\030\005 \001"
-    "(\t\022\030\n\020gate_instance_id\030\006 \001(\t*\205\001\n\022PlayerS"
-    "essionState\022\031\n\025SESSION_STATE_UNKNOWN\020\000\022\030"
-    "\n\024SESSION_STATE_ONLINE\020\001\022\037\n\033SESSION_STAT"
-    "E_DISCONNECTING\020\002\022\031\n\025SESSION_STATE_OFFLI"
-    "NE\020\0032\345\003\n\rPlayerLocator\0224\n\013SetLocation\022\035."
-    "playerlocator.PlayerLocation\032\006.Empty\022E\n\013"
-    "GetLocation\022\027.playerlocator.PlayerId\032\035.p"
-    "layerlocator.PlayerLocation\0228\n\013MarkOffli"
-    "ne\022!.playerlocator.MarkOfflineRequest\032\006."
-    "Empty\0226\n\nSetSession\022 .playerlocator.SetS"
-    "essionRequest\032\006.Empty\022Q\n\nGetSession\022 .pl"
-    "ayerlocator.GetSessionRequest\032!.playerlo"
-    "cator.GetSessionResponse\022B\n\020SetDisconnec"
-    "ting\022&.playerlocator.SetDisconnectingReq"
-    "uest\032\006.Empty\022N\n\tReconnect\022\037.playerlocato"
-    "r.ReconnectRequest\032 .playerlocator.Recon"
-    "nectResponseB\026Z\024proto/player_locatorb\006pr"
-    "oto3"
+    "\r \001(\t\022\030\n\020login_generation\030\016 \001(\004\022\033\n\023sessi"
+    "on_incarnation\030\017 \001(\004\"B\n\021SetSessionReques"
+    "t\022-\n\007session\030\001 \001(\0132\034.playerlocator.Playe"
+    "rSession\"&\n\021GetSessionRequest\022\021\n\tplayer_"
+    "id\030\001 \001(\004\"R\n\022GetSessionResponse\022-\n\007sessio"
+    "n\030\001 \001(\0132\034.playerlocator.PlayerSession\022\r\n"
+    "\005found\030\002 \001(\010\"\211\001\n\022MarkOfflineRequest\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\033\n\023expected_session_id\030\002 "
+    "\001(\r\022 \n\030expected_session_version\030\003 \001(\r\022!\n"
+    "\031expected_gate_instance_id\030\004 \001(\t\"\222\001\n\027Set"
+    "DisconnectingRequest\022\021\n\tplayer_id\030\001 \001(\004\022"
+    "\022\n\nsession_id\030\002 \001(\r\022\031\n\021lease_ttl_seconds"
+    "\030\003 \001(\r\022\030\n\020gate_instance_id\030\004 \001(\t\022\033\n\023sess"
+    "ion_incarnation\030\005 \001(\004\"\357\001\n\020ReconnectReque"
+    "st\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016new_session_id\030"
+    "\002 \001(\r\022\017\n\007gate_id\030\003 \001(\t\022\030\n\020gate_instance_"
+    "id\030\004 \001(\t\022\020\n\010token_id\030\005 \001(\t\022\027\n\017token_expi"
+    "ry_ms\030\006 \001(\004\022\022\n\nrequest_id\030\007 \001(\t\022\017\n\007accou"
+    "nt\030\010 \001(\t\022\030\n\020login_generation\030\t \001(\004\022\033\n\023se"
+    "ssion_incarnation\030\n \001(\004\"j\n\021ReconnectResp"
+    "onse\022\017\n\007success\030\001 \001(\010\022-\n\007session\030\002 \001(\0132\034"
+    ".playerlocator.PlayerSession\022\025\n\rerror_me"
+    "ssage\030\003 \001(\t\"\216\001\n\021LeaseExpiredEvent\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\025\n\rscen"
+    "e_node_id\030\003 \001(\t\022\020\n\010scene_id\030\004 \001(\004\022\017\n\007gat"
+    "e_id\030\005 \001(\t\022\030\n\020gate_instance_id\030\006 \001(\t*\205\001\n"
+    "\022PlayerSessionState\022\031\n\025SESSION_STATE_UNK"
+    "NOWN\020\000\022\030\n\024SESSION_STATE_ONLINE\020\001\022\037\n\033SESS"
+    "ION_STATE_DISCONNECTING\020\002\022\031\n\025SESSION_STA"
+    "TE_OFFLINE\020\0032\345\003\n\rPlayerLocator\0224\n\013SetLoc"
+    "ation\022\035.playerlocator.PlayerLocation\032\006.E"
+    "mpty\022E\n\013GetLocation\022\027.playerlocator.Play"
+    "erId\032\035.playerlocator.PlayerLocation\0228\n\013M"
+    "arkOffline\022!.playerlocator.MarkOfflineRe"
+    "quest\032\006.Empty\0226\n\nSetSession\022 .playerloca"
+    "tor.SetSessionRequest\032\006.Empty\022Q\n\nGetSess"
+    "ion\022 .playerlocator.GetSessionRequest\032!."
+    "playerlocator.GetSessionResponse\022B\n\020SetD"
+    "isconnecting\022&.playerlocator.SetDisconne"
+    "ctingRequest\032\006.Empty\022N\n\tReconnect\022\037.play"
+    "erlocator.ReconnectRequest\032 .playerlocat"
+    "or.ReconnectResponseB\026Z\024proto/player_loc"
+    "atorb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto_deps[1] = {
@@ -2236,7 +2266,7 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5flocator_2fplayer_5flo
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto = {
     false,
     false,
-    2164,
+    2252,
     descriptor_table_protodef_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
     "proto/player_locator/player_locator.proto",
     &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto_once,
@@ -2972,7 +3002,7 @@ PROTOBUF_NOINLINE void PlayerSession::Clear() {
         reinterpret_cast<char*>(&_impl_.session_id_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.session_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     ::memset(&_impl_.session_version_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.state_) -
         reinterpret_cast<char*>(&_impl_.session_version_)) + sizeof(_impl_.state_));
@@ -3086,7 +3116,7 @@ PROTOBUF_NOINLINE void PlayerSession::Clear() {
   }
 
   // .playerlocator.PlayerSessionState state = 10;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_state() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -3129,6 +3159,15 @@ PROTOBUF_NOINLINE void PlayerSession::Clear() {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           14, this_._internal_login_generation(), target);
+    }
+  }
+
+  // uint64 session_incarnation = 15;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_session_incarnation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          15, this_._internal_session_incarnation(), target);
     }
   }
 
@@ -3215,7 +3254,7 @@ PROTOBUF_NOINLINE void PlayerSession::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint32 session_version = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_session_version() != 0) {
@@ -3251,8 +3290,15 @@ PROTOBUF_NOINLINE void PlayerSession::Clear() {
             this_._internal_login_generation());
       }
     }
-    // .playerlocator.PlayerSessionState state = 10;
+    // uint64 session_incarnation = 15;
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_session_incarnation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_session_incarnation());
+      }
+    }
+    // .playerlocator.PlayerSessionState state = 10;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_state() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_state());
@@ -3342,7 +3388,7 @@ void PlayerSession::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_session_version() != 0) {
         _this->_impl_.session_version_ = from._impl_.session_version_;
@@ -3369,6 +3415,11 @@ void PlayerSession::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_session_incarnation() != 0) {
+        _this->_impl_.session_incarnation_ = from._impl_.session_incarnation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_state() != 0) {
         _this->_impl_.state_ = from._impl_.state_;
       }
@@ -4397,9 +4448,9 @@ SetDisconnectingRequest::SetDisconnectingRequest(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, lease_ttl_seconds_) -
+           offsetof(Impl_, session_incarnation_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::lease_ttl_seconds_));
+               sizeof(Impl_::session_incarnation_));
 
   // @@protoc_insertion_point(copy_constructor:playerlocator.SetDisconnectingRequest)
 }
@@ -4414,9 +4465,9 @@ inline void SetDisconnectingRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, lease_ttl_seconds_) -
+           offsetof(Impl_, session_incarnation_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::lease_ttl_seconds_));
+               sizeof(Impl_::session_incarnation_));
 }
 SetDisconnectingRequest::~SetDisconnectingRequest() {
   // @@protoc_insertion_point(destructor:playerlocator.SetDisconnectingRequest)
@@ -4470,10 +4521,10 @@ PROTOBUF_NOINLINE void SetDisconnectingRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.gate_instance_id_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.lease_ttl_seconds_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.lease_ttl_seconds_));
+        reinterpret_cast<char*>(&_impl_.session_incarnation_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.session_incarnation_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -4535,6 +4586,15 @@ PROTOBUF_NOINLINE void SetDisconnectingRequest::Clear() {
     }
   }
 
+  // uint64 session_incarnation = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_session_incarnation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_session_incarnation(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -4560,7 +4620,7 @@ PROTOBUF_NOINLINE void SetDisconnectingRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string gate_instance_id = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_gate_instance_id().empty()) {
@@ -4589,6 +4649,13 @@ PROTOBUF_NOINLINE void SetDisconnectingRequest::Clear() {
             this_._internal_lease_ttl_seconds());
       }
     }
+    // uint64 session_incarnation = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_session_incarnation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_session_incarnation());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -4607,7 +4674,7 @@ void SetDisconnectingRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_gate_instance_id().empty()) {
         _this->_internal_set_gate_instance_id(from._internal_gate_instance_id());
@@ -4632,6 +4699,11 @@ void SetDisconnectingRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.lease_ttl_seconds_ = from._impl_.lease_ttl_seconds_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_session_incarnation() != 0) {
+        _this->_impl_.session_incarnation_ = from._impl_.session_incarnation_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -4654,8 +4726,8 @@ void SetDisconnectingRequest::InternalSwap(SetDisconnectingRequest* PROTOBUF_RES
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.gate_instance_id_, &other->_impl_.gate_instance_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.lease_ttl_seconds_)
-      + sizeof(SetDisconnectingRequest::_impl_.lease_ttl_seconds_)
+      PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.session_incarnation_)
+      + sizeof(SetDisconnectingRequest::_impl_.session_incarnation_)
       - PROTOBUF_FIELD_OFFSET(SetDisconnectingRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -4805,7 +4877,11 @@ PROTOBUF_NOINLINE void ReconnectRequest::Clear() {
         reinterpret_cast<char*>(&_impl_.login_generation_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.login_generation_));
   }
-  _impl_.new_session_id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.session_incarnation_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.new_session_id_) -
+        reinterpret_cast<char*>(&_impl_.session_incarnation_)) + sizeof(_impl_.new_session_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -4839,7 +4915,7 @@ PROTOBUF_NOINLINE void ReconnectRequest::Clear() {
   }
 
   // uint32 new_session_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_new_session_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4912,6 +4988,15 @@ PROTOBUF_NOINLINE void ReconnectRequest::Clear() {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           9, this_._internal_login_generation(), target);
+    }
+  }
+
+  // uint64 session_incarnation = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_session_incarnation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_session_incarnation(), target);
     }
   }
 
@@ -4998,9 +5083,16 @@ PROTOBUF_NOINLINE void ReconnectRequest::Clear() {
       }
     }
   }
-   {
-    // uint32 new_session_id = 2;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 session_incarnation = 10;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_session_incarnation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_session_incarnation());
+      }
+    }
+    // uint32 new_session_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_new_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_new_session_id());
@@ -5086,9 +5178,16 @@ void ReconnectRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_new_session_id() != 0) {
-      _this->_impl_.new_session_id_ = from._impl_.new_session_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_session_incarnation() != 0) {
+        _this->_impl_.session_incarnation_ = from._impl_.session_incarnation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_new_session_id() != 0) {
+        _this->_impl_.new_session_id_ = from._impl_.new_session_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;

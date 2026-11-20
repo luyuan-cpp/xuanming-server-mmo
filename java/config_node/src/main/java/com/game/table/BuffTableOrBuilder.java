@@ -462,4 +462,10 @@ public interface BuffTableOrBuilder extends
    * @return The tickOnApply.
    */
   int getTickOnApply();
+
+  /**
+   * <code>uint32 keep_on_logout = 54;</code>
+   * @return The keepOnLogout.
+   */
+  int getKeepOnLogout();
 }

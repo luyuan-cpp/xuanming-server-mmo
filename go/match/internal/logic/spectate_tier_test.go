@@ -932,29 +932,46 @@ func TestSpectateMaintenanceLoopPrunesIndexes(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond)
 }
 
-// fakeIntentPurger 记下每一轮的翻页位置。
+// fakeIntentPurger 记下每一页的翻页位置,page 给出这一页的结论(下一页的位置或错误)。
 type fakeIntentPurger struct {
 	afters []authority.SpectatorIntentCursor
-	next   authority.SpectatorIntentCursor
-	err    error
+	page   func(after authority.SpectatorIntentCursor) (authority.SpectatorIntentCursor, error)
 }
 
 func (f *fakeIntentPurger) PurgeClosedSpectatorIntents(_ context.Context, after authority.SpectatorIntentCursor, _ int) (authority.SpectatorIntentCursor, int64, error) {
 	f.afters = append(f.afters, after)
-	return f.next, 0, f.err
+	next, err := f.page(after)
+	return next, 0, err
 }
 
-// 意图清理的翻页:成功前进;失败不动游标,下一轮重试同一页。
-func TestGlobalSpectatorIntentPurgeKeepsCursorOnFailure(t *testing.T) {
+// 意图清理一轮连续清页:满页接着清,扫到末尾这一轮结束、游标回到开头;失败的那一页不动游标、记一次失败,下一轮从它重试。
+func TestGlobalSpectatorIntentPurgeDrainsPagesAndKeepsCursorOnFailure(t *testing.T) {
 	first := authority.SpectatorIntentCursor{CreatedMs: 1, Player: 2, High: 3, Low: 4}
-	purger := &fakeIntentPurger{next: first}
+	failing := false
+	purger := &fakeIntentPurger{page: func(after authority.SpectatorIntentCursor) (authority.SpectatorIntentCursor, error) {
+		switch {
+		case after == (authority.SpectatorIntentCursor{}):
+			return first, nil // 满页
+		case failing:
+			return after, errors.New("TiDB unavailable")
+		default:
+			return authority.SpectatorIntentCursor{}, nil // 不满一页:扫到末尾
+		}
+	}}
 	purge := &globalSpectatorIntentPurge{}
+	failures := metrics.RetentionPurgeFailureValue(metrics.RetentionPurgeSpectatorIntent)
 
 	purge.round(context.Background(), purger)
-	purger.err = errors.New("TiDB 不可用")
-	purge.round(context.Background(), purger)
-	purger.err = nil
-	purge.round(context.Background(), purger)
+	require.Equal(t, []authority.SpectatorIntentCursor{{}, first}, purger.afters, "一轮里满页接着清下一页")
+	require.Equal(t, authority.SpectatorIntentCursor{}, purge.after, "扫到末尾回到开头")
 
-	require.Equal(t, []authority.SpectatorIntentCursor{{}, first, first}, purger.afters)
+	failing = true
+	purge.round(context.Background(), purger)
+	require.Equal(t, first, purge.after, "失败的那一页不动游标")
+	require.Equal(t, failures+1, metrics.RetentionPurgeFailureValue(metrics.RetentionPurgeSpectatorIntent))
+
+	failing = false
+	purge.round(context.Background(), purger)
+	require.Equal(t, []authority.SpectatorIntentCursor{{}, first, {}, first, first}, purger.afters, "下一轮从失败的那一页重试")
+	require.Equal(t, failures+1, metrics.RetentionPurgeFailureValue(metrics.RetentionPurgeSpectatorIntent), "成功的一轮不计失败")
 }

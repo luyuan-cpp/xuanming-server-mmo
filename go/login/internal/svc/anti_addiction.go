@@ -22,6 +22,8 @@ type RealNameDirectory interface {
 	// ReadWithLifecycle 与 Directory.Read 是同一次目录读,应答另带账号的 real_name_pi(空串 = 没实名)与注销状态。
 	ReadWithLifecycle(ctx context.Context, account string, create bool) (*dspb.AccountDirectoryResponse, error)
 	SetRealName(ctx context.Context, account, pi string) (string, error)
+	// ResetRealName 清掉账号上的 pi(客服重置),返回清之前有没有。
+	ResetRealName(ctx context.Context, account string) (bool, error)
 }
 
 // RealNames 返回账号目录的实名读写;目录实现不支持时(测试替身)ok=false。
@@ -34,10 +36,22 @@ func (s *ServiceContext) RealNames() (RealNameDirectory, bool) {
 // ServiceContext.AntiAddiction 为 nil,Evaluate 在 nil 上回放行。
 type AntiAddiction struct {
 	Calendar antiaddiction.Calendar
+	// Ledger 是防沉迷会话账本:上报的会话与未成年人的截止时刻都在里面,所有副本共用。
+	Ledger   *nppa.Ledger
 	Reporter *nppa.Reporter
 	RealName *realname.Service
 	// PlatformManaged 是由渠道平台实名并执行防沉迷的 auth_type。
 	PlatformManaged map[string]bool
+	// Clock 是判定用的时钟,nil = time.Now;单测换成定值。
+	Clock func() time.Time
+}
+
+// Now 是防沉迷判定用的当前时刻。
+func (a *AntiAddiction) Now() time.Time {
+	if a == nil || a.Clock == nil {
+		return time.Now()
+	}
+	return a.Clock()
 }
 
 // SelfManaged 报告这个渠道(签发令牌时的 auth_type)是否要游戏方自己实名、执行限制并上报。
@@ -111,11 +125,17 @@ func NewAntiAddiction(c config.AntiAddictionConf, secretKey string, s *ServiceCo
 	for _, authType := range c.PlatformManagedAuthTypes {
 		managed[authType] = true
 	}
+	// 国家系统按运营单位限流:额度放在所有 login 副本共用的登录域 Redis 里,副本加多少都不超额。
+	quota := nppa.NewQuota(s.LoginRedis)
+	// 账本的租约取登录态的寿命:gate 每三分之一寿命续一次,漏两次还在。
+	ledger := nppa.NewLedger(s.LoginRedis, time.Duration(config.AppConfig.Node.SessionExpireMin)*time.Minute)
 	return &AntiAddiction{
 		Calendar: calendar,
-		Reporter: nppa.NewReporter(client),
+		Ledger:   ledger,
+		Reporter: nppa.NewReporter(client, ledger, quota),
 		RealName: &realname.Service{
-			Redis: s.LoginRedis, Verifier: client, Directory: realNames, DailyLimit: c.DailySubmitLimit, Now: time.Now,
+			Redis: s.LoginRedis, Verifier: client, Directory: realNames, Quota: quota,
+			DailyLimit: c.DailySubmitLimit, Now: time.Now,
 		},
 		PlatformManaged: managed,
 	}, nil
@@ -139,7 +159,8 @@ func (s *ServiceContext) initAntiAddiction() {
 		c.PlatformManagedAuthTypes, len(c.ExtraPlayDays), c.DailySubmitLimit)
 }
 
-// startAntiAddictionReporter 起上下线上报循环(每个 login 副本一份,见 nppa.Reporter)。
+// startAntiAddictionReporter 起上下线上报循环(每个 login 副本一份,见 nppa.Reporter)。事件都在账本里,
+// 停机时不用排空:没发完的由别的副本或下一次启动接着发。
 func (s *ServiceContext) startAntiAddictionReporter() {
 	if s.AntiAddiction == nil {
 		return

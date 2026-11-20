@@ -154,6 +154,37 @@ type Config struct {
 
 	// BattleReport:战报回放开关。与 Team 一样不标 optional,整段缺席时按 default 打开。
 	BattleReport BattleReportConf
+
+	// ---- 战斗剧本(docs/design/battle-script.md)----
+
+	// BattleScript:战斗剧本配置。与 Team 一样不标 optional,整段缺席时按 default 填。
+	BattleScript BattleScriptConf
+}
+
+// 审核流水保留期(天)的缺省与上下限(battle-script.md §6.4)。缺省与 data_service transaction_log 的审计保留同值;
+// 下限 30 天:短于它,玩家申诉、事后追责就查不到审了哪一版;上限 365 天:玩家写的正文不变成近乎永久保留,
+// 与 trade / guild 保留期配置的上限同值。
+const (
+	DefaultBattleScriptReviewRetentionDays = 180
+	MinBattleScriptReviewRetentionDays     = 30
+	MaxBattleScriptReviewRetentionDays     = 365
+)
+
+// BattleScriptConf 战斗剧本配置(battle-script.md §6)。
+type BattleScriptConf struct {
+	// ReviewRetentionDays:审核流水 match_battle_script_review 的保留天数,按审核时刻 reviewed_ms(match 库时间)算,
+	// 到期由后台循环分批删除。缺省 180;0 = 缺省;其余越出 [30, 365] 拒启。不是提交点规则,不进策略指纹:
+	// 滚动改配置时各副本短暂不同,只是按较短的那份先删。
+	ReviewRetentionDays uint32 `json:",default=180"`
+}
+
+// ReviewRetention 返回审核流水的保留期;0 / 漏配(直接构造 Config 的单测)按缺省 180 天。
+func (c BattleScriptConf) ReviewRetention() time.Duration {
+	days := c.ReviewRetentionDays
+	if days == 0 {
+		days = DefaultBattleScriptReviewRetentionDays
+	}
+	return time.Duration(days) * 24 * time.Hour
 }
 
 // BattleReportConf 战报回放配置(battle-report-replay.md §7.1)。
@@ -504,6 +535,10 @@ func (c *Config) Validate() error {
 	}
 	if err := c.GlobalMatch.validateSubPools(); err != nil {
 		return err
+	}
+	if days := c.BattleScript.ReviewRetentionDays; days != 0 && (days < MinBattleScriptReviewRetentionDays || days > MaxBattleScriptReviewRetentionDays) {
+		return fmt.Errorf("BattleScript.ReviewRetentionDays must be in [%d, %d] (0 = default %d), got %d",
+			MinBattleScriptReviewRetentionDays, MaxBattleScriptReviewRetentionDays, DefaultBattleScriptReviewRetentionDays, days)
 	}
 	return c.validateSpectate()
 }

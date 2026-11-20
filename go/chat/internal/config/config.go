@@ -9,8 +9,8 @@ import (
 	"strconv"
 
 	"chat/internal/constants"
-	"chat/internal/textfilter"
 	"shared/authoritysql"
+	"shared/contentguard"
 	"shared/dbplacement"
 
 	"github.com/zeromicro/go-zero/zrpc"
@@ -65,9 +65,10 @@ type Config struct {
 	// MaxContentBytes:单条内容的最大**字节**数(不是字符数:512 字节 ≈ 170 个汉字)。
 	MaxContentBytes int `json:",default=512"`
 
-	// SensitiveWords 为启动时加载的字面屏蔽词表；空表不过滤。
-	// 大小写敏感、按配置顺序替换，一个 Unicode 字符变为一个 *，与原 Go 聊天业务一致。
-	SensitiveWords []string `json:",optional"`
+	// ContentGuard:正文送检用的内容安全服务客户端(docs/design/rename-and-content-safety.md §6.6)。
+	// 屏蔽词不再配在本服务里(以前的 SensitiveWords 已删):词库在内容安全服务,可以热更新。
+	// 缺省严格:没配目标拒启,不可达时发言被拒(回可重试的提示),不放过没检过的正文;只有本机 yaml 写 Optional: true 才放宽。
+	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
 
 	// RateLimitPerSecond:每玩家每秒最多接受几条；按SQL时间固定秒窗口计数,并发在途时可能略超。
 	RateLimitPerSecond int `json:",default=5"`
@@ -199,8 +200,5 @@ func (c *Config) Validate() error {
 	if c.HistoryMaxLimit > constants.MaxHistoryPullLimit {
 		return fmt.Errorf("HistoryMaxLimit不得超过%d条权威读取预算", constants.MaxHistoryPullLimit)
 	}
-	if _, err := textfilter.New(c.SensitiveWords); err != nil {
-		return err
-	}
-	return nil
+	return c.ContentGuard.Validate()
 }

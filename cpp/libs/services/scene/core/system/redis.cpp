@@ -323,6 +323,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
             }
             line += " bind_rejected=" + std::to_string(fenceStats.bindRejected);
             line += " session_update_rejected=" + std::to_string(fenceStats.sessionUpdateRejected);
+            line += " stale_gate_instance_rejected=" + std::to_string(fenceStats.staleGateInstanceRejected);
             if (fenceStats.Rejected() > lastEnterFence.Rejected())
             {
                 LOG_WARN << line;

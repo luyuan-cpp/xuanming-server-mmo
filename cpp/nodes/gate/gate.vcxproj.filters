@@ -57,6 +57,9 @@
     <ClCompile Include="handler\rpc\login_session_renewal.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="handler\rpc\minor_play_deadline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="handler\rpc\router_muduo_forward.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -132,6 +135,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\login_session_renewal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\minor_play_deadline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="handler\rpc\router_muduo_forward.h">

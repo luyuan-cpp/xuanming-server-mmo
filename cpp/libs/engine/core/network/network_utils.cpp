@@ -7,6 +7,19 @@
 #include "network/node_utils.h"
 #include "node/system/node/node_util.h"
 #include "thread_context/node_context_manager.h"
+#include "engine/core/type_define/player_login_identity_comp.h"
+#include "thread_context/ecs_context.h"
+
+namespace
+{
+	// 身份组件记的会话就是 sessionId 时它记下的 gate 实例,否则空串(未知)。返回的引用只在当次调用里用。
+	const std::string &RecordedGateInstanceId(entt::entity player, SessionId sessionId)
+	{
+		static const std::string kUnknown;
+		const auto *identity = tlsEcs.actorRegistry.try_get<PlayerLoginIdentityComp>(player);
+		return (identity != nullptr && identity->sessionId == sessionId) ? identity->gateInstanceId : kUnknown;
+	}
+} // namespace
 
 NodeId GetGateNodeId(SessionId session_id)
 {
@@ -53,6 +66,35 @@ std::optional<entt::entity> ResolveLocalZoneGateEntity(SessionId sessionId)
 		return uniqueMatch;
 	}
 	return std::nullopt;
+}
+
+std::optional<entt::entity> ResolveSessionGateEntity(SessionId sessionId, const std::string &gateInstanceId)
+{
+	if (gateInstanceId.empty())
+	{
+		return ResolveLocalZoneGateEntity(sessionId);
+	}
+	return NodeUtils::FindNodeEntityByUuid(eNodeType::GateNodeService, gateInstanceId);
+}
+
+std::optional<entt::entity> ResolvePlayerGateEntity(entt::entity player, SessionId sessionId)
+{
+	return ResolveSessionGateEntity(sessionId, RecordedGateInstanceId(player, sessionId));
+}
+
+std::string BoundGateInstanceId(entt::entity player, SessionId sessionId)
+{
+	if (const auto &recorded = RecordedGateInstanceId(player, sessionId); !recorded.empty())
+	{
+		return recorded;
+	}
+	const auto gateEntity = ResolveLocalZoneGateEntity(sessionId);
+	if (!gateEntity)
+	{
+		return {};
+	}
+	const auto *gateNodeInfo = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService).try_get<NodeInfo>(*gateEntity);
+	return gateNodeInfo != nullptr ? gateNodeInfo->node_uuid() : std::string{};
 }
 
 void ParseIpPort(const std::string &input, std::string &ip, uint16_t &port)

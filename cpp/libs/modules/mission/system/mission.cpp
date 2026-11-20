@@ -121,7 +121,6 @@ uint32_t MissionSystem::AbandonMission(const AbandonParam &param, MissionsComp &
 	missionComp.ClearClaimable(param.missionId);
 	missionComp.GetMutableMissionList().mutable_missions()->erase(param.missionId);
 	missionComp.AbandonMission(param.missionId);
-	missionComp.GetMutableMissionList().mutable_mission_begin_time()->erase(param.missionId);
 	UnregisterMissionIndexes(missionComp, param.missionId, config);
 
 	LOG_INFO << "Mission abandoned: missionId = " << param.missionId

@@ -164,8 +164,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: loginDirectoryFailureTip(err)}
 		return resp, nil
 	}
-	now := time.Now()
-	verdict := l.svcCtx.AntiAddiction.Evaluate(channel, realNamePI, now)
+	verdict := l.svcCtx.AntiAddiction.Evaluate(channel, realNamePI, l.svcCtx.AntiAddiction.Now())
 	resp.AntiAddiction = verdict.Status
 	if verdict.RejectTip != 0 {
 		logx.Infof("Login rejected by anti-addiction: account=%s channel=%s tip=%d sessionId=%d",
@@ -173,8 +172,10 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: verdict.RejectTip}
 		return resp, nil
 	}
-	if err := holdMinorDeadline(l.ctx, l.svcCtx, sessionRef, verdict, now); err != nil {
-		logx.Errorf("Login minor play deadline write failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
+	// 写登录态之前先进防沉迷会话账本(上报上线、记未成年人的截止时刻);登记不上就不放行。
+	// 之后的步骤失败时不撤这条登记:连接还在,它断开或再登录时自然收尾。只有发现连接已断(不会再有断线通知)才当场收尾。
+	if err := beginWatchedSession(l.ctx, l.svcCtx, sessionRef, verdict); err != nil {
+		logx.Errorf("Login anti-addiction session register failed: sessionId=%d account=%s err=%v", sessionDetails.SessionId, account, err)
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisSetFailed)}
 		return resp, nil
 	}
@@ -192,7 +193,8 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	// 没人清理的登录态(最长 SessionExpireMin),还可能误触设备数上限。
 	if err := sessionfence.CommitLogin(l.ctx, l.svcCtx.LoginRedis, sessionRef.Fence(), account, loginsession.TTL()); err != nil {
 		if errors.Is(err, sessionfence.ErrClosed) {
-			// 连接已断开,回包也送不到;什么都没写。
+			// 连接已断开,回包也送不到;登录态什么都没写。断线通知已经处理过、不会再来,账本里刚登记的那条在这里收尾。
+			endWatchedSession(l.ctx, l.svcCtx, sessionRef)
 			logx.Infof("Login skipped: gate connection already closed sessionId=%d account=%s", sessionDetails.SessionId, account)
 			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionNotFound)}
 			return resp, nil
@@ -222,9 +224,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		return resp, nil
 	}
 
-	// 5. 绑定成功:我们自己实名的会话写上报记录、排一条上线(账号目录已在写登录态之前读过)。
-	startAntiAddictionReport(l.ctx, l.svcCtx, sessionRef, verdict, now)
-
+	// 5. (账号目录已在写登录态之前读过,防沉迷会话也在那时登记。)
 	// 6. Issue access/refresh tokens (skip for access_token re-auth to avoid token churn)
 	authType := in.AuthType
 	if authType == "" {

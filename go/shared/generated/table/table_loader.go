@@ -27,6 +27,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActorActionState table: %v", err)
     }
+    if err := AfkPassRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load AfkPassRule table: %v", err)
+    }
     if err := AttributeAllocRatioTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load AttributeAllocRatio table: %v", err)
     }
@@ -181,7 +184,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(53)
+    wg.Add(54)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -210,6 +213,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load ActorActionState table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := AfkPassRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load AfkPassRule table: %v", err)
         }
     }()
     go func() {
@@ -536,6 +545,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newActorActionState.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload ActorActionState failed: %w", err)
     }
+    newAfkPassRule := NewAfkPassRuleTableManager()
+    if err := newAfkPassRule.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload AfkPassRule failed: %w", err)
+    }
     newAttributeAllocRatio := NewAttributeAllocRatioTableManager()
     if err := newAttributeAllocRatio.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload AttributeAllocRatio failed: %w", err)
@@ -735,6 +748,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     ActivityVitalityRuleTableManagerInstance = newActivityVitalityRule
     ActorActionCombatStateTableManagerInstance = newActorActionCombatState
     ActorActionStateTableManagerInstance = newActorActionState
+    AfkPassRuleTableManagerInstance = newAfkPassRule
     AttributeAllocRatioTableManagerInstance = newAttributeAllocRatio
     AttributeAutoPlanTableManagerInstance = newAttributeAutoPlan
     AttributeDimensionTableManagerInstance = newAttributeDimension

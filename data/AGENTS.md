@@ -155,13 +155,14 @@ cd tools/data_table_exporter && py -m pytest -q
 | **ActivityVitalityRule** | `ActivityVitalityRule.xlsx` | `activityvitalityrule_table.proto` | 6 | 6 | 0 | — | — | — | — | — | — | — |
 | **ActorActionCombatState** | `ActorActionCombatState.xlsx` | `actoractioncombatstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
 | **ActorActionState** | `ActorActionState.xlsx` | `actoractionstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
+| **AfkPassRule** | `AfkPassRule.xlsx` | `afkpassrule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **AttributeAllocRatio** | `AttributeAllocRatio.xlsx` | `attributeallocratio_table.proto` | 10 | 10 | 8 | — | — | `dimension_id` `class_id` | `dimension_id→AttributeDimension.id` | — | — | — |
 | **AttributeAutoPlan** | `AttributeAutoPlan.xlsx` | `attributeautoplan_table.proto` | 14 | 6 | 6 | — | — | `class_id` `pool_id` | `pool_id→AttributePool.id` `dimension→AttributeDimension.id` | — | — | — |
 | **AttributeDimension** | `AttributeDimension.xlsx` | `attributedimension_table.proto` | 12 | 12 | 8 | — | — | `pool_id` | `pool_id→AttributePool.id` | — | — | — |
 | **AttributePool** | `AttributePool.xlsx` | `attributepool_table.proto` | 10 | 10 | 2 | — | — | `owner_type` | — | — | — | — |
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
-| **Buff** | `Buff.xlsx` | `buff_table.proto` | 63 | 53 | 98 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
+| **Buff** | `Buff.xlsx` | `buff_table.proto` | 64 | 54 | 98 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
 | **Cooldown** | `Cooldown.xlsx` | `cooldown_table.proto` | 2 | 2 | 9 | — | — | — | — | — | — | — |
@@ -190,8 +191,10 @@ cd tools/data_table_exporter && py -m pytest -q
 | **MysteryMerchantGoods** | `MysteryMerchantGoods.xlsx` | `mysterymerchantgoods_table.proto` | 8 | 8 | 12 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **MysteryMerchantRule** | `MysteryMerchantRule.xlsx` | `mysterymerchantrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **MysteryMerchantSpot** | `MysteryMerchantSpot.xlsx` | `mysterymerchantspot_table.proto` | 6 | 6 | 6 | — | — | `scene_config_id` | — | — | — | — |
-| **Pet** | `Pet.xlsx` | `pet_table.proto` | 24 | 15 | 22 | — | — | — | — | — | — | — |
-| **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 6 | 6 | 1 | — | — | — | — | — | — | — |
+| **Pet** | `Pet.xlsx` | `pet_table.proto` | 25 | 16 | 22 | — | — | — | — | — | — | — |
+| **PetEntry** | `PetEntry.xlsx` | `petentry_table.proto` | 10 | 10 | 21 | — | — | — | — | — | — | — |
+| **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
+| **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 4 | 4 | 5 | — | — | — | — | — | — | — |
 | **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 5 | 5 | 7 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
 | **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
@@ -202,6 +205,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **51** 张表、**598** 个物理列、**450** 个进产物的字段。
+合计 **54** 张表、**624** 个物理列、**476** 个进产物的字段。
 
 <!-- END GENERATED -->

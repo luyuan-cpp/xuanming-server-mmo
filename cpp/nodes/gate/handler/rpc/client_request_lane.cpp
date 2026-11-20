@@ -12,6 +12,7 @@
 #include "gate_codec.h"
 #include "login_admission.h"
 #include "login_session_renewal.h"
+#include "minor_play_deadline.h"
 #include "session_details_builder.h"
 #include "error_reporter/error_reporter.h"
 #include "node/system/grpc_call_deadline.h"
@@ -377,11 +378,16 @@ bool OnRouterReply(const SessionDetails &echoed, const ::google::protobuf::Messa
 	++tlsCounters.replied;
 	// 先记 Login 结果,再放行下一条:同一会话里排在 Login 后面的 CreatePlayer / EnterGame 在 Pump 时要看到它。
 	// 会话已按代次核对过(FindLiveSession),旧连接迟到的 Login 回包不会记到撞号的新连接上。
-	if (call->messageId == ClientPlayerLoginLoginMessageId && gate_login_admission::IsLoginReplySuccess(reply))
+	if (call->messageId == ClientPlayerLoginLoginMessageId)
 	{
-		session->loginSucceeded = true;
-		// 从这次登录起,连接活着期间由 gate 定期向 login 续租登录态(login_session_renewal.h)。
-		gate_login_renewal::NoteLoginSucceeded(call->sessionId, *session, std::chrono::steady_clock::now());
+		if (const auto login = gate_login_admission::SuccessfulLoginResponse(reply))
+		{
+			session->loginSucceeded = true;
+			// 从这次登录起,连接活着期间由 gate 定期向 login 续租登录态(login_session_renewal.h)。
+			gate_login_renewal::NoteLoginSucceeded(call->sessionId, *session, std::chrono::steady_clock::now());
+			// 未成年人当天的截止时刻随成功的回包下来,到点由 gate 自己关连接(minor_play_deadline.h)。
+			gate_minor_deadline::NoteLoginSucceeded(call->sessionId, *session, login->anti_addiction().play_deadline_ms());
+		}
 	}
 	if (const auto conn = session->conn.lock())
 	{

@@ -58,6 +58,7 @@ const (
 func (s *AccountDirectoryStore) ConfigurePlayerNames(names *PlayerNameStore) {
 	if names != nil {
 		s.names = names
+		s.renames = names
 	}
 }
 
@@ -106,7 +107,7 @@ func (s *AccountDirectoryStore) bindRoleName(ctx context.Context, role *base.Acc
 		return fmt.Errorf("re-read the committed role: %w", err)
 	}
 	if owned == nil || owned.GetAccount() == "" || owned.GetRole().GetName() != role.GetName() {
-		// 提交点之后才会走到这里,角色行一定在。对不上说明有别的写改了它(删角、改名都不该发生):不绑,留给人看。
+		// 提交点之后才会走到这里,角色行一定在。对不上说明有别的写改了它(删角;改名要等建角的绑定之后才轮得到):不绑,留给人看。
 		return bindFailure(NameBindFailureRoleMismatch, errors.New("the role row is missing, removed or carries another name; refusing to bind"))
 	}
 	// 补登记(BindRestored)把同一个时刻写进 created_ms 和 bound_ms,撤销按它认出本次写的那一行。
@@ -233,6 +234,10 @@ func (s *AccountDirectoryStore) dropSettledRemoval(ctx context.Context, player u
 		}
 		if old.Account != "" {
 			return errors.New("the role is not removed, keeping its removal row")
+		}
+		// 改名记录跟着角色一起删(里面有名字);删角开始时已经核过它不是没收完的。
+		if _, err = tx.ExecContext(ctx, "DELETE FROM account_role_rename WHERE player_id=?", player); err != nil {
+			return err
 		}
 		_, err = tx.ExecContext(ctx, "DELETE FROM account_role_removal WHERE player_id=?", player)
 		return err

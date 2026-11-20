@@ -1,0 +1,27 @@
+name: 玩家文字字段送检守卫
+
+# 客户端请求里出现的 string 字段必须登记「送检」「豁免」或「待接入」之一(docs/design/rename-and-content-safety.md §6.6):
+# 屏蔽字是按入口接的,以后谁加了新的文字字段而忘了送检,不会有任何报错。登记表与判定规则只写在
+# tools/scripts/tests/test_client_text_fields_reviewed.py 的头注释里,这里不重复。
+# 只读 proto 源码,不编译、不联网,秒级完成。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  client-text-fields:
+    name: 客户端请求的文字字段都已表态
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 核对登记表
+        run: python3 -m unittest discover -s tools/scripts/tests -p 'test_client_text_fields_reviewed.py' -v

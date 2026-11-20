@@ -508,6 +508,8 @@ public:
     std::vector<RpcDoneCallback> parked;
     // ProcessClientPlayerMessage 执行时的当前 trace,按请求的 session_id 记(链路追踪用例读)。
     std::vector<std::pair<uint32_t, tracing::TraceContext>> processTraces;
+    // ProcessClientPlayerMessage 执行时 ctx 上的握手身份,按请求的 session_id 记(握手身份透传用例读)。
+    std::vector<std::pair<uint32_t, std::string>> processPeers;
 
     std::optional<tracing::TraceContext> ProcessTraceOf(uint32_t sessionId) const
     {
@@ -522,13 +524,14 @@ public:
     }
 
     // 同步回显:返回即由框架回包。
-    void ProcessClientPlayerMessage(::google::protobuf::RpcController*,
+    void ProcessClientPlayerMessage(::google::protobuf::RpcController* controller,
                                     const ::ProcessClientPlayerMessageRequest* request,
                                     ::ProcessClientPlayerMessageResponse* response,
                                     ::google::protobuf::Closure*) override
     {
         ++processCalls;
         processTraces.emplace_back(request->session_id(), tracing::Current());
+        processPeers.emplace_back(request->session_id(), RpcController::From(controller).HandshakePeerUuid());
         response->set_session_id(request->session_id());
         *response->mutable_message_content() = request->message_content();
     }
@@ -963,6 +966,45 @@ TEST_F(RpcChannelLoopback, RoundTripCompletesExactlyOnceAfterCallMethodReturned)
     });
     EXPECT_EQ(outstanding, 0u);
     EXPECT_EQ(handlerCalls, 2);
+}
+
+TEST_F(RpcChannelLoopback, HandshakePeerRecordedOnTheInboundChannelReachesEveryLaterDispatch)
+{
+    // 入站侧握手成功时 NodeHandshakeManager::OnNodeHandshake 经 RecordHandshakePeer 记下对端进程;之后这条连接上每次派发的
+    // ctx 都带着它(docs/design/muduo-rpc-channel.md §8.3)。scene 按它认 gate 实例、不信消息体自报
+    // (docs/design/scene-enter-chain-residuals.md §14)。宿主不构造 Node,这里直接调记录入口,与 OnNodeHandshake 同一个。
+    serverMode_ = ServerMode::kChannel;
+    ASSERT_NO_FATAL_FAILURE(ConnectRpcClient());
+    auto log = std::make_shared<CallLog>();
+    constexpr const char kPeer[] = "gate-node3-new-process";
+
+    RunInLoopAndWait([&] { Issue(*client_, log, "before", kProcessId, ProcessRequest(11)); });
+    ASSERT_TRUE(log->WaitForCount(1));
+
+    bool recorded = false;
+    bool recordedWithoutConnection = true;
+    RunInLoopAndWait([&] {
+        recorded = RpcChannel::RecordHandshakePeer(serverConn_.lock(), kPeer);
+        recordedWithoutConnection = RpcChannel::RecordHandshakePeer(TcpConnectionPtr{}, "ignored");
+    });
+    EXPECT_TRUE(recorded) << "服务端连接的 context 里放着本连接的 channel";
+    EXPECT_FALSE(recordedWithoutConnection) << "空连接什么都不做";
+
+    RunInLoopAndWait([&] { Issue(*client_, log, "after", kProcessId, ProcessRequest(12)); });
+    ASSERT_TRUE(log->WaitForCount(2));
+
+    std::vector<std::pair<uint32_t, std::string>> peers;
+    std::string clientSidePeer = "unread";
+    RunInLoopAndWait([&] {
+        peers = service_.processPeers;
+        clientSidePeer = client_->channel() ? client_->channel()->HandshakePeerUuid() : std::string("no channel");
+    });
+    ASSERT_EQ(peers.size(), 2u);
+    EXPECT_EQ(peers[0].first, 11u);
+    EXPECT_EQ(peers[0].second, "") << "握手之前:ctx 上没有对端身份";
+    EXPECT_EQ(peers[1].first, 12u);
+    EXPECT_EQ(peers[1].second, kPeer) << "记下之后的派发都读得到";
+    EXPECT_EQ(clientSidePeer, "") << "只记在入站那一侧的 channel 上,出站 channel 恒为空";
 }
 
 TEST_F(RpcChannelLoopback, TypedCallMethodChecksTheResponseTypeAgainstTheRegistry)

@@ -31,6 +31,24 @@ Kafka:
   Brokers:
     - "localhost:9092"
 
+# 正文送检:聊天正文在落库前送内容安全服务(go/content_guard;docs/design/rename-and-content-safety.md §6.6)。
+# 屏蔽词库在那边,可热更新;本服务不再配词表(以前的 SensitiveWords 已删)。
+# 缺省严格:没配目标拒启,内容安全不可达时这条发言被拒(回可重试的提示),不放过没检过的正文。Optional: true 只许本机这样写:
+# 内容安全没起时不送检、原样放行并打 ERROR;K8s 的 ConfigMap 不写这一键(k8s_deploy.ps1 的 New-ContentGuardClientYaml)。
+# NonBlock:内容安全晚起不挡 chat 启动。熔断:它整体不可用时快速失败。TimeoutMs 是单次送检的时限。
+ContentGuard:
+  Rpc:
+    Etcd:
+      Hosts:
+        - 127.0.0.1:2379
+      Key: contentguard.rpc
+    Timeout: 500
+    NonBlock: true
+    Middlewares:
+      Breaker: true
+  Optional: true
+  TimeoutMs: 300
+
 # zrpc 服务端整体超时(毫秒)。必须 ≤ 路由服 ForwardTimeoutMs(5000)− 1000:
 # chat 要先于路由服超时把 in-band 结果回去,否则"写入已生效 + 客户端看到失败"会诱发重发。
 # config.Validate 拒绝 0 与 >4000。

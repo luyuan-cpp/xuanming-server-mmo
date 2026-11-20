@@ -119,6 +119,7 @@ set(SOURCE_FILES
     player/system/team_follow_formation.cpp
     player/system/team_follow_system.cpp
     player/system/afk_hosting.cpp
+    player/system/afk_pass.cpp
     player/system/player_landing.cpp
     player/system/player_skill.cpp
     player/system/player_support_effects.cpp
@@ -129,8 +130,10 @@ set(SOURCE_FILES
     player/system/player_equipment_material_reward.cpp
     player/system/player_mystery_merchant.cpp
     player/system/player_tip.cpp
+    player/system/content_guard_client.cpp
     player/system/stress_test_probe.cpp
     player/system/bag_marshal.cpp
+    spatial/system/actor_move_broadcast.cpp
     spatial/system/aoi.cpp
     spatial/system/aoi_load.cpp
     spatial/system/grid.cpp

@@ -1,0 +1,22 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum afk_pass_error {
+  kAfk_pass_errorOK = 0;
+
+  kAfkPassPriceChanged = 32000;
+
+  kAfkPassCurrencyNotEnough = 32001;
+
+  kAfkPassStackLimit = 32002;
+
+  kAfkPassFrozen = 32003;
+
+  kAfkPassUnavailable = 32004;
+
+};

@@ -157,6 +157,11 @@ message BaseDeployConfig {
 
     // span 导出(见 TracingConfig)。22、23 没用过但不确定历史上有无存量配置,新字段从 25 起。yaml 键 Tracing。
     TracingConfig tracing = 25;
+
+    // 内容安全(ContentGuardNodeService,go/content_guard)对本节点是否可有可无。yaml 键 ContentGuard.Optional。
+    // 缺省 false = 必须可达:发现不到实例或调用失败时,玩家填写的名字一律不放行(K8s 的 node-config 不写这一键)。
+    // 只有本机 bin/etc 写 true:内容安全没起时不送检、原样放行并打 ERROR(docs/design/rename-and-content-safety.md §6.6)。
+    bool content_guard_optional = 26;
 }
 
 // Game config

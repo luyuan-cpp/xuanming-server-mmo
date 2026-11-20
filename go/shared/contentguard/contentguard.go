@@ -2,8 +2,9 @@
 // (docs/design/rename-and-content-safety.md §6.6)。
 //
 // 口径收在这一处,调用方不用各写一遍:
-//   - 内容安全服务不可达、超时、回了不认识的结局,一律不放行(Unavailable 或 Reject):宁可让玩家稍后再试,也不放过没检过的文字;
-//   - 没配目标时(只允许本机开发,见 Conf.Required)跳过送检,一律放行;
+//   - 缺省严格:必须配目标(没配拒启);内容安全服务不可达、超时、回了不认识的结局,一律不放行(Unavailable 或 Reject),
+//     宁可让玩家稍后再试,也不放过没检过的文字;
+//   - 只有显式写了 Optional: true(本机开发)才放宽:没配目标或服务不可达时不送检、原样放行,并打 ERROR;
 //   - 被检文字不进日志。
 package contentguard
 
@@ -24,8 +25,9 @@ type Conf struct {
 	// Rpc 是内容安全服务的 zrpc 客户端配置,按 go-zero 的发现键找(Etcd.Key: contentguard.rpc);
 	// 建议 NonBlock: true,内容安全服务晚起不挡本服务启动。三种目标(Etcd / Endpoints / Target)都没写 = 没配。
 	Rpc zrpc.RpcClientConf `json:",optional"`
-	// Required 为真时没配目标就拒绝启动。staging / prod 必须为真;本机缺省为假,没配时跳过送检并在启动时打一行警告。
-	Required bool `json:",default=false"`
+	// Optional 为真时内容安全是可有可无的:没配目标、或服务不可达时不送检,原样放行并打 ERROR。只许本机开发这样写。
+	// 缺省为假(staging / prod 的 ConfigMap 不写这一键):没配目标拒启,服务不可达时文字不放行。
+	Optional bool `json:",default=false"`
 	// TimeoutMs 是单次送检的时限(毫秒)。判定是纯内存计算,正常在几毫秒内;时限只是兜底。
 	TimeoutMs int64 `json:",default=300"`
 }
@@ -37,8 +39,8 @@ func (c Conf) Configured() bool {
 
 // Validate 核对配置自身是否合理。
 func (c Conf) Validate() error {
-	if c.Required && !c.Configured() {
-		return errors.New("ContentGuard.Required is true but ContentGuard.Rpc has no target (Etcd / Endpoints / Target)")
+	if !c.Configured() && !c.Optional {
+		return errors.New("ContentGuard.Rpc has no target (Etcd / Endpoints / Target): configure it, or set ContentGuard.Optional: true for local development only")
 	}
 	if c.Configured() && (c.TimeoutMs < 20 || c.TimeoutMs > 5000) {
 		return errors.New("ContentGuard.TimeoutMs must be in [20, 5000]")
@@ -83,30 +85,36 @@ func (f Func) Check(ctx context.Context, scene cgpb.TextScene, playerID uint64, 
 	return f(ctx, scene, playerID, text)
 }
 
-// Client 是内容安全服务的客户端。零值(没有 rpc)表示没配目标:Check 一律放行。
+// Client 是内容安全服务的客户端。零值(没有 rpc)表示没配目标:Check 一律放行,只有 Optional 的配置才建得出这样的客户端。
 type Client struct {
-	rpc         cgpb.ContentGuardClient
-	timeout     time.Duration
+	rpc     cgpb.ContentGuardClient
+	timeout time.Duration
+	// optional 为真时调用失败按放行处理(Conf.Optional)。
+	optional    bool
 	lastLogUnix atomic.Int64
 }
 
-// New 按配置建客户端。没配目标且不要求时返回一个一律放行的客户端并打一行警告;service 是调用方的名字,只进日志。
+// New 按配置建客户端;service 是调用方的名字,只进日志。
+// 没配目标且 Optional 时返回一个一律放行的客户端并打一行 ERROR;没配目标又不是 Optional 时返回错误(调用方拒启)。
 func New(service string, conf Conf, options ...zrpc.ClientOption) (*Client, error) {
 	if err := conf.Validate(); err != nil {
 		return nil, err
 	}
 	if !conf.Configured() {
-		logx.Errorf("[contentguard] %s has no ContentGuard.Rpc target: player text is NOT checked (allowed for local development only)", service)
-		return &Client{}, nil
+		logx.Errorf("[contentguard] %s has no ContentGuard.Rpc target and ContentGuard.Optional is true: player text is NOT checked (local development only)", service)
+		return &Client{optional: true}, nil
+	}
+	if conf.Optional {
+		logx.Errorf("[contentguard] %s runs with ContentGuard.Optional: true: player text passes unchecked whenever the content guard is unreachable (local development only)", service)
 	}
 	rpc, err := zrpc.NewClient(conf.Rpc, options...)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{rpc: cgpb.NewContentGuardClient(rpc.Conn()), timeout: time.Duration(conf.TimeoutMs) * time.Millisecond}, nil
+	return &Client{rpc: cgpb.NewContentGuardClient(rpc.Conn()), timeout: time.Duration(conf.TimeoutMs) * time.Millisecond, optional: conf.Optional}, nil
 }
 
-// NewWithClient 用现成的 gRPC 客户端建(测试、或调用方自己管连接时用)。
+// NewWithClient 用现成的 gRPC 客户端建一个严格的客户端(测试、或调用方自己管连接时用)。
 func NewWithClient(rpc cgpb.ContentGuardClient, timeout time.Duration) *Client {
 	return &Client{rpc: rpc, timeout: timeout}
 }
@@ -124,6 +132,9 @@ func (c *Client) Check(ctx context.Context, scene cgpb.TextScene, playerID uint6
 	out, err := c.rpc.CheckText(callCtx, &cgpb.CheckTextRequest{Scene: scene, Text: text, PlayerId: playerID})
 	if err != nil {
 		c.logFailure(scene, err)
+		if c.optional {
+			return Result{Verdict: Pass}
+		}
 		return Result{Verdict: Unavailable}
 	}
 	return FromResponse(out)
@@ -148,6 +159,10 @@ func (c *Client) logFailure(scene cgpb.TextScene, err error) {
 	now := time.Now().Unix()
 	last := c.lastLogUnix.Load()
 	if now == last || !c.lastLogUnix.CompareAndSwap(last, now) {
+		return
+	}
+	if c.optional {
+		logx.Errorf("[contentguard] check failed (scene=%s), passing the text UNCHECKED because ContentGuard.Optional is true: %v", scene, err)
 		return
 	}
 	logx.Errorf("[contentguard] check failed (scene=%s), treating the text as unusable: %v", scene, err)

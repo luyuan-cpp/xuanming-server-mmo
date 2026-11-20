@@ -80,7 +80,7 @@ def test_every_table_starts_with_id_column(all_tables: list[TableSchema]):
 
 
 def test_bit_index_tables_use_a_single_marked_column(all_tables: list[TableSchema]):
-    """位序表只能有一个 bit_index 标记列——_read_max_bit_index_column_value 只看第一个,多标一个就会静默取错列。"""
+    """位序表只能有一个 bit_index 标记列:位序按首列 id 发放,多标一列只能是配置写错了。"""
     for table in all_tables:
         marked = {c.name for c in table.bit_index_columns}
         assert len(marked) <= 1, f"{table.name} 标了多个 bit_index 列:{sorted(marked)}"

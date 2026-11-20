@@ -47,7 +47,7 @@ const (
 	PlayerStoreKind_PLAYER_STORE_KIND_GROWTH PlayerStoreKind = 3
 	// 职业、注册时间、名字副本、外观、性别、近期战斗结果、物品获取封禁、压测探针。都很小,大多建角后不变
 	PlayerStoreKind_PLAYER_STORE_KIND_PROFILE PlayerStoreKind = 4
-	// 等级、基础属性与当前血蓝。小,战斗和升级时变
+	// 等级、基础属性与当前血蓝、技能冷却、下线保留的 Buff。小,战斗和升级时变
 	PlayerStoreKind_PLAYER_STORE_KIND_CHARACTER PlayerStoreKind = 6
 	// 货币、资产通道账本、收件箱账本、神秘商人限购。小,任何经济行为都会改它
 	PlayerStoreKind_PLAYER_STORE_KIND_WALLET PlayerStoreKind = 7

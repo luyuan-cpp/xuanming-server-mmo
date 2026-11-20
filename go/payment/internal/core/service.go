@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"google.golang.org/protobuf/proto"
 
 	"payment/internal/channel"
 	"payment/internal/data"
@@ -123,10 +122,8 @@ type Options struct {
 	Products              []Product
 	TestPolicies          map[string]TestPolicy // 渠道名 → 规则;没写的渠道不接受测试交易
 	// RealNames 非 nil 时执行未成年人充值限额(Compliance.MinorSpendingGate=realname,minor.go);nil = 不接实名。
+	// 单次、每日、每月的数字都在 shared/antiaddiction.SpendLimitAt。
 	RealNames RealNames
-	// 未成年人单日累计上限(分),按年龄段:8 周岁以上未满 16 周岁、16 周岁以上未满 18 周岁。0 = 不设。
-	DailyLimitFenAge8To16  uint64
-	DailyLimitFenAge16To18 uint64
 }
 
 func (o Options) withDefaults() Options {
@@ -488,12 +485,11 @@ func (s *Service) activeQuery(ctx context.Context, intent *paymentpb.PaymentInte
 	if err := s.record(ctx, ch, *result.Payment, result.State == channel.TradeRefundedOutside); err != nil {
 		return intent, unknownOnly(err)
 	}
-	refreshed := proto.Clone(intent).(*paymentpb.PaymentIntentRecord)
-	refreshed.State = data.IntentPaid
-	if result.State == channel.TradeRefundedOutside {
-		refreshed.State = data.IntentClosed
+	// 记账之后意图可能转已付,也可能关掉(渠道侧已退、这笔钱不算订单的付款):重读,不猜。
+	if refreshed, err := s.store.Intent(ctx, intent.OrderHi, intent.OrderLo); err == nil {
+		return refreshed, nil
 	}
-	return refreshed, nil
+	return intent, nil
 }
 
 // query 按意图查一次渠道(带上查单要用的付款人与渠道引用)。
@@ -708,7 +704,7 @@ func (s *Service) record(ctx context.Context, ch channel.Channel, payment channe
 	if refundedOutside {
 		orphan("refunded at the channel before this service recorded it; not delivered")
 	}
-	if rec.MallState == data.MallPending && intent != nil && intent.State == data.IntentClosed && minorIntent(intent) {
+	if intent != nil && intent.State == data.IntentClosed && minorIntent(intent) && countsForIntent(rec, intent) {
 		if err := s.recheckLatePayment(ctx, rec, intent, now, orphan); err != nil {
 			return err
 		}
@@ -727,24 +723,9 @@ func (s *Service) record(ctx context.Context, ch channel.Channel, payment channe
 			ch.Name(), tail(payment.TransactionID))
 		return ErrFactConflict
 	}
-	if inserted && (stored.OrderHi != 0 || stored.OrderLo != 0) {
-		switch {
-		case refundedOutside:
-			_, err = s.store.CloseIntent(ctx, stored.OrderHi, stored.OrderLo, nowMs)
-		case stored.MallState != data.MallOrphan:
-			err = s.store.MarkIntentPaid(ctx, stored.OrderHi, stored.OrderLo, nowMs)
-		}
-		if err != nil {
-			return err
-		}
-	} else if !inserted && stored.MallState != data.MallOrphan && !data.Revoked(stored.FactRevision) && (stored.OrderHi != 0 || stored.OrderLo != 0) {
-		// 重复报告:补做上一次可能没做完的第二步(幂等)。未成年人的意图在这期间到期关闭了(额度已释放)的,在额度行锁下重新计入。
-		if intent != nil && intent.State == data.IntentClosed && minorIntent(intent) {
-			err = s.recountMinor(ctx, intent, nowMs)
-		} else {
-			err = s.store.MarkIntentPaid(ctx, stored.OrderHi, stored.OrderLo, nowMs)
-		}
-		if err != nil {
+	// 重复报告补做上一次可能没做完的第二步;已被渠道撤销的事实不再改意图(revoke 管它)。
+	if (stored.OrderHi != 0 || stored.OrderLo != 0) && (inserted || !data.Revoked(stored.FactRevision)) {
+		if err := s.settleIntent(ctx, ch, stored, intent, inserted, refundedOutside, nowMs); err != nil {
 			return err
 		}
 	}
@@ -760,6 +741,36 @@ func (s *Service) record(ctx context.Context, ch channel.Channel, payment channe
 	}
 	s.Kick()
 	return nil
+}
+
+// settleIntent 是记账的第二步:按记下的这笔钱改订单的意图。首次记账与重复报告都走这里,幂等。
+//   - 渠道侧已退,或这笔钱不算订单的付款(见 countsForIntent)而渠道一个商户单号只能付成一次(我们定价的渠道):意图再也付不成,
+//     关掉。不关的话后台每次查单都得到「已付」、记账判重复后就返回,意图一直停在等付款,每个租约周期查一次渠道、永不停,
+//     未成年人的在途额度也一直占着。CloseIntent 只改还在等付款的意图,已由别的付款付清的不受影响。
+//   - 商店渠道上不算数的那笔:不动意图,同一张订单之后还可能有一笔对得上的购买,意图照常到期。
+//   - 算数的:转已付。重复报告时未成年人的意图已到期关闭(额度已释放)的,在额度行锁下重新计入。
+func (s *Service) settleIntent(ctx context.Context, ch channel.Channel, fact *paymentpb.PaymentTxnRecord, intent *paymentpb.PaymentIntentRecord, inserted, refundedOutside bool, nowMs uint64) error {
+	counts := countsForIntent(fact, intent)
+	switch {
+	case refundedOutside || (!counts && !isReceiptChannel(ch)):
+		_, err := s.store.CloseIntent(ctx, fact.OrderHi, fact.OrderLo, nowMs)
+		return err
+	case !counts:
+		return nil
+	case !inserted && intent != nil && intent.State == data.IntentClosed && minorIntent(intent):
+		return s.recountMinor(ctx, intent, nowMs)
+	default:
+		return s.store.MarkIntentPaid(ctx, fact.OrderHi, fact.OrderLo, nowMs)
+	}
+}
+
+// countsForIntent 报告这笔钱算不算订单意图的付款:没转人工、没被本服务退掉,金额与币种和意图冻结的一致。
+// 对不上的商城按异常付款退掉、不绑定订单(AMOUNT_MISMATCH / CURRENCY_MISMATCH)。没有意图时无从比较,照常算。
+func countsForIntent(fact *paymentpb.PaymentTxnRecord, intent *paymentpb.PaymentIntentRecord) bool {
+	if fact.MallState == data.MallOrphan || fact.RefundState == data.RefundSucceeded || fact.RefundState == data.RefundReported {
+		return false
+	}
+	return intent == nil || (fact.PaidAmountMinor == intent.AmountMinor && fact.PaidCurrency == intent.Currency)
 }
 
 // screen 按订单意图核对一笔付款,不合格的记成人工处理。只在付款认得出订单时调用。

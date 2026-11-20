@@ -126,6 +126,7 @@ const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
 	"  `name_norm` VARCHAR(191) NOT NULL COMMENT 'pb:3',\n" +
 	"  `created_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:4',\n" +
 	"  `bound_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:5',\n" +
+	"  `held_until_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:6',\n" +
 	"  PRIMARY KEY (`name_norm`) /*T![clustered_index] NONCLUSTERED */\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin" +
 	" /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */ COMMENT='player_name';"
@@ -282,6 +283,7 @@ var bootstrapTables = map[string]string{
 	AccountRoleAdmissionTableName:    accountRoleAdmissionDDL,
 	AccountRoleTradeHolderTableName:  accountRoleTradeHolderDDL,
 	AccountRoleRemovalTableName:      accountRoleRemovalDDL,
+	AccountRoleRenameTableName:       accountRoleRenameDDL,
 	AccountRoleRefTableName:          accountRoleRefDDL,
 	AccountDeletionReceiptTableName:  accountDeletionReceiptDDL,
 	DirectoryShardTableName:          directoryShardDDL,
@@ -1140,6 +1142,7 @@ func directoryTableMessages(slot int) []proto.Message {
 		&dbpb.AccountRoleAdmission{},
 		&dbpb.AccountRoleTradeHolder{},
 		&dbpb.AccountRoleRemoval{},
+		&dbpb.AccountRoleRename{},
 		&dbpb.AccountDeletionReceipt{},
 	}
 	if slot == 0 {

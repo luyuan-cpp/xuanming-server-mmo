@@ -299,6 +299,12 @@ public final class BuffTableComp {
         }
     }
 
+    public record Keep_on_logout(int value) {
+        public static Keep_on_logout from(BuffTable row) {
+            return new Keep_on_logout(row.getKeepOnLogout());
+        }
+    }
+
     public record Interval_effect(List<Double> values) {
         public static Interval_effect from(BuffTable row) {
             return new Interval_effect(row.getIntervalEffectList());

@@ -1,0 +1,104 @@
+# 支付服务(go/payment,docs/design/payment-recharge.md §22)的告警。钱已经进了渠道,所以盯的是「收了钱却没走完」的每一段:
+# 回调没处理成、事实写不进库、商城迟迟没记下、商城拒收、渠道退不了款。
+# 多副本的 counter 用 sum(rate / increase);商城积压取各副本的 max(只有跑后台任务的 stable 副本发布这个值)。
+# 须抓取 payment Pod 的 metrics(9280);进程或抓取缺失沿现有工作负载 / 探针告警处理。
+# 所有 label 只有有限的 channel / op / outcome,不得增加玩家号、订单号或交易号。
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: payment-alerts
+  labels:
+    app: payment
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: payment.money
+      interval: 60s
+      rules:
+        - alert: PaymentMallSyncStalled
+          expr: |
+            max(payment_mall_oldest_pending_seconds) > 600
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "有付款超过 10 分钟还没记进商城"
+            description: >-
+              渠道已收款、支付服务已记下事实,但商城一直没有记账,玩家付了钱拿不到货。
+              查商城是否可达、支付到商城的调用密钥(commerce-payment)是否一致、商城的允许渠道里有没有这个渠道;支付服务会一直重试,不用人工补单。
+
+        - alert: PaymentMallRejected
+          expr: |
+            sum(increase(payment_mall_pushes_total{outcome="rejected"}[15m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "商城拒收了一笔付款或修订,需要人工处理"
+            description: >-
+              商城回了 400 或 409:交易号已属于别的订单、金额币种与已记下的不同,或请求非法。支付服务不再重试这一笔。
+              按支付服务日志里的订单号与交易号后缀核对两边记录,钱在渠道里,由人决定退款或补单。
+
+        - alert: PaymentFactStoreFailing
+          expr: |
+            sum(rate(payment_facts_total{outcome="store_error"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "付款事实持续写不进支付库"
+            description: "回调会回失败让渠道重发,不丢钱,但到账被推迟。查 mmorpg_payment 的连接、写者授权与锁等待。"
+
+        - alert: PaymentFactNeedsManual
+          expr: |
+            sum by (channel) (increase(payment_facts_total{outcome=~"orphan|conflict"}[15m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.channel }} 有付款转人工"
+            description: >-
+              orphan:对不上订单、商品或买家的付款(不推商城,谷歌的会在 3 天后自动退款);conflict:同一交易号两次报来的内容不同。
+              少量 orphan 多半是测试交易或过期订单,持续出现要核对商品号映射与渠道后台的配置。
+
+    - name: payment.channel
+      interval: 60s
+      rules:
+        - alert: PaymentNotificationRetrying
+          expr: |
+            sum by (channel) (rate(payment_notifications_total{outcome="retry"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.channel }} 的回调持续处理不成"
+            description: "支付服务回了失败,渠道会重发。常见原因是支付库写不进或正在排空;渠道的重发有次数上限,拖久了要靠主动查单兜底。"
+
+        - alert: PaymentNotificationRejected
+          expr: |
+            sum by (channel) (rate(payment_notifications_total{outcome="rejected"}[5m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.channel }} 的回调持续验签不过"
+            description: "渠道换了证书或公钥而配置没跟上时,真回调会全部被拒;也可能是有人在探测回调地址。先核对渠道后台的密钥、证书与回调配置。"
+
+        - alert: PaymentChannelCallFailing
+          expr: |
+            sum by (channel, op) (rate(payment_channel_calls_total{outcome="error"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "调 {{ $labels.channel }} 的 {{ $labels.op }} 接口持续失败"
+            description: "传输失败或超时。下单失败玩家付不了款;查单、核验失败时到账只能等渠道回调。查出网、DNS 与渠道的服务状态。"
+
+        - alert: PaymentRefundFailed
+          expr: |
+            sum by (channel) (increase(payment_refunds_total{outcome="failed"}[15m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.channel }} 有退款退不了,已转人工"
+            description: "渠道没有开发者退款接口(苹果)或明确拒绝了退款。商城的退款待办已标成 MANUAL,要在渠道后台手工处理后登记。"

@@ -9,12 +9,14 @@
 #     正常客户端拿到票据后毫秒级握手,这个数「高且不周转」就是有连接占着位置不认证;
 #   - battle_accepted_total:接纳的直连,rate() 就是新建连接速率;
 #   - battle_rejected_total{reason}:被拒的直连,reason ∈ capacity / accept_rate / shutting_down / no_token_secret /
-#     preauth_budget / preauth_early_drop;
+#     preauth_budget / preauth_early_drop / source_rate;
 #   - battle_handshake_duration_ms:建连到票据握手成功的耗时直方图;
 #   - battle_preauth_reaped_total:建连满握手期限仍未握手、被关掉的直连;
 #   - battle_preauth_evicted_total:未认证池承压时,建连满 3 秒还没握手、被淘汰给新直连让位的直连;
 #   - battle_preauth_budget / battle_preauth_early_drop_start / battle_preauth_evictable_age_ms:未验签预算参数
-#     (BattleMaxConnections 4096 时 1000 / 500 / 3000ms;BATTLE_PREAUTH_* 可覆盖)。
+#     (BattleMaxConnections 4096 时 1000 / 500 / 3000ms;BATTLE_PREAUTH_* 可覆盖);
+#   - battle_source_rate_limit_per_second / battle_source_burst / battle_source_rate_active / battle_source_tracked /
+#     battle_source_untracked_total:按来源前缀限速(缺省关闭,BATTLE_SOURCE_RATE_PER_SECOND 打开;只在承压时、只对公网源地址生效)。
 # 规则引用的指标名与 reason 取值由 tools/scripts/tests/battle_connection_alerts_contract.tests.ps1 对照 C++ 源码钉住。
 # 处置见 docs/ops/gate-kernel-tuning-runbook.md §3.3。
 #
@@ -125,6 +127,37 @@ spec:
               P99 正常说明涌进来的连接大多不握手,是突发攻击,预算在按设计挡,去上游处置来源;P99 也在变慢说明是 battle
               自己卡顿或网络变差,拒掉的多半是真实玩家,先处理卡顿,反复出现再按运维手册 §3.3 用 BATTLE_PREAUTH_BUDGET /
               BATTLE_PREAUTH_EARLY_DROP_START 调大。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 按来源限速在拒绝(只在开了 BATTLE_SOURCE_RATE_PER_SECOND 之后、承压时才会有):某个公网来源前缀建连太快,
+        # 超出它那一份(推荐值是全局缺省持续速率的十分之一)。经边缘 nginx 进来的小游戏直连是内网地址,不受这一道管。
+        - alert: BattleSourceRateLimited
+          expr: |
+            sum by (namespace, instance) (increase(battle_rejected_total{reason="source_rate"}[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 承压期间按来源前缀拒绝了新直连({{ $value | printf \"%.0f\" }} 条 / 5 分钟)"
+            description: >-
+              有公网来源前缀在 battle 承压时建连太快。看 battle 日志里采样的
+              `battle direct connection rejected at accept(sampled): reason=source_rate` 一行的 latest_peer 找前缀,去上游处置。
+              CGNAT / 网吧出口后面的大批真玩家同时进同一台 battle 也会碰到它:同一时段 battle_handshake_duration_ms 正常、被拒的前缀
+              是已知的运营商出口时,按运维手册 §3.3 调高 BATTLE_SOURCE_RATE_PER_SECOND / BATTLE_SOURCE_BURST。
+            runbook_url: docs/ops/gate-kernel-tuning-runbook.md
+
+        # 来源前缀表满了:极分散的来源(上万个 /24 或 /64)同时在建连,新前缀没登记就放行(fail-open)。
+        - alert: BattleSourceTableFull
+          expr: |
+            sum by (namespace, instance) (increase(battle_source_untracked_total[5m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 来源前缀表已满,{{ $value | printf \"%.0f\" }} 条直连没按来源限速就放行了"
+            description: >-
+              来源极分散,按来源限速帮不上忙,全局速率闸与未验签预算照常生效。这是分布式的连接洪水的形状,
+              去上游(L4 / 云清洗)处置;battle 这一侧不用调参。
             runbook_url: docs/ops/gate-kernel-tuning-runbook.md
 
         # 握手期限在持续收割连接:每秒超过 1 条、持续 5 分钟。偶发的收割(客户端建连后网络断了)是常态,持续的不是。

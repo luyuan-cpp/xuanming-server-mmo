@@ -56,7 +56,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 
 1. 不手改任何生成产物,改源头再重新生成。
 2. 字段编号上线后不复用;删字段写 `reserved N;` 并注明原因。
-3. 字段类型有强制约束:坐标用 `double`,雪花 ID、时间戳、货币用 64 位。完整列表见
+3. 字段类型有强制约束:坐标用 `double`,ID(发号器的永久 ID、snowflake 的 scene_id、运行时实例 ID)、时间戳、货币用 64 位。完整列表见
    [AGENTS.md](AGENTS.md)。
 
 错误码(tip)不在这里手写,由导表器从 `data/tip/Tip.xlsx` 生成,见 [data/README.md](../data/README.md)。

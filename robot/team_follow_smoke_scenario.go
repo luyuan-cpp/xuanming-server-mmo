@@ -4,14 +4,14 @@ package main
 // (docs/design/team-system.md「组队跟随 v1.1」V.2;走路跟随本身在客户端,不在本场景范围):
 //
 //	F0 预备:A、B 各自离开残留队伍;从自己的 ActorCreate(guid == 自己)读出实体号与进场坐标;
-//	F1 拉开距离:A 朝若干方向之一上报移动(服务器按导航裁决,撞墙会回 MoveAck),直到与 B 水平相距 >= 12;
+//	F1 拉开距离:A 朝若干方向之一分步上报移动(每步 16,服务器按导航裁决,撞墙会回 MoveAck),直到与 B 水平相距 >= 60;
 //	F2 入队即归队:A 建队 → B 申请 → A 同意。B 在 15s 内收到 TeleportS2C(reason=5),落点在 A 的权威位置 1 以内
 //	   (两人不同线时 B 会先收到换线的 EnterSceneS2C,这一步不单独断言,只记进日志);
 //	   随后 B 像真实客户端那样在落点上报一次位置,服务器不应把它拉走;
 //	F3 可见性重建:B 收到 guid == A 的 ActorCreate,A 收到 guid == B 的 ActorCreate;
 //	F4 移动广播:A MoveStart(带速度)→ B 收到 entity == A、move_state=1、速度非零的 ActorMoveS2C;
 //	   A MoveStop → B 收到 move_state=0。反过来 B 动一次,A 同样收到;
-//	F6 请求归队(GetMyTeam{regroup},V.9):B 在 A 身边请求 → 2s 内不应瞬移;B 自己走开 >= 12 → 不请求就没有瞬移;
+//	F6 请求归队(GetMyTeam{regroup},V.9):B 在 A 身边请求 → 2s 内不应瞬移;B 自己分步走开 >= 60(每步 16)→ 不请求就没有瞬移;
 //	   B 请求归队 → 15s 内收到 TeleportS2C(reason=5)、落点在 A 的位置 1 以内,在落点上报不被拉走;
 //	F5 A 解散。
 //
@@ -338,7 +338,7 @@ func RunTeamFollowSmoke(cfg *config.Config) {
 		func() *scene.TeleportS2C { return &scene.TeleportS2C{} }, nil); err == nil {
 		fail("F6-regroup-near", "B 就在 A 身边(%.2f)请求归队却被瞬移了", teamFollowSmokeDistance(posB, posA))
 	}
-	// 走远:B 自己走开 12 以上;不请求归队就没人拉他(这正是要补的缺口)。
+	// 走远:B 自己分步走开 60 以上(每步 16);不请求归队就没人拉他(这正是要补的缺口)。
 	posB, err = teamFollowSmokeWalkAway(b, posB, posA)
 	if err != nil {
 		fail("F6-walk-away", "%v", err)

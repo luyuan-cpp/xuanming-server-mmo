@@ -81,10 +81,15 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 		return reject(rejectStorage)
 	}
 	if result.Tip != 0 {
-		// 两种限流回同一个提示码;指标分开记,看得出是单人突发还是世界频道发言间隔在挡。
+		// 两种限流回同一个提示码;指标分开记,看得出是单人突发还是世界频道发言间隔在挡。正文送检没过的两种结局各记各的。
 		outcome := svc.OutcomeRateLimited
-		if result.Cooldown {
+		switch {
+		case result.Cooldown:
 			outcome = svc.OutcomeWorldCooldown
+		case result.Tip == constants.ErrContentRejected:
+			outcome = svc.OutcomeContentRejected
+		case result.Tip == constants.ErrContentCheckUnavailable:
+			outcome = svc.OutcomeContentUnavailable
 		}
 		svc.ObserveSend(label, outcome)
 		return &chatpb.SendChatResponse{ErrorMessage: &base.TipInfoMessage{Id: result.Tip}}, nil

@@ -140,9 +140,12 @@ void ViewSystem::BroadcastMessageToVisiblePlayers(entt::entity entity, const uin
     // 客户端只显示关注列表里的对象:没显示 entity 的人收到它的技能消息既无用,也会泄露隐身者的行动。
     EntityVector receivers;
     InterestSystem::GetVisibleWatchers(entity, receivers);
-    // 没有会话快照的实体(NPC 等)没有客户端可发,留在名单里只会让广播函数逐个报错。
+    // 没有会话快照的实体(NPC 等)或断线保留 / 离线托管中(会话已置无效)没有客户端可发,留在名单里只会让广播函数逐个报错。
     std::erase_if(receivers, [](entt::entity watcher)
-                  { return !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(watcher); });
+                  {
+                      const auto *session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(watcher);
+                      return session == nullptr || session->gate_session_id() == kInvalidSessionId;
+                  });
     if (receivers.empty())
     {
         return;

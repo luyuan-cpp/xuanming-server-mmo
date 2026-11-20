@@ -95,7 +95,8 @@ DataServiceRpc:
 # 内容安全(go/content_guard;docs/design/rename-and-content-safety.md §6.6):帮会名(建帮、改名)与帮会公告先送它判定,
 # 命中回 kGuildNameSensitive / kGuildAnnouncementSensitive,它不可达回 kGuildTextCheckUnavailable(可重试),
 # 不放行没检过的文字。送检排在铸号和写事务之前。
-# 整段不写 = 不送检,只允许本机;Required: true 时没配目标拒启(staging / prod 由部署脚本写 true)。
+# 缺省严格:没配目标拒启,内容安全不可达时建帮与改公告被拒(回可重试的提示)。Optional: true 只许本机这样写:内容安全没起时不送检、
+# 原样放行并打 ERROR;K8s 的 ConfigMap 不写这一键(k8s_deploy.ps1 的 New-ContentGuardClientYaml)。
 # NonBlock:内容安全晚起不挡 guild 启动。熔断:它整体不可用时快速失败。TimeoutMs 是单次送检的时限。
 ContentGuard:
   Rpc:
@@ -107,7 +108,7 @@ ContentGuard:
     NonBlock: true
     Middlewares:
       Breaker: true
-  Required: false
+  Optional: true
   TimeoutMs: 300
 
 # guild_id 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。

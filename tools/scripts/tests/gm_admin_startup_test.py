@@ -211,5 +211,64 @@ class EntrypointTest(unittest.TestCase):
         web.assert_called_once()
 
 
+class MailRecoveryTest(unittest.TestCase):
+    def setUp(self):
+        self.calls = []
+        self.rows = {
+            'mail': {
+                'Id': 'id-mail', 'Image': 'img-mail', 'Name': '/xuanming-gm-mail-mail-1',
+                'Config': {'Labels': {'com.docker.compose.project': gm.MAIL_PROJECT, 'com.docker.compose.service': 'mail'}},
+                'HostConfig': {'PortBindings': deepcopy(gm.MAIL_PORTS)}, 'Mounts': [], 'RestartCount': 0,
+                'State': {'Status': 'exited', 'ExitCode': 255, 'StartedAt': 'old-mail', 'FinishedAt': 'old-stop',
+                          'OOMKilled': False, 'Health': {'Status': 'unhealthy'}},
+            },
+            'mail-register': {
+                'Id': 'id-reg', 'Image': 'img-boot', 'Name': '/xuanming-gm-mail-mail-register-1',
+                'Config': {'Labels': {'com.docker.compose.project': gm.MAIL_PROJECT, 'com.docker.compose.service': 'mail-register'}},
+                'HostConfig': {'PortBindings': {}}, 'Mounts': [], 'RestartCount': 0,
+                'State': {'Status': 'exited', 'ExitCode': 0, 'StartedAt': 'old-reg', 'FinishedAt': 'old-reg-end',
+                          'OOMKilled': False},
+            },
+        }
+        self.addCleanup(patch.stopall)
+        patch.object(startup, 'run', side_effect=self.run_command).start()
+        patch.object(startup, 'inspect', side_effect=self.inspect).start()
+        patch.object(gm.time, 'sleep').start()
+
+    def inspect(self, ids):
+        return [deepcopy(next(r for r in self.rows.values() if r['Id'] == value)) for value in ids]
+
+    def run_command(self, command, **kwargs):
+        args = command[len(startup.DOCKER):]
+        self.calls.append(args)
+        if args[:2] == ['ps', '-aq']:
+            return '\n'.join(r['Id'] for r in self.rows.values())
+        if args[0] == 'start':
+            row = next(r for r in self.rows.values() if r['Id'] == args[1])
+            if row['Id'] == 'id-reg':
+                row['State'].update(Status='exited', ExitCode=0, StartedAt='new-reg', FinishedAt='new-reg-end')
+            else:
+                row['State'].update(Status='running', ExitCode=0, StartedAt='new-mail', FinishedAt='')
+                row['State']['Health']['Status'] = 'healthy'
+            return row['Id']
+        raise AssertionError('Unexpected Docker command: ' + str(args))
+
+    def test_stopped_mail_registers_writer_before_starting_existing_container(self):
+        plan = gm.mail_preflight(Path('.'))
+        self.assertEqual(plan['action'], 'start-existing')
+        result = gm.ensure_mail(Path('.'), plan)
+        self.assertEqual(result['action'], 'started')
+        self.assertEqual([c for c in self.calls if c[0] == 'start'], [['start', 'id-reg'], ['start', 'id-mail']])
+        self.calls.clear()
+        again = gm.ensure_mail(Path('.'), gm.mail_preflight(Path('.')))
+        self.assertEqual(again['action'], 'already-running')
+        self.assertFalse(any(c[0] == 'start' for c in self.calls))
+
+    def test_public_mail_port_is_rejected(self):
+        self.rows['mail']['HostConfig']['PortBindings']['50900/tcp'][0]['HostIp'] = '0.0.0.0'
+        with self.assertRaisesRegex(RuntimeError, 'loopback port'):
+            gm.mail_preflight(Path('.'))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -278,8 +278,12 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 **(2026-11-19,未编译)按来源前缀限速**(设计文档 P2-2):缺省关闭,设了 `GATE_SOURCE_RATE_PER_SECOND` 才开,开了也只在承压时生效
 (未验签池过了早拒起点,或全局速率闸最近 10 秒内拒过连接)。按 IPv4 /24、IPv6 /64 聚合,每个前缀一个小令牌桶,
 承压期间单个前缀最多拿到全局速率的一成(`gate_rejected_total{reason="source_rate"}`)。限速率不限总量、不封来源。
-只在 gate 看得到玩家真实源地址的部署形态里开(external 入口 + `externalTrafficPolicy: Local`);podip 形态与代理型 LB 后面开了,
-会把所有人当成同一个来源。前缀表满(65536)时新前缀不登记、直接放行(fail-open,计数并告警),全局各道照常生效。
+只在 gate 看得到玩家真实源地址的部署形态里有用(external 入口 + `externalTrafficPolicy: Local`)。
+2026-11-20 起只对公网源地址生效:私网、回环、链路本地、100.64/10 与 IPv6 唯一本地 / 链路本地的来源不按来源限速。
+这类地址是代理、LB 或集群内调用方的,在 accept 时认不出后面的真实玩家;podip 形态、代理型 LB 后面开了也不会误伤,只是不起作用。
+**经 ws-edge 进来的小游戏连接不受 gate 这一道管**:gate 看到的是边缘 Pod 的内网地址。要按来源限它们,就在 infra-up 时带
+`-WsEdgeSourceRatePerSecond`,由边缘 nginx 按 /24 `limit_req`。前缀表满(65536)时新前缀不登记、直接放行(fail-open,计数并告警),
+全局各道照常生效。
 
 > **这最后一句是一个已知的、成建制的缺口，不是措辞上的保留。** 它的完整分析、业界对照
 > （nginx / HAProxy / Envoy / sshd / Redis / PostgreSQL 的对应机制）、两条拒绝路线的取舍，

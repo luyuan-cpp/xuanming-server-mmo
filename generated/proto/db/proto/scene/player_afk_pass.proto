@@ -1,0 +1,81 @@
+syntax = "proto3";
+option go_package = "db/proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 挂机月卡:开通之后,断线的角色不按 25 秒退出,由服务器离线托管(留在世界里、组队跟随照常带着走),
+// 直到重连或月卡到期。设计文档:docs/design/afk-monthly-card.md。
+//
+// 月卡就是存档里的一个到期时刻(PlayerUint64Comp.afk_pass_expires_at)。获得只有一个写入口:花灵石开通(BuyAfkPass),
+// 到期 = max(现在, 原到期) + period_days 天,可叠加,剩余不超过 max_remaining_days 天。真钱经现有充值档位买灵石。
+
+// 月卡此刻的状态与售价。所有时间都是服务器墙钟的 Unix 秒。
+message AfkPassInfo
+{
+	uint64 expires_at = 1;          // 到期时刻;0 = 从未开通或已清除;<= server_now = 已到期
+	uint64 server_now = 2;          // 组这份应答时服务器的墙钟:客户端用它算剩余时长,不信本机时钟
+	uint32 price_currency_type = 3; // 开通扣的货币(CurrencyType)
+	uint64 price = 4;               // 开通一次的价格;0 = 暂不出售(规则表不可用),此时下面三项也是 0
+	uint32 period_days = 5;         // 开通一次加多少天
+	uint32 max_remaining_days = 6;  // 剩余时长的上限:续费后超过它就拒绝
+	uint32 remind_before_hours = 7; // 剩余不超过这么多小时时,客户端提醒快到期;0 = 不提醒
+	uint64 balance = 8;             // 玩家此刻持有的 price_currency_type 余额,只供展示(买不买得起由服务器裁决)
+}
+
+message GetAfkPassRequest {}
+
+message GetAfkPassResponse
+{
+	TipInfoMessage error_message = 1;
+	AfkPassInfo info = 2;
+}
+
+// 开通 / 续费。
+// client_request_id:客户端幂等键(docs/design/client-request-idempotency.md §2.1),必须非 0。同一次操作拿到明确结果之前,
+//   所有重发都带同一个键、其余字段不变;服务器对同一个键至多扣一次钱、加一次天数。
+// expected_currency_type / expected_price:客户端此刻显示的报价。与服务器当前的规则表不一致(热更过)就整笔拒绝
+//   (kAfkPassPriceChanged),不扣钱,保证不会以玩家没看到的价格成交。
+message BuyAfkPassRequest
+{
+	uint64 client_request_id = 1;
+	uint32 expected_currency_type = 2;
+	uint64 expected_price = 3;
+}
+
+message BuyAfkPassResponse
+{
+	TipInfoMessage error_message = 1;
+	AfkPassInfo info = 2; // 成功(含重放)时是开通之后的状态
+	bool replayed = 3;    // true = 这个键之前已经成功过,这一次没有再执行,info 是当前状态
+}
+
+// GM(只在 dev / test 放行):把到期设为 现在 + remaining_seconds;0 = 清除。上限 366 天。
+// 「设定」而不是「增加」:联调要能精确造出「还剩 2 分钟」;重放结果不变,不带幂等键。
+message GmSetAfkPassRequest
+{
+	uint32 remaining_seconds = 1;
+}
+
+message GmSetAfkPassResponse
+{
+	TipInfoMessage error_message = 1;
+	AfkPassInfo info = 2;
+}
+
+service SceneAfkPassClientPlayer
+{
+	option (OptionIsPlayerService) = true;
+	option (OptionIsClientProtocolService) = true;
+
+	// 查询。纯读取:登录进场后、打开面板时各调一次。
+	rpc GetAfkPass (GetAfkPassRequest) returns (GetAfkPassResponse);
+	// 开通 / 续费:扣灵石、加天数,同一次同步调用里完成,随同一次存盘提交。
+	rpc BuyAfkPass (BuyAfkPassRequest) returns (BuyAfkPassResponse);
+	// GM:设定剩余时长(gate 的 GM 消息清单与 scene 的 GM 闸两道锁,生产环境整条关掉)。
+	rpc GmSetAfkPass (GmSetAfkPassRequest) returns (GmSetAfkPassResponse);
+	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+}

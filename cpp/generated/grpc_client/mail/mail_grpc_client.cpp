@@ -29,6 +29,7 @@ namespace mailpb {
 #pragma region ClientPlayerMailListMails
 namespace {
 void QueueLocalClientPlayerMailListMailsFailure(GrpcDone<::mailpb::ListMailsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerMailListMailsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendClientPlayerMailListMailsErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerMail.ListMails: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailListMailsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendClientPlayerMailListMailsErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::mailpb::ListMailsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerMail.ListMails: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailListMailsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendClientPlayerMailListMailsErased(entt::registry& registry, entt::entity 
 #pragma region ClientPlayerMailReadMail
 namespace {
 void QueueLocalClientPlayerMailReadMailFailure(GrpcDone<::mailpb::ReadMailResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerMailReadMailGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendClientPlayerMailReadMailErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerMail.ReadMail: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailReadMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendClientPlayerMailReadMailErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::mailpb::ReadMailRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerMail.ReadMail: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailReadMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendClientPlayerMailReadMailErased(entt::registry& registry, entt::entity n
 #pragma region ClientPlayerMailClaimMailAttachments
 namespace {
 void QueueLocalClientPlayerMailClaimMailAttachmentsFailure(GrpcDone<::mailpb::ClaimMailAttachmentsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerMailClaimMailAttachmentsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendClientPlayerMailClaimMailAttachmentsErased(entt::registry& registry, en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerMail.ClaimMailAttachments: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailClaimMailAttachmentsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendClientPlayerMailClaimMailAttachmentsErased(entt::registry& registry, en
     const auto* typedRequest = dynamic_cast<const ::mailpb::ClaimMailAttachmentsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerMail.ClaimMailAttachments: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailClaimMailAttachmentsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendClientPlayerMailClaimMailAttachmentsErased(entt::registry& registry, en
 #pragma region ClientPlayerMailDeleteMails
 namespace {
 void QueueLocalClientPlayerMailDeleteMailsFailure(GrpcDone<::mailpb::DeleteMailsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerMailDeleteMailsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendClientPlayerMailDeleteMailsErased(entt::registry& registry, entt::entit
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerMail.DeleteMails: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailDeleteMailsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendClientPlayerMailDeleteMailsErased(entt::registry& registry, entt::entit
     const auto* typedRequest = dynamic_cast<const ::mailpb::DeleteMailsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerMail.DeleteMails: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailDeleteMailsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendClientPlayerMailDeleteMailsErased(entt::registry& registry, entt::entit
 #pragma region ClientPlayerMailClearReadMails
 namespace {
 void QueueLocalClientPlayerMailClearReadMailsFailure(GrpcDone<::mailpb::ClearReadMailsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerMailClearReadMailsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendClientPlayerMailClearReadMailsErased(entt::registry& registry, entt::en
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerMail.ClearReadMails: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailClearReadMailsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendClientPlayerMailClearReadMailsErased(entt::registry& registry, entt::en
     const auto* typedRequest = dynamic_cast<const ::mailpb::ClearReadMailsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerMail.ClearReadMails: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailClearReadMailsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendClientPlayerMailClearReadMailsErased(entt::registry& registry, entt::en
 #pragma region ClientPlayerMailNotifyMailChanged
 namespace {
 void QueueLocalClientPlayerMailNotifyMailChangedFailure(GrpcDone<::mailpb::MailChangedEvent> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerMailNotifyMailChangedGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendClientPlayerMailNotifyMailChangedErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC ClientPlayerMail.NotifyMailChanged: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailNotifyMailChangedGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendClientPlayerMailNotifyMailChangedErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::mailpb::MailChangedEvent*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC ClientPlayerMail.NotifyMailChanged: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerMailNotifyMailChangedGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

@@ -28,6 +28,7 @@ GrpcCallOutcome MakeLocalFailureOutcome(uint32_t code, std::string message) {
 #pragma region dbTest
 namespace {
 void QueueLocaldbTestFailure(GrpcDone<::TestResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kdbTestGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -95,6 +96,7 @@ void SenddbTestErased(entt::registry& registry, entt::entity nodeEntity, const g
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC db.Test: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kdbTestGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -104,6 +106,7 @@ void SenddbTestErased(entt::registry& registry, entt::entity nodeEntity, const g
     const auto* typedRequest = dynamic_cast<const ::TestRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC db.Test: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kdbTestGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

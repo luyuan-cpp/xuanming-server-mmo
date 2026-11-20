@@ -25,6 +25,9 @@ const (
 	DataService_LookupAccountRole_FullMethodName             = "/data_service.DataService/LookupAccountRole"
 	DataService_RepairAccountRole_FullMethodName             = "/data_service.DataService/RepairAccountRole"
 	DataService_RemoveAccountRoles_FullMethodName            = "/data_service.DataService/RemoveAccountRoles"
+	DataService_SetAccountRealName_FullMethodName            = "/data_service.DataService/SetAccountRealName"
+	DataService_GetAccountRealName_FullMethodName            = "/data_service.DataService/GetAccountRealName"
+	DataService_ResetAccountRealName_FullMethodName          = "/data_service.DataService/ResetAccountRealName"
 	DataService_BeginAccountRoleTrade_FullMethodName         = "/data_service.DataService/BeginAccountRoleTrade"
 	DataService_ConfirmAccountRoleTradeFreeze_FullMethodName = "/data_service.DataService/ConfirmAccountRoleTradeFreeze"
 	DataService_CancelAccountRoleTrade_FullMethodName        = "/data_service.DataService/CancelAccountRoleTrade"
@@ -35,6 +38,10 @@ const (
 	DataService_RegisterRoleAdmission_FullMethodName         = "/data_service.DataService/RegisterRoleAdmission"
 	DataService_CloseRoleAdmissions_FullMethodName           = "/data_service.DataService/CloseRoleAdmissions"
 	DataService_AckRoleTradeDrain_FullMethodName             = "/data_service.DataService/AckRoleTradeDrain"
+	DataService_RequestAccountDeletion_FullMethodName        = "/data_service.DataService/RequestAccountDeletion"
+	DataService_CancelAccountDeletion_FullMethodName         = "/data_service.DataService/CancelAccountDeletion"
+	DataService_ClaimAccountDeletions_FullMethodName         = "/data_service.DataService/ClaimAccountDeletions"
+	DataService_FinishAccountDeletion_FullMethodName         = "/data_service.DataService/FinishAccountDeletion"
 	DataService_ReleaseDeadPlayerStoreHolder_FullMethodName  = "/data_service.DataService/ReleaseDeadPlayerStoreHolder"
 	DataService_ReadPlayerStoreHolder_FullMethodName         = "/data_service.DataService/ReadPlayerStoreHolder"
 	DataService_RegisterPlayerZone_FullMethodName            = "/data_service.DataService/RegisterPlayerZone"
@@ -54,6 +61,7 @@ const (
 	DataService_ReservePlayerName_FullMethodName             = "/data_service.DataService/ReservePlayerName"
 	DataService_ReleasePlayerName_FullMethodName             = "/data_service.DataService/ReleasePlayerName"
 	DataService_BatchGetPlayerName_FullMethodName            = "/data_service.DataService/BatchGetPlayerName"
+	DataService_RenameRole_FullMethodName                    = "/data_service.DataService/RenameRole"
 	DataService_BatchGetPlayerDisplay_FullMethodName         = "/data_service.DataService/BatchGetPlayerDisplay"
 	DataService_GetPlayerAssetOpLedger_FullMethodName        = "/data_service.DataService/GetPlayerAssetOpLedger"
 	DataService_GetPlayerInboxLedger_FullMethodName          = "/data_service.DataService/GetPlayerInboxLedger"
@@ -73,6 +81,13 @@ type DataServiceClient interface {
 	LookupAccountRole(ctx context.Context, in *LookupAccountRoleRequest, opts ...grpc.CallOption) (*AccountRoleOwnership, error)
 	RepairAccountRole(ctx context.Context, in *RepairAccountRoleRequest, opts ...grpc.CallOption) (*AccountDirectoryResponse, error)
 	RemoveAccountRoles(ctx context.Context, in *RemoveAccountRolesRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// 实名(docs/design/real-name-anti-addiction.md §5.1)。只写一次:已有相同的 pi 算成功,已有不同的 pi 不改,
+	// 应答都回库里现存的值,由 login 比较。只认 login 的调用证明;账号行不存在回 NOT_FOUND。
+	SetAccountRealName(ctx context.Context, in *SetAccountRealNameRequest, opts ...grpc.CallOption) (*SetAccountRealNameResponse, error)
+	// 充值限额闸按玩家查实名(§5.6)。只认 payment 的调用证明;角色不存在或已删回 found=false。
+	GetAccountRealName(ctx context.Context, in *GetAccountRealNameRequest, opts ...grpc.CallOption) (*GetAccountRealNameResponse, error)
+	// 客服重置实名(§5.2 末):清掉账号行上的 pi,玩家下次登录重新提交。幂等,只认 login 的调用证明;账号行不存在回 NOT_FOUND。
+	ResetAccountRealName(ctx context.Context, in *ResetAccountRealNameRequest, opts ...grpc.CallOption) (*ResetAccountRealNameResponse, error)
 	// 角色寄售控制仅允许独立 trade 证明；Begin 只阻新入场，不等于在线实体已冻结。
 	BeginAccountRoleTrade(ctx context.Context, in *BeginAccountRoleTradeRequest, opts ...grpc.CallOption) (*AccountRoleTradeReceipt, error)
 	// 请求不接受 caller proof。只有装配的服务端 SQL 验证器能确认 FROZEN；未装配时拒绝。
@@ -94,6 +109,16 @@ type DataServiceClient interface {
 	CloseRoleAdmissions(ctx context.Context, in *CloseRoleAdmissionsRequest, opts ...grpc.CallOption) (*CloseRoleAdmissionsResponse, error)
 	// 原 listing 的本地墓碑与排空 ACK；不是 caller 自报的冻结完成证明。
 	AckRoleTradeDrain(ctx context.Context, in *AckRoleTradeDrainRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// 账号注销(docs/design/account-deletion.md §4、§5.1),只认 login 的调用证明。结论一律带内回(outcome),
+	// gRPC 错误只留给鉴权与非法参数:四个方法都幂等,没有结局未知要消歧。
+	// 申请:预检全部角色(协调者 DryRun),通过才把账号行 0 → 1;已是 1 原样回,已是 2 回执行中。
+	RequestAccountDeletion(ctx context.Context, in *RequestAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
+	// 撤销:账号行 1 → 0;已是 2 回 TOO_LATE。
+	CancelAccountDeletion(ctx context.Context, in *CancelAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
+	// 执行者认领:冷静期满的 1 与租约过期的 2,逐行条件改成 2 并写租约。1 → 2 之后不可撤销。
+	ClaimAccountDeletions(ctx context.Context, in *ClaimAccountDeletionsRequest, opts ...grpc.CallOption) (*ClaimAccountDeletionsResponse, error)
+	// 收尾:清能证明陈旧的 ref,账号行是 2 且一条 ref 都不剩才写回执、删行。行已不在回 done(幂等)。
+	FinishAccountDeletion(ctx context.Context, in *FinishAccountDeletionRequest, opts ...grpc.CallOption) (*FinishAccountDeletionResponse, error)
 	// 持有节点已判死:同一个事务里抬写权行的代次、清持有者、置 released=1,旧持有者恢复之后的写被挡住
 	// (docs/design/player-save-direct-commit.md §6)。只有 scene_manager 能调。
 	ReleaseDeadPlayerStoreHolder(ctx context.Context, in *ReleaseDeadPlayerStoreHolderRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -140,6 +165,9 @@ type DataServiceClient interface {
 	// 已绑定的名字一律拒绝,预留态的先在玩家片证明角色永远不会提交(§3.4a)。删角之后的释放不走这里。
 	ReleasePlayerName(ctx context.Context, in *ReleasePlayerNameRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	BatchGetPlayerName(ctx context.Context, in *BatchGetPlayerNameRequest, opts ...grpc.CallOption) (*BatchGetPlayerNameResponse, error)
+	// 角色改名(docs/design/rename-and-content-safety.md §4)。只认 scene 的调用证明;同一个 (player_id, seq) 重发回同一个结局。
+	// 名字不合规、被占用、冷却中这些都回 OK + result,由 scene 翻成提示;只有库不可用这类真故障才走 gRPC error(scene 按结局未知重发)。
+	RenameRole(ctx context.Context, in *RenameRoleRequest, opts ...grpc.CallOption) (*RenameRoleResponse, error)
 	// 玩家展示资料:名字、等级、职业、性别、外观,读 player_store。
 	// 好友列表、在线目录、队伍视图用。只读、不鉴权,与 BatchGetPlayerName 同级。
 	BatchGetPlayerDisplay(ctx context.Context, in *BatchGetPlayerDisplayRequest, opts ...grpc.CallOption) (*BatchGetPlayerDisplayResponse, error)
@@ -213,6 +241,36 @@ func (c *dataServiceClient) RemoveAccountRoles(ctx context.Context, in *RemoveAc
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, DataService_RemoveAccountRoles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) SetAccountRealName(ctx context.Context, in *SetAccountRealNameRequest, opts ...grpc.CallOption) (*SetAccountRealNameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetAccountRealNameResponse)
+	err := c.cc.Invoke(ctx, DataService_SetAccountRealName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) GetAccountRealName(ctx context.Context, in *GetAccountRealNameRequest, opts ...grpc.CallOption) (*GetAccountRealNameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAccountRealNameResponse)
+	err := c.cc.Invoke(ctx, DataService_GetAccountRealName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) ResetAccountRealName(ctx context.Context, in *ResetAccountRealNameRequest, opts ...grpc.CallOption) (*ResetAccountRealNameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResetAccountRealNameResponse)
+	err := c.cc.Invoke(ctx, DataService_ResetAccountRealName_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -313,6 +371,46 @@ func (c *dataServiceClient) AckRoleTradeDrain(ctx context.Context, in *AckRoleTr
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, DataService_AckRoleTradeDrain_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) RequestAccountDeletion(ctx context.Context, in *RequestAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AccountDeletionResponse)
+	err := c.cc.Invoke(ctx, DataService_RequestAccountDeletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) CancelAccountDeletion(ctx context.Context, in *CancelAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AccountDeletionResponse)
+	err := c.cc.Invoke(ctx, DataService_CancelAccountDeletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) ClaimAccountDeletions(ctx context.Context, in *ClaimAccountDeletionsRequest, opts ...grpc.CallOption) (*ClaimAccountDeletionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimAccountDeletionsResponse)
+	err := c.cc.Invoke(ctx, DataService_ClaimAccountDeletions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) FinishAccountDeletion(ctx context.Context, in *FinishAccountDeletionRequest, opts ...grpc.CallOption) (*FinishAccountDeletionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FinishAccountDeletionResponse)
+	err := c.cc.Invoke(ctx, DataService_FinishAccountDeletion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -509,6 +607,16 @@ func (c *dataServiceClient) BatchGetPlayerName(ctx context.Context, in *BatchGet
 	return out, nil
 }
 
+func (c *dataServiceClient) RenameRole(ctx context.Context, in *RenameRoleRequest, opts ...grpc.CallOption) (*RenameRoleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameRoleResponse)
+	err := c.cc.Invoke(ctx, DataService_RenameRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dataServiceClient) BatchGetPlayerDisplay(ctx context.Context, in *BatchGetPlayerDisplayRequest, opts ...grpc.CallOption) (*BatchGetPlayerDisplayResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BatchGetPlayerDisplayResponse)
@@ -562,6 +670,13 @@ type DataServiceServer interface {
 	LookupAccountRole(context.Context, *LookupAccountRoleRequest) (*AccountRoleOwnership, error)
 	RepairAccountRole(context.Context, *RepairAccountRoleRequest) (*AccountDirectoryResponse, error)
 	RemoveAccountRoles(context.Context, *RemoveAccountRolesRequest) (*emptypb.Empty, error)
+	// 实名(docs/design/real-name-anti-addiction.md §5.1)。只写一次:已有相同的 pi 算成功,已有不同的 pi 不改,
+	// 应答都回库里现存的值,由 login 比较。只认 login 的调用证明;账号行不存在回 NOT_FOUND。
+	SetAccountRealName(context.Context, *SetAccountRealNameRequest) (*SetAccountRealNameResponse, error)
+	// 充值限额闸按玩家查实名(§5.6)。只认 payment 的调用证明;角色不存在或已删回 found=false。
+	GetAccountRealName(context.Context, *GetAccountRealNameRequest) (*GetAccountRealNameResponse, error)
+	// 客服重置实名(§5.2 末):清掉账号行上的 pi,玩家下次登录重新提交。幂等,只认 login 的调用证明;账号行不存在回 NOT_FOUND。
+	ResetAccountRealName(context.Context, *ResetAccountRealNameRequest) (*ResetAccountRealNameResponse, error)
 	// 角色寄售控制仅允许独立 trade 证明；Begin 只阻新入场，不等于在线实体已冻结。
 	BeginAccountRoleTrade(context.Context, *BeginAccountRoleTradeRequest) (*AccountRoleTradeReceipt, error)
 	// 请求不接受 caller proof。只有装配的服务端 SQL 验证器能确认 FROZEN；未装配时拒绝。
@@ -583,6 +698,16 @@ type DataServiceServer interface {
 	CloseRoleAdmissions(context.Context, *CloseRoleAdmissionsRequest) (*CloseRoleAdmissionsResponse, error)
 	// 原 listing 的本地墓碑与排空 ACK；不是 caller 自报的冻结完成证明。
 	AckRoleTradeDrain(context.Context, *AckRoleTradeDrainRequest) (*emptypb.Empty, error)
+	// 账号注销(docs/design/account-deletion.md §4、§5.1),只认 login 的调用证明。结论一律带内回(outcome),
+	// gRPC 错误只留给鉴权与非法参数:四个方法都幂等,没有结局未知要消歧。
+	// 申请:预检全部角色(协调者 DryRun),通过才把账号行 0 → 1;已是 1 原样回,已是 2 回执行中。
+	RequestAccountDeletion(context.Context, *RequestAccountDeletionRequest) (*AccountDeletionResponse, error)
+	// 撤销:账号行 1 → 0;已是 2 回 TOO_LATE。
+	CancelAccountDeletion(context.Context, *CancelAccountDeletionRequest) (*AccountDeletionResponse, error)
+	// 执行者认领:冷静期满的 1 与租约过期的 2,逐行条件改成 2 并写租约。1 → 2 之后不可撤销。
+	ClaimAccountDeletions(context.Context, *ClaimAccountDeletionsRequest) (*ClaimAccountDeletionsResponse, error)
+	// 收尾:清能证明陈旧的 ref,账号行是 2 且一条 ref 都不剩才写回执、删行。行已不在回 done(幂等)。
+	FinishAccountDeletion(context.Context, *FinishAccountDeletionRequest) (*FinishAccountDeletionResponse, error)
 	// 持有节点已判死:同一个事务里抬写权行的代次、清持有者、置 released=1,旧持有者恢复之后的写被挡住
 	// (docs/design/player-save-direct-commit.md §6)。只有 scene_manager 能调。
 	ReleaseDeadPlayerStoreHolder(context.Context, *ReleaseDeadPlayerStoreHolderRequest) (*emptypb.Empty, error)
@@ -629,6 +754,9 @@ type DataServiceServer interface {
 	// 已绑定的名字一律拒绝,预留态的先在玩家片证明角色永远不会提交(§3.4a)。删角之后的释放不走这里。
 	ReleasePlayerName(context.Context, *ReleasePlayerNameRequest) (*emptypb.Empty, error)
 	BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error)
+	// 角色改名(docs/design/rename-and-content-safety.md §4)。只认 scene 的调用证明;同一个 (player_id, seq) 重发回同一个结局。
+	// 名字不合规、被占用、冷却中这些都回 OK + result,由 scene 翻成提示;只有库不可用这类真故障才走 gRPC error(scene 按结局未知重发)。
+	RenameRole(context.Context, *RenameRoleRequest) (*RenameRoleResponse, error)
 	// 玩家展示资料:名字、等级、职业、性别、外观,读 player_store。
 	// 好友列表、在线目录、队伍视图用。只读、不鉴权,与 BatchGetPlayerName 同级。
 	BatchGetPlayerDisplay(context.Context, *BatchGetPlayerDisplayRequest) (*BatchGetPlayerDisplayResponse, error)
@@ -673,6 +801,15 @@ func (UnimplementedDataServiceServer) RepairAccountRole(context.Context, *Repair
 func (UnimplementedDataServiceServer) RemoveAccountRoles(context.Context, *RemoveAccountRolesRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveAccountRoles not implemented")
 }
+func (UnimplementedDataServiceServer) SetAccountRealName(context.Context, *SetAccountRealNameRequest) (*SetAccountRealNameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAccountRealName not implemented")
+}
+func (UnimplementedDataServiceServer) GetAccountRealName(context.Context, *GetAccountRealNameRequest) (*GetAccountRealNameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAccountRealName not implemented")
+}
+func (UnimplementedDataServiceServer) ResetAccountRealName(context.Context, *ResetAccountRealNameRequest) (*ResetAccountRealNameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResetAccountRealName not implemented")
+}
 func (UnimplementedDataServiceServer) BeginAccountRoleTrade(context.Context, *BeginAccountRoleTradeRequest) (*AccountRoleTradeReceipt, error) {
 	return nil, status.Error(codes.Unimplemented, "method BeginAccountRoleTrade not implemented")
 }
@@ -702,6 +839,18 @@ func (UnimplementedDataServiceServer) CloseRoleAdmissions(context.Context, *Clos
 }
 func (UnimplementedDataServiceServer) AckRoleTradeDrain(context.Context, *AckRoleTradeDrainRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method AckRoleTradeDrain not implemented")
+}
+func (UnimplementedDataServiceServer) RequestAccountDeletion(context.Context, *RequestAccountDeletionRequest) (*AccountDeletionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RequestAccountDeletion not implemented")
+}
+func (UnimplementedDataServiceServer) CancelAccountDeletion(context.Context, *CancelAccountDeletionRequest) (*AccountDeletionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelAccountDeletion not implemented")
+}
+func (UnimplementedDataServiceServer) ClaimAccountDeletions(context.Context, *ClaimAccountDeletionsRequest) (*ClaimAccountDeletionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimAccountDeletions not implemented")
+}
+func (UnimplementedDataServiceServer) FinishAccountDeletion(context.Context, *FinishAccountDeletionRequest) (*FinishAccountDeletionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FinishAccountDeletion not implemented")
 }
 func (UnimplementedDataServiceServer) ReleaseDeadPlayerStoreHolder(context.Context, *ReleaseDeadPlayerStoreHolderRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReleaseDeadPlayerStoreHolder not implemented")
@@ -759,6 +908,9 @@ func (UnimplementedDataServiceServer) ReleasePlayerName(context.Context, *Releas
 }
 func (UnimplementedDataServiceServer) BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BatchGetPlayerName not implemented")
+}
+func (UnimplementedDataServiceServer) RenameRole(context.Context, *RenameRoleRequest) (*RenameRoleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameRole not implemented")
 }
 func (UnimplementedDataServiceServer) BatchGetPlayerDisplay(context.Context, *BatchGetPlayerDisplayRequest) (*BatchGetPlayerDisplayResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BatchGetPlayerDisplay not implemented")
@@ -879,6 +1031,60 @@ func _DataService_RemoveAccountRoles_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DataServiceServer).RemoveAccountRoles(ctx, req.(*RemoveAccountRolesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_SetAccountRealName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAccountRealNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).SetAccountRealName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_SetAccountRealName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).SetAccountRealName(ctx, req.(*SetAccountRealNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_GetAccountRealName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAccountRealNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).GetAccountRealName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_GetAccountRealName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).GetAccountRealName(ctx, req.(*GetAccountRealNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_ResetAccountRealName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResetAccountRealNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).ResetAccountRealName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_ResetAccountRealName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).ResetAccountRealName(ctx, req.(*ResetAccountRealNameRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1059,6 +1265,78 @@ func _DataService_AckRoleTradeDrain_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(DataServiceServer).AckRoleTradeDrain(ctx, req.(*AckRoleTradeDrainRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_RequestAccountDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestAccountDeletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).RequestAccountDeletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_RequestAccountDeletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).RequestAccountDeletion(ctx, req.(*RequestAccountDeletionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_CancelAccountDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelAccountDeletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).CancelAccountDeletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_CancelAccountDeletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).CancelAccountDeletion(ctx, req.(*CancelAccountDeletionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_ClaimAccountDeletions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimAccountDeletionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).ClaimAccountDeletions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_ClaimAccountDeletions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).ClaimAccountDeletions(ctx, req.(*ClaimAccountDeletionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_FinishAccountDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FinishAccountDeletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).FinishAccountDeletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_FinishAccountDeletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).FinishAccountDeletion(ctx, req.(*FinishAccountDeletionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1405,6 +1683,24 @@ func _DataService_BatchGetPlayerName_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_RenameRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).RenameRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_RenameRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).RenameRole(ctx, req.(*RenameRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DataService_BatchGetPlayerDisplay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(BatchGetPlayerDisplayRequest)
 	if err := dec(in); err != nil {
@@ -1505,6 +1801,18 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _DataService_RemoveAccountRoles_Handler,
 		},
 		{
+			MethodName: "SetAccountRealName",
+			Handler:    _DataService_SetAccountRealName_Handler,
+		},
+		{
+			MethodName: "GetAccountRealName",
+			Handler:    _DataService_GetAccountRealName_Handler,
+		},
+		{
+			MethodName: "ResetAccountRealName",
+			Handler:    _DataService_ResetAccountRealName_Handler,
+		},
+		{
 			MethodName: "BeginAccountRoleTrade",
 			Handler:    _DataService_BeginAccountRoleTrade_Handler,
 		},
@@ -1543,6 +1851,22 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AckRoleTradeDrain",
 			Handler:    _DataService_AckRoleTradeDrain_Handler,
+		},
+		{
+			MethodName: "RequestAccountDeletion",
+			Handler:    _DataService_RequestAccountDeletion_Handler,
+		},
+		{
+			MethodName: "CancelAccountDeletion",
+			Handler:    _DataService_CancelAccountDeletion_Handler,
+		},
+		{
+			MethodName: "ClaimAccountDeletions",
+			Handler:    _DataService_ClaimAccountDeletions_Handler,
+		},
+		{
+			MethodName: "FinishAccountDeletion",
+			Handler:    _DataService_FinishAccountDeletion_Handler,
 		},
 		{
 			MethodName: "ReleaseDeadPlayerStoreHolder",
@@ -1619,6 +1943,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BatchGetPlayerName",
 			Handler:    _DataService_BatchGetPlayerName_Handler,
+		},
+		{
+			MethodName: "RenameRole",
+			Handler:    _DataService_RenameRole_Handler,
 		},
 		{
 			MethodName: "BatchGetPlayerDisplay",

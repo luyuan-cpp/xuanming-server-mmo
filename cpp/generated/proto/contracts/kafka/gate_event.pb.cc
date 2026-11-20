@@ -460,11 +460,11 @@ constexpr RedirectToGateEvent::ParseTableT_ RedirectToGateEvent::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -474,22 +474,25 @@ constexpr RedirectToGateEvent::ParseTableT_ RedirectToGateEvent::InternalGenerat
       ::_pbi::TcParser::GetTable<::contracts::kafka::RedirectToGateEvent>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // string target_gate_ws_url = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 3, 0,
+        PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.target_gate_ws_url_)}},
       // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateEvent, _impl_.player_id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateEvent, _impl_.player_id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.player_id_)}},
       // uint32 session_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateEvent, _impl_.session_id_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateEvent, _impl_.session_id_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.session_id_)}},
       // string target_gate_ip = 3;
       {::_pbi::TcParser::FastUS1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.target_gate_ip_)}},
       // uint32 target_gate_port = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateEvent, _impl_.target_gate_port_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateEvent, _impl_.target_gate_port_), 6>(),
+       {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.target_gate_port_)}},
       // bytes token_payload = 5;
       {::_pbi::TcParser::FastBS1,
@@ -500,32 +503,35 @@ constexpr RedirectToGateEvent::ParseTableT_ RedirectToGateEvent::InternalGenerat
        {50, 2, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.token_signature_)}},
       // int64 token_deadline = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateEvent, _impl_.token_deadline_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateEvent, _impl_.token_deadline_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.token_deadline_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 session_id = 2;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string target_gate_ip = 3;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.target_gate_ip_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 target_gate_port = 4;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.target_gate_port_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.target_gate_port_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes token_payload = 5;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.token_payload_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // bytes token_signature = 6;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.token_signature_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // int64 token_deadline = 7;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.token_deadline_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.token_deadline_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // string target_gate_ws_url = 8;
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.target_gate_ws_url_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\43\0\0\16\0\0\0\0"
+      "\43\0\0\16\0\0\0\0\22\0\0\0\0\0\0\0"
       "contracts.kafka.RedirectToGateEvent"
       "target_gate_ip"
+      "target_gate_ws_url"
     }},
   };
 }
@@ -542,6 +548,9 @@ inline constexpr RedirectToGateEvent::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         token_signature_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_gate_ws_url_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
@@ -1012,11 +1021,11 @@ constexpr KickPlayerEvent::ParseTableT_ KickPlayerEvent::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1026,28 +1035,33 @@ constexpr KickPlayerEvent::ParseTableT_ KickPlayerEvent::InternalGenerateParseTa
       ::_pbi::TcParser::GetTable<::contracts::kafka::KickPlayerEvent>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 reason_tip = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(KickPlayerEvent, _impl_.reason_tip_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.reason_tip_)}},
       // uint32 session_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(KickPlayerEvent, _impl_.session_id_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(KickPlayerEvent, _impl_.session_id_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.session_id_)}},
       // uint64 player_id = 2;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickPlayerEvent, _impl_.player_id_), 0>(),
        {16, 0, 0,
         PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.player_id_)}},
       // uint64 login_generation = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickPlayerEvent, _impl_.login_generation_), 1>(),
-       {24, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(KickPlayerEvent, _impl_.login_generation_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.login_generation_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 session_id = 1;
-      {PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 player_id = 2;
       {PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 login_generation = 3;
-      {PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.login_generation_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.login_generation_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 reason_tip = 4;
+      {PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.reason_tip_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -1061,8 +1075,9 @@ inline constexpr KickPlayerEvent::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         player_id_{::uint64_t{0u}},
-        login_generation_{::uint64_t{0u}},
-        session_id_{0u} {}
+        session_id_{0u},
+        reason_tip_{0u},
+        login_generation_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr KickPlayerEvent::KickPlayerEvent(::_pbi::ConstantInitialized,
@@ -2190,13 +2205,15 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::KickPlayerEvent, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::KickPlayerEvent, _impl_.session_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::KickPlayerEvent, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::KickPlayerEvent, _impl_.login_generation_),
-        2,
-        0,
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::KickPlayerEvent, _impl_.reason_tip_),
         1,
+        0,
+        3,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerDisconnectedEvent, _impl_._has_bits_),
         7, // hasbit index offset
@@ -2244,7 +2261,7 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_.session_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_.target_gate_ip_),
@@ -2252,13 +2269,15 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_.token_payload_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_.token_signature_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_.token_deadline_),
-        3,
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::RedirectToGateEvent, _impl_.target_gate_ws_url_),
         4,
-        0,
         5,
+        0,
+        6,
         1,
         2,
-        6,
+        7,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::GateDrainMigrationEvent, _impl_._has_bits_),
         6, // hasbit index offset
@@ -2327,16 +2346,16 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::contracts::kafka::RoutePlayerEvent)},
         {19, sizeof(::contracts::kafka::KickPlayerEvent)},
-        {28, sizeof(::contracts::kafka::PlayerDisconnectedEvent)},
-        {39, sizeof(::contracts::kafka::PlayerLeaseExpiredEvent)},
-        {54, sizeof(::contracts::kafka::BindSessionEvent)},
-        {73, sizeof(::contracts::kafka::RedirectToGateEvent)},
-        {90, sizeof(::contracts::kafka::GateDrainMigrationEvent)},
-        {99, sizeof(::contracts::kafka::PushToPlayerEvent)},
-        {108, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
-        {121, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
-        {128, sizeof(::contracts::kafka::BroadcastToAllEvent)},
-        {133, sizeof(::contracts::kafka::SpectateFrameEvent)},
+        {30, sizeof(::contracts::kafka::PlayerDisconnectedEvent)},
+        {41, sizeof(::contracts::kafka::PlayerLeaseExpiredEvent)},
+        {56, sizeof(::contracts::kafka::BindSessionEvent)},
+        {75, sizeof(::contracts::kafka::RedirectToGateEvent)},
+        {94, sizeof(::contracts::kafka::GateDrainMigrationEvent)},
+        {103, sizeof(::contracts::kafka::PushToPlayerEvent)},
+        {112, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
+        {125, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
+        {132, sizeof(::contracts::kafka::BroadcastToAllEvent)},
+        {137, sizeof(::contracts::kafka::SpectateFrameEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2363,50 +2382,51 @@ const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2e
     " \001(\r\022\020\n\010scene_id\030\003 \001(\004\022\021\n\tplayer_id\030\004 \001("
     "\004\022\024\n\014home_zone_id\030\005 \001(\r\022\023\n\013owner_epoch\030\006"
     " \001(\004\022\030\n\020login_generation\030\007 \001(\004\022\026\n\016owner_"
-    "revision\030\010 \001(\004:\005\210\346\325\002\001\"Y\n\017KickPlayerEvent"
+    "revision\030\010 \001(\004:\005\210\346\325\002\001\"m\n\017KickPlayerEvent"
     "\022\022\n\nsession_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022"
-    "\030\n\020login_generation\030\003 \001(\004:\005\210\346\325\002\001\"k\n\027Play"
-    "erDisconnectedEvent\022\022\n\nsession_id\030\001 \001(\r\022"
-    "\021\n\tplayer_id\030\002 \001(\004\022\017\n\007gate_id\030\003 \001(\t\022\030\n\020g"
-    "ate_instance_id\030\004 \001(\t\"\233\001\n\027PlayerLeaseExp"
-    "iredEvent\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nsession_"
-    "id\030\002 \001(\r\022\025\n\rscene_node_id\030\003 \001(\t\022\020\n\010scene"
-    "_id\030\004 \001(\004\022\017\n\007gate_id\030\005 \001(\t\022\030\n\020gate_insta"
-    "nce_id\030\006 \001(\t:\005\210\346\325\002\001\"\336\001\n\020BindSessionEvent"
-    "\022\022\n\nsession_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022"
-    "\027\n\017session_version\030\003 \001(\r\022\025\n\renter_gs_typ"
-    "e\030\004 \001(\r\022\030\n\020login_generation\030\005 \001(\004\022\035\n\025aut"
-    "henticated_account\030\006 \001(\t\022\033\n\023session_inca"
-    "rnation\030\007 \001(\004\022\026\n\016owner_revision\030\010 \001(\004:\005\210"
-    "\346\325\002\001\"\275\001\n\023RedirectToGateEvent\022\021\n\tplayer_i"
-    "d\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\026\n\016target_ga"
-    "te_ip\030\003 \001(\t\022\030\n\020target_gate_port\030\004 \001(\r\022\025\n"
-    "\rtoken_payload\030\005 \001(\014\022\027\n\017token_signature\030"
-    "\006 \001(\014\022\026\n\016token_deadline\030\007 \001(\003:\005\210\346\325\002\001\"d\n\027"
-    "GateDrainMigrationEvent\022\027\n\017drain_marked_"
-    "at\030\001 \001(\003\022\027\n\017rate_per_second\030\002 \001(\r\022\020\n\010lea"
-    "se_ms\030\003 \001(\r:\005\210\346\325\002\001\"k\n\021PushToPlayerEvent\022"
-    "\022\n\nsession_id\030\001 \001(\r\022(\n\017message_content\030\002"
-    " \001(\0132\017.MessageContent\022\021\n\tplayer_id\030\003 \001(\004"
-    ":\005\210\346\325\002\001\"\252\001\n\027BroadcastToPlayersEvent\022\024\n\014s"
-    "ession_list\030\001 \003(\r\022(\n\017message_content\030\002 \001"
-    "(\0132\017.MessageContent\022\033\n\023session_bitmap_ba"
-    "se\030\003 \001(\r\022\026\n\016session_bitmap\030\004 \001(\014\022\023\n\013play"
-    "er_list\030\005 \003(\004:\005\210\346\325\002\001\"Z\n\025BroadcastToScene"
-    "Event\022\020\n\010scene_id\030\001 \001(\004\022(\n\017message_conte"
-    "nt\030\002 \001(\0132\017.MessageContent:\005\210\346\325\002\001\"F\n\023Broa"
-    "dcastToAllEvent\022(\n\017message_content\030\001 \001(\013"
-    "2\017.MessageContent:\005\210\346\325\002\001\"\352\001\n\022SpectateFra"
-    "meEvent\022\021\n\tbattle_id\030\001 \001(\004\022\032\n\022battle_ins"
-    "tance_id\030\002 \001(\t\022\023\n\013round_index\030\003 \001(\r\0221\n\004k"
-    "ind\030\004 \001(\0162#.contracts.kafka.eSpectateFra"
-    "meKind\022\024\n\014client_frame\030\005 \001(\014\022\023\n\013deadline"
-    "_ms\030\006 \001(\004\022\026\n\016target_gate_id\030\007 \001(\r\022\032\n\022tar"
-    "get_instance_id\030\010 \001(\t*x\n\022eSpectateFrameK"
-    "ind\022\027\n\023SPECTATE_FRAME_NONE\020\000\022\030\n\024SPECTATE"
-    "_FRAME_STATE\020\001\022\027\n\023SPECTATE_FRAME_TURN\020\002\022"
-    "\026\n\022SPECTATE_FRAME_END\020\003B\021Z\017contracts/kaf"
-    "kab\006proto3"
+    "\030\n\020login_generation\030\003 \001(\004\022\022\n\nreason_tip\030"
+    "\004 \001(\r:\005\210\346\325\002\001\"k\n\027PlayerDisconnectedEvent\022"
+    "\022\n\nsession_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\017"
+    "\n\007gate_id\030\003 \001(\t\022\030\n\020gate_instance_id\030\004 \001("
+    "\t\"\233\001\n\027PlayerLeaseExpiredEvent\022\021\n\tplayer_"
+    "id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\025\n\rscene_no"
+    "de_id\030\003 \001(\t\022\020\n\010scene_id\030\004 \001(\004\022\017\n\007gate_id"
+    "\030\005 \001(\t\022\030\n\020gate_instance_id\030\006 \001(\t:\005\210\346\325\002\001\""
+    "\336\001\n\020BindSessionEvent\022\022\n\nsession_id\030\001 \001(\r"
+    "\022\021\n\tplayer_id\030\002 \001(\004\022\027\n\017session_version\030\003"
+    " \001(\r\022\025\n\renter_gs_type\030\004 \001(\r\022\030\n\020login_gen"
+    "eration\030\005 \001(\004\022\035\n\025authenticated_account\030\006"
+    " \001(\t\022\033\n\023session_incarnation\030\007 \001(\004\022\026\n\016own"
+    "er_revision\030\010 \001(\004:\005\210\346\325\002\001\"\331\001\n\023RedirectToG"
+    "ateEvent\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nsession_i"
+    "d\030\002 \001(\r\022\026\n\016target_gate_ip\030\003 \001(\t\022\030\n\020targe"
+    "t_gate_port\030\004 \001(\r\022\025\n\rtoken_payload\030\005 \001(\014"
+    "\022\027\n\017token_signature\030\006 \001(\014\022\026\n\016token_deadl"
+    "ine\030\007 \001(\003\022\032\n\022target_gate_ws_url\030\010 \001(\t:\005\210"
+    "\346\325\002\001\"d\n\027GateDrainMigrationEvent\022\027\n\017drain"
+    "_marked_at\030\001 \001(\003\022\027\n\017rate_per_second\030\002 \001("
+    "\r\022\020\n\010lease_ms\030\003 \001(\r:\005\210\346\325\002\001\"k\n\021PushToPlay"
+    "erEvent\022\022\n\nsession_id\030\001 \001(\r\022(\n\017message_c"
+    "ontent\030\002 \001(\0132\017.MessageContent\022\021\n\tplayer_"
+    "id\030\003 \001(\004:\005\210\346\325\002\001\"\252\001\n\027BroadcastToPlayersEv"
+    "ent\022\024\n\014session_list\030\001 \003(\r\022(\n\017message_con"
+    "tent\030\002 \001(\0132\017.MessageContent\022\033\n\023session_b"
+    "itmap_base\030\003 \001(\r\022\026\n\016session_bitmap\030\004 \001(\014"
+    "\022\023\n\013player_list\030\005 \003(\004:\005\210\346\325\002\001\"Z\n\025Broadcas"
+    "tToSceneEvent\022\020\n\010scene_id\030\001 \001(\004\022(\n\017messa"
+    "ge_content\030\002 \001(\0132\017.MessageContent:\005\210\346\325\002\001"
+    "\"F\n\023BroadcastToAllEvent\022(\n\017message_conte"
+    "nt\030\001 \001(\0132\017.MessageContent:\005\210\346\325\002\001\"\352\001\n\022Spe"
+    "ctateFrameEvent\022\021\n\tbattle_id\030\001 \001(\004\022\032\n\022ba"
+    "ttle_instance_id\030\002 \001(\t\022\023\n\013round_index\030\003 "
+    "\001(\r\0221\n\004kind\030\004 \001(\0162#.contracts.kafka.eSpe"
+    "ctateFrameKind\022\024\n\014client_frame\030\005 \001(\014\022\023\n\013"
+    "deadline_ms\030\006 \001(\004\022\026\n\016target_gate_id\030\007 \001("
+    "\r\022\032\n\022target_instance_id\030\010 \001(\t*x\n\022eSpecta"
+    "teFrameKind\022\027\n\023SPECTATE_FRAME_NONE\020\000\022\030\n\024"
+    "SPECTATE_FRAME_STATE\020\001\022\027\n\023SPECTATE_FRAME"
+    "_TURN\020\002\022\026\n\022SPECTATE_FRAME_END\020\003B\021Z\017contr"
+    "acts/kafkab\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_deps[2] = {
@@ -2417,7 +2437,7 @@ static ::absl::once_flag descriptor_table_proto_2fcontracts_2fkafka_2fgate_5feve
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto = {
     false,
     false,
-    2050,
+    2098,
     descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
     "proto/contracts/kafka/gate_event.proto",
     &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_once,
@@ -2825,9 +2845,9 @@ inline void KickPlayerEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, session_id_) -
+           offsetof(Impl_, login_generation_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::session_id_));
+               sizeof(Impl_::login_generation_));
 }
 KickPlayerEvent::~KickPlayerEvent() {
   // @@protoc_insertion_point(destructor:contracts.kafka.KickPlayerEvent)
@@ -2877,10 +2897,10 @@ PROTOBUF_NOINLINE void KickPlayerEvent::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.session_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.session_id_));
+        reinterpret_cast<char*>(&_impl_.login_generation_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.login_generation_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2906,7 +2926,7 @@ PROTOBUF_NOINLINE void KickPlayerEvent::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 session_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_session_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2924,11 +2944,20 @@ PROTOBUF_NOINLINE void KickPlayerEvent::Clear() {
   }
 
   // uint64 login_generation = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_login_generation() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           3, this_._internal_login_generation(), target);
+    }
+  }
+
+  // uint32 reason_tip = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_reason_tip() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_reason_tip(), target);
     }
   }
 
@@ -2957,7 +2986,7 @@ PROTOBUF_NOINLINE void KickPlayerEvent::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // uint64 player_id = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -2965,18 +2994,25 @@ PROTOBUF_NOINLINE void KickPlayerEvent::Clear() {
             this_._internal_player_id());
       }
     }
-    // uint64 login_generation = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (this_._internal_login_generation() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_login_generation());
-      }
-    }
     // uint32 session_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_id());
+      }
+    }
+    // uint32 reason_tip = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_reason_tip() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_reason_tip());
+      }
+    }
+    // uint64 login_generation = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_login_generation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_login_generation());
       }
     }
   }
@@ -2997,20 +3033,25 @@ void KickPlayerEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_login_generation() != 0) {
-        _this->_impl_.login_generation_ = from._impl_.login_generation_;
+      if (from._internal_session_id() != 0) {
+        _this->_impl_.session_id_ = from._impl_.session_id_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
-      if (from._internal_session_id() != 0) {
-        _this->_impl_.session_id_ = from._impl_.session_id_;
+      if (from._internal_reason_tip() != 0) {
+        _this->_impl_.reason_tip_ = from._impl_.reason_tip_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_login_generation() != 0) {
+        _this->_impl_.login_generation_ = from._impl_.login_generation_;
       }
     }
   }
@@ -3032,8 +3073,8 @@ void KickPlayerEvent::InternalSwap(KickPlayerEvent* PROTOBUF_RESTRICT PROTOBUF_N
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.session_id_)
-      + sizeof(KickPlayerEvent::_impl_.session_id_)
+      PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.login_generation_)
+      + sizeof(KickPlayerEvent::_impl_.login_generation_)
       - PROTOBUF_FIELD_OFFSET(KickPlayerEvent, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));
@@ -4139,7 +4180,8 @@ PROTOBUF_NDEBUG_INLINE RedirectToGateEvent::Impl_::Impl_(
         _cached_size_{0},
         target_gate_ip_(arena, from.target_gate_ip_),
         token_payload_(arena, from.token_payload_),
-        token_signature_(arena, from.token_signature_) {}
+        token_signature_(arena, from.token_signature_),
+        target_gate_ws_url_(arena, from.target_gate_ws_url_) {}
 
 RedirectToGateEvent::RedirectToGateEvent(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -4171,7 +4213,8 @@ PROTOBUF_NDEBUG_INLINE RedirectToGateEvent::Impl_::Impl_(
       : _cached_size_{0},
         target_gate_ip_(arena),
         token_payload_(arena),
-        token_signature_(arena) {}
+        token_signature_(arena),
+        target_gate_ws_url_(arena) {}
 
 inline void RedirectToGateEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -4196,6 +4239,7 @@ inline void RedirectToGateEvent::SharedDtor(MessageLite& self) {
   this_._impl_.target_gate_ip_.Destroy();
   this_._impl_.token_payload_.Destroy();
   this_._impl_.token_signature_.Destroy();
+  this_._impl_.target_gate_ws_url_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -4233,7 +4277,7 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.target_gate_ip_.ClearNonDefaultToEmpty();
     }
@@ -4243,8 +4287,11 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.token_signature_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.target_gate_ws_url_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.token_deadline_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.token_deadline_));
@@ -4273,7 +4320,7 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4282,7 +4329,7 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
   }
 
   // uint32 session_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_session_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4301,7 +4348,7 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
   }
 
   // uint32 target_gate_port = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_target_gate_port() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -4326,11 +4373,21 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
   }
 
   // int64 token_deadline = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_token_deadline() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<7>(
               stream, this_._internal_token_deadline(), target);
+    }
+  }
+
+  // string target_gate_ws_url = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_target_gate_ws_url().empty()) {
+      const ::std::string& _s = this_._internal_target_gate_ws_url();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "contracts.kafka.RedirectToGateEvent.target_gate_ws_url");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
     }
   }
 
@@ -4359,7 +4416,7 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string target_gate_ip = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_target_gate_ip().empty()) {
@@ -4381,29 +4438,36 @@ PROTOBUF_NOINLINE void RedirectToGateEvent::Clear() {
                                         this_._internal_token_signature());
       }
     }
-    // uint64 player_id = 1;
+    // string target_gate_ws_url = 8;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_target_gate_ws_url().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_gate_ws_url());
+      }
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint32 session_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_id());
       }
     }
     // uint32 target_gate_port = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_target_gate_port() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_target_gate_port());
       }
     }
     // int64 token_deadline = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_token_deadline() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_token_deadline());
@@ -4427,7 +4491,7 @@ void RedirectToGateEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_target_gate_ip().empty()) {
         _this->_internal_set_target_gate_ip(from._internal_target_gate_ip());
@@ -4456,21 +4520,30 @@ void RedirectToGateEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_target_gate_ws_url().empty()) {
+        _this->_internal_set_target_gate_ws_url(from._internal_target_gate_ws_url());
+      } else {
+        if (_this->_impl_.target_gate_ws_url_.IsDefault()) {
+          _this->_internal_set_target_gate_ws_url("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_session_id() != 0) {
         _this->_impl_.session_id_ = from._impl_.session_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_target_gate_port() != 0) {
         _this->_impl_.target_gate_port_ = from._impl_.target_gate_port_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_token_deadline() != 0) {
         _this->_impl_.token_deadline_ = from._impl_.token_deadline_;
       }
@@ -4498,6 +4571,7 @@ void RedirectToGateEvent::InternalSwap(RedirectToGateEvent* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_gate_ip_, &other->_impl_.target_gate_ip_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.token_payload_, &other->_impl_.token_payload_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.token_signature_, &other->_impl_.token_signature_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_gate_ws_url_, &other->_impl_.target_gate_ws_url_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(RedirectToGateEvent, _impl_.token_deadline_)
       + sizeof(RedirectToGateEvent::_impl_.token_deadline_)

@@ -101,6 +101,18 @@ enum login_error : int {
   kLoginAuthProviderUnavailable = 2035,
   kLoginTokenIssueFailed = 2036,
   kLoginZoneCreateRoleClosed = 2037,
+  kLoginAccountDeletionPending = 2038,
+  kLoginAccountDeletionBlocked = 2039,
+  kLoginAccountDeletionInProgress = 2040,
+  kLoginAccountDeletionReauthRequired = 2041,
+  kLoginRealNameRequired = 2042,
+  kLoginRealNameInvalid = 2043,
+  kLoginRealNamePending = 2044,
+  kLoginRealNameTooManyAttempts = 2045,
+  kLoginRealNameAlreadyBound = 2046,
+  kLoginRealNameServiceUnavailable = 2047,
+  kLoginMinorNotInPlayTime = 2048,
+  kLoginMinorPlayTimeOver = 2049,
   login_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   login_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -111,11 +123,11 @@ extern const uint32_t login_error_internal_data_[];
 inline constexpr login_error login_error_MIN =
     static_cast<login_error>(0);
 inline constexpr login_error login_error_MAX =
-    static_cast<login_error>(2037);
+    static_cast<login_error>(2049);
 [[nodiscard]] inline bool login_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, login_error_internal_data_);
 }
-inline constexpr int login_error_ARRAYSIZE = 2037 + 1;
+inline constexpr int login_error_ARRAYSIZE = 2049 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 login_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(login_error) {

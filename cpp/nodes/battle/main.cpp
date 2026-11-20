@@ -251,21 +251,33 @@ namespace
                             std::getenv(battle_connection_admission::kPreAuthEvictableAgeEnv), effectiveMaxConnections,
                             error)
                       : std::nullopt;
-        if (!rateLimit || !preAuthBudget)
+        // 按来源限速(与 gate 同一份规则,设计稿 P2-2):缺省关闭,BATTLE_SOURCE_RATE_PER_SECOND 打开;写错同样拒启。
+        std::optional<battle_connection_admission::RateLimit> sourceRateLimit;
+        const bool sourceRateResolved =
+            preAuthBudget && battle_connection_admission::ResolveSourceRateLimit(
+                                 std::getenv(battle_connection_admission::kSourceRateEnv),
+                                 std::getenv(battle_connection_admission::kSourceBurstEnv), sourceRateLimit, error);
+        if (!rateLimit || !preAuthBudget || !sourceRateResolved)
         {
             LOG_FATAL << "Refusing to start: " << error;
             return;
         }
-        edge.ConfigureAdmission(*rateLimit, *preAuthBudget);
+        edge.ConfigureAdmission(*rateLimit, *preAuthBudget, sourceRateLimit);
+        const auto suggestedSource = accept_admission::DefaultSourceRateLimit(effectiveMaxConnections);
         LOG_INFO << "Battle client connection admission ENFORCED at accept, max_connections=" << effectiveMaxConnections
                  << " accept_rate_per_second=" << rateLimit->perSecond << " accept_burst=" << rateLimit->burst
                  << " preauth_early_drop_start=" << preAuthBudget->earlyDropStart
                  << " preauth_budget=" << preAuthBudget->full
                  << " preauth_evictable_age_ms=" << preAuthBudget->minEvictableAge.count()
+                 << " source_rate_per_second=" << (sourceRateLimit ? sourceRateLimit->perSecond : 0)
+                 << " source_burst=" << (sourceRateLimit ? sourceRateLimit->burst : 0)
                  << " (overrides: " << battle_connection_admission::kAcceptRateEnv << " / "
                  << battle_connection_admission::kAcceptBurstEnv << ", " << battle_connection_admission::kPreAuthBudgetEnv
                  << " / " << battle_connection_admission::kPreAuthEarlyDropStartEnv << " / "
-                 << battle_connection_admission::kPreAuthEvictableAgeEnv << ")";
+                 << battle_connection_admission::kPreAuthEvictableAgeEnv << ", " << battle_connection_admission::kSourceRateEnv
+                 << " / " << battle_connection_admission::kSourceBurstEnv << "; suggested per-source "
+                 << suggestedSource.perSecond << "/s burst " << suggestedSource.burst
+                 << ", applies to public source addresses only)";
     }
 
     struct BattleNodeHooks

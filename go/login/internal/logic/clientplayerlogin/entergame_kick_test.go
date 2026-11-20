@@ -390,11 +390,11 @@ func TestEnterGame_ReplaceLoginKicksOnlyAfterSetSessionCommits(t *testing.T) {
 }
 
 // 同一连接重登(会话号与实例号都相同):不踢,否则本连接的 gate 会话仍绑着更小的代次,ClassifyKick 会判 kKick 自踢(回归)。
-// 计数也要落在 skip_same_session:§2.2 ⑤ 第 3、4 行踢线次数都是 0,只能靠 result 区分「同一连接」与「跨实例同号」。
+// 计数落在 skip_same_session,不落在 sent。
 func TestEnterGame_SameSessionSameInstanceDoesNotKick(t *testing.T) {
 	h := newKickHarness(t, kickExistingRecord(kickChainSessionID, kickChainInstance), kickChainInstance)
 	beforeSame := kickCount(t, kickResultSkipSameSession)
-	beforeCross := kickCount(t, kickResultSkipCrossInstance)
+	beforeSent := kickCount(t, kickResultSent)
 
 	_ = h.apply(context.Background())
 
@@ -402,21 +402,34 @@ func TestEnterGame_SameSessionSameInstanceDoesNotKick(t *testing.T) {
 		t.Fatalf("kicks = %+v, want none for the same connection", calls)
 	}
 	requireKickDelta(t, kickResultSkipSameSession, beforeSame, 1)
-	requireKickDelta(t, kickResultSkipCrossInstance, beforeCross, 0)
+	requireKickDelta(t, kickResultSent, beforeSent, 0)
 }
 
-// 跨实例同号(gate 以同一 node_id 重启,同号落到新实例):按 §12.3 定论只计数不踢(result=skip_cross_instance)。
-// 设计 §2.7 原表此行是「踢 1 次」,§12.3 定论改为不踢;旧代码同号直接跳过,踢线次数相同,只差计数。
-func TestEnterGame_SameSessionDifferentInstanceSkipsCrossInstance(t *testing.T) {
+// 跨实例同号(同一 node_id 上的老 gate 进程还没关停,新进程发出了同号):踢老实例上的旧连接,目标实例取旧记录的实例号,
+// 新实例按防僵尸过滤丢弃这条命令。scene 按 (gate 实例, session_id) 认会话之后(scene-enter-chain-residuals.md §14),
+// 老实例关闭旧连接时代发的 ExitGame 不再退掉新会话,于是 §12.3 第 1 点改回踢线(改回之前只计 skip_cross_instance、踢 0 次,红)。
+func TestEnterGame_SameSessionDifferentInstanceKicks(t *testing.T) {
 	h := newKickHarness(t, kickExistingRecord(kickChainSessionID, "uuid-old"), kickChainInstance)
-	before := kickCount(t, kickResultSkipCrossInstance)
+	beforeSent := kickCount(t, kickResultSent)
+	beforeSame := kickCount(t, kickResultSkipSameSession)
 
 	_ = h.apply(context.Background())
 
-	if calls := h.kicker.recorded(); len(calls) != 0 {
-		t.Fatalf("kicks = %+v, want none: cross-instance same-session kicks stay off until the scene-side fence lands", calls)
+	want := kickCall{
+		gateID:          kickOldGateID,
+		gateInstanceID:  "uuid-old",
+		sessionID:       kickChainSessionID,
+		playerID:        kickPlayerID,
+		loginGeneration: h.locator.committedGeneration(t),
 	}
-	requireKickDelta(t, kickResultSkipCrossInstance, before, 1)
+	if calls := h.kicker.recorded(); len(calls) != 1 || calls[0] != want {
+		t.Fatalf("kicks = %+v, want exactly [%+v]: the old connection on the old gate process must be kicked", calls, want)
+	}
+	if got, want := h.events.snapshot(), []string{"GetSession", "SetSession", "Kick"}; !slices.Equal(got, want) {
+		t.Fatalf("event sequence = %v, want %v (kick only after the session record is committed)", got, want)
+	}
+	requireKickDelta(t, kickResultSent, beforeSent, 1)
+	requireKickDelta(t, kickResultSkipSameSession, beforeSame, 0)
 }
 
 // 本链实例号为空:这条链必在 Bind 的守卫一失败,无论会话号都不踢(旧代码会话号不同的那例会先踢掉旧设备,红)。

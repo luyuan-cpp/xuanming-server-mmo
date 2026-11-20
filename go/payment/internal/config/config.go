@@ -75,12 +75,10 @@ type ProductConf struct {
 //   - realname:建意图前按 data_service 账号目录里的实名执行未成年人充值限额(docs/design/real-name-anti-addiction.md §5.6),
 //     App 渠道才能在生产模式开。小游戏渠道上没有实名的账号仍由平台管。
 //   - overseas:部署在中国大陆以外,不适用上面的法规:App 渠道照开、不读实名。当地的未成年人消费规则由商店(家长控制)与运营按当地法规执行。
+//
+// 单次、每日、每月的额度不在这里配,只有 shared/antiaddiction.SpendLimitAt 一份(每日 = 单次上限,2026-11-20 定)。
 type ComplianceConf struct {
 	MinorSpendingGate string `json:"MinorSpendingGate,default=none"`
-	// 《未成年人网络保护条例》要求的单日累计上限(分),按年龄段:8 周岁以上未满 16 周岁、16 周岁以上未满 18 周岁。
-	// 0 = 不设;数字待负责人定(充值设计 §18 第 7 条)。单次、每月上限是法规定额,写在 shared/antiaddiction。
-	DailyLimitFenAge8To16  uint64 `json:"DailyLimitFenAge8To16,optional"`
-	DailyLimitFenAge16To18 uint64 `json:"DailyLimitFenAge16To18,optional"`
 }
 
 // MinorSpendingGate 的取值。

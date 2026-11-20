@@ -1,0 +1,38 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum payment_error {
+  kPayment_errorOK = 0;
+
+  kPaymentChannelUnavailable = 31000;
+
+  kPaymentOrderNotFound = 31001;
+
+  kPaymentOrderNotPayable = 31002;
+
+  kPaymentOrderExpired = 31003;
+
+  kPaymentChannelMismatch = 31004;
+
+  kPaymentCurrencyUnsupported = 31005;
+
+  kPaymentBusy = 31006;
+
+  kPaymentLoginRequired = 31007;
+
+  kPaymentRealNameRequired = 31008;
+
+  kPaymentMinorNotAllowed = 31009;
+
+  kPaymentMinorSingleLimit = 31010;
+
+  kPaymentMinorDailyLimit = 31011;
+
+  kPaymentMinorMonthlyLimit = 31012;
+
+};

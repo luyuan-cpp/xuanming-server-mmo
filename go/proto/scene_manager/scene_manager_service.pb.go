@@ -616,14 +616,15 @@ func (x *EnterSceneResponse) GetCorrelationId() uint64 {
 
 // Redirect info returned when player needs to switch to a different zone's Gate.
 type RedirectToGateInfo struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	TargetGateIp   string                 `protobuf:"bytes,1,opt,name=target_gate_ip,json=targetGateIp,proto3" json:"target_gate_ip,omitempty"`
-	TargetGatePort uint32                 `protobuf:"varint,2,opt,name=target_gate_port,json=targetGatePort,proto3" json:"target_gate_port,omitempty"`
-	TokenPayload   []byte                 `protobuf:"bytes,3,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`       // serialized GateTokenPayload for target gate
-	TokenSignature []byte                 `protobuf:"bytes,4,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"` // HMAC-SHA256 signature
-	TokenDeadline  int64                  `protobuf:"varint,5,opt,name=token_deadline,json=tokenDeadline,proto3" json:"token_deadline,omitempty"`   // unix seconds
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TargetGateIp    string                 `protobuf:"bytes,1,opt,name=target_gate_ip,json=targetGateIp,proto3" json:"target_gate_ip,omitempty"`
+	TargetGatePort  uint32                 `protobuf:"varint,2,opt,name=target_gate_port,json=targetGatePort,proto3" json:"target_gate_port,omitempty"`
+	TokenPayload    []byte                 `protobuf:"bytes,3,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`              // serialized GateTokenPayload for target gate
+	TokenSignature  []byte                 `protobuf:"bytes,4,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"`        // HMAC-SHA256 signature
+	TokenDeadline   int64                  `protobuf:"varint,5,opt,name=token_deadline,json=tokenDeadline,proto3" json:"token_deadline,omitempty"`          // unix seconds
+	TargetGateWsUrl string                 `protobuf:"bytes,6,opt,name=target_gate_ws_url,json=targetGateWsUrl,proto3" json:"target_gate_ws_url,omitempty"` // 目标 gate 的 WebSocket 地址(NodeInfo.client_ws_url);空串 = 不接小游戏
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RedirectToGateInfo) Reset() {
@@ -689,6 +690,13 @@ func (x *RedirectToGateInfo) GetTokenDeadline() int64 {
 		return x.TokenDeadline
 	}
 	return 0
+}
+
+func (x *RedirectToGateInfo) GetTargetGateWsUrl() string {
+	if x != nil {
+		return x.TargetGateWsUrl
+	}
+	return ""
 }
 
 type LeaveSceneRequest struct {
@@ -833,13 +841,14 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"\bredirect\x18\x03 \x01(\v2!.scene_manager.RedirectToGateInfoR\bredirect\x12\x1b\n" +
 	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\x12;\n" +
 	"\x1aowner_epoch_after_rollback\x18\x05 \x01(\x04R\x17ownerEpochAfterRollback\x12%\n" +
-	"\x0ecorrelation_id\x18\x06 \x01(\x04R\rcorrelationId\"\xd9\x01\n" +
+	"\x0ecorrelation_id\x18\x06 \x01(\x04R\rcorrelationId\"\x86\x02\n" +
 	"\x12RedirectToGateInfo\x12$\n" +
 	"\x0etarget_gate_ip\x18\x01 \x01(\tR\ftargetGateIp\x12(\n" +
 	"\x10target_gate_port\x18\x02 \x01(\rR\x0etargetGatePort\x12#\n" +
 	"\rtoken_payload\x18\x03 \x01(\fR\ftokenPayload\x12'\n" +
 	"\x0ftoken_signature\x18\x04 \x01(\fR\x0etokenSignature\x12%\n" +
-	"\x0etoken_deadline\x18\x05 \x01(\x03R\rtokenDeadline\"\xcd\x01\n" +
+	"\x0etoken_deadline\x18\x05 \x01(\x03R\rtokenDeadline\x12+\n" +
+	"\x12target_gate_ws_url\x18\x06 \x01(\tR\x0ftargetGateWsUrl\"\xcd\x01\n" +
 	"\x11LeaveSceneRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\x04R\asceneId\x12\x1d\n" +

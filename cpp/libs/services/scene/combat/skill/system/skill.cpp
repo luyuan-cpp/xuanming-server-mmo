@@ -193,8 +193,8 @@ void SkillSystem::StartCooldown(entt::entity caster, const SkillTable* skillTabl
 }
 
 void SkillSystem::RestoreCooldowns(const entt::entity caster, const CooldownTimeListComp& saved) {
-	if (saved.cooldown_list().empty()) {
-		return;  // 没有记录 = 没有冷却,按需状态不挂空表
+	if (saved.ByteSizeLong() == 0) {
+		return;  // 没有记录、也没有更新版本带来的列表级字段 = 没有冷却,按需状态不挂空表
 	}
 	if (!tlsEcs.actorRegistry.valid(caster)) {
 		LOG_ERROR << "RestoreCooldowns: invalid caster, entity=" << entt::to_integral(caster);

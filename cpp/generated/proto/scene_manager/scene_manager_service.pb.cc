@@ -59,11 +59,11 @@ constexpr RedirectToGateInfo::ParseTableT_ RedirectToGateInfo::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -79,8 +79,8 @@ constexpr RedirectToGateInfo::ParseTableT_ RedirectToGateInfo::InternalGenerateP
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_ip_)}},
       // uint32 target_gate_port = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateInfo, _impl_.target_gate_port_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateInfo, _impl_.target_gate_port_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_port_)}},
       // bytes token_payload = 3;
       {::_pbi::TcParser::FastBS1,
@@ -91,10 +91,13 @@ constexpr RedirectToGateInfo::ParseTableT_ RedirectToGateInfo::InternalGenerateP
        {34, 2, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.token_signature_)}},
       // int64 token_deadline = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateInfo, _impl_.token_deadline_), 3>(),
-       {40, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateInfo, _impl_.token_deadline_), 4>(),
+       {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.token_deadline_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string target_gate_ws_url = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 3, 0,
+        PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_ws_url_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -102,19 +105,22 @@ constexpr RedirectToGateInfo::ParseTableT_ RedirectToGateInfo::InternalGenerateP
       // string target_gate_ip = 1;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_ip_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 target_gate_port = 2;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_port_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_port_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes token_payload = 3;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.token_payload_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // bytes token_signature = 4;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.token_signature_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // int64 token_deadline = 5;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.token_deadline_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.token_deadline_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // string target_gate_ws_url = 6;
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_ws_url_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\40\16\0\0\0\0\0\0"
+      "\40\16\0\0\0\0\22\0"
       "scene_manager.RedirectToGateInfo"
       "target_gate_ip"
+      "target_gate_ws_url"
     }},
   };
 }
@@ -131,6 +137,9 @@ inline constexpr RedirectToGateInfo::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         token_signature_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_gate_ws_url_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         token_deadline_{::int64_t{0}},
@@ -1473,16 +1482,18 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_.target_gate_ip_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_.target_gate_port_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_.token_payload_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_.token_signature_),
         PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_.token_deadline_),
+        PROTOBUF_FIELD_OFFSET(::scene_manager::RedirectToGateInfo, _impl_.target_gate_ws_url_),
         0,
-        4,
+        5,
         1,
         2,
+        4,
         3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::scene_manager::LeaveSceneRequest, _impl_._has_bits_),
@@ -1509,7 +1520,7 @@ static const ::_pbi::MigrationSchema
         {37, sizeof(::scene_manager::EnterSceneRequest)},
         {70, sizeof(::scene_manager::EnterSceneResponse)},
         {85, sizeof(::scene_manager::RedirectToGateInfo)},
-        {98, sizeof(::scene_manager::LeaveSceneRequest)},
+        {100, sizeof(::scene_manager::LeaveSceneRequest)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1550,25 +1561,26 @@ const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fmanager_5
     "ssage\030\002 \001(\t\0223\n\010redirect\030\003 \001(\0132!.scene_ma"
     "nager.RedirectToGateInfo\022\021\n\tplayer_id\030\004 "
     "\001(\004\022\"\n\032owner_epoch_after_rollback\030\005 \001(\004\022"
-    "\026\n\016correlation_id\030\006 \001(\004\"\216\001\n\022RedirectToGa"
+    "\026\n\016correlation_id\030\006 \001(\004\"\252\001\n\022RedirectToGa"
     "teInfo\022\026\n\016target_gate_ip\030\001 \001(\t\022\030\n\020target"
     "_gate_port\030\002 \001(\r\022\025\n\rtoken_payload\030\003 \001(\014\022"
     "\027\n\017token_signature\030\004 \001(\014\022\026\n\016token_deadli"
-    "ne\030\005 \001(\003\"\213\001\n\021LeaveSceneRequest\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\020\n\010scene_id\030\002 \001(\004\022\022\n\nrequest_i"
-    "d\030\003 \001(\t\022\017\n\007zone_id\030\004 \001(\r\022\022\n\nsession_id\030\005"
-    " \001(\r\022\030\n\020login_generation\030\006 \001(\004*[\n\tSceneT"
-    "ype\022\032\n\026SCENE_TYPE_UNSPECIFIED\020\000\022\031\n\025SCENE"
-    "_TYPE_MAIN_WORLD\020\001\022\027\n\023SCENE_TYPE_INSTANC"
-    "E\020\0022\263\002\n\014SceneManager\022V\n\013CreateScene\022!.sc"
-    "ene_manager.CreateSceneRequest\032\".scene_m"
-    "anager.CreateSceneResponse\"\000\022<\n\014DestroyS"
-    "cene\022\".scene_manager.DestroySceneRequest"
-    "\032\006.Empty\"\000\022S\n\nEnterScene\022 .scene_manager"
-    ".EnterSceneRequest\032!.scene_manager.Enter"
-    "SceneResponse\"\000\0228\n\nLeaveScene\022 .scene_ma"
-    "nager.LeaveSceneRequest\032\006.Empty\"\000B\035Z\033sce"
-    "ne_manager/scene_managerb\006proto3"
+    "ne\030\005 \001(\003\022\032\n\022target_gate_ws_url\030\006 \001(\t\"\213\001\n"
+    "\021LeaveSceneRequest\022\021\n\tplayer_id\030\001 \001(\004\022\020\n"
+    "\010scene_id\030\002 \001(\004\022\022\n\nrequest_id\030\003 \001(\t\022\017\n\007z"
+    "one_id\030\004 \001(\r\022\022\n\nsession_id\030\005 \001(\r\022\030\n\020logi"
+    "n_generation\030\006 \001(\004*[\n\tSceneType\022\032\n\026SCENE"
+    "_TYPE_UNSPECIFIED\020\000\022\031\n\025SCENE_TYPE_MAIN_W"
+    "ORLD\020\001\022\027\n\023SCENE_TYPE_INSTANCE\020\0022\263\002\n\014Scen"
+    "eManager\022V\n\013CreateScene\022!.scene_manager."
+    "CreateSceneRequest\032\".scene_manager.Creat"
+    "eSceneResponse\"\000\022<\n\014DestroyScene\022\".scene"
+    "_manager.DestroySceneRequest\032\006.Empty\"\000\022S"
+    "\n\nEnterScene\022 .scene_manager.EnterSceneR"
+    "equest\032!.scene_manager.EnterSceneRespons"
+    "e\"\000\0228\n\nLeaveScene\022 .scene_manager.LeaveS"
+    "ceneRequest\032\006.Empty\"\000B\035Z\033scene_manager/s"
+    "cene_managerb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto_deps[3] = {
@@ -1580,7 +1592,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_5fmanager_2fscene_5fmana
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto = {
     false,
     false,
-    1832,
+    1860,
     descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto,
     "proto/scene_manager/scene_manager_service.proto",
     &descriptor_table_proto_2fscene_5fmanager_2fscene_5fmanager_5fservice_2eproto_once,
@@ -3516,7 +3528,8 @@ PROTOBUF_NDEBUG_INLINE RedirectToGateInfo::Impl_::Impl_(
         _cached_size_{0},
         target_gate_ip_(arena, from.target_gate_ip_),
         token_payload_(arena, from.token_payload_),
-        token_signature_(arena, from.token_signature_) {}
+        token_signature_(arena, from.token_signature_),
+        target_gate_ws_url_(arena, from.target_gate_ws_url_) {}
 
 RedirectToGateInfo::RedirectToGateInfo(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3548,7 +3561,8 @@ PROTOBUF_NDEBUG_INLINE RedirectToGateInfo::Impl_::Impl_(
       : _cached_size_{0},
         target_gate_ip_(arena),
         token_payload_(arena),
-        token_signature_(arena) {}
+        token_signature_(arena),
+        target_gate_ws_url_(arena) {}
 
 inline void RedirectToGateInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -3573,6 +3587,7 @@ inline void RedirectToGateInfo::SharedDtor(MessageLite& self) {
   this_._impl_.target_gate_ip_.Destroy();
   this_._impl_.token_payload_.Destroy();
   this_._impl_.token_signature_.Destroy();
+  this_._impl_.target_gate_ws_url_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -3610,7 +3625,7 @@ PROTOBUF_NOINLINE void RedirectToGateInfo::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.target_gate_ip_.ClearNonDefaultToEmpty();
     }
@@ -3620,8 +3635,11 @@ PROTOBUF_NOINLINE void RedirectToGateInfo::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.token_signature_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.target_gate_ws_url_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000030U)) {
     ::memset(&_impl_.token_deadline_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_gate_port_) -
         reinterpret_cast<char*>(&_impl_.token_deadline_)) + sizeof(_impl_.target_gate_port_));
@@ -3660,7 +3678,7 @@ PROTOBUF_NOINLINE void RedirectToGateInfo::Clear() {
   }
 
   // uint32 target_gate_port = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_target_gate_port() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3685,11 +3703,21 @@ PROTOBUF_NOINLINE void RedirectToGateInfo::Clear() {
   }
 
   // int64 token_deadline = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_token_deadline() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
               stream, this_._internal_token_deadline(), target);
+    }
+  }
+
+  // string target_gate_ws_url = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_target_gate_ws_url().empty()) {
+      const ::std::string& _s = this_._internal_target_gate_ws_url();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "scene_manager.RedirectToGateInfo.target_gate_ws_url");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
     }
   }
 
@@ -3718,7 +3746,7 @@ PROTOBUF_NOINLINE void RedirectToGateInfo::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string target_gate_ip = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_target_gate_ip().empty()) {
@@ -3740,15 +3768,22 @@ PROTOBUF_NOINLINE void RedirectToGateInfo::Clear() {
                                         this_._internal_token_signature());
       }
     }
-    // int64 token_deadline = 5;
+    // string target_gate_ws_url = 6;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_target_gate_ws_url().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_gate_ws_url());
+      }
+    }
+    // int64 token_deadline = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_token_deadline() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_token_deadline());
       }
     }
     // uint32 target_gate_port = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_target_gate_port() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_target_gate_port());
@@ -3772,7 +3807,7 @@ void RedirectToGateInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_target_gate_ip().empty()) {
         _this->_internal_set_target_gate_ip(from._internal_target_gate_ip());
@@ -3801,11 +3836,20 @@ void RedirectToGateInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_target_gate_ws_url().empty()) {
+        _this->_internal_set_target_gate_ws_url(from._internal_target_gate_ws_url());
+      } else {
+        if (_this->_impl_.target_gate_ws_url_.IsDefault()) {
+          _this->_internal_set_target_gate_ws_url("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_token_deadline() != 0) {
         _this->_impl_.token_deadline_ = from._impl_.token_deadline_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_target_gate_port() != 0) {
         _this->_impl_.target_gate_port_ = from._impl_.target_gate_port_;
       }
@@ -3833,6 +3877,7 @@ void RedirectToGateInfo::InternalSwap(RedirectToGateInfo* PROTOBUF_RESTRICT PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_gate_ip_, &other->_impl_.target_gate_ip_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.token_payload_, &other->_impl_.token_payload_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.token_signature_, &other->_impl_.token_signature_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_gate_ws_url_, &other->_impl_.target_gate_ws_url_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(RedirectToGateInfo, _impl_.target_gate_port_)
       + sizeof(RedirectToGateInfo::_impl_.target_gate_port_)

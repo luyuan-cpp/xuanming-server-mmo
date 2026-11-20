@@ -34,6 +34,7 @@
 #include "ActivityVitalityRuleTable.h"
 #include "ActorActionCombatStateTable.h"
 #include "ActorActionStateTable.h"
+#include "AfkPassRuleTable.h"
 #include "AttributeAllocRatioTable.h"
 #include "AttributeAutoPlanTable.h"
 #include "AttributeDimensionTable.h"
@@ -120,7 +121,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 53;
+	static constexpr int32 TableCount = 54;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -185,6 +186,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UActorActionStateTable* GetActorActionStateTable() const { return ActorActionStateTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAfkPassRuleTable* GetAfkPassRuleTable() const { return AfkPassRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UAttributeAllocRatioTable* GetAttributeAllocRatioTable() const { return AttributeAllocRatioTable; }
@@ -341,6 +345,8 @@ private:
 	TObjectPtr<UActorActionCombatStateTable> ActorActionCombatStateTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UActorActionStateTable> ActorActionStateTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UAfkPassRuleTable> AfkPassRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UAttributeAllocRatioTable> AttributeAllocRatioTable;
 	UPROPERTY(Transient)

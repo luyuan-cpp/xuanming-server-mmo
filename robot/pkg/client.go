@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/luyuancpp/muduoclient/muduo"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
@@ -42,7 +41,7 @@ func (e *ServerTipError) Error() string {
 // outstandingCall 是一次在途调用。conn 记下发出请求的那条连接:SwapConn 只让旧连接上的调用失败,
 // 换连接之后发出的调用不受影响。
 type outstandingCall struct {
-	conn *muduo.Client
+	conn *wireConn
 	stop func() bool
 	done func(*base.MessageContent, error)
 }
@@ -59,12 +58,9 @@ type GameClient struct {
 	// 跟随 gate 重定向(msg 124)时 FollowRedirect 把整条 TCP 换成新 zone 的 gate,
 	// 而 AI 循环、token 刷新器等 goroutine 随时可能并发 SendRequest。
 	connMu   sync.RWMutex
-	client   *muduo.Client
+	client   *wireConn
 	gateIP   string
 	gatePort int
-	// closeTransport 收掉 client 这条连接在传输层占的东西(WebSocket 模式下的本机桥,见 transport.go),
-	// 在 client.Close() 之后调;TCP 模式为 nil。与 client 一起换。
-	closeTransport func()
 
 	PlayerId uint64
 	Account  string
@@ -104,19 +100,19 @@ type GameClient struct {
 	lateReplies atomic.Uint64
 
 	// 测试替身注入点,nil 走生产实现:transmit 代替 muduo 发送,afterFunc 代替 time.AfterFunc。
-	transmit  func(*muduo.Client, *base.ClientRequest)
+	transmit  func(*wireConn, *base.ClientRequest)
 	afterFunc func(time.Duration, func()) (stop func() bool)
 
 	// 应用层心跳(heartbeat.go):验签成功后按 gate 通告的间隔发 ClientHeartbeatRequest。
 	hb heartbeat
 	// 心跳的测试替身注入点,nil 走生产实现:heartbeatSend 代替 muduo 发送,heartbeatAfter 代替 time.After。
-	heartbeatSend  func(*muduo.Client, *base.ClientHeartbeatRequest)
+	heartbeatSend  func(*wireConn, *base.ClientHeartbeatRequest)
 	heartbeatAfter func(time.Duration) <-chan time.Time
 }
 
 // conn 取当前连接快照。所有用到内部 muduo 客户端的地方都必须走它:
 // 重定向会原子换掉 gc.client,裸读字段就是数据竞争。
-func (gc *GameClient) conn() *muduo.Client {
+func (gc *GameClient) conn() *wireConn {
 	gc.connMu.RLock()
 	defer gc.connMu.RUnlock()
 	return gc.client
@@ -166,11 +162,11 @@ func (gc *GameClient) SnapshotTokens() (access, refresh string, accessExpire, re
 
 // NewGameClient connects to the gate at ip:port, over the process-wide transport (TCP or WebSocket, transport.go).
 func NewGameClient(ip string, port int) (*GameClient, error) {
-	c, closeTransport, err := newMuduoClient(ip, port)
+	c, err := dialNode(ip, port)
 	if err != nil {
 		return nil, fmt.Errorf("connect to gate %s:%d: %w", ip, port, err)
 	}
-	return &GameClient{client: c, closeTransport: closeTransport, gateIP: ip, gatePort: port}, nil
+	return &GameClient{client: c, gateIP: ip, gatePort: port}, nil
 }
 
 // SwapConn 把当前连接换成 ip:port 的新连接,并关掉旧连接。跟随 gate 重定向时用。
@@ -186,20 +182,17 @@ func NewGameClient(ip string, port int) (*GameClient, error) {
 // 旧连接上的在途 Call 在关旧连接之前就以 ErrRPCDisconnected 完成:它们的回包只会从旧连接回来,
 // 而旧连接从此没人读。换连接之后发出的 Call 登记在新连接上,不受影响(为什么没有漏网见 startCall 登记处的注释)。
 func (gc *GameClient) SwapConn(ip string, port int) error {
-	c, closeTransport, err := newMuduoClient(ip, port)
+	c, err := dialNode(ip, port)
 	if err != nil {
 		return fmt.Errorf("connect to gate %s:%d: %w", ip, port, err)
 	}
 	gc.connMu.Lock()
-	old, closeOldTransport := gc.client, gc.closeTransport
-	gc.client, gc.closeTransport, gc.gateIP, gc.gatePort = c, closeTransport, ip, port
+	old := gc.client
+	gc.client, gc.gateIP, gc.gatePort = c, ip, port
 	gc.connMu.Unlock()
 	if old != nil {
 		gc.failCallsOn(old, ErrRPCDisconnected)
 		old.Close()
-	}
-	if closeOldTransport != nil {
-		closeOldTransport()
 	}
 	return nil
 }
@@ -342,7 +335,7 @@ func (gc *GameClient) nextRequestId() uint64 {
 	}
 }
 
-func (gc *GameClient) send(c *muduo.Client, req *base.ClientRequest) {
+func (gc *GameClient) send(c *wireConn, req *base.ClientRequest) {
 	if gc.transmit != nil {
 		gc.transmit(c, req)
 		return
@@ -378,7 +371,7 @@ func (gc *GameClient) finishCall(id uint64, reply *base.MessageContent, err erro
 }
 
 // failCallsOn 让连接 conn 上发出的全部在途调用以 err 完成(SwapConn 换下旧连接时)。
-func (gc *GameClient) failCallsOn(conn *muduo.Client, err error) {
+func (gc *GameClient) failCallsOn(conn *wireConn, err error) {
 	gc.callMu.Lock()
 	failed := gc.takeCallsLocked(func(call *outstandingCall) bool { return call.conn == conn })
 	gc.callMu.Unlock()
@@ -645,13 +638,7 @@ func (gc *GameClient) ReplayDeferred() {
 func (gc *GameClient) Close() {
 	gc.stopHeartbeat()
 	gc.failAllCalls(ErrRPCDisconnected)
-	gc.connMu.RLock()
-	c, closeTransport := gc.client, gc.closeTransport
-	gc.connMu.RUnlock()
-	if c != nil {
+	if c := gc.conn(); c != nil {
 		c.Close()
-	}
-	if closeTransport != nil {
-		closeTransport()
 	}
 }

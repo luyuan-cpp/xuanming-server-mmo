@@ -108,6 +108,12 @@ enum TransactionType
   // 玩家花灵石开通 / 续费挂机月卡的扣钱流水(scene 内同步扣,不走资产通道)。correlation_id = 那次请求的
   // 客户端幂等键 client_request_id,同一个键至多出现一条。月卡到期时刻不在流水里,在存档 PlayerUint64Comp。只追加,不复用旧编号。
   TX_AFK_PASS_BUY = 32;
+
+  // ── 角色改名(docs/design/rename-and-content-safety.md §4.3)────────────────
+  //
+  // 改名成功时销毁改名卡的流水。correlation_id = 那次改名的流水号(PlayerProfileComp.rename_seq)。
+  // 改名不成时卡只是解除占用、没有离开过背包,不记流水。只追加,不复用旧编号。
+  TX_ROLE_RENAME = 33;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

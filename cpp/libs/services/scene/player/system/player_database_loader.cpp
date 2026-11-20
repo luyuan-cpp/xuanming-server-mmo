@@ -298,7 +298,7 @@ bool PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	const auto* attribute = FindPersistedComp<PlayerAttributeComp>(player, "PlayerAttributeComp", missing);
 	const auto* pet = FindPersistedComp<PlayerPetComp>(player, "PlayerPetComp", missing);
 	const auto* profile = FindPersistedComp<PlayerProfileComp>(player, "PlayerProfileComp", missing);
-	// 背包 / 任务由各自的 marshal 读。它们对缺组件输出的是「权威的空记录」(任务还会标 scoped_state_present),
+	// 背包 / 任务由各自的 marshal 读。它们对缺组件输出的是「权威的空记录」,
 	// 落盘就等于清空玩家的物品与任务,所以存盘侧必须在这里先拦住。
 	FindPersistedComp<PlayerBagsComp>(player, "PlayerBagsComp", missing);
 	FindPersistedComp<MissionsContainerComp>(player, "MissionsContainerComp", missing);

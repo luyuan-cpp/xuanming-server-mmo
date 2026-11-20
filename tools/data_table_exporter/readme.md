@@ -142,8 +142,9 @@ xlsx 第 2~5 行的旧格式(`core/excel_reader.py`,格式见该文件 docstring
    - 文件缺失 → 中止,提示从 git 恢复;
    - 只有显式 `python run.py --bitindex-bootstrap` 才允许从空初始化,
      **且只在确认该表从未发布过**(没有任何存量玩家位图依赖它)时才可以用。
-3. 位图容量取 `max(表里 bit_index 列最大 ID, 已分配的最大位 + 1)`,确保覆盖全部已分配位序。
-   最大的 ID 被删掉后它的位仍占着,只看表数据会算出偏小的 bitset 而越界。
+3. 位图容量取「已分配的最大位 + 1」,与 ID 的数值大小无关(位图一律经 `<Sheet>BitMap` 按位序下标)。
+   退休 ID 的位仍在 mapping 里占位,所以容量覆盖它们;ID 稀疏或很大时也不会把每个玩家的 bitset 撑大。
+   2026-11-20 之前取的是 `max(表里最大 ID, 最大位 + 1)`。
    C++ 的 `k<Sheet>BitmapCapacity` 与 Go 的 `BitmapCapacity` 均表示容量,有效下标范围是 `[0, BitmapCapacity)`,不是最大下标。
 
 `state/mapping/**` 必须进版本库,并且**不要手改**。

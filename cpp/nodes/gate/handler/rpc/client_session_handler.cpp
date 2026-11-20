@@ -7,6 +7,7 @@
 #include "client_entry_admission.h"
 #include "login_admission.h"
 #include "login_session_renewal.h"
+#include "minor_play_deadline.h"
 #include "rpc_reply_bridge.h"
 #include "scene_client_call_reply.h"
 #include "session_details_builder.h"
@@ -45,6 +46,7 @@
 #include "rpc/service_metadata/scene_service_metadata.h"
 #include "proto/common/base/empty.pb.h"
 #include "proto/scene/scene.pb.h"
+#include "proto/scene/client_player_common.pb.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
 #include "rpc/service_metadata/login_service_metadata.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
@@ -387,6 +389,27 @@ static bool SendGateMigrationRequest(const SessionId sessionId, const SessionInf
 		sessionId, session, std::move(done), &loginpb::SendClientPlayerLoginRequestGateMigration);
 }
 
+// 未成年人到点(minor_play_deadline.h,docs/design/real-name-anti-addiction.md §5.4):推一条带原因的踢线,关连接。
+// 经 gate_minor_deadline::SetCloser 注入。断线通知、离场、login 那边的收尾都由断开回调照常做,这里不加业务逻辑。
+static void CloseMinorAtPlayDeadline(SessionInfo &session)
+{
+	const auto conn = session.conn.lock();
+	if (!conn || !conn->connected())
+	{
+		return;
+	}
+	GameKickPlayerRequest kickMsg;
+	kickMsg.mutable_reason()->set_id(kLoginMinorPlayTimeOver);
+	MessageContent mc;
+	mc.set_message_id(SceneClientPlayerCommonKickPlayerMessageId);
+	mc.set_serialized_message(kickMsg.SerializeAsString());
+	GetGateCodec().send(conn, mc);
+	// shutdown 只关写端,让踢线先发出去,不在本调用栈里 erase 会话;不配合挥手的客户端由 forceCloseWithDelay 兜住
+	// (同 scene_entry_dispatch.cpp 的放弃进场)。
+	conn->shutdown();
+	conn->forceCloseWithDelay(gate_minor_deadline::kForceCloseDelaySeconds);
+}
+
 // 为仍然连着的连接向 login 续租登录态(ClientPlayerLogin.RenewSession,docs/design/gate-online-identity.md §10.4),
 // 经 gate_login_renewal::SetRequestSender 注入。什么时候发、应答怎么处置都在 login_session_renewal.cpp。
 static bool SendLoginSessionRenewRequest(const SessionId sessionId, const SessionInfo &session,
@@ -504,6 +527,8 @@ GateClientSessionHandler::GateClientSessionHandler(ProtobufCodec &codec,
 	// Disconnect,login 确认之前由该模块退避重发。同样是函数指针,不捕获对象。
 	gate_login_renewal::SetRequestSender(&SendLoginSessionRenewRequest);
 	gate_login_renewal::SetDisconnectSender(&SendLoginDisconnectNotice);
+	// 未成年人到点关连接的出口(minor_play_deadline.h)。同样是函数指针,不捕获对象。
+	gate_minor_deadline::SetCloser(&CloseMinorAtPlayDeadline);
 	// 场景 lane 的发送出口(client_scene_lane.h):把客户端消息交给会话当前绑定的 scene 节点。同样是函数指针,不捕获对象。
 	gate_scene_lane::SetSceneSender(&SendClientMessageToScene, kGateToSceneClientCallTimeout);
 

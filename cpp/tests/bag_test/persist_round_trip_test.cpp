@@ -32,6 +32,7 @@
 
 #include "actor/actor_net_id.h"
 #include "core/system/id_generator.h"
+#include "core/utils/bit_index/bit_index_util.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "modules/bag/bag_system.h"
 #include "persist_schema/persist_schema_gen.h"
@@ -54,6 +55,7 @@
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
 #include "table/code/attributerule_table.h"
+#include "table/code/bit_index/mission_table_id_bit_index.h"
 #include "table/code/class_table.h"
 #include "table/code/condition_table.h"
 #include "table/code/mission_table.h"
@@ -455,17 +457,21 @@ protected:
 
         // 任务:两个 scope 各一条进行中的任务(与 player_feature_persistence_test 同一份真实任务 ID)。
         auto &quest = *db.mutable_mission_component();
-        quest.set_scoped_state_present(true);
         auto *mainScope = quest.add_scopes();
         mainScope->set_scope(MissionListComp::kPlayerMission);
         auto &mainMission = (*mainScope->mutable_mission_list()->mutable_missions())[7];
         mainMission.set_id(7);
         mainMission.add_progress(5);
-        (*mainScope->mutable_mission_list()->mutable_mission_begin_time())[7] = kAcceptedAtMs;
-        mainScope->add_completed_mission_ids(11);
+        // 已完成 11 与 15(活动任务,下面的账本给它记过积分),存档里是按位序的位图。
+        std::string completedBits;
+        SetPackedBit(completedBits, MissionBitMap.at(11));
+        SetPackedBit(completedBits, MissionBitMap.at(15));
+        mainScope->mutable_mission_list()->set_complete_missions(completedBits);
         // 活动三层账本均随任务快照携带；覆盖每层未知字段，不能靠标冻结绕过恢复校验。
-        mainScope->add_completed_mission_ids(15);
         auto *activityLedger = mainScope->mutable_mission_list()->mutable_activity_ledger();
+        std::string creditedBits;
+        SetPackedBit(creditedBits, MissionBitMap.at(15));
+        activityLedger->set_credited_missions(creditedBits);
         auto *activitySource = activityLedger->add_sources();
         activitySource->set_mission_scope(MissionListComp::kPlayerMission);
         activitySource->set_mission_id(15);

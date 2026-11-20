@@ -26,6 +26,25 @@ message RedirectToGateNotify {
   string target_ws_url = 6;
 }
 
+// 角色改名(docs/design/rename-and-content-safety.md §4.3)。应答只表示「已受理」或「立即拒绝」:
+// error_message 为空 = 已受理,最终结局经 NotifyPlayerRenamed 推送(名字要送内容安全、再到全服名字表登记,等不了一个回包)。
+// 需要背包里有改名卡(配表 RoleNameRule.rename_item_id);受理后这张卡被占住,改名成功才扣,不成原样还给玩家。
+message RenamePlayerRequest {
+  string name = 1;
+}
+
+message RenamePlayerResponse {
+  TipInfoMessage error_message = 1;
+}
+
+// 改名的最终结局。error_message 为空 = 成功,name 是新名(规范化后的写法),next_rename_time 是最早可以再改的时刻(Unix 秒)。
+// 失败时 error_message 是原因,name 为空;改名卡已经解除占用。
+message PlayerRenamedNotify {
+  TipInfoMessage error_message = 1;
+  string name = 2;
+  uint64 next_rename_time = 3;
+}
+
 service SceneClientPlayerCommon 
 {
   option (OptionIsPlayerService) = true;
@@ -34,4 +53,6 @@ service SceneClientPlayerCommon
   rpc SendTipToClient (TipInfoMessage) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc KickPlayer (GameKickPlayerRequest) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc RedirectToGate (RedirectToGateNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+  rpc RenamePlayer (RenamePlayerRequest) returns (RenamePlayerResponse);
+  rpc NotifyPlayerRenamed (PlayerRenamedNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }

@@ -204,55 +204,28 @@ message BagAllData {
   //    that pings on first-time-acquired, its acquired-set could live here.
 }
 
-// QuestAllData — placeholder. Quest system does NOT exist in the cpp
-// codebase yet (cross-zone-readiness-audit.md §1.2 confirmed via
-// `grep -rn "QuestSystem"` returning zero hits in services/scene/).
-// The proto exists so PlayerAllData has a slot ready when quest
-// lands, and the cross-zone marshaller can be wired through without
-// schema churn. See task #22 (quest persistence audit).
-message QuestEntry {
-  // Quest config_id from QuestTable.
-  uint32 config_id = 1;
-  // Progress toward completion. Schema TBD by quest team —
-  // could be repeated counters, or a JSON blob, depending on
-  // how complex objectives get (kill-N-mobs / collect-X /
-  // reach-coords / chain-quest-N-of-M).
-  uint32 progress = 2;
-  // Quest state. 0=accepted / 1=in_progress / 2=ready_to_turn_in /
-  // 3=completed. Stored as uint32 not enum for the same wire-stability
-  // reason as ItemEntry.bag_type.
-  uint32 state = 3;
-  uint64 accepted_at_ms = 4;
-  // ─── TODO: quest-specific game-design fields ──────────────────
-  // (locked until quest module lands)
-}
-
-// 保存配置 ID 而非运行期位图下标，加载时重建索引；不保存 UI 追踪或排序。
+// 一个任务 scope 的存档:进行中的任务与已完成位图在 mission_list 里(MissionListComp.complete_missions),
+// 待领取存配置 ID(量很小)。加载时重建索引;不保存 UI 追踪或排序。
 // 冻结(§3.2 R1):mission_marshal 每次存盘重建本层;新的任务数据放进 MissionListComp(整份携带)。
 message QuestScopeData {
   option (OptionPersistFrozen) = true;
+  // 3 是已完成任务 ID 列表,2026-11-20 改存 mission_list.complete_missions 位图后删除(上线前清档,不读旧格式)。
+  reserved 3;
 
   uint32 scope = 1;
   MissionListComp mission_list = 2;
-  repeated uint32 completed_mission_ids = 3;
   repeated uint32 claimable_mission_ids = 4;
 }
 
+// 玩家的全部任务存档,每个 scope 一份。
 message QuestAllData {
   // 冻结(§3.2 R1):mission_marshal 先 Clear 再重建本层。
   option (OptionPersistFrozen) = true;
+  // 1 / 2 / 4 是 2026-09 之前的旧格式(进行中列表 active、已完成列表 completed、区分新旧格式的 scoped_state_present),
+  // 2026-11-20 删除(上线前清档,不读旧格式);消息 QuestEntry 只被 active 用到,一并删除。
+  reserved 1, 2, 4;
 
-  // 只读旧格式:加载时转成 scopes,存盘不再写出(OptionPersistUncarried)。
-  repeated QuestEntry active = 1 [(OptionPersistUncarried) = true];
-  // Completed-quest IDs. Used for prereq checks ("you must have
-  // completed quest X to accept Y") and achievement counting.
-  repeated uint32 completed = 2;
   repeated QuestScopeData scopes = 3;
-  bool scoped_state_present = 4; // 区分正式空快照和仅有旧版 active/completed 的快照。
-  // Daily/weekly reset trackers — completed-set above is permanent;
-  // these are the periodic ones that respawn.
-  // TODO: schema decision pending — may need separate per-period
-  // counters once daily/weekly reset code lands.
 }
 
 // MailAllData — placeholder + design note.

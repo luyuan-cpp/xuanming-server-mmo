@@ -266,4 +266,8 @@ struct FCfgBuffRow : public FTableRowBase
 	/** 1表示当轮末可结算/扣时,0从下一轮开始。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
 	int32 tick_on_apply = 0;
+
+	/** 下线保留:1 = 随玩家存档保留(下线重登、换节点、跨 zone 都不丢),按到期时刻存,离线期间照常走;0 = 实体重建即清(战斗类短效状态)。 只配分钟级以上、非战斗、与施法者无关的增益或惩罚(经验加成、料理、死亡惩罚等);控制、伤害、护盾、隐身、子 Buff 不配。 存档不记施法者,配 1 的行按 no_caster=1 叠层。规则见 docs/design/realtime-cooldown-buff-persistence.md。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Buff")
+	int32 keep_on_logout = 0;
 };

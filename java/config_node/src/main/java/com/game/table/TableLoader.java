@@ -27,6 +27,8 @@ public class TableLoader {
 
         ActorActionStateTableManager.getInstance().load(configDir, useBinary);
 
+        AfkPassRuleTableManager.getInstance().load(configDir, useBinary);
+
         AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
 
         AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
@@ -138,7 +140,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(53);
+        CountDownLatch latch = new CountDownLatch(54);
 
         new Thread(() -> {
             try {
@@ -185,6 +187,16 @@ public class TableLoader {
                 ActorActionStateTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load ActorActionState table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AfkPassRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AfkPassRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -699,6 +711,8 @@ public class TableLoader {
         ActorActionCombatStateTableManager.getInstance().load(configDir, useBinary);
 
         ActorActionStateTableManager.getInstance().load(configDir, useBinary);
+
+        AfkPassRuleTableManager.getInstance().load(configDir, useBinary);
 
         AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
 

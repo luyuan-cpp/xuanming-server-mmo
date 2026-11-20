@@ -36,7 +36,7 @@ void SendToPlayerClient(uint32_t messageId, const google::protobuf::Message &mes
 		return;
 	}
 
-	const auto resolvedGateEntity = ResolveLocalZoneGateEntity(sessionSnapshot->gate_session_id());
+	const auto resolvedGateEntity = ResolvePlayerGateEntity(playerEntity, sessionSnapshot->gate_session_id());
 	auto &gateNodeRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
 	if (!resolvedGateEntity)
 	{
@@ -114,7 +114,7 @@ void BroadcastToPlayerClientsImpl(uint32_t messageId, const google::protobuf::Me
 			continue;
 		}
 
-		const auto resolvedGateEntity = ResolveLocalZoneGateEntity(sessionSnapshot->gate_session_id());
+		const auto resolvedGateEntity = ResolvePlayerGateEntity(playerEntity, sessionSnapshot->gate_session_id());
 		if (!resolvedGateEntity)
 		{
 			LOG_ERROR << "Gate node not found for player session ID: " << sessionSnapshot->gate_session_id();
@@ -169,7 +169,7 @@ void BroadcastToSceneClientsImpl(uint32_t messageId, const google::protobuf::Mes
 		const auto *sessionSnapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
 		if (!sessionSnapshot)
 			continue;
-		if (const auto resolvedGateEntity = ResolveLocalZoneGateEntity(sessionSnapshot->gate_session_id());
+		if (const auto resolvedGateEntity = ResolvePlayerGateEntity(playerEntity, sessionSnapshot->gate_session_id());
 		    resolvedGateEntity)
 			sceneGateEntities.insert(*resolvedGateEntity);
 	}

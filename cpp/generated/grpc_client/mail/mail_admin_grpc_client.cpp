@@ -29,6 +29,7 @@ namespace mailpb {
 #pragma region MailAdminSendPersonalMail
 namespace {
 void QueueLocalMailAdminSendPersonalMailFailure(GrpcDone<::mailpb::SendMailResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMailAdminSendPersonalMailGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendMailAdminSendPersonalMailErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC MailAdmin.SendPersonalMail: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSendPersonalMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendMailAdminSendPersonalMailErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::mailpb::SendMailRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC MailAdmin.SendPersonalMail: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSendPersonalMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendMailAdminSendPersonalMailErased(entt::registry& registry, entt::entity 
 #pragma region MailAdminSendSystemMail
 namespace {
 void QueueLocalMailAdminSendSystemMailFailure(GrpcDone<::mailpb::SendMailResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMailAdminSendSystemMailGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendMailAdminSendSystemMailErased(entt::registry& registry, entt::entity no
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC MailAdmin.SendSystemMail: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSendSystemMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendMailAdminSendSystemMailErased(entt::registry& registry, entt::entity no
     const auto* typedRequest = dynamic_cast<const ::mailpb::SendMailRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC MailAdmin.SendSystemMail: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSendSystemMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendMailAdminSendSystemMailErased(entt::registry& registry, entt::entity no
 #pragma region MailAdminSendGuildMail
 namespace {
 void QueueLocalMailAdminSendGuildMailFailure(GrpcDone<::mailpb::SendMailResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMailAdminSendGuildMailGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendMailAdminSendGuildMailErased(entt::registry& registry, entt::entity nod
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC MailAdmin.SendGuildMail: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSendGuildMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendMailAdminSendGuildMailErased(entt::registry& registry, entt::entity nod
     const auto* typedRequest = dynamic_cast<const ::mailpb::SendMailRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC MailAdmin.SendGuildMail: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSendGuildMailGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendMailAdminSendGuildMailErased(entt::registry& registry, entt::entity nod
 #pragma region MailAdminImportMailRecipients
 namespace {
 void QueueLocalMailAdminImportMailRecipientsFailure(GrpcDone<::mailpb::ImportMailRecipientsResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMailAdminImportMailRecipientsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendMailAdminImportMailRecipientsErased(entt::registry& registry, entt::ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC MailAdmin.ImportMailRecipients: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminImportMailRecipientsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendMailAdminImportMailRecipientsErased(entt::registry& registry, entt::ent
     const auto* typedRequest = dynamic_cast<const ::mailpb::ImportMailRecipientsRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC MailAdmin.ImportMailRecipients: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminImportMailRecipientsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendMailAdminImportMailRecipientsErased(entt::registry& registry, entt::ent
 #pragma region MailAdminSealMailCampaign
 namespace {
 void QueueLocalMailAdminSealMailCampaignFailure(GrpcDone<::mailpb::SendMailResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMailAdminSealMailCampaignGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendMailAdminSealMailCampaignErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC MailAdmin.SealMailCampaign: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSealMailCampaignGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendMailAdminSealMailCampaignErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::mailpb::SealMailCampaignRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC MailAdmin.SealMailCampaign: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMailAdminSealMailCampaignGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

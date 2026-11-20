@@ -555,9 +555,11 @@ type GetQueueStatusResponse struct {
 	BattleId             uint64                 `protobuf:"varint,5,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
 	SelectedRegion       uint32                 `protobuf:"varint,6,opt,name=selected_region,json=selectedRegion,proto3" json:"selected_region,omitempty"`
 	RetryAfterMs         uint32                 `protobuf:"varint,7,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"`
-	RequestCancelled     bool                   `protobuf:"varint,8,opt,name=request_cancelled,json=requestCancelled,proto3" json:"request_cancelled,omitempty"` // 对上述 request_id 的 SQL 撤销墓碑已提交；NOT_QUEUED 单独不构成此证据。
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 上述 request_id 不会再入队：它的 SQL 撤销墓碑已提交，或它的原件属于角色此前的归属（过户前留下，现主人不能沿它入队）。
+	// NOT_QUEUED 单独不构成此证据。
+	RequestCancelled bool `protobuf:"varint,8,opt,name=request_cancelled,json=requestCancelled,proto3" json:"request_cancelled,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *GetQueueStatusResponse) Reset() {
@@ -1323,7 +1325,7 @@ type SpectateBattleRecord struct {
 	Summary      *BattleWatchSummary    `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
 	BattleNodeId uint32                 `protobuf:"varint,2,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"`
 	// 与 CreateBattleRequest.spectate_visibility 同值(建房原件冻结)。非 PUBLIC 的记录
-	// 只用来给丢票补签定位 battle 节点,不进 spectate:battles:active,也不能被 WatchBattle 指定观战。
+	// 只用来给丢票补签定位 battle 节点,不进观战活跃索引 spectate:battles:active:{sba:<k>},也不能被 WatchBattle 指定观战。
 	Visibility battle.ESpectateVisibility `protobuf:"varint,3,opt,name=visibility,proto3,enum=ESpectateVisibility" json:"visibility,omitempty"`
 	// 以下三项由 match 在观战准入时维护(§15.6):档位以独立键 spectate:tier:{id} 为准(Lua 只升不降),
 	// 这里只是建房时的初值;实例与期限来自 battle 的 AttachRelayGate / PromoteSpectateBroadcast 回包。

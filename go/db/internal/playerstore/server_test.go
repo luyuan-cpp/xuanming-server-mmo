@@ -16,6 +16,7 @@ import (
 	"db/internal/dbtest"
 
 	storepb "proto/player_store"
+	"shared/authoritysql"
 	"shared/serviceauth"
 )
 
@@ -230,5 +231,90 @@ func TestServer_SqlErrorIsUnknownOutcome(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret table detail") {
 		t.Fatalf("error details must not reach the caller: %v", err)
+	}
+}
+
+// breakerTestServer 建一个由 open 决定每个存档库能不能打开的服务;能打开的库上每笔存盘都提交。
+func breakerTestServer(t *testing.T, open func(storageID uint32, db *sql.DB) (*sql.DB, error)) *Server {
+	t.Helper()
+	db, _ := dbtest.OpenTx(t, func(_ context.Context, query string, _ []driver.NamedValue) (*dbtest.Rows, error) {
+		if strings.Contains(query, "FOR UPDATE") {
+			return ownerValues(10, 5, 1, instanceA), nil
+		}
+		return nil, nil
+	})
+	server, err := NewServer(ServerOptions{
+		Secret:   testSecret,
+		Open:     func(_ context.Context, storageID uint32) (*sql.DB, error) { return open(storageID, db) },
+		Resolve:  func(context.Context, uint64) (uint32, error) { return 0, ErrPlayerStorageMissing },
+		KnownGen: testKnownGen,
+		Limits:   DefaultLimits(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return server
+}
+
+func saveOn(t *testing.T, server *Server, storageID uint32) (*storepb.SavePlayerResponse, error) {
+	t.Helper()
+	req := validSave()
+	req.StorageId = storageID
+	return server.SavePlayer(context.Background(), signed(t, methodSavePlayer, req, sceneCaller, testSecret))
+}
+
+// 熔断按存档库:一个库一直打不开时,指向它的调用大多被立即挡回、不再去碰它;指向另一个库的调用一次都不受影响。
+// 熔断表是进程级的、按库编号取名,所以这里用别的用例不用的编号。
+func TestServer_BreakerIsPerStore(t *testing.T) {
+	const downStore, healthyStore = uint32(880001), uint32(880002)
+	const calls = 200
+	opensOfDown := 0
+	server := breakerTestServer(t, func(storageID uint32, db *sql.DB) (*sql.DB, error) {
+		if storageID == downStore {
+			opensOfDown++
+			return nil, errors.New("storage down")
+		}
+		return db, nil
+	})
+	for i := 0; i < calls; i++ {
+		if _, err := saveOn(t, server, downStore); grpcCode(err) != codes.Unavailable {
+			t.Fatalf("call %d on the failing store: %v", i, err)
+		}
+	}
+	if opensOfDown >= calls {
+		t.Fatalf("the failing store was opened on all %d calls, want its breaker to shed some of them", calls)
+	}
+	for i := 0; i < calls; i++ {
+		resp, err := saveOn(t, server, healthyStore)
+		if err != nil || resp.GetResult() != storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED {
+			t.Fatalf("call %d on the healthy store: resp=%v err=%v", i, resp, err)
+		}
+	}
+}
+
+// 闸门冻结(搬库窗口)不算库的故障:冻结期间每次调用都照常走到库,窗口一过下一次调用直接提交。
+func TestServer_FrozenGateDoesNotOpenTheStoreBreaker(t *testing.T) {
+	const store = uint32(880003)
+	const calls = 200
+	frozen, opens := true, 0
+	server := breakerTestServer(t, func(_ uint32, db *sql.DB) (*sql.DB, error) {
+		opens++
+		if frozen {
+			return nil, authoritysql.ErrWriterFrozen
+		}
+		return db, nil
+	})
+	for i := 0; i < calls; i++ {
+		if _, err := saveOn(t, server, store); grpcCode(err) != codes.Unavailable {
+			t.Fatalf("call %d during the freeze: %v", i, err)
+		}
+	}
+	if opens != calls {
+		t.Fatalf("the store was reached on %d of %d calls, a frozen gate must not open its breaker", opens, calls)
+	}
+	frozen = false
+	resp, err := saveOn(t, server, store)
+	if err != nil || resp.GetResult() != storepb.SavePlayerResult_SAVE_PLAYER_COMMITTED {
+		t.Fatalf("first call after the freeze: resp=%v err=%v", resp, err)
 	}
 }

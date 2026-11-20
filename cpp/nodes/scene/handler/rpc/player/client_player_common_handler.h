@@ -23,6 +23,12 @@ public:
     static void RedirectToGate(entt::entity player,
         const ::RedirectToGateNotify* request,
         ::Empty* response);
+    static void RenamePlayer(entt::entity player,
+        const ::RenamePlayerRequest* request,
+        ::RenamePlayerResponse* response);
+    static void NotifyPlayerRenamed(entt::entity player,
+        const ::PlayerRenamedNotify* request,
+        ::Empty* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -49,6 +55,22 @@ public:
 			{
             RedirectToGate(player,
                 static_cast<const ::RedirectToGateNotify*>(request),
+                static_cast<::Empty*>(response));
+			}
+            break;
+        case 3:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::RenamePlayerResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            RenamePlayer(player,
+                static_cast<const ::RenamePlayerRequest*>(request),
+                static_cast<::RenamePlayerResponse*>(response));
+			}
+            break;
+        case 4:
+			{
+            NotifyPlayerRenamed(player,
+                static_cast<const ::PlayerRenamedNotify*>(request),
                 static_cast<::Empty*>(response));
 			}
             break;

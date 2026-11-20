@@ -146,6 +146,7 @@ set(SOURCE_FILES
     scene/player_mission.pb.cc
     scene/player_activity.pb.cc
     scene/player_mystery_merchant.pb.cc
+    scene/player_afk_pass.pb.cc
     common/base/service_call_auth.pb.cc
     friend/friend_table.pb.cc
     mail/mail_table.pb.cc
@@ -179,6 +180,7 @@ set(SOURCE_FILES
     common/component/equipment_effects.pb.cc
     common/component/pet_cultivation_effects.pb.cc
     common/component/support_effects.pb.cc
+    content_guard/content_guard.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

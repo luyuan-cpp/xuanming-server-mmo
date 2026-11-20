@@ -7,14 +7,15 @@
 // battle 不为它建任何对象,内核也不留 TIME_WAIT。判据都不需要知道对端是谁,按顺序:
 //   1. 关源:停机 / 维护关源之后不再接新连接;
 //   2. 总量:直连会话数到上限(battle_max_connections;dev / test 的 0 = BattleClientEdge::kHardMaxConnections);
-//   3. 未验签预算:既没完成票据握手、也没出示探测授权的直连单独一个池,承压时最老的先让位,腾不出位置时按概率早拒、
+//   3. 按来源限速(缺省关闭,BATTLE_SOURCE_RATE_PER_SECOND 打开;只在承压时、只对公网源地址生效):单个来源前缀超过它的桶就拒;
+//   4. 未验签预算:既没完成票据握手、也没出示探测授权的直连单独一个池,承压时最老的先让位,腾不出位置时按概率早拒、
 //      到预算全拒(规则与 gate 同一份,accept_admission.h 的 PreAuthBudget / DecidePreAuth);
-//   4. 速率:新建连接的全局令牌桶,挡住「不停建连又立刻关」这种总量闸永远碰不到的流量。
-// 总量与预算排在速率前面:被它们拒掉的连接不消耗速率名额。顺序与 gate 的 Decide 相同(gate 另有按来源限速)。
+//   5. 速率:新建连接的全局令牌桶,挡住「不停建连又立刻关」这种总量闸永远碰不到的流量。
+// 前几道都排在速率前面:被它们拒掉的连接不消耗速率名额。顺序与 gate 的 Decide 相同。
 //
-// 速率闸、缺省速率的推导、环境变量解析、未验签预算与握手耗时直方图和 gate 是同一份(core network/accept_admission.h);
-// 拒绝原因、计数与指标名是 battle 自己的。本文件只管判定、计数与写指标,不认识连接与会话表:当前直连数、生效上限、
-// 未握手的直连数与其中最老一条的年龄都由 BattleClientEdge 在调用时给,时刻也由调用方给(单调时钟,单测注入)。
+// 速率闸、缺省速率的推导、环境变量解析、未验签预算、按来源前缀限速与握手耗时直方图和 gate 是同一份
+// (core network/accept_admission.h);拒绝原因、计数与指标名是 battle 自己的。本文件只管判定、计数与写指标,不认识会话表:
+// 当前直连数、生效上限、未认证直连数与其中最老一条的年龄都由 BattleClientEdge 在调用时给,时刻也由调用方给(单调时钟,单测注入)。
 // 单测:cpp/nodes/battle/tests/battle_connection_admission_test.cpp。
 // 线程模型:只在 battle 主 loop 线程上用(与 BattleClientEdge 同线程),不加锁。
 
@@ -36,6 +37,7 @@ using accept_admission::DefaultPreAuthBudget;
 using accept_admission::PreAuthBudget;
 using accept_admission::PreAuthVerdict;
 using accept_admission::RateLimit;
+using accept_admission::SourcePrefix;
 using accept_admission::SteadyTime;
 using accept_admission::UniformBelow;
 
@@ -49,6 +51,7 @@ enum class RejectReason : uint8_t
     kNoTokenSecret, // prod 下 battle_token_secret 为空(纵深防御,启动门禁已拒启)
     kPreAuthBudget,    // 未认证直连到预算,且没有建连够久、可以让位的
     kPreAuthEarlyDrop, // 未认证直连过了早拒起点、没有可以让位的,按概率拒了
+    kSourceRate,       // 按来源前缀限速生效中(承压),这个公网前缀的新建直连超过了它的桶
     kCount,
 };
 inline constexpr size_t kRejectReasonCount = static_cast<size_t>(RejectReason::kCount);
@@ -59,6 +62,7 @@ inline constexpr auto kRejectReasonNames = std::to_array<std::string_view>({
     "no_token_secret",
     "preauth_budget",
     "preauth_early_drop",
+    "source_rate",
 });
 static_assert(kRejectReasonNames.size() == kRejectReasonCount, "one name per RejectReason");
 
@@ -102,23 +106,22 @@ inline std::optional<PreAuthBudget> ResolvePreAuthBudget(const char *rawBudget, 
         rawEvictableAgeMs, effectiveMaxConnections, error);
 }
 
-// BattleClientEdge 扫一遍会话表数未认证直连时的累计:池里有几条、最老的是哪条。
-struct UnauthenticatedScan
-{
-    uint64_t count{0};
-    std::optional<uint64_t> oldestConnId;
-    SteadyTime oldestOpenedAt{};
+// 按来源限速的开关与参数(缺省关闭,取值范围见 accept_admission::SourceRateEnvNames;推荐值见 DefaultSourceRateLimit,
+// BattleMaxConnections 4096 时是每个前缀 10 条/秒、桶深 100,启动日志会打出来):
+//   BATTLE_SOURCE_RATE_PER_SECOND  设了就开启:单个前缀的持续速率;
+//   BATTLE_SOURCE_BURST            单个前缀的桶深;不设时取持续速率 × 握手期限。
+// 只设桶深不设速率、或写错都拒绝启动。battle 的 hostPort / Agones 端口映射保源地址(D89),所以直连看得到玩家的公网地址;
+// 小游戏经边缘 nginx 进来的 WebSocket 直连只看得到边缘的内网地址,按规则不限(那一段的按来源限速在边缘,infra-up 的
+// -WsEdgeSourceRatePerSecond)。
+inline constexpr const char *kSourceRateEnv = "BATTLE_SOURCE_RATE_PER_SECOND";
+inline constexpr const char *kSourceBurstEnv = "BATTLE_SOURCE_BURST";
 
-    void Add(const uint64_t connId, const SteadyTime openedAt)
-    {
-        ++count;
-        if (!oldestConnId || openedAt < oldestOpenedAt)
-        {
-            oldestConnId = connId;
-            oldestOpenedAt = openedAt;
-        }
-    }
-};
+// 解析两个变量。成功返回 true:limit 为空表示关闭,否则是开启后的参数;失败返回 false,error 里是给启动日志用的英文说明。
+inline bool ResolveSourceRateLimit(const char *rawRate, const char *rawBurst, std::optional<RateLimit> &limit,
+                                   std::string &error)
+{
+    return accept_admission::ResolveSourceRateLimit({kSourceRateEnv, kSourceBurstEnv}, rawRate, rawBurst, limit, error);
+}
 
 // 判定所需的当前状态。
 struct AdmissionState
@@ -126,10 +129,11 @@ struct AdmissionState
     bool sourceClosed{false};     // 已关源
     size_t currentConnections{0}; // 直连会话数。与连接一一对应:建连回调插入,断开回调删除,都在 loop 线程上同步完成
     size_t maxConnections{0};     // 生效上限(BattleClientEdge::EffectiveMaxConnections)
-    uint64_t unauthenticated{0};  // 未认证直连数(没完成票据握手、也没出示探测授权,且还连着)
+    uint64_t unauthenticated{0};  // 未认证直连数(没完成票据握手、也没出示探测授权)
     // 其中最老一条已建连多久。没有未认证直连、或此刻不允许淘汰(本端 loop 刚卡过)时为空。
     std::optional<SteadyTime::duration> oldestUnauthenticatedAge;
     PreAuthBudget preAuthBudget{DefaultPreAuthBudget(0)};
+    bool sourceOverRate{false}; // 按来源限速生效中(开启且承压),而这条直连的公网来源前缀已超过它的桶
 };
 
 // 判定结果:拒绝(带原因),或放行;放行时可能要先淘汰最老的一条未认证直连给它让位。
@@ -137,12 +141,14 @@ struct Verdict
 {
     std::optional<RejectReason> rejected;    // 空 = 放行
     bool evictOldestUnauthenticated{false}; // 放行,并且要先淘汰最老的一条未认证直连
+    // 放行了,但按来源限速的前缀表满、这个来源没登记上(fail-open):调用方采样打日志。Decide 不填,Admission::Admit 填。
+    bool sourceUntracked{false};
 
     bool operator==(const Verdict &) const = default;
 };
 
-// 判定一条刚 accept 进来的直连,顺序:关源 → 总量 → 未验签预算 → 速率。放行时已从速率闸取走一个名额;
-// 拒绝时不动速率闸。
+// 判定一条刚 accept 进来的直连,顺序:关源 → 总量 → 按来源限速 → 未验签预算 → 速率。放行时已从速率闸取走一个名额;
+// 拒绝时不动速率闸。来源排在预算前面:超速前缀的直连不会让别人的老连接被淘汰,也不消耗早拒的随机数(与 gate 相同)。
 inline Verdict Decide(const AdmissionState &state, accept_admission::AcceptRateGate &rateGate, SteadyTime now,
                       UniformBelow uniformBelow)
 {
@@ -153,6 +159,10 @@ inline Verdict Decide(const AdmissionState &state, accept_admission::AcceptRateG
     if (state.currentConnections >= state.maxConnections)
     {
         return Verdict{.rejected = RejectReason::kCapacity};
+    }
+    if (state.sourceOverRate)
+    {
+        return Verdict{.rejected = RejectReason::kSourceRate};
     }
     const PreAuthVerdict preAuth =
         DecidePreAuth(state.preAuthBudget, state.unauthenticated, state.oldestUnauthenticatedAge, uniformBelow);
@@ -182,6 +192,7 @@ struct Counters
     uint64_t handshakes{0};                              // 票据握手成功、耗时进了直方图的直连
     uint64_t handshakeTimeouts{0};                       // 建连满握手期限仍未握手、被关掉的直连
     uint64_t preAuthEvicted{0};                          // 承压时被淘汰、给新连接让位的未认证直连
+    uint64_t sourceUntracked{0};                         // 前缀表满、没做按来源记账就放行的直连
 
     bool operator==(const Counters &) const = default;
 };
@@ -192,11 +203,20 @@ class Admission
 public:
     explicit Admission(RateLimit rateLimit) : rateGate_(rateLimit) {}
 
-    // 换速率闸参数并把桶装满,换未验签预算。启动时调一次(main.cpp ConfigureClientAdmissionOrDie)。
-    void Configure(RateLimit rateLimit, PreAuthBudget preAuthBudget)
+    // 换速率闸参数并把桶装满,换未验签预算与按来源限速(sourceRateLimit 为空 = 关闭)。启动时调一次
+    // (main.cpp ConfigureClientAdmissionOrDie)。
+    void Configure(RateLimit rateLimit, PreAuthBudget preAuthBudget, std::optional<RateLimit> sourceRateLimit = std::nullopt)
     {
         rateGate_.Reset(rateLimit);
         preAuthBudget_ = preAuthBudget;
+        if (sourceRateLimit)
+        {
+            sourceRate_.emplace(*sourceRateLimit);
+        }
+        else
+        {
+            sourceRate_.reset();
+        }
     }
 
     // 关源:从这一刻起新直连一律在 accept 处拒绝(reason = shutting_down)。停机 / 维护关源时调,不可撤销
@@ -205,10 +225,11 @@ public:
     bool SourceClosed() const { return sourceClosed_; }
 
     // 准入回调的判定:放行时 rejected 为空(已取走一个速率名额),evictOldestUnauthenticated 为真时调用方要先淘汰
-    // 最老的一条未认证直连(淘汰后调 NotePreAuthEvicted);拒绝时带原因,并已按原因计数。日志由调用方采样打。
-    // unauthenticated 与 oldestUnauthenticatedAge 的含义见 AdmissionState。
-    Verdict Admit(size_t currentConnections, size_t maxConnections, uint64_t unauthenticated,
-                  std::optional<SteadyTime::duration> oldestUnauthenticatedAge, SteadyTime now);
+    // 最老的一条未认证直连(淘汰后调 NotePreAuthEvicted),sourceUntracked 为真时调用方采样打日志;拒绝时带原因,
+    // 并已按原因计数。日志由调用方采样打。unauthenticated 与 oldestUnauthenticatedAge 的含义见 AdmissionState。
+    // 按来源限速开启且承压时(SourceRateUnderPressure)从 peer 取公网来源前缀问它的桶,所有闸都放行之后才给它记一笔。
+    Verdict Admit(const muduo::net::InetAddress &peer, size_t currentConnections, size_t maxConnections,
+                  uint64_t unauthenticated, std::optional<SteadyTime::duration> oldestUnauthenticatedAge, SteadyTime now);
 
     // 连接建出来之后才发现不能要(连接回调里的第二道总量闸、空密钥兜底):只计数,连接由调用方关。
     void NoteRejectedAfterAccept(RejectReason reason);
@@ -224,6 +245,11 @@ public:
     const Counters &GetCounters() const { return counters_; }
     const RateLimit &CurrentRateLimit() const { return rateGate_.Limit(); }
     const PreAuthBudget &CurrentPreAuthBudget() const { return preAuthBudget_; }
+    // 生效的按来源限速参数;关闭时为空。
+    std::optional<RateLimit> CurrentSourceRateLimit() const
+    {
+        return sourceRate_ ? std::optional<RateLimit>(sourceRate_->Limit()) : std::nullopt;
+    }
 
     // 把连接类指标写进一次抓取(BattleClientEdge 登记的采集回调在 battle 主 loop 上调用):
     //   battle_connections_current / battle_connections_max  直连会话数与生效上限;
@@ -234,8 +260,13 @@ public:
     //   battle_handshake_duration_ms                         建连到票据握手成功的耗时直方图;
     //   battle_preauth_reaped_total                          建连满握手期限仍未握手、被关掉的直连;
     //   battle_preauth_evicted_total                         承压时被淘汰、给新连接让位的未认证直连;
-    //   battle_preauth_budget / battle_preauth_early_drop_start / battle_preauth_evictable_age_ms 生效的未验签预算参数。
-    // 标签只有 reason 一个封闭集合,不带对端地址、房间号与玩家号(AGENTS.md §9)。
+    //   battle_preauth_budget / battle_preauth_early_drop_start / battle_preauth_evictable_age_ms 生效的未验签预算参数;
+    //   battle_source_rate_limit_per_second / battle_source_burst 生效的按来源限速参数(关闭时为 0);
+    //   battle_source_rate_active                            最近一次判定时按来源限速是否在生效(开启且承压);
+    //   battle_source_tracked / battle_source_untracked_total 前缀表里的前缀数,表满时没记账就放行的直连;
+    //   battle_websocket_handshakes_total{result}            小游戏直连的 WebSocket 升级请求,result 是 accepted / rejected;
+    //   battle_websocket_protocol_closed_total               帧不合协议、由本端关掉的 WebSocket 直连。
+    // 标签只有 reason 与 result 两个封闭集合,不带对端地址、房间号与玩家号(AGENTS.md §9)。
     void CollectMetrics(prometheus_text::Writer &writer, size_t currentConnections, size_t maxConnections,
                         size_t unauthenticatedConnections) const;
 
@@ -244,6 +275,12 @@ private:
     accept_admission::AcceptRateGate rateGate_;
     // 没 Configure 时(只有不 Install 的单测)取速率下限推导的缺省:起点 500、预算 1000。main.cpp 启动时换成正式参数。
     PreAuthBudget preAuthBudget_{DefaultPreAuthBudget(0)};
+    // 按来源限速:空 = 关闭(缺省)。
+    std::optional<accept_admission::SourceRateGate> sourceRate_;
+    // 全局速率闸最近一次拒绝的时刻:之后一个握手期限内算承压(SourceRateUnderPressure)。
+    std::optional<SteadyTime> lastAcceptRateRejectAt_;
+    // 最近一次判定时按来源限速是否在生效,给指标用。
+    bool sourceRateActive_{false};
     Counters counters_;
     accept_admission::HandshakeHistogram handshake_;
 };

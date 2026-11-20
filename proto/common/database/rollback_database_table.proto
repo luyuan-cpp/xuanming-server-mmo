@@ -373,6 +373,10 @@ message player_name
   // 建角在玩家片提交 account_role 之后,data_service 先复核角色确已提交,再把它置为已绑定。
   // 已绑定的名字 ReleasePlayerName 一律拒绝,只有删角写完墓碑之后由 data_service 释放。
   uint64 bound_ms   = 5;
+  // 保护到期时刻 Unix 毫秒;0 = 不在保护期。角色改名之后,旧名这一行留在原主名下(player_id 不变)到这个时刻为止,
+  // 期间别人登记不了;到期不靠后台扫描,别人来登记时撞上这一行、发现已过期,用一条带条件的 UPDATE 接管
+  // (docs/design/rename-and-content-safety.md §4.2)。原主在保护期内改回这个名字时清回 0。
+  uint64 held_until_ms = 6;
 }
 
 // 玩家分片上「这个角色登记的名字」。BatchGetPlayerName 读它,不用扫全部名字分片;
@@ -567,6 +571,33 @@ message account_role_removal {
   string account = 2;
   uint64 owner_revision = 3;
   uint64 started_ms = 4;
+}
+
+// 角色改名记录(docs/design/rename-and-content-safety.md §4.4):每名玩家一行,只保留最近一次,删角收尾时删除。
+// 它承担三件事:同一个 seq 重发回同一个结局;seq 比记录小的迟到请求一律拒绝;上一次成功的时刻(冷却从它算)。
+// seq 是 scene 按玩家递增发的流水号,不用发号器的 ID(那种 ID 不能比先后)。
+// 手写 DDL(store/account_role_rename.go):名字两列要和 player_name 同列型、同排序规则,还要一条二级索引给后台续做用。
+message account_role_rename {
+  option(OptionTableName) = "account_role_rename";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+  uint64 player_id = 1;
+  uint64 seq = 2;
+  // 1 进行中;2 已提交、未收尾;3 已收尾;4 已拒绝、预留的新名还没清;5 已拒绝。
+  uint32 state = 3;
+  // 状态 4、5 时的结局,取 data_service.RenameRoleResult 的值;其余状态为 0。
+  uint32 result = 4;
+  string new_name = 5;
+  string new_norm = 6;
+  // 提交时被换下的旧名的判重键(收尾按它把旧名行置为保护);没有旧名时为空。
+  string old_norm = 7;
+  // 最近一次改名成功的时刻 Unix 毫秒,0 = 从没改过。新的一次改名覆盖这一行时保留它。
+  uint64 renamed_ms = 8;
+  // 旧名保护到期时刻 Unix 毫秒,提交时算好,收尾写进 player_name.held_until_ms。
+  uint64 held_until_ms = 9;
+  uint64 updated_ms = 10;
 }
 
 // listing 级永久冻结收据；取消后保留，旧冻结请求重放不能再次冻结。

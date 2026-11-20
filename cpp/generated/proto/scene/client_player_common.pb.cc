@@ -33,9 +33,161 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
         // ::RedirectToGateNotify
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
+        // ::RenamePlayerRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
+        // ::RenamePlayerResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
+        // ::PlayerRenamedNotify
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class RenamePlayerRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RenamePlayerRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RenamePlayerRequest, _impl_._has_bits_);
+};
+
+constexpr RenamePlayerRequest::ParseTableT_ RenamePlayerRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RenamePlayerRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::RenamePlayerRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string name = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RenamePlayerRequest, _impl_.name_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string name = 1;
+      {PROTOBUF_FIELD_OFFSET(RenamePlayerRequest, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\23\4\0\0\0\0\0\0"
+      "RenamePlayerRequest"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr RenamePlayerRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+constexpr RenamePlayerRequest::RenamePlayerRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RenamePlayerRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RenamePlayerRequest(arena);
+}
+constexpr auto RenamePlayerRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RenamePlayerRequest), alignof(RenamePlayerRequest));
+}
+constexpr auto RenamePlayerRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RenamePlayerRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RenamePlayerRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RenamePlayerRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RenamePlayerRequest>(), &RenamePlayerRequest::ByteSizeLong,
+              &RenamePlayerRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RenamePlayerRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[2],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RenamePlayerRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RenamePlayerRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RenamePlayerRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RenamePlayerRequest::InternalGenerateClassData_(
+            _default, &RenamePlayerRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RenamePlayerRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RenamePlayerRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RenamePlayerRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RenamePlayerRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RenamePlayerRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RenamePlayerRequestGlobalsTypeInternal RenamePlayerRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RenamePlayerRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RenamePlayerRequest_globals_.GetClassData();
+#else
+  return RenamePlayerRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RedirectToGateNotify::_Internal {
  public:
   using HasBits = decltype(::std::declval<RedirectToGateNotify>()._impl_._has_bits_);
@@ -48,11 +200,11 @@ constexpr RedirectToGateNotify::ParseTableT_ RedirectToGateNotify::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -68,8 +220,8 @@ constexpr RedirectToGateNotify::ParseTableT_ RedirectToGateNotify::InternalGener
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_ip_)}},
       // uint32 target_port = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateNotify, _impl_.target_port_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RedirectToGateNotify, _impl_.target_port_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_port_)}},
       // bytes token_payload = 3;
       {::_pbi::TcParser::FastBS1,
@@ -80,10 +232,13 @@ constexpr RedirectToGateNotify::ParseTableT_ RedirectToGateNotify::InternalGener
        {34, 2, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.token_signature_)}},
       // int64 token_deadline = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateNotify, _impl_.token_deadline_), 3>(),
-       {40, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RedirectToGateNotify, _impl_.token_deadline_), 4>(),
+       {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.token_deadline_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // string target_ws_url = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 3, 0,
+        PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_ws_url_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -91,19 +246,22 @@ constexpr RedirectToGateNotify::ParseTableT_ RedirectToGateNotify::InternalGener
       // string target_ip = 1;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_ip_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 target_port = 2;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_port_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_port_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes token_payload = 3;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.token_payload_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // bytes token_signature = 4;
       {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.token_signature_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // int64 token_deadline = 5;
-      {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.token_deadline_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.token_deadline_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // string target_ws_url = 6;
+      {PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_ws_url_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\24\11\0\0\0\0\0\0"
+      "\24\11\0\0\0\0\15\0"
       "RedirectToGateNotify"
       "target_ip"
+      "target_ws_url"
     }},
   };
 }
@@ -120,6 +278,9 @@ inline constexpr RedirectToGateNotify::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         token_signature_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_ws_url_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         token_deadline_{::int64_t{0}},
@@ -213,6 +374,320 @@ const ::_pbi::ClassData* RedirectToGateNotify_get_class_data() {
   return RedirectToGateNotify_globals_.GetClassData();
 #else
   return RedirectToGateNotify_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class RenamePlayerResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RenamePlayerResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RenamePlayerResponse, _impl_._has_bits_);
+};
+
+constexpr RenamePlayerResponse::ParseTableT_ RenamePlayerResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RenamePlayerResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::RenamePlayerResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RenamePlayerResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(RenamePlayerResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr RenamePlayerResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr} {}
+
+template <typename>
+constexpr RenamePlayerResponse::RenamePlayerResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RenamePlayerResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RenamePlayerResponse(arena);
+}
+constexpr auto RenamePlayerResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RenamePlayerResponse), alignof(RenamePlayerResponse));
+}
+constexpr auto RenamePlayerResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RenamePlayerResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RenamePlayerResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RenamePlayerResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RenamePlayerResponse>(), &RenamePlayerResponse::ByteSizeLong,
+              &RenamePlayerResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RenamePlayerResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[3],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RenamePlayerResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RenamePlayerResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RenamePlayerResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RenamePlayerResponse::InternalGenerateClassData_(
+            _default, &RenamePlayerResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RenamePlayerResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RenamePlayerResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RenamePlayerResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RenamePlayerResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RenamePlayerResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RenamePlayerResponseGlobalsTypeInternal RenamePlayerResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RenamePlayerResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RenamePlayerResponse_globals_.GetClassData();
+#else
+  return RenamePlayerResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PlayerRenamedNotify::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PlayerRenamedNotify>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_._has_bits_);
+};
+
+constexpr PlayerRenamedNotify::ParseTableT_ PlayerRenamedNotify::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PlayerRenamedNotify>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.error_message_)}},
+      // string name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.name_)}},
+      // uint64 next_rename_time = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerRenamedNotify, _impl_.next_rename_time_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.next_rename_time_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.error_message_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string name = 2;
+      {PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 next_rename_time = 3;
+      {PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.next_rename_time_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+      "\23\0\4\0\0\0\0\0"
+      "PlayerRenamedNotify"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr PlayerRenamedNotify::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        error_message_{nullptr},
+        next_rename_time_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr PlayerRenamedNotify::PlayerRenamedNotify(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PlayerRenamedNotify::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerRenamedNotify(arena);
+}
+constexpr auto PlayerRenamedNotify::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerRenamedNotify), alignof(PlayerRenamedNotify));
+}
+constexpr auto PlayerRenamedNotify::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PlayerRenamedNotify::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerRenamedNotify>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerRenamedNotify::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PlayerRenamedNotify>(), &PlayerRenamedNotify::ByteSizeLong,
+              &PlayerRenamedNotify::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PlayerRenamedNotifyGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PlayerRenamedNotifyGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PlayerRenamedNotify_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PlayerRenamedNotify::InternalGenerateClassData_(
+            _default, &PlayerRenamedNotify_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PlayerRenamedNotify>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PlayerRenamedNotifyGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PlayerRenamedNotify _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PlayerRenamedNotify>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PlayerRenamedNotifyGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PlayerRenamedNotifyGlobalsTypeInternal PlayerRenamedNotify_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PlayerRenamedNotify_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PlayerRenamedNotify_globals_.GetClassData();
+#else
+  return PlayerRenamedNotify_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -392,28 +867,55 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RedirectToGateNotify, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::RedirectToGateNotify, _impl_.target_ip_),
         PROTOBUF_FIELD_OFFSET(::RedirectToGateNotify, _impl_.target_port_),
         PROTOBUF_FIELD_OFFSET(::RedirectToGateNotify, _impl_.token_payload_),
         PROTOBUF_FIELD_OFFSET(::RedirectToGateNotify, _impl_.token_signature_),
         PROTOBUF_FIELD_OFFSET(::RedirectToGateNotify, _impl_.token_deadline_),
+        PROTOBUF_FIELD_OFFSET(::RedirectToGateNotify, _impl_.target_ws_url_),
         0,
-        4,
+        5,
         1,
         2,
+        4,
         3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::RenamePlayerRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::RenamePlayerRequest, _impl_.name_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::RenamePlayerResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::RenamePlayerResponse, _impl_.error_message_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PlayerRenamedNotify, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PlayerRenamedNotify, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::PlayerRenamedNotify, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::PlayerRenamedNotify, _impl_.next_rename_time_),
+        1,
+        0,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::GameKickPlayerRequest)},
         {7, sizeof(::RedirectToGateNotify)},
+        {22, sizeof(::RenamePlayerRequest)},
+        {27, sizeof(::RenamePlayerResponse)},
+        {32, sizeof(::PlayerRenamedNotify)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::GameKickPlayerRequest_globals_,
         &::RedirectToGateNotify_globals_,
+        &::RenamePlayerRequest_globals_,
+        &::RenamePlayerResponse_globals_,
+        &::PlayerRenamedNotify_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -422,16 +924,24 @@ const char descriptor_table_protodef_proto_2fscene_2fclient_5fplayer_5fcommon_2e
     "mon/base/tip.proto\032\035proto/common/base/em"
     "pty.proto\"J\n\025GameKickPlayerRequest\022\037\n\006re"
     "ason\030\001 \001(\0132\017.TipInfoMessage\022\020\n\010operator\030"
-    "\002 \001(\t\"\206\001\n\024RedirectToGateNotify\022\021\n\ttarget"
+    "\002 \001(\t\"\235\001\n\024RedirectToGateNotify\022\021\n\ttarget"
     "_ip\030\001 \001(\t\022\023\n\013target_port\030\002 \001(\r\022\025\n\rtoken_"
     "payload\030\003 \001(\014\022\027\n\017token_signature\030\004 \001(\014\022\026"
-    "\n\016token_deadline\030\005 \001(\0032\305\001\n\027SceneClientPl"
-    "ayerCommon\0221\n\017SendTipToClient\022\017.TipInfoM"
-    "essage\032\006.Empty\"\005\210\231\310\001\002\0223\n\nKickPlayer\022\026.Ga"
-    "meKickPlayerRequest\032\006.Empty\"\005\210\231\310\001\002\0226\n\016Re"
-    "directToGate\022\025.RedirectToGateNotify\032\006.Em"
-    "pty\"\005\210\231\310\001\002\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006"
-    "proto3"
+    "\n\016token_deadline\030\005 \001(\003\022\025\n\rtarget_ws_url\030"
+    "\006 \001(\t\"#\n\023RenamePlayerRequest\022\014\n\004name\030\001 \001"
+    "(\t\">\n\024RenamePlayerResponse\022&\n\rerror_mess"
+    "age\030\001 \001(\0132\017.TipInfoMessage\"e\n\023PlayerRena"
+    "medNotify\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
+    "foMessage\022\014\n\004name\030\002 \001(\t\022\030\n\020next_rename_t"
+    "ime\030\003 \001(\0042\276\002\n\027SceneClientPlayerCommon\0221\n"
+    "\017SendTipToClient\022\017.TipInfoMessage\032\006.Empt"
+    "y\"\005\210\231\310\001\002\0223\n\nKickPlayer\022\026.GameKickPlayerR"
+    "equest\032\006.Empty\"\005\210\231\310\001\002\0226\n\016RedirectToGate\022"
+    "\025.RedirectToGateNotify\032\006.Empty\"\005\210\231\310\001\002\022;\n"
+    "\014RenamePlayer\022\024.RenamePlayerRequest\032\025.Re"
+    "namePlayerResponse\022:\n\023NotifyPlayerRename"
+    "d\022\024.PlayerRenamedNotify\032\006.Empty\"\005\210\231\310\001\002\032\n"
+    "\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto_deps[3] = {
@@ -443,13 +953,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fclient_5fplayer_5fcomm
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto = {
     false,
     false,
-    566,
+    914,
     descriptor_table_protodef_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto,
     "proto/scene/client_player_common.proto",
     &descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto_once,
     descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto_deps,
     3,
-    2,
+    5,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto::offsets,
@@ -731,7 +1241,8 @@ PROTOBUF_NDEBUG_INLINE RedirectToGateNotify::Impl_::Impl_(
         _cached_size_{0},
         target_ip_(arena, from.target_ip_),
         token_payload_(arena, from.token_payload_),
-        token_signature_(arena, from.token_signature_) {}
+        token_signature_(arena, from.token_signature_),
+        target_ws_url_(arena, from.target_ws_url_) {}
 
 RedirectToGateNotify::RedirectToGateNotify(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -763,7 +1274,8 @@ PROTOBUF_NDEBUG_INLINE RedirectToGateNotify::Impl_::Impl_(
       : _cached_size_{0},
         target_ip_(arena),
         token_payload_(arena),
-        token_signature_(arena) {}
+        token_signature_(arena),
+        target_ws_url_(arena) {}
 
 inline void RedirectToGateNotify::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -788,6 +1300,7 @@ inline void RedirectToGateNotify::SharedDtor(MessageLite& self) {
   this_._impl_.target_ip_.Destroy();
   this_._impl_.token_payload_.Destroy();
   this_._impl_.token_signature_.Destroy();
+  this_._impl_.target_ws_url_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -825,7 +1338,7 @@ PROTOBUF_NOINLINE void RedirectToGateNotify::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.target_ip_.ClearNonDefaultToEmpty();
     }
@@ -835,8 +1348,11 @@ PROTOBUF_NOINLINE void RedirectToGateNotify::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.token_signature_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.target_ws_url_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000030U)) {
     ::memset(&_impl_.token_deadline_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_port_) -
         reinterpret_cast<char*>(&_impl_.token_deadline_)) + sizeof(_impl_.target_port_));
@@ -875,7 +1391,7 @@ PROTOBUF_NOINLINE void RedirectToGateNotify::Clear() {
   }
 
   // uint32 target_port = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_target_port() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -900,11 +1416,21 @@ PROTOBUF_NOINLINE void RedirectToGateNotify::Clear() {
   }
 
   // int64 token_deadline = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_token_deadline() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
               stream, this_._internal_token_deadline(), target);
+    }
+  }
+
+  // string target_ws_url = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_target_ws_url().empty()) {
+      const ::std::string& _s = this_._internal_target_ws_url();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "RedirectToGateNotify.target_ws_url");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
     }
   }
 
@@ -933,7 +1459,7 @@ PROTOBUF_NOINLINE void RedirectToGateNotify::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string target_ip = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_target_ip().empty()) {
@@ -955,15 +1481,22 @@ PROTOBUF_NOINLINE void RedirectToGateNotify::Clear() {
                                         this_._internal_token_signature());
       }
     }
-    // int64 token_deadline = 5;
+    // string target_ws_url = 6;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_target_ws_url().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_ws_url());
+      }
+    }
+    // int64 token_deadline = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_token_deadline() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_token_deadline());
       }
     }
     // uint32 target_port = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_target_port() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_target_port());
@@ -987,7 +1520,7 @@ void RedirectToGateNotify::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_target_ip().empty()) {
         _this->_internal_set_target_ip(from._internal_target_ip());
@@ -1016,11 +1549,20 @@ void RedirectToGateNotify::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_target_ws_url().empty()) {
+        _this->_internal_set_target_ws_url(from._internal_target_ws_url());
+      } else {
+        if (_this->_impl_.target_ws_url_.IsDefault()) {
+          _this->_internal_set_target_ws_url("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_token_deadline() != 0) {
         _this->_impl_.token_deadline_ = from._impl_.token_deadline_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_target_port() != 0) {
         _this->_impl_.target_port_ = from._impl_.target_port_;
       }
@@ -1048,6 +1590,7 @@ void RedirectToGateNotify::InternalSwap(RedirectToGateNotify* PROTOBUF_RESTRICT 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_ip_, &other->_impl_.target_ip_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.token_payload_, &other->_impl_.token_payload_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.token_signature_, &other->_impl_.token_signature_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_ws_url_, &other->_impl_.target_ws_url_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(RedirectToGateNotify, _impl_.target_port_)
       + sizeof(RedirectToGateNotify::_impl_.target_port_)
@@ -1057,6 +1600,725 @@ void RedirectToGateNotify::InternalSwap(RedirectToGateNotify* PROTOBUF_RESTRICT 
 }
 
 ::google::protobuf::Metadata RedirectToGateNotify::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+RenamePlayerRequest::RenamePlayerRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenamePlayerRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:RenamePlayerRequest)
+}
+PROTOBUF_NDEBUG_INLINE RenamePlayerRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::RenamePlayerRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+RenamePlayerRequest::RenamePlayerRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RenamePlayerRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenamePlayerRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RenamePlayerRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:RenamePlayerRequest)
+}
+PROTOBUF_NDEBUG_INLINE RenamePlayerRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void RenamePlayerRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+RenamePlayerRequest::~RenamePlayerRequest() {
+  // @@protoc_insertion_point(destructor:RenamePlayerRequest)
+  SharedDtor(*this);
+}
+inline void RenamePlayerRequest::SharedDtor(MessageLite& self) {
+  RenamePlayerRequest& this_ = static_cast<RenamePlayerRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RenamePlayerRequest_class_data_ =
+        RenamePlayerRequest::InternalGenerateClassData_(RenamePlayerRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenamePlayerRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenamePlayerRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RenamePlayerRequest_class_data_.tc_table);
+  return RenamePlayerRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenamePlayerRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenamePlayerRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RenamePlayerRequest_globals_));
+  return RenamePlayerRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RenamePlayerRequest::ParseTableT_
+    RenamePlayerRequest::_table_ =
+        RenamePlayerRequest::InternalGenerateParseTable_(RenamePlayerRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RenamePlayerRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:RenamePlayerRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RenamePlayerRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RenamePlayerRequest& this_ = static_cast<const RenamePlayerRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RenamePlayerRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RenamePlayerRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:RenamePlayerRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string name = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "RenamePlayerRequest.name");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:RenamePlayerRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RenamePlayerRequest::ByteSizeLong(const MessageLite& base) {
+  const RenamePlayerRequest& this_ = static_cast<const RenamePlayerRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RenamePlayerRequest::ByteSizeLong() const {
+  const RenamePlayerRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:RenamePlayerRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // string name = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RenamePlayerRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RenamePlayerRequest*>(&to_msg);
+  auto& from = static_cast<const RenamePlayerRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:RenamePlayerRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!from._internal_name().empty()) {
+      _this->_internal_set_name(from._internal_name());
+    } else {
+      if (_this->_impl_.name_.IsDefault()) {
+        _this->_internal_set_name("");
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RenamePlayerRequest::CopyFrom(const RenamePlayerRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:RenamePlayerRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RenamePlayerRequest::InternalSwap(RenamePlayerRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+}
+
+::google::protobuf::Metadata RenamePlayerRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void RenamePlayerResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+RenamePlayerResponse::RenamePlayerResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenamePlayerResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:RenamePlayerResponse)
+}
+PROTOBUF_NDEBUG_INLINE RenamePlayerResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::RenamePlayerResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+RenamePlayerResponse::RenamePlayerResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RenamePlayerResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, RenamePlayerResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  RenamePlayerResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:RenamePlayerResponse)
+}
+PROTOBUF_NDEBUG_INLINE RenamePlayerResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void RenamePlayerResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.error_message_ = {};
+}
+RenamePlayerResponse::~RenamePlayerResponse() {
+  // @@protoc_insertion_point(destructor:RenamePlayerResponse)
+  SharedDtor(*this);
+}
+inline void RenamePlayerResponse::SharedDtor(MessageLite& self) {
+  RenamePlayerResponse& this_ = static_cast<RenamePlayerResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RenamePlayerResponse_class_data_ =
+        RenamePlayerResponse::InternalGenerateClassData_(RenamePlayerResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenamePlayerResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenamePlayerResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RenamePlayerResponse_class_data_.tc_table);
+  return RenamePlayerResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RenamePlayerResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RenamePlayerResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RenamePlayerResponse_globals_));
+  return RenamePlayerResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RenamePlayerResponse::ParseTableT_
+    RenamePlayerResponse::_table_ =
+        RenamePlayerResponse::InternalGenerateParseTable_(RenamePlayerResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void RenamePlayerResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:RenamePlayerResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.error_message_ != nullptr);
+    _impl_.error_message_->Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL RenamePlayerResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const RenamePlayerResponse& this_ = static_cast<const RenamePlayerResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL RenamePlayerResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const RenamePlayerResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:RenamePlayerResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:RenamePlayerResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t RenamePlayerResponse::ByteSizeLong(const MessageLite& base) {
+  const RenamePlayerResponse& this_ = static_cast<const RenamePlayerResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t RenamePlayerResponse::ByteSizeLong() const {
+  const RenamePlayerResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:RenamePlayerResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .TipInfoMessage error_message = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void RenamePlayerResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<RenamePlayerResponse*>(&to_msg);
+  auto& from = static_cast<const RenamePlayerResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:RenamePlayerResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+    if (_this->_impl_.error_message_ == nullptr) {
+      _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+    } else {
+      _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void RenamePlayerResponse::CopyFrom(const RenamePlayerResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:RenamePlayerResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void RenamePlayerResponse::InternalSwap(RenamePlayerResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.error_message_, other->_impl_.error_message_);
+}
+
+::google::protobuf::Metadata RenamePlayerResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void PlayerRenamedNotify::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+PlayerRenamedNotify::PlayerRenamedNotify(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerRenamedNotify_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:PlayerRenamedNotify)
+}
+PROTOBUF_NDEBUG_INLINE PlayerRenamedNotify::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::PlayerRenamedNotify& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+PlayerRenamedNotify::PlayerRenamedNotify(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerRenamedNotify& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerRenamedNotify_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerRenamedNotify* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.next_rename_time_ = from._impl_.next_rename_time_;
+
+  // @@protoc_insertion_point(copy_constructor:PlayerRenamedNotify)
+}
+PROTOBUF_NDEBUG_INLINE PlayerRenamedNotify::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void PlayerRenamedNotify::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, next_rename_time_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::next_rename_time_));
+}
+PlayerRenamedNotify::~PlayerRenamedNotify() {
+  // @@protoc_insertion_point(destructor:PlayerRenamedNotify)
+  SharedDtor(*this);
+}
+inline void PlayerRenamedNotify::SharedDtor(MessageLite& self) {
+  PlayerRenamedNotify& this_ = static_cast<PlayerRenamedNotify&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerRenamedNotify_class_data_ =
+        PlayerRenamedNotify::InternalGenerateClassData_(PlayerRenamedNotify_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerRenamedNotify::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerRenamedNotify_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerRenamedNotify_class_data_.tc_table);
+  return PlayerRenamedNotify_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerRenamedNotify::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerRenamedNotify_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PlayerRenamedNotify_globals_));
+  return PlayerRenamedNotify_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PlayerRenamedNotify::ParseTableT_
+    PlayerRenamedNotify::_table_ =
+        PlayerRenamedNotify::InternalGenerateParseTable_(PlayerRenamedNotify_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PlayerRenamedNotify::Clear() {
+// @@protoc_insertion_point(message_clear_start:PlayerRenamedNotify)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+  }
+  _impl_.next_rename_time_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PlayerRenamedNotify::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PlayerRenamedNotify& this_ = static_cast<const PlayerRenamedNotify&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PlayerRenamedNotify::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PlayerRenamedNotify& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:PlayerRenamedNotify)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // string name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PlayerRenamedNotify.name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint64 next_rename_time = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_next_rename_time() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_next_rename_time(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:PlayerRenamedNotify)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PlayerRenamedNotify::ByteSizeLong(const MessageLite& base) {
+  const PlayerRenamedNotify& this_ = static_cast<const PlayerRenamedNotify&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PlayerRenamedNotify::ByteSizeLong() const {
+  const PlayerRenamedNotify& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:PlayerRenamedNotify)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // uint64 next_rename_time = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_next_rename_time() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_rename_time());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PlayerRenamedNotify::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PlayerRenamedNotify*>(&to_msg);
+  auto& from = static_cast<const PlayerRenamedNotify&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:PlayerRenamedNotify)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_next_rename_time() != 0) {
+        _this->_impl_.next_rename_time_ = from._impl_.next_rename_time_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PlayerRenamedNotify::CopyFrom(const PlayerRenamedNotify& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:PlayerRenamedNotify)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerRenamedNotify::InternalSwap(PlayerRenamedNotify* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.next_rename_time_)
+      + sizeof(PlayerRenamedNotify::_impl_.next_rename_time_)
+      - PROTOBUF_FIELD_OFFSET(PlayerRenamedNotify, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata PlayerRenamedNotify::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================
@@ -1091,6 +2353,20 @@ void SceneClientPlayerCommon::RedirectToGate(::google::protobuf::RpcController* 
   controller->SetFailed("Method RedirectToGate() not implemented.");
   done->Run();
 }
+void SceneClientPlayerCommon::RenamePlayer(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::RenamePlayerRequest* PROTOBUF_NONNULL,
+                         ::RenamePlayerResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method RenamePlayer() not implemented.");
+  done->Run();
+}
+void SceneClientPlayerCommon::NotifyPlayerRenamed(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::PlayerRenamedNotify* PROTOBUF_NONNULL,
+                         ::Empty* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method NotifyPlayerRenamed() not implemented.");
+  done->Run();
+}
 
 void SceneClientPlayerCommon::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -1111,6 +2387,14 @@ void SceneClientPlayerCommon::CallMethod(
       this->RedirectToGate(controller, ::google::protobuf::DownCastMessage<::RedirectToGateNotify>(request),
                    ::google::protobuf::DownCastMessage<::Empty>(response), done);
       break;
+    case 3:
+      this->RenamePlayer(controller, ::google::protobuf::DownCastMessage<::RenamePlayerRequest>(request),
+                   ::google::protobuf::DownCastMessage<::RenamePlayerResponse>(response), done);
+      break;
+    case 4:
+      this->NotifyPlayerRenamed(controller, ::google::protobuf::DownCastMessage<::PlayerRenamedNotify>(request),
+                   ::google::protobuf::DownCastMessage<::Empty>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -1128,6 +2412,10 @@ const ::google::protobuf::Message& SceneClientPlayerCommon::GetRequestPrototype(
       return ::GameKickPlayerRequest::default_instance();
     case 2:
       return ::RedirectToGateNotify::default_instance();
+    case 3:
+      return ::RenamePlayerRequest::default_instance();
+    case 4:
+      return ::PlayerRenamedNotify::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -1145,6 +2433,10 @@ const ::google::protobuf::Message& SceneClientPlayerCommon::GetResponsePrototype
     case 1:
       return ::Empty::default_instance();
     case 2:
+      return ::Empty::default_instance();
+    case 3:
+      return ::RenamePlayerResponse::default_instance();
+    case 4:
       return ::Empty::default_instance();
 
     default:
@@ -1186,6 +2478,20 @@ void SceneClientPlayerCommon_Stub::RedirectToGate(
     const ::RedirectToGateNotify* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(2), controller,
+                       request, response, done);
+}
+void SceneClientPlayerCommon_Stub::RenamePlayer(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::RenamePlayerRequest* PROTOBUF_NONNULL request, ::RenamePlayerResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(3), controller,
+                       request, response, done);
+}
+void SceneClientPlayerCommon_Stub::NotifyPlayerRenamed(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::PlayerRenamedNotify* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(4), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

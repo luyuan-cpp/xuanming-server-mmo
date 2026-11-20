@@ -78,14 +78,6 @@ extern const ::google::protobuf::internal::ClassDataFull MissionListComp_class_d
 #else
 extern const MissionListCompGlobalsTypeInternal MissionListComp_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
-class MissionListComp_MissionBeginTimeEntry_DoNotUse;
-struct MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_;
-extern const ::google::protobuf::internal::ClassDataFull MissionListComp_MissionBeginTimeEntry_DoNotUse_class_data_;
-#else
-extern const MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
 class MissionListComp_MissionsEntry_DoNotUse;
 struct MissionListComp_MissionsEntry_DoNotUseGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -343,7 +335,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityPointSource final : p
   [[nodiscard]] static const PlayerActivityPointSource& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerActivityPointSource>(&PlayerActivityPointSource_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(PlayerActivityPointSource& a, PlayerActivityPointSource& b) { a.Swap(&b); }
   inline void Swap(PlayerActivityPointSource* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -604,7 +596,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityClaimRecord final : p
   [[nodiscard]] static const PlayerActivityClaimRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerActivityClaimRecord>(&PlayerActivityClaimRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(PlayerActivityClaimRecord& a, PlayerActivityClaimRecord& b) { a.Swap(&b); }
   inline void Swap(PlayerActivityClaimRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -823,55 +815,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityClaimRecord final : p
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto;
-};
-// -------------------------------------------------------------------
-
-class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionListComp_MissionBeginTimeEntry_DoNotUse final
-    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint64_t,
-                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
-                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT64> {
- public:
-  using SuperType =
-      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint64_t,
-                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
-                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT64>;
-  MissionListComp_MissionBeginTimeEntry_DoNotUse();
-  template <typename = void>
-  explicit constexpr MissionListComp_MissionBeginTimeEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-  explicit MissionListComp_MissionBeginTimeEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
-    return &MissionListComp_MissionBeginTimeEntry_DoNotUse_globals_;
-  }
-
-
-  static constexpr auto InternalGenerateClassData_(
-      const ::google::protobuf::MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
- private:
-  friend class ::google::protobuf::MessageLite;
-  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fmission_5fcomp_2eproto;
-  friend ::google::protobuf::internal::PrivateAccess;
-  friend MissionListComp_MissionBeginTimeEntry_DoNotUseGlobalsTypeInternal;
-
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
 };
 // -------------------------------------------------------------------
 
@@ -1207,7 +1150,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardListComp final : public ::goo
   [[nodiscard]] static const RewardListComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RewardListComp>(&RewardListComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(RewardListComp& a, RewardListComp& b) { a.Swap(&b); }
   inline void Swap(RewardListComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1414,7 +1357,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityLedger final : public
   [[nodiscard]] static const PlayerActivityLedger& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerActivityLedger>(&PlayerActivityLedger_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(PlayerActivityLedger& a, PlayerActivityLedger& b) { a.Swap(&b); }
   inline void Swap(PlayerActivityLedger* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1508,6 +1451,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityLedger final : public
   enum : int {
     kSourcesFieldNumber = 1,
     kClaimsFieldNumber = 2,
+    kCreditedMissionsFieldNumber = 3,
   };
   // repeated .PlayerActivityPointSource sources = 1;
   [[nodiscard]] int sources_size()
@@ -1551,11 +1495,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityLedger final : public
   ::google::protobuf::RepeatedPtrField<::PlayerActivityClaimRecord>* PROTOBUF_NONNULL _internal_mutable_claims();
 
   public:
+  // bytes credited_missions = 3;
+  void clear_credited_missions() ;
+  [[nodiscard]] const ::std::string& credited_missions() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_credited_missions(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_credited_missions();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_credited_missions();
+  void set_allocated_credited_missions(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_credited_missions() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_credited_missions(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_credited_missions();
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerActivityLedger)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1586,6 +1545,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerActivityLedger final : public
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::PlayerActivityPointSource > sources_;
     ::google::protobuf::RepeatedPtrField< ::PlayerActivityClaimRecord > claims_;
+    ::google::protobuf::internal::ArenaStringPtr credited_missions_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1698,7 +1658,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionListComp final : public ::go
   [[nodiscard]] static const MissionListComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MissionListComp>(&MissionListComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(MissionListComp& a, MissionListComp& b) { a.Swap(&b); }
   inline void Swap(MissionListComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1816,7 +1776,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionListComp final : public ::go
     kActivityLedgerFieldNumber = 5,
     kTypeFieldNumber = 4,
     kMissionsFieldNumber = 1,
-    kMissionBeginTimeFieldNumber = 3,
   };
   // bytes complete_missions = 2;
   void clear_complete_missions() ;
@@ -1875,28 +1834,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionListComp final : public ::go
   ::google::protobuf::Map<::uint32_t, ::MissionComp>* PROTOBUF_NONNULL _internal_mutable_missions();
 
   public:
-  // map<uint32, uint64> mission_begin_time = 3;
-  [[nodiscard]] int mission_begin_time_size()
-      const;
-  private:
-  int _internal_mission_begin_time_size() const;
-
-  public:
-  void clear_mission_begin_time() ;
-  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint64_t>& mission_begin_time() const;
-  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint64_t>* PROTOBUF_NONNULL mutable_mission_begin_time();
-
-  private:
-  const ::google::protobuf::Map<::uint32_t, ::uint64_t>& _internal_mission_begin_time() const;
-  ::google::protobuf::Map<::uint32_t, ::uint64_t>* PROTOBUF_NONNULL _internal_mutable_mission_begin_time();
-
-  public:
   // @@protoc_insertion_point(class_scope:MissionListComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 5,
-                          4, 0,
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1928,7 +1871,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MissionListComp final : public ::go
     ::PlayerActivityLedger* PROTOBUF_NULLABLE activity_ledger_;
     ::uint32_t type_;
     ::google::protobuf::internal::MapField<MissionListComp_MissionsEntry_DoNotUse, ::uint32_t, ::MissionComp> missions_;
-    ::google::protobuf::internal::MapField<MissionListComp_MissionBeginTimeEntry_DoNotUse, ::uint32_t, ::uint64_t> mission_begin_time_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2118,8 +2060,6 @@ inline void MissionComp::set_allocated_data(::std::string* PROTOBUF_NULLABLE val
 
 // -------------------------------------------------------------------
 
-// -------------------------------------------------------------------
-
 // MissionListComp
 
 // map<uint32, .MissionComp> missions = 1;
@@ -2215,37 +2155,6 @@ inline void MissionListComp::set_allocated_complete_missions(::std::string* PROT
     _impl_.complete_missions_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:MissionListComp.complete_missions)
-}
-
-// map<uint32, uint64> mission_begin_time = 3;
-inline int MissionListComp::_internal_mission_begin_time_size() const {
-  return _internal_mission_begin_time().size();
-}
-inline int MissionListComp::mission_begin_time_size() const {
-  return _internal_mission_begin_time_size();
-}
-inline void MissionListComp::clear_mission_begin_time() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.mission_begin_time_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
-}
-inline const ::google::protobuf::Map<::uint32_t, ::uint64_t>& MissionListComp::_internal_mission_begin_time() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.mission_begin_time_.GetMap();
-}
-inline const ::google::protobuf::Map<::uint32_t, ::uint64_t>& MissionListComp::mission_begin_time() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_map:MissionListComp.mission_begin_time)
-  return _internal_mission_begin_time();
-}
-inline ::google::protobuf::Map<::uint32_t, ::uint64_t>* PROTOBUF_NONNULL MissionListComp::_internal_mutable_mission_begin_time() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.mission_begin_time_.MutableMap();
-}
-inline ::google::protobuf::Map<::uint32_t, ::uint64_t>* PROTOBUF_NONNULL MissionListComp::mutable_mission_begin_time()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  // @@protoc_insertion_point(field_mutable_map:MissionListComp.mission_begin_time)
-  return _internal_mutable_mission_begin_time();
 }
 
 // uint32 type = 4;
@@ -2842,6 +2751,70 @@ inline ::google::protobuf::RepeatedPtrField<::PlayerActivityClaimRecord>* PROTOB
 PlayerActivityLedger::_internal_mutable_claims() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.claims_;
+}
+
+// bytes credited_missions = 3;
+inline void PlayerActivityLedger::clear_credited_missions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.credited_missions_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& PlayerActivityLedger::credited_missions() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerActivityLedger.credited_missions)
+  return _internal_credited_missions();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerActivityLedger::set_credited_missions(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.credited_missions_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerActivityLedger.credited_missions)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerActivityLedger::mutable_credited_missions()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_credited_missions();
+  // @@protoc_insertion_point(field_mutable:PlayerActivityLedger.credited_missions)
+  return _s;
+}
+inline const ::std::string& PlayerActivityLedger::_internal_credited_missions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.credited_missions_.Get();
+}
+inline void PlayerActivityLedger::_internal_set_credited_missions(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.credited_missions_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerActivityLedger::_internal_mutable_credited_missions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.credited_missions_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerActivityLedger::release_credited_missions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerActivityLedger.credited_missions)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.credited_missions_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.credited_missions_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerActivityLedger::set_allocated_credited_missions(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.credited_missions_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.credited_missions_.IsDefault()) {
+    _impl_.credited_missions_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerActivityLedger.credited_missions)
 }
 
 // -------------------------------------------------------------------

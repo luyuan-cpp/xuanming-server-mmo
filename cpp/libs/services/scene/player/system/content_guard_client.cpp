@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "muduo/base/Logging.h"
+#include "muduo/net/EventLoop.h"
 #include "muduo_grpc/channel.h" // 选点读 muduo_grpc::Channel::GetState / ConnectivityState
 
 #include "core/network/grpc_client_call.h"
@@ -14,6 +15,7 @@
 #include "proto/common/base/node.pb.h"	 // ContentGuardNodeService
 #include "thread_context/node_context_manager.h"
 #include "utils/random/random.h"
+#include <node_config_manager.h>
 
 namespace
 {
@@ -41,23 +43,40 @@ namespace
 
 	bool DefaultSend(const content_guard::CheckTextRequest &request, ContentGuardClient::Done done)
 	{
+		// 只有本机配置才为真;K8s 的 node-config 不写这一键。
+		const bool optional = tlsNodeConfigManager.GetBaseDeployConfig().content_guard_optional();
 		const entt::entity node = PickReadyContentGuardNode();
 		if (node == entt::null)
 		{
-			return false;
+			auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+			if (!optional || loop == nullptr)
+			{
+				return false;
+			}
+			// 本机没起内容安全:不送检,按通过处理。回调排到本轮之后,保持「不在 Check 的调用栈里同步调用」。
+			LOG_ERROR << "[ContentGuard] no ready content guard node and ContentGuard.Optional is true: passing the text UNCHECKED"
+					  << " (local development only): scene=" << static_cast<int>(request.scene());
+			loop->queueInLoop([done = std::move(done)]()
+			{
+				ContentGuardClient::Result passed;
+				passed.verdict = ContentGuardClient::Verdict::kPass;
+				done(passed);
+			});
+			return true;
 		}
 		content_guard::SendContentGuardCheckText(
 			tlsNodeContextManager.GetRegistry(common::base::ContentGuardNodeService), node, request,
-			[scene = static_cast<int>(request.scene()), done = std::move(done)](
+			[scene = static_cast<int>(request.scene()), optional, done = std::move(done)](
 				const GrpcCallOutcome &outcome, const content_guard::CheckTextResponse *reply)
 			{
 				if (!outcome.ok())
 				{
 					// 只记场景与状态码,不记被检文字。
-					LOG_ERROR << "[ContentGuard] check failed, treating the text as unusable: scene=" << scene
-							  << " grpc_code=" << outcome.code << " message=" << outcome.message;
+					LOG_ERROR << "[ContentGuard] check failed, "
+							  << (optional ? "passing the text UNCHECKED because ContentGuard.Optional is true" : "treating the text as unusable")
+							  << ": scene=" << scene << " grpc_code=" << outcome.code << " message=" << outcome.message;
 				}
-				done(ContentGuardClient::FromReply(outcome.ok(), reply));
+				done(ContentGuardClient::ApplyOptional(ContentGuardClient::FromReply(outcome.ok(), reply), optional));
 			});
 		return true;
 	}
@@ -100,6 +119,15 @@ ContentGuardClient::Result ContentGuardClient::FromReply(bool callOk, const cont
 		break;
 	}
 	result.verdict = Verdict::kReject;
+	return result;
+}
+
+ContentGuardClient::Result ContentGuardClient::ApplyOptional(Result result, bool optional)
+{
+	if (optional && result.verdict == Verdict::kUnavailable)
+	{
+		result.verdict = Verdict::kPass;
+	}
 	return result;
 }
 

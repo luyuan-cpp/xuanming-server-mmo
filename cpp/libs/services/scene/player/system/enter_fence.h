@@ -6,8 +6,12 @@
 #include <cstdint>
 #include <iterator>
 #include <span>
+#include <string>
+#include <string_view>
 
 #include "engine/core/type_define/type_define.h" // SessionId / kInvalidSessionId
+// PlayerLoginIdentityComp(实体上已放行的最高登录身份):定义在引擎层,推送也按它记下的 gate 实例找 gate。
+#include "engine/core/type_define/player_login_identity_comp.h"
 // IsBoundSession:会话号是否指向一个会话(0 与 kInvalidSessionId 都不算)。写全路径:本头经 player_lifecycle.h
 // 被 modules 库包含,那个工程的包含目录里只有 cpp/libs。
 #include "services/scene/player/system/player_exit_intent.h"
@@ -21,35 +25,40 @@
 //
 // 本头只放组件、纯判定与计数,不含 entt / redis / muduo / protobuf,不读任何时钟(先例:player_exit_intent.h)。
 // 粘合代码在 player_lifecycle.cpp(PlayerLifecycleSystem::HandleEnterGameNode / JudgeEnter / EnterScene 的绑定复核 /
-// RecordLoginIdentity),以及 scene_handler.cpp 的 UpdateSessionDetail。单测:cpp/tests/cross_zone_test 的 EnterFence*。
+// RecordLoginIdentity / IsStaleGateInstance),以及 scene_handler.cpp 的 PlayerEnterGameNode(读入站连接的 gate 实例)、
+// ProcessClientPlayerMessage(跨实例的客户端消息不派发)与 UpdateSessionDetail。单测:cpp/tests/cross_zone_test 的 EnterFence*、
+// GateInstanceFence*。
 // 另有一个只读用途:ActingLoginGeneration 给发往 scene_manager 的请求盖章(scene-enter-chain-residuals.md §5.2 ④),
 // 单测 ActingLoginGeneration*。
 //
 // 不变量(改任何一条先重过设计 §3.1 与 §5):
 //   * 只比较"随请求携带的代次"与"本节点已放行的最高代次",不与铸造键、会话记录做相等校验(G3 / G4)。
-//   * 同一会话一律放行:同一会话号只经同一条 gate→scene 连接到达,FIFO 之下到达序就是 gate 的决策序。
-//   * 栅栏只读、零副作用:被拒的请求不碰当前会话、待入场上下文、改派票据与待确认条目。
+//   * 同一会话一律放行。同一会话 = 同一 (gate 实例, session_id):会话号相同,且两边的 gate 实例都已知时实例也相同
+//     (SameGateInstance)。会话号由 gate 的 node_id 派生,同一 node_id 短暂有两个 gate 进程时同号可以出自两个进程;
+//     gate 实例取自请求所走入站连接的握手身份(RpcController::HandshakePeerUuid),不取消息体自报的值。这样"同一会话只经
+//     同一条 gate→scene 连接到达,FIFO 之下到达序就是 gate 的决策序"由定义保证(scene-enter-chain-residuals.md §14)。
+//   * 栅栏只读、零副作用,是入口第一步:被拒的请求不碰当前会话、待入场上下文、改派票据与待确认条目。连接身份不是栅栏之前的
+//     另一道判定,而是请求身份的一部分,在组请求上下文时读出(与读请求字段同类)。
 //   * 登录代次不进存盘(G5):PlayerLoginIdentityComp 是纯运行时组件,不进 PlayerAllData、不序列化。
-
-// 实体上"已放行的最高登录身份"。独立于 PlayerSessionSnapshotComp:入场第 2 步(RemovePlayerSessionSilently)会把快照的
-// 会话置无效,身份组件不受影响,所以随后到达的陈旧请求仍有东西可比。
-// 只在两处写(PlayerLifecycleSystem::RecordLoginIdentity):EnterScene 第 1 步绑定会话时、UpdateSessionDetail 改绑后。
-// 会话有效才记会话号;代次只取 max,从不回退。随实体销毁消失。
-struct PlayerLoginIdentityComp
-{
-	SessionId sessionId{kInvalidSessionId};
-	uint64_t loginGeneration{0};
-};
 
 namespace enter_fence
 {
 	// 一处"当前身份"。exists = false 表示这一处没有这名玩家(不参与判定)。
+	// gateInstanceId 借用来源(身份组件 / 待入场上下文 / 待确认条目)里的字符串,只在同一次只读判定里用,不存。空 = 未知。
 	struct Identity
 	{
 		bool exists{false};
 		SessionId sessionId{kInvalidSessionId};
 		uint64_t loginGeneration{0};
+		std::string_view gateInstanceId{};
 	};
+
+	// 两个会话号相同的会话是否出自同一个 gate 进程:两边实例都已知且不同 = 不是同一会话;任一边未知(空)不比较,按会话号认
+	// (与改动前同一口径,也与 player_locator 按实例号忽略断线上报的规则一致:scene-enter-chain-residuals.md §1.4)。
+	constexpr bool SameGateInstance(std::string_view current, std::string_view request)
+	{
+		return current.empty() || request.empty() || current == request;
+	}
 
 	// 一名玩家在本节点上最多有三处当前身份(设计 §5.1),存在的都要判,任一拒即拒。下标即顺序,也是 DecideAll 的"第一处"。
 	//   kEntity        实体:PlayerLoginIdentityComp;没有该组件时退回快照会话、代次 0
@@ -132,21 +141,25 @@ namespace enter_fence
 
 	// 一处当前身份对一个入场请求的结论(设计 §5.2):
 	//   不存在                              → kAdmitFresh
-	//   会话号相同且有效                    → kAdmitSameSession(任意代次)
+	//   同一会话(会话号相同且有效、gate 实例相同或有一边未知) → kAdmitSameSession(任意代次)
 	//   当前代次 0:请求代次 0 / 非 0         → kAdmitLegacy / kAdmitNewer
 	//   当前代次非 0:请求代次 0              → kRejectUnversioned
 	//                请求更大 / 更小          → kAdmitNewer / kRejectStale
 	//                相等:当前有会话 / 没有   → kRejectConflict / kAdmitSameSession
 	// "同一会话"要求会话有效:0 与 kInvalidSessionId 不是会话,两边都没有会话时按代次裁决。
+	// 会话号相同而 gate 实例不同(同一 node_id 上的两个 gate 进程)不是同一会话,按代次裁决:老进程迟到的入场代次更小,拒。
 	// 代次相等而当前没有会话可比时按同一会话放行:G2 保证一个非 0 代次只属于一条会话。
-	constexpr Verdict Decide(const Identity &current, SessionId requestSession, uint64_t requestGeneration)
+	// requestGateInstance 缺省为空 = 未知,只给纯函数单测用;生产调用点(JudgeEnter、EnterScene 的绑定复核)一律显式传。
+	constexpr Verdict Decide(const Identity &current, SessionId requestSession, uint64_t requestGeneration,
+							 std::string_view requestGateInstance = {})
 	{
 		if (!current.exists)
 		{
 			return Verdict::kAdmitFresh;
 		}
 		const bool currentBound = player_exit::IsBoundSession(current.sessionId);
-		if (currentBound && current.sessionId == requestSession)
+		if (currentBound && current.sessionId == requestSession &&
+			SameGateInstance(current.gateInstanceId, requestGateInstance))
 		{
 			return Verdict::kAdmitSameSession;
 		}
@@ -171,7 +184,8 @@ namespace enter_fence
 
 	// 多处身份的合并:逐个判,遇到拒即返回(返回的是第一处拒绝的结论);全放行时返回第一处**存在的**身份的结论
 	// (不存在的那几处恒为 kAdmitFresh,不该盖掉真正比过的结论);一处都不存在返回 kAdmitFresh。
-	constexpr Verdict DecideAll(std::span<const Identity> identities, SessionId requestSession, uint64_t requestGeneration)
+	constexpr Verdict DecideAll(std::span<const Identity> identities, SessionId requestSession, uint64_t requestGeneration,
+								std::string_view requestGateInstance = {})
 	{
 		bool haveFirst = false;
 		Verdict first = Verdict::kAdmitFresh;
@@ -181,7 +195,7 @@ namespace enter_fence
 			{
 				continue;
 			}
-			const Verdict verdict = Decide(identity, requestSession, requestGeneration);
+			const Verdict verdict = Decide(identity, requestSession, requestGeneration, requestGateInstance);
 			if (!Admits(verdict))
 			{
 				return verdict;
@@ -220,6 +234,9 @@ namespace enter_fence
 //                              确实挡下过跨会话的陈旧入场(或混版窗口里的无代次顶号,见设计 §6)
 //   bind_rejected              EnterScene 绑定时的复核拒绝。入口已判过,应恒为 0;非 0 = 有绕过入口的 EnterScene 调用方
 //   session_update_rejected    UpdateSessionDetail 按代次 0 过栅栏被拒(设计 §5.8)。该 RPC 没有已知发送方,应恒为 0
+//   stale_gate_instance_rejected 客户端消息(含 gate 代发的 ExitGame)会话号与玩家都对得上,却出自另一个 gate 进程,不派发
+//                              (按"会话不在"答复:能换节点重投的答稍后重投,其余空应答;PlayerLifecycleSystem::IsStaleGateInstance,
+//                              scene-enter-chain-residuals.md §14)。只在同一 node_id 短暂有两个 gate 进程时出现,平时恒为 0
 namespace enter_fence_stats
 {
 	struct Counters
@@ -227,6 +244,7 @@ namespace enter_fence_stats
 		std::array<std::atomic<uint64_t>, enter_fence::kVerdictCount> verdicts{};
 		std::atomic<uint64_t> bindRejected{0};
 		std::atomic<uint64_t> sessionUpdateRejected{0};
+		std::atomic<uint64_t> staleGateInstanceRejected{0};
 	};
 
 	inline Counters &Get()
@@ -252,13 +270,14 @@ namespace enter_fence_stats
 		std::array<uint64_t, enter_fence::kVerdictCount> verdicts{};
 		uint64_t bindRejected{0};
 		uint64_t sessionUpdateRejected{0};
+		uint64_t staleGateInstanceRejected{0};
 
 		bool operator==(const Snapshot &) const = default;
 
 		// 拒绝类计数之和:30s 汇总行据此判断要不要升 WARN。
 		uint64_t Rejected() const
 		{
-			uint64_t total = bindRejected + sessionUpdateRejected;
+			uint64_t total = bindRejected + sessionUpdateRejected + staleGateInstanceRejected;
 			for (std::size_t i = 0; i < verdicts.size(); ++i)
 			{
 				if (!enter_fence::Admits(static_cast<enter_fence::Verdict>(i)))
@@ -280,6 +299,7 @@ namespace enter_fence_stats
 		}
 		snapshot.bindRejected = counters.bindRejected.load(std::memory_order_relaxed);
 		snapshot.sessionUpdateRejected = counters.sessionUpdateRejected.load(std::memory_order_relaxed);
+		snapshot.staleGateInstanceRejected = counters.staleGateInstanceRejected.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace enter_fence_stats

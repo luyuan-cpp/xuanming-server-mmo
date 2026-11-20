@@ -137,7 +137,7 @@ func TestIntegration_QueueDrainAdmits(t *testing.T) {
 	// Enqueue 5 entries — capacity is only 2, so 3 sit in queue first tick.
 	tokens := make([]string, 0, 5)
 	for i := range 5 {
-		res, err := q.Enqueue(ctx, 1, "alice", "dev")
+		res, err := q.Enqueue(ctx, 1, "", "dev")
 		if err != nil {
 			t.Fatalf("enqueue %d: %v", i, err)
 		}
@@ -194,7 +194,7 @@ func TestIntegration_DispatcherRespectsCapacity(t *testing.T) {
 	// be admitted while the gate stays full.
 	var stuck []string
 	for range 4 {
-		res, _ := q.Enqueue(ctx, 1, "u", "d")
+		res, _ := q.Enqueue(ctx, 1, "", "d")
 		stuck = append(stuck, res.QueueToken)
 	}
 
@@ -265,7 +265,7 @@ func TestIntegration_LeaderElectionSerializesDispatch(t *testing.T) {
 	ctx := context.Background()
 	const N = 10
 	for range N {
-		_, _ = q.Enqueue(ctx, 1, "u", "d")
+		_, _ = q.Enqueue(ctx, 1, "", "d")
 	}
 
 	// All N must drain — the property is "no entry vanishes due to
@@ -391,10 +391,10 @@ func TestIntegration_TwoZonesSharedRedis_BothQueuesDrain(t *testing.T) {
 	defer d2.Stop()
 
 	for range 5 {
-		if _, err := q.Enqueue(ctx, 1, "zone1-account", "dev"); err != nil {
+		if _, err := q.Enqueue(ctx, 1, "", "dev"); err != nil {
 			t.Fatalf("enqueue zone 1: %v", err)
 		}
-		if _, err := q.Enqueue(ctx, 2, "zone2-account", "dev"); err != nil {
+		if _, err := q.Enqueue(ctx, 2, "", "dev"); err != nil {
 			t.Fatalf("enqueue zone 2: %v", err)
 		}
 	}
@@ -440,7 +440,7 @@ func TestIntegration_DualLeadersSameZone_NoLossBoundedOverAdmit(t *testing.T) {
 	}
 	want := make(map[string]bool, total)
 	for range total {
-		res, err := q.Enqueue(ctx, 1, "u", "d")
+		res, err := q.Enqueue(ctx, 1, "", "d")
 		if err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
@@ -586,7 +586,7 @@ func TestDispatchOnce_EmptyQueueSkipsGateDirectory(t *testing.T) {
 		t.Fatalf("empty queue must not touch the gate directory, CandidatesForZone called %d times", n)
 	}
 
-	if _, err := q.Enqueue(ctx, 1, "u", "d"); err != nil {
+	if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 	d.dispatchOnce(ctx)
@@ -655,7 +655,7 @@ func TestDispatchOnce_BatchSpreadsAcrossGatesWithOneCandidateRead(t *testing.T) 
 
 			tokens := make([]string, 0, entries)
 			for range entries {
-				res, err := q.Enqueue(ctx, 1, "u", "d")
+				res, err := q.Enqueue(ctx, 1, "", "d")
 				if err != nil {
 					t.Fatalf("enqueue: %v", err)
 				}
@@ -704,7 +704,7 @@ func TestBatchPickFn_NoCandidatesKeepsEntryQueued(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	res, err := q.Enqueue(ctx, 1, "u", "d")
+	res, err := q.Enqueue(ctx, 1, "", "d")
 	if err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
@@ -876,7 +876,7 @@ func TestDispatchOnce_ConsumedAdmitsHoldCapacityForHandoffGrace(t *testing.T) {
 
 	tokens := make([]string, 0, 6)
 	for range 6 {
-		res, err := q.Enqueue(ctx, 1, "u", "d")
+		res, err := q.Enqueue(ctx, 1, "", "d")
 		if err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
@@ -938,7 +938,7 @@ func TestDispatchOnce_NonEmptyQueueWithoutGates_KeepsEntries(t *testing.T) {
 	// 不 Start:直接调 dispatchOnce,没有 goroutine,结果确定。
 	d := mustNewDispatcher(t, q, prov, rdb, secret, "dispatcher:lock:nogate", 1)
 
-	if _, err := q.Enqueue(ctx, 1, "u", "d"); err != nil {
+	if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
 		t.Fatalf("enqueue: %v", err)
 	}
 	for range 3 {
@@ -985,7 +985,7 @@ func TestIntegration_SameZoneStandbyTakesOverAfterLeaderStops(t *testing.T) {
 
 	const N = 5
 	for range N {
-		if _, err := q.Enqueue(ctx, 1, "u", "d"); err != nil {
+		if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
 	}
@@ -1034,7 +1034,7 @@ func TestIntegration_PanickedTermReleasesLockForSameZoneStandby(t *testing.T) {
 	const base = "dispatcher:lock:panic"
 	lockKey := ZoneDispatcherLockKey(base, 1)
 	for range 3 {
-		if _, err := q.Enqueue(ctx, 1, "u", "d"); err != nil {
+		if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
 	}
@@ -1162,5 +1162,43 @@ func TestDispatcher_LeaderGaugeRepublishedAfterMetricsEnabled(t *testing.T) {
 	d.Stop()
 	if v, ok := leaderGaugeValue(t, "gauge-test-pod", "4242"); !ok || v != 0 {
 		t.Fatalf(`login_queue_dispatcher_is_leader{pod="gauge-test-pod",zone="4242"} after Stop = %v (present=%v), want 0`, v, ok)
+	}
+}
+
+// 一拍放行的人数有上限(2026-11-20):空位再多,一拍也只放 LimitAdmitPerTick 个,其余留到下一拍。
+// 修复前红:第一拍把 5 个空位全部放满,队列只剩 1 个。
+func TestDispatchOnce_AdmitsAtMostTheTickLimit(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis: %v", err)
+	}
+	defer mr.Close()
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	secret := []byte("tick-limit")
+	q := New(rdb, time.Hour, 60*time.Second, secret)
+	// 假时钟不走:放行写下的在途占位不会到期,每拍的空位只随放行减少。
+	clk := newFakeClock()
+	q.now = clk.Now
+	ctx := context.Background()
+
+	prov := &integrationProvider{
+		caps:  map[uint32]uint32{1: 5},
+		cands: map[uint32][]GateCandidate{1: {{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 1}}},
+	}
+	d := mustNewDispatcher(t, q, prov, rdb, secret, "dispatcher:lock:tick-limit", 1)
+	d.LimitAdmitPerTick(2)
+
+	for range 6 {
+		if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
+			t.Fatalf("enqueue: %v", err)
+		}
+	}
+	// 容量 5、在线 0:空位依次是 5、3、1、0,每拍放 min(空位, 上限 2)。
+	for tick, want := range []uint32{4, 2, 1, 1} {
+		d.dispatchOnce(ctx)
+		if n, err := q.QueueLen(ctx, 1); err != nil || n != want {
+			t.Fatalf("queue length after tick %d = %d err=%v, want %d", tick+1, n, err, want)
+		}
 	}
 }

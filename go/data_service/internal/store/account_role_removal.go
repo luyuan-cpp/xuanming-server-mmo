@@ -143,6 +143,13 @@ func (s *AccountDirectoryStore) beginRemoval(ctx context.Context, account string
 		if old.TradeListingId != 0 || old.PrepareToken != 0 {
 			return accountdirectory.ErrConflict
 		}
+		// 改名没收完时先不删(docs/design/rename-and-content-safety.md §4.6):删角按角色当前的名字释放名字行,和改名的收尾交错
+		// 会留下放不掉的名字。收尾在毫秒级,卡住的由后台做完,所以回可重试。
+		if open, err := renameOpenTx(ctx, tx, player); err != nil {
+			return err
+		} else if open {
+			return accountdirectory.ErrRetryLater
+		}
 		if err := requireClosedAdmissions(ctx, tx, player); err != nil {
 			return err
 		}

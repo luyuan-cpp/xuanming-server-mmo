@@ -4,8 +4,6 @@ package realname
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -30,6 +28,11 @@ type Directory interface {
 	SetRealName(ctx context.Context, account, pi string) (string, error)
 }
 
+// Quota 是所有 login 副本共用的国家系统调用额度,*nppa.Quota 实现它。超了额会被系统封 1 分钟,所以取不到名额就不调。
+type Quota interface {
+	Allow(ctx context.Context, rule nppa.QuotaRule) (bool, error)
+}
+
 // pendingTTL 是认证中的结果可查的时长(技术规范:48 小时内可以查询)。
 const pendingTTL = 48 * time.Hour
 
@@ -50,8 +53,18 @@ type Service struct {
 	Redis      redis.UniversalClient // 登录域
 	Verifier   Verifier
 	Directory  Directory
+	Quota      Quota
 	DailyLimit int
 	Now        func() time.Time
+}
+
+// allow 取一个国家系统的调用名额;取不到或额度读不了都按没有名额处理。
+func (s *Service) allow(ctx context.Context, rule nppa.QuotaRule) bool {
+	ok, err := s.Quota.Allow(ctx, rule)
+	if err != nil {
+		logx.Errorf("[real-name] NPPA quota unavailable: api=%s err=%v", rule.Name, err)
+	}
+	return ok
 }
 
 // Submit 提交一次实名。成功返回库里的 pi 与 0;否则返回 tip(导表码):信息有误、认证中、次数用完、已绑定别的实名、服务故障。
@@ -61,6 +74,10 @@ func (s *Service) Submit(ctx context.Context, account, name, idNumber string) (s
 	idNumber = antiaddiction.NormalizeIDNumber(idNumber)
 	if !antiaddiction.ValidName(name) || !antiaddiction.ValidIDNumber(idNumber, s.Now()) {
 		return "", uint32(table.LoginError_kLoginRealNameInvalid)
+	}
+	// 先取全服的调用名额,再计账号当天的次数:额度紧时回「繁忙」,不占玩家的提交次数。
+	if !s.allow(ctx, nppa.CheckQuota) {
+		return "", uint32(table.LoginError_kLoginRealNameServiceUnavailable)
 	}
 	attempts, err := countAttemptScript.Run(ctx, s.Redis,
 		[]string{redisslot.RealNameAttemptsKey(account, s.Now().In(antiaddiction.Beijing).Format(time.DateOnly))},
@@ -72,7 +89,7 @@ func (s *Service) Submit(ctx context.Context, account, name, idNumber string) (s
 	if attempts > int64(s.DailyLimit) {
 		return "", uint32(table.LoginError_kLoginRealNameTooManyAttempts)
 	}
-	ai, err := newAI()
+	ai, err := nppa.NewID() // 没被删除的 ai 不能再提交,所以每次提交都新生成
 	if err != nil {
 		logx.Errorf("[real-name] generate ai failed: %v", err)
 		return "", uint32(table.LoginError_kLoginRealNameServiceUnavailable)
@@ -109,6 +126,9 @@ func (s *Service) ResolvePending(ctx context.Context, account string) string {
 			logx.Errorf("[real-name] read pending ai failed: account=%s err=%v", account, err)
 		}
 		return ""
+	}
+	if !s.allow(ctx, nppa.QueryQuota) {
+		return "" // 下一次登录再查
 	}
 	result, err := s.Verifier.Query(ctx, ai)
 	switch {
@@ -151,13 +171,4 @@ func (s *Service) forgetPending(ctx context.Context, key string) {
 	if err := s.Redis.Del(ctx, key).Err(); err != nil {
 		logx.Errorf("[real-name] clear pending ai failed: err=%v", err)
 	}
-}
-
-// newAI 生成一次提交的游戏内成员标识(规范要求 32 位;没被删除的 ai 不能再提交,所以每次都新生成)。
-func newAI() (string, error) {
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(raw), nil
 }

@@ -29,7 +29,7 @@ import (
 // 选库只在 go/db 一处发生(internal/playerstore 经 data_service 的 GetPlayerRoute 选),本文件负责把「落点编号」变成「一个已打开、
 // 已核对过的库」:
 //   - go/db 没有「本区主库」(A17c):注册表建出来是空的,每个存档库第一次被指向时按需打开(同一个库并发只打开一次),之后常驻;
-//   - 按需打开**从不建库、不跑 DDL**:只 Ping + 断言连上的库 + 只读 schema 闸,库不存在就报错延后,
+//   - 按需打开**从不建库、不跑 DDL**:只 Ping + 断言连上的库 + 只读 schema 闸,库不存在就报错(调用方重试),
 //     绝不会因为一条畸形的落点记录在生产实例上建出一个新库。
 
 // ErrStoreUnavailable 表示落点库打不开:不被放行、库不存在、连不上或 schema 闸未通过(打开失败的冷却期内复用上次的错误)。
@@ -142,7 +142,7 @@ func NewStoreRegistry(opts StoreRegistryOptions) (*StoreRegistry, error) {
 	}, nil
 }
 
-// NewStoreRegistryFromConfig 按进程配置建注册表。必须在 InitDB 成功之后、消费者启动之前调用。
+// NewStoreRegistryFromConfig 按进程配置建注册表。必须在 InitDB 成功之后、存盘接口与审计转发启动之前调用。
 func NewStoreRegistryFromConfig() (*StoreRegistry, error) {
 	allow, err := AllowlistSpec().Resolve()
 	if err != nil {
@@ -221,8 +221,9 @@ func applyStorePool(handle *sql.DB, pool StorePoolOptions) {
 // 参数里的 context 不参与打开:同一个库的打开结果被所有并发请求共享,不能随第一个调用方的取消一起失败;
 // 打开用自己的有界 context(openTimeout)。返回的错误一律包着 ErrStoreUnavailable。
 //
-// 已打开的库在运行期失联时照常交出:每次调用自己等到拨号 / 读超时或调用方的截止时间后失败,由调用方退避重试。
-// 没有运行期冷却是定案(2026-11-19,依据见 docs/design/db-task-store-unavailable-deferral.md 文首)。
+// 已打开的库在运行期失联时照常交出,注册表不做运行期冷却(2026-11-19 定案,依据见
+// docs/design/db-task-store-unavailable-deferral.md 文首):存盘接口的快速失败由按存档库的熔断做(playerstore 的 enterStore),
+// 审计转发一轮里遇错就跳过这个库。
 func (r *StoreRegistry) Store(_ context.Context, storageID uint32) (*GameDB, error) {
 	r.mu.RLock()
 	store := r.stores[storageID]
@@ -250,11 +251,12 @@ func (r *StoreRegistry) Store(_ context.Context, storageID uint32) (*GameDB, err
 }
 
 // reject 处理一次不拨号的拒绝:记失败(退避期内同一个库直接回这个错误,不刷日志)、计数、打一行日志。
-// 这个进程的白名单和家族开关启动后不变,所以被拒的库要改部署再重启才能打开;其间这些玩家的写一直延后,不消耗重试。
+// 这个进程的白名单和家族开关启动后不变,所以被拒的库要改部署再重启才能打开;其间指向它的调用一律回暂不可用:
+// scene 留着快照按原序号重试存盘,认领用完 30 秒预算后进场失败,审计转发每轮跳过它。
 func (r *StoreRegistry) reject(storageID uint32, err error) error {
 	r.recordFailure(storageID, err)
 	metrics.CountPlacementStoreOpen(metrics.StoreOpenRejected)
-	logx.Errorf("[placement] store rejected (writes for its players stay deferred without consuming retries until the deployment is fixed): storage=%d err=%v",
+	logx.Errorf("[placement] store rejected (calls on it fail as unavailable and are retried by their callers until the deployment is fixed and this process restarts): storage=%d err=%v",
 		storageID, err)
 	return err
 }
@@ -302,14 +304,14 @@ func (r *StoreRegistry) openOnce(storageID uint32) (*GameDB, error) {
 	}
 	if err != nil {
 		wrapped := fmt.Errorf("%w: open %s: %w", ErrStoreUnavailable, name, err)
-		// 闸门冻结是搬库窗口,秒级,库本身没有坏:不进冷却,窗口一过下一条任务就能打开。
+		// 闸门冻结是搬库窗口,秒级,库本身没有坏:不进冷却,窗口一过下一次调用就能打开。
 		if authoritysql.IsWriterFrozen(err) {
 			logx.Infof("[placement] store open hit a frozen writer gate, not backing off: storage=%d db=%s", storageID, name)
 			return nil, wrapped
 		}
 		r.recordFailure(storageID, wrapped)
 		metrics.CountPlacementStoreOpen(metrics.StoreOpenError)
-		logx.Errorf("[placement] store open failed (writes for its players keep being deferred without consuming retries; next attempt in %v): storage=%d admitted_by=%s err=%v",
+		logx.Errorf("[placement] store open failed (calls on it fail as unavailable and are retried by their callers; next open attempt in %v): storage=%d admitted_by=%s err=%v",
 			r.retryBackoff, storageID, via, err)
 		return nil, wrapped
 	}

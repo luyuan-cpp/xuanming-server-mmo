@@ -45,9 +45,10 @@ func Tables() []proto.Message {
 // 机房投影表 match_ticket_region / team_launch_region 已随按池撮合退役（2026-11-05）；旧库里若还在是孤表，不再核对。
 // match_spectator_intent 的索引给已关闭意图的 7 天保留期清理用(PurgeClosedSpectatorIntents 按 (created_ms, 主键) 翻页):
 // 缺了它每轮清理都是全表扫描加排序,3 秒预算内跑不完,清理永远不前进(观战第二轮评审 R2-GO 一般-4)。
+// match_battle_script_review 的索引同理,给审核流水的保留期清理用(PurgeExpiredBattleScriptReviews 按 (reviewed_ms, 主键) 翻页)。
 func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 	rows, err := s.DB.QueryContext(ctx, `SELECT table_name,index_name,column_name FROM information_schema.statistics
-		WHERE table_schema=DATABASE() AND table_name IN ('match_authority_ticket','match_challenge_invitation','match_direct_intent','match_join_intent','team_authority','team_invite_index','team_application_index','team_launch','team_launch_role','match_spectator','match_spectator_intent')
+		WHERE table_schema=DATABASE() AND table_name IN ('match_authority_ticket','match_challenge_invitation','match_direct_intent','match_join_intent','team_authority','team_invite_index','team_application_index','team_launch','team_launch_role','match_spectator','match_spectator_intent','match_battle_script_review')
 		ORDER BY table_name,index_name,seq_in_index`)
 	if err != nil {
 		return err
@@ -79,6 +80,7 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 		"match_join_intent":          {"state,player_id,request_high,request_low"},
 		"match_spectator":            {"state,player_id", "updated_ms,player_id"},
 		"match_spectator_intent":     {"state,created_ms,player_id,request_high,request_low"},
+		"match_battle_script_review": {"reviewed_ms,script_id,revision"},
 		"team_authority":             {"state,idle_expires_ms,team_id"},
 		"team_invite_index":          {"invitee_id,expires_ms,team_id"},
 		"team_application_index":     {"applicant_id,expires_ms,team_id"},

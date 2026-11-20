@@ -456,6 +456,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
     kStackLimitFieldNumber = 51,
     kRequireLivingCasterFieldNumber = 52,
     kTickOnApplyFieldNumber = 53,
+    kKeepOnLogoutFieldNumber = 54,
   };
   // repeated double interval_effect = 14;
   [[nodiscard]] int interval_effect_size()
@@ -1055,11 +1056,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
   void _internal_set_tick_on_apply(::uint32_t value);
 
   public:
+  // uint32 keep_on_logout = 54;
+  void clear_keep_on_logout() ;
+  [[nodiscard]] ::uint32_t keep_on_logout() const;
+  void set_keep_on_logout(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_keep_on_logout() const;
+  void _internal_set_keep_on_logout(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BuffTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 53,
+      ::google::protobuf::internal::TcParseTable<5, 54,
                           3, 151,
                           9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1143,6 +1154,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuffTable final : public ::google::
     ::uint32_t stack_limit_;
     ::uint32_t require_living_caster_;
     ::uint32_t tick_on_apply_;
+    ::uint32_t keep_on_logout_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2915,6 +2927,30 @@ inline ::uint32_t BuffTable::_internal_tick_on_apply() const {
 inline void BuffTable::_internal_set_tick_on_apply(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tick_on_apply_ = value;
+}
+
+// uint32 keep_on_logout = 54;
+inline void BuffTable::clear_keep_on_logout() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keep_on_logout_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00200000U);
+}
+inline ::uint32_t BuffTable::keep_on_logout() const {
+  // @@protoc_insertion_point(field_get:BuffTable.keep_on_logout)
+  return _internal_keep_on_logout();
+}
+inline void BuffTable::set_keep_on_logout(::uint32_t value) {
+  _internal_set_keep_on_logout(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00200000U);
+  // @@protoc_insertion_point(field_set:BuffTable.keep_on_logout)
+}
+inline ::uint32_t BuffTable::_internal_keep_on_logout() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.keep_on_logout_;
+}
+inline void BuffTable::_internal_set_keep_on_logout(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keep_on_logout_ = value;
 }
 
 // -------------------------------------------------------------------

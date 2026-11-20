@@ -93,6 +93,38 @@ class AssignGateServiceAuthTest {
         assertEquals("unauthenticated", out.getError());
     }
 
+    /**
+     * login 回 status=5(本区队列已到上限,2026-11-20)时,网关回前置限流那种重试提示:没有排队令牌、没有 gate 地址。
+     * 5 同样不能落进 mapAssignGate 的 default 分支。
+     */
+    @Test
+    void queueFullMapsToTheRateLimitRetryHintWithoutTokenOrAddress() {
+        var full = new LoginRpcClient.AssignGateResponseProto();
+        full.status = 5;
+        full.retryAfterMs = 34_000;
+        when(rpc.assignGate(any(), anyInt())).thenReturn(full);
+
+        AssignGateResponse out = service.assignGate(request());
+
+        assertEquals(100, out.getCode());
+        assertEquals("ratelimit", out.getQueueSource(), "客户端按无票重试处理,不当成真排位");
+        assertEquals(34_000L, out.getRetryAfterMs());
+        assertNull(out.getQueueToken(), "没有入队,不能给排队令牌");
+        assertNull(out.getGateIp(), "不能给出 gate 地址");
+    }
+
+    @Test
+    void queueFullWithoutHintFallsBackToThirtySeconds() {
+        var full = new LoginRpcClient.AssignGateResponseProto();
+        full.status = 5;
+        when(rpc.assignGate(any(), anyInt())).thenReturn(full);
+
+        AssignGateResponse out = service.assignGate(request());
+
+        assertEquals(100, out.getCode());
+        assertEquals(30_000L, out.getRetryAfterMs());
+    }
+
     /** 小游戏客户端的 WebSocket 地址原样透传(docs/design/minigame-websocket-gate.md W7);gate 没自报时不出现在应答里。 */
     @Test
     void gateWsUrlIsPassedThroughOnlyWhenTheGateAdvertisesOne() {

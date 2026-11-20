@@ -31,9 +31,13 @@ namespace
 		// 我是否看得见对方与此无关;网格范围外的显式关注者同样收到。没显示我的人(隐身、对方表满)
 		// 收到坐标既没有意义,也是在泄露位置。
 		InterestSystem::GetVisibleWatchers(entity, receivers);
-		// 没有会话快照的实体(NPC 等)没有客户端可发;留在名单里只会让广播函数为每一个打一条 ERROR。
+		// 没有会话快照的实体(NPC 等)或断线保留 / 离线托管中(会话已置无效)没有客户端可发;
+		// 留在名单里只会让广播函数为每一个打一条 ERROR,也会在合批里白白多拆出一组。
 		std::erase_if(receivers, [](entt::entity observer)
-					  { return !tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(observer); });
+					  {
+						  const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(observer);
+						  return session == nullptr || session->gate_session_id() == kInvalidSessionId;
+					  });
 		// 本人:只在会话有效时发(断线保留中的会话已被置无效,发了也只会打一条"找不到会话")。
 		if (includeSelf && std::ranges::find(receivers, entity) == receivers.end())
 		{

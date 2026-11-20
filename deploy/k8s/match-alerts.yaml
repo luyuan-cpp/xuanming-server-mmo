@@ -1,5 +1,6 @@
-# match 按池撮合的告警(docs/design/global-match-hierarchical-pools.md §5、§14),以及后台循环的活性(组 match.loop-liveness,
-# docs/design/assetop-redelivery-sharding-20261110.md §14.10)。安装方式与 rank / mail 相同:
+# match 按池撮合的告警(docs/design/global-match-hierarchical-pools.md §5、§14),后台循环的活性(组 match.loop-liveness,
+# docs/design/assetop-redelivery-sharding-20261110.md §14.10),以及保留期清理的失败与逾期(组 match.retention,
+# docs/design/battle-script.md §6.4)。安装方式与 rank / mail 相同:
 #   kubectl apply -n observability -f deploy/k8s/match-alerts.yaml
 # 抓取前提:集群里要有按注解抓取 match 指标端口(9170,go/match/etc 下服务配置的 MetricsListenAddr)的 job 或 PodMonitor;
 # 本文件里以 match 加下划线开头的词都会被契约测试当成指标名核对,注释里不要写这种形状的文件名。
@@ -93,3 +94,44 @@ spec:
               或循环意外退出(序列停在退出的那一刻)。撮合与投榜按片分工,停住的副本名下的撮合段、投榜片没人做,
               这些段的排队不成局、排名不更新,别的副本照常推进。先按点位名查这个 Pod 的日志(goroutine_panic 事件带栈),
               再看它连的库与 Redis;查不出就重启这个 Pod,它的片会换到别的副本。
+
+    # 保留期清理(到期删除)的失败与逾期(2026-11-20,docs/design/battle-script.md §6.4)。两个清理循环各一分钟一轮、每个 stable 副本
+    # 各跑各的:观战意图(purge="spectator_intent")与剧本审核流水(purge="battle_script_review")。上一组的循环活性只看
+    # 「有没有跑完一轮」,成败都算;一轮接一轮地失败、或跑着但没删掉,要靠这一组看出来。
+    - name: match.retention
+      interval: 60s
+      rules:
+        # 按副本、按清理逐条判,不聚合。一个副本一小时 60 轮,门槛 30 = 过去一小时有一半以上的轮次失败;再持续 1 小时才报,
+        # 库短暂不可用、偶发的写冲突不会响。
+        - alert: MatchRetentionPurgeFailing
+          expr: |
+            increase(match_retention_purge_failures_total[1h]) > 30
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 的保留期清理 {{ $labels.purge }} 持续失败"
+            description: >-
+              过去一小时这个副本的清理失败了 {{ $value | printf "%.0f" }} 轮(一分钟一轮)。到期的行下一轮还在,数据不会错,只是没有按期删除:
+              剧本审核流水过了保留期仍留着玩家写的正文,观战意图表一直涨。按 purge 查这个 Pod 的日志
+              (`Review retention purge failed` / `Spectator intent retention purge failed`)里的错误:库不可达、搬库窗口写者冻结,
+              或清理用的索引被删(读页超时)。只有一个副本在响时别的副本仍在删,先看这个 Pod 连库是否正常。
+
+        # 清理的结果(只有剧本审核流水报):每轮清理之后各副本报表里现存最老一行的审核时刻(表是空的报读的那一刻),以及生效的保留期。
+        # 报的是时刻不是年龄,年龄在这里用 time() 减:副本读不动库时它照样变老。各副本报的都是「现存最老一行不早于它」的下界,
+        # 取最大的那个最准。最老一行比保留期还老一天以上、持续 1 小时 = 到期的行没有删掉。
+        # 观战意图不报这一项:请求头的行有意一直留着,最老一行没有意义。
+        - alert: MatchRetentionBehind
+          expr: |
+            time() - max by (purge) (match_retention_oldest_unixtime)
+              > on (purge) max by (purge) (match_retention_max_age_seconds) + 86400
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "保留期清理 {{ $labels.purge }} 没有按期删除:最老一行比保留期还老一天以上"
+            description: >-
+              最老一行的年龄 {{ $value | printf "%.0f" }} 秒。剧本审核流水存着玩家写的正文,保留期(BattleScript.ReviewRetentionDays,缺省 180 天)
+              是写给玩家的承诺,账号注销之后也按它删。先看 MatchRetentionPurgeFailing 与 MatchBackgroundLoopStalled 有没有在响
+              (清理失败或循环停住);都没响就是清理在跑但没删掉,查审核流水表上 (reviewed_ms, script_id, revision) 索引还在不在。
+              刚把保留期调短时积压的行按每分钟约 2 万行清,一天内清不完才会走到这里。

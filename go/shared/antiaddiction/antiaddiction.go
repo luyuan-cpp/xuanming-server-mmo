@@ -45,6 +45,17 @@ func BirthDate(pi string) (time.Time, bool) {
 	return dateOf(value/10000, value/100%100, value%100)
 }
 
+// PIBirthPrefix 把出生日期编成 pi 的前 6 位,是 BirthDate 的逆运算。login 的国家系统沙箱 mock 与单测用它造 pi。
+func PIBirthPrefix(year, month, day int) string {
+	value := year*10000 + month*100 + day
+	digits := make([]byte, 6)
+	for i := len(digits) - 1; i >= 0; i-- {
+		digits[i] = piDigits[value%26]
+		value /= 26
+	}
+	return string(digits)
+}
+
 // ValidPI 报告 pi 的格式和出生日期段是否合法。
 func ValidPI(pi string) bool {
 	_, ok := BirthDate(pi)
@@ -61,23 +72,26 @@ func AgeAt(birth, now time.Time) int {
 	return age
 }
 
-// SpendLimit 是一个年龄段的充值上限,单位分(国新出发〔2019〕34 号)。Unlimited 为真时两个上限都不适用;
-// 否则 SingleFen 为 0 表示不得充值。
+// SpendLimit 是一个年龄段的充值上限,单位分。Unlimited 为真时上限都不适用;否则 SingleFen 为 0 表示不得充值。
+// 单次与每月是国新出发〔2019〕34 号的定额。单日累计是《未成年人网络保护条例》要求设、但没给数字的那一项:
+// 2026-11-20 按负责人「先按最标准的定」取单次上限(一天至多一笔顶格),月额度要分到至少 4 天才用得完。
 type SpendLimit struct {
 	Unlimited  bool
 	SingleFen  uint64
+	DailyFen   uint64
 	MonthlyFen uint64
 }
 
-// SpendLimitAt 返回该周岁的充值上限:未满 8 周岁不得充值;8–16 单次 50 元、每月 200 元;16–18 单次 100 元、每月 400 元。
+// SpendLimitAt 返回该周岁的充值上限:未满 8 周岁不得充值;8–16 单次与每日 50 元、每月 200 元;
+// 16–18 单次与每日 100 元、每月 400 元。
 func SpendLimitAt(age int) SpendLimit {
 	switch {
 	case age >= AdultAge:
 		return SpendLimit{Unlimited: true}
 	case age >= 16:
-		return SpendLimit{SingleFen: 100_00, MonthlyFen: 400_00}
+		return SpendLimit{SingleFen: 100_00, DailyFen: 100_00, MonthlyFen: 400_00}
 	case age >= 8:
-		return SpendLimit{SingleFen: 50_00, MonthlyFen: 200_00}
+		return SpendLimit{SingleFen: 50_00, DailyFen: 50_00, MonthlyFen: 200_00}
 	default:
 		return SpendLimit{}
 	}

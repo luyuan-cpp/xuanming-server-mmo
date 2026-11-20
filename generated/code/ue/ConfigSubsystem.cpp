@@ -38,6 +38,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	ActivityVitalityRuleTable = NewObject<UActivityVitalityRuleTable>(this);
 	ActorActionCombatStateTable = NewObject<UActorActionCombatStateTable>(this);
 	ActorActionStateTable = NewObject<UActorActionStateTable>(this);
+	AfkPassRuleTable = NewObject<UAfkPassRuleTable>(this);
 	AttributeAllocRatioTable = NewObject<UAttributeAllocRatioTable>(this);
 	AttributeAutoPlanTable = NewObject<UAttributeAutoPlanTable>(this);
 	AttributeDimensionTable = NewObject<UAttributeDimensionTable>(this);
@@ -95,6 +96,7 @@ void UConfigSubsystem::Deinitialize()
 	ActivityVitalityRuleTable = nullptr;
 	ActorActionCombatStateTable = nullptr;
 	ActorActionStateTable = nullptr;
+	AfkPassRuleTable = nullptr;
 	AttributeAllocRatioTable = nullptr;
 	AttributeAutoPlanTable = nullptr;
 	AttributeDimensionTable = nullptr;
@@ -157,6 +159,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UActivityVitalityRuleTable::FileName(),
 		UActorActionCombatStateTable::FileName(),
 		UActorActionStateTable::FileName(),
+		UAfkPassRuleTable::FileName(),
 		UAttributeAllocRatioTable::FileName(),
 		UAttributeAutoPlanTable::FileName(),
 		UAttributeDimensionTable::FileName(),
@@ -278,6 +281,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!ActorActionStateTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (AfkPassRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AfkPassRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AfkPassRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1083,6 +1100,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!ActorActionStateTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (AfkPassRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AfkPassRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAfkPassRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AfkPassRule] 取不到 %s"), UAfkPassRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AfkPassRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

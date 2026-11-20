@@ -78,6 +78,14 @@ extern const ::google::protobuf::internal::ClassDataFull PaymentIntentRecord_cla
 #else
 extern const PaymentIntentRecordGlobalsTypeInternal PaymentIntentRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PaymentSpendRecord;
+struct PaymentSpendRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PaymentSpendRecordGlobalsTypeInternal PaymentSpendRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PaymentSpendRecord_class_data_;
+#else
+extern const PaymentSpendRecordGlobalsTypeInternal PaymentSpendRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PaymentTxnRecord;
 struct PaymentTxnRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -294,7 +302,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentTxnRecord final : public ::g
   [[nodiscard]] static const PaymentTxnRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PaymentTxnRecord>(&PaymentTxnRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(PaymentTxnRecord& a, PaymentTxnRecord& b) { a.Swap(&b); }
   inline void Swap(PaymentTxnRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -919,6 +927,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentTxnRecord final : public ::g
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentSpendRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:paymentpb.PaymentSpendRecord) */ {
+ public:
+  inline PaymentSpendRecord() : PaymentSpendRecord(nullptr) {}
+  ~PaymentSpendRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PaymentSpendRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PaymentSpendRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PaymentSpendRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PaymentSpendRecord(const PaymentSpendRecord& from) : PaymentSpendRecord(nullptr, from) {}
+  inline PaymentSpendRecord(PaymentSpendRecord&& from) noexcept : PaymentSpendRecord(nullptr, ::std::move(from)) {}
+  inline PaymentSpendRecord& operator=(const PaymentSpendRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PaymentSpendRecord& operator=(PaymentSpendRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PaymentSpendRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PaymentSpendRecord>(&PaymentSpendRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(PaymentSpendRecord& a, PaymentSpendRecord& b) { a.Swap(&b); }
+  inline void Swap(PaymentSpendRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PaymentSpendRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PaymentSpendRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PaymentSpendRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PaymentSpendRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PaymentSpendRecord& from) { PaymentSpendRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PaymentSpendRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "paymentpb.PaymentSpendRecord"; }
+
+  explicit PaymentSpendRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PaymentSpendRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PaymentSpendRecord& from);
+  PaymentSpendRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PaymentSpendRecord&& from) noexcept
+      : PaymentSpendRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSpenderHiFieldNumber = 1,
+    kSpenderLoFieldNumber = 2,
+    kUpdatedMsFieldNumber = 3,
+  };
+  // uint64 spender_hi = 1;
+  void clear_spender_hi() ;
+  [[nodiscard]] ::uint64_t spender_hi() const;
+  void set_spender_hi(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_spender_hi() const;
+  void _internal_set_spender_hi(::uint64_t value);
+
+  public:
+  // uint64 spender_lo = 2;
+  void clear_spender_lo() ;
+  [[nodiscard]] ::uint64_t spender_lo() const;
+  void set_spender_lo(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_spender_lo() const;
+  void _internal_set_spender_lo(::uint64_t value);
+
+  public:
+  // uint64 updated_ms = 3;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:paymentpb.PaymentSpendRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PaymentSpendRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t spender_hi_;
+    ::uint64_t spender_lo_;
+    ::uint64_t updated_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fpayment_2fpayment_5ftable_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentIntentRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:paymentpb.PaymentIntentRecord) */ {
  public:
@@ -1083,8 +1316,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentIntentRecord final : public 
     kCreatedMsFieldNumber = 13,
     kUpdatedMsFieldNumber = 14,
     kChannelRefMsFieldNumber = 16,
-    kSkuIdFieldNumber = 17,
     kCheckCountFieldNumber = 11,
+    kMinorAgeFieldNumber = 22,
+    kSkuIdFieldNumber = 17,
+    kSpenderHiFieldNumber = 19,
+    kSpenderLoFieldNumber = 20,
+    kPaidMsFieldNumber = 21,
   };
   // string order_id = 3;
   void clear_order_id() ;
@@ -1266,16 +1503,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentIntentRecord final : public 
   void _internal_set_channel_ref_ms(::uint64_t value);
 
   public:
-  // uint64 sku_id = 17;
-  void clear_sku_id() ;
-  [[nodiscard]] ::uint64_t sku_id() const;
-  void set_sku_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_sku_id() const;
-  void _internal_set_sku_id(::uint64_t value);
-
-  public:
   // uint32 check_count = 11;
   void clear_check_count() ;
   [[nodiscard]] ::uint32_t check_count() const;
@@ -1286,11 +1513,61 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentIntentRecord final : public 
   void _internal_set_check_count(::uint32_t value);
 
   public:
+  // uint32 minor_age = 22;
+  void clear_minor_age() ;
+  [[nodiscard]] ::uint32_t minor_age() const;
+  void set_minor_age(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_minor_age() const;
+  void _internal_set_minor_age(::uint32_t value);
+
+  public:
+  // uint64 sku_id = 17;
+  void clear_sku_id() ;
+  [[nodiscard]] ::uint64_t sku_id() const;
+  void set_sku_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sku_id() const;
+  void _internal_set_sku_id(::uint64_t value);
+
+  public:
+  // uint64 spender_hi = 19;
+  void clear_spender_hi() ;
+  [[nodiscard]] ::uint64_t spender_hi() const;
+  void set_spender_hi(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_spender_hi() const;
+  void _internal_set_spender_hi(::uint64_t value);
+
+  public:
+  // uint64 spender_lo = 20;
+  void clear_spender_lo() ;
+  [[nodiscard]] ::uint64_t spender_lo() const;
+  void set_spender_lo(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_spender_lo() const;
+  void _internal_set_spender_lo(::uint64_t value);
+
+  public:
+  // uint64 paid_ms = 21;
+  void clear_paid_ms() ;
+  [[nodiscard]] ::uint64_t paid_ms() const;
+  void set_paid_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_paid_ms() const;
+  void _internal_set_paid_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:paymentpb.PaymentIntentRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 18,
+      ::google::protobuf::internal::TcParseTable<5, 22,
                           0, 89,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1335,8 +1612,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentIntentRecord final : public 
     ::uint64_t created_ms_;
     ::uint64_t updated_ms_;
     ::uint64_t channel_ref_ms_;
-    ::uint64_t sku_id_;
     ::uint32_t check_count_;
+    ::uint32_t minor_age_;
+    ::uint64_t sku_id_;
+    ::uint64_t spender_hi_;
+    ::uint64_t spender_lo_;
+    ::uint64_t paid_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1400,7 +1681,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PaymentChannelCursorRecord final : 
   [[nodiscard]] static const PaymentChannelCursorRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PaymentChannelCursorRecord>(&PaymentChannelCursorRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(PaymentChannelCursorRecord& a, PaymentChannelCursorRecord& b) { a.Swap(&b); }
   inline void Swap(PaymentChannelCursorRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1932,7 +2213,7 @@ inline void PaymentIntentRecord::_internal_set_next_check_ms(::uint64_t value) {
 inline void PaymentIntentRecord::clear_check_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.check_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t PaymentIntentRecord::check_count() const {
   // @@protoc_insertion_point(field_get:paymentpb.PaymentIntentRecord.check_count)
@@ -1940,7 +2221,7 @@ inline ::uint32_t PaymentIntentRecord::check_count() const {
 }
 inline void PaymentIntentRecord::set_check_count(::uint32_t value) {
   _internal_set_check_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:paymentpb.PaymentIntentRecord.check_count)
 }
 inline ::uint32_t PaymentIntentRecord::_internal_check_count() const {
@@ -2116,7 +2397,7 @@ inline void PaymentIntentRecord::_internal_set_channel_ref_ms(::uint64_t value) 
 inline void PaymentIntentRecord::clear_sku_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sku_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t PaymentIntentRecord::sku_id() const {
   // @@protoc_insertion_point(field_get:paymentpb.PaymentIntentRecord.sku_id)
@@ -2124,7 +2405,7 @@ inline ::uint64_t PaymentIntentRecord::sku_id() const {
 }
 inline void PaymentIntentRecord::set_sku_id(::uint64_t value) {
   _internal_set_sku_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:paymentpb.PaymentIntentRecord.sku_id)
 }
 inline ::uint64_t PaymentIntentRecord::_internal_sku_id() const {
@@ -2198,6 +2479,178 @@ inline void PaymentIntentRecord::set_allocated_payer_id(::std::string* PROTOBUF_
     _impl_.payer_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:paymentpb.PaymentIntentRecord.payer_id)
+}
+
+// uint64 spender_hi = 19;
+inline void PaymentIntentRecord::clear_spender_hi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_hi_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t PaymentIntentRecord::spender_hi() const {
+  // @@protoc_insertion_point(field_get:paymentpb.PaymentIntentRecord.spender_hi)
+  return _internal_spender_hi();
+}
+inline void PaymentIntentRecord::set_spender_hi(::uint64_t value) {
+  _internal_set_spender_hi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:paymentpb.PaymentIntentRecord.spender_hi)
+}
+inline ::uint64_t PaymentIntentRecord::_internal_spender_hi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spender_hi_;
+}
+inline void PaymentIntentRecord::_internal_set_spender_hi(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_hi_ = value;
+}
+
+// uint64 spender_lo = 20;
+inline void PaymentIntentRecord::clear_spender_lo() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_lo_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint64_t PaymentIntentRecord::spender_lo() const {
+  // @@protoc_insertion_point(field_get:paymentpb.PaymentIntentRecord.spender_lo)
+  return _internal_spender_lo();
+}
+inline void PaymentIntentRecord::set_spender_lo(::uint64_t value) {
+  _internal_set_spender_lo(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:paymentpb.PaymentIntentRecord.spender_lo)
+}
+inline ::uint64_t PaymentIntentRecord::_internal_spender_lo() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spender_lo_;
+}
+inline void PaymentIntentRecord::_internal_set_spender_lo(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_lo_ = value;
+}
+
+// uint64 paid_ms = 21;
+inline void PaymentIntentRecord::clear_paid_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.paid_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint64_t PaymentIntentRecord::paid_ms() const {
+  // @@protoc_insertion_point(field_get:paymentpb.PaymentIntentRecord.paid_ms)
+  return _internal_paid_ms();
+}
+inline void PaymentIntentRecord::set_paid_ms(::uint64_t value) {
+  _internal_set_paid_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:paymentpb.PaymentIntentRecord.paid_ms)
+}
+inline ::uint64_t PaymentIntentRecord::_internal_paid_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.paid_ms_;
+}
+inline void PaymentIntentRecord::_internal_set_paid_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.paid_ms_ = value;
+}
+
+// uint32 minor_age = 22;
+inline void PaymentIntentRecord::clear_minor_age() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_age_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t PaymentIntentRecord::minor_age() const {
+  // @@protoc_insertion_point(field_get:paymentpb.PaymentIntentRecord.minor_age)
+  return _internal_minor_age();
+}
+inline void PaymentIntentRecord::set_minor_age(::uint32_t value) {
+  _internal_set_minor_age(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:paymentpb.PaymentIntentRecord.minor_age)
+}
+inline ::uint32_t PaymentIntentRecord::_internal_minor_age() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.minor_age_;
+}
+inline void PaymentIntentRecord::_internal_set_minor_age(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_age_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// PaymentSpendRecord
+
+// uint64 spender_hi = 1;
+inline void PaymentSpendRecord::clear_spender_hi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_hi_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t PaymentSpendRecord::spender_hi() const {
+  // @@protoc_insertion_point(field_get:paymentpb.PaymentSpendRecord.spender_hi)
+  return _internal_spender_hi();
+}
+inline void PaymentSpendRecord::set_spender_hi(::uint64_t value) {
+  _internal_set_spender_hi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:paymentpb.PaymentSpendRecord.spender_hi)
+}
+inline ::uint64_t PaymentSpendRecord::_internal_spender_hi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spender_hi_;
+}
+inline void PaymentSpendRecord::_internal_set_spender_hi(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_hi_ = value;
+}
+
+// uint64 spender_lo = 2;
+inline void PaymentSpendRecord::clear_spender_lo() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_lo_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t PaymentSpendRecord::spender_lo() const {
+  // @@protoc_insertion_point(field_get:paymentpb.PaymentSpendRecord.spender_lo)
+  return _internal_spender_lo();
+}
+inline void PaymentSpendRecord::set_spender_lo(::uint64_t value) {
+  _internal_set_spender_lo(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:paymentpb.PaymentSpendRecord.spender_lo)
+}
+inline ::uint64_t PaymentSpendRecord::_internal_spender_lo() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spender_lo_;
+}
+inline void PaymentSpendRecord::_internal_set_spender_lo(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spender_lo_ = value;
+}
+
+// uint64 updated_ms = 3;
+inline void PaymentSpendRecord::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t PaymentSpendRecord::updated_ms() const {
+  // @@protoc_insertion_point(field_get:paymentpb.PaymentSpendRecord.updated_ms)
+  return _internal_updated_ms();
+}
+inline void PaymentSpendRecord::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:paymentpb.PaymentSpendRecord.updated_ms)
+}
+inline ::uint64_t PaymentSpendRecord::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void PaymentSpendRecord::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
 }
 
 // -------------------------------------------------------------------

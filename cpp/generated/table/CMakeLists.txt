@@ -102,6 +102,7 @@ set(SOURCE_FILES
     code/mysterymerchantgoods_table.cpp
     code/mysterymerchantgoods_table_fk.cpp
     code/mysterymerchantrule_table.cpp
+    code/afkpassrule_table.cpp
     code/mysterymerchantspot_table.cpp
     code/item_table_fk.cpp
     code/attributerule_table.cpp
@@ -171,9 +172,11 @@ set(SOURCE_FILES
     proto/tip/player_inbox_error_tip.pb.cc
     proto/mysterymerchantgoods_table.pb.cc
     proto/mysterymerchantrule_table.pb.cc
+    proto/afkpassrule_table.pb.cc
     proto/mysterymerchantspot_table.pb.cc
     proto/tip/mystery_merchant_error_tip.pb.cc
     proto/tip/payment_error_tip.pb.cc
+    proto/tip/afk_pass_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc
     proto/tip/cross_server_error_tip.pb.cc
     proto/tip/entity_error_tip.pb.cc

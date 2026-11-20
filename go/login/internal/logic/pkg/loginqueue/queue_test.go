@@ -656,7 +656,7 @@ func TestConsume_KeepsPlaceholderForHandoffGraceThenReleases(t *testing.T) {
 
 	queueIDs := make(map[string]string) // token → queueId
 	for range 6 {
-		res, err := q.Enqueue(ctx, 1, "u", "d")
+		res, err := q.Enqueue(ctx, 1, "", "d")
 		if err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
@@ -1006,7 +1006,7 @@ func TestAdmittedKeyTTL_SmallerWindowNeverShortensIt(t *testing.T) {
 	}
 	enqueue := func(q *Queue) string {
 		t.Helper()
-		res, err := q.Enqueue(ctx, 1, "u", "d")
+		res, err := q.Enqueue(ctx, 1, "", "d")
 		if err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
@@ -1109,7 +1109,7 @@ func TestAdmittedKey_EveryWritePathSetsTTLWhenMissing(t *testing.T) {
 		}},
 		{"admit", func(t *testing.T, q *Queue, shape func()) {
 			t.Helper()
-			if _, err := q.Enqueue(ctx, 1, "u", "d"); err != nil {
+			if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
 				t.Fatalf("enqueue: %v", err)
 			}
 			shape()
@@ -1119,7 +1119,7 @@ func TestAdmittedKey_EveryWritePathSetsTTLWhenMissing(t *testing.T) {
 		}},
 		{"consume", func(t *testing.T, q *Queue, shape func()) {
 			t.Helper()
-			res, err := q.Enqueue(ctx, 1, "u", "d")
+			res, err := q.Enqueue(ctx, 1, "", "d")
 			if err != nil {
 				t.Fatalf("enqueue: %v", err)
 			}
@@ -2600,7 +2600,7 @@ func TestEnqueue_QueueKeyTTLNeverShortened(t *testing.T) {
 	key := zoneZSetKey(1)
 	enqueue := func(q *Queue) {
 		t.Helper()
-		if _, err := q.Enqueue(ctx, 1, "u", "d"); err != nil {
+		if _, err := q.Enqueue(ctx, 1, "", "d"); err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
 	}
@@ -3028,4 +3028,269 @@ func TestPopAdmit_ZeroBudgetAdmitsNothingWithoutTouchingRedis(t *testing.T) {
 	if n, err := dead.PopAdmit(context.Background(), 1, 5, 0, pickZone1Gate); err != nil || n != 0 {
 		t.Fatalf("popadmit with budget 0 = (%d, %v), want (0, nil) without touching Redis", n, err)
 	}
+}
+
+// ── 入队按账号幂等、队列上限、重连占位(2026-11-20)────────────────────────────
+
+// 同一账号、同一 zone 的条目号恒定;换 zone、换账号、换密钥都不同;条目号不带出账号原文。
+func TestQueueIDForAccount_StablePerAccountAndZone(t *testing.T) {
+	secret := []byte("test-secret")
+	id := queueIDForAccount(secret, 1, "alice")
+	if id != queueIDForAccount(secret, 1, "alice") {
+		t.Fatalf("the same account and zone gave two different ids")
+	}
+	others := map[string]string{
+		"another zone":    queueIDForAccount(secret, 2, "alice"),
+		"another account": queueIDForAccount(secret, 1, "bob"),
+		"another secret":  queueIDForAccount([]byte("other-secret"), 1, "alice"),
+	}
+	for what, other := range others {
+		if other == id {
+			t.Fatalf("%s produced the same id %q", what, id)
+		}
+	}
+	if !strings.HasPrefix(id, accountQueueIDPrefix) || len(id) != len(accountQueueIDPrefix)+32 || strings.Contains(id, "alice") {
+		t.Fatalf("id = %q, want %q followed by 32 hex chars and no account name in it", id, accountQueueIDPrefix)
+	}
+}
+
+// 同一账号再次入队得到同一个条目:位置与分数都不变,只多一张令牌,两张令牌都查得到。
+// 修复前红:每次调用新建一个条目,队列里是 3 个成员,第二次入队排在队尾。
+func TestEnqueue_SameAccountKeepsItsPlace(t *testing.T) {
+	q, rdb, _, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	first, err := q.Enqueue(ctx, 1, "alice", "phone")
+	if err != nil {
+		t.Fatalf("enqueue alice: %v", err)
+	}
+	if first.Rejoined {
+		t.Fatalf("the first enqueue reported Rejoined")
+	}
+	// 入队分数取墙钟,同一毫秒时名次按成员字典序;把 alice 固定到更早的分数,名次才确定。
+	if err := rdb.ZAdd(ctx, zoneZSetKey(1), redis.Z{Score: 1, Member: first.QueueID}).Err(); err != nil {
+		t.Fatalf("pin alice's score: %v", err)
+	}
+	if _, err := q.Enqueue(ctx, 1, "bob", "pc"); err != nil {
+		t.Fatalf("enqueue bob: %v", err)
+	}
+
+	again, err := q.Enqueue(ctx, 1, "alice", "tablet")
+	if err != nil {
+		t.Fatalf("enqueue alice again: %v", err)
+	}
+	if again.QueueID != first.QueueID || !again.Rejoined || again.Rank != 0 || again.Total != 2 {
+		t.Fatalf("second enqueue = %+v, want the same entry %q at rank 0 of 2 with Rejoined", again, first.QueueID)
+	}
+	if score, err := rdb.ZScore(ctx, zoneZSetKey(1), first.QueueID).Result(); err != nil || score != 1 {
+		t.Fatalf("alice's score = %v err=%v, want it untouched (1)", score, err)
+	}
+	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 2 {
+		t.Fatalf("queue length = %d err=%v, want 2 (one entry per account)", n, err)
+	}
+	for which, token := range map[string]string{"first": first.QueueToken, "second": again.QueueToken} {
+		st, err := q.Poll(ctx, token, 1, signMustNotRun(t))
+		if err != nil || st.Status != StatusQueueing || st.Rank != 0 {
+			t.Fatalf("poll with the %s token = (%+v, %v), want QUEUEING at rank 0", which, st, err)
+		}
+	}
+}
+
+// 匿名分配没有账号可认,每次调用仍是一个新条目。
+func TestEnqueue_AnonymousCallsStaySeparate(t *testing.T) {
+	q, rdb, _, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	a, err := q.Enqueue(ctx, 1, "", "d")
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	b, err := q.Enqueue(ctx, 1, "", "d")
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if a.QueueID == b.QueueID || a.Rejoined || b.Rejoined {
+		t.Fatalf("anonymous enqueues = %+v and %+v, want two separate new entries", a, b)
+	}
+	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 2 {
+		t.Fatalf("queue length = %d err=%v, want 2", n, err)
+	}
+}
+
+// 已放行、放行槽还没人取时再入队:不把成员加回队列,回名次 0,用这次的令牌能取走。
+// 「放行槽在时照样 ZADD」的写法红在队列长度:同一个条目既已放行又在排队。
+func TestEnqueue_AdmittedButUntakenIsNotRequeued(t *testing.T) {
+	q, rdb, _, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	first, err := q.Enqueue(ctx, 1, "alice", "phone")
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, pickZone1Gate); err != nil || n != 1 {
+		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
+	}
+
+	again, err := q.Enqueue(ctx, 1, "alice", "tablet")
+	if err != nil {
+		t.Fatalf("enqueue again: %v", err)
+	}
+	if again.QueueID != first.QueueID || !again.Rejoined || again.Rank != 0 {
+		t.Fatalf("second enqueue = %+v, want the same entry %q at rank 0 with Rejoined", again, first.QueueID)
+	}
+	if n, err := rdb.ZCard(ctx, zoneZSetKey(1)).Result(); err != nil || n != 0 {
+		t.Fatalf("queue length = %d err=%v, want 0: an admitted entry must not be queued again", n, err)
+	}
+	st, err := q.Poll(ctx, again.QueueToken, 1, stubSignFn)
+	if err != nil || st.Status != StatusAdmitted {
+		t.Fatalf("poll with the new token = (%+v, %v), want ADMITTED", st, err)
+	}
+}
+
+// 上一轮已经取走放行槽之后再入队是新的一轮:从队尾重新排,meta 重建,能再次被放行并取走。
+// 不重建 meta 的写法红在第二次 PopAdmit:上一轮留下的 admitted_at 让放行脚本把它当成已放行,放行数为 0。
+func TestEnqueue_AfterTakingTheAdmitStartsANewRound(t *testing.T) {
+	q, rdb, _, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	first, err := q.Enqueue(ctx, 1, "alice", "phone")
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, pickZone1Gate); err != nil || n != 1 {
+		t.Fatalf("first popadmit = (%d, %v), want (1, nil)", n, err)
+	}
+	if st, err := q.Poll(ctx, first.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusAdmitted {
+		t.Fatalf("first poll = (%+v, %v), want ADMITTED", st, err)
+	}
+
+	second, err := q.Enqueue(ctx, 1, "alice", "phone")
+	if err != nil {
+		t.Fatalf("enqueue for the second round: %v", err)
+	}
+	if second.Rejoined || second.QueueID != first.QueueID || second.Total != 1 {
+		t.Fatalf("second round = %+v, want a new round of the same entry %q, alone in the queue", second, first.QueueID)
+	}
+	if stale, err := rdb.HExists(ctx, metaKey(1, second.QueueID), metaFieldAdmittedAt).Result(); err != nil || stale {
+		t.Fatalf("meta still carries admitted_at from the previous round (exists=%v err=%v)", stale, err)
+	}
+	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, pickZone1Gate); err != nil || n != 1 {
+		t.Fatalf("second popadmit = (%d, %v), want (1, nil)", n, err)
+	}
+	if st, err := q.Poll(ctx, second.QueueToken, 1, stubSignFn); err != nil || st.Status != StatusAdmitted {
+		t.Fatalf("second poll = (%+v, %v), want ADMITTED", st, err)
+	}
+}
+
+// 条目空闲过久、meta 先于队列成员到期之后再入队:旧成员不能沿用(拿它查询只会回 EXPIRED),从队尾重新排。
+// 「成员在队列里就沿用」的写法红在名次(仍是 0)与查询(EXPIRED)。
+func TestEnqueue_OrphanedMemberRestartsAtTheTail(t *testing.T) {
+	q, rdb, _, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	first, err := q.Enqueue(ctx, 1, "alice", "phone")
+	if err != nil {
+		t.Fatalf("enqueue alice: %v", err)
+	}
+	if err := rdb.ZAdd(ctx, zoneZSetKey(1), redis.Z{Score: 1, Member: first.QueueID}).Err(); err != nil {
+		t.Fatalf("pin alice's score: %v", err)
+	}
+	if err := rdb.Del(ctx, metaKey(1, first.QueueID)).Err(); err != nil {
+		t.Fatalf("drop alice's meta: %v", err)
+	}
+	bob, err := q.Enqueue(ctx, 1, "bob", "pc")
+	if err != nil {
+		t.Fatalf("enqueue bob: %v", err)
+	}
+	if err := rdb.ZAdd(ctx, zoneZSetKey(1), redis.Z{Score: 2, Member: bob.QueueID}).Err(); err != nil {
+		t.Fatalf("pin bob's score: %v", err)
+	}
+
+	again, err := q.Enqueue(ctx, 1, "alice", "phone")
+	if err != nil {
+		t.Fatalf("enqueue alice again: %v", err)
+	}
+	if again.Rejoined || again.Rank != 1 || again.Total != 2 {
+		t.Fatalf("re-enqueue of an orphaned entry = %+v, want a new round at rank 1 of 2", again)
+	}
+	st, err := q.Poll(ctx, again.QueueToken, 1, signMustNotRun(t))
+	if err != nil || st.Status != StatusQueueing || st.Rank != 1 {
+		t.Fatalf("poll = (%+v, %v), want QUEUEING at rank 1", st, err)
+	}
+}
+
+// 队列到上限:新来的账号不入队、Redis 里不留任何键;已经在排的账号再入队不受影响;腾出位置后新账号能进。
+func TestEnqueue_FullQueueRejectsNewcomersOnly(t *testing.T) {
+	q, rdb, mr, cleanup := newTestQueue(t)
+	defer cleanup()
+	ctx := context.Background()
+	q.LimitLength(2)
+
+	if _, err := q.Enqueue(ctx, 1, "alice", "d"); err != nil {
+		t.Fatalf("enqueue alice: %v", err)
+	}
+	bob, err := q.Enqueue(ctx, 1, "bob", "d")
+	if err != nil {
+		t.Fatalf("enqueue bob: %v", err)
+	}
+
+	keysBefore := mr.Keys()
+	if _, err := q.Enqueue(ctx, 1, "carol", "d"); !errors.Is(err, ErrQueueFull) {
+		t.Fatalf("enqueue into a full queue: err = %v, want ErrQueueFull", err)
+	}
+	if keys := mr.Keys(); !slices.Equal(keys, keysBefore) {
+		t.Fatalf("a rejected enqueue left keys behind:\nbefore %v\nafter  %v", keysBefore, keys)
+	}
+
+	again, err := q.Enqueue(ctx, 1, "alice", "d")
+	if err != nil || !again.Rejoined {
+		t.Fatalf("an account already queued re-enqueued into a full queue = (%+v, %v), want its entry back", again, err)
+	}
+
+	if err := rdb.ZRem(ctx, zoneZSetKey(1), bob.QueueID).Err(); err != nil {
+		t.Fatalf("remove bob: %v", err)
+	}
+	if _, err := q.Enqueue(ctx, 1, "carol", "d"); err != nil {
+		t.Fatalf("enqueue carol after a seat freed up: %v", err)
+	}
+}
+
+// 免排队重连的占位:按 player_id 定名,同一个人反复调用只占一个名额、只把到期时刻往后推;
+// 它不看名额,但占着的名额会让快速通道少放人;到期后不再计入在途。
+func TestHoldReconnectSlot_OnePlaceholderPerPlayer(t *testing.T) {
+	q, rdb, clk := newClockedQueue(t)
+	ctx := context.Background()
+	mustInflight := func(want uint32, when string) {
+		t.Helper()
+		if n, err := q.AdmittedCount(ctx, 1); err != nil || n != want {
+			t.Fatalf("in-flight count (%s) = %d err=%v, want %d", when, n, err, want)
+		}
+	}
+
+	for range 3 {
+		if err := q.HoldReconnectSlot(ctx, 1, 42); err != nil {
+			t.Fatalf("hold: %v", err)
+		}
+	}
+	mustInflight(1, "the same player held three times")
+	wantScore := float64(clk.Now().Add(q.handoffGrace).UnixMilli())
+	if score, err := rdb.ZScore(ctx, admittedZSetKey(1), "reconnect:42").Result(); err != nil || score != wantScore {
+		t.Fatalf("placeholder score = %.0f err=%v, want %.0f (now + handoffGrace)", score, err, wantScore)
+	}
+
+	if err := q.HoldReconnectSlot(ctx, 1, 43); err != nil {
+		t.Fatalf("hold another player: %v", err)
+	}
+	mustInflight(2, "two players")
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 2); err != nil || ok {
+		t.Fatalf("fast path with a budget of 2 = (%v, %v), want (false, nil): both seats are held by reconnects", ok, err)
+	}
+
+	clk.Advance(q.handoffGrace)
+	mustInflight(0, "after handoffGrace")
 }

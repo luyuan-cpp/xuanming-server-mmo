@@ -8299,7 +8299,8 @@ TEST(EnterFenceEcs, StaleEnterDoesNotSupersedeRelocateEntry)
 
     // 只读判定不改任何状态、不计数。
     const auto before = enter_fence_stats::Read();
-    EXPECT_EQ(PlayerLifecycleSystem::JudgeEnter(kExitPlayerId, kNewerSession, kGenOld), ef::Verdict::kRejectStale);
+    EXPECT_EQ(PlayerLifecycleSystem::JudgeEnter(kExitPlayerId, kNewerSession, kGenOld, /*gateInstanceId=*/{}),
+              ef::Verdict::kRejectStale);
     EXPECT_TRUE(enter_fence_stats::Read() == before);
 
     EXPECT_EQ(EnterGameNode(FenceEnter(kNewerSession, kGenOld)), PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected);
@@ -9388,9 +9389,6 @@ static_assert(std::size(kAllReleaseVerdicts) == rf::kVerdictCount, "新增结论
 
 constexpr uint64_t kReleaseExpectedEpoch = 5; // E:scene_manager 本次落点 CAS 用过的观察值
 
-// 静态存储期,供 constexpr 断言取地址。
-constexpr PlayerLoginIdentityComp kActingIdentity{kSessionAtExit, 9};
-
 uint64_t ReleaseVerdictCount(const release_fence_stats::Snapshot &snapshot, rf::Verdict verdict)
 {
     return snapshot.verdicts[static_cast<std::size_t>(verdict)];
@@ -9728,7 +9726,8 @@ TEST(ActingLoginGeneration, MatchingSessionYieldsGeneration)
     EXPECT_EQ(ef::ActingLoginGeneration(&identity, kSessionAtExit), 9u);
     identity.loginGeneration = 0;
     EXPECT_EQ(ef::ActingLoginGeneration(&identity, kSessionAtExit), 0u) << "身份没有代次(旧版 login 放行的)就如实给 0";
-    static_assert(ef::ActingLoginGeneration(&kActingIdentity, kSessionAtExit) == 9, "纯函数,可在编译期求值");
+    // 编译期可求值由 NoIdentityComponentYieldsZero 里 nullptr 那条 static_assert 守着:身份组件 2026-11-20 起带 gate 实例
+    // (std::string),不再能做 constexpr 变量取地址(scene-enter-chain-residuals.md §14)。
 }
 
 // ===========================================================================
@@ -11329,4 +11328,367 @@ TEST(ReleaseFenceEcs, KeepHeldSessionEndedReleaseWithoutHolderStillGoesForTheCre
               CredentialCount(before, rf::SessionEndedCredential::kWrite) + 1);
     EXPECT_EQ(QualificationCount(after, rf::CredentialQualification::kReadFailed),
               QualificationCount(before, rf::CredentialQualification::kReadFailed) + 1);
+}
+
+// ============================================================================
+// 同号跨实例:scene 按 (gate 实例, session_id) 认会话(docs/design/scene-enter-chain-residuals.md §10 第 1 条「e 方案 C」、§14)。
+//
+// gate 会话号 = node_id<<17 | 序号。同一个 node_id 短暂有两个 gate 进程(老进程还没关停、新进程已接走号)时,同一名玩家
+// 可能在两边拿到同一个会话号。旧代码「同号即同会话」:老进程迟到的入场被判同一会话放行;老进程关闭旧连接时代发的
+// ExitGame、旧客户端照发的消息都被当成当前会话的 —— 新会话进入断线保留,25s 后退出、存盘,玩家要重登。
+// 生产里 gate 实例取自请求所走入站连接的握手身份(RpcController::HandshakePeerUuid,rpc_channel_loopback_test 的
+// HandshakePeerRecordedOnTheInboundChannelReachesEveryLaterDispatch 守着那一段);这里直接填进入场上下文 / 传给判定。
+// 复现残余的是 GateInstanceFenceEcs.LateEnterFromOldGateProcessIsRejected 与 ExitGameFromOldGateProcessIsStale:
+// 变异核对时把 enter_fence::SameGateInstance 改成恒 true(= 旧口径「同号即同会话」),本节注明「变异红」的断言全部失败。
+// ============================================================================
+namespace
+{
+constexpr std::string_view kGateOld = "gate-node3-old-process"; // 老进程:还没关停,迟到的消息从它的连接上来
+constexpr std::string_view kGateNew = "gate-node3-new-process"; // 新进程:接走了同一个 node_id,会话序号从头发
+constexpr SessionId kReusedSession = kFenceSessionB;             // 两个进程上同一个会话号
+
+PlayerEnterContext FenceEnterVia(std::string_view gateInstance, SessionId session, uint64_t generation,
+                                 uint32_t enterGsType = LOGIN_REPLACE)
+{
+    auto ctx = FenceEnter(session, generation, enterGsType);
+    ctx.gateInstanceId = std::string(gateInstance);
+    return ctx;
+}
+
+// 本玩家在线、会话绑在老进程上(登录代次 A):新进程起来之前的状态。
+entt::entity MakePlayerOnOldGateProcess()
+{
+    const auto player = MakeFencedPlayer(kReusedSession, kGenA);
+    tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).gateInstanceId = std::string(kGateOld);
+    return player;
+}
+
+// ExpectBoundTo 之外再核对身份组件记下的 gate 实例。
+void ExpectBoundVia(entt::entity player, std::string_view gateInstance, SessionId session, uint64_t generation)
+{
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, session, generation));
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).gateInstanceId, gateInstance);
+}
+
+constexpr ef::Identity FenceIdentityVia(std::string_view gateInstance, SessionId session, uint64_t generation)
+{
+    return ef::Identity{true, session, generation, gateInstance};
+}
+} // namespace
+
+TEST(GateInstanceFence, SameGateInstanceComparesOnlyWhenBothAreKnown)
+{
+    // 只有这一条写成编译期断言(变异 M1 下它仍成立);其余用运行期断言,变异时整个工程照常编得过、红在这里。
+    static_assert(ef::SameGateInstance(kGateNew, kGateNew), "纯函数,可在编译期求值");
+    EXPECT_FALSE(ef::SameGateInstance(kGateNew, kGateOld)) << "变异红:两边都已知且不同 = 另一个进程上的另一条会话";
+    EXPECT_TRUE(ef::SameGateInstance({}, kGateOld)) << "当前实例未知(旧实体、托管落点建出的实体):按会话号认";
+    EXPECT_TRUE(ef::SameGateInstance(kGateNew, {})) << "请求实例未知(连接没有握手身份):按会话号认";
+    EXPECT_TRUE(ef::SameGateInstance({}, {}));
+}
+
+TEST(GateInstanceFence, ReusedSessionIdOnAnotherGateProcessIsNotTheSameSession)
+{
+    // 实体绑在新进程的同号会话上(代次 B);老进程迟到的入场带更早的代次 A。
+    const ef::Identity onNew = FenceIdentityVia(kGateNew, kReusedSession, kGenB);
+    EXPECT_EQ(ef::Decide(onNew, kReusedSession, kGenA, kGateOld), ef::Verdict::kRejectStale)
+        << "变异红:另一个进程上的同号会话按代次裁决,老进程更早的入场拒";
+    EXPECT_EQ(ef::Decide(onNew, kReusedSession, kGenB, kGateOld), ef::Verdict::kRejectConflict)
+        << "变异红:代次相等而会话不同(G2 冲突)";
+    EXPECT_EQ(ef::Decide(onNew, kReusedSession, 0, kGateOld), ef::Verdict::kRejectUnversioned) << "变异红";
+    EXPECT_EQ(ef::Decide(onNew, kReusedSession, kGenB + 1, kGateOld), ef::Verdict::kAdmitNewer)
+        << "另一个进程上更新的登录照常接管";
+
+    // 同一进程上的同一会话:任意代次放行(同一会话一律放行不变)。
+    EXPECT_EQ(ef::Decide(onNew, kReusedSession, kGenA, kGateNew), ef::Verdict::kAdmitSameSession);
+    EXPECT_EQ(ef::Decide(onNew, kReusedSession, 0, kGateNew), ef::Verdict::kAdmitSameSession);
+    // 任一边实例未知:按会话号认,与改动前相同。
+    EXPECT_EQ(ef::Decide(onNew, kReusedSession, kGenA), ef::Verdict::kAdmitSameSession) << "请求实例未知(纯函数缺省)";
+    EXPECT_EQ(ef::Decide(FenceIdentity(kReusedSession, kGenB), kReusedSession, kGenA, kGateOld),
+              ef::Verdict::kAdmitSameSession)
+        << "当前实例未知";
+
+    // 改派待确认条目那一处(实体已销毁、只剩条目记着他)同样按实例认。
+    const ef::Identity onlyEntry[] = {kNoIdentity, kNoIdentity, onNew};
+    EXPECT_EQ(ef::DecideAll(onlyEntry, kReusedSession, kGenA, kGateOld), ef::Verdict::kRejectStale) << "变异红";
+    EXPECT_EQ(ef::DecideAll(onlyEntry, kReusedSession, kGenA, kGateNew), ef::Verdict::kAdmitSameSession);
+}
+
+TEST(GateInstanceFenceEcs, LateEnterFromOldGateProcessIsRejected)
+{
+    // 迟到的入场(复现残余):玩家原在老进程的会话 3:k 上;新进程以同一 node_id 起来,玩家重连又拿到 3:k,新登录(代次 B)
+    // 先到并接管实体;老进程的进场待办随后补发它那次入场(代次 A)。旧代码判同一会话,第二次入场照样放行、把实体按过期路由
+    // 重新处置(改场景、改登录态)。
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    const auto player = MakePlayerOnOldGateProcess();
+
+    const uint64_t newerBefore = FenceCount(ef::Verdict::kAdmitNewer);
+    ASSERT_EQ(EnterGameNode(FenceEnterVia(kGateNew, kReusedSession, kGenB)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting);
+    EXPECT_EQ(FenceCount(ef::Verdict::kAdmitNewer), newerBefore + 1)
+        << "变异红:另一个进程上的同号会话是另一条会话,按更新的代次接管(而不是同一会话放行)";
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundVia(player, kGateNew, kReusedSession, kGenB));
+
+    const uint64_t staleBefore = FenceCount(ef::Verdict::kRejectStale);
+    EXPECT_EQ(EnterGameNode(FenceEnterVia(kGateOld, kReusedSession, kGenA)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected)
+        << "变异红:老进程迟到的同号入场不是当前会话";
+    EXPECT_EQ(FenceCount(ef::Verdict::kRejectStale), staleBefore + 1);
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundVia(player, kGateNew, kReusedSession, kGenB));
+    EXPECT_EQ(PendingEnter(), nullptr) << "被拒的请求不登记待入场上下文";
+
+    // 新进程上同一会话的重复路由(gate 补发、0 型换图)照旧按同一会话放行,代次不被拉低。
+    const uint64_t sameBefore = FenceCount(ef::Verdict::kAdmitSameSession);
+    EXPECT_EQ(EnterGameNode(FenceEnterVia(kGateNew, kReusedSession, kGenA, LOGIN_NONE)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting);
+    EXPECT_EQ(FenceCount(ef::Verdict::kAdmitSameSession), sameBefore + 1);
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundVia(player, kGateNew, kReusedSession, kGenB));
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+}
+
+TEST(GateInstanceFenceEcs, LateEnterFromOldGateProcessDuringLoadKeepsThePendingLoad)
+{
+    // 迟到入场的载入中变体:老进程那次登录的载入还在途,新进程的同号新登录覆盖了待入场上下文;老进程再补发它的入场。
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    ASSERT_EQ(EnterGameNode(FenceEnterVia(kGateOld, kReusedSession, kGenA, LOGIN_FIRST)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kLoadRequired);
+    ASSERT_EQ(EnterGameNode(FenceEnterVia(kGateNew, kReusedSession, kGenB, LOGIN_REPLACE)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kLoadRequired);
+    const PlayerEnterContext *pending = PendingEnter();
+    ASSERT_NE(pending, nullptr);
+    EXPECT_EQ(pending->gateInstanceId, kGateNew);
+    EXPECT_EQ(pending->loginGeneration, kGenB);
+    const uint64_t lifecycle = pending->inheritClear.lifecycle;
+    ASSERT_EQ(SessionMap().count(kReusedSession), 1u)
+        << "同号:映射刚被新进程这次的预登记覆盖,覆盖待入场上下文时不得当成上一条会话的映射擦掉";
+    EXPECT_EQ(SessionMap().at(kReusedSession), kExitPlayerId);
+
+    const uint64_t staleBefore = FenceCount(ef::Verdict::kRejectStale);
+    EXPECT_EQ(EnterGameNode(FenceEnterVia(kGateOld, kReusedSession, kGenA, LOGIN_FIRST)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected)
+        << "变异红";
+    EXPECT_EQ(FenceCount(ef::Verdict::kRejectStale), staleBefore + 1);
+    pending = PendingEnter();
+    ASSERT_NE(pending, nullptr) << "待入场上下文仍在";
+    EXPECT_EQ(pending->gateInstanceId, kGateNew);
+    EXPECT_EQ(pending->loginGeneration, kGenB);
+    EXPECT_EQ(pending->enterInfo.enter_gs_type(), static_cast<uint32_t>(LOGIN_REPLACE));
+    EXPECT_EQ(pending->inheritClear.lifecycle, lifecycle) << "仍是同一次载入";
+    EXPECT_EQ(SessionMap().count(kReusedSession), 1u);
+    EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+}
+
+TEST(GateInstanceFenceEcs, ExitGameFromOldGateProcessIsStale)
+{
+    // ExitGame 面(复现残余):老进程关闭旧连接(被踢、冲突收尾、进程退出)时代发 ExitGame(3:k, 本玩家)。会话号与玩家都对得上,
+    // 旧代码照常派发,新会话进入断线保留、25s 后退出。ProcessClientPlayerMessage 在派发与一切擦除之前先问 IsStaleGateInstance,
+    // 是就不派发(ExitGame 是单向消息,不回包)。宿主不跑节点层的 handler,这里核对的是那道判定与它的只读性。
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    const auto player = MakePlayerOnOldGateProcess();
+    EXPECT_FALSE(PlayerLifecycleSystem::IsStaleGateInstance(kExitPlayerId, kReusedSession, kGateOld))
+        << "新进程起来之前,老进程上的会话就是当前会话,它的 ExitGame 照常派发";
+    ASSERT_EQ(EnterGameNode(FenceEnterVia(kGateNew, kReusedSession, kGenB)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting);
+
+    const uint64_t rejectedBefore = enter_fence_stats::Read().staleGateInstanceRejected;
+    EXPECT_TRUE(PlayerLifecycleSystem::IsStaleGateInstance(kExitPlayerId, kReusedSession, kGateOld))
+        << "变异红:老进程上的同号会话不是当前会话,它的 ExitGame 不派发";
+    EXPECT_FALSE(PlayerLifecycleSystem::IsStaleGateInstance(kExitPlayerId, kReusedSession, kGateNew))
+        << "当前会话自己的 ExitGame 照常派发";
+    EXPECT_FALSE(PlayerLifecycleSystem::IsStaleGateInstance(kExitPlayerId, kReusedSession, {}))
+        << "连接没有握手身份:不比较";
+    EXPECT_FALSE(PlayerLifecycleSystem::IsStaleGateInstance(kExitPlayerId, kFenceSessionA, kGateOld))
+        << "会话号不同:留给既有的陈旧会话守卫";
+    EXPECT_FALSE(PlayerLifecycleSystem::IsStaleGateInstance(kFenceOtherPlayerId, kReusedSession, kGateOld))
+        << "本节点上没有这名玩家";
+
+    // 判定只读:实体照旧绑在新进程的会话上,没有进入退出,映射还在。
+    ASSERT_NO_FATAL_FAILURE(ExpectBoundVia(player, kGateNew, kReusedSession, kGenB));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player));
+    EXPECT_EQ(enter_fence_stats::Read().staleGateInstanceRejected, rejectedBefore) << "判定本身不计数,节点层拒绝派发时才加";
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+}
+
+TEST(GateInstanceFenceEcs, OldClientMessagesDuringLoadAreStaleAndCannotCancelTheLoad)
+{
+    // 旧客户端消息面:新进程上的同号新登录正在载入,老进程上还连着的旧客户端照发消息(断开时还会代发 ExitGame)。
+    // 旧代码把载入中的 ExitGame 当成"载入被取消",擦掉预登记映射,新登录的载入白做,玩家停在没有实体的状态。
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    ASSERT_EQ(EnterGameNode(FenceEnterVia(kGateNew, kReusedSession, kGenB, LOGIN_REPLACE)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kLoadRequired);
+
+    EXPECT_TRUE(PlayerLifecycleSystem::IsStaleGateInstance(kExitPlayerId, kReusedSession, kGateOld))
+        << "变异红:载入在途时按待入场上下文记下的实例认";
+    EXPECT_FALSE(PlayerLifecycleSystem::IsStaleGateInstance(kExitPlayerId, kReusedSession, kGateNew));
+    ASSERT_NE(PendingEnter(), nullptr);
+    ASSERT_EQ(SessionMap().count(kReusedSession), 1u) << "预登记还在";
+    EXPECT_EQ(SessionMap().at(kReusedSession), kExitPlayerId);
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+}
+
+TEST(GateInstanceFenceEcs, EnterWithoutGateInstanceKeepsTheKnownInstanceOfTheSameSession)
+{
+    // 托管落点等不经 gate 连接的入场不带实例:同一会话不能把已知实例抹成未知(否则老进程同号的迟到入场又按会话号放行);
+    // 换了会话就照写(旧会话的实例对新会话不成立)。
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    const auto player = MakeFencedPlayer(kReusedSession, kGenB);
+    tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).gateInstanceId = std::string(kGateNew);
+
+    PlayerLifecycleSystem::RecordLoginIdentity(player, kReusedSession, kGenB, {});
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).gateInstanceId, kGateNew);
+    EXPECT_EQ(EnterGameNode(FenceEnterVia(kGateOld, kReusedSession, kGenA)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected)
+        << "实例还在:老进程的迟到入场照样被拒";
+
+    PlayerLifecycleSystem::RecordLoginIdentity(player, kFenceSessionA, kGenB + 1, {});
+    const auto &identity = tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player);
+    EXPECT_EQ(identity.sessionId, kFenceSessionA);
+    EXPECT_EQ(identity.loginGeneration, kGenB + 1);
+    EXPECT_TRUE(identity.gateInstanceId.empty()) << "换了会话:新会话的实例未知,不沿用旧会话的";
+
+    PlayerLifecycleSystem::RecordLoginIdentity(player, kInvalidSessionId, 0, kGateOld);
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).sessionId, kFenceSessionA);
+    EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).gateInstanceId.empty())
+        << "没有会话的绑定不改会话,也不改实例";
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+}
+
+TEST(GateInstanceFenceEcs, RelocateEntryRemembersTheGateProcessOfTheSession)
+{
+    // 迟到入场的改派条目变体:排空把他改派出去、实体已销毁,本节点上只剩改派待确认条目记着他。条目的 gate 实例取自会话
+    // 绑定时记下的实例(宿主里没有 gate,按 node_id 查只会得到空串)。老进程同号的迟到入场照样被拒,条目不被误结清。
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+    PlayerStoreDirectFixture store;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = kFenceOwnerEpoch;
+    auto &identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
+    identity.sessionId = kSessionAtExit;
+    identity.loginGeneration = kGenB;
+    identity.gateInstanceId = std::string(kGateNew);
+    const auto scene = PlaceInScene(player, kRelocateSourceScene);
+    ASSERT_TRUE(MarkPersisted(player)); // 最后做:快照要与退出时再 marshal 出来的那一份逐字节相同
+    ASSERT_TRUE(SeedCurrentPlayerStore(player));
+    ASSERT_EQ(PlayerLifecycleSystem::BeginSceneDrain(scene), 1u);
+    ASSERT_NO_FATAL_FAILURE(CommitPendingExit(store, player));
+    ASSERT_FALSE(tlsEcs.actorRegistry.valid(player)) << "SQL释放已提交，退出实体已销毁";
+    const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(entry.has_value());
+    EXPECT_EQ(entry->sessionId, kSessionAtExit);
+    EXPECT_EQ(entry->gateInstanceId, kGateNew) << "票据与条目记的是会话所在的 gate 进程,不是按 node_id 查到的那个";
+
+    const uint64_t staleBefore = FenceCount(ef::Verdict::kRejectStale);
+    EXPECT_EQ(EnterGameNode(FenceEnterVia(kGateOld, kSessionAtExit, kGenA)),
+              PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected)
+        << "变异红:老进程上的同号会话不是条目那条会话";
+    EXPECT_EQ(FenceCount(ef::Verdict::kRejectStale), staleBefore + 1);
+    const auto kept = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(kept.has_value()) << "条目没有被误结清";
+    EXPECT_EQ(kept->seq, entry->seq);
+    EXPECT_EQ(kept->phase, entry->phase);
+    EXPECT_EQ(PendingEnter(), nullptr);
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
+}
+
+// ============================================================================
+// scene → gate 按会话所在的 gate 进程找 gate(docs/design/scene-enter-chain-residuals.md §14.6 第二条)。
+//
+// 同一 node_id 短暂有两个 gate 进程、两者在 scene 上都有节点实体(老进程断线重连后重新握手登记,或开了摘除宽限期)时,
+// 按会话号里的 node_id 只能取到第一个匹配的实体,绑在另一个进程上的会话的回推会投错进程(那里的同号会话是旧连接或已关闭)。
+// 会话绑定时记下了实例(PlayerLoginIdentityComp::gateInstanceId)就只按实例找,找不到不退回按 node_id;没记下才按 node_id。
+// 推送(SendToPlayerClient、按玩家 / 按场景广播、按会话直推)经 ResolvePlayerGateEntity / ResolveSessionGateEntity;
+// scene 自发的 EnterScene(换图、建镜像后跟进、组队跟随、跨 zone 传送、改派票据)与战斗路由的实例经 BoundGateInstanceId。
+// 变异核对:ResolveSessionGateEntity 改成恒 `return ResolveLocalZoneGateEntity(sessionId);`(= 旧口径),或 BoundGateInstanceId
+// 删掉取身份组件实例那一支,本节与 PlayerTeamFollowTest.DifferentSceneRequestNamesTheGateProcessThatHoldsTheSession
+// 注明「变异红」的断言失败。
+// ============================================================================
+#include "network/network_utils.h" // ResolvePlayerGateEntity / ResolveSessionGateEntity / BoundGateInstanceId / GetGateNodeId
+
+namespace
+{
+constexpr std::string_view kRouteGateOld = "gate-route-old-process";
+constexpr std::string_view kRouteGateNew = "gate-route-new-process";
+constexpr uint32_t kRouteZone = 3;
+
+// 本 zone 里、会话号所在 node_id 上的一个 gate 进程。
+entt::entity AddSessionGate(std::string_view instance, SessionId session)
+{
+    auto &gates = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
+    const auto gate = gates.create();
+    auto &info = gates.emplace<NodeInfo>(gate);
+    info.set_zone_id(kRouteZone);
+    info.set_node_id(GetGateNodeId(session));
+    info.set_node_uuid(std::string(instance));
+    return gate;
+}
+
+// gate 节点表在 tlsNodeContextManager 里,不随 tlsEcs.Clear() 复位。
+void ResetRouteHost()
+{
+    tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService).clear();
+    ResetFenceHost();
+    TestLocalNodeInfo().set_zone_id(kRouteZone);
+}
+} // namespace
+
+TEST(GateInstanceRouteEcs, PushGoesOnlyToTheGateProcessThatHoldsTheSession)
+{
+    // 两个进程都在:旧代码两种绑定得到同一个实体(按 node_id 的第一个匹配),不论实体遍历顺序,两条里总有一条红。
+    ASSERT_NO_FATAL_FAILURE(ResetRouteHost());
+    const auto oldGate = AddSessionGate(kRouteGateOld, kReusedSession);
+    const auto newGate = AddSessionGate(kRouteGateNew, kReusedSession);
+    const auto player = MakeFencedPlayer(kReusedSession, kGenB);
+    auto &identity = tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player);
+
+    identity.gateInstanceId = std::string(kRouteGateNew);
+    EXPECT_EQ(ResolvePlayerGateEntity(player, kReusedSession), std::optional{newGate}) << "变异红";
+    EXPECT_EQ(BoundGateInstanceId(player, kReusedSession), kRouteGateNew);
+    identity.gateInstanceId = std::string(kRouteGateOld);
+    EXPECT_EQ(ResolvePlayerGateEntity(player, kReusedSession), std::optional{oldGate}) << "变异红";
+    EXPECT_EQ(BoundGateInstanceId(player, kReusedSession), kRouteGateOld);
+
+    // 会话所在的进程已不在本节点上(实体随 etcd 摘除销毁):找不到,不退回按 node_id 推给另一个进程。
+    tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService).destroy(oldGate);
+    EXPECT_FALSE(ResolvePlayerGateEntity(player, kReusedSession).has_value())
+        << "变异红:另一个进程上没有这条会话,推过去要么推不到、要么推给同号的另一名玩家";
+    EXPECT_FALSE(ResolveSessionGateEntity(kReusedSession, std::string(kRouteGateOld)).has_value()) << "变异红";
+    EXPECT_EQ(ResolveSessionGateEntity(kReusedSession, std::string(kRouteGateNew)), std::optional{newGate});
+    EXPECT_EQ(BoundGateInstanceId(player, kReusedSession), kRouteGateOld)
+        << "自发的 EnterScene 照带会话所在的进程,不换成按 node_id 查到的那个";
+
+    ASSERT_NO_FATAL_FAILURE(ResetRouteHost());
+}
+
+TEST(GateInstanceRouteEcs, UnknownInstanceFallsBackToTheNodeIdOfTheSession)
+{
+    // 实例未知时与改动前相同:按会话号里的 node_id 找。
+    ASSERT_NO_FATAL_FAILURE(ResetRouteHost());
+    const auto gate = AddSessionGate(kRouteGateNew, kReusedSession);
+    const auto player = MakeFencedPlayer(kReusedSession, 0);
+    EXPECT_EQ(ResolvePlayerGateEntity(player, kReusedSession), std::optional{gate}) << "没有身份组件(旧实体)";
+    EXPECT_EQ(BoundGateInstanceId(player, kReusedSession), kRouteGateNew);
+    EXPECT_EQ(ResolveSessionGateEntity(kReusedSession, {}), std::optional{gate}) << "按会话直推不带实例(载入在途的提示)";
+
+    auto &identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
+    identity.sessionId = kReusedSession;
+    identity.loginGeneration = kGenB;
+    EXPECT_EQ(ResolvePlayerGateEntity(player, kReusedSession), std::optional{gate}) << "实例未知(托管落点建出的实体)";
+
+    identity.sessionId = kFenceSessionA;
+    identity.gateInstanceId = std::string(kRouteGateOld);
+    EXPECT_EQ(ResolvePlayerGateEntity(player, kReusedSession), std::optional{gate})
+        << "记下的实例属于另一条会话,对这一条不成立";
+    EXPECT_EQ(BoundGateInstanceId(player, kReusedSession), kRouteGateNew);
+
+    // 本 zone 没有这个 node_id 上的 gate:找不到,请求带空实例(与改动前相同)。
+    tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService).clear();
+    EXPECT_FALSE(ResolvePlayerGateEntity(player, kReusedSession).has_value());
+    EXPECT_TRUE(BoundGateInstanceId(player, kReusedSession).empty());
+
+    ASSERT_NO_FATAL_FAILURE(ResetRouteHost());
 }

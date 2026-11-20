@@ -315,7 +315,7 @@ func TestStoreRegistryOpenFailureBacksOffThenRetries(t *testing.T) {
 	}
 }
 
-// 闸门冻结是搬库窗口,秒级,库没有坏:不进冷却,窗口一过下一条任务就能打开。错误链要分得清冻结。
+// 闸门冻结是搬库窗口,秒级,库没有坏:不进冷却,窗口一过下一次调用就能打开。错误链要分得清冻结。
 func TestStoreRegistryFrozenGateDoesNotBackOff(t *testing.T) {
 	opener := newFakeOpener()
 	opener.setErr(fmt.Errorf("read the schema: %w", authoritysql.ErrWriterFrozen))

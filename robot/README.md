@@ -54,8 +54,8 @@ transport:
 - 地址:服务端下发了就用下发的(assign-gate / queue-status 的 `gate_ws_url`、msg 124 的 `target_ws_url`、战斗分配与测速目标的
   `ws_url`);没下发时直连 `ws://<ip>:<端口>/`。本机栈没有边缘、节点也不自报地址,靠这条回落就能跑。
 - 后三项只在 `kind: websocket` 下有效,写了却没选 websocket 会拒绝启动(否则等于悄悄测了 TCP)。
-- 实现上每条连接多一个本机回环监听和一跳回环 TCP(`muduoclient` 只会自己拨 TCP),适合冒烟与小规模,不要拿它打高并发压测。
-  代码在 `pkg/transport.go`。
+- 机器人直接在 WebSocket 上收发,一个客户端帧一条二进制消息,与 Unity 客户端相同;冒烟与压测都可以用。
+  连接是仓内的 `pkg/wire_conn.go`(由 `muduoclient` 的连接搬来,只把「怎么拨号」换成可注入的),传输选择在 `pkg/transport.go`。
 
 ## 模式
 

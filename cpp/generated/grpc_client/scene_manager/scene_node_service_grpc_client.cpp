@@ -29,6 +29,7 @@ namespace scene_node {
 #pragma region SceneNodeGrpcCreateScene
 namespace {
 void QueueLocalSceneNodeGrpcCreateSceneFailure(GrpcDone<::CreateSceneResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcCreateSceneGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendSceneNodeGrpcCreateSceneErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.CreateScene: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcCreateSceneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendSceneNodeGrpcCreateSceneErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::CreateSceneRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.CreateScene: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcCreateSceneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendSceneNodeGrpcCreateSceneErased(entt::registry& registry, entt::entity n
 #pragma region SceneNodeGrpcDestroyScene
 namespace {
 void QueueLocalSceneNodeGrpcDestroySceneFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcDestroySceneGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendSceneNodeGrpcDestroySceneErased(entt::registry& registry, entt::entity 
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.DestroyScene: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcDestroySceneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendSceneNodeGrpcDestroySceneErased(entt::registry& registry, entt::entity 
     const auto* typedRequest = dynamic_cast<const ::DestroySceneRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.DestroyScene: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcDestroySceneGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendSceneNodeGrpcDestroySceneErased(entt::registry& registry, entt::entity 
 #pragma region SceneNodeGrpcReleasePlayer
 namespace {
 void QueueLocalSceneNodeGrpcReleasePlayerFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcReleasePlayerGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendSceneNodeGrpcReleasePlayerErased(entt::registry& registry, entt::entity
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.ReleasePlayer: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcReleasePlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendSceneNodeGrpcReleasePlayerErased(entt::registry& registry, entt::entity
     const auto* typedRequest = dynamic_cast<const ::scene_node::ReleasePlayerRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.ReleasePlayer: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcReleasePlayerGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendSceneNodeGrpcReleasePlayerErased(entt::registry& registry, entt::entity
 #pragma region SceneNodeGrpcPrepareBattle
 namespace {
 void QueueLocalSceneNodeGrpcPrepareBattleFailure(GrpcDone<::PrepareBattleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcPrepareBattleGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendSceneNodeGrpcPrepareBattleErased(entt::registry& registry, entt::entity
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.PrepareBattle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcPrepareBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendSceneNodeGrpcPrepareBattleErased(entt::registry& registry, entt::entity
     const auto* typedRequest = dynamic_cast<const ::PrepareBattleRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.PrepareBattle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcPrepareBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -381,6 +393,7 @@ void SendSceneNodeGrpcPrepareBattleErased(entt::registry& registry, entt::entity
 #pragma region SceneNodeGrpcCancelBattlePrepare
 namespace {
 void QueueLocalSceneNodeGrpcCancelBattlePrepareFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcCancelBattlePrepareGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -448,6 +461,7 @@ void SendSceneNodeGrpcCancelBattlePrepareErased(entt::registry& registry, entt::
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.CancelBattlePrepare: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcCancelBattlePrepareGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -457,6 +471,7 @@ void SendSceneNodeGrpcCancelBattlePrepareErased(entt::registry& registry, entt::
     const auto* typedRequest = dynamic_cast<const ::CancelBattlePrepareRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.CancelBattlePrepare: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcCancelBattlePrepareGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -469,6 +484,7 @@ void SendSceneNodeGrpcCancelBattlePrepareErased(entt::registry& registry, entt::
 #pragma region SceneNodeGrpcSealAccountRoleTrade
 namespace {
 void QueueLocalSceneNodeGrpcSealAccountRoleTradeFailure(GrpcDone<::Empty> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcSealAccountRoleTradeGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -536,6 +552,7 @@ void SendSceneNodeGrpcSealAccountRoleTradeErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.SealAccountRoleTrade: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcSealAccountRoleTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -545,6 +562,7 @@ void SendSceneNodeGrpcSealAccountRoleTradeErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::SealAccountRoleTradeRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.SealAccountRoleTrade: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcSealAccountRoleTradeGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -557,6 +575,7 @@ void SendSceneNodeGrpcSealAccountRoleTradeErased(entt::registry& registry, entt:
 #pragma region SceneNodeGrpcAssetDebit
 namespace {
 void QueueLocalSceneNodeGrpcAssetDebitFailure(GrpcDone<::AssetOpResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetDebitGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -624,6 +643,7 @@ void SendSceneNodeGrpcAssetDebitErased(entt::registry& registry, entt::entity no
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetDebit: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetDebitGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -633,6 +653,7 @@ void SendSceneNodeGrpcAssetDebitErased(entt::registry& registry, entt::entity no
     const auto* typedRequest = dynamic_cast<const ::AssetOpRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetDebit: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetDebitGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -645,6 +666,7 @@ void SendSceneNodeGrpcAssetDebitErased(entt::registry& registry, entt::entity no
 #pragma region SceneNodeGrpcAssetAbortDebit
 namespace {
 void QueueLocalSceneNodeGrpcAssetAbortDebitFailure(GrpcDone<::AssetOpResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetAbortDebitGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -712,6 +734,7 @@ void SendSceneNodeGrpcAssetAbortDebitErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetAbortDebit: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetAbortDebitGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -721,6 +744,7 @@ void SendSceneNodeGrpcAssetAbortDebitErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::AssetOpRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetAbortDebit: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetAbortDebitGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -733,6 +757,7 @@ void SendSceneNodeGrpcAssetAbortDebitErased(entt::registry& registry, entt::enti
 #pragma region SceneNodeGrpcAssetCredit
 namespace {
 void QueueLocalSceneNodeGrpcAssetCreditFailure(GrpcDone<::AssetOpResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetCreditGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -800,6 +825,7 @@ void SendSceneNodeGrpcAssetCreditErased(entt::registry& registry, entt::entity n
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetCredit: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetCreditGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -809,6 +835,7 @@ void SendSceneNodeGrpcAssetCreditErased(entt::registry& registry, entt::entity n
     const auto* typedRequest = dynamic_cast<const ::AssetOpRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetCredit: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetCreditGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -821,6 +848,7 @@ void SendSceneNodeGrpcAssetCreditErased(entt::registry& registry, entt::entity n
 #pragma region SceneNodeGrpcAssetAckReceipt
 namespace {
 void QueueLocalSceneNodeGrpcAssetAckReceiptFailure(GrpcDone<::AssetOpResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetAckReceiptGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -888,6 +916,7 @@ void SendSceneNodeGrpcAssetAckReceiptErased(entt::registry& registry, entt::enti
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetAckReceipt: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetAckReceiptGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -897,6 +926,7 @@ void SendSceneNodeGrpcAssetAckReceiptErased(entt::registry& registry, entt::enti
     const auto* typedRequest = dynamic_cast<const ::AssetOpRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.AssetAckReceipt: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcAssetAckReceiptGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -909,6 +939,7 @@ void SendSceneNodeGrpcAssetAckReceiptErased(entt::registry& registry, entt::enti
 #pragma region SceneNodeGrpcGmExecutePlayerCommand
 namespace {
 void QueueLocalSceneNodeGrpcGmExecutePlayerCommandFailure(GrpcDone<::scene_node::GmExecutePlayerCommandResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kSceneNodeGrpcGmExecutePlayerCommandGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -976,6 +1007,7 @@ void SendSceneNodeGrpcGmExecutePlayerCommandErased(entt::registry& registry, ent
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC SceneNodeGrpc.GmExecutePlayerCommand: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcGmExecutePlayerCommandGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -985,6 +1017,7 @@ void SendSceneNodeGrpcGmExecutePlayerCommandErased(entt::registry& registry, ent
     const auto* typedRequest = dynamic_cast<const ::scene_node::GmExecutePlayerCommandRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC SceneNodeGrpc.GmExecutePlayerCommand: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kSceneNodeGrpcGmExecutePlayerCommandGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });

@@ -293,65 +293,8 @@ TEST(ConnectionAdmissionPolicy, PreAuthBudgetResolvesFromTheGateEnvNames)
 	EXPECT_NE(error.find(kPreAuthBudgetEnv), std::string::npos) << error;
 }
 
-// 来源前缀:IPv4 按 /24、IPv6 按 /64 聚合;IPv4 映射地址按 IPv4 算;IPv6 前缀与数值相同的 IPv4 前缀不是同一个来源。
-TEST(ConnectionAdmissionPolicy, SourcePrefixesAggregateIpv4Slash24AndIpv6Slash64)
-{
-	EXPECT_EQ(SourcePrefixOfIpv4(0xC0A80101), SourcePrefixOfIpv4(0xC0A801FE)) << "192.168.1.1 与 192.168.1.254 同一个 /24";
-	EXPECT_NE(SourcePrefixOfIpv4(0xC0A80101), SourcePrefixOfIpv4(0xC0A80201));
-
-	const std::array<uint8_t, 16> host{0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x01, 1, 2, 3, 4, 5, 6, 7, 8};
-	std::array<uint8_t, 16> sameSlash64 = host;
-	sameSlash64[8] = 0xFF;
-	sameSlash64[15] = 0x09;
-	std::array<uint8_t, 16> otherSlash64 = host;
-	otherSlash64[7] = 0x02;
-	EXPECT_EQ(SourcePrefixOfIpv6(host), SourcePrefixOfIpv6(sameSlash64)) << "接口标识不同、/64 相同";
-	EXPECT_NE(SourcePrefixOfIpv6(host), SourcePrefixOfIpv6(otherSlash64));
-
-	const std::array<uint8_t, 16> mapped{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 192, 168, 1, 7};
-	EXPECT_EQ(SourcePrefixOfIpv6(mapped), SourcePrefixOfIpv4(0xC0A80101));
-	EXPECT_NE((SourcePrefix{true, 0xC0A801}), (SourcePrefix{false, 0xC0A801}));
-	EXPECT_NE(SourcePrefixHash{}(SourcePrefix{true, 0xC0A801}), SourcePrefixHash{}(SourcePrefix{false, 0xC0A801}));
-
-	// 从 muduo 的地址取前缀:与按字节算的同一个。
-	EXPECT_EQ(SourcePrefixOf(muduo::net::InetAddress("192.168.1.9", 40000)), SourcePrefixOfIpv4(0xC0A80109));
-	EXPECT_EQ(SourcePrefixOf(muduo::net::InetAddress("2001:db8:0:1::5", 40000, true)), SourcePrefixOfIpv6(host));
-}
-
-// 每个前缀一个桶:只问不扣;一个前缀用完不影响别的前缀;按持续速率回满。
-TEST(SourceRateGate, EachPrefixHasItsOwnBucketAndAskingDoesNotSpend)
-{
-	SourceRateGate gate(RateLimit{1, 2});
-	const SourcePrefix a = SourcePrefixOfIpv4(0x0A000001);
-	const SourcePrefix b = SourcePrefixOfIpv4(0x0A000101);
-	EXPECT_TRUE(gate.WouldAdmit(a, kT0));
-	EXPECT_TRUE(gate.WouldAdmit(a, kT0)) << "只问不扣";
-	EXPECT_EQ(gate.Tracked(), 0u);
-	EXPECT_TRUE(gate.Take(a, kT0));
-	EXPECT_TRUE(gate.Take(a, kT0));
-	EXPECT_FALSE(gate.WouldAdmit(a, kT0)) << "桶深 2 用完";
-	EXPECT_TRUE(gate.WouldAdmit(b, kT0)) << "别的前缀不受影响";
-	EXPECT_FALSE(gate.WouldAdmit(a, kT0 + milliseconds(999)));
-	EXPECT_TRUE(gate.WouldAdmit(a, kT0 + seconds(1))) << "每秒回一个";
-	EXPECT_EQ(gate.Tracked(), 1u);
-}
-
-// 前缀表满:新前缀照样放行但不登记(fail-open);表满时先清掉桶已回满的前缀,每秒最多清一次。
-TEST(SourceRateGate, AFullTableAdmitsNewPrefixesUntrackedAndPrunesRefilledOnes)
-{
-	SourceRateGate gate(RateLimit{1, 1}, 2);
-	const auto prefix = [](const uint32_t index) { return SourcePrefixOfIpv4(index << 8); };
-	EXPECT_TRUE(gate.Take(prefix(1), kT0));
-	EXPECT_TRUE(gate.Take(prefix(2), kT0));
-	EXPECT_TRUE(gate.WouldAdmit(prefix(3), kT0)) << "没登记过的前缀放行";
-	EXPECT_FALSE(gate.Take(prefix(3), kT0)) << "表满、两个桶都还没回满:不登记";
-	EXPECT_EQ(gate.Tracked(), 2u);
-	// 1 秒后两个桶都回满了:清掉它们,给新前缀腾位置。
-	EXPECT_TRUE(gate.Take(prefix(3), kT0 + seconds(1)));
-	EXPECT_EQ(gate.Tracked(), 1u);
-}
-
 // 按来源限速缺省关闭,设了速率才开;桶深缺省是速率 × 握手期限;推荐值是全局缺省持续速率的 1/10。
+// 前缀聚合、只限公网来源与前缀表的用例在 core 的 accept_admission_test.cpp;这里核 gate 的转发口带 GATE_* 变量名。
 TEST(ConnectionAdmissionPolicy, PerSourceLimitingIsOffUnlessItsRateIsSet)
 {
 	std::optional<RateLimit> limit = RateLimit{1, 1};
@@ -708,7 +651,8 @@ TEST_F(ConnectionAdmission, PerSourceLimitingAppliesOnlyUnderPressure)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000}, DefaultPreAuthBudget(10000), RateLimit{1, 2});
 	ASSERT_EQ(CurrentSourceRateLimit(), (RateLimit{1, 2}));
-	const muduo::net::InetAddress first("10.1.2.3", 40000);
+	// 文档用的公网段(203.0.113.0/24、198.51.100.0/24):只有公网来源按来源限速。
+	const muduo::net::InetAddress first("203.0.113.3", 40000);
 	for (int i = 0; i < 50; ++i)
 	{
 		EXPECT_TRUE(AdmitConnection(first, kT0)) << "不承压:不按来源限速";
@@ -719,19 +663,37 @@ TEST_F(ConnectionAdmission, PerSourceLimitingAppliesOnlyUnderPressure)
 	OpenUnverifiedRange(1, CurrentPreAuthBudget().earlyDropStart, kT0);
 	MarkLoopHealthy(kT0);
 	EXPECT_TRUE(AdmitConnection(first, kT0));
-	EXPECT_TRUE(AdmitConnection(muduo::net::InetAddress("10.1.2.200", 40000), kT0));
-	EXPECT_FALSE(AdmitConnection(muduo::net::InetAddress("10.1.2.99", 40000), kT0)) << "这个 /24 的桶深 2 用完";
+	EXPECT_TRUE(AdmitConnection(muduo::net::InetAddress("203.0.113.200", 40000), kT0));
+	EXPECT_FALSE(AdmitConnection(muduo::net::InetAddress("203.0.113.99", 40000), kT0)) << "这个 /24 的桶深 2 用完";
 	EXPECT_EQ(Rejected(RejectReason::kSourceRate), 1u);
-	EXPECT_TRUE(AdmitConnection(muduo::net::InetAddress("10.1.3.1", 40000), kT0)) << "别的前缀照常";
+	EXPECT_TRUE(AdmitConnection(muduo::net::InetAddress("198.51.100.1", 40000), kT0)) << "别的前缀照常";
 	EXPECT_TRUE(AdmitConnection(first, kT0 + seconds(1))) << "每秒回一个";
 	EXPECT_EQ(GetCounters().sourceUntracked, 0u);
+}
+
+// 承压时私网来源也不按来源限速:经代理 / LB / 边缘 nginx 进来的连接在 accept 时只看得到前面那一跳的内网地址,
+// 按它限速等于把后面所有玩家当成一个来源(core accept_admission.h IsPublicSourcePrefix)。
+TEST_F(ConnectionAdmission, PerSourceLimitingSkipsNonPublicSources)
+{
+	Configure(10000, RateLimit{1'000'000, 1'000'000}, DefaultPreAuthBudget(10000), RateLimit{1, 1});
+	OpenUnverifiedRange(1, CurrentPreAuthBudget().earlyDropStart, kT0);
+	MarkLoopHealthy(kT0);
+	const muduo::net::InetAddress edgeProxy("10.244.1.17", 40000);
+	for (int i = 0; i < 20; ++i)
+	{
+		EXPECT_TRUE(AdmitConnection(edgeProxy, kT0)) << "承压,但私网来源不按来源限速";
+	}
+	EXPECT_EQ(Rejected(RejectReason::kSourceRate), 0u);
+	EXPECT_TRUE(AdmitConnection(muduo::net::InetAddress("203.0.113.3", 40000), kT0));
+	EXPECT_FALSE(AdmitConnection(muduo::net::InetAddress("203.0.113.4", 40000), kT0)) << "公网来源照常限";
+	EXPECT_EQ(Rejected(RejectReason::kSourceRate), 1u);
 }
 
 // 全局速率闸拒过连接也算承压:之后一个握手期限内按来源限速,超速的前缀在速率闸之前就被拦下、不消耗全局名额。
 TEST_F(ConnectionAdmission, AGlobalRateRejectionEngagesPerSourceLimitingForOneHandshakeDeadline)
 {
 	Configure(10000, RateLimit{1, 1}, DefaultPreAuthBudget(10000), RateLimit{1, 1});
-	const muduo::net::InetAddress source("10.9.9.9", 40000);
+	const muduo::net::InetAddress source("198.51.100.9", 40000);
 	EXPECT_TRUE(AdmitConnection(source, kT0)) << "不承压,用掉速率闸唯一的名额";
 	EXPECT_FALSE(AdmitConnection(source, kT0));
 	EXPECT_EQ(Rejected(RejectReason::kAcceptRate), 1u) << "速率闸拒了:从这一刻起承压";

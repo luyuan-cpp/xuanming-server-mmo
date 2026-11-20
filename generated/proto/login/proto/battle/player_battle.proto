@@ -188,6 +188,9 @@ message BattleAssignedS2C {
   bytes token_signature = 5;   // 原样放进 BattleTokenVerifyRequest.signature
   uint64 expire_at_ms = 6;     // 票据 / 房间作废期限(Unix 毫秒)
   eBattleTicketRole role = 7;
+  // 同一台 battle 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url):小游戏客户端连它,原生客户端仍连 host / port;
+  // 空串 = 这台 battle 不接小游戏(docs/design/minigame-websocket-gate.md W7、W9)。
+  string ws_url = 8;
 }
 
 // 客户端丢票(冷启动 / 换设备)时经大厅通道补签(D25)。请求 / 响应由 MatchService.RequestBattleTicket

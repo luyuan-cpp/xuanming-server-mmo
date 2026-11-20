@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -142,7 +143,7 @@ func (g *Google) token(ctx context.Context) (string, error) {
 		return "", err
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	response, err := g.cfg.HTTP.Do(request)
+	response, err := send(g.cfg.HTTP, request)
 	if err != nil {
 		return "", err
 	}
@@ -179,7 +180,7 @@ func (g *Google) api(ctx context.Context, method, path string, body []byte) (int
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := g.cfg.HTTP.Do(request)
+	response, err := send(g.cfg.HTTP, request)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -335,7 +336,10 @@ func (g *Google) verifyPushToken(ctx context.Context, authorization string) erro
 	}
 	key, err := g.certKey(ctx, header.Kid)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errGoogleCerts, err)
+	}
+	if key == nil {
+		return errors.New("payment channel: google push token is signed by an unknown key")
 	}
 	if err := verifyRS256(key, parts.signingInput, parts.signature); err != nil {
 		return err
@@ -363,7 +367,12 @@ func (g *Google) verifyPushToken(ctx context.Context, authorization string) erro
 	return nil
 }
 
+// errGoogleCerts:取不到 Google 的 OIDC 验签公钥(传输失败、非 200、读不懂)。这是「验不了」而不是「验不过」,
+// ParseNotification 原样报出去,不算成 ErrBadSignature。
+var errGoogleCerts = errors.New("payment channel: google OIDC certificates are unavailable")
+
 // certKey 取 Google 的 OIDC 签名公钥。缓存一小时;遇到不认识的 kid 立即重拉一次(Google 会轮换密钥)。
+// 重拉之后仍然没有这个 kid 的回 nil(不算错):令牌不是 Google 现在的密钥签的。
 func (g *Google) certKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	g.certsMu.Lock()
 	defer g.certsMu.Unlock()
@@ -374,7 +383,7 @@ func (g *Google) certKey(ctx context.Context, kid string) (*rsa.PublicKey, error
 	if err != nil {
 		return nil, err
 	}
-	response, err := g.cfg.HTTP.Do(request)
+	response, err := send(g.cfg.HTTP, request)
 	if err != nil {
 		return nil, err
 	}
@@ -415,11 +424,7 @@ func (g *Google) certKey(ctx context.Context, kid string) (*rsa.PublicKey, error
 		keys[k.Kid] = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: exponent}
 	}
 	g.certs, g.certsExpiry = keys, g.cfg.Now().Add(time.Hour)
-	key, ok := keys[kid]
-	if !ok {
-		return nil, errors.New("payment channel: google push token is signed by an unknown key")
-	}
-	return key, nil
+	return keys[kid], nil
 }
 
 // googleNotification 是 DeveloperNotification 里本服务用到的部分。
@@ -441,6 +446,9 @@ type googleNotification struct {
 
 func (g *Google) ParseNotification(r *http.Request, body []byte) (Notification, error) {
 	if err := g.verifyPushToken(r.Context(), r.Header.Get("Authorization")); err != nil {
+		if errors.Is(err, errGoogleCerts) {
+			return Notification{}, err // 验不了不等于验不过:回调入口记日志并回失败,Pub/Sub 会重投
+		}
 		return Notification{}, ErrBadSignature
 	}
 	var envelope struct {

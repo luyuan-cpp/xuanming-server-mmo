@@ -504,6 +504,28 @@ TEST_F(BuffDurationTest, PositiveDurationWithoutInfiniteFlag_StillArmsExpiryTime
 	BuffSystem::RemoveBuff(actor, id);
 }
 
+// 同一施法者再施加同一条是刷新:不另起一条,剩余时长回到表里的整时长(重挂满时,与回合引擎同一口径)。
+// 没有 EventLoop 时定时器不挂,到期时刻照样在同一处更新。
+TEST_F(BuffDurationTest, ReapplyingRefreshesTheExpiryToTheFullDuration)
+{
+	const auto actor = tlsEcs.actorRegistry.create();
+	const auto caster = tlsEcs.actorRegistry.create();
+	const auto [first, id] = BuffSystem::AddOrUpdateBuff(actor, kFiniteDuration, ContextFromCaster(caster));
+	ASSERT_EQ(kSuccess, first);
+	ASSERT_NE(UINT64_MAX, id);
+	auto& entry = tlsEcs.actorRegistry.get<BuffListComp>(actor).at(id);
+	entry.expireAtMs = 1; // 当作快到期了
+
+	const uint64_t before = TimeSystem::NowMillisecondsUTC();
+	const auto [again, newId] = BuffSystem::AddOrUpdateBuff(actor, kFiniteDuration, ContextFromCaster(caster));
+	const uint64_t after = TimeSystem::NowMillisecondsUTC();
+	EXPECT_EQ(kSuccess, again);
+	EXPECT_EQ(UINT64_MAX, newId) << "刷新,不另起一条";
+	EXPECT_EQ(1u, tlsEcs.actorRegistry.get<BuffListComp>(actor).size());
+	EXPECT_GE(entry.expireAtMs, before + 60000);
+	EXPECT_LE(entry.expireAtMs, after + 60000);
+}
+
 class BuffCombatIdleTest : public BuffTableFixture {};
 
 TEST_F(BuffCombatIdleTest, NewlyAddedBuff_DoesNotGrantBeforeIdleWindow)
@@ -909,16 +931,14 @@ TEST_F(BuffKeepOnLogoutTest, KeptSubBuffIsLeftToItsOwner)
 	EXPECT_EQ(0, out.size());
 }
 
-// 恢复按存档的到期时刻接着走(不是从头再算一个整时长),层数夹到 [1, max_layer],没有施法者,暂存组件摘掉;
-// 有 EventLoop 时有时限的挂到期定时器,永久的不挂。
+// 恢复按存档的到期时刻接着走(不是从头再算一个整时长),到期时刻与存档里的一字不差(重建多少次都不漂移),
+// 层数夹到 [1, max_layer],没有施法者,暂存组件摘掉;有 EventLoop 时有时限的挂到期定时器,永久的不挂。
 TEST_F(BuffKeepOnLogoutTest, RestoreContinuesFromSavedExpiryWithClampedLayer)
 {
 	muduo::net::EventLoop loop;
 	const auto actor = tlsEcs.actorRegistry.create();
-	const uint64_t before = TimeSystem::NowMillisecondsUTC();
-	const uint64_t expireAt = before + 120000;
+	const uint64_t expireAt = TimeSystem::NowMillisecondsUTC() + 120000;
 	Restore(actor, {Saved(kKeptTimed, 5, expireAt), Saved(kKeptPermanent, 0, 0)});
-	const uint64_t after = TimeSystem::NowMillisecondsUTC();
 
 	EXPECT_FALSE(tlsEcs.actorRegistry.any_of<SavedBuffsPendingComp>(actor));
 	ASSERT_EQ(2u, tlsEcs.actorRegistry.get<BuffListComp>(actor).size());
@@ -926,8 +946,7 @@ TEST_F(BuffKeepOnLogoutTest, RestoreContinuesFromSavedExpiryWithClampedLayer)
 	ASSERT_NE(nullptr, timed);
 	EXPECT_EQ(3u, timed->buffPb.layer());
 	EXPECT_EQ(kNoBuffCaster, timed->buffPb.caster());
-	EXPECT_GE(timed->expireAtMs, expireAt);
-	EXPECT_LE(timed->expireAtMs, expireAt + (after - before));
+	EXPECT_EQ(expireAt, timed->expireAtMs);
 	EXPECT_TRUE(timed->expireTimerTaskComp.IsActive());
 	const auto* permanent = FindByTable(actor, kKeptPermanent);
 	ASSERT_NE(nullptr, permanent);
@@ -937,12 +956,12 @@ TEST_F(BuffKeepOnLogoutTest, RestoreContinuesFromSavedExpiryWithClampedLayer)
 	tlsEcs.actorRegistry.clear(); // 定时器要在 loop 析构之前取消
 }
 
-// 按加载时的表裁剪:到期的、表里没有的、表改成不保留的丢弃(全丢时不挂空表);
+// 按加载时的表裁剪:到期的(查不到行的也一样按自己的到期时刻判)、表改成不保留的丢弃,全丢时不挂空表、暂存组件摘掉;
 // 剩余时长不超过表里的整时长;存档时永久、表改成有时限的从现在起算一个整时长。
 TEST_F(BuffKeepOnLogoutTest, RestoreTrimsByTheTableAtLoadTime)
 {
 	const auto dropped = tlsEcs.actorRegistry.create();
-	Restore(dropped, {Saved(kKeptTimed, 1, 1), Saved(123456, 1, 0), Saved(kFiniteDuration, 1, 0)});
+	Restore(dropped, {Saved(kKeptTimed, 1, 1), Saved(123456, 1, 1), Saved(kFiniteDuration, 1, 0)});
 	EXPECT_FALSE((tlsEcs.actorRegistry.any_of<BuffListComp, SavedBuffsPendingComp>(dropped)));
 
 	const auto capped = tlsEcs.actorRegistry.create();
@@ -958,6 +977,29 @@ TEST_F(BuffKeepOnLogoutTest, RestoreTrimsByTheTableAtLoadTime)
 		EXPECT_GE(entry->expireAtMs, before + kKeptTimedDurationMs);
 		EXPECT_LE(entry->expireAtMs, after + kKeptTimedDurationMs);
 	}
+}
+
+// 本节点表里查不到行(更新版本加的行,或这里还没热更到)的条目不生效,留在暂存组件上,存盘原样写回(连未知字段),
+// 认识的行照常恢复。丢掉它的话,玩家回到新版本节点时这个 Buff 就永远没了(混版本保护 P1)。
+TEST_F(BuffKeepOnLogoutTest, RestoreCarriesRecordsOfRowsThisNodeDoesNotKnow)
+{
+	constexpr uint32_t kNewerRow = 123456;
+	auto newer = Saved(kNewerRow, 2, 0);
+	newer.GetReflection()->MutableUnknownFields(&newer)->AddVarint(412348, 9);
+	const auto actor = tlsEcs.actorRegistry.create();
+	Restore(actor, {newer, Saved(kKeptPermanent, 1, 0)});
+
+	EXPECT_NE(nullptr, FindByTable(actor, kKeptPermanent));
+	EXPECT_EQ(nullptr, FindByTable(actor, kNewerRow));
+	const auto* pending = tlsEcs.actorRegistry.try_get<SavedBuffsPendingComp>(actor);
+	ASSERT_NE(nullptr, pending);
+	ASSERT_EQ(1, pending->buffs.size());
+
+	google::protobuf::RepeatedPtrField<SavedBuffComp> out;
+	ASSERT_TRUE(BuffSystem::SaveKeptBuffs(actor, out));
+	ASSERT_EQ(2, out.size());
+	EXPECT_EQ(newer.SerializeAsString(), out[0].SerializeAsString());
+	EXPECT_EQ(kKeptPermanent, out[1].buff_table_id());
 }
 
 // 恢复不重跑准入:正常施加会被免疫挡住的组合,存档里两条都活着,恢复后两条都在。

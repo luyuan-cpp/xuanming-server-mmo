@@ -28,4 +28,22 @@ NodeId GetGateNodeId(SessionId session_id);
 // Scene only talks to same-zone Gates (cross-zone flows are redirected at the
 // SceneManager layer), so (self_zone, node_id) is a valid composite key here.
 // Returns std::nullopt if no matching Gate has been discovered locally.
+//
+// 只认 node_id:同一 node_id 短暂有两个 gate 进程、两者在本节点上都有实体时,取到的是第一个匹配的那个。
+// 知道会话所在的 gate 进程时用下面的 ResolveSessionGateEntity / ResolvePlayerGateEntity。
 std::optional<entt::entity> ResolveLocalZoneGateEntity(SessionId sessionId);
+
+// 会话所在 gate 的实体。gateInstanceId 是这条会话所在的 gate 进程(会话绑定时记下的入站连接握手身份,
+// PlayerLoginIdentityComp::gateInstanceId;改派票据抄下的是同一个值):非空时只按它找(NodeUtils::FindNodeEntityByUuid),
+// 找不到返回空、不退回按 node_id —— 同一 node_id 上的另一个进程没有这条会话,推过去要么推不到,要么推给同号的另一名玩家
+// (docs/design/scene-enter-chain-residuals.md §14.6)。空 = 未知,按会话号里的 node_id 找(ResolveLocalZoneGateEntity)。
+std::optional<entt::entity> ResolveSessionGateEntity(SessionId sessionId, const std::string &gateInstanceId);
+
+// 玩家实体这条会话(sessionId,通常取自 PlayerSessionSnapshotComp)所在 gate 的实体:身份组件(PlayerLoginIdentityComp)
+// 记的会话就是这一条时按它记下的实例找,否则按 node_id(同 ResolveSessionGateEntity)。按玩家推送一律走这里。
+std::optional<entt::entity> ResolvePlayerGateEntity(entt::entity player, SessionId sessionId);
+
+// 玩家这条会话所在 gate 进程的实例 uuid,给 scene 自发的请求填 gate_instance_id(EnterSceneRequest、改派票据、战斗路由;
+// 下游用它做 Kafka 目标校验):身份组件记的会话就是这一条且实例已知时用记下的实例(那个进程此刻不在本节点上也照用,由下游
+// 按实例裁决,不换成同一 node_id 上的另一个进程);否则取按 node_id 找到的 gate 的 uuid;都没有返回空串。
+std::string BoundGateInstanceId(entt::entity player, SessionId sessionId);

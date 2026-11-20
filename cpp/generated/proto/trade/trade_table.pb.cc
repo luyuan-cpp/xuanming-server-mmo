@@ -2283,11 +2283,11 @@ constexpr TradeCommerceLeg::ParseTableT_ TradeCommerceLeg::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      9,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2297,10 +2297,7 @@ constexpr TradeCommerceLeg::ParseTableT_ TradeCommerceLeg::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::trade::TradeCommerceLeg>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string superseded_by = 8;
-      {::_pbi::TcParser::FastUS1,
-       {66, 1, 0,
-        PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.superseded_by_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string role = 1;
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -2329,6 +2326,20 @@ constexpr TradeCommerceLeg::ParseTableT_ TradeCommerceLeg::InternalGenerateParse
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeCommerceLeg, _impl_.outcome_), 7>(),
        {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.outcome_)}},
+      // string superseded_by = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.superseded_by_)}},
+      // uint64 escrow_owner_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceLeg, _impl_.escrow_owner_id_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.escrow_owner_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2348,6 +2359,8 @@ constexpr TradeCommerceLeg::ParseTableT_ TradeCommerceLeg::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.outcome_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string superseded_by = 8;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.superseded_by_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 escrow_owner_id = 9;
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.escrow_owner_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2386,7 +2399,8 @@ inline constexpr TradeCommerceLeg::Impl_::Impl_(
         player_id_{::uint64_t{0u}},
         op_id_{::uint64_t{0u}},
         stream_{0u},
-        outcome_{0u} {}
+        outcome_{0u},
+        escrow_owner_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr TradeCommerceLeg::TradeCommerceLeg(::_pbi::ConstantInitialized,
@@ -3503,7 +3517,7 @@ const ::uint32_t
         15,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_.role_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_.stream_),
@@ -3512,6 +3526,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_.snapshot_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_.outcome_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_.superseded_by_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceLeg, _impl_.escrow_owner_id_),
         0,
         4,
         6,
@@ -3520,6 +3535,7 @@ const ::uint32_t
         3,
         7,
         1,
+        8,
 };
 
 static const ::_pbi::MigrationSchema
@@ -3677,33 +3693,34 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABS
     "\031\n\021client_request_id\030\016 \001(\t\0225\n\022registered"
     "_listing\030\017 \001(\0132\031.trade.RmbConsignmentVie"
     "w\022\027\n\017delivery_digest\030\020 \001(\014\022\034\n\024buyer_owne"
-    "r_revision\030\021 \001(\004\"\272\001\n\020TradeCommerceLeg\022\014\n"
+    "r_revision\030\021 \001(\004\"\323\001\n\020TradeCommerceLeg\022\014\n"
     "\004role\030\001 \001(\t\022\021\n\tplayer_id\030\002 \001(\004\022\016\n\006stream"
     "\030\003 \001(\r\022\034\n\006bundle\030\004 \001(\0132\014.AssetBundle\022\r\n\005"
     "op_id\030\005 \001(\004\022 \n\010snapshot\030\006 \001(\0132\016.AssetSna"
     "pshot\022\017\n\007outcome\030\007 \001(\r\022\025\n\rsuperseded_by\030"
-    "\010 \001(\t*\373\001\n\rListingStatus\022\036\n\032LISTING_STATU"
-    "S_UNSPECIFIED\020\000\022\034\n\030LISTING_STATUS_ESCROW"
-    "ING\020\001\022\031\n\025LISTING_STATUS_LISTED\020\002\022\031\n\025LIST"
-    "ING_STATUS_LOCKED\020\003\022\027\n\023LISTING_STATUS_SO"
-    "LD\020\004\022\034\n\030LISTING_STATUS_RETURNING\020\005\022\033\n\027LI"
-    "STING_STATUS_RETURNED\020\006\022\"\n\036LISTING_STATU"
-    "S_ESCROW_REJECTED\020\007*\254\001\n\020TradeAssetOpKind"
-    "\022#\n\037TRADE_ASSET_OP_KIND_UNSPECIFIED\020\000\022$\n"
-    " TRADE_ASSET_OP_KIND_ESCROW_DEBIT\020\001\022&\n\"T"
-    "RADE_ASSET_OP_KIND_DELIVER_CREDIT\020\002\022%\n!T"
-    "RADE_ASSET_OP_KIND_RETURN_CREDIT\020\003*\230\002\n\022T"
-    "radeAssetOpStatus\022%\n!TRADE_ASSET_OP_STAT"
-    "US_UNSPECIFIED\020\000\022!\n\035TRADE_ASSET_OP_STATU"
-    "S_PENDING\020\001\022!\n\035TRADE_ASSET_OP_STATUS_APP"
-    "LIED\020\002\022\"\n\036TRADE_ASSET_OP_STATUS_REJECTED"
-    "\020\003\022!\n\035TRADE_ASSET_OP_STATUS_ABORTED\020\004\022)\n"
-    "%TRADE_ASSET_OP_STATUS_APPLIED_PARTIAL\020\005"
-    "\022#\n\037TRADE_ASSET_OP_STATUS_ABANDONED\020\006*\206\001"
-    "\n\023TradeAssetOpRefKind\022\'\n#TRADE_ASSET_OP_"
-    "REF_KIND_UNSPECIFIED\020\000\022#\n\037TRADE_ASSET_OP"
-    "_REF_KIND_LISTING\020\001\022!\n\035TRADE_ASSET_OP_RE"
-    "F_KIND_ORDER\020\002B\007Z\005tradeb\006proto3"
+    "\010 \001(\t\022\027\n\017escrow_owner_id\030\t \001(\004*\373\001\n\rListi"
+    "ngStatus\022\036\n\032LISTING_STATUS_UNSPECIFIED\020\000"
+    "\022\034\n\030LISTING_STATUS_ESCROWING\020\001\022\031\n\025LISTIN"
+    "G_STATUS_LISTED\020\002\022\031\n\025LISTING_STATUS_LOCK"
+    "ED\020\003\022\027\n\023LISTING_STATUS_SOLD\020\004\022\034\n\030LISTING"
+    "_STATUS_RETURNING\020\005\022\033\n\027LISTING_STATUS_RE"
+    "TURNED\020\006\022\"\n\036LISTING_STATUS_ESCROW_REJECT"
+    "ED\020\007*\254\001\n\020TradeAssetOpKind\022#\n\037TRADE_ASSET"
+    "_OP_KIND_UNSPECIFIED\020\000\022$\n TRADE_ASSET_OP"
+    "_KIND_ESCROW_DEBIT\020\001\022&\n\"TRADE_ASSET_OP_K"
+    "IND_DELIVER_CREDIT\020\002\022%\n!TRADE_ASSET_OP_K"
+    "IND_RETURN_CREDIT\020\003*\230\002\n\022TradeAssetOpStat"
+    "us\022%\n!TRADE_ASSET_OP_STATUS_UNSPECIFIED\020"
+    "\000\022!\n\035TRADE_ASSET_OP_STATUS_PENDING\020\001\022!\n\035"
+    "TRADE_ASSET_OP_STATUS_APPLIED\020\002\022\"\n\036TRADE"
+    "_ASSET_OP_STATUS_REJECTED\020\003\022!\n\035TRADE_ASS"
+    "ET_OP_STATUS_ABORTED\020\004\022)\n%TRADE_ASSET_OP"
+    "_STATUS_APPLIED_PARTIAL\020\005\022#\n\037TRADE_ASSET"
+    "_OP_STATUS_ABANDONED\020\006*\206\001\n\023TradeAssetOpR"
+    "efKind\022\'\n#TRADE_ASSET_OP_REF_KIND_UNSPEC"
+    "IFIED\020\000\022#\n\037TRADE_ASSET_OP_REF_KIND_LISTI"
+    "NG\020\001\022!\n\035TRADE_ASSET_OP_REF_KIND_ORDER\020\002B"
+    "\007Z\005tradeb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_deps[4] = {
@@ -3716,7 +3733,7 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto = {
     false,
     false,
-    5911,
+    5936,
     descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto,
     "proto/trade/trade_table.proto",
     &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_once,
@@ -9968,9 +9985,9 @@ TradeCommerceLeg::TradeCommerceLeg(
                offsetof(Impl_, player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, player_id_),
-           offsetof(Impl_, outcome_) -
+           offsetof(Impl_, escrow_owner_id_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::outcome_));
+               sizeof(Impl_::escrow_owner_id_));
 
   // @@protoc_insertion_point(copy_constructor:trade.TradeCommerceLeg)
 }
@@ -9986,9 +10003,9 @@ inline void TradeCommerceLeg::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, bundle_),
            0,
-           offsetof(Impl_, outcome_) -
+           offsetof(Impl_, escrow_owner_id_) -
                offsetof(Impl_, bundle_) +
-               sizeof(Impl_::outcome_));
+               sizeof(Impl_::escrow_owner_id_));
 }
 TradeCommerceLeg::~TradeCommerceLeg() {
   // @@protoc_insertion_point(destructor:trade.TradeCommerceLeg)
@@ -10063,6 +10080,7 @@ PROTOBUF_NOINLINE void TradeCommerceLeg::Clear() {
         reinterpret_cast<char*>(&_impl_.outcome_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.outcome_));
   }
+  _impl_.escrow_owner_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -10156,6 +10174,15 @@ PROTOBUF_NOINLINE void TradeCommerceLeg::Clear() {
     }
   }
 
+  // uint64 escrow_owner_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_escrow_owner_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_escrow_owner_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -10235,6 +10262,15 @@ PROTOBUF_NOINLINE void TradeCommerceLeg::Clear() {
       }
     }
   }
+   {
+    // uint64 escrow_owner_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_escrow_owner_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_escrow_owner_id());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -10309,6 +10345,11 @@ void TradeCommerceLeg::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_escrow_owner_id() != 0) {
+      _this->_impl_.escrow_owner_id_ = from._impl_.escrow_owner_id_;
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -10331,8 +10372,8 @@ void TradeCommerceLeg::InternalSwap(TradeCommerceLeg* PROTOBUF_RESTRICT PROTOBUF
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.role_, &other->_impl_.role_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.superseded_by_, &other->_impl_.superseded_by_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.outcome_)
-      + sizeof(TradeCommerceLeg::_impl_.outcome_)
+      PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.escrow_owner_id_)
+      + sizeof(TradeCommerceLeg::_impl_.escrow_owner_id_)
       - PROTOBUF_FIELD_OFFSET(TradeCommerceLeg, _impl_.bundle_)>(
           reinterpret_cast<char*>(&_impl_.bundle_),
           reinterpret_cast<char*>(&other->_impl_.bundle_));

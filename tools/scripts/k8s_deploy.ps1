@@ -336,6 +336,19 @@ param(
 	# 区分大小写:C++ 只认小写,其余值按 enforce 处理;ValidateSet 缺省不分大小写,所以 IgnoreCase = $false,大写或拼错在入口就拒。
 	[ValidateSet("enforce", "warn", IgnoreCase = $false)]
 	[string]$NodeOpenFileLimitMode = "",
+	# 客户端面连接准入的覆盖变量(gate 大厅连接与 battle 直连;docs/ops/gate-kernel-tuning-runbook.md §3.2、§3.3),逗号分隔的「名字=值」,
+	# 如 -ConnectionAdmissionEnv GATE_ACCEPT_RATE_PER_SECOND=2000,GATE_ACCEPT_BURST=20000。
+	#   名字只收 lib 契约的两组名单(区分大小写):GATE_ACCEPT_RATE_PER_SECOND / GATE_ACCEPT_BURST / GATE_PREAUTH_BUDGET /
+	#   GATE_PREAUTH_EARLY_DROP_START / GATE_PREAUTH_EVICTABLE_AGE_MS / GATE_SOURCE_RATE_PER_SECOND / GATE_SOURCE_BURST,以及 BATTLE_ 开头的同名七个。
+	#   值只收规范十进制正整数;范围与相互关系(早拒起点不大于预算、预算不大于连接上限等)由进程启动时校验,写错拒启、Pod 进 CrashLoop。
+	#   留空(缺省)= 一个都不写,进程按连接上限推导缺省值,生成物与引入参数之前逐字相同。
+	# 覆盖范围:GATE_* 只写 zone-up 的 gate(Deployment / external StatefulSet),BATTLE_* 只写 infra-up 的 battle(Deployment /
+	# hostPort Deployment / Agones Fleet,含金丝雀池);同一次部署只渲染其中一侧时,另一侧的名字不生效。
+	# 改值会改 Pod 模板:gate Deployment 滚动;battle Fleet 换代,在打的房间不受影响,新房间用新值;external gate 是 OnDelete,
+	# 要按 k8s_gate_drain.ps1 逐台排空删 Pod 才生效。
+	# 不粘滞(同 -GateRouterMode):脚本不从集群读回旧值,下一次部署不传就落回推导缺省。压测或应急改过的,之后每次部署都要照传;
+	# 想长期改缺省值,改 C++ 的推导(accept_admission.h)并写进设计稿,不靠这个参数常驻。
+	[string[]]$ConnectionAdmissionEnv = @(),
 	# C++ 节点(gate / scene / battle)的 Prometheus 出口端口(cpp/libs/engine/core/metrics/metrics_http_exporter.h,
 	# 进程读环境变量 MMORPG_METRICS_PORT;补 docs/ops/cross-zone-failure-test-runbook.md §6 观测缺口 G1 / G2)。
 	# 每个 Pod 一个 IP,三种角色共用一个端口即可。大于 0 时渲染三样:env、名为 metrics 的容器端口、
@@ -421,6 +434,11 @@ param(
 	[string]$WsEdgeServiceType = "LoadBalancer",
 	[ValidateRange(0, 32767)]
 	[int]$WsEdgeNodePort = 0,
+	# 边缘的按来源限速:单个来源前缀(IPv4 /24)每秒新建的 WebSocket 连接数,0 = 不限(缺省)。桶深 = 速率 × 握手期限(10 秒)。
+	# 经边缘进来的连接不受 gate / battle 自己的按来源限速管(它们只看得到边缘 Pod 的内网地址),要限只能在这里限。
+	# nginx 不知道后端是否承压,开了就一直生效,所以缺省不开,被打的时候再带上它跑 infra-up(只有 infra-up 生成 ws-edge)。
+	[ValidateRange(0, 100000)]
+	[int]$WsEdgeSourceRatePerSecond = 0,
 	# 钉住的 nginx 镜像;内网环境换成自己的镜像仓地址。
 	[string]$WsEdgeImage = "nginx:1.28.0",
 	# 集群内 login 的开发口令认证(2b §7):login ConfigMap 写 DevPasswordAuth(账号前缀 robot_ / dev_),共享口令从环境变量
@@ -556,6 +574,11 @@ param(
 	# 模板没变时给了也不会重启(它是许可,不是指令);DryRun 不查集群。不粘滞;dev_tools.ps1 / k8s_image.ps1 只在被指定时透传。
 	# 名字沿用 docs/design/shared-redis-split-by-purpose.md(G4a)§4.2 的规划,语义按 P0-E 放宽为「模板有变化就要确认」。
 	[switch]$ConfirmRedisCoreRestart,
+	# 部署替运维维护 domain-service-secrets 里 16 把内部 HMAC 密钥($script:ManagedDomainServiceSecrets):缺的自动补齐(从 infra 的规范值复制,
+	# 都没有就生成),已有的合格值沿用。各 namespace 值不同、过短或两把同值时默认在任何写操作之前拒绝;给了这个开关才改成统一值
+	# (infra 那份合格就以它为准,否则生成新值),并重启读这些键的 Pod(删 Pod 由控制器重建,不是滚动)。只在修复时显式加;不粘滞;
+	# dev_tools.ps1 只在被指定时透传。
+	[switch]$ResyncDomainServiceSecrets,
 	# 通用资产通道(帮会捐献 / 商店兑换、聚宝斋上架;docs/design/guild-phase2/04-asset-channel.md §4.32、90-consistency.md G-05)。
 	# off(默认):guild / trade 的 ConfigMap 写 AssetOp.Enabled: false,不建签名密钥 Secret,guild / trade / scene 都不注入密钥。
 	# on:两把签名密钥从环境变量 MMORPG_ASSET_OP_SECRET_GUILD / _TRADE 读入(各档位都没有回落值;≥32 字节、不含空白、两把不同、
@@ -1014,6 +1037,8 @@ $script:LoginQueueTokenSecret = ""
 #   ① G1b 规格指定的多 zone 用例(L-01 验收标准:每个 zone 的队列都能出队;spec_G1b.md T3 / T8a)由 Codex 跑绿;
 #   ② G4b-G(spec_G4b-G.md,在途占位逐个到期)由 Codex 跑绿;
 #   ③ spec_G4b-G.md §8.4 的真实 Redis 最小冒烟跑通,命令原文与输出摘要记进 docs/PROGRESS.md(miniredis 的结果不能顶替)。
+#      2026-11-20 定案:要两轮,Redis 7.2 单实例与 Redis 8.10.2 Cluster 各一轮(staging / prod 的排队键在控制集群上);
+#      现行步骤见 docs/PROGRESS.md 2026-11-20「登录排队清合入门槛的 Codex 验证单」与「登录排队遗留项收口」两条。
 # spec §7 原列的「契约用例 15 绿」不单列:它属于 k8s_deploy_contract.tests.ps1,改本常量的提交必须改写用例 19 / 20 并重跑整套契约测试
 # (本文件在 tools/scripts/** 下,也会触发 deploy-config-tests.yml),因此一定会重跑;它只核对 G1b / G4b-G 的代码形状,代替不了 ①②。
 # 三项都满足、docs/PROGRESS.md 有记录之后,由负责人在同一提交里把它改为 $true,并在这里写上那条 PROGRESS 条目的标题。
@@ -1089,6 +1114,15 @@ if ($NodeOpenFileLimitMode -ceq 'warn') {
 # 集群外客户端入口(D76–D93)的生成器、preflight、就绪等待与模式切换清理。库函数不读本脚本的任何变量,
 # 碰集群的函数一律显式传 -KubeContext / -KubeConfig(漏传不会悄悄落到本机默认 context)。
 . (Join-Path (Join-Path $ScriptDir "lib") "k8s_client_entry.ps1")
+# 连接准入覆盖变量(见参数处注释):库加载后、任何 kubectl 之前解析一次,拼错、重名或值不合规在这里 throw。
+# 每次部署都打一行实际写进去的值:参数不粘滞,部署输出里要看得出这次带没带。
+$script:ConnectionAdmission = Resolve-ClientEntryConnectionAdmissionEnv -Entries $ConnectionAdmissionEnv
+foreach ($admissionSide in @('Gate', 'Battle')) {
+	$admissionValues = $script:ConnectionAdmission.$admissionSide
+	if ($admissionValues.Count -gt 0) {
+		Write-Host ("[connection-admission] {0} overrides: {1} (not sticky: a later deploy without -ConnectionAdmissionEnv falls back to the derived defaults)" -f $admissionSide.ToLowerInvariant(), (@($admissionValues.Keys | ForEach-Object { "$_=$($admissionValues[$_])" }) -join ', '))
+	}
+}
 # Pod 间透明加密的只读核对项(开关 + 每个节点的 WireGuard 公钥),与集群核验脚本 k8s_netpol_probe.ps1 共用。纯函数,不读本脚本的变量。
 . (Join-Path (Join-Path $ScriptDir "lib") "pod_network_encryption.ps1")
 
@@ -7661,19 +7695,23 @@ function Assert-TlsSecretProvisioned {
 
 <#
 .SYNOPSIS
-	运维预置在 Secret domain-service-secrets 里、签名方与验签方分处 infra 与 zone 两个 namespace 的键:两侧都要有,值必须相同。
-	单一来源:写路径门禁 Assert-SharedDomainServiceSecretsForRun、契约测试与开服手册 §1 的 Secret 表都对照它。
+	部署替运维维护的内部 HMAC 密钥:Secret domain-service-secrets 里 zone 的工作负载引用的 16 把,同一个集群里每个 namespace 必须同值。
+	单一来源:门禁 Initialize-ManagedDomainServiceSecrets、写入 Sync-ManagedDomainServiceSecrets、契约测试与开服手册 §1 的 Secret 表都对照它。
 
 .DESCRIPTION
-	ZoneConsumers 是 zone 侧读这把的工作负载,决定 zone 侧什么时候核:含 scene(C++,每次 zone-up / all-up 都部署)就每次都核;
-	只有 data-service 的只在本次部署 zone 的 Go 服务时核(Test-ZoneDbDeployed)。InfraConsumers 都是全局 Go 服务,本次部署
-	全局 Go 服务时才核 infra 侧(Test-GlobalGoSvcDeployed)。键名与各清单 secretKeyRef 的 key 逐字相同(契约测试按清单核对)。
-	每把都经 serviceauth 验签:去掉首尾空白后至少 32 字节;不同用途互不相同(data_service 的 validateGlobalCallerSecrets 对复用拒启)。
-	引用它们的清单一律是 optional: false:缺键时 Pod 卡在 CreateContainerConfigError;两侧值不同时验签方以 UNAUTHENTICATED 拒绝,功能静默失效
-	(战斗掉落邮件寄不出去、过户 / 删角被拒、查不到实名)。只在 zone 一侧用的键(account-directory-login、account-directory-scene-manager、
-	role-fence-db、player-store-scene)签名与验签读的是同一份 Secret,不在表里。
+	为什么是全集群同值,不只是签名方与验签方两侧:每个 zone namespace 各有一份副本,而 data-service 与 go/db 是全局池(发现键 dataservice.rpc /
+	db.rpc 不分 zone),login、scene、scene-manager 的调用可能落到别的 zone 的实例上;值不同时只有一部分调用被 UNAUTHENTICATED 拒绝,时好时坏。
+	规范值存在 infra namespace 那一份(只在 zone 里用的键也存一份),zone 里的都是它的副本。部署怎么维护(早于任何工作负载):已有的合格值
+	一律沿用;缺的从规范值复制,infra 没有就沿用各 zone 一致的那个值,都没有就随机生成(32 字节,64 位十六进制)。值不同、去掉首尾空白后
+	不足 32 字节、两把同值,默认在任何写操作之前拒绝;给了 -ResyncDomainServiceSecrets 才改成统一值,并重启读它们的 Pod。值只在部署进程的
+	内存里,不打印、不进错误信息;它们只用于集群内服务之间互相签名,集群外没有人需要知道。
+	ZoneConsumers / InfraConsumers 是读这把的工作负载(Pod 的 app 标签),决定什么时候核与 resync 时重启谁:zone 侧含 scene(C++,每次
+	zone-up / all-up 都部署)就每次都核,其余只在本次部署 zone 的 Go 服务时核(Test-ZoneDbDeployed);InfraConsumers 都是全局 Go 服务,
+	本次部署全局 Go 服务时才核(Test-GlobalGoSvcDeployed)。表里恰好是 zone 工作负载以 optional: false 引用的全部键,每行的两侧用法与清单一致,
+	由契约测试按清单反查。每把都经 serviceauth 验签,不同用途互不相同(data_service 的 validateGlobalCallerSecrets 对复用拒启)。
+	domain-service-secrets 里其余的键只在 infra 有一份(数据库连接串与迁移账号、运维口令、infra 内部的生产者密钥等),仍由运维预置,部署不碰。
 #>
-$script:SharedDomainServiceSecrets = @(
+$script:ManagedDomainServiceSecrets = @(
 	[pscustomobject]@{ Key = 'mail-producer-battle'; ZoneConsumers = @('scene'); InfraConsumers = @('mail') }
 	[pscustomobject]@{ Key = 'account-directory-trade'; ZoneConsumers = @('scene', 'data-service'); InfraConsumers = @('trade') }
 	[pscustomobject]@{ Key = 'account-directory-scene'; ZoneConsumers = @('scene', 'data-service'); InfraConsumers = @('match', 'player-inbox') }
@@ -7686,119 +7724,239 @@ $script:SharedDomainServiceSecrets = @(
 	[pscustomobject]@{ Key = 'role-fence-player-inbox'; ZoneConsumers = @('data-service'); InfraConsumers = @('player-inbox') }
 	[pscustomobject]@{ Key = 'role-fence-friend'; ZoneConsumers = @('data-service'); InfraConsumers = @('friend') }
 	[pscustomobject]@{ Key = 'role-fence-chat'; ZoneConsumers = @('data-service'); InfraConsumers = @('chat') }
+	# 只在 zone 里用,但调用会跨 zone 落到全局池的实例上,同样要全集群同值;规范值照样存在 infra。
+	[pscustomobject]@{ Key = 'account-directory-login'; ZoneConsumers = @('login', 'data-service'); InfraConsumers = @() }
+	[pscustomobject]@{ Key = 'account-directory-scene-manager'; ZoneConsumers = @('scene-manager', 'data-service'); InfraConsumers = @() }
+	[pscustomobject]@{ Key = 'role-fence-db'; ZoneConsumers = @('db', 'data-service'); InfraConsumers = @() }
+	[pscustomobject]@{ Key = 'player-store-scene'; ZoneConsumers = @('scene', 'db'); InfraConsumers = @() }
 )
 
-# 读一个 namespace 的 domain-service-secrets(只读一次),把 -Keys 逐个解码成「去掉首尾空白之后的 SHA-256 摘要」,返回 键 → 摘要。
-# 缺 Secret、缺键、过短、base64 不合法、两把同值、kubectl 读失败都 throw,一次报全这个 namespace 的缺键与过短;报错只点键名,
-# 解出来的值不出这个函数。长度口径与验签两端一致:serviceauth 按 strings.TrimSpace 后取 len([]byte),scene 去掉首尾 ASCII 空白后按字节数比。
-function Read-DomainServiceSecretDigests {
-	param(
-		[Parameter(Mandatory = $true)][string]$Namespace,
-		[Parameter(Mandatory = $true)][string[]]$Keys,
-		[Parameter(Mandatory = $true)][string]$Purpose
-	)
+# 一把密钥的比较形态:Base64 是 Secret 里的原文(复制时原样写,不改字节);Digest / Bytes 按去掉首尾空白之后的值算,
+# 与验签两端的口径一致(serviceauth 按 strings.TrimSpace 后取 len([]byte),scene 去掉首尾 ASCII 空白后按字节数比)。base64 不合法即 throw。
+function New-DomainServiceSecretEntry {
+	param([Parameter(Mandatory = $true)][string]$Base64)
 
-	$allArgs = @()
-	$allArgs += Build-KubectlBaseArgs
-	$allArgs += @('get', 'secret', 'domain-service-secrets', '-n', $Namespace, '--ignore-not-found', '-o', 'json')
-	$out = & kubectl @allArgs
-	$exitCode = $LASTEXITCODE
-	if ($exitCode -ne 0) {
-		throw "Cannot read Secret domain-service-secrets in namespace $Namespace ($Purpose): kubectl exit code $exitCode. Nothing was written for this step."
+	$bytes = [System.Text.Encoding]::UTF8.GetBytes([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($Base64)).Trim())
+	$sha256 = [System.Security.Cryptography.SHA256]::Create()
+	try { $digest = ([BitConverter]::ToString($sha256.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant() }
+	finally { $sha256.Dispose() }
+	return [pscustomobject]@{ Base64 = $Base64; Digest = $digest; Bytes = $bytes.Length }
+}
+
+# 一次列出集群里全部 domain-service-secrets,返回 namespace → { Exists = $true; Entries = 键 → New-DomainServiceSecretEntry }(只含 -Keys 里有的键)。
+# 只收 infra 与名字以 "<-NamespacePrefix>-" 开头的 namespace:本环境的 zone,与 Find-ReadyDataServiceNamespace 同一判据,zones.json 没列的 zone 也算
+# (它的 data-service 同样接全集群的调用)。没有这个 Secret 的 namespace 不在返回值里。kubectl 失败、输出不是 JSON、base64 不合法都 throw:
+# 读不到不等于没有。报错只点键名与 namespace,值不出这个函数与它的返回值之外。
+function Read-DomainServiceSecretEntries {
+	param([Parameter(Mandatory = $true)][string[]]$Keys)
+
+	$result = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'secrets', '--all-namespaces', '--field-selector', 'metadata.name=domain-service-secrets', '-o', 'json') `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput -AllowFailure
+	if ($result.ExitCode -ne 0) {
+		throw "Cannot list Secret domain-service-secrets across namespaces (kubectl exit code $($result.ExitCode)): $($result.Stderr). Nothing was written."
 	}
-	$text = ([string]($out | Out-String)).Trim()
-	if ([string]::IsNullOrEmpty($text)) {
-		throw "Secret domain-service-secrets is missing in namespace $Namespace ($Purpose). Provision it first with $($Keys -join ', ') (each at least 32 bytes, the same value in the infra namespace and in every zone namespace), see docs/ops/k8s-open-server-runbook.md §1. Nothing was written for this step."
-	}
-	$data = (ConvertFrom-Json -InputObject $text).data
-	$digests = [ordered]@{}
-	$missing = [System.Collections.Generic.List[string]]::new()
-	$short = [System.Collections.Generic.List[string]]::new()
-	foreach ($key in $Keys) {
-		$encoded = if ($null -eq $data) { '' } else { [string]$data.$key }
-		if ([string]::IsNullOrEmpty($encoded)) {
-			$missing.Add($key)
-			continue
+	# 解析错误的原文可能带上 Secret 的片段,不往外抛。
+	try { $list = ([string]$result.Stdout) | ConvertFrom-Json -ErrorAction Stop }
+	catch { throw "The kubectl output for Secret domain-service-secrets is not valid JSON. Nothing was written." }
+	$prefix = "$NamespacePrefix-"
+	$states = @{}
+	foreach ($item in @($list.items)) {
+		if ($null -eq $item) { continue }
+		$namespace = [string]$item.metadata.namespace
+		if ($namespace -cne $InfraNamespace -and -not $namespace.StartsWith($prefix, [System.StringComparison]::Ordinal)) { continue }
+		$entries = [ordered]@{}
+		foreach ($key in $Keys) {
+			$encoded = if ($null -eq $item.data) { '' } else { [string]$item.data.$key }
+			if ([string]::IsNullOrEmpty($encoded)) { continue }
+			try { $entries[$key] = New-DomainServiceSecretEntry -Base64 $encoded }
+			catch { throw "The key $key in namespace $namespace is not valid base64. Nothing was written." }
 		}
-		try {
-			$value = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encoded)).Trim()
-		}
-		catch {
-			throw "The key $key in namespace $Namespace is not valid base64 ($Purpose). Nothing was written for this step."
-		}
-		$bytes = [System.Text.Encoding]::UTF8.GetBytes($value)
-		if ($bytes.Length -lt 32) {
-			$short.Add($key)
-			continue
-		}
-		$sha256 = [System.Security.Cryptography.SHA256]::Create()
-		try { $digests[$key] = ([BitConverter]::ToString($sha256.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant() }
-		finally { $sha256.Dispose() }
+		$states[$namespace] = [pscustomobject]@{ Exists = $true; Entries = $entries }
 	}
-	if ($missing.Count -gt 0) {
-		throw "Secret domain-service-secrets in namespace $Namespace lacks the key(s) $($missing -join ', ') ($Purpose). The Pods that reference them would stay in CreateContainerConfigError. Nothing was written for this step."
-	}
-	if ($short.Count -gt 0) {
-		throw "The key(s) $($short -join ', ') in namespace $Namespace are shorter than 32 bytes ($Purpose). The services that verify them refuse to start or switch the feature off. Nothing was written for this step."
-	}
-	# 不同用途不得共用一把:持一把的服务就能冒充另一个调用方(data_service 对复用拒启)。
-	$keyByDigest = @{}
-	foreach ($key in $digests.Keys) {
-		$digest = $digests[$key]
-		if ($keyByDigest.ContainsKey($digest)) {
-			throw "The keys $($keyByDigest[$digest]) and $key in namespace $Namespace hold the same value ($Purpose). Every purpose needs its own secret, otherwise whoever holds one can act as the other caller. Nothing was written for this step."
-		}
-		$keyByDigest[$digest] = $key
-	}
-	return $digests
+	return $states
 }
 
 <#
 .SYNOPSIS
-	本次命令要核对的跨 namespace 共享密钥($script:SharedDomainServiceSecrets):infra 侧在本次部署全局 Go 服务时核;每个 zone 侧在
-	zone-up / all-up 时核(只有 data-service 用的键要本次部署 zone 的 Go 服务),并与 infra 侧逐键比。写路径门禁调用,早于任何集群写操作。
+	托管内部密钥的写入计划。纯函数:只看入参,返回 { Errors; Writes; Restarts; Exists },不调 kubectl、不打印。
 
 .DESCRIPTION
-	每个 namespace 只读一次 domain-service-secrets(Read-DomainServiceSecretDigests):键在、去掉首尾空白后至少 32 字节、互不相同;
-	zone 侧与 infra 侧摘要不同的键一次报全。这是本脚本里唯一读取 domain-service-secrets 真实值的地方(「同值」只能靠比较得到):
-	值只在内存里解码、取长度与摘要,不打印、不写文件、不进错误信息。DryRun 不连集群,每个 namespace 只打一行将要核对什么。
+	-Keys 是本次要维护的键(表的顺序);-Infra 与 -Zones 是各 namespace 的 { Exists; Entries }(Read-DomainServiceSecretEntries 的结果,没有这个
+	Secret 的记 Exists = $false;-Zones:namespace → 结果,含集群里本次没部署的 zone,它们只用来判同值,缺键不补);-ScopeZones 是本次部署的 zone namespace,-ZoneKeys 是它们要有的键;-Resync 即 -ResyncDomainServiceSecrets。
+	规范值:infra 那份合格(去掉首尾空白后至少 32 字节)就用它;infra 没有就用各 zone 一致且合格的那个;都没有就生成(-NewValue)。
+	记进 Errors 的情形:infra 那份过短;infra 没有而各 zone 值不同或过短;两把同值;任何 namespace 的值与规范值不同。-Resync 时改为:
+	规范值不合格或撞值就生成新值;持有不同值的 namespace 一律改写,并把读这些键的 Pod 记进 Restarts。
+	Writes:namespace → 键 → base64,只含缺的与要改写的;infra 存全部规范值(只在 zone 用的键也存一份)。Exists:namespace → 那里有没有这个 Secret
+	(写入时决定 create 还是 merge patch)。Errors 只写键名与 namespace,不带值。
 #>
-function Assert-SharedDomainServiceSecretsForRun {
+function Get-ManagedDomainServiceSecretPlan {
+	param(
+		[Parameter(Mandatory = $true)][object[]]$Table,
+		[Parameter(Mandatory = $true)][string[]]$Keys,
+		[Parameter(Mandatory = $true)][string]$InfraNamespace,
+		[Parameter(Mandatory = $true)]$Infra,
+		[Parameter(Mandatory = $true)][System.Collections.IDictionary]$Zones,
+		[AllowEmptyCollection()][string[]]$ScopeZones = @(),
+		[AllowEmptyCollection()][string[]]$ZoneKeys = @(),
+		[bool]$Resync = $false,
+		# 生成一把新值;缺省 32 字节随机数的十六进制。契约测试换成确定的值。
+		[scriptblock]$NewValue = { $random = [byte[]]::new(32); [System.Security.Cryptography.RandomNumberGenerator]::Fill($random); [Convert]::ToHexString($random).ToLowerInvariant() }
+	)
+
+	$errors = [System.Collections.Generic.List[string]]::new()
+	$rowOf = @{}
+	foreach ($row in $Table) { $rowOf[$row.Key] = $row }
+	$states = [ordered]@{ $InfraNamespace = $Infra }
+	foreach ($ns in $Zones.Keys) { $states[$ns] = $Zones[$ns] }
+	$generate = { New-DomainServiceSecretEntry -Base64 ([Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes([string](& $NewValue)))) }
+
+	# 规范值。
+	$values = [ordered]@{}
+	foreach ($key in $Keys) {
+		$own = $Infra.Entries[$key]
+		if ($null -ne $own) {
+			if ($own.Bytes -ge 32) { $values[$key] = $own }
+			elseif ($Resync) { $values[$key] = & $generate }
+			else { $errors.Add("$key in namespace $InfraNamespace is shorter than 32 bytes") }
+			continue
+		}
+		$held = @(foreach ($ns in $Zones.Keys) { if ($null -ne $Zones[$ns].Entries[$key]) { $Zones[$ns].Entries[$key] } })
+		$unique = @($held | ForEach-Object { $_.Digest } | Select-Object -Unique)
+		if ($held.Count -eq 0) { $values[$key] = & $generate }
+		elseif ($unique.Count -eq 1 -and $held[0].Bytes -ge 32) { $values[$key] = $held[0] }
+		elseif ($Resync) { $values[$key] = & $generate }
+		else { $errors.Add("$key is missing in namespace $InfraNamespace and the zone namespaces hold different or short values") }
+	}
+	# 不同用途不得共用一把:持一把的服务就能冒充另一个调用方。
+	$keyByDigest = @{}
+	foreach ($key in @($values.Keys)) {
+		if ($keyByDigest.ContainsKey($values[$key].Digest)) {
+			if (-not $Resync) {
+				$errors.Add("$($keyByDigest[$values[$key].Digest]) and $key hold the same value")
+				continue
+			}
+			$values[$key] = & $generate
+		}
+		$keyByDigest[$values[$key].Digest] = $key
+	}
+
+	# 每个 namespace 要写什么、改写了谁就重启谁。
+	$writes = [ordered]@{}
+	$restarts = [ordered]@{}
+	$exists = [ordered]@{}
+	foreach ($ns in $states.Keys) {
+		$isInfra = $ns -ceq $InfraNamespace
+		$exists[$ns] = [bool]$states[$ns].Exists
+		foreach ($key in $values.Keys) {
+			$have = $states[$ns].Entries[$key]
+			if ($null -eq $have) {
+				if (-not ($isInfra -or (($ScopeZones -contains $ns) -and ($ZoneKeys -contains $key)))) { continue }
+			}
+			elseif ($have.Digest -ceq $values[$key].Digest) { continue }
+			elseif (-not $Resync) {
+				$errors.Add("$key in namespace $ns differs from the cluster-wide value (kept in namespace $InfraNamespace)")
+				continue
+			}
+			else {
+				# 改写已有值:读它的 Pod 只在启动时读 secretKeyRef,要重启才拿到新值。
+				$apps = if ($isInfra) { @($rowOf[$key].InfraConsumers | ForEach-Object { $_; "$_-canary" }) }
+				else { @($rowOf[$key].ZoneConsumers | ForEach-Object { if ($_ -ceq 'scene') { 'scene'; 'scene-world'; 'scene-instance' } else { $_ } }) }
+				foreach ($app in $apps) {
+					if (-not $restarts.Contains($ns)) { $restarts[$ns] = [System.Collections.Generic.List[string]]::new() }
+					if (-not $restarts[$ns].Contains($app)) { $restarts[$ns].Add($app) }
+				}
+			}
+			if (-not $writes.Contains($ns)) { $writes[$ns] = [ordered]@{} }
+			$writes[$ns][$key] = $values[$key].Base64
+		}
+	}
+	return [pscustomobject]@{ Errors = [string[]]$errors.ToArray(); Writes = $writes; Restarts = $restarts; Exists = $exists }
+}
+
+<#
+.SYNOPSIS
+	托管内部密钥($script:ManagedDomainServiceSecrets)的写前门禁:只读,算出写入计划存进 $script:ManagedDomainServiceSecretPlan,
+	判不了的情形在任何写操作之前 throw。由写路径入口调用;真正写在所有只读门禁之后的 Sync-ManagedDomainServiceSecrets。
+
+.DESCRIPTION
+	本次要维护的键:部署全局 Go 服务时是 infra 侧有用者的那些;zone-up / all-up 时再加 zone 要有的(只发 C++ 节点时只有 scene 读的四把)。
+	一次列出集群里的 domain-service-secrets,比 infra 与每个 "<-NamespacePrefix>-*" namespace(本次部署的 zone 还没有这个 Secret 的,记为待建):
+	data-service 与 go/db 是全局池,本次没部署的 zone、zones.json 没列的 zone 也会接到调用,它的值不同同样要拦。规则见
+	Get-ManagedDomainServiceSecretPlan。值只在内存里,不打印、不写进日志与报错;这是本脚本里唯一读取 domain-service-secrets 真实值的地方
+	(「同值」只能靠比较得到)。DryRun 不连集群,只打一行将要维护什么。
+#>
+function Initialize-ManagedDomainServiceSecrets {
+	$script:ManagedDomainServiceSecretPlan = $null
 	$infraKeys = @()
 	if (Test-GlobalGoSvcDeployed) {
-		$infraKeys = @($script:SharedDomainServiceSecrets | ForEach-Object { $_.Key })
+		$infraKeys = @($script:ManagedDomainServiceSecrets | Where-Object { @($_.InfraConsumers).Count -gt 0 } | ForEach-Object { $_.Key })
 	}
 	$zoneKeys = @()
-	$zoneNames = @()
+	$scopeZoneNames = @()
 	if ($Command -in @('zone-up', 'all-up')) {
 		$zoneGoSvc = Test-ZoneDbDeployed
-		$zoneKeys = @($script:SharedDomainServiceSecrets | Where-Object { $zoneGoSvc -or $_.ZoneConsumers -contains 'scene' } | ForEach-Object { $_.Key })
-		$zoneNames = if ($Command -eq 'zone-up') { @($ZoneName) } else { @(Get-ZonesFromJson -Path (Resolve-ZonesConfigPath) | ForEach-Object { $_.name }) }
+		$zoneKeys = @($script:ManagedDomainServiceSecrets | Where-Object { $zoneGoSvc -or $_.ZoneConsumers -contains 'scene' } | ForEach-Object { $_.Key })
+		$scopeZoneNames = if ($Command -eq 'zone-up') { @($ZoneName) } else { @(Get-ZonesFromJson -Path (Resolve-ZonesConfigPath) | ForEach-Object { $_.name }) }
 	}
+	$keys = @($script:ManagedDomainServiceSecrets | Where-Object { $infraKeys -contains $_.Key -or $zoneKeys -contains $_.Key } | ForEach-Object { $_.Key })
+	if ($keys.Count -eq 0) { return }
+	$scopeZones = @($scopeZoneNames | ForEach-Object { Get-ZoneNamespace -Name $_ })
 	if ($DryRun) {
-		if ($infraKeys.Count -gt 0) {
-			Write-Host "[dry-run] would check that Secret domain-service-secrets in namespace $InfraNamespace has $($infraKeys -join ', ') (each at least 32 bytes, all different)"
-		}
-		foreach ($zoneName in $zoneNames) {
-			Write-Host "[dry-run] would check that Secret domain-service-secrets in namespace $(Get-ZoneNamespace -Name $zoneName) has $($zoneKeys -join ', ') (each at least 32 bytes, all different, each equal to the same key in namespace $InfraNamespace)"
-		}
+		$where = (@($InfraNamespace) + $scopeZones) -join ', '
+		Write-Host "[dry-run] would make sure Secret domain-service-secrets in namespace(s) $where holds $($keys -join ', '), with one value per key across namespace $InfraNamespace and every $NamespacePrefix-* namespace (missing ones are copied from namespace $InfraNamespace or generated, existing ones are kept; different, short or shared values stop the deployment unless -ResyncDomainServiceSecrets)"
 		return
 	}
-	if ($infraKeys.Count -eq 0 -and $zoneNames.Count -eq 0) { return }
-	# infra 侧只读一次:本次部署全局 Go 服务时核全表,只发 zone 时只读要比的那几把。
-	$readInfraKeys = if ($infraKeys.Count -gt 0) { $infraKeys } else { $zoneKeys }
-	$infraDigests = Read-DomainServiceSecretDigests -Namespace $InfraNamespace -Keys $readInfraKeys -Purpose 'shared with the zone namespaces'
-	if ($infraKeys.Count -gt 0) {
-		Write-Host "[preflight] domain-service-secrets in namespace $InfraNamespace has the $($infraKeys.Count) keys shared with the zones (each at least 32 bytes, all different)"
+	$found = Read-DomainServiceSecretEntries -Keys $keys
+	$absent = { [pscustomobject]@{ Exists = $false; Entries = [ordered]@{} } }
+	$zones = [ordered]@{}
+	foreach ($namespace in @(@($scopeZones) + @($found.Keys | Where-Object { $_ -cne $InfraNamespace } | Sort-Object) | Select-Object -Unique)) {
+		$zones[$namespace] = if ($found.ContainsKey($namespace)) { $found[$namespace] } else { & $absent }
 	}
-	foreach ($zoneName in $zoneNames) {
-		$namespace = Get-ZoneNamespace -Name $zoneName
-		$zoneDigests = Read-DomainServiceSecretDigests -Namespace $namespace -Keys $zoneKeys -Purpose "zone $zoneName"
-		$differ = @($zoneKeys | Where-Object { $zoneDigests[$_] -cne $infraDigests[$_] })
-		if ($differ.Count -gt 0) {
-			throw "Secret domain-service-secrets in namespace $namespace differs from namespace $InfraNamespace for $($differ -join ', ') (zone $zoneName). The verifying side rejects the signing side's calls (UNAUTHENTICATED), so the features behind these keys fail silently. Make the values identical (values are not printed). Nothing was written for this step."
+	$infra = if ($found.ContainsKey($InfraNamespace)) { $found[$InfraNamespace] } else { & $absent }
+	$plan = Get-ManagedDomainServiceSecretPlan -Table $script:ManagedDomainServiceSecrets -Keys $keys -InfraNamespace $InfraNamespace `
+		-Infra $infra -Zones $zones -ScopeZones $scopeZones -ZoneKeys $zoneKeys -Resync ([bool]$ResyncDomainServiceSecrets)
+	if ($plan.Errors.Count -gt 0) {
+		throw ("domain-service-secrets check failed ($($plan.Errors.Count) problem(s)); nothing was written. Rerun with -ResyncDomainServiceSecrets to give every namespace one value per key (generated when the current ones are unusable) and restart the Pods that read them:`n  - " + ($plan.Errors -join "`n  - "))
+	}
+	$pending = @($plan.Writes.Keys | ForEach-Object { "$_ ($(@($plan.Writes[$_].Keys).Count) key(s))" })
+	Write-Host "[preflight] domain-service-secrets: $($keys.Count) managed keys agree across namespace $InfraNamespace and $($zones.Count) zone namespace(s); to write: $(if ($pending.Count -gt 0) { $pending -join ', ' } else { 'nothing' })"
+	$script:ManagedDomainServiceSecretPlan = $plan
+}
+
+<#
+.SYNOPSIS
+	按 Initialize-ManagedDomainServiceSecrets 的计划写托管内部密钥:写路径门禁块的最后一步,所有只读门禁之后、任何工作负载之前。
+
+.DESCRIPTION
+	已有这个 Secret 的 namespace 用 merge patch 只增改计划里的键(不用 apply:对运维建的 Secret 做部分 apply 会记下 last-applied,
+	下次只写别的键时 3-way merge 会删掉这次写的键);没有的先建 namespace,再 create 一个只含这些键的 Secret。patch 内容经临时文件交给
+	kubectl(值不进命令行),用完即删。-ResyncDomainServiceSecrets 改写了已有值的 namespace,删掉读这些键的 Pod 由控制器重建
+	(secretKeyRef 只在容器启动时读);只补缺的不用重启:缺键的 Pod 本来就卡在 CreateContainerConfigError,键到了 kubelet 自己重试。
+#>
+function Sync-ManagedDomainServiceSecrets {
+	$plan = $script:ManagedDomainServiceSecretPlan
+	if ($DryRun -or $null -eq $plan) { return }
+	foreach ($namespace in $plan.Writes.Keys) {
+		$written = @($plan.Writes[$namespace].Keys)
+		if ($plan.Exists[$namespace]) {
+			$patchFile = [System.IO.Path]::GetTempFileName()
+			try {
+				Set-Content -LiteralPath $patchFile -Value (ConvertTo-Json -InputObject @{ data = $plan.Writes[$namespace] } -Depth 3 -Compress) -NoNewline -Encoding utf8NoBOM
+				Invoke-Kubectl -Args @('patch', 'secret', 'domain-service-secrets', '-n', $namespace, '--type', 'merge', '--patch-file', $patchFile)
+			}
+			finally { Remove-Item -LiteralPath $patchFile -Force -ErrorAction SilentlyContinue }
 		}
-		Write-Host "[preflight] domain-service-secrets in namespace $namespace matches namespace $InfraNamespace for $($zoneKeys.Count) shared keys (zone $zoneName)"
+		else {
+			Ensure-Namespace -Namespace $namespace
+			$dataLines = @($written | ForEach-Object { "  ${_}: $($plan.Writes[$namespace][$_])" })
+			Invoke-KubectlWithInputFile -Args @('create', '-n', $namespace) -InputContent ("apiVersion: v1`nkind: Secret`nmetadata:`n  name: domain-service-secrets`ntype: Opaque`ndata:`n" + ($dataLines -join "`n"))
+		}
+		Write-Host "[secrets] domain-service-secrets in namespace ${namespace}: wrote $($written -join ', ') (values not printed)"
+	}
+	foreach ($namespace in $plan.Restarts.Keys) {
+		$apps = @($plan.Restarts[$namespace])
+		Invoke-Kubectl -Args @('delete', 'pod', '-n', $namespace, '-l', "app in ($($apps -join ','))", '--wait=false')
+		Write-Host "[secrets] restarted the Pods of $($apps -join ', ') in namespace $namespace so that they read the resynced values"
 	}
 }
 
@@ -8237,6 +8395,33 @@ function New-CppOpenFileLimitModeEnvLines {
 	)
 }
 
+# 连接准入覆盖变量(-ConnectionAdmissionEnv,见参数处注释)里归这个角色的一组:gate → GATE_*,battle → BATTLE_*,其余角色空表。
+# lib 的三个生成器经 PodCommon.ConnectionAdmissionEnv 拿到它(New-CppNodePodCommon),本脚本的 New-NodeDeploymentYaml 经下面的 env 行。
+function Get-CppConnectionAdmissionEnv {
+	param([AllowEmptyString()][string]$Role = '')
+
+	$resolved = $script:ConnectionAdmission
+	if ($null -ne $resolved -and $Role -ceq 'gate') { return $resolved.Gate }
+	if ($null -ne $resolved -and $Role -ceq 'battle') { return $resolved.Battle }
+	return [ordered]@{}
+}
+
+# 同上的 env 行,给本脚本自己的 New-NodeDeploymentYaml 用(gate / battle 的 Deployment 形态)。没有覆盖时返回空数组,模板逐字不变。
+function New-CppConnectionAdmissionEnvLines {
+	param(
+		[Parameter(Mandatory = $true)][string]$ItemIndent,
+		[AllowEmptyString()][string]$Role = ''
+	)
+
+	$admission = Get-CppConnectionAdmissionEnv -Role $Role
+	$lines = @()
+	foreach ($name in $admission.Keys) {
+		$lines += "${ItemIndent}- name: $name"
+		$lines += "${ItemIndent}  value: `"$($admission[$name])`""
+	}
+	return $lines
+}
+
 # 发布轨道的 env 行(-ReleaseTrack,见参数处注释),给本脚本自己的两个 C++ 模板用(New-NodeDeploymentYaml、New-SceneFleetYaml);
 # lib 的三个生成器经 PodCommon.ReleaseTrack 写同一个变量(Get-ClientEntryNodeBaseEnv),Go 服务经 Add-GoSvcReleaseTrackEnv。
 # env 名取 lib 契约,几处同一份。stable 返回空数组:进程不设即 stable,模板与引入参数之前逐字相同。
@@ -8495,6 +8680,8 @@ function New-NodeDeploymentYaml {
 	}
 	# B0-4 豁免开关(-NodeOpenFileLimitMode):gate / scene / battle 都读,留空不写。
 	$extraEnvLines += @(New-CppOpenFileLimitModeEnvLines -ItemIndent "`t`t`t")
+	# 连接准入覆盖变量(-ConnectionAdmissionEnv):gate 写 GATE_*、battle 写 BATTLE_*,scene 没有;没给不写。
+	$extraEnvLines += @(New-CppConnectionAdmissionEnvLines -ItemIndent "`t`t`t" -Role $NodeName)
 	# Prometheus 出口(-CppMetricsPort):gate / scene / battle 都开,0 不写。
 	$extraEnvLines += @(New-CppMetricsEnvLines -ItemIndent "`t`t`t")
 	# 发布轨道(-ReleaseTrack canary,只在 zone-up):gate / scene 写;battle 只在 infra-up 渲染,那里只能是 stable,stable 不写。
@@ -9650,7 +9837,7 @@ function New-CppNodePodCommon {
 		-LogVolumeSizeLimit $script:CppLogVolumeSizeLimit -LogPrunerCommand $script:CppLogPrunerCommand `
 		-GrpcServerMaxPollers 0 -PodAnnotations $podAnnotations -OpenFileLimitMode $NodeOpenFileLimitMode -MetricsPort $CppMetricsPort `
 		-ReleaseTrack $Track -BuildLabel (Get-CppBuildLabelValue -Image $Image) -ClientWsBaseUrl (Get-ClientWsBaseUrl) `
-		-SecretEnv $secretEnv @sidecar
+		-ConnectionAdmissionEnv (Get-CppConnectionAdmissionEnv -Role $Role) -SecretEnv $secretEnv @sidecar
 }
 
 # 小游戏 WebSocket 入口的基地址(-WsEdgeHost,docs/design/minigame-websocket-gate.md W7):gate / battle 据它自报
@@ -9666,12 +9853,16 @@ function Get-ClientWsBaseUrl {
 # New-BattleWorkloadManifest 传给生成器的 -RpcPort 相同),目标 app 标签含金丝雀 battle 池。
 function New-WsEdgeManifest {
 	if ([string]::IsNullOrWhiteSpace($WsEdgeHost)) {
+		if ($WsEdgeSourceRatePerSecond -gt 0) {
+			throw "-WsEdgeSourceRatePerSecond $WsEdgeSourceRatePerSecond needs -WsEdgeHost: without it no WebSocket edge is deployed, so there is nothing to rate limit. Nothing was written."
+		}
 		return $null
 	}
 	return New-WsEdgeYaml -EdgeHost $WsEdgeHost -TlsSecretName $WsEdgeTlsSecret `
 		-PodCidrs (ConvertTo-ClientEntryCidrList -CommaSeparated $WsEdgePodCidrs) `
 		-TargetPorts @(18000, 20000) -TargetApps (Get-ReleaseTrackAppLabels -Apps @('gate', 'battle')) `
-		-Image $WsEdgeImage -Replicas $WsEdgeReplicas -ServiceType $WsEdgeServiceType -NodePort $WsEdgeNodePort
+		-Image $WsEdgeImage -Replicas $WsEdgeReplicas -ServiceType $WsEdgeServiceType -NodePort $WsEdgeNodePort `
+		-SourceRatePerSecond $WsEdgeSourceRatePerSecond
 }
 
 # ws-edge 要挂的 TLS Secret 必须已经预置:缺了 Pod 只会停在 ContainerCreating,而 gate / battle 已经在下发经它转发的地址。
@@ -11064,6 +11255,23 @@ function Get-PlayerInboxEnqueueTypesYaml {
 	return (@('  EnqueueTypes:') + @($items | ForEach-Object { "    - $_" })) -join "`n"
 }
 
+# login / guild / chat 的 ContentGuard 段(内容安全服务的调用端,docs/design/rename-and-content-safety.md §6.6):
+# 从服务自己的 yaml 镜像,只改 etcd 地址,并删掉 Optional 那一行。所有档位都是严格的(调用端的缺省):内容安全在集群里随
+# 全局服务一起部署,不可达时名字与聊天被拒,而不是不检就放行。Optional: true 只是本机 yaml 的写法,不上集群。
+function New-ContentGuardClientYaml {
+	param([Parameter(Mandatory = $true)][string]$RelativePath)
+	$block = Get-AuthoritativeYamlBlock -RelativePath $RelativePath -Key 'ContentGuard'
+	if ([regex]::Matches($block, '(?m)^        - .*$').Count -ne 1) {
+		throw "The ContentGuard section of $RelativePath must have exactly one Rpc.Etcd.Hosts entry; cannot render it for the cluster."
+	}
+	$block = $block -replace '(?m)^        - .*$', "        - `"etcd.${InfraNamespace}:2379`""
+	$block = $block -replace '(?m)^  Optional:.*\r?\n?', ''
+	if ($block -match 'Optional') {
+		throw "The ContentGuard section of $RelativePath still mentions Optional after rendering; refusing to ship a lenient content check to the cluster."
+	}
+	return $block
+}
+
 function New-GuildServiceConfigYaml {
 	param([int]$CurrentZoneId, [Parameter(Mandatory = $true)][string]$DbPlacementBlock)
 	$source = 'go/guild/etc/guild.yaml'
@@ -11122,6 +11330,8 @@ Prometheus:
 		$block = $block -replace '(?m)^      -.*$', "      - `"etcd.${InfraNamespace}:2379`""
 		$blocks.Add($block)
 	}
+	# 帮会名与公告送检。
+	$blocks.Add((New-ContentGuardClientYaml -RelativePath $source))
 	foreach ($key in @('Cache', 'IdSegment', 'AssetOp', 'Activity', 'KillSwitchPrefix')) {
 		$block = Get-AuthoritativeYamlBlock -RelativePath $source -Key $key
 		if ($key -eq 'AssetOp' -and (-not $script:AssetOpsOn -or $ReleaseProfile -ne 'dev')) {
@@ -11415,6 +11625,7 @@ function New-GoSvcConfigMapYaml {
 	$chatHistoryMaxEntries   = ''
 	$chatHistoryTTLSeconds   = ''
 	$chatOptionalLines       = ''
+	$chatContentGuardBlock   = ''
 	$chatSqlMaxOpen          = ''
 	$chatSqlDsnEnv           = ''
 	$chatDataServiceTimeout  = ''
@@ -11447,6 +11658,8 @@ function New-GoSvcConfigMapYaml {
 			}
 		}
 		$chatOptionalLines = $chatOptional -join "`n"
+		# 聊天正文送检。
+		$chatContentGuardBlock = New-ContentGuardClientYaml -RelativePath $chatYaml
 	}
 
 	# 路由服 client-rpc-router 的契约值(契约 zone_contract_v1 §1):超时预算 / 租约同样只从服务自己的 yaml 取。
@@ -11939,7 +12152,10 @@ function New-GoSvcConfigMapYaml {
 	# login 的实名与防沉迷段(-LoginNppaAppId,New-LoginAntiAddictionYaml)。只在生成 login 自己的 ConfigMap 时求值;没给 = 空串,
 	# login 模板的产物与接入前逐字相同。只写公开值:secretKey 经工作负载密钥目录的 Secret login-nppa 注入 SecretKeyEnv 指向的变量。
 	$loginAntiAddictionBlock = ''
+	$loginContentGuardBlock = ''
 	if ($SvcName -eq 'login') {
+		# 建角名送检。
+		$loginContentGuardBlock = New-ContentGuardClientYaml -RelativePath 'go/login/etc/login.yaml'
 		$antiAddictionYaml = New-LoginAntiAddictionYaml -AppId $LoginNppaAppId -BizId $LoginNppaBizId -ExtraPlayDays $LoginAntiAddictionExtraPlayDays `
 			-CheckUrl $LoginNppaCheckUrl -QueryUrl $LoginNppaQueryUrl -LoginoutUrl $LoginNppaLoginoutUrl
 		if (-not [string]::IsNullOrEmpty($antiAddictionYaml)) {
@@ -12296,6 +12512,8 @@ DataServiceRpc:
   NonBlock: true
   Middlewares:
     Breaker: true
+# 建角名送检(内容安全服务;New-ContentGuardClientYaml 从 go/login/etc/login.yaml 镜像,不带本机的 Optional)。
+${loginContentGuardBlock}
 # PlayerId 号段发号(node-id-overhaul-plan §6)。
 # Enabled 必须**显式写 true**:go-zero 对缺席的 optional 块不填 default,shared/idsegment 的规则是
 #   「整块不写 = 关 = 发不出 id」;漏写这一行建角全部失败。
@@ -12541,6 +12759,8 @@ DataServiceRpc:
     Key: dataservice.rpc
   Timeout: ${chatDataServiceTimeout}
   NonBlock: true
+# 聊天正文送检(内容安全服务;New-ContentGuardClientYaml 从 go/chat/etc/chat.yaml 镜像,不带本机的 Optional)。
+${chatContentGuardBlock}
 ActorVerifyTTLSeconds: ${chatActorVerifyTTL}
 # 世界频道推送写 chat-world-bcast_g<N>(docs/design/chat-world-channel-fanout.md §4),topic 代号经 KAFKA_COMMAND_TOPIC_GENERATION 注入。
 Kafka:
@@ -13526,7 +13746,9 @@ function Rename-CanaryWorkload {
 #>
 function Add-MatchAuthoritySecretEnv {
 	param([string]$ManifestContent)
-	# domain-service-secrets沿现役mail/rank/目录签名合同由运维预置，本脚本不生成其真实值;读取只限两处:Assert-TlsSecretProvisioned 只查键在不在,Assert-SharedDomainServiceSecretsForRun 只在内存里比共享键的长度与摘要(不打印)。
+	# domain-service-secrets 里只在 infra 用的键(如下面这几把)由运维预置,本脚本不生成其真实值;zone 工作负载引用的 16 把内部密钥由部署维护
+	# ($script:ManagedDomainServiceSecrets,缺了补齐、全集群同值)。读取只限两处:Assert-TlsSecretProvisioned 只查键在不在,
+	# Initialize-ManagedDomainServiceSecrets 只在内存里比托管键的长度与摘要(不打印)。
 	# 新协议部署前须在Match/Battle所属namespace预置独立key match-outcome-battle，
 	# 在Match/PlayerInbox所属namespace预置另一独立key player-inbox-match；同用途两端值须相同。
 	# 下方均为mandatory secretKeyRef，缺Secret/缺key由K8s拒启，不借其他用途密钥降级。所有档位相同。
@@ -17389,7 +17611,7 @@ function Apply-Infra {
 	# 滚动会断开经过旧 Pod 的小游戏连接,玩家走断线重连。
 	if ($null -ne $wsEdgeManifest) {
 		Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $wsEdgeManifest
-		Write-Host "  [applied] ws-edge host=$WsEdgeHost replicas=$WsEdgeReplicas service=$WsEdgeServiceType tls=$WsEdgeTlsSecret pod_cidrs=$WsEdgePodCidrs"
+		Write-Host "  [applied] ws-edge host=$WsEdgeHost replicas=$WsEdgeReplicas service=$WsEdgeServiceType tls=$WsEdgeTlsSecret pod_cidrs=$WsEdgePodCidrs source_rate_per_second=$WsEdgeSourceRatePerSecond"
 	}
 
 	# 全局池服务一份、放 infra namespace、所有 zone 共用。这里只做第一步,依赖 data-service 的进程见 Apply-GlobalGoSvcWorkloads。
@@ -17502,10 +17724,10 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-AssetOpClusterConsistency
 	# C++ gRPC deadline ≥ 目标 Go 服务 zrpc Timeout + 2000(上游比下游宽)。放在任何集群写操作之前:
 	# 不成立就整条拒绝,不留半截部署(见 Assert-GrpcClientDeadlineBudget)。
-	# 签名方与验签方分处 infra 与 zone 的共享密钥($script:SharedDomainServiceSecrets:战斗掉落改投邮件的发件密钥、账号目录与查实名的
-	# 调用密钥、角色护栏密钥):两侧都要有、至少 32 字节、互不相同,zone 与 infra 同值。缺键 Pod 起不来,值不同则验签方拒绝、功能静默失效。
-	# 只读;DryRun 每个 namespace 只打一行说明。
-	Assert-SharedDomainServiceSecretsForRun
+	# 部署替运维维护的内部密钥($script:ManagedDomainServiceSecrets:账号目录与查实名的调用密钥、角色护栏、存盘、战斗掉落改投邮件):
+	# 全集群每把一个值。这里只读、只算计划:缺的待补、值不同 / 过短 / 两把同值在任何写操作之前拒绝(-ResyncDomainServiceSecrets 改成统一值)。
+	# 真正写在本块最后一步(Sync-ManagedDomainServiceSecrets)。DryRun 只打一行说明。
+	Initialize-ManagedDomainServiceSecrets
 	Assert-GrpcClientDeadlineBudget
 	# 收件箱写前门禁(交接 player-inbox-handoff-20261015 §6 H1):渲染值只取 git 跟踪的两份 yaml;-PlayerInboxConsumer 与 yaml 不一致、
 	# 「消费端关而白名单非空」(当前检出里的两份 yaml,或非 DryRun 时另一侧线上已部署的值)且没传 -AllowPlayerInboxConsumerOff、
@@ -17533,6 +17755,8 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 		Write-KafkaDiskLedger -Plan $script:KafkaDiskPlan
 		Assert-KafkaStorageChangeIsSafe -Plan $script:KafkaDiskPlan
 	}
+	# 第一个写操作:上面的只读门禁全部通过之后,先把托管内部密钥补齐(Initialize-ManagedDomainServiceSecrets 算好的计划),再进 switch 部署工作负载。
+	Sync-ManagedDomainServiceSecrets
 }
 
 switch ($Command) {

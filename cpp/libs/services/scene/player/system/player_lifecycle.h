@@ -102,6 +102,10 @@ struct PlayerEnterContext
 	// 入场会话栅栏的输入,也是待入场上下文这一处"当前身份"的代次(scene-enter-session-fence.md §5.1 / §5.5)。
 	// 不进存盘(G5)。
 	uint64_t loginGeneration{0};
+	// 本次入场出自哪个 gate 进程:SceneHandler::PlayerEnterGameNode 取请求所走入站连接的握手身份(gate 的 node_uuid),
+	// 不取消息体自报的值。与 enterInfo.session_id 一起构成"哪一条会话"(enter_fence.h 的 SameGateInstance;
+	// scene-enter-chain-residuals.md §14)。空 = 未知:托管落点等不经 gate 连接的入场,按会话号认。
+	std::string gateInstanceId;
 	uint64_t ownerRevision{0};
 	uint64_t roleAdmissionGeneration{0};
 	std::string handoffFence; // 原 SQL 确认后登记的 H，入场全过程按值保留
@@ -1192,7 +1196,9 @@ public:
 	static PendingEnterMap& GetPendingEnterMap();
 	// 交易只在实际载入/A2回调均已结束后清掉封存上下文，不触发新载入。
 	static bool DrainSealedPendingEntry(Guid playerId);
-	static void RejectRoleAdmission(Guid playerId, SessionId sessionId);
+	// 给被拒入场请求自己的会话推 kEnterSceneFailed。gateInstanceId 是请求出自的 gate 进程(PlayerEnterContext::gateInstanceId):
+	// 非空时只推给那个进程,同号会话落在另一个进程上(同一 node_id 的新 gate)时不推,免得把 3023 推给新进程上的活玩家。
+	static void RejectRoleAdmission(Guid playerId, SessionId sessionId, const std::string& gateInstanceId);
 	static void FreezeRoleForTrade(Guid playerId);
 
 	static void HandlePlayerAsyncLoaded(Guid player_id, const PlayerAllData& message);
@@ -1236,17 +1242,27 @@ public:
 	static EnterGameNodeOutcome HandleEnterGameNode(Guid playerId, PlayerEnterContext ctx);
 
 	// 只读:按本节点此刻的三处当前身份(实体 / 待入场 / 改派待确认条目)判一个入场请求,不计数、不打日志、不改任何状态。
-	// 入口、UpdateSessionDetail(代次按 0 传)与单测共用。
-	static enter_fence::Verdict JudgeEnter(Guid playerId, SessionId sessionId, uint64_t loginGeneration);
+	// 入口(角色登记前的预检与 HandleEnterGameNode 第 0 步)、UpdateSessionDetail(代次按 0 传)与单测共用。
+	// gateInstanceId 是请求出自的 gate 进程(入站连接的握手身份),空 = 未知、按会话号认(enter_fence::SameGateInstance)。
+	static enter_fence::Verdict JudgeEnter(Guid playerId, SessionId sessionId, uint64_t loginGeneration,
+										   std::string_view gateInstanceId);
+
+	// gate 转来的客户端消息(含 gate 断线代发的 ExitGame)是否出自另一个 gate 进程上的同号会话(scene-enter-chain-residuals.md
+	// §14):玩家当前的会话(有实体看 PlayerLoginIdentityComp,载入在途看待入场上下文)与消息会话号相同,而两边的 gate 实例都已知
+	// 且不同。是 = 同一 node_id 上老 gate 进程的旧连接(老进程还没关停、新进程已发出同号),调用方不派发、不擦映射、不取消载入。
+	// 会话号不同返回 false,留给调用方既有的陈旧会话守卫。只读、不计数。
+	static bool IsStaleGateInstance(Guid playerId, SessionId sessionId, std::string_view gateInstanceId);
 
 	// 只在 SessionMap[sessionId] 此刻映射到 playerId 时才擦,返回是否擦了(设计 §5.6)。gate 以同一 node_id 重启后
 	// 会话序号从头发,同号会话可能已属于别的玩家;按自己快照里的旧号无条件擦,擦掉的是别人的在线映射。
 	// SessionMap 的擦除点(RemovePlayerSession、EnterScene 换会话、覆盖待入场上下文、三条载入放弃路径)一律走它。
 	static bool EraseSessionMappingIfOwned(SessionId sessionId, Guid playerId);
 
-	// 把一次已放行的绑定写进实体的 PlayerLoginIdentityComp:会话有效才记会话号,代次取 max。只由 EnterScene 第 1 步与
+	// 把一次已放行的绑定写进实体的 PlayerLoginIdentityComp:会话有效才记会话号与 gate 实例,代次取 max。实例只在换了会话或
+	// 带来了已知实例时改:同一会话的托管落点等不带实例的入场不把已知实例抹成未知。只由 EnterScene 第 1 步与
 	// SceneHandler::UpdateSessionDetail 调用。非 per-tick 路径,内部用 get_or_emplace。
-	static void RecordLoginIdentity(entt::entity player, SessionId sessionId, uint64_t loginGeneration);
+	static void RecordLoginIdentity(entt::entity player, SessionId sessionId, uint64_t loginGeneration,
+									std::string_view gateInstanceId);
 
 	// ctx.homeZoneId / ctx.ownerEpoch 非 0 时更新实体上的归属组件(重连 / 顶号复用实体的路径
 	// 靠这里拿到 Go 给的当前 epoch;首登路径 InitPlayerFromAllData 先挂零值组件再经这里赋值)。
@@ -1821,8 +1837,11 @@ public:
 	// hostedPlacement:这次进场是托管落点(sessionId 是断开那次登录)。托管落点从不取消退出(EnterScene 对退出中的实体直接
 	// 丢下这条落点),被它"打断"的退出照常收尾、票据照常被消费,所以第 1 步不作废票据 —— 作废的话,组队跟随的同节点托管落点
 	// 恰好撞上排空退出时,他会存盘下线而不是被改派(player-connection-lost-hold.md §4.3)。第 2 步不受影响。
+	// gateInstanceId:进场出自的 gate 进程(PlayerEnterContext::gateInstanceId)。"与票据是同一条会话"按 (gate 实例, session_id)
+	// 认(enter_fence::SameGateInstance):会话号相同而实例不同是另一个进程上的另一条会话,按会话不同处理。空 = 未知,只比会话号。
 	// 没有票据也没有条目时 no-op。
-	static void ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId, bool hostedPlacement = false);
+	static void ReconcileRelocateOnReentry(Guid playerId, SessionId sessionId, bool hostedPlacement = false,
+										   std::string_view gateInstanceId = {});
 
 	// 推进待确认表:各阶段的截止时刻、核实的首发与重发、落地条目看实体建出来没有、读不到时的处置。由 RedisSystem 的
 	// 1s 定时器驱动,与标记撤回、A2′ 重发同一个节拍。核实只在条目自己的 nextVerifyAt 到了才(重)发:Redis 重连成功时

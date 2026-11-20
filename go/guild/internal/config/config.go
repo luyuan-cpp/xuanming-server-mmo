@@ -80,7 +80,7 @@ type Config struct {
 	// optional 只为 -migrate:只建表的形态不连 data_service。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
 	// ContentGuard 是内容安全服务(go/content_guard)的调用端:帮会名与公告先送检
-	// (docs/design/rename-and-content-safety.md §6.6)。没配目标时不送检,仅供本机开发;staging / prod 写 Required: true,没配就拒启。
+	// (docs/design/rename-and-content-safety.md §6.6)。缺省严格:没配目标拒启、不可达不放行;只有本机 yaml 写 Optional: true 才放宽。
 	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
 	// IdSegment 控制 guild_id 的号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
 	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 发不出 guild_id,建帮一律失败**:

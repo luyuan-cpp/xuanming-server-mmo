@@ -175,7 +175,6 @@ protected:
     static constexpr uint64_t kPlayerId = (uint64_t{1} << 58) + 320;
     static constexpr uint64_t kInventoryItemId = (uint64_t{1} << 60) + 701;
     static constexpr uint64_t kWarehouseItemId = (uint64_t{1} << 60) + 702;
-    static constexpr uint64_t kAcceptedAtMs = 1900000000123;
 
     void SetUp() override
     {
@@ -229,7 +228,6 @@ protected:
         auto& mission = (*main.GetMutableMissionList().mutable_missions())[7];
         mission.set_id(7);
         mission.add_progress(5);
-        (*main.GetMutableMissionList().mutable_mission_begin_time())[7] = kAcceptedAtMs;
         main.RestoreCompleted(11);
         main.RestoreCompleted(12);
         main.RestoreClaimable(12);
@@ -263,7 +261,7 @@ protected:
         previous.mutable_player_database_data()->set_player_id(kPlayerId + 1);
         previous.mutable_player_database_data()->mutable_currency()->add_values(831);
         previous.mutable_player_database_data()->mutable_bag_component()->add_items()->set_item_uuid(kInventoryItemId);
-        previous.mutable_player_database_data()->mutable_mission_component()->set_scoped_state_present(true);
+        previous.mutable_player_database_data()->mutable_mission_component()->add_scopes()->set_scope(MissionListComp::kPlayerMission);
         const auto previousBytes = previous.SerializeAsString();
         EXPECT_FALSE(PlayerAllDataMessageFieldsMarshal(player, previous));
         EXPECT_EQ(previousBytes, previous.SerializeAsString()) << "拒绝必须保留原输出";
@@ -307,7 +305,6 @@ protected:
         const auto& active = main->GetMissionList().missions().at(7);
         ASSERT_EQ(1, active.progress_size());
         EXPECT_EQ(5u, active.progress(0));
-        EXPECT_EQ(kAcceptedAtMs, main->GetMissionList().mission_begin_time().at(7));
         EXPECT_TRUE(main->IsComplete(11));
         EXPECT_FALSE(main->IsClaimable(11));
         EXPECT_TRUE(main->IsComplete(12));
@@ -346,7 +343,7 @@ TEST_F(PlayerFeaturePersistenceTest, DatabaseRecordAloneRestoresBagAssetsAndMiss
     ASSERT_TRUE(database.has_bag_component());
     ASSERT_TRUE(database.has_mission_component());
     EXPECT_EQ(2, database.bag_component().items_size());
-    EXPECT_TRUE(database.mission_component().scoped_state_present());
+    EXPECT_EQ(2, database.mission_component().scopes_size());
 
     std::string bytes;
     ASSERT_TRUE(database.SerializeToString(&bytes));
@@ -415,7 +412,6 @@ TEST_F(PlayerFeaturePersistenceTest, EmptyDatabaseBagAndMissionsLoadEmpty)
     auto* database = saved.mutable_player_database_data();
     database->mutable_bag_component()->Clear();
     database->mutable_mission_component()->Clear();
-    database->mutable_mission_component()->set_scoped_state_present(true);
     ASSERT_TRUE(database->has_bag_component());
     ASSERT_TRUE(database->has_mission_component());
 

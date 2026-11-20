@@ -59,6 +59,8 @@ $script:AdmissionHeader = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rp
 $script:AdmissionSource = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rpc/connection_admission.cpp'
 $script:GateMain = Read-RepoText -RelativePath 'cpp/nodes/gate/main.cpp'
 $script:SessionHandler = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rpc/client_session_handler.cpp'
+# 与 battle 直连共用的纯逻辑(速率闸、未验签预算、按来源前缀限速)。
+$script:SharedAdmissionHeader = Read-RepoText -RelativePath 'cpp/libs/engine/core/network/accept_admission.h'
 
 # C++ 导出的指标族:名字 → 类型(counter / gauge / histogram)。
 $script:Families = [ordered]@{}
@@ -168,8 +170,9 @@ Test-Case '按来源限速:缺省关闭,只在承压时问前缀的桶,放行之
     $decideAt = $admit.Value.IndexOf('Decide(state')
     $takeAt = $admit.Value.IndexOf('tlsState.sourceRate->Take(')
     Assert-True -Condition ($decideAt -ge 0 -and $takeAt -gt $decideAt) -Because '前缀的桶在所有闸都放行之后才记账,被别的闸拒掉的连接不消耗它的名额'
-    Assert-Match -Text $script:AdmissionHeader -Pattern 'return SourcePrefix\{false, hostOrderAddress >> 8\};' -Because 'IPv4 按 /24 聚合'
-    Assert-Match -Text $script:AdmissionHeader -Pattern '(?s)for \(size_t i = 0; i < 8; \+\+i\)\s*\{\s*bits = \(bits << 8\) \| address\[i\];' -Because 'IPv6 按 /64 聚合(按 /128 等于没做)'
+    Assert-Match -Text $admit.Value -Pattern 'tlsState\.sourceRateActive \? RateLimitedSourceOf\(peer\) : std::nullopt' -Because '只对公网源地址按来源限速:代理、LB、边缘 nginx 后面的连接在 accept 时只看得到内网地址'
+    Assert-Match -Text $script:SharedAdmissionHeader -Pattern 'return SourcePrefix\{false, hostOrderAddress >> 8\};' -Because 'IPv4 按 /24 聚合(core accept_admission.h)'
+    Assert-Match -Text $script:SharedAdmissionHeader -Pattern '(?s)for \(size_t i = 0; i < 8; \+\+i\)\s*\{\s*bits = \(bits << 8\) \| address\[i\];' -Because 'IPv6 按 /64 聚合(按 /128 等于没做)'
 }
 
 Test-Case 'gate-connection-alerts.yaml:PrometheusRule 形状,gate.connections 组的规则名单与每条规则的字段' {

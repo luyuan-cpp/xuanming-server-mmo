@@ -29,6 +29,7 @@ namespace player_inbox {
 #pragma region PlayerInboxFetchItems
 namespace {
 void QueueLocalPlayerInboxFetchItemsFailure(GrpcDone<::player_inbox::FetchPlayerInboxResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxFetchItemsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -96,6 +97,7 @@ void SendPlayerInboxFetchItemsErased(entt::registry& registry, entt::entity node
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInbox.FetchItems: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxFetchItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -105,6 +107,7 @@ void SendPlayerInboxFetchItemsErased(entt::registry& registry, entt::entity node
     const auto* typedRequest = dynamic_cast<const ::player_inbox::FetchPlayerInboxRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInbox.FetchItems: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxFetchItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -117,6 +120,7 @@ void SendPlayerInboxFetchItemsErased(entt::registry& registry, entt::entity node
 #pragma region PlayerInboxAckItems
 namespace {
 void QueueLocalPlayerInboxAckItemsFailure(GrpcDone<::player_inbox::AckPlayerInboxResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxAckItemsGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -184,6 +188,7 @@ void SendPlayerInboxAckItemsErased(entt::registry& registry, entt::entity nodeEn
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInbox.AckItems: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAckItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -193,6 +198,7 @@ void SendPlayerInboxAckItemsErased(entt::registry& registry, entt::entity nodeEn
     const auto* typedRequest = dynamic_cast<const ::player_inbox::AckPlayerInboxRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInbox.AckItems: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxAckItemsGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -205,6 +211,7 @@ void SendPlayerInboxAckItemsErased(entt::registry& registry, entt::entity nodeEn
 #pragma region PlayerInboxEnqueueBattleSettlement
 namespace {
 void QueueLocalPlayerInboxEnqueueBattleSettlementFailure(GrpcDone<::player_inbox::BattleSettlementInboxResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxEnqueueBattleSettlementGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -272,6 +279,7 @@ void SendPlayerInboxEnqueueBattleSettlementErased(entt::registry& registry, entt
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInbox.EnqueueBattleSettlement: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxEnqueueBattleSettlementGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -281,6 +289,7 @@ void SendPlayerInboxEnqueueBattleSettlementErased(entt::registry& registry, entt
     const auto* typedRequest = dynamic_cast<const ::player_inbox::BattleSettlementInboxRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInbox.EnqueueBattleSettlement: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxEnqueueBattleSettlementGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -293,6 +302,7 @@ void SendPlayerInboxEnqueueBattleSettlementErased(entt::registry& registry, entt
 #pragma region PlayerInboxLookupBattleSettlement
 namespace {
 void QueueLocalPlayerInboxLookupBattleSettlementFailure(GrpcDone<::player_inbox::BattleSettlementInboxResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kPlayerInboxLookupBattleSettlementGrpcPath, code, message);
     QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
         done(outcome, nullptr);
     });
@@ -360,6 +370,7 @@ void SendPlayerInboxLookupBattleSettlementErased(entt::registry& registry, entt:
         const auto requestTypeName = message.GetDescriptor()->full_name();
         LOG_ERROR << "gRPC PlayerInbox.LookupBattleSettlement: request type " << std::string(requestTypeName.data(), requestTypeName.size())
                   << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxLookupBattleSettlementGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
@@ -369,6 +380,7 @@ void SendPlayerInboxLookupBattleSettlementErased(entt::registry& registry, entt:
     const auto* typedRequest = dynamic_cast<const ::player_inbox::BattleSettlementInboxRequest*>(&message);
     if (typedRequest == nullptr) {
         LOG_ERROR << "gRPC PlayerInbox.LookupBattleSettlement: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kPlayerInboxLookupBattleSettlementGrpcPath, kGrpcStatusInternal, "request type mismatch");
         QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
             done(outcome, nullptr);
         });
