@@ -1,4 +1,4 @@
-{# python_all_table.py.j2 — 全部表的聚合加载入口 #}
+{# python_table_loader.py.j2 — 全部表的聚合加载入口 #}
 """全部配置表的聚合加载入口（自动生成，请勿手改）。
 
 DO NOT EDIT — regenerate from Excel via Data Table Exporter.
@@ -7,9 +7,9 @@ DO NOT EDIT — regenerate from Excel via Data Table Exporter.
 ====
 ::
 
-    from table import all_table
+    from table import table_loader
 
-    all_table.load_tables("generated/tables", use_binary=True)
+    table_loader.load_tables("generated/tables", use_binary=True)
 
     from table.item_table import ItemTableManager
     row = ItemTableManager.instance().find_by_id(1001)

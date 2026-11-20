@@ -1,4 +1,4 @@
-
+{# cpp_table_loader.h.j2 — aggregated table loader header #}
 #pragma once
 
 #include <cstdint>
@@ -8,6 +8,9 @@ using LoadSuccessCallback = std::function<void()>;
 
 void LoadTables();
 
+/// 并行加载全部表:工作线程数不超过 CPU 核数,阻塞到全部加载完、LoadSuccess 与回调都跑完才返回,
+/// 返回时工作线程已全部退出。名字里的 Async 指并行,不是「返回后还在后台加载」。
+/// 可以重复调用;加载会整批换掉各表的快照,调用期间不能有别的线程读表。
 void LoadTablesAsync();
 
 void OnTablesLoadSuccess(const LoadSuccessCallback& callback);

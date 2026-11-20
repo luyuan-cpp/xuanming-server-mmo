@@ -149,7 +149,7 @@ def _validate_java_code_outputs(cfg: ExporterConfig, tables: list[TableSchema]) 
     if not cfg.java.enabled:
         return
 
-    expected = {"AllTable.java"}
+    expected = {"TableLoader.java"}
     for table in tables:
         expected.add(f"{table.name}TableManager.java")
         if table.has_foreign_keys:

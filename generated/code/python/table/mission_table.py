@@ -88,7 +88,7 @@ class MissionTableManager:
     def build_snapshot(self, config_dir: str | Path, use_binary: bool = False) -> Snapshot:
         """读盘 + 建索引，返回一个新快照。**不碰管理器当前状态。**
 
-        和 :meth:`apply_snapshot` 分开，是为了让 ``all_table.load_tables`` 做到
+        和 :meth:`apply_snapshot` 分开，是为了让 ``table_loader.load_tables`` 做到
         「全部表都读成功了才换」——中间任何一张表读失败，一张都不会被换掉，
         进程继续跑在上一批完整的配置上。
 
@@ -248,5 +248,5 @@ class MissionTableManager:
 
 
 #: 模块级单例。别再 ``MissionTableManager()`` 自己新建一个 —— 那个实例是空的，
-#: all_table 也不会给它加载数据。
+#: table_loader 也不会给它加载数据。
 _INSTANCE: MissionTableManager = MissionTableManager()

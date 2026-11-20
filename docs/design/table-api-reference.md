@@ -24,7 +24,7 @@
 
 ## 1. Global Table Loader
 
-Defined in `all_table.h` / `all_table.cpp`.
+Defined in `table_loader.h` / `table_loader.cpp`.
 
 ```cpp
 // Serial load: all Load() first, then all LoadSuccess(), then global callback.

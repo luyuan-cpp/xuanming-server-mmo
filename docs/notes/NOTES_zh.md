@@ -519,7 +519,7 @@
 | #163 | 服务器 push 而非客户端 pull | player_lifecycle_handler + EnterScene push | 设计文档 | S | — |
 | #164 | C++ 少用宏 | `cpp/libs/engine/core/macros/` 仅 return_define/error_return | 业务层已遵守 | — | ➖ |
 | #170 | 物品移动应交换非删加 | bag_system 只有 Add/Remove | SwapItem/ExchangeItem | M | — |
-| #171 | 热更支持表新行 | `all_table.cpp` 有 hot_reload | go/data_service 无 | M | — |
+| #171 | 热更支持表新行 | `table_loader.cpp` 有 hot_reload | go/data_service 无 | M | — |
 | #179 | 功能条件解锁 | `function_switch.proto` | 完整集成 handler | M | #228 |
 | #187 | 流数据模板转化 | codec `ParseMessageFromRequestBody` | 泛化为通用工具 | S | — |
 | #188 (UE 视野同步+登录排队) | AOI 优先级 | `aoi_priority_design.md` | 登录排队延展未实现 | M | #102 |

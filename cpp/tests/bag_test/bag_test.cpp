@@ -4080,7 +4080,7 @@ int main(int argc, char **argv)
         return 1;
     }
     ItemTableManager::Instance().Load();
-    // 装备栏的槽位口径在这张表里(哪个槽接受哪个部位)。生产侧由 all_table.cpp
+    // 装备栏的槽位口径在这张表里(哪个槽接受哪个部位)。生产侧由 table_loader.cpp
     // 自动注册加载;单测没有那条启动链,必须自己加载,否则 FindAll() 为空、
     // 任何装备都放不进具名槽。
     EquipSlotTableManager::Instance().Load();

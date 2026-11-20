@@ -15,7 +15,7 @@
 // skill.json 还是 skill.pb 加载,指纹相同。
 //
 // 缓存:Current() 进程内只算一次(八张表全量序列化,scene 每次备战都算不划算)。
-// 注意:generated/table/code/all_table.h 的 ReloadTables() 目前全仓无人调用;
+// 注意:generated/table/code/table_loader.h 的 ReloadTables() 目前全仓无人调用;
 // 若日后接线热重载,必须在重载完成回调里调用 Refresh(),否则指纹与内存表脱节。
 
 #include <string>

@@ -1,7 +1,7 @@
 """Config class generator.
 
 Produces per-table config manager classes for enabled languages (C++, Go,
-Java) using Jinja2 templates, plus aggregated "all_table" files.
+Java) using Jinja2 templates, plus aggregated "table_loader" files.
 """
 
 from __future__ import annotations
@@ -83,12 +83,12 @@ def _gen_all_cpp(tables: list[TableSchema], env: Environment, cfg: ExporterConfi
             logger.info("Generated C++ FK: %s", t.name)
         logger.info("Generated C++ config: %s", t.name)
 
-    # all_table aggregator
+    # table_loader aggregator
     names: list[str] = sorted(t.name for t in tables)
-    ah_tpl: Template = env.get_template("cpp_all_table.h.j2")
-    ac_tpl: Template = env.get_template("cpp_all_table.cpp.j2")
-    write_file(cfg.cpp.code_dir / "all_table.h", ah_tpl.render())
-    write_file(cfg.cpp.code_dir / "all_table.cpp", ac_tpl.render(sheetnames=names))
+    ah_tpl: Template = env.get_template("cpp_table_loader.h.j2")
+    ac_tpl: Template = env.get_template("cpp_table_loader.cpp.j2")
+    write_file(cfg.cpp.code_dir / "table_loader.h", ah_tpl.render())
+    write_file(cfg.cpp.code_dir / "table_loader.cpp", ac_tpl.render(sheetnames=names))
 
 
 def _cpp_ctx(table: TableSchema) -> dict:
@@ -133,8 +133,8 @@ def _gen_all_go(tables: list[TableSchema], env: Environment, cfg: ExporterConfig
         logger.info("Generated Go config: %s", t.name)
 
     names: list[str] = sorted(t.name for t in tables)
-    all_tpl: Template = env.get_template("go_all_table.go.j2")
-    write_file(cfg.go.code_dir / "all_table.go", all_tpl.render(sheetnames=names))
+    all_tpl: Template = env.get_template("go_table_loader.go.j2")
+    write_file(cfg.go.code_dir / "table_loader.go", all_tpl.render(sheetnames=names))
 
 
 def _go_ctx(table: TableSchema, cfg: ExporterConfig) -> dict:
@@ -176,8 +176,8 @@ def _gen_all_java(tables: list[TableSchema], env: Environment, cfg: ExporterConf
         logger.info("Generated Java config: %s", t.name)
 
     names: list[str] = sorted(t.name for t in tables)
-    all_tpl: Template = env.get_template("java_all_table.java.j2")
-    write_file(cfg.java.code_dir / "AllTable.java", all_tpl.render(
+    all_tpl: Template = env.get_template("java_table_loader.java.j2")
+    write_file(cfg.java.code_dir / "TableLoader.java", all_tpl.render(
         sheetnames=names, package=cfg.java.package
     ))
 
@@ -245,9 +245,9 @@ def _gen_all_csharp(tables: list[TableSchema], env: Environment, cfg: ExporterCo
         logger.info("Generated C# config: %s", t.name)
 
     names: list[str] = sorted(t.name for t in tables)
-    all_tpl: Template = env.get_template("csharp_all_table.cs.j2")
+    all_tpl: Template = env.get_template("csharp_table_loader.cs.j2")
     write_file(
-        cfg.csharp.code_dir / "AllTable.cs",
+        cfg.csharp.code_dir / "TableLoader.cs",
         _clean_output(all_tpl.render(sheetnames=names, package=cfg.csharp.package)),
     )
 
@@ -314,9 +314,9 @@ def _gen_all_python(tables: list[TableSchema], env: Environment, cfg: ExporterCo
         logger.info("Generated Python config: %s", t.name)
 
     names: list[str] = sorted(t.name for t in tables)
-    all_tpl: Template = env.get_template("python_all_table.py.j2")
+    all_tpl: Template = env.get_template("python_table_loader.py.j2")
     write_file(
-        cfg.python.code_dir / "all_table.py",
+        cfg.python.code_dir / "table_loader.py",
         _clean_python_output(all_tpl.render(sheetnames=names)),
     )
 
@@ -471,8 +471,8 @@ def _gen_all_ue(tables: list[TableSchema], env: Environment, cfg: ExporterConfig
         logger.info("Generated UE config: %s", t.name)
 
     names: list[str] = sorted(t.name for t in tables)
-    ah_tpl: Template = env.get_template("ue_all_table.h.j2")
-    ac_tpl: Template = env.get_template("ue_all_table.cpp.j2")
+    ah_tpl: Template = env.get_template("ue_table_loader.h.j2")
+    ac_tpl: Template = env.get_template("ue_table_loader.cpp.j2")
     write_file(cfg.ue.code_dir / "ConfigSubsystem.h",
                _clean_output(ah_tpl.render(sheetnames=names, api=cfg.ue.package)))
     write_file(cfg.ue.code_dir / "ConfigSubsystem.cpp",

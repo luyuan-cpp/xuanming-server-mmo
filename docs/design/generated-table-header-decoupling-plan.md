@@ -3,6 +3,9 @@
 仓库：`D:\luyuan\mmorpg`　生成器：`tools/data_table_exporter`
 状态：**方案已审，代码未动**。本文档自包含，执行者不需要原对话。
 
+> 2026-11-19 改名对照：聚合加载器 `all_table` 已改名为 `table_loader`（模板 `cpp_all_table.cpp.j2` → `cpp_table_loader.cpp.j2`、`ue_all_table.h.j2` → `ue_table_loader.h.j2`，产物 `all_table.{h,cpp}` → `table_loader.{h,cpp}`）。下文是写作当时的快照，保留当时的名字、行号与度量（如 `all_table.obj` 的体积），按这条对照阅读即可。
+> 改名的原因之一见 P2-K：`ls *_table.h` 因为 `all_table.h` 也匹配通配而多算了一个。
+
 ---
 
 ## 0. 硬约束（用户明确要求，不可违反）

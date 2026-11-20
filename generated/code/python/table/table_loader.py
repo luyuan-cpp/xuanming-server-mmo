@@ -6,9 +6,9 @@ DO NOT EDIT — regenerate from Excel via Data Table Exporter.
 ====
 ::
 
-    from table import all_table
+    from table import table_loader
 
-    all_table.load_tables("generated/tables", use_binary=True)
+    table_loader.load_tables("generated/tables", use_binary=True)
 
     from table.item_table import ItemTableManager
     row = ItemTableManager.instance().find_by_id(1001)

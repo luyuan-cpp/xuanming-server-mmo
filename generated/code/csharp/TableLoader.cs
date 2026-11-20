@@ -19,7 +19,7 @@ namespace MmorpgClient.Table
     /// 会炸。异步的正确形状是「后台取字节 → 主线程调 LoadTables(byteProvider, ...)」，
     /// 见下面那个重载。
     /// </remarks>
-    public static class AllTable
+    public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
         public const int TableCount = 53;

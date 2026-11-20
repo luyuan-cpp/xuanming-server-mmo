@@ -35,7 +35,7 @@
     <ClInclude Include="code\actoractioncombatstate_table_comp.h" />
     <ClInclude Include="code\actoractionstate_table.h" />
     <ClInclude Include="code\actoractionstate_table_comp.h" />
-    <ClInclude Include="code\all_table.h" />
+    <ClInclude Include="code\table_loader.h" />
     <ClInclude Include="code\basescene_table.h" />
     <ClInclude Include="code\basescene_table_comp.h" />
     <ClInclude Include="code\bit_index\mission_table_id_bit_index.h" />
@@ -235,7 +235,7 @@
     <ClCompile Include="code\petentry_table.cpp" />
     <ClCompile Include="code\actoractioncombatstate_table.cpp" />
     <ClCompile Include="code\actoractionstate_table.cpp" />
-    <ClCompile Include="code\all_table.cpp" />
+    <ClCompile Include="code\table_loader.cpp" />
     <ClCompile Include="code\basescene_table.cpp" />
     <ClCompile Include="code\buff_table.cpp" />
     <ClCompile Include="code\class_table.cpp" />

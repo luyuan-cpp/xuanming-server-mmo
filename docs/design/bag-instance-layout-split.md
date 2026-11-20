@@ -428,7 +428,7 @@ C++ 侧只有两个函数参与,都在桥层:
 - `Bag::EquipKindFor(configId)` —— 查物品表拿部位
 - `Bag::FindFreeSlotForKind(kind)` —— 在槽位表里找**第一个接受该部位、且当前空着**的槽(是"第一个空的",不是"那个唯一的")
 
-槽位表由 `all_table.cpp` 自动注册加载(导表工具生成);`bag_test` 没有那条启动链,`main()` 里显式加载了它 —— 忘了加载的症状是 `FindAll()` 为空、任何装备都放不进具名槽。
+槽位表由 `table_loader.cpp` 自动注册加载(导表工具生成);`bag_test` 没有那条启动链,`main()` 里显式加载了它 —— 忘了加载的症状是 `FindAll()` 为空、任何装备都放不进具名槽。
 
 布局层依旧不认识 config(§2.2 那条判据没破):它只多了一个 `HasSlotSemantics()` 谓词,回答"我的槽位有没有含义"。注意它**不等于** `!SupportsCompaction()` —— 格子背包同样不许自动重排,但槽位没有具名语义。
 

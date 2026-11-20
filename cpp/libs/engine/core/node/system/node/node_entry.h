@@ -10,7 +10,7 @@
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/node.h"
 #include "node/system/node/node_kafka_command_handler.h"
-#include "table/code/all_table.h"
+#include "table/code/table_loader.h"
 #include "thread_context/ecs_context.h"
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 

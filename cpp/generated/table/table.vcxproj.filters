@@ -33,7 +33,7 @@
     <ClInclude Include="code\actoractionstate_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="code\all_table.h">
+    <ClInclude Include="code\table_loader.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\buff_table.h">
@@ -595,7 +595,7 @@
     <ClCompile Include="code\actoractionstate_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="code\all_table.cpp">
+    <ClCompile Include="code\table_loader.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\buff_table.cpp">

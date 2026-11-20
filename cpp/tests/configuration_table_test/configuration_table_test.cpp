@@ -1,7 +1,8 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include "muduo/base/Logging.h"
-#include "table/code/all_table.h"
+#include "table/code/activityschedule_table.h"
+#include "table/code/table_loader.h"
 #include "table/code/test_table.h"
 #include "table/code/testmultikey_table.h"
 #include "table/code/testmultikey_table_comp.h"
@@ -9,10 +10,12 @@
 #include "table/code/skill_table.h"
 #include "table/code/buff_table.h"
 #include "table/code/buff_table_comp.h"
+#include "table/code/zonegroup_table.h"
 #include "../test_config_helper.h"
 #include "engine/config/config.h"
 #include "modules/snapshot/audit_snapshot_policy.h"
 
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -907,20 +910,30 @@ TEST(LookupGuardMacro, OrContinueDoesNotSkipWhenRowPresent)
 	EXPECT_EQ(reachedBody, 1);
 }
 
-// LoadTablesAsync 每次调用自带一组加载线程,返回前全部 join。早先用函数内静态门闩,只能调一次:
+// LoadTablesAsync 每次调用自带一组工作线程,返回前全部 join。早先用函数内静态门闩,只能调一次:
 // 第二次调用不等加载完就跑 LoadSuccess。那是数据竞争,普通构建下没法稳定复现成失败,
-// 所以这里守的是可观察的契约:连调两次,每次返回时回调都已跑过,表照常可查。
+// 所以这里守的是可观察的契约:连调两次,每次返回时回调都已跑过、表确实重新加载过,之后照常可查。
 TEST(LoadTablesAsyncTest, CanBeCalledRepeatedly)
 {
-	// 加载线程经 InitThreadLocalConfig() 从进程级那份拷配置;测试的 main 只装了本线程这份。
+	// 工作线程经 InitThreadLocalConfig() 从进程级那份拷配置;测试的 main 只装了本线程这份。
 	gNodeConfigManager = tlsNodeConfigManager;
+
+	// Load() 先建好新快照再换掉旧的,所以快照地址变了就说明这张表这一轮确实加载过。
+	// 记成整数再比:旧快照析构后,它的地址只当数值用。
+	const auto addressOf = [](const auto &snapshot) { return reinterpret_cast<std::uintptr_t>(&snapshot); };
 
 	int loaded = 0;
 	OnTablesLoadSuccess([&loaded] { ++loaded; });
-	LoadTablesAsync();
-	EXPECT_EQ(loaded, 1);
-	LoadTablesAsync();
-	EXPECT_EQ(loaded, 2);
+	for (int round = 1; round <= 2; ++round)
+	{
+		// ActivitySchedule 与 ZoneGroup 是加载顺序里的第一张和最后一张,守住工作线程取号的两头。
+		const auto firstBefore = addressOf(ActivityScheduleTableManager::Instance().GetSnapshot());
+		const auto lastBefore = addressOf(ZoneGroupTableManager::Instance().GetSnapshot());
+		LoadTablesAsync();
+		EXPECT_EQ(loaded, round);
+		EXPECT_NE(addressOf(ActivityScheduleTableManager::Instance().GetSnapshot()), firstBefore);
+		EXPECT_NE(addressOf(ZoneGroupTableManager::Instance().GetSnapshot()), lastBefore);
+	}
 	OnTablesLoadSuccess({}); // 回调按引用抓着本用例的局部变量,用完摘掉
 
 	EXPECT_NE(TestTableManager::Instance().FindByIdSilent(1u).first, nullptr);

@@ -7,7 +7,7 @@ import java.util.concurrent.CountDownLatch;
  * Auto-generated aggregated table loader.
  * DO NOT EDIT — regenerate from Excel via Data Table Exporter.
  */
-public class AllTable {
+public class TableLoader {
 
     private static Runnable loadSuccessCallback;
 

@@ -218,7 +218,7 @@ def test_java_code_source_orphan_is_fail_closed(cfg, tmp_path):
     cfg.java.enabled = True
     cfg.java.code_dir = tmp_path / "java-code"
     cfg.java.code_dir.mkdir(parents=True)
-    (cfg.java.code_dir / "AllTable.java").write_text("current", encoding="utf-8")
+    (cfg.java.code_dir / "TableLoader.java").write_text("current", encoding="utf-8")
     stale = cfg.java.code_dir / "RemovedTableManager.java"
     stale.write_text("old generated class", encoding="utf-8")
 

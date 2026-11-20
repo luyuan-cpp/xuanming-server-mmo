@@ -79,6 +79,7 @@ worker 的线程数由实现决定，生产基线必须来自 ThreadMonitor 实�
 | 官方 gRPC C++ SDK | 0（不链接） | — | 官方运行时与桩生成插件已移除；依赖边界由源码及工程静态检查把关 |
 | Kafka consumer / librdkafka | 由实现决定 | librdkafka 内部管理 | 后台线程；应实测，不能假定固定数量 |
 | 异步日志和 lifecycle worker | 由组件决定 | 组件各自配置 | 包括启用时 scene / battle 的 Agones lifecycle 工作线程 |
+| 配置表加载（仅启动期） | 不超过 CPU 核数，也不超过表数 | — | `LoadTablesAsync()` 的工作线程；全部表加载完即 join 退出，稳态下为 0 |
 | 操作系统 / 运行库线程 | 由平台决定 | — | 例如 Windows 加载器线程池的 worker，可能自行退出；应实测，不能假定 |
 
 已退役或无效的配置：
@@ -159,6 +160,7 @@ handler 在 loop 上同步执行，已经在跑的 handler 一定先于任何排
 6. **Go 服务没有 goroutine 硬上限** — 依赖 `GOMAXPROCS` 调度；`runtime.SetMaxThreads()` 管的是 OS 线程，不是 goroutine 数量。
 7. **Kafka 内部线程由实现管理** — 生产基线必须来自 ThreadMonitor 实测。
 8. **K8s cgroup CPU/内存限制不会直接限制线程数** — 应使用监控和组件公开支持的控制项，不能把间接资源限制当成线程硬上限。
+9. **C++ 自己的代码不新起线程**（负责人 2026-11-19 定）— 现有后台线程（Kafka 轮询、异步日志、Agones worker、维护流程的阻塞操作、启动期表加载）逐个评估后保留，清单与保留原因登记在 `tools/scripts/tests/test_cpp_thread_sources.py`；清单之外出现起线程的写法，CI 判红。新代码需要异步就挂主 EventLoop，多步等待用 `loop_async::AwaitCallback` 协程。
 
 ---
 
@@ -170,6 +172,7 @@ handler 在 loop 上同步执行，已经在跑的 handler 一定先于任何排
 | `cpp/libs/engine/core/node/system/node/node.cpp` | 注册 ThreadMonitor；启动 `muduo_grpc` 服务端并在 loop 内执行关机排空 |
 | `cpp/libs/engine/muduo_grpc/` | muduo 驱动的 gRPC 客户端通道与服务端（不建线程） |
 | `tools/scripts/tests/test_cpp_grpc_dependency_boundary.py` | 官方 SDK 的源码、生成产物与全配置工程依赖边界检查 |
+| `tools/scripts/tests/test_cpp_thread_sources.py` | 线程清单守卫：`cpp/libs`、`cpp/nodes` 与表加载器里，清单之外出现起线程的写法即失败 |
 | `cpp/tests/rpc_controller_test/grpc_client_local_reject_test.cpp` | 生成客户端本地拒绝与异步完成回归 |
 | `cpp/tests/rpc_controller_test/grpc_client_loopback_test.cpp` | 生成客户端经 muduo 通道的真实回环回归 |
 | `go/db/internal/kafka/key_ordered_consumer.go` | Kafka 分区 worker 池（结构化 goroutine 控制） |

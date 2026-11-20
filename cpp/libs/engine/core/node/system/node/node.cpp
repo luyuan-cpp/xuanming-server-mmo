@@ -1,7 +1,7 @@
 #include "node.h"
 #include <regex>
 #include <boost/uuid/uuid_io.hpp>
-#include "table/code/all_table.h"
+#include "table/code/table_loader.h"
 #include "node/system/etcd/etcd_helper.h"
 #include "config.h"
 #include "google/protobuf/util/json_util.h"

@@ -419,7 +419,7 @@ Claude 未执行任何编译、测试或导表。第一批与第二批合并验�
 2. 新表：
    - 在仓库根执行 `dev.bat gen`（全量导表，会写 `generated/` 与三端部署目录）；期望：ZoneGroup、PlayMode 两表导出成功，PlayMode 的 `battle_config_id` 外键校验通过（0 视为空引用）。
    - `py tools/data_table_exporter/tools/gen_schema_index.py` 更新 `data/AGENTS.md` 的索引块。
-   - **C++ 登记是必做项**：导表后生成的 `cpp/generated/table/code/all_table.cpp` 会 include 每张表的头文件并调用其 `TableManager::Load()`，不登记就会链接失败。C++ 编译前在 `cpp/generated/table/CMakeLists.txt` 与 `table.vcxproj`（含 `.filters`）按既有格式（参照 GuildActivity 的写法）登记：`code/zonegroup_table.cpp`、`code/playmode_table.cpp`、`code/playmode_table_fk.cpp`（PlayMode 带外键）、`proto/zonegroup_table.pb.cc`、`proto/playmode_table.pb.cc`，以及对应 `.h` / `_comp.h` / `_fk.h` / `.pb.h` 的 ClInclude 项；最终以导表器实际产出的文件列表为准。之后 MSBuild 串行 `/m:1` 编 table 库与链接它的节点。
+   - **C++ 登记是必做项**：导表后生成的 `cpp/generated/table/code/table_loader.cpp` 会 include 每张表的头文件并调用其 `TableManager::Load()`，不登记就会链接失败。C++ 编译前在 `cpp/generated/table/CMakeLists.txt` 与 `table.vcxproj`（含 `.filters`）按既有格式（参照 GuildActivity 的写法）登记：`code/zonegroup_table.cpp`、`code/playmode_table.cpp`、`code/playmode_table_fk.cpp`（PlayMode 带外键）、`proto/zonegroup_table.pb.cc`、`proto/playmode_table.pb.cc`，以及对应 `.h` / `_comp.h` / `_fk.h` / `.pb.h` 的 ClInclude 项；最终以导表器实际产出的文件列表为准。之后 MSBuild 串行 `/m:1` 编 table 库与链接它的节点。
    - 失败时保留导表器完整报错。
 3. 通过后，第二批才开始接线（match 读表需要 `go/shared/generated/table` 里生成的 `PlayModeTable` / `ZoneGroupTable`）。
 

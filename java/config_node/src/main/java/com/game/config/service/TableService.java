@@ -1,6 +1,6 @@
 package com.game.config.service;
 
-import com.game.table.AllTable;
+import com.game.table.TableLoader;
 import com.google.protobuf.MessageOrBuilder;
 import com.google.protobuf.util.JsonFormat;
 import org.slf4j.Logger;
@@ -28,7 +28,7 @@ public class TableService {
     public void loadAll() {
         try {
             long start = System.currentTimeMillis();
-            AllTable.loadTables(configDir);
+            TableLoader.loadTables(configDir);
             lastLoadTimeMs = System.currentTimeMillis() - start;
             loadVersion.incrementAndGet();
             log.info("All tables loaded (version={}, took={}ms)", loadVersion.get(), lastLoadTimeMs);
@@ -41,7 +41,7 @@ public class TableService {
     public void reload() {
         try {
             long start = System.currentTimeMillis();
-            AllTable.reloadTables(configDir);
+            TableLoader.reloadTables(configDir);
             lastLoadTimeMs = System.currentTimeMillis() - start;
             loadVersion.incrementAndGet();
             log.info("Tables reloaded (version={}, took={}ms)", loadVersion.get(), lastLoadTimeMs);

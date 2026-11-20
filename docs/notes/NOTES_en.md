@@ -520,7 +520,7 @@ Pulled from ❌ Not done — infrastructure gaps that hurt when production break
 | #163 | Server push instead of client pull | player_lifecycle_handler + EnterScene push | Design doc | S | — |
 | #164 | C++ minimize macros | `cpp/libs/engine/core/macros/` only return_define / error_return | Business layer already follows | — | ➖ |
 | #170 | Item move = swap not delete-add | bag_system has only Add/Remove | SwapItem / ExchangeItem | M | — |
-| #171 | Hot-reload supports new table rows | `all_table.cpp` has hot_reload | go/data_service does not | M | — |
+| #171 | Hot-reload supports new table rows | `table_loader.cpp` has hot_reload | go/data_service does not | M | — |
 | #179 | Feature-condition unlock | `function_switch.proto` | Full handler integration | M | #228 |
 | #187 | Stream-data template conversion | codec `ParseMessageFromRequestBody` | Generalize to common util | S | — |
 | #188 (UE relevancy + login queue) | AOI priority | `aoi_priority_design.md` | Login queue extension not implemented | M | #102 |

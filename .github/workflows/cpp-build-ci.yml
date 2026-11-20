@@ -93,7 +93,7 @@ jobs:
           bash -n tools/archived/setup_dependencies.sh
           bash -n tools/scripts/third_party/build_linux_sdk.sh
 
-      - name: C++ 独立 SDK 依赖边界
+      - name: C++ 静态契约(独立 SDK 依赖边界、线程清单)
         run: python3 -m unittest discover -s tools/scripts/tests -p 'test_cpp*' -v
 
       - name: 工程清单与文件系统对账

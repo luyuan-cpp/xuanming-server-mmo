@@ -24,7 +24,7 @@
 
 ## 1. 全局表加载器
 
-定义在 `all_table.h` / `all_table.cpp`。
+定义在 `table_loader.h` / `table_loader.cpp`。
 
 ```cpp
 // 串行加载：先全部 Load()，再全部 LoadSuccess()，最后全局回调。

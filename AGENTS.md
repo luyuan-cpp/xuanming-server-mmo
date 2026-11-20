@@ -163,6 +163,7 @@
 - ❌ 不要手改生成产物（见 §3）
 - ❌ 不要在 `docs/design/` 之外随便建 README，不要为记录改动新建 markdown（除非用户要求）
 - ❌ 不要把 `player_id` 当 Prometheus label（高基数会爆）
+- ❌ C++ 节点自己的代码不新起线程（负责人 2026-11-19 定）：不加 `std::thread` / `std::jthread` / `std::async` / `EventLoopThread`，异步挂主 EventLoop，多步等待用 `loop_async::AwaitCallback`。保留的后台线程与原因登记在 `tools/scripts/tests/test_cpp_thread_sources.py`，清单之外 CI 判红；线程构成见 `docs/design/thread-count-monitoring_zh.md`
 - ❌ 不要用 `--no-verify`、注释断言、跳 test 等方式绕过安全检查
 - ❌ 不要执行 `git push` / `git tag`；`git commit` 仅在用户明确要求时执行
 - ❌ 不要登录远端账号（GitHub / k8s / 云厂商 / 注册表），不要改 CI 凭证 / secrets

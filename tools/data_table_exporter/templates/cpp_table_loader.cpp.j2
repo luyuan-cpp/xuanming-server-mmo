@@ -1,0 +1,92 @@
+{# cpp_table_loader.cpp.j2 — aggregated table loader implementation #}
+#include "table_loader.h"
+
+#include <algorithm>
+#include <atomic>
+#include <cstddef>
+#include <thread>
+#include <vector>
+
+{% for item in sheetnames -%}
+#include "{{ item | lower }}_table.h"
+{% endfor %}
+
+LoadSuccessCallback loadSuccessCallback;
+
+void LoadTables() {
+{% for item in sheetnames %}
+    {{ item }}TableManager::Instance().Load();
+{% endfor %}
+
+{% for item in sheetnames %}
+    {{ item }}TableManager::Instance().LoadSuccess();
+{% endfor %}
+
+    if (loadSuccessCallback) {
+        loadSuccessCallback();
+    }
+}
+
+namespace {
+
+constexpr std::size_t kTableCount = {{ sheetnames | length }};
+
+// 按序号加载一张表,序号与上面 LoadTables() 的顺序一致。
+void LoadTableAt(std::size_t index) {
+    switch (index) {
+{%- for item in sheetnames %}
+    case {{ loop.index0 }}: {{ item }}TableManager::Instance().Load(); break;
+{%- endfor %}
+    }
+}
+
+} // namespace
+
+void LoadTablesAsync() {
+    // 工作线程数取 CPU 核数与表数的较小者:表再多,线程数和同时在解析的表数都不超过核数。
+    const std::size_t workerCount = std::min<std::size_t>(
+        std::max<std::size_t>(1, std::thread::hardware_concurrency()), kTableCount);
+    std::atomic<std::size_t> nextTable{0};
+    {
+        // 每次调用各起一组线程,走出这对花括号时全部 join(std::jthread 析构即 join):可以重复调用,
+        // LoadSuccess 不会和加载并发。别改回 detach 加函数内静态门闩,那样第二次调用不会等加载完。
+        std::vector<std::jthread> workers;
+        workers.reserve(workerCount);
+        for (std::size_t worker = 0; worker < workerCount; ++worker) {
+            workers.emplace_back([&nextTable] {
+                void InitThreadLocalConfig();
+                InitThreadLocalConfig();
+                // 各工作线程循环取号,同一个序号只会被一个线程取到。
+                for (;;) {
+                    const std::size_t index = nextTable.fetch_add(1);
+                    if (index >= kTableCount) {
+                        break;
+                    }
+                    LoadTableAt(index);
+                }
+            });
+        }
+    }
+
+{% for item in sheetnames %}
+    {{ item }}TableManager::Instance().LoadSuccess();
+{% endfor %}
+    if (loadSuccessCallback) {
+        loadSuccessCallback();
+    }
+}
+
+void OnTablesLoadSuccess(const LoadSuccessCallback& callback) {
+    loadSuccessCallback = callback;
+}
+
+static uint64_t tableLoadVersion = 0;
+
+void ReloadTables() {
+    LoadTables();
+    ++tableLoadVersion;
+}
+
+uint64_t GetTableLoadVersion() {
+    return tableLoadVersion;
+}

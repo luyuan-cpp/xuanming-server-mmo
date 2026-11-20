@@ -83,6 +83,7 @@ pollers, and shutdown used a temporary worker thread.
 | 官方 gRPC C++ SDK | 0（不链接） | — | 官方运行时与桩生成插件已移除；依赖边界由源码及工程静态检查把关 |
 | Kafka consumer / librdkafka | implementation-dependent | librdkafka internal | Background threads; measure rather than assume a fixed count |
 | Async logging and lifecycle workers | component-dependent | component-specific | Includes the Agones lifecycle worker on scene / battle where enabled |
+| 配置表加载（仅启动期） | 不超过 CPU 核数，也不超过表数 | — | `LoadTablesAsync()` 的工作线程；全部表加载完即 join 退出，稳态下为 0 |
 | OS / runtime threads | platform-dependent | — | For example Windows loader thread-pool workers, which may exit on their own; measure, do not assume |
 
 Retired or inert settings:
@@ -170,6 +171,7 @@ are queued or waiting asynchronously (for example on an Agones permit).
 6. **Go services have no goroutine hard limit** — they rely on scheduling via `GOMAXPROCS`; `runtime.SetMaxThreads()` concerns OS threads, not goroutine count.
 7. **Kafka internal threads are implementation-managed** — production baselines must come from ThreadMonitor measurements.
 8. **K8s cgroup CPU/memory limits do not directly cap thread count** — use monitoring and component-specific supported controls rather than assuming an indirect hard limit.
+9. **C++ 自己的代码不新起线程**（负责人 2026-11-19 定）— 现有后台线程（Kafka 轮询、异步日志、Agones worker、维护流程的阻塞操作、启动期表加载）逐个评估后保留，清单与保留原因登记在 `tools/scripts/tests/test_cpp_thread_sources.py`；清单之外出现起线程的写法，CI 判红。新代码需要异步就挂主 EventLoop，多步等待用 `loop_async::AwaitCallback` 协程。
 
 ---
 
@@ -181,6 +183,7 @@ are queued or waiting asynchronously (for example on an Agones permit).
 | `cpp/libs/engine/core/node/system/node/node.cpp` | Registers ThreadMonitor; starts the `muduo_grpc` server and runs its in-loop shutdown drain |
 | `cpp/libs/engine/muduo_grpc/` | muduo-driven gRPC client channels and server (no threads) |
 | `tools/scripts/tests/test_cpp_grpc_dependency_boundary.py` | 官方 SDK 的源码、生成产物与全配置工程依赖边界检查 |
+| `tools/scripts/tests/test_cpp_thread_sources.py` | 线程清单守卫：`cpp/libs`、`cpp/nodes` 与表加载器里，清单之外出现起线程的写法即失败 |
 | `cpp/tests/rpc_controller_test/grpc_client_local_reject_test.cpp` | 生成客户端本地拒绝与异步完成回归 |
 | `cpp/tests/rpc_controller_test/grpc_client_loopback_test.cpp` | 生成客户端经 muduo 通道的真实回环回归 |
 | `go/db/internal/kafka/key_ordered_consumer.go` | Kafka partition worker pool (structured goroutine control) |

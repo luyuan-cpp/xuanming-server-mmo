@@ -51,7 +51,7 @@ set(SOURCE_FILES
     code/petentry_table.cpp
     code/actoractioncombatstate_table.cpp
     code/actoractionstate_table.cpp
-    code/all_table.cpp
+    code/table_loader.cpp
     code/basescene_table.cpp
     code/buff_table.cpp
     code/class_table.cpp
