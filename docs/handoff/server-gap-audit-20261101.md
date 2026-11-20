@@ -135,7 +135,7 @@
 ### 会造成错误行为
 
 1. **(11-01 已落码,未编译,验证见 progress.md §16「清单第 1、6 条」)scene_manager 写路径的非原子残余(R3、R5、排空)。**
-   - 回滚收进脚本 `luaRollbackInstanceAllocation`:映射仍指向这次分配才认领,认领到才还名额。
+   - 回滚收进脚本 `atomicRollbackInstanceAllocation`（11-01 时的名字 `luaRollbackInstanceAllocation` 之后删除，见 PROGRESS 中写「`luaRollbackInstanceAllocation` 删除」的条目）:映射仍指向这次分配才认领,认领到才还名额。
    - 空闲回收脚本回显式状态,有人时在脚本里 `ZADD XX` 重置时钟;映射缺失时摘掉条目、交回 agones_gs,不再加回。
    - 三段认领脚本带 token 和 `scene:{id}:claim` 记录(TTL 600s),重发返回原快照;Eval 回错时 token 记在 `SceneClaimTokens`,同进程下一次认领接手。
    - force 认领以映射存在为前提(`absent` 模式除外)。

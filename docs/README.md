@@ -459,6 +459,7 @@ Redis 物理水平扩展的用户目标、当前存盘链问题、源码入口�
 - [remaining-two-handoff-20261102-r1.md](handoff/remaining-two-handoff-20261102-r1.md) — 剩余两项验收交接（2026-11-02 晚，America/New_York）
 - [repo-layout-20261007.md](handoff/repo-layout-20261007.md) — 仓库目录整理:交接说明(2026-10-07)
 - [rpc-channel-batch7-handoff-20261015.md](handoff/rpc-channel-batch7-handoff-20261015.md) — 交接:RpcChannel 改造收尾——第 7 批、剩余调用点迁移与玩家级延后完成(2026-10-15)
+- [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20):可做部分已落码未编译,残余按负责人决定 / 后台身份 / 其它会话分类
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
 - [session-summary-20260908-09.md](handoff/session-summary-20260908-09.md) — 本轮会话总览与遗留清单（2026-09-08 ~ 09-09）
 - [zone-home-and-physical-storage-conversation-20260924.md](handoff/zone-home-and-physical-storage-conversation-20260924.md) — 逻辑归属、物理存储与合服：完整对话记录（mmorpg）

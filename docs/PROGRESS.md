@@ -37355,3 +37355,4 @@ Windows modules、scene及bag_test按/m:1构建和完整裸指针门禁通过；
   两个人同时发布(`ErrConflict`)、watch 中断后重读两条路径没有任何证据。K8s 的清单、ConfigMap 与准入策略只有契约测试,没上过集群;非 dev 档的 ConfigMap 没有 DryRun 用例(只核对了脚本里的缺省值)。
 - **上线注意**:staging / prod 首次部署前要先发布词库,否则 content-guard 的副本不就绪,带 `-WaitReady` 的发布会停在这里(`deploy/k8s/README.md`「内容安全」)。
 - **Java 版(AGENTS §12)**:待做,Java 版本号 0.1.0-SNAPSHOT。本地层用 houbb/sensitive-word(不到 2 万 star,负责人 2026-11-19 同意例外),行为以 `go/content_guard/testdata/vectors.json` 为准。
+- **2026-11-20 服务器代码完成度核对**：提交 `55eae6be3`（本地 main，未 push，588 个文件，未编译未测）。按缺口清单与 PROGRESS 核对，服务器可做部分已落码未编译；残余与决定见 `docs/handoff/server-code-completion-20261120.md`：需负责人定的有支付回调域名与证书、App Store / Google Play 桥的依赖授权；依赖后台身份的有交易人工判定审批流；其它会话在做的有改名与内容安全、排队持票、挂机月卡、账号注销客户端、剧本保留期；Java 待做。缺口清单第 1 条的回滚脚本名已改为 `atomicRollbackInstanceAllocation`。未编译，待 Codex 验证。
