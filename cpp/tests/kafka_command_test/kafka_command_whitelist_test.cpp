@@ -12,8 +12,9 @@ namespace
 {
 // 固定已发布事件号，既检查生产入口，也防止墓碑或内部事件重新进入白名单。
 // 49 = PlayerInboxNotifyEvent（player_inbox 在线提醒）。
+// 53 = PlayerHostedPlacementEvent（离线托管队员跨场景/跨节点落点）。
 // 42 = BattleSettlementEvent 已退役：结算只经收件箱，event_id.txt 里只留墓碑号，不再是 scene 入口。
-constexpr std::array<uint32_t, 3> kSceneEvents{45, 48, 49};
+constexpr std::array<uint32_t, 4> kSceneEvents{45, 48, 49, 53};
 constexpr std::array<uint32_t, 9> kGateEvents{10, 11, 18, 32, 34, 37, 38, 39, 40};
 
 template <size_t Size>

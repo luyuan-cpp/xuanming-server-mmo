@@ -27,7 +27,7 @@
 | §6 | 压测纪律、基线清场与复盘脚本流程 | [docs/rules/stress-testing.md](docs/rules/stress-testing.md) |
 | §7 | 系统不变量（永久 ID / SnowFlake、Kafka 防僵尸、tip 单轴、ECS、逻辑库自治） | [docs/rules/invariants.md](docs/rules/invariants.md) |
 | §8 / §9 | 命名规范第一原则、关联 Git 仓库与权限/线程硬边界 | [docs/rules/naming-and-boundaries.md](docs/rules/naming-and-boundaries.md) |
-| §10 | AI 协作分工（Claude / Codex / Gemini）、写回流程与模型档位规定 | [docs/rules/ai-workflow.md](docs/rules/ai-workflow.md) |
+| §10 | AI 协作分工（Claude / Codex / Gemini）、写回流程、模型档位与设计落盘 | [docs/rules/ai-workflow.md](docs/rules/ai-workflow.md) |
 | §11 | 工程设计与编码原则（SOLID/KISS/不用宏/实例布局分层/muduo 生命周期） | [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md) |
 | §13（位图） | 位图（bit）优先存储规范、领取状态归属与策划删表 ID 红线 | [docs/rules/bit-storage-and-table-ids.md](docs/rules/bit-storage-and-table-ids.md) |
 | §13（运行时） | C++ 编码/门禁/生命周期、通信广播、gRPC 关机与构建测试命令 | [docs/rules/cpp-runtime-and-build.md](docs/rules/cpp-runtime-and-build.md) |
@@ -109,14 +109,15 @@
 
 - **§10.1 分工**：Claude 改代码/测试/文档（交付 C++ 前先跑只读预检 `test_cpp_no_raw_pointer_member.py`），不跑编译/测试/压测命令，交由 Codex 执行；无运行证据不得声称已验证。
 - **§10.2 执行与交付**：先查既有改动，不覆盖他人工作；失败保留首错日志，遇红线立即停下汇报。
-- **§10.3 模型档位（强制）**：改代码必须用各软件最高档模型（Claude Code `Fable 5.2 Max` / Gemini `Gemini 4 Neon Extra` / Codex `GPT 6.2 Astral Ultra`）；编译、生成、跑测与冒烟用低档模型（Gemini `Carbon Medium` / Codex `6.1 Sol Ultra` / Claude Code `Opus 5 High`）。
+- **§10.3 模型档位（强制）**：写/改代码以及**需求分析、设计分析、思想分析、漏洞分析、步骤分析、执行步骤**必须用各软件最高档模型（Claude Code `Fable 5.2 Max` / Gemini `Gemini 4 Neon Extra` / Codex `GPT 6.2 Astral Ultra`）；仅编译、生成、跑测与冒烟用低档模型（Gemini `Carbon Medium` / Codex `6.1 Sol Ultra` / Claude Code `Opus 5 High`）。
+- **§10.4 设计方案落盘 `.md`（强制）**：以后编写设计方案时，Claude Code（及其他 AI Agent）写好设计后必须将**需求分析、设计分析、思想分析、漏洞分析、步骤分析、执行步骤**及完整方案保存到 `docs/design/<主题>.md`（或既有对应设计文档），不得只留在对话中。
 - 完整分工与写回流程见 → [docs/rules/ai-workflow.md](docs/rules/ai-workflow.md)。
 
 ## 11. 工程设计与编码原则（强制）
 
 优先级：`正确性 / 安全 / 数据一致性 / 向后兼容 > 简单 / 可读 / 与仓库一致 > 可维护 / 可测试 > 有数据支撑的性能 > 假想扩展`。
 
-- **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、**适合用 23 种设计模式时主动采用并向程序说明原因**、**某功能有 GitHub ≥ 2 万 Star 成熟开源库可用时交由程序决定并说明原因**、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、fail-closed、面向接口测试与交付门禁。
+- **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、**系统/模块间采用 Actor 消息通信（状态私有、只传不可变消息、串行消费、禁借全局单例绕过；模块内部保持正常直接调用，不把内部函数过度拆成消息）**、**适合用 23 种设计模式时主动采用并向程序说明原因**、**优先使用当前开发语言的标准库，标准库没有时再去 GitHub 找同语言高 Star 成熟库（门槛随该语言生态体量浮动），交由程序决定并说明原因**、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、fail-closed、面向接口测试与交付门禁。
 - **§11.6 实例与布局分层**：实例层只描述「是什么」，布局层只描述「摆在哪」，布局层源码不得出现领域概念。
 - **§11.7 连接与回调生命周期（muduo，强制）**：应用层不拥有连接也不裸绑自己——**存连接只存 `weak_ptr`，绑回调只绑 `weak_ptr<自己>`**，关机两跳 `queueInLoop` 再 `quit()`。
 - 完整细则见 → [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)。
@@ -125,7 +126,7 @@
 
 - 2026-09-29 起本仓库（C++ 节点 + Go 微服务）与 **Java 版**（`https://github.com/luyuan-java/xuanming-server-mmo`）并行演进；所有功能两版都要做，交付写明另一版状态。
 - 对账本为 Java 仓库根目录 `PARITY.md`；两版仅共享客户端契约（帧格式、客户端可见 proto、tip 码、配置表数据），服务端内部按各自语言惯用方式实现。
-- Java 版选型优先 GitHub ≥ 2 万 star 成熟库（JDK 与 Spring 视为事实标准），构建与测试以 Java 仓 `AGENTS.md` 为准。
+- Java 版选型优先同类头部高 Star 成熟库（参考 ≥ 2 万 Star 并按领域生态浮动；JDK 与 Spring 视为事实标准），构建与测试以 Java 仓 `AGENTS.md` 为准。
 
 ## 13. 架构、构建与编码细则
 

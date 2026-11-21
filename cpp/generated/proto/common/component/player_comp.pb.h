@@ -2014,9 +2014,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   enum : int {
     kNameFieldNumber = 1,
     kAppearanceIdFieldNumber = 2,
+    kAppearanceTrialUsedBitsFieldNumber = 7,
+    kTrialAppearanceIdFieldNumber = 8,
     kRenameOpFieldNumber = 6,
     kRenameSeqFieldNumber = 4,
     kRenamedMsFieldNumber = 5,
+    kTrialExpiresAtFieldNumber = 9,
+    kAppearanceSwitchSeqFieldNumber = 10,
     kGenderFieldNumber = 3,
   };
   // string name = 1;
@@ -2047,6 +2051,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   const ::std::string& _internal_appearance_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_appearance_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_appearance_id();
+
+  public:
+  // bytes appearance_trial_used_bits = 7;
+  void clear_appearance_trial_used_bits() ;
+  [[nodiscard]] const ::std::string& appearance_trial_used_bits() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_appearance_trial_used_bits(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_appearance_trial_used_bits();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_appearance_trial_used_bits();
+  void set_allocated_appearance_trial_used_bits(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_appearance_trial_used_bits() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_appearance_trial_used_bits(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_appearance_trial_used_bits();
+
+  public:
+  // string trial_appearance_id = 8;
+  void clear_trial_appearance_id() ;
+  [[nodiscard]] const ::std::string& trial_appearance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_trial_appearance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_trial_appearance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_trial_appearance_id();
+  void set_allocated_trial_appearance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_trial_appearance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_trial_appearance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_trial_appearance_id();
 
   public:
   // .PlayerRenameOp rename_op = 6;
@@ -2085,6 +2119,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   void _internal_set_renamed_ms(::uint64_t value);
 
   public:
+  // uint64 trial_expires_at = 9;
+  void clear_trial_expires_at() ;
+  [[nodiscard]] ::uint64_t trial_expires_at() const;
+  void set_trial_expires_at(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_trial_expires_at() const;
+  void _internal_set_trial_expires_at(::uint64_t value);
+
+  public:
+  // uint64 appearance_switch_seq = 10;
+  void clear_appearance_switch_seq() ;
+  [[nodiscard]] ::uint64_t appearance_switch_seq() const;
+  void set_appearance_switch_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_appearance_switch_seq() const;
+  void _internal_set_appearance_switch_seq(::uint64_t value);
+
+  public:
   // uint32 gender = 3;
   void clear_gender() ;
   [[nodiscard]] ::uint32_t gender() const;
@@ -2099,8 +2153,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          1, 43,
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          1, 70,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2130,9 +2184,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr appearance_id_;
+    ::google::protobuf::internal::ArenaStringPtr appearance_trial_used_bits_;
+    ::google::protobuf::internal::ArenaStringPtr trial_appearance_id_;
     ::PlayerRenameOp* PROTOBUF_NULLABLE rename_op_;
     ::uint64_t rename_seq_;
     ::uint64_t renamed_ms_;
+    ::uint64_t trial_expires_at_;
+    ::uint64_t appearance_switch_seq_;
     ::uint32_t gender_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2476,7 +2534,7 @@ inline void PlayerProfileComp::set_allocated_appearance_id(::std::string* PROTOB
 inline void PlayerProfileComp::clear_gender() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t PlayerProfileComp::gender() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.gender)
@@ -2484,7 +2542,7 @@ inline ::uint32_t PlayerProfileComp::gender() const {
 }
 inline void PlayerProfileComp::set_gender(::uint32_t value) {
   _internal_set_gender(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.gender)
 }
 inline ::uint32_t PlayerProfileComp::_internal_gender() const {
@@ -2500,7 +2558,7 @@ inline void PlayerProfileComp::_internal_set_gender(::uint32_t value) {
 inline void PlayerProfileComp::clear_rename_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rename_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t PlayerProfileComp::rename_seq() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.rename_seq)
@@ -2508,7 +2566,7 @@ inline ::uint64_t PlayerProfileComp::rename_seq() const {
 }
 inline void PlayerProfileComp::set_rename_seq(::uint64_t value) {
   _internal_set_rename_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.rename_seq)
 }
 inline ::uint64_t PlayerProfileComp::_internal_rename_seq() const {
@@ -2524,7 +2582,7 @@ inline void PlayerProfileComp::_internal_set_rename_seq(::uint64_t value) {
 inline void PlayerProfileComp::clear_renamed_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.renamed_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t PlayerProfileComp::renamed_ms() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.renamed_ms)
@@ -2532,7 +2590,7 @@ inline ::uint64_t PlayerProfileComp::renamed_ms() const {
 }
 inline void PlayerProfileComp::set_renamed_ms(::uint64_t value) {
   _internal_set_renamed_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.renamed_ms)
 }
 inline ::uint64_t PlayerProfileComp::_internal_renamed_ms() const {
@@ -2546,14 +2604,14 @@ inline void PlayerProfileComp::_internal_set_renamed_ms(::uint64_t value) {
 
 // .PlayerRenameOp rename_op = 6;
 inline bool PlayerProfileComp::has_rename_op() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
   PROTOBUF_ASSUME(!value || _impl_.rename_op_ != nullptr);
   return value;
 }
 inline void PlayerProfileComp::clear_rename_op() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.rename_op_ != nullptr) _impl_.rename_op_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::PlayerRenameOp& PlayerProfileComp::_internal_rename_op() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -2572,16 +2630,16 @@ inline void PlayerProfileComp::unsafe_arena_set_allocated_rename_op(
   }
   _impl_.rename_op_ = reinterpret_cast<::PlayerRenameOp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PlayerProfileComp.rename_op)
 }
 inline ::PlayerRenameOp* PROTOBUF_NULLABLE PlayerProfileComp::release_rename_op() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::PlayerRenameOp* released = _impl_.rename_op_;
   _impl_.rename_op_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -2601,7 +2659,7 @@ inline ::PlayerRenameOp* PROTOBUF_NULLABLE PlayerProfileComp::unsafe_arena_relea
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerProfileComp.rename_op)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::PlayerRenameOp* temp = _impl_.rename_op_;
   _impl_.rename_op_ = nullptr;
   return temp;
@@ -2616,7 +2674,7 @@ inline ::PlayerRenameOp* PROTOBUF_NONNULL PlayerProfileComp::_internal_mutable_r
 }
 inline ::PlayerRenameOp* PROTOBUF_NONNULL PlayerProfileComp::mutable_rename_op()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::PlayerRenameOp* _msg = _internal_mutable_rename_op();
   // @@protoc_insertion_point(field_mutable:PlayerProfileComp.rename_op)
   return _msg;
@@ -2633,13 +2691,189 @@ inline void PlayerProfileComp::set_allocated_rename_op(::PlayerRenameOp* PROTOBU
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
 
   _impl_.rename_op_ = reinterpret_cast<::PlayerRenameOp*>(value);
   // @@protoc_insertion_point(field_set_allocated:PlayerProfileComp.rename_op)
+}
+
+// bytes appearance_trial_used_bits = 7;
+inline void PlayerProfileComp::clear_appearance_trial_used_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_trial_used_bits_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& PlayerProfileComp::appearance_trial_used_bits() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.appearance_trial_used_bits)
+  return _internal_appearance_trial_used_bits();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerProfileComp::set_appearance_trial_used_bits(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.appearance_trial_used_bits_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.appearance_trial_used_bits)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::mutable_appearance_trial_used_bits()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_appearance_trial_used_bits();
+  // @@protoc_insertion_point(field_mutable:PlayerProfileComp.appearance_trial_used_bits)
+  return _s;
+}
+inline const ::std::string& PlayerProfileComp::_internal_appearance_trial_used_bits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.appearance_trial_used_bits_.Get();
+}
+inline void PlayerProfileComp::_internal_set_appearance_trial_used_bits(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_trial_used_bits_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::_internal_mutable_appearance_trial_used_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.appearance_trial_used_bits_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerProfileComp::release_appearance_trial_used_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerProfileComp.appearance_trial_used_bits)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.appearance_trial_used_bits_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.appearance_trial_used_bits_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerProfileComp::set_allocated_appearance_trial_used_bits(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.appearance_trial_used_bits_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.appearance_trial_used_bits_.IsDefault()) {
+    _impl_.appearance_trial_used_bits_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerProfileComp.appearance_trial_used_bits)
+}
+
+// string trial_appearance_id = 8;
+inline void PlayerProfileComp::clear_trial_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_appearance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& PlayerProfileComp::trial_appearance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.trial_appearance_id)
+  return _internal_trial_appearance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerProfileComp::set_trial_appearance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.trial_appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.trial_appearance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::mutable_trial_appearance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_trial_appearance_id();
+  // @@protoc_insertion_point(field_mutable:PlayerProfileComp.trial_appearance_id)
+  return _s;
+}
+inline const ::std::string& PlayerProfileComp::_internal_trial_appearance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_appearance_id_.Get();
+}
+inline void PlayerProfileComp::_internal_set_trial_appearance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_appearance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::_internal_mutable_trial_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.trial_appearance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerProfileComp::release_trial_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerProfileComp.trial_appearance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.trial_appearance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.trial_appearance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerProfileComp::set_allocated_trial_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.trial_appearance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.trial_appearance_id_.IsDefault()) {
+    _impl_.trial_appearance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerProfileComp.trial_appearance_id)
+}
+
+// uint64 trial_expires_at = 9;
+inline void PlayerProfileComp::clear_trial_expires_at() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_expires_at_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t PlayerProfileComp::trial_expires_at() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.trial_expires_at)
+  return _internal_trial_expires_at();
+}
+inline void PlayerProfileComp::set_trial_expires_at(::uint64_t value) {
+  _internal_set_trial_expires_at(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.trial_expires_at)
+}
+inline ::uint64_t PlayerProfileComp::_internal_trial_expires_at() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_expires_at_;
+}
+inline void PlayerProfileComp::_internal_set_trial_expires_at(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_expires_at_ = value;
+}
+
+// uint64 appearance_switch_seq = 10;
+inline void PlayerProfileComp::clear_appearance_switch_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_switch_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t PlayerProfileComp::appearance_switch_seq() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.appearance_switch_seq)
+  return _internal_appearance_switch_seq();
+}
+inline void PlayerProfileComp::set_appearance_switch_seq(::uint64_t value) {
+  _internal_set_appearance_switch_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.appearance_switch_seq)
+}
+inline ::uint64_t PlayerProfileComp::_internal_appearance_switch_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.appearance_switch_seq_;
+}
+inline void PlayerProfileComp::_internal_set_appearance_switch_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_switch_seq_ = value;
 }
 
 // -------------------------------------------------------------------

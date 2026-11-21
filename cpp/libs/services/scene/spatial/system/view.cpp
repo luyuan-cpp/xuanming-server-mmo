@@ -17,8 +17,10 @@
 #include "combat/buff/comp/buff_comp.h"
 #include "spatial/comp/scene_node_scene_comp.h"
 
+#include "engine/core/time/system/time.h"
 #include "engine/core/type_define/type_define.h"
 #include "network/client_message_sender.h"
+#include "player/system/player_appearance.h"
 #include "thread_context/ecs_context.h"
 
 bool ViewSystem::ShouldSendNpcEnterMessage(entt::entity observer, entt::entity entrant)
@@ -114,7 +116,8 @@ void ViewSystem::FillActorCreateMessageInfo(entt::entity entrant, uint64_t netId
         createMessage.set_actor_type(ACTOR_TYPE_PLAYER);
         if (const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(entrant))
         {
-            createMessage.set_appearance_id(profile->appearance_id());
+            createMessage.set_appearance_id(
+                PlayerAppearanceSystem::EffectiveAppearanceId(entrant, TimeSystem::NowSecondsUTC()));
             createMessage.set_gender(profile->gender());
         }
         if (const auto* identity = tlsEcs.actorRegistry.try_get<PlayerUint32Comp>(entrant))

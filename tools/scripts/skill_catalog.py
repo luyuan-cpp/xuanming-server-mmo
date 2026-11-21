@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""69 项正式技能首测目录与只读验证。xlsx 仍是运行配置事实源。
+"""61 项正式技能首测目录与只读验证。xlsx 仍是运行配置事实源。
 
 参数来源见 docs/design/skill-planning/first-test-parameters.md；除已确认边界外均待平衡。
 本脚本只生成增量计划/文档或验证源表，写表由 skill_catalog_xlsx.mjs 完成。
@@ -19,20 +19,31 @@ import openpyxl
 ROOT = Path(__file__).resolve().parents[2]
 DESIGN = ROOT / "docs/design/skill-planning"
 BASES = {"A": 10000, "B": 11000, "P": 12000, "T": 13000, "O": 14000}
-SHARED = {"A02", "A06", "A10", "A14", "A16", "A18", "A19", "A25", "A26", "A27", "A33", "A34", "P04", "P06", "T01"}
-PET_ONLY = {"P14", "P15", "P16", "P17", "P18", "T05", "T06", "O03"}
+SHARED = {"A02", "A06", "A10", "A14", "A16", "A19", "A25", "A26", "A27", "A33", "A34", "P04", "P06"}
+PET_ONLY = {"A18", "P14", "P15", "P16", "P17", "P18", "T01", "T05", "T06", "O03"}
+RETIRED_SKILL_IDS = {10007, 10017, 10028, 10032, 10037, 12010, 13002, 13003}
+RETIRED_BUFF_IDS = {100070, 100071, 100170, 100280, 100320, 100370, 120100, 120101, 130020, 130030}
 BUFFS: list[dict] = []
 SKILLS: list[dict] = []
 
 
 def definitions() -> dict[str, dict]:
     result = {}
-    for prefix, file in [("A", "active-character.md"), ("B", "active-pet.md"), ("P", "passive.md"), ("T", "pursuit-opening.md"), ("O", "pursuit-opening.md")]:
+    for prefix, file, effect_col in [
+        ("A", "active-character.md", 3),
+        ("A", "active-pet.md", 4),
+        ("B", "active-pet.md", 4),
+        ("P", "passive.md", 4),
+        ("T", "pursuit-opening.md", 4),
+        ("O", "pursuit-opening.md", 4),
+    ]:
         for line in (DESIGN / file).read_text(encoding="utf-8").splitlines():
             if re.match(r"^\| " + prefix + r"\d\d \|", line):
                 cells = [cell.strip() for cell in line.strip("|").split("|")]
-                result[cells[0]] = {"name": cells[1], "effect": cells[3 if prefix == "A" else 4], "source": file}
-    assert len(result) == 69, f"Expected 69 formal prototypes, got {len(result)}"
+                if len(cells) <= effect_col:
+                    continue
+                result[cells[0]] = {"name": cells[1], "effect": cells[effect_col], "source": file}
+    assert len(result) == 61, f"Expected 61 formal prototypes, got {len(result)}"
     return result
 
 
@@ -44,7 +55,7 @@ def skill(code: str, team=1, count=1, mana=.06, cd=1, tags=8, **kw) -> dict:
                ability_kind=kind, prototype_code=code, name=entry["name"],
                description=entry["effect"] + "；首测参数，待平衡。", category={1: "主动", 2: "被动", 3: "追击", 4: "开场"}[kind],
                unlock_level=1, max_rank=10, target_team=team, max_targets=count,
-               pet_max_targets=(2 if code in {"A02", "A06", "A18", "A19"} else 1),
+               pet_max_targets=(2 if code in {"A02", "A06", "A18", "A19", "B12"} else 1),
                mana_percent=mana if kind == 1 else 0, cooldown_rounds=cd if kind == 1 else 0,
                action_tags=tags, skill_type=[1] if kind == 1 else [], targeting_mode=[1], require_target=1,
                effect=[], init_effect=[])
@@ -75,11 +86,10 @@ def mod(row: dict, stat: int, ratio: float, rounds=5, tag="Buff", **kw):
 
 
 def make_catalog():
-    # 主动：效果按列中顺序结算；伤害后再挂障碍，条件伤害在唤醒前读取。
+    # 主动：效果按列中顺序结算；伤害后再挂障碍。
     damage(skill("A02", count=5, mana=.05, cd=0), True)
     r = skill("A03", count=5, mana=.08, cd=2); damage(r, True, .7); mod(r, 1, -.20, tag="Debuff")
     damage(skill("A06", count=5, mana=.05, cd=0))
-    r = skill("A07", mana=.06); damage(r, multiplier=.9); mod(r, 4, -.25, 3, tag="Slow")
     damage(skill("A08", count=5, mana=.15, cd=4), multiplier=1.6)
     # 独立治疗曲线：以旧首测 Lv30/法攻600/rank1 的强度为锚点，不再读取攻击面板。
     r = skill("A10", team=2, count=7, tags=4, cd=0); buff(r, 2, value_basis=0, per_level=20)
@@ -87,8 +97,7 @@ def make_catalog():
     mod(skill("A14", team=2, count=7, cd=2), 3, .25)
     buff(skill("A15", team=3, mana=0, cd=2), 3, value_basis=4, ratio=.25)
     mod(skill("A16", team=2, count=7, cd=2), 4, .25, 3)
-    damage(skill("A17", mana=.05, cd=1, initiative=1), True, .9)
-    r = skill("A18", mana=.05, cd=1); damage(r, True, .55); mod(r, 3, -.25, 3, tag="Break", stack_key=100181, refresh_policy=1)
+    r = skill("A18", count=2, mana=.05, cd=1); damage(r, True, .55); mod(r, 3, -.25, 3, tag="Break", stack_key=100181, refresh_policy=1)
     r = skill("A19", count=5, mana=.08, cd=2, tags=18)
     buff(r, 7, value_basis=2, ratio=.25, per_level=2, state_kind=7, tick_count=3, duration_rounds=3, application_chance=.75, tick_on_apply=1, tag=["Poison", "Debuff"], stack_key=100190, refresh_policy=1)
     for code, state, tag, count, chance, rounds, mana in [
@@ -100,17 +109,14 @@ def make_catalog():
     buff(skill("A26", team=2, count=7, mana=.10, cd=3, tags=4, allow_dead_target=1), 8,
          value_basis=0, per_level=6, secondary_ratio=.20, duration_rounds=5, tick_count=5, tick_on_apply=1, keep_on_death=1, tag=["Buff", "Revive"], refresh_policy=1)
     mod(skill("A27", team=2, count=7, cd=2), 7, .15, 3)
-    buff(skill("A28", mana=.06, tags=16), 14, required_tag="Poison", effect_count=2)
     buff(skill("A29", count=5, mana=.06, cd=2, tags=16), 15, required_tag="Poison", effect_count=1)
     r = skill("A30", count=5, mana=.08, cd=2); damage(r, multiplier=.5)
     buff(r, 7, value_basis=2, ratio=.20, per_level=2, state_kind=8, tick_count=3, duration_rounds=3, application_chance=.80, tick_on_apply=1, tag=["Burn", "Debuff"], refresh_policy=1)
     r = skill("A31", count=5, mana=.10, cd=2); damage(r, multiplier=.85); buff(r, 14, required_tag="Poison", second_required_tag="Burn", effect_count=1)
-    damage(skill("A32", mana=.07, cd=1), True, 1.0, required_tag="Sleep", conditional_bonus=.75)
     buff(skill("A33", team=2, count=7, mana=.06, cd=1), 4, effect_count=1)
     buff(skill("A34", count=7, mana=.08, cd=2), 5, effect_count=1)
     mod(skill("A35", count=5, mana=.08, cd=2, tags=16), 6, -.35, tag="Debuff", application_chance=.80)
     buff(skill("A36", team=2, count=7, mana=.08, cd=3), 11, ratio=.25, value_basis=3, secondary_ratio=.30, duration_rounds=3, tick_on_apply=1, require_living_caster=1, tag=["Buff"], effect_priority=40)
-    damage(skill("A37", mana=.07, cd=1), True, 1.0, required_tag="Break", conditional_bonus=.5)
     damage(skill("A39", count=5, mana=.15, cd=4), True, 1.6)
     buff(skill("A40", team=2, count=7, mana=.08, cd=3), 9, value_basis=0, per_level=16, duration_rounds=2, tick_on_apply=1, tag=["Buff", "Shield"], refresh_policy=2, effect_priority=20)
     # 宝宝专属：B13/B16费用先校验目标，B12吸血只给施法宝宝。
@@ -134,14 +140,9 @@ def make_catalog():
     buff(skill("P08", team=3), 22, init=True, trigger_event=4, required_tag="Poison", value_basis=3, ratio=.04, per_round_limit=1)
     for code, filt in [("P09", 1), ("P19", 2)]:
         buff(skill(code, team=3), 19, init=True, trigger_event=3, damage_filter=filt, ratio=1, trigger_chance=.20, per_round_limit=1)
-    r = skill("P10", team=3); listener = buff(r, 24, init=True, trigger_event=5)
-    child = buff(r, 6, child=True, modifier_stat=14, ratio=.30, hit_limit=1, duration_rounds=2, tick_on_apply=0, tag=["Buff"])
-    listener["sub_buff"] = [child["id"]]
     buff(skill("P18", team=3), 23, init=True, trigger_event=3, value_basis=4, ratio=.05, per_round_limit=1)
     # 派生动作不再触发追击或镜像，所有监听均至多每轮一次。
     buff(skill("T01", team=3), 20, init=True, trigger_event=1, ratio=.5, damage_filter=1, target_count=1, pet_target_count=2, trigger_chance=.35, per_round_limit=1)
-    buff(skill("T02", team=3), 20, init=True, trigger_event=1, ratio=.65, damage_filter=1, target_count=1, required_tag="Break", second_required_tag="Slow", per_round_limit=1)
-    buff(skill("T03", team=3), 16, init=True, trigger_event=1, value_basis=4, ratio=.10, per_round_limit=1)
     r = skill("T05", team=3); listener = buff(r, 21, init=True, trigger_event=1, per_round_limit=1)
     child = buff(r, 6, child=True, modifier_stat=3, ratio=-.20, duration_rounds=3, tick_on_apply=1, tag=["Break", "Debuff"], stack_key=100181, refresh_policy=1)
     listener["target_sub_buff"] = [child["id"]]
@@ -159,7 +160,9 @@ make_catalog()
 
 def validate_catalog():
     assert {s["prototype_code"] for s in SKILLS} == set(CATALOG)
-    assert len(SKILLS) == 69 and len({b["id"] for b in BUFFS}) == len(BUFFS)
+    assert len(SKILLS) == 61 and len(BUFFS) == 62 and len({b["id"] for b in BUFFS}) == len(BUFFS)
+    assert not (RETIRED_SKILL_IDS & {s["id"] for s in SKILLS})
+    assert not (RETIRED_BUFF_IDS & {b["id"] for b in BUFFS})
     ids = {b["id"] for b in BUFFS}
     for s in SKILLS:
         assert s.get("passive_stat") or s["effect"] or s["init_effect"], f"Empty skill: {s['id']}"
@@ -208,26 +211,29 @@ def verify_xlsx():
                 got = list(actual[row["id"]][indexes[key]:indexes[key] + len(want)])
                 assert got == want, f"{name} {row['id']} {key}: {got!r} != {want!r}"
         if name == "Skill":
+            assert not (RETIRED_SKILL_IDS & set(actual)), f"Retired Skill rows still present: {sorted(RETIRED_SKILL_IDS & set(actual))}"
             public = [r for r in actual.values() if r[indexes["battle_model"]] == 1]
-            assert len(public) == 69, f"Expected 69 model rows, got {len(public)}"
+            assert len(public) == 61, f"Expected 61 model rows, got {len(public)}"
+        else:
+            assert not (RETIRED_BUFF_IDS & set(actual)), f"Retired Buff rows still present: {sorted(RETIRED_BUFF_IDS & set(actual))}"
     pets = openpyxl.load_workbook(ROOT / "data/Pet.xlsx")["Pet"]
     index = [c.value for c in pets[1]].index("skill")
     legal = {s["id"] for s in SKILLS if s["caster_mask"] & 2}
     for row in list(pets.values)[5:]:
         assert all(v in legal for v in row[index:index+4] if v), f"Illegal pet skill: {row[0]}"
-    print(f"Verified 69 skills, {len(BUFFS)} effects and legal pet loadouts")
+    print(f"Verified 61 skills, {len(BUFFS)} effects and legal pet loadouts")
 
 
 def documentation() -> str:
-    text = """# 69项正式技能首测参数
+    text = """# 61项正式技能首测参数
 
-更新：2026-11-17。用户授权本轮将完整69原型及原文建议落为可调首测配置。**表已落地，所有新增倍率、概率、耗蓝、冷却与未明确定案的边界仍待平衡**；不是最终平衡结论。运行实现、导表与测试结论统一见[实施清单](implementation.md)，此页不提前宣称测试通过。
+更新：2026-11-21。本页为当前有效 61 项正式原型及 62 条 Buff 的可调首测配置（2026-11-21 撤回人物单体/普攻系 8 项与 10 条对应 Buff，旧编号与 ID 永久保留不复用；`A18`/`T01` 取消人物资格转为宝宝专属；`A15` 保留；`B12` 修正为 `pet_max_targets=2`）。**表已落地，所有新增倍率、概率、耗蓝、冷却与未明确定案的边界仍待平衡**；不是最终平衡结论。运行实现、导表与测试结论统一见[实施清单](implementation.md)，此页不提前宣称测试通过。
 
 ## 1. 事实源与覆盖范围
 
 运行配置来自 `data/Skill.xlsx`、`data/Buff.xlsx`，结构来自同名 `data/schema/*_table.proto`。`tools/scripts/skill_catalog.py` 是本轮可复现的初始化目录与校验器，后续策划调数应同步更新本页及校验基线，生成脚本遇到已存在但不同的值会拒绝覆盖。
 
-正式目录为人物/共享主动34、宝宝专属主动11、被动16、追击5、开场3，共69。策略S/SP候选、暂缓E候选、撤回P11和所有合并旧编号不生成新原型。旧46条Skill和26条Buff原样保留。新增72条Buff承载真实操作；P01/P02/P03/P04/P06沿既有 `passive_stat` 聚合入口，不再重复挂属性Buff。
+正式目录为人物/共享主动28、宝宝专属主动12（含 A18）、被动15、追击3（均为宝宝专属）、开场3，共61。策略S/SP候选、暂缓E候选、撤回项（`P11`、`A07`/`A17`/`A28`/`A32`/`A37`/`P10`/`T02`/`T03`）和所有合并旧编号不生成新原型。旧46条Skill和26条Buff原样保留。新增62条Buff承载真实操作；P01/P02/P03/P04/P06沿既有 `passive_stat` 聚合入口，不再重复挂属性Buff。
 
 Skill ID分别为A10000、B11000、P12000、T13000、O14000加编号。Buff ID为该Skill ID乘10加本原型效果序号。这是编表约定；运行时只读取操作、事件、主体资格和参数，禁止按策划编号或这些ID段分支。
 
@@ -237,17 +243,17 @@ Skill ID分别为A10000、B11000、P12000、T13000、O14000加编号。Buff ID�
 - 技能全量解锁入口仍走系统既有学习/快照流程；首测解锁等级1、最高10重，不新增任务/抽取/刷材料门槛。这里不设置人物4＋2或宝宝2/3招装配上限。
 - 比例字段全部为小数。主动直接伤害基础为 `4*level` 加对应攻击属性乘 `attack_multiplier`，仍经过正式伤害、减免、暴击等管线。治疗/容量为 `flat_value + level*per_level + value_basis*ratio`，施加时快照。主动伤害及数值效果每增加一重提高基础量2%；scene静态属性被动每重提高基础比例5%。Buff属性比例、命中率、触发概率、限次、持续时间、反弹和追击倍率首测直接读取表值，不暗加另一条全局成长曲线。
 - 新模型CD数值表示再次施放的回合偏移，CD3在第1轮施放后最早第4轮再用；旧模型继续原有完整回合CD口径。耗蓝按最大法力比例，普通非零费用向上取整且至少1；零耗蓝反击独立处理。
-- 持续轮数的 `tick_on_apply=1` 包含施加轮末，0从下一轮末起扣时。A03/A14/A25/A35均5轮；A07/A16首测3轮，排速只影响下次排序；控制保留至少一个后续完整回合窗口。A26当轮末可结算，最多5次。
-- A19毒3次、A30烧3次；毒同名跨来源同强刷新、强者覆盖，弱者不替换。催毒最多提前2次；蔓毒每份延长1次且刷新保留已延长标记；毒火联动须同时有毒和烧，各提前1次，消费原状态及原施加者强度，不能在轮末重复跳伤。
+- 持续轮数的 `tick_on_apply=1` 包含施加轮末，0从下一轮末起扣时。A03/A14/A25/A35均5轮；A16首测3轮，排速只影响下次排序；控制保留至少一个后续完整回合窗口。A26当轮末可结算，最多5次。
+- A19毒3次、A30烧3次；毒同名跨来源同强刷新、强者覆盖，弱者不替换。蔓毒每份延长1次且刷新保留已延长标记；毒火联动须同时有毒和烧，各提前1次，消费原状态及原施加者强度，不能在轮末重复跳伤。
 - A24实际扣血才唤醒；护盾全吸收、未命中不唤醒。A38冻结隔离伤害及新障碍，旧持续状态时钟继续；友方治疗/保护/净化允许，敌方抽蓝/驱散/劝退阻断。
 - A26死亡保留回生印，轮末持续伤害后结算印记再判胜负；复活20%最大气血并消费整印。重新施加新印可再次复活，没有每场一次限制。A33每目标净化1项，优先控制；不附加原A11候选少量治疗。A34每目标驱散1项。
 - A10/A12/A26独立治疗基础分别为20/17.5/6×人物等级，再乘技能支持等级系数；不读取攻击面板。初始曲线锚定旧首测Lv30/法攻600/rank1强度，尚非平衡结论。
 - A40仅独立施放、七目标。容量为16×人物等级×技能支持等级系数（按A10普通治疗基础的80%编表，但运行时不调用治疗产生护盾）；持续2轮含当轮、耗蓝8%、CD3。同名容量按剩余容量择强，不因弱覆盖延时；目标死亡移除，来源死亡保留；可驱散。只吸收直接伤害，不吸收毒、反射、转伤及资源费用。
 - 类型护罩→普通容量盾→法力盾→援护预算→实际气血伤害→反射依次处理，优先级10/20/30/40/50。B05/B06最多吸收2次且有容量；B14受益者用自己的法力吸收50%伤害，每吸收1点耗1法力。A36分担25%单体直接伤害，来源每轮承担最多自身最大气血30%，不循环转伤。
-- B12首测法术、两目标、按实际扣血30%吸血给施法宝宝，不吃治疗修正、不从护罩吸收量获益。B13降至1气血后按已付气血125%削蓝，当前1气血不可施放。B15耗自身25%最大法力，按实际已付法力2倍临时增最大气血并回血，持续3轮，到期回归原上限。B16每战1次、牺牲自身，对其他存活友方治疗其最大气血60%并净化最多3项。
+- B12首测法术、两目标（`pet_max_targets=2`）、按实际扣血30%吸血给施法宝宝，不吃治疗修正、不从护罩吸收量获益。B13降至1气血后按已付气血125%削蓝，当前1气血不可施放。B15耗自身25%最大法力，按实际已付法力2倍临时增最大气血并回血，持续3轮，到期回归原上限。B16每战1次、牺牲自身，对其他存活友方治疗其最大气血60%并净化最多3项。
 - B09劝退不等于死亡，保留气血与单位身份。首测离场后等待2个完整回合：第1轮劝退，最早第4轮由其人物主人提交召回行动；主人消耗本轮正常行动，召回宝宝本轮不追加行动，下一轮恢复正常指令。不能召回别人的宝宝或死亡宝宝。返回截止为施放轮＋配置轮数＋1，`PET_RETREAT`事件值1表示退场、0表示召回。
-- P08原毒施加者每轮首次实际毒伤恢复自身最大气血4%，自身灼烧不能借目标身上其他人的毒触发。P09/P19首测20%概率、每轮最多1次、复制同技能且使用自身属性、零耗蓝；逐段实际扣血后立即触发，群攻的每个受击者各自遵守本轮1次上限，反击释放时来袭者须仍存活。不等待主行动结束；派生动作不再互相触发追击或反击。P10储存最多1份30%单体直接伤害强化，持续到后续2轮。P18每轮首次实际受敌方直接伤害回5%最大法力。
-- T01首测35%概率、50%物理倍率，每轮最多1次；人物原目标1，宝宝最多2。T02目标破防或减速时追加65%物理倍率；T03扣目标最大法力10%；T05挂20%破防3轮且不附伤；T06法术行动后35%概率追加40%法术倍率、最多2目标、每轮最多1次，不能每个命中目标重复触发。
+- P08原毒施加者每轮首次实际毒伤恢复自身最大气血4%，自身灼烧不能借目标身上其他人的毒触发。P09/P19首测20%概率、每轮最多1次、复制同技能且使用自身属性、零耗蓝；逐段实际扣血后立即触发，群攻的每个受击者各自遵守本轮1次上限，反击释放时来袭者须仍存活。不等待主行动结束；派生动作不再互相触发追击或反击。P18每轮首次实际受敌方直接伤害回5%最大法力。
+- T01仅限宝宝、首测35%概率、50%物理倍率、最多2敌，每轮最多1次；T05挂20%破防3轮且不附伤；T06法术行动后35%概率追加40%法术倍率、最多2目标、每轮最多1次，不能每个命中目标重复触发。
 - O01第3轮开始每轮加5%直接伤害、最多3层；来源死亡暂停且不补增长。O02开局前2轮直接减伤20%，来源死亡暂停但时钟照走。O03优先主人，单目标盾1倍法攻＋5×等级，前2轮有效，来源死亡不撤回已生成容量。复活不重新执行开场。
 - Pet22行保持原名字、模型、品质、资质和商业字段；旧法术14映射共享A06，石灵首测A14/P04，金猊A02/T01，其余已有法术宝宝映射A06。这是初始技能配置，不限制后续合法学习，也不复制已合并B01/B02/B03/P12/T04。
 
@@ -286,7 +292,7 @@ python tools/scripts/skill_catalog.py check
 
 本页可通过 `python tools/scripts/skill_catalog.py documentation --output docs/design/skill-planning/first-test-parameters.md` 从初始化目录重建。生成/核对源表后，由主流程执行 `dev.bat gen`（或项目现有导表入口），禁止手写generated产物。
 
-首测验收不能只有69行存在：必须通过全部引用闭合、合法主体、目标数、事件顺序、时长、消耗、死亡/复活/净化/派生链和同seed重放用例。数值强弱仍要用实战对局验证；本次目录闭合不代表已经平衡。
+首测验收不能只有61行存在：必须通过全部引用闭合、合法主体、目标数、事件顺序、时长、消耗、死亡/复活/净化/派生链和同seed重放用例。数值强弱仍要用实战对局验证；本次目录闭合不代表已经平衡。
 """
     return text
 

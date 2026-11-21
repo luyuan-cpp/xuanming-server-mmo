@@ -39,6 +39,7 @@
 #include "combat/skill/system/skill.h"
 #include "combat_state/system/combat_state.h"
 #include "player/system/team_follow_system.h"
+#include "player/system/player_appearance.h"
 #include "player/system/player_rename.h"
 
 #include <chrono>
@@ -121,6 +122,11 @@ namespace
                     err = "scene RoleNameRule table validation failed";
                     return false;
                 }
+                if (!PlayerAppearanceSystem::ValidateTables())
+                {
+                    err = "scene AppearanceRule / CharacterAppearance table validation failed";
+                    return false;
+                }
                 return true;
             }
 
@@ -131,6 +137,7 @@ namespace
                          << turnbattle::BattleTableFingerprint::Refresh();
                 PlayerMysteryMerchantSystem::ValidateTables();
                 PlayerRenameSystem::ValidateTables();
+                PlayerAppearanceSystem::ValidateTables();
                 ActorActionStateSystem::RefreshCompiledTable();
                 CombatStateSystem::RefreshCompiledTable();
             }

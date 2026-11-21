@@ -4454,3 +4454,112 @@
   - Unity 客户端：离线 Roslyn 全量编译 543 份运行时脚本 + 4 份战报 EditMode 测试 0 错，3 套纯 C# 夹具 **23/23 PASS**，WebGL 禁用 API 扫描 0 命中。
 - **文档同步**：已更新 `docs/design/battle-report-replay.md`（§17.3）与 `docs/handoff/battle-report-replay-client.md`（状态、§8、§9）。
 - **二次深度审计收敛（同日补完并复测通过）**：服务端 `battle` 节点 `kSqlOutcomeSendsPerPump` 新增 `MMORPG_BATTLE_OUTCOME_SENDS_PER_PUMP`（`[1, 1024]`，默认 64，消除“等压测再调”），`battle.exe` 编译通过且 `rpc_controller_test` `Battle*` 扩至 **122/122 PASS**（`BattleObserverContract` **49/49 PASS**）；客户端 `BattleReportClient` 补 `decoded.Replay.BattleId == battleId` 强一致校验、`BattleReportPanel.FormatMembers` 补成员职业名展示，离线 Roslyn 全量编译 `TOTAL_ERRORS=0` 且纯 C# 测试扩至 **25/25 PASS**。
+- **客户端原生 Unity 6000.6.0f1 EditMode 实跑通过**：按 `tools/verify_activity_ui.ps1` 隔离工程模式（不抢主工程锁）调用本机 Unity `-batchmode -nographics` 执行全套 7 份战斗 EditMode 夹具 **78/78 PASS、0 FAIL、0 SKIP**（含战报 27/27：纯逻辑 25/25 + uGUI `BattleReportPanelUiTests` 2/2，以及 `BattleUiRootLifecycleTests` 2/2、`BattleHudLogicTests`/`BattleUiLayoutTests`/`BattleResultRecoveryClientTests` 49/49），证据位于 `../mmorpg-client/.codex-artifacts/battle-report-native-editmode/editmode-results-20261121-024508.xml`。
+
+
+## 2026-11-21 Gemini（Gemini 4 Neon）：邮件 GM 全能力补齐——个人邮件多附件、全服纯文本公告邮件与三段式幂等批量活动发奖（未编译运行，待 Codex 验证；Java 全服务版留 TODO）
+
+- **背景**：对照 `go/mail`（`proto/mail/mail_admin.proto`、`go/mail/internal/data/{repo,campaign,policy}.go`、`go/shared/mailgrant/bundle.go`）逐项核对邮件 GM 缺口，在 `main` 一次性补齐全部剩余后端与 Vue 3 前端能力（零 `.proto` 与零 `go/mail` 改动，未建分支、未提交）：
+  1. **跨语言 SHA-256 活动名单分片与摘要器**（新增 `java/gm_admin/src/main/java/org/jeecg/modules/gm/MailCampaignManifest.java` + `MailCampaignManifestTest.java`）：
+     - 与 `go/mail/internal/data/campaign.go` 逐字节一致：无符号 uint64 升序去重、每片至多 1000 人、网页单次上限 10,000 人、`shardHash = sha256("id\n"...)`、`manifestHash = sha256("v1\n" + "idx:shardHash:count\n"...)`，附 Python 独立验算黄金向量单测。
+  2. **gRPC 邮件管理通道补全**（`GameServices.java` + `GameServicesTest.java`）：
+     - 新增 `sendSystemMail`（调用 `mailpb.MailAdmin/SendSystemMail`，拒绝附件、单人、帮会与活动字段，仅放行纯文本全服公告，零玩家扩散写）。
+     - 新增 `sendMailCampaign`（发包前先校验 `{mail, shards}` 并重算 `MailCampaignManifest.manifestHashOf(shards)` 防篡改；随后按三段式幂等协议依次执行 `SendSystemMail` → 逐片 `ImportMailRecipients` → `SealMailCampaign`，每步独立 `budgetMillis` 截止时间与 `ServiceCallAuth` 签名；建活动后任一故障均标 `outcomeUnknown=true` 保留原单供幂等续传）。
+  3. **强一致冻结命令账本与可扩展视图裁剪**（`GmCommandJournal.java` + `GmCommandJournalTest.java`）：
+     - 原生兼容既有 `gm_command` 表（零 DDL 破坏），扩展 `SYSTEM_MAIL` 与 `MAIL_CAMPAIGN` 两种命令类型（`player_id = "0"`），支持草稿冻结（`campaignId = id`、`manifestGeneration = "1"`、`expireMs`）、`FOR UPDATE` 原子到期拦截、单飞租约（个人/公告 60s、批量活动 120s）与 `UNKNOWN` 同单幂等重试。
+     - 读写视图分离：`list` 跳过 `input_json` 列，且 `MAIL_CAMPAIGN` 的 HTTP 视图裁剪掉巨大 `shards` 数组（仅返回 `recipientSample` 前 20 条、`totalRecipients`、`shardCount`），同时 `sendInternal` 仍向发送回调传递完整冻结 `fullRequest.deepCopy()`。
+  4. **并发安全权限迁移版本 6**（`GmInstallation.java` + `GmInstallationTest.java`）：
+     - `runMigration(6, ...)` 幂等新增 `gm:system-mail:prepare`（准备系统邮件）与 `gm:system-mail:send`（确认系统邮件）并授予 `admin` 角色。
+  5. **个人邮件多附件升级 + 系统/活动邮件 REST 接缝**（`GmController.java` + `GmControllerTest.java`）：
+     - `POST /gm/mail/drafts` 升级支持 `currencies` 数组（最多 4 种不重复币种）与 `items` 数组（最多 16 种不重复物品，总数 ≤ 4096），同时 100% 向下兼容旧版单字段（禁止同项混用数组与单字段）。
+     - 新增 `/gm/system-mail/{drafts,commands,commands/{id},commands/{id}/send,commands/{id}/audit}` 与 `/gm/mail-campaigns/{drafts,commands,commands/{id},commands/{id}/send,commands/{id}/audit}`（活动草稿支持 512 KiB 请求体，强制至少包含一项货币或物品附件），严格执行 `gm:system-mail:prepare` / `gm:system-mail:send` / `gm:audit:read` 权限与 `mailEnabled` fail-closed 门禁。
+  6. **Vue 3 GM 控制台前端**（`console.ts`、新增 `systemMail.ts`、新增 `SystemMail.vue`、`index.vue`）：
+     - 个人邮件发放卡片支持动态增删货币（≤ 4 种）与物品（≤ 16 种，总数 ≤ 4096）附件行。
+     - 新增「系统邮件与批量活动发奖」双页签卡片：全服纯文本公告邮件 + 批量活动发奖（实时解析去重人数与分片数、冻结草稿核对弹窗展示 `campaignId` / SHA-256 清单摘要 / 前 20 位收件人样例 / 完整附件、确认勾选、单命令精确刷新、`UNKNOWN` 同单幂等重试与 `gm_command_audit` 状态轨迹）。
+- **文档同步**：同步更新 `docs/design/jeecg-gm-administration.md` 与 `java/gm_admin/README.md`。
+- **交 Codex 验证命令（均未编译、未运行测试；清库后执行）**：
+  1. 协议生成（如上一轮 `player_locator.proto` 尚未生成）：`pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`
+  2. Go `player_locator`（上一轮改动联验，`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）：`cd go/player_locator && go build ./... && go vet ./... && go test ./internal/logic/... -count=1 -v`
+  3. GM 扩展打包、单测与前端构建（仓库根目录）：
+     - `python java/gm_admin/prepare.py`
+     - `mvn -f java/gm_admin/pom.xml -DskipTests=false test`（核对 `MailCampaignManifestTest`、`GameServicesTest`、`GmCommandJournalTest`、`GmInstallationTest`、`GmControllerTest`、`GmPlayerCommandControllerTest`、`GamePlayerAdminTest` 全部 PASS）
+     - `mvn -s build/gm-admin-runtime/maven-settings.xml -f build/gm-admin-upstream/jeecg-boot/pom.xml -pl jeecg-module-system/jeecg-system-start -am '-Dmaven.compiler.proc=full' -DskipTests package`
+     - `pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 build`
+  4. 本机冒烟：`python -X utf8 -B tools/scripts/start_docker_debug.py --execute` 与 `python deploy/gm-admin/probe_scene.py --execute`，并在网页端验证个人多附件邮件、全服纯文本系统公告与小名单批量活动发奖（建草稿 → 核对 → 发布 → 审计轨迹）。
+- **Java 全服务版（AGENTS §12）**：仍保留在独立仓 `D:\luyuan\xuanming-server-mmo\PARITY.md` TODO，本轮未改动。
+
+
+## 2026-11-21 Gemini（协调员 Gemini 4 Neon Extra + 验证员 Gemini 4 Carbon Medium）：真钱支付生产加固全量编译、单测、隔离 TiDB 真库与部署契约一次授权验证收口
+
+- **分工与边界**：按用户单次授权执行原交接给 Codex 的验证工作；全部代码修复由协调员（`gemini-4-neon-xhigh`）执行，全部协议生成、编译、单测、隔离 TiDB 真库测试与静态门禁由 `verifier-2`（`gemini-4-carbon-medium`）执行，日志全部落盘 `build/verification/payment-hardening-20261121/`。未改独立 Java 全服务仓 `D:\luyuan\xuanming-server-mmo`（仍留 `PARITY.md` TODO），未执行 `git commit` / `git push`，未触碰主机在跑 Docker 容器与已打开的 Unity Editor。
+- **验证暴露并当场修复的唯一本线缺陷**：
+  - 首轮 `mvn -f java/mall_game/pom.xml test` 命中 `MockPaymentStoreTest.V3升级同一V4结构且保留冻结订单与预占_缺mock表拒启动` 抛 `IllegalStateException: 商城退款待办缺可恢复扫描索引`（`SchemaVerifier.java:127`），根因为 `java/mall_game/src/main/resources/db/migration/V4__mock_payment.sql` L17 仍建 2 列旧索引 `idx_commerce_refund_pending(status,order_sn)`。
+  - 修复 `V4__mock_payment.sql` L17 为 `CREATE INDEX idx_commerce_refund_pending ON commerce_refund_intent(status,order_sn,channel,transaction_id);`，与 `db/schema.sql` 及 `SchemaVerifier` 四列键集分页索引一致，复验全绿。
+- **全套实测结果（本线 100% 全绿）**：
+  1. **协议生成**：`protoc --version` 为 `libprotoc 35.1`；`pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run` exit `0`；核对 `go/proto/payment/payment_table.pb.go` 已生成 `PayFinalizeState_PAY_FINALIZE_STATE_FAILED = 3` 与索引 `state,next_check_ms;spender_hi,spender_lo,state,paid_ms`。
+  2. **Go 编译/Vet/离线单测 + 隔离 TiDB v8.5.2 真库（`GOTOOLCHAIN=local`, `GOPROXY=off`）**：
+     - `go/shared`：`go build ./tracing/...` exit `0`；`go test ./tracing/... -count=1 -v` exit `0`（**22 PASS / 0 FAIL / 0 SKIP**）。
+     - `go/payment`：`go build ./...` / `go vet ./...` / `go build ./cmd/devpaynotify` 均 exit `0`；`go test ./... -count=1 -v` exit `0`（**顶层 69 / 含子测试 162 PASS / 0 FAIL / 4 SKIP**；本机 Windows 缺 MinGW `gcc` 无法跑 `-race`，已记录）。
+     - `go/trade`：`go build ./...` / `go vet ./...` exit `0`；`go test ./internal/data/... ./internal/commerce/... -count=1 -v` exit `0`（**顶层 156 / 含子测试 355 PASS / 0 FAIL / 105 SKIP**）。
+     - **隔离 TiDB v8.5.2 真库**（临时容器 `payment-verify-tidb-20261121` 监听 `127.0.0.1:14001`，`--pull=never`，`finally` 彻底移除残留 `0`）：
+       - `go/payment`（`PAYMENT_REQUIRE_TIDB=1`）：`go test ./internal/data/... -count=1 -v` exit `0`（**8 PASS / 0 FAIL / 0 SKIP**，含 `TestTiDBRecordMinorPaymentTxnSerializesLatePayments`）。
+       - `go/trade`（`COMMERCE_REQUIRE_TIDB=1`）：`go test ./internal/commerce -run 'TestTiDBMallReversalClawsBackThenRegrants|TestTiDBMallBridgeWaitsForCommittedLegAndRecoversLostReceipt' -count=1 -v` exit `0`（**2 PASS / 0 FAIL / 0 SKIP**）。
+  3. **Java `mall_game`**：
+     - `mvn -f java/pom.xml -pl authority_jdbc,server_startup install -DskipTests "-Dprotoc.spec=file:///D:/luyuan/xuanming-server-mmo-cpp/third_party/protobuf/install_vs2026_dbg/bin/protoc.exe"` exit `0`。
+     - 复验 `mvn -f java/mall_game/pom.xml test` exit `0`：**`Tests run: 132, Failures: 0, Errors: 0, Skipped: 0`**（23 个测试类全部 PASS，`MockPaymentStoreTest` 13/13 PASS）。
+  4. **C++ 串行构建（`/m:1`）与单测**：
+     - `msbuild /m:1 cpp/tests/currency_test/currency_test.vcxproj /p:Configuration=Debug /p:Platform=x64` exit `0`（0 Warning, 0 Error，`no-raw-pointer-member` 14 TU PASSED）。
+     - `build/cpp/tests/currency_test.exe --gtest_filter=AssetOpSystemTest.*`：62 例中 **61 PASS / 1 FAIL**；本线 `PaymentReversalDebitsStackableAcrossWarehouseAndNonStackableEquipment`（`19 ms`）与 `PaymentReversalDebitsOnTradeStreamAndNeverOverdraws`（`1 ms`）均 **PASS**；唯一失败项为前置既有提交 `f067d01fc` 的跨线用例 `UncommittedOrStaleEpochSnapshotNeverReportsDurable`（`asset_op_system_test.cpp:1413`，纯货币扣款无快照导致 `CompleteFakeSave()` 后 `ackResp.durable()` 为 `true`），未改动他线代码。
+  5. **PowerShell 部署契约测试**：
+     - `tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1` exit `0`（**22/22 PASS**）。
+     - `tools/scripts/tests/sql_boot_catalog_java.tests.ps1` exit `0`（**13/13 PASS**）。
+  6. **Unity 客户端（`D:\luyuan\mmorpg-client`）**：
+     - 独立 NUnit（不启 `-batchmode` 抢占已开编辑器）：exit `0`，**43/43 PASS**（`PaymentClientTests` 13/13、`CommerceClientTests` 22/22、`CommerceRecoveryFileStoreTests` 4/4、`RpcGuardTests` 4/4）。
+     - 四平台宏 + `MMORPG_UNITY_IAP` 编译（`Editor` / `UNITY_ANDROID` / `UNITY_IOS` / `UNITY_WEBGL`）：本线全部支付/商城/渠道桥 `.cs` **0 error**（在临时 gitignore 目录补齐并发外观线 `PlayerAppearance.cs` 后四组 564/564 文件均 exit `0`；裸跑 `client_compile_check.ps1` 仅在并发外观线新生成的 `Assets/Scripts/Net/Generated/Rpc/SceneAppearanceClientPlayerRpc.cs` 报 10 处 `CS0400`，待外观线运行客户端 `tools/gen_proto.ps1` 即可消除）。
+  7. **Python 静态门禁**：
+     - `python tools/scripts/check_log_text_english.py` exit `0`。
+     - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` exit `0`（**10/10 PASS**）。
+- **仍未覆盖项**：Go `-race`（需含 `gcc` 的 Linux/MinGW 环境）、`devpay` 本机进程与 `kind` 集群冒烟、真实渠道商户号/证书/真机沙盒验单、以及独立 Java 全服务仓 `xuanming-server-mmo`。
+
+
+### 2026-11-21 Gemini（Carbon Medium）：邮件 GM 与定位落点全套构建、单测与真库冒烟验证通过
+
+- **修复确认**：[GmController.java](../../java/gm_admin/src/main/java/org/jeecg/modules/gm/GmController.java) 两处 `instanceof` 流作用域修复已在最高档模型完成后重跑验证。
+- **验证结果（全部 PASS）**：
+  1. **Go 服务**：
+     - `go/player_locator`：`go build ./...`、`go vet ./...`、`go test ./internal/logic/... -count=1 -v` 全部 PASS（58.6s）。
+     - `go/mail`：`go vet ./...`、`go test ./... -count=1` 全包 PASS。
+  2. **门禁检查**：`test_cpp_no_raw_pointer_member.py`（10/10 OK）、`check_log_text_english.py`（0 违规）。
+  3. **GM 协议描述与 Java 扩展单测**：
+     - `python java/gm_admin/prepare.py` PASS。
+     - `mvn -B -f java/gm_admin/pom.xml -DskipTests=false test`：**64/64 PASS、0 FAIL、0 ERROR**（`GamePlayerAdminTest` 11、`GameServicesTest` 9、`GmCommandJournalTest` 16、`GmControllerTest` 10、`GmInstallationTest` 7、`GmPlayerCommandControllerTest` 8、`MailCampaignManifestTest` 3）。
+  4. **GM 前后端生产构建与打包**：
+     - `mvn -B -s build/gm-admin-runtime/maven-settings.xml -f build/gm-admin-upstream/jeecg-boot/pom.xml -pl jeecg-module-system/jeecg-system-start -am '-Dmaven.compiler.proc=full' -DskipTests package`：10/10 模块 `BUILD SUCCESS`（生成 `jeecg-system-start-3.9.6.jar`）。
+     - `node node_modules/vite/bin/vite.js build --mode gm`：9193 模块 0 错误构建完成（含 `dist/js/SystemMail-*.js`）。
+  5. **本机真库迁移与 HTTP 冒烟**：
+     - 启动 `xuanming-gm-admin-mysql-1`（MySQL 8.4）与 `xuanming-gm-admin-redis-1`（Redis 7.2）及 GM 前后端进程，两边均达 `ready`。
+     - 实查真库 `gm_admin`：`gm_install` 版本 `1,2,3,4,5,6` 全部落盘，`sys_permission` 新增 2 项系统邮件权限且 `sys_role_permission` 2 项绑定就位。
+     - HTTP 实测：`/actuator/health/liveness` `200 UP`、`/actuator/health/readiness` `200 UP`、未登录访问 `/gm/overview` / `/gm/system-mail/commands` / `/gm/mail-campaigns/commands` 均返回 `401`、前端 `http://127.0.0.1:3101/` 返回 `200`。
+  6. **现场说明**：本机 4 小时前 `rpc-bridge` 转发容器与独立 `gm-mail` 容器已被清理，未在本次冒烟中擅自重建跨栈容器；后续需联调在线游戏栈时按 `README.md` 执行 `python deploy/gm-admin/rpc-bridge.py deploy --execute` 后再运行 `start_docker_debug.py --execute` 即可。
+
+
+## 2026-11-21 观战分级扩容（L0 / L1 / L2）三仓全链路补齐、真库/实栈验收、Linux 容量实测与交接清零
+
+- **范围**：逐项补齐并闭环验收原 `docs/handoff/spectate-tiered-fanout-20261030/CODEX.md` 全部剩余工作，涉及主仓 `xuanming-server-mmo-cpp`、Unity 客户端 `mmorpg-client` 与独立 Java 仓 `xuanming-server-mmo`（均在 `main` 操作，未执行 `git commit` / `git push`）。验收完成后已删除 `docs/handoff/spectate-tiered-fanout-20261030/CODEX.md` 及其空目录，并同步更新 `docs/design/battle-spectate-tiered-fanout.md` 与 Java 仓 `PARITY.md`。
+- **代码补齐与修复**：
+  1. **Unity 客户端（`../mmorpg-client`）**：`SpectateClient` / `GameClient.Reconnect` / `BattleUiRoot` / `SpectatePanel` 补齐 `delivery == LOBBY` 分支、大厅连接 351/352 订阅与退订、大厅 161/158/166 接帧与 158 独立回合水位去重、`SPECTATE_END_SOURCE_LOST`、16021/16024 提示及断线重连后原 `request_id` 重发 `WatchBattle`；离线编译 547/547 0 错，`SpectateClientStateMachineTests` **32/32 PASS**。
+  2. **Go Robot（`robot/`）**：新增 `battle_spectate_lobby_scenario.go`、`battle_spectate_lobby_test.go`、`etc/battle_smoke_lobby.yaml`，支持占满 20 直连席转 `DELIVERY_LOBBY`、351/352 订阅退订、161 < 158 < 166 断言、25s 手动保活断言与 battle 停机 `<10s` `SOURCE_LOST` 断言（`lobbySpectateLoginConcurrency = 4`）；`go vet -mod=readonly ./...` exit 0，`TestBattleLobbySpectate*` **2/2 PASS**。
+  3. **Go `match` 夹具修复**：修复 `go/match/internal/authority/schema_test.go` 在 DML 运行池上执行测试夹具 DDL/建用户导致的真实 TiDB 失败，改用 `testInstall` 与独立 root 连接。
+  4. **独立 Java 服务端（`../xuanming-server-mmo`）**：补齐第二轮评审全部 10 项（`BattleRoomServiceImpl` 停机改发 `SOURCE_LOST` + 10s 冻结心跳 + 期限+60s 停止 + 停机期间 SQL 落定补发中继 END；`GlobalWatchAuthority` 排除 `match_battle_completion.terminal_decision <> 0`；`GlobalWatchService` 落 L0 原件前目录实例确认；`ClientDispatcher` `LeaveGame` 无条件摘订阅且拒绝 `playerId==0` 匹配未绑定会话）、`WatchBattleService` 本地 163 跨会话栅栏、`game-robot` dev 观战原操作字段（`BattleFixtures`、`DevBattleController`、`BattleAdminClient`、`BattleScenario`）与大厅档 `SpectateSteps` 351/352 支持。
+- **验证证据（全部本线 0 FAIL / 0 SKIP）**：
+  - **C++**：`routing_identity_test` 全量 **481/481 PASS**（观战定向 104/104）；`rpc_controller_test` 观战定向 **83/83 PASS**（`BattleObserverContract` 49/49、`BattleSpectateRelay` 5/5；全量 557/559 仅 2 处他线 `RedisCommandRouteTest`）；`kafka_command_test` 广播向量 **8/8 PASS**；`test_cpp_no_raw_pointer_member.py` 10/10 OK；`check_log_text_english.py` exit 0。
+  - **Go + 真实 TiDB（0 SKIP）**：`go/shared` `kafkautil` PASS；`go/match` 7 份观战文件 `gofmt -l` 0 差、`go build ./...` / `go vet ./internal/logic/...` PASS；隔离 TiDB（`MATCH_IT_REQUIRE_TIDB=1`）下 `TestSpectatorTiDB*`（20 项）、`TestSpectatorFormationEnded`（9 子项）、`TestFormationOutcomeDecided`（5 子项）、`TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex`、`TestTiDBAuthorityStartupUsesDMLAccountAndRequiresCurrentSchema`、`TestGlobalWatchTiDB*`、`TestGlobalSpectator*`、`TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone`、`TestCommitBattleOutcomeTiDB*`、`internal/team/...` 全绿（**0 SKIP**）；`go/{friend,guild,login,mail}` `go build ./...` 全过；`protogen` 生成器包全过（仅 `protogen/internal` 1 处他线 `GmExecutePlayerCommand` 脏改）。
+  - **部署契约、Topic 与 Schema**：`k8s_deploy_contract.tests.ps1` 全部观战条目 PASS（362/364，2 处他线）；实栈 Kafka 核对 `gate-spectate_g2`（256 分区，保留 10 分钟）与 `spectate-bcast_g2`（16 分区，保留 10 分钟）；实栈 MySQL `mmorpg_match.match_spectator_intent` 核对 `close_tip` / `delivery` / `created_ms` 及 5 列清理索引完备。
+  - **实栈端到端 4 组冒烟（`xuanming-debug-current`，结束后已恢复停机原状）**：
+    1. L0 直连：`BATTLE_SMOKE_OK battle_id=4549369686814868390 a_turns=9 b_spectate_turns=9 a_direct_turns=9 b_direct_spectate_turns=9`；
+    2. LOBBY 中继：`BATTLE_LOBBY_SMOKE_OK battle_id=5347841691603443690 direct_fill=20 l_states=1 l_turns=8 end_reason=SPECTATE_END_BATTLE_FINISHED`（351/352 正常，单跳中继延迟 6~7 ms，gate 指标 `metric=gate_spectate` 0 错/0 跳过）；
+    3. 25s 手动保活：`BATTLE_LOBBY_SMOKE_OK battle_id=4315230802341563129 direct_fill=20 l_states=1 l_turns=4 manual_hold_25s=true`（24s 窗口内无误判 `SOURCE_LOST`）；
+    4. battle 停机：`BATTLE_LOBBY_SHUTDOWN_SMOKE_OK battle_id=2939263823626645267 elapsed_ms=733 reason=SPECTATE_END_SOURCE_LOST`（733 ms 立即收尾，不等 30s）。
+  - **Linux 帧大小与 Gate 单线程扇出容量实测**：详见 [docs/stress/stress-spectate-fanout-20261121.md](stress/stress-spectate-fanout-20261121.md)（GCC 13.4.0 `-O2` 直链生产 `SpectateHub` + `EncodedFrame` + `muduo` 单线程真实 TCP 回环：5v5 线帧 3,373 B、5v5+pets 6,594 B；单台满载 20,000 连接 @2s 占单核 15.8~17.7% / 32.2~62.9 MB/s；`kFanoutBatch=512` p50 单批 8 ms；256 KB 软水位在 3.3 MB 压灌慢客户端下 `softSkip=4,800, hardHW=0`；过载合并轮转极差 1）。
+  - **独立 Java 仓（`../xuanming-server-mmo`）**：`ContractSync --check` 0 协议/Tip/消息号漂移；`game-common`、`game-discovery`、`game-data`（710 PASS）、`game-battle`（636/636）、`game-match`（2062/2062）、`game-gate`（`SpectateHubTest` 37/37 + `ClientSpectateRequestTest` 全过；仅 1 处他线 `MessageRoutesTest` `RenameGuild`）、`game-robot`（`BattleAdminClientTest` 8/8 + `SpectateStepsTest` 23/23 全过；695/696 仅 1 处他线 `GuildScenarioTest` `RenameGuild`）；真 Redis 7.2 与 8.10.2 两轮 `SpectateFrameChannelIntegrationTest` 均 **4/4 PASS（0 SKIP）**；真 TiDB v8.5.8 `GlobalMatchStoreIntegrationTest` **62/62 PASS（0 SKIP）**。全部临时 Docker 容器已清理。
+- **残余与后续交接**：环境受限的两项后续验证（目标物理机/云主机混跑复测 Gate 扇出 p99、独立 Java 仓全栈进程 LOBBY 冒烟，以及附注的同期他线未闭合项边界）已登记至 `docs/handoff/spectate-tiered-fanout-followup-20261121.md`。

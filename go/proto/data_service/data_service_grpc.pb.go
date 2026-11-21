@@ -68,6 +68,7 @@ const (
 	DataService_GetPlayerAssetOpLedger_FullMethodName        = "/data_service.DataService/GetPlayerAssetOpLedger"
 	DataService_GetPlayerInboxLedger_FullMethodName          = "/data_service.DataService/GetPlayerInboxLedger"
 	DataService_GetPlayerItemGainBlock_FullMethodName        = "/data_service.DataService/GetPlayerItemGainBlock"
+	DataService_UpdateRoleAppearance_FullMethodName          = "/data_service.DataService/UpdateRoleAppearance"
 )
 
 // DataServiceClient is the client API for DataService service.
@@ -192,6 +193,10 @@ type DataServiceClient interface {
 	// PlayerInboxAdmin.GetItemGainBlocks(那一层校验 x-admin-token),不是 scene。
 	// 设计见 docs/design/player-inbox-service.md §2.2。
 	GetPlayerItemGainBlock(ctx context.Context, in *GetPlayerItemGainBlockRequest, opts ...grpc.CallOption) (*GetPlayerItemGainBlockResponse, error)
+	// ── 角色永久外观同步 ─────────────────────────────────────────
+	// scene 消耗角色形象卡成功落盘后同步账号目录 account_role.role_proto.appearance_id,使登录选角列表立即展示最新永久形象。
+	// 只认 scene 调用证明(RoleAdmissionAuth);不动 owner_revision 与 fence_version。
+	UpdateRoleAppearance(ctx context.Context, in *UpdateRoleAppearanceRequest, opts ...grpc.CallOption) (*UpdateRoleAppearanceResponse, error)
 }
 
 type dataServiceClient struct {
@@ -682,6 +687,16 @@ func (c *dataServiceClient) GetPlayerItemGainBlock(ctx context.Context, in *GetP
 	return out, nil
 }
 
+func (c *dataServiceClient) UpdateRoleAppearance(ctx context.Context, in *UpdateRoleAppearanceRequest, opts ...grpc.CallOption) (*UpdateRoleAppearanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateRoleAppearanceResponse)
+	err := c.cc.Invoke(ctx, DataService_UpdateRoleAppearance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServiceServer is the server API for DataService service.
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
@@ -804,6 +819,10 @@ type DataServiceServer interface {
 	// PlayerInboxAdmin.GetItemGainBlocks(那一层校验 x-admin-token),不是 scene。
 	// 设计见 docs/design/player-inbox-service.md §2.2。
 	GetPlayerItemGainBlock(context.Context, *GetPlayerItemGainBlockRequest) (*GetPlayerItemGainBlockResponse, error)
+	// ── 角色永久外观同步 ─────────────────────────────────────────
+	// scene 消耗角色形象卡成功落盘后同步账号目录 account_role.role_proto.appearance_id,使登录选角列表立即展示最新永久形象。
+	// 只认 scene 调用证明(RoleAdmissionAuth);不动 owner_revision 与 fence_version。
+	UpdateRoleAppearance(context.Context, *UpdateRoleAppearanceRequest) (*UpdateRoleAppearanceResponse, error)
 	mustEmbedUnimplementedDataServiceServer()
 }
 
@@ -957,6 +976,9 @@ func (UnimplementedDataServiceServer) GetPlayerInboxLedger(context.Context, *Get
 }
 func (UnimplementedDataServiceServer) GetPlayerItemGainBlock(context.Context, *GetPlayerItemGainBlockRequest) (*GetPlayerItemGainBlockResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPlayerItemGainBlock not implemented")
+}
+func (UnimplementedDataServiceServer) UpdateRoleAppearance(context.Context, *UpdateRoleAppearanceRequest) (*UpdateRoleAppearanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateRoleAppearance not implemented")
 }
 func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
 func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
@@ -1843,6 +1865,24 @@ func _DataService_GetPlayerItemGainBlock_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_UpdateRoleAppearance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateRoleAppearanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).UpdateRoleAppearance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_UpdateRoleAppearance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).UpdateRoleAppearance(ctx, req.(*UpdateRoleAppearanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2041,6 +2081,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPlayerItemGainBlock",
 			Handler:    _DataService_GetPlayerItemGainBlock_Handler,
+		},
+		{
+			MethodName: "UpdateRoleAppearance",
+			Handler:    _DataService_UpdateRoleAppearance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

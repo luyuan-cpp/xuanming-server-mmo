@@ -35,6 +35,7 @@
 #include "ActorActionCombatStateTable.h"
 #include "ActorActionStateTable.h"
 #include "AfkPassRuleTable.h"
+#include "AppearanceRuleTable.h"
 #include "AttributeAllocRatioTable.h"
 #include "AttributeAutoPlanTable.h"
 #include "AttributeDimensionTable.h"
@@ -42,6 +43,7 @@
 #include "AttributeRuleTable.h"
 #include "BaseSceneTable.h"
 #include "BuffTable.h"
+#include "CharacterAppearanceTable.h"
 #include "ClassTable.h"
 #include "ConditionTable.h"
 #include "CooldownTable.h"
@@ -121,7 +123,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 54;
+	static constexpr int32 TableCount = 56;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -191,6 +193,9 @@ public:
 	UAfkPassRuleTable* GetAfkPassRuleTable() const { return AfkPassRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAppearanceRuleTable* GetAppearanceRuleTable() const { return AppearanceRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UAttributeAllocRatioTable* GetAttributeAllocRatioTable() const { return AttributeAllocRatioTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -210,6 +215,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UBuffTable* GetBuffTable() const { return BuffTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UCharacterAppearanceTable* GetCharacterAppearanceTable() const { return CharacterAppearanceTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UClassTable* GetClassTable() const { return ClassTable; }
@@ -348,6 +356,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UAfkPassRuleTable> AfkPassRuleTable;
 	UPROPERTY(Transient)
+	TObjectPtr<UAppearanceRuleTable> AppearanceRuleTable;
+	UPROPERTY(Transient)
 	TObjectPtr<UAttributeAllocRatioTable> AttributeAllocRatioTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UAttributeAutoPlanTable> AttributeAutoPlanTable;
@@ -361,6 +371,8 @@ private:
 	TObjectPtr<UBaseSceneTable> BaseSceneTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UBuffTable> BuffTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UCharacterAppearanceTable> CharacterAppearanceTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UClassTable> ClassTable;
 	UPROPERTY(Transient)

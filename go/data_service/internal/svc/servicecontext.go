@@ -176,6 +176,8 @@ type ServiceContext struct {
 	RolePreparing          RolePreparingAborter
 	// RoleRenames 是角色改名(RenameRole RPC 与后台续做),只认 scene 的调用证明(RoleAdmissionAuth)。见 configureRoleFence。
 	RoleRenames RoleRenamer
+	// RoleAppearances 是角色永久外观目录同步(UpdateRoleAppearance RPC),只认 scene 的调用证明(RoleAdmissionAuth)。
+	RoleAppearances RoleAppearanceUpdater
 	PlayerRouteAuth        *serviceauth.Verifier // GetPlayerRoute 的调用证明,缺席时回 Unavailable
 	roleFenceCoordinator   io.Closer
 	stopRemovalResumer     func(context.Context) error

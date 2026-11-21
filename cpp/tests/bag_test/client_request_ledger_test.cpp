@@ -334,7 +334,11 @@ TEST(ClientRequestLedgerTest, KindValuesAndNameTablesAreStable)
 	EXPECT_EQ(2u, static_cast<uint32_t>(ClientRequestKind::kBuyMysteryMerchantGoods));
 	EXPECT_EQ(3u, static_cast<uint32_t>(ClientRequestKind::kCreateAttributeScheme));
 	EXPECT_EQ(6u, static_cast<uint32_t>(ClientRequestKind::kBuyAfkPass));
+	EXPECT_EQ(7u, static_cast<uint32_t>(ClientRequestKind::kSwitchAppearance));
+	EXPECT_EQ(8u, static_cast<uint32_t>(ClientRequestKind::kStartAppearanceTrial));
 	EXPECT_STREQ("buy_afk_pass", ClientRequestKindName(ClientRequestKind::kBuyAfkPass));
+	EXPECT_STREQ("switch_appearance", ClientRequestKindName(ClientRequestKind::kSwitchAppearance));
+	EXPECT_STREQ("start_appearance_trial", ClientRequestKindName(ClientRequestKind::kStartAppearanceTrial));
 	EXPECT_STREQ("enhance_equip", ClientRequestKindName(ClientRequestKind::kEnhanceEquip));
 	EXPECT_STREQ("buy_mystery_merchant_goods", ClientRequestKindName(ClientRequestKind::kBuyMysteryMerchantGoods));
 	EXPECT_STREQ("create_attribute_scheme", ClientRequestKindName(ClientRequestKind::kCreateAttributeScheme));

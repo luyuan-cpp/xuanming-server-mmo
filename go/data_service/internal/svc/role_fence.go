@@ -92,6 +92,11 @@ type ChannelIdentityStore interface {
 }
 
 // AccountDeletionStore 是账号注销在目录上的动作与读(docs/design/account-deletion.md §4、§5.1)。*store.AccountDirectoryStore 满足它。
+// RoleAppearanceUpdater 同步角色永久外观到账号目录。*store.AccountDirectoryStore 实现。
+type RoleAppearanceUpdater interface {
+	UpdateRoleAppearance(ctx context.Context, playerID uint64, appearanceID string) (bool, error)
+}
+
 // 读目录列表连同注销状态走 AccountDirectory(store 的 ReadWithLifecycle),不在这里。
 type AccountDeletionStore interface {
 	AccountDeletionState(ctx context.Context, account string) (dspb.AccountDeletionState, error)
@@ -111,6 +116,7 @@ func (s *ServiceContext) configureRoleFence(c config.Config, directory *store.Ac
 	s.RolePreparing = directory
 	// 改名不依赖过户、删角的协调者:它只写目录自己的两个逻辑库。
 	s.RoleRenames = directory
+	s.RoleAppearances = directory
 	if auth, err := newRoleFenceAuth(getenv); err != nil {
 		logx.Errorf("[role-fence] no caller key usable; GetRoleFenceState disabled: %v", err)
 	} else {

@@ -93,6 +93,11 @@ const (
 	// 改名成功时销毁改名卡的流水。correlation_id = 那次改名的流水号(PlayerProfileComp.rename_seq)。
 	// 改名不成时卡只是解除占用、没有离开过背包,不记流水。只追加,不复用旧编号。
 	TransactionType_TX_ROLE_RENAME TransactionType = 33
+	// ── 角色形象永久切换(docs/design/character-appearance-switch.md)────────────
+	//
+	// 消耗角色形象卡(Item 3402)永久切换角色形象的销毁流水。correlation_id = 客户端幂等键 client_request_id。
+	// 1 小时免费试用不消耗道具,不记流水。只追加,不复用旧编号。
+	TransactionType_TX_APPEARANCE_SWITCH TransactionType = 34
 )
 
 // Enum value maps for TransactionType.
@@ -132,6 +137,7 @@ var (
 		31: "TX_PAYMENT_REVERSAL",
 		32: "TX_AFK_PASS_BUY",
 		33: "TX_ROLE_RENAME",
+		34: "TX_APPEARANCE_SWITCH",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":               0,
@@ -168,6 +174,7 @@ var (
 		"TX_PAYMENT_REVERSAL":      31,
 		"TX_AFK_PASS_BUY":          32,
 		"TX_ROLE_RENAME":           33,
+		"TX_APPEARANCE_SWITCH":     34,
 	}
 )
 
@@ -439,7 +446,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xe1\x05\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xfb\x05\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -476,7 +483,8 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x11TX_AUCTION_RETURN\x10\x1e\x12\x17\n" +
 	"\x13TX_PAYMENT_REVERSAL\x10\x1f\x12\x13\n" +
 	"\x0fTX_AFK_PASS_BUY\x10 \x12\x12\n" +
-	"\x0eTX_ROLE_RENAME\x10!B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x0eTX_ROLE_RENAME\x10!\x12\x18\n" +
+	"\x14TX_APPEARANCE_SWITCH\x10\"B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

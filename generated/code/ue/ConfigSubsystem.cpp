@@ -39,6 +39,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	ActorActionCombatStateTable = NewObject<UActorActionCombatStateTable>(this);
 	ActorActionStateTable = NewObject<UActorActionStateTable>(this);
 	AfkPassRuleTable = NewObject<UAfkPassRuleTable>(this);
+	AppearanceRuleTable = NewObject<UAppearanceRuleTable>(this);
 	AttributeAllocRatioTable = NewObject<UAttributeAllocRatioTable>(this);
 	AttributeAutoPlanTable = NewObject<UAttributeAutoPlanTable>(this);
 	AttributeDimensionTable = NewObject<UAttributeDimensionTable>(this);
@@ -46,6 +47,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	AttributeRuleTable = NewObject<UAttributeRuleTable>(this);
 	BaseSceneTable = NewObject<UBaseSceneTable>(this);
 	BuffTable = NewObject<UBuffTable>(this);
+	CharacterAppearanceTable = NewObject<UCharacterAppearanceTable>(this);
 	ClassTable = NewObject<UClassTable>(this);
 	ConditionTable = NewObject<UConditionTable>(this);
 	CooldownTable = NewObject<UCooldownTable>(this);
@@ -97,6 +99,7 @@ void UConfigSubsystem::Deinitialize()
 	ActorActionCombatStateTable = nullptr;
 	ActorActionStateTable = nullptr;
 	AfkPassRuleTable = nullptr;
+	AppearanceRuleTable = nullptr;
 	AttributeAllocRatioTable = nullptr;
 	AttributeAutoPlanTable = nullptr;
 	AttributeDimensionTable = nullptr;
@@ -104,6 +107,7 @@ void UConfigSubsystem::Deinitialize()
 	AttributeRuleTable = nullptr;
 	BaseSceneTable = nullptr;
 	BuffTable = nullptr;
+	CharacterAppearanceTable = nullptr;
 	ClassTable = nullptr;
 	ConditionTable = nullptr;
 	CooldownTable = nullptr;
@@ -160,6 +164,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UActorActionCombatStateTable::FileName(),
 		UActorActionStateTable::FileName(),
 		UAfkPassRuleTable::FileName(),
+		UAppearanceRuleTable::FileName(),
 		UAttributeAllocRatioTable::FileName(),
 		UAttributeAutoPlanTable::FileName(),
 		UAttributeDimensionTable::FileName(),
@@ -167,6 +172,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UAttributeRuleTable::FileName(),
 		UBaseSceneTable::FileName(),
 		UBuffTable::FileName(),
+		UCharacterAppearanceTable::FileName(),
 		UClassTable::FileName(),
 		UConditionTable::FileName(),
 		UCooldownTable::FileName(),
@@ -303,6 +309,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (AppearanceRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AppearanceRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AppearanceRuleTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (AttributeAllocRatioTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAllocRatio] 管理器未创建"));
@@ -393,6 +413,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!BuffTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (CharacterAppearanceTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[CharacterAppearance] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!CharacterAppearanceTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1129,6 +1163,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAnySwapped = true;
 	}
 	JsonText.Reset();
+	if (AppearanceRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AppearanceRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAppearanceRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AppearanceRule] 取不到 %s"), UAppearanceRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AppearanceRuleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
 	if (AttributeAllocRatioTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAllocRatio] 管理器未创建"));
@@ -1260,6 +1314,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!BuffTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (CharacterAppearanceTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[CharacterAppearance] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UCharacterAppearanceTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[CharacterAppearance] 取不到 %s"), UCharacterAppearanceTable::FileName());
+		bAllOk = false;
+	}
+	else if (!CharacterAppearanceTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

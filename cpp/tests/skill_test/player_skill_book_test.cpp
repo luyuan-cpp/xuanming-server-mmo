@@ -138,8 +138,10 @@ TEST_F(PlayerSkillBookTest, FreeCatalogIsSharedAcrossClassesAndLearningUsesTheSe
     ListSkillsResponse first, second;
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(player, first), kSuccess);
     ASSERT_EQ(PlayerSkillSystem::BuildSkillBook(otherClass, second), kSuccess);
-    ASSERT_EQ(first.catalog_size(), 50);
+    ASSERT_EQ(first.catalog_size(), 40);
     ASSERT_EQ(second.catalog_size(), first.catalog_size());
+    EXPECT_EQ(FindEntry(first, 10018), nullptr); // A18 仅限宝宝学习。
+    EXPECT_EQ(FindEntry(first, 13001), nullptr); // T01 仅限宝宝学习。
     for (int i = 0; i < first.catalog_size(); ++i) {
         EXPECT_EQ(first.catalog(i).skill_table_id(), second.catalog(i).skill_table_id());
         EXPECT_EQ(first.catalog(i).class_id(), 0u);
@@ -201,6 +203,8 @@ TEST_F(PlayerSkillBookTest, PetSkillBookEnforcesOwnershipRankAndKeepsHealthRatio
     EXPECT_EQ(book.pet_id(), 88u);
     EXPECT_EQ(book.catalog_size(), 34);
     EXPECT_EQ(FindEntry(book, 10003), nullptr); // A03 只可由人物学习。
+    EXPECT_NE(FindEntry(book, 10018), nullptr); // A18 转为宝宝专属敌2主动。
+    EXPECT_NE(FindEntry(book, 13001), nullptr); // T01 转为宝宝专属追击。
     EXPECT_EQ(PetSystem::BuildSkillBook(stranger, 88, book), kPetNotFound);
 
     UpgradeSkillRequest request;
@@ -762,7 +766,7 @@ TEST_F(PlayerSkillBookTest, MissingClassComponentLeavesNoUsableSkills) {
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerUint32Comp>(player)) << "读路径不补建持久组件";
 }
 
-// 使用当前正式69项目录运行本组；旧职业目录回归使用它自己的隔离表。
+// 使用当前正式61项目录运行本组；旧职业目录回归使用它自己的隔离表。
 TEST_F(PlayerSkillBookTest, SupportPreviewUsesAuthoritativeLevelCurvePassiveAndModernDuration) {
     const auto* healing = Row(10010); const auto* shield = Row(10040);
     ASSERT_NE(nullptr, healing); ASSERT_NE(nullptr, shield);

@@ -40,6 +40,7 @@
     <ClInclude Include="code\basescene_table_comp.h" />
     <ClInclude Include="code\bit_index\mission_table_id_bit_index.h" />
     <ClInclude Include="code\bit_index\reward_table_id_bit_index.h" />
+    <ClInclude Include="code\bit_index\characterappearance_table_id_bit_index.h" />
     <ClInclude Include="code\buff_table.h" />
     <ClInclude Include="code\buff_table_comp.h" />
     <ClInclude Include="code\class_table.h" />
@@ -129,6 +130,11 @@
     <ClInclude Include="code\mysterymerchantrule_table_comp.h" />
     <ClInclude Include="code\afkpassrule_table.h" />
     <ClInclude Include="code\afkpassrule_table_comp.h" />
+    <ClInclude Include="code\appearancerule_table.h" />
+    <ClInclude Include="code\appearancerule_table_comp.h" />
+    <ClInclude Include="code\appearancerule_table_fk.h" />
+    <ClInclude Include="code\characterappearance_table.h" />
+    <ClInclude Include="code\characterappearance_table_comp.h" />
     <ClInclude Include="code\mysterymerchantspot_table.h" />
     <ClInclude Include="code\mysterymerchantspot_table_comp.h" />
     <ClInclude Include="code\item_table_fk.h" />
@@ -208,10 +214,13 @@
     <ClInclude Include="proto\mysterymerchantgoods_table.pb.h" />
     <ClInclude Include="proto\mysterymerchantrule_table.pb.h" />
     <ClInclude Include="proto\afkpassrule_table.pb.h" />
+    <ClInclude Include="proto\appearancerule_table.pb.h" />
+    <ClInclude Include="proto\characterappearance_table.pb.h" />
     <ClInclude Include="proto\mysterymerchantspot_table.pb.h" />
     <ClInclude Include="proto\tip\mystery_merchant_error_tip.pb.h" />
     <ClInclude Include="proto\tip\payment_error_tip.pb.h" />
     <ClInclude Include="proto\tip\afk_pass_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\appearance_error_tip.pb.h" />
     <ClInclude Include="proto\tip\chat_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
@@ -292,6 +301,9 @@
     <ClCompile Include="code\mysterymerchantgoods_table_fk.cpp" />
     <ClCompile Include="code\mysterymerchantrule_table.cpp" />
     <ClCompile Include="code\afkpassrule_table.cpp" />
+    <ClCompile Include="code\appearancerule_table.cpp" />
+    <ClCompile Include="code\appearancerule_table_fk.cpp" />
+    <ClCompile Include="code\characterappearance_table.cpp" />
     <ClCompile Include="code\mysterymerchantspot_table.cpp" />
     <ClCompile Include="code\item_table_fk.cpp" />
     <ClCompile Include="code\attributerule_table.cpp" />
@@ -362,10 +374,13 @@
     <ClCompile Include="proto\mysterymerchantgoods_table.pb.cc" />
     <ClCompile Include="proto\mysterymerchantrule_table.pb.cc" />
     <ClCompile Include="proto\afkpassrule_table.pb.cc" />
+    <ClCompile Include="proto\appearancerule_table.pb.cc" />
+    <ClCompile Include="proto\characterappearance_table.pb.cc" />
     <ClCompile Include="proto\mysterymerchantspot_table.pb.cc" />
     <ClCompile Include="proto\tip\mystery_merchant_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\payment_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\afk_pass_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\appearance_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />

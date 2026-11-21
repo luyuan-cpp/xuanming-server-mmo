@@ -1,0 +1,122 @@
+syntax = "proto3";
+option go_package = "robot/proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/base/empty.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 角色形象切换（商城 10 元角色形象卡）与一小时免费试用（bit 位图存储）。
+// 设计文档: docs/design/character-appearance-switch.md。
+//
+// 业务规则:
+//   1. 每个角色同一时刻只持有 1 个永久形象(PlayerProfileComp.appearance_id),不设永久解锁衣柜;
+//      每次切换到其他形象需消耗 1 张角色形象卡(Item 3402,官方商城售价 10 元 CNY)。
+//   2. 每个可选形象每角色可免费试用 1 小时(AppearanceRule.trial_duration_seconds = 3600),
+//      试用标记按 CharacterAppearance 表的 (cfg_bit_index) 紧凑位图存储在 PlayerProfileComp.appearance_trial_used_bits。
+//   3. 试用期间大世界 AOI 与战斗快照展示试用形象,不覆盖选角永久形象;支持提前取消或覆盖试用其他未试用形象,
+//      到期后服务端自动还原永久形象并广播。
+
+message CharacterAppearanceEntry
+{
+	uint32 config_id = 1;     // CharacterAppearance.id(永久主键)
+	string appearance_id = 2; // 稳定资源外观 ID(如 "08_alchemy_prodigy_boy")
+	string name = 3;          // 中文展示名
+	uint32 sort_order = 4;    // 界面排序(升序)
+	bool trial_used = 5;      // 由玩家 appearance_trial_used_bits 对应 bit 算出
+}
+
+message PlayerAppearanceInfo
+{
+	string permanent_appearance_id = 1;               // 当前永久持有的唯一形象
+	string active_appearance_id = 2;                  // 此刻实际生效展示的形象(试用中为试用形象,否则为永久形象)
+	string trial_appearance_id = 3;                   // 当前正在试用的形象;空串 = 未试用
+	uint64 trial_expires_at = 4;                      // 试用到期 Unix 秒;0 = 未试用
+	uint64 server_now = 5;                            // 服务器墙钟 Unix 秒(客户端据此算倒计时,不信本机墙钟)
+	uint32 card_item_id = 6;                          // 形象卡道具 ID(AppearanceRule.card_item_id, 默认 3402)
+	uint32 card_item_count = 7;                       // 每次切换消耗张数(默认 1)
+	uint32 owned_card_count = 8;                      // 玩家人物背包当前可用形象卡张数(已扣预留)
+	uint32 trial_duration_seconds = 9;                // 免费试用时长秒数(默认 3600)
+	uint64 mall_sku_id = 10;                          // 商城对应 SKU ID(快捷跳转购买用)
+	uint64 mall_price_fen = 11;                       // 商城标价(人民币分, 默认 1000 = 10 元)
+	bytes trial_used_bits = 12;                       // 紧凑位图原样(低位在前,与 CharacterAppearance bit_index 对应)
+	repeated CharacterAppearanceEntry appearances = 13; // 当前可用形象列表(按 sort_order 升序)
+}
+
+message GetAppearanceInfoRequest {}
+
+message GetAppearanceInfoResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+}
+
+// 消耗角色形象卡永久切换唯一角色形象(带幂等键,与 BuyAfkPass 同口径)。
+message SwitchAppearanceRequest
+{
+	uint64 client_request_id = 1; // 必须非 0;同一次操作重发带同一键
+	string appearance_id = 2;     // 目标形象稳定 ID
+}
+
+message SwitchAppearanceResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	bool replayed = 3;
+}
+
+// 开启 1 小时免费试用(每个形象每角色限 1 次,写入 bit 标记)。
+message StartAppearanceTrialRequest
+{
+	uint64 client_request_id = 1; // 必须非 0
+	string appearance_id = 2;     // 目标形象稳定 ID
+}
+
+message StartAppearanceTrialResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	bool replayed = 3;
+}
+
+// 手动提前结束当前试用,立即恢复永久形象。
+message CancelAppearanceTrialRequest {}
+
+message CancelAppearanceTrialResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+}
+
+// 场景内某玩家生效展示形象变更广播(发给本人 + AOI 视野内可见观察者)。
+message ActorAppearanceChangedS2C
+{
+	uint64 entity = 1;           // 场景内不透明 actor 网络号(同 ActorCreateS2C.entity)
+	uint64 player_id = 2;        // 玩家永久 ID(同 ActorCreateS2C.guid)
+	string appearance_id = 3;    // 变更后的生效展示形象
+	bool is_trial = 4;           // true = 正在试用, false = 永久形象
+	uint64 trial_expires_at = 5; // 试用到期 Unix 秒(非试用为 0)
+}
+
+// 本人试用到期自动还原或状态变化推送(单播给本人)。
+message AppearanceStateNotify
+{
+	PlayerAppearanceInfo info = 1;
+	bool trial_expired = 2; // true = 因 1 小时试用到期自动还原
+}
+
+service SceneAppearanceClientPlayer
+{
+	option (OptionIsPlayerService) = true;
+	option (OptionIsClientProtocolService) = true;
+
+	rpc GetAppearanceInfo (GetAppearanceInfoRequest) returns (GetAppearanceInfoResponse);
+	rpc SwitchAppearance (SwitchAppearanceRequest) returns (SwitchAppearanceResponse);
+	rpc StartAppearanceTrial (StartAppearanceTrialRequest) returns (StartAppearanceTrialResponse);
+	rpc CancelAppearanceTrial (CancelAppearanceTrialRequest) returns (CancelAppearanceTrialResponse);
+	rpc NotifyActorAppearanceChanged (ActorAppearanceChangedS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+	rpc NotifyAppearanceState (AppearanceStateNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+}

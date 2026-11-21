@@ -34,7 +34,7 @@
 #include <thread_context/ecs_context.h>
 #include <proto/scene/player_scene.pb.h>
 
-extern const Point kDefaultSize(20.0, 20.0);
+extern const Point kDefaultSize(kAoiHexSize, kAoiHexSize);
 extern const Point kOrigin(0.0, 0.0);
 extern const auto kHexLayout = Layout(layout_flat, kDefaultSize, kOrigin);
 

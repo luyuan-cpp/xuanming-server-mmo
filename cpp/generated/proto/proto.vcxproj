@@ -377,6 +377,8 @@
     <ClInclude Include="scene\player_mystery_merchant.pb.h" />
     <ClCompile Include="scene\player_afk_pass.pb.cc" />
     <ClInclude Include="scene\player_afk_pass.pb.h" />
+    <ClCompile Include="scene\player_appearance.pb.cc" />
+    <ClInclude Include="scene\player_appearance.pb.h" />
     <ClInclude Include="battle\battle_data.pb.h" />
     <ClInclude Include="battle\battle_node.pb.h" />
     <ClInclude Include="battle\player_battle.pb.h" />
@@ -487,5 +489,7 @@
   <ItemGroup Label="ProtoGeneratorSources">
     <ClCompile Include="content_guard\content_guard.pb.cc" />
     <ClInclude Include="content_guard\content_guard.pb.h" />
+  </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
   </ItemGroup>
 </Project>

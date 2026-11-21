@@ -12,6 +12,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authz.AuthorizationException;
@@ -30,9 +33,21 @@ import org.springframework.web.server.ResponseStatusException;
 @Lazy(false)
 @RequestMapping(value = "/gm", produces = "application/json;charset=UTF-8")
 public class GmController {
-    private static final Set<String> PERMISSIONS = Set.of("gm:zone:read", "gm:player:read", "gm:mail:prepare", "gm:mail:send", "gm:audit:read",
+    private static final Set<String> PERMISSIONS = Set.of("gm:zone:read", "gm:player:read", "gm:mail:prepare", "gm:mail:send",
+            "gm:system-mail:prepare", "gm:system-mail:send", "gm:audit:read",
             "gm:currency:add", "gm:currency:deduct", "gm:currency:block", "gm:currency:unblock", "gm:player:level", "gm:pet:grant", "gm:item:grant");
-    private static final Set<String> DRAFT_FIELDS = Set.of("clientRequestId", "playerId", "title", "body", "reason", "currencyType", "currencyAmount", "itemConfigId", "itemCount", "validDays");
+    private static final Set<String> DRAFT_FIELDS = Set.of("clientRequestId", "playerId", "title", "body", "reason",
+            "currencyType", "currencyAmount", "itemConfigId", "itemCount", "currencies", "items", "validDays");
+    private static final Set<String> SYSTEM_MAIL_FIELDS = Set.of("clientRequestId", "title", "body", "reason", "validDays");
+    private static final Set<String> CAMPAIGN_FIELDS = Set.of("clientRequestId", "title", "body", "reason",
+            "currencies", "items", "recipientPlayerIds", "validDays");
+    private static final Set<String> CURRENCY_ENTRY_FIELDS = Set.of("currencyType", "amount");
+    private static final Set<String> ITEM_ENTRY_FIELDS = Set.of("configId", "count");
+    private static final int DEFAULT_MAX_BODY_BYTES = 16_384;
+    private static final int CAMPAIGN_MAX_BODY_BYTES = 512 * 1024;
+    private static final int MAX_CURRENCIES = 4;
+    private static final int MAX_ITEMS = 16;
+    private static final int MAX_TOTAL_ITEM_COUNT = 4096;
     private final ObjectMapper json;
     private final GameServices game;
     private final GmCommandJournal journal;
@@ -97,30 +112,16 @@ public class GmController {
     @PostMapping("/mail/drafts")
     public String prepare(@RequestBody String body) {
         String actor = require("gm:mail:prepare");
-        if (!mailEnabled) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "邮件服务未配置，暂不能发放");
-        ObjectNode input = parse(body);
+        requireMailEnabled();
+        ObjectNode input = parse(body, DEFAULT_MAX_BODY_BYTES);
         input.fieldNames().forEachRemaining(key -> { if (!DRAFT_FIELDS.contains(key)) bad("存在未知字段"); });
-        String clientId = text(input, "clientRequestId", 1, 36);
-        try { if (!java.util.UUID.fromString(clientId).toString().equals(clientId)) bad("请求号无效"); }
-        catch (IllegalArgumentException e) { bad("请求号无效"); }
+        String clientId = uuid(input);
         String playerId = text(input, "playerId", 1, 19);
         decimal(playerId, BigInteger.valueOf(Long.MAX_VALUE), "玩家 ID");
         ObjectNode request = json.createObjectNode().put("senderKind", 1)
                 .put("title", text(input, "title", 1, 128)).put("body", text(input, "body", 0, 4096))
                 .put("validDays", integer(input, "validDays", 1, 30));
-        ObjectNode attachments = request.putObject("attachments");
-        boolean hasCurrency = input.hasNonNull("currencyAmount") && !input.path("currencyAmount").asText().isBlank();
-        boolean hasItem = input.hasNonNull("itemConfigId");
-        if (hasCurrency) {
-            String amount = text(input, "currencyAmount", 1, 19);
-            decimal(amount, BigInteger.valueOf(Long.MAX_VALUE), "货币数量");
-            int currencyType = input.hasNonNull("currencyType") ? integer(input, "currencyType", 0, Integer.MAX_VALUE) : 0;
-            if (!game.supportsCurrency(currencyType)) bad("未知币种");
-            attachments.putArray("currencies").addObject().put("currencyType", currencyType).put("amount", amount);
-        }
-        if (hasItem) attachments.putArray("items").addObject().put("configId", integer(input, "itemConfigId", 1, Integer.MAX_VALUE))
-                .put("count", integer(input, "itemCount", 1, 4096));
-        if (!hasCurrency && !hasItem) bad("至少填写一种货币或物品附件");
+        request.set("attachments", buildAttachments(input, true));
         if (!game.player(playerId).path("found").asBoolean()) bad("未找到目标玩家，请核对玩家 ID");
         return ok(journal.prepare(actor, clientId, playerId, text(input, "reason", 1, 191), request));
     }
@@ -128,7 +129,7 @@ public class GmController {
     @PostMapping("/mail/commands/{id}/send")
     public String send(@PathVariable String id) {
         String actor = require("gm:mail:send");
-        if (!mailEnabled) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "邮件服务未配置，暂不能发放");
+        requireMailEnabled();
         decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
         return ok(journal.send(id, actor, game::sendMail));
     }
@@ -157,6 +158,199 @@ public class GmController {
         return ok(journal.auditHistory(id, "MAIL"));
     }
 
+    @PostMapping("/system-mail/drafts")
+    public String prepareSystemMail(@RequestBody String body) {
+        String actor = require("gm:system-mail:prepare");
+        requireMailEnabled();
+        ObjectNode input = parse(body, DEFAULT_MAX_BODY_BYTES);
+        input.fieldNames().forEachRemaining(key -> { if (!SYSTEM_MAIL_FIELDS.contains(key)) bad("存在未知字段"); });
+        String clientId = uuid(input);
+        ObjectNode request = json.createObjectNode().put("senderKind", 1)
+                .put("title", text(input, "title", 1, 128)).put("body", text(input, "body", 0, 4096))
+                .put("validDays", integer(input, "validDays", 1, 30));
+        return ok(journal.prepareSystemMail(actor, clientId, text(input, "reason", 1, 191), request));
+    }
+
+    @PostMapping("/system-mail/commands/{id}/send")
+    public String sendSystemMail(@PathVariable String id) {
+        String actor = require("gm:system-mail:send");
+        requireMailEnabled();
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.sendSystemMail(id, actor, game::sendSystemMail));
+    }
+
+    @GetMapping("/system-mail/commands")
+    public String systemMailCommands(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String status) {
+        require("gm:audit:read");
+        return ok(journal.listSystemMails(page, pageSize, status));
+    }
+
+    @GetMapping("/system-mail/commands/{id}")
+    public String systemMailCommand(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.get(id, "SYSTEM_MAIL"));
+    }
+
+    @GetMapping("/system-mail/commands/{id}/audit")
+    public String systemMailAudit(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.auditHistory(id, "SYSTEM_MAIL"));
+    }
+
+    @PostMapping("/mail-campaigns/drafts")
+    public String prepareMailCampaign(@RequestBody String body) {
+        String actor = require("gm:system-mail:prepare");
+        requireMailEnabled();
+        ObjectNode input = parse(body, CAMPAIGN_MAX_BODY_BYTES);
+        input.fieldNames().forEachRemaining(key -> { if (!CAMPAIGN_FIELDS.contains(key)) bad("存在未知字段"); });
+        String clientId = uuid(input);
+        JsonNode rawRecipients = input.get("recipientPlayerIds");
+        if (rawRecipients == null || !rawRecipients.isArray() || rawRecipients.isEmpty()
+                || rawRecipients.size() > MailCampaignManifest.MAX_WEB_RECIPIENTS * 2) {
+            bad("收件人名单必须是非空玩家 ID 数组，且去重后不超过 " + MailCampaignManifest.MAX_WEB_RECIPIENTS + " 人");
+        }
+        List<String> recipientIds = new ArrayList<>(rawRecipients.size());
+        for (JsonNode item : rawRecipients) {
+            if (!item.isTextual()) bad("收件人玩家 ID 必须是十进制字符串");
+            recipientIds.add(item.textValue());
+        }
+        MailCampaignManifest.Plan plan;
+        try { plan = MailCampaignManifest.build(recipientIds); }
+        catch (IllegalArgumentException e) { bad(e.getMessage()); return null; }
+
+        ObjectNode mail = json.createObjectNode().put("senderKind", 1)
+                .put("title", text(input, "title", 1, 128)).put("body", text(input, "body", 0, 4096))
+                .put("validDays", integer(input, "validDays", 1, 30))
+                .put("expectedRecipientCount", Integer.toString(plan.recipientCount()))
+                .put("expectedShardCount", plan.shards().size())
+                .put("manifestHash", plan.manifestHash());
+        mail.set("attachments", buildAttachments(input, false));
+        ObjectNode campaign = json.createObjectNode();
+        campaign.set("mail", mail);
+        ArrayNode shardsNode = campaign.putArray("shards");
+        for (List<String> shard : plan.shards()) {
+            ArrayNode shardArray = shardsNode.addArray();
+            shard.forEach(shardArray::add);
+        }
+        return ok(journal.prepareMailCampaign(actor, clientId, text(input, "reason", 1, 191), campaign));
+    }
+
+    @PostMapping("/mail-campaigns/commands/{id}/send")
+    public String sendMailCampaign(@PathVariable String id) {
+        String actor = require("gm:system-mail:send");
+        requireMailEnabled();
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.sendMailCampaign(id, actor, game::sendMailCampaign));
+    }
+
+    @GetMapping("/mail-campaigns/commands")
+    public String mailCampaignCommands(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String status) {
+        require("gm:audit:read");
+        return ok(journal.listMailCampaigns(page, pageSize, status));
+    }
+
+    @GetMapping("/mail-campaigns/commands/{id}")
+    public String mailCampaignCommand(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.get(id, "MAIL_CAMPAIGN"));
+    }
+
+    @GetMapping("/mail-campaigns/commands/{id}/audit")
+    public String mailCampaignAudit(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.auditHistory(id, "MAIL_CAMPAIGN"));
+    }
+
+    private void requireMailEnabled() {
+        if (!mailEnabled) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "邮件服务未配置，暂不能发放");
+    }
+
+    private ObjectNode buildAttachments(ObjectNode input, boolean allowLegacyFlat) {
+        ObjectNode attachments = json.createObjectNode();
+        boolean hasCurrencyArray = input.hasNonNull("currencies");
+        boolean hasItemArray = input.hasNonNull("items");
+        boolean hasFlatCurrency = allowLegacyFlat && input.hasNonNull("currencyAmount") && !input.path("currencyAmount").asText().isBlank();
+        boolean hasFlatItem = allowLegacyFlat && (input.hasNonNull("itemConfigId") || input.hasNonNull("itemCount"));
+        if (hasCurrencyArray && (hasFlatCurrency || (allowLegacyFlat && input.hasNonNull("currencyType")))) {
+            bad("货币附件不能同时混用数组和单字段格式");
+        }
+        if (hasItemArray && hasFlatItem) bad("物品附件不能同时混用数组和单字段格式");
+
+        int currencyCount = 0;
+        if (hasCurrencyArray) {
+            JsonNode node = input.get("currencies");
+            if (!node.isArray() || node.size() > MAX_CURRENCIES) bad("货币附件数组格式非法或超过 4 种上限");
+            Set<Integer> seen = new HashSet<>();
+            ArrayNode out = null;
+            for (JsonNode entry : node) {
+                if (!(entry instanceof ObjectNode)) bad("货币附件项必须是对象");
+                ObjectNode obj = (ObjectNode) entry;
+                obj.fieldNames().forEachRemaining(k -> { if (!CURRENCY_ENTRY_FIELDS.contains(k)) bad("货币附件存在未知字段"); });
+                int currencyType = integer(obj, "currencyType", 0, Integer.MAX_VALUE);
+                if (!game.supportsCurrency(currencyType)) bad("未知币种");
+                if (!seen.add(currencyType)) bad("货币附件不能包含重复币种");
+                String amount = text(obj, "amount", 1, 19);
+                decimal(amount, BigInteger.valueOf(Long.MAX_VALUE), "货币数量");
+                if (out == null) out = attachments.putArray("currencies");
+                out.addObject().put("currencyType", currencyType).put("amount", amount);
+                currencyCount++;
+            }
+        } else if (hasFlatCurrency) {
+            String amount = text(input, "currencyAmount", 1, 19);
+            decimal(amount, BigInteger.valueOf(Long.MAX_VALUE), "货币数量");
+            int currencyType = input.hasNonNull("currencyType") ? integer(input, "currencyType", 0, Integer.MAX_VALUE) : 0;
+            if (!game.supportsCurrency(currencyType)) bad("未知币种");
+            attachments.putArray("currencies").addObject().put("currencyType", currencyType).put("amount", amount);
+            currencyCount = 1;
+        }
+
+        int itemEntries = 0;
+        int totalItems = 0;
+        if (hasItemArray) {
+            JsonNode node = input.get("items");
+            if (!node.isArray() || node.size() > MAX_ITEMS) bad("物品附件数组格式非法或超过 16 种上限");
+            Set<Integer> seen = new HashSet<>();
+            ArrayNode out = null;
+            for (JsonNode entry : node) {
+                if (!(entry instanceof ObjectNode)) bad("物品附件项必须是对象");
+                ObjectNode obj = (ObjectNode) entry;
+                obj.fieldNames().forEachRemaining(k -> { if (!ITEM_ENTRY_FIELDS.contains(k)) bad("物品附件存在未知字段"); });
+                int configId = integer(obj, "configId", 1, Integer.MAX_VALUE);
+                if (!seen.add(configId)) bad("物品附件不能包含重复配置 ID");
+                int count = integer(obj, "count", 1, MAX_TOTAL_ITEM_COUNT);
+                totalItems += count;
+                if (totalItems > MAX_TOTAL_ITEM_COUNT) bad("单封邮件物品总数不能超过 4096");
+                if (out == null) out = attachments.putArray("items");
+                out.addObject().put("configId", configId).put("count", count);
+                itemEntries++;
+            }
+        } else if (hasFlatItem) {
+            attachments.putArray("items").addObject().put("configId", integer(input, "itemConfigId", 1, Integer.MAX_VALUE))
+                    .put("count", integer(input, "itemCount", 1, MAX_TOTAL_ITEM_COUNT));
+            itemEntries = 1;
+        }
+
+        if (currencyCount == 0 && itemEntries == 0) bad("至少填写一种货币或物品附件");
+        return attachments;
+    }
+
+    private static String uuid(ObjectNode input) {
+        String clientId = text(input, "clientRequestId", 1, 36);
+        try { if (!java.util.UUID.fromString(clientId).toString().equals(clientId)) bad("请求号无效"); }
+        catch (IllegalArgumentException e) { bad("请求号无效"); }
+        return clientId;
+    }
+
     private Subject authenticated() {
         Subject subject = SecurityUtils.getSubject();
         if (!subject.isAuthenticated() || subject.getPrincipal() == null)
@@ -174,8 +368,8 @@ public class GmController {
         return name;
     }
 
-    private ObjectNode parse(String body) {
-        if (body == null || body.getBytes(StandardCharsets.UTF_8).length > 16384) bad("请求体过大");
+    private ObjectNode parse(String body, int maxBytes) {
+        if (body == null || body.getBytes(StandardCharsets.UTF_8).length > maxBytes) bad("请求体过大");
         try (JsonParser parser = json.getFactory().createParser(body)) {
             parser.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
             JsonNode node = json.readTree(parser);

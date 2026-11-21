@@ -91,7 +91,7 @@ flowchart LR
 ├── deploy/               本地基础设施的 Docker Compose、Kubernetes 清单
 ├── tools/                代码生成器、导表器、工程脚本
 ├── docs/                 设计文档、运维手册、压测复盘
-├── third_party/          C++ 依赖(git 子模块)
+├── third_party/          源码级外部依赖(git 子模块，以 C++ 库和全仓共享 protobuf 工具链为主)
 ├── bin/                  C++ 节点的工作目录:只放配置
 ├── game.sln              全部 C++ 工程的 Visual Studio 解决方案
 ├── dev.bat               开发菜单:编译、生成、启动、停止、看日志

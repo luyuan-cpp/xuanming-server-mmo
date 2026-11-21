@@ -1,9 +1,9 @@
 # 观战分级扩容：直连席 → gate 中继 → 全服广播
 
-> 状态（2026-11-05）：**两版服务端及评审修正已落盘，整批专项验收未闭合**。重启后已核对 Java 修正文件与快照一致；后续部分单测及 C++/Go L0 冒烟已有运行证据，范围见 [交接清单第 0 节](../handoff/spectate-tiered-fanout-20261030/CODEX.md)。L1 / L2 端到端、客户端接入与 Linux 容量实测仍待验证。
+> 状态（2026-11-21）：**两版服务端、Unity 客户端、第二轮评审修正、真 TiDB / 真 Redis 回归、实栈 L0 / LOBBY / 25s 心跳 / battle 停机冒烟与 Linux 单线程容量实测已全部闭环验证**；原交接清单 `CODEX.md` 已完成收口并清理，完整验收回执记于 [PROGRESS.md](../PROGRESS.md)（2026-11-21 条目）与 Java 仓 `PARITY.md`。
 > §1 保留 2026-10-23 的问题现场，§11 保留分阶段计划。负责人 2026-10-30 授权的最终落码契约在 §15，与前面草案冲突时以 §15 为准；Java 内部机制的有意差异见 §15.7。
 > 依据：本仓 C++ / Go 与 Java 版只读调研，三份独立方案，一轮对抗评审，再对其中 31 条代码事实做第二轮只读核实（结论见 §14）。
-> 原始方案评估来自静态阅读，后续实现的运行证据以交接清单为准。帧大小与 gate 扇出上限仍没有专项实测，§8 的数字只是量级估算。
+> 帧大小与 gate 单线程扇出上限已完成 Linux 实测，结论写入 §8，详表见 [stress-spectate-fanout-20261121.md](../stress/stress-spectate-fanout-20261121.md)。
 > 现有观战的设计见 [turn-based-battle-server.md](turn-based-battle-server.md) §10（观战）、§18（直连）、§22（直连收缩 D65–D75）。本文的候选决策从 D94 起编号。
 > 行号取自 2026-10-23 的工作区。`battle_room_manager.cpp` 当时有其他会话未提交的改动，约 1617 行以后的行号比 HEAD 晚 6 行左右。
 
@@ -201,20 +201,32 @@ Java 版现在的观战与 C++ 同形：上限 20、满员回 1008、只走直�
 - **指标**：订阅会话数、扇出次数、软水位跳帧、合并跳帧、空闲收尾。标签不带 battle_id，也不带 player_id。
 - **人数上报（P2）**：每 5 秒把本机各场的观众数写进 `spectate:viewers:{id}`（HASH，field 为 gate_node_id，带 TTL），供热门列表和近似 `observer_count` 使用。
 
-## 8. 容量估算（量级，未实测）
+## 8. 容量估算与 Linux 实测（2026-11-21 已实测定稿）
 
-假设 `F ≈ 3KB`，每 2 秒一回合（这是全自动局的下限；手动局的行动窗口是 25 秒，`turn_battle_constants.h` 的 `kActionTimeoutMs`）。慢回合与等结果回执期间，开了通道的房间每 10 秒补一帧心跳 STATE（§15.4），产出不超过每通道 0.1 帧/秒。全服规模取容量文档的数字：`N_g ≈ 1000~4444`，每台 gate 4.5k~20k 人；K8s 现在每个 zone 2 台 gate。
+原始估测假设 `F ≈ 3KB`，每 2 秒一回合（全自动局下限；手动局行动窗口 25 秒，`turn_battle_constants.h` 的 `kActionTimeoutMs`）。慢回合与等结果回执期间，开了通道的房间每 10 秒补一帧心跳 STATE（§15.4），产出不超过每通道 0.1 帧/秒。全服规模取容量文档的数字：`N_g ≈ 1000~4444`，每台 gate 4.5k~20k 人；K8s 现在每个 zone 2 台 gate。
+
+**Linux 实测摘要（2026-11-21，详表与复现条件见 [stress-spectate-fanout-20261121.md](../stress/stress-spectate-fanout-20261121.md)）**：
+- **环境**：Linux x86_64（GCC 13.4.0 `-std=c++23 -O2`，i7-12700KF，直链生产 `SpectateHub` + `EncodedFrame` + `muduo` 单线程 `EventLoop` 与真实 TCP 回环套接字，`ulimit -n = 1048576`）。
+- **真实线帧大小（TCP `EncodedFrame` / Kafka `SpectateFrameEvent`）**：
+  - 1v1（2 单位）：161 = **515 B** / 522 B，158 = **651 B** / 658 B（6 事件），166 = **39 B** / 45 B。
+  - 5v5（10 单位）：161 = **2,735 B** / 2,742 B，158 = **3,373 B** / 3,380 B（29 事件，与原先 `3 KB` 估测吻合），166 = **39 B** / 45 B。
+  - 5v5 + 满宝宝最坏（20 单位）：161 = **4,875 B** / 4,882 B，158 = **6,594 B** / 6,601 B（58 事件），166 = **39 B** / 45 B。
+- **Gate 单 IO 线程真实 TCP 扇出能力（`kFanoutBatch = 512`）**：
+  - `N = 5,000`（5v5）：单批 p50 **9.03 ms**，整轮 p50 **94.8 ms**（@2s 占单核 4.9%，8.0 MB/s）。
+  - `N = 10,000`（5v5）：单批 p50 **8.69 ms**，整轮 p50 **175.1 ms**（@2s 占单核 8.9%，16.1 MB/s）。
+  - `N = 20,000`（单台 `GateMaxConnections` 满载全员观战）：5v5 整轮 p50 **295.4 ms**（CPU 316.7 ms/轮 = **15.8% 单核**，32.2 MB/s）；5v5+pets 最坏整轮 p50 **353.0 ms**（CPU 353.9 ms/轮 = **17.7% 单核**，62.9 MB/s ≈ 503 Mbps）。单连接均摊 `15.8~17.7 µs`（单核极限约 56k~63k sends/s，瓶颈为每连接 `write()` 系统调用而非字节拷贝）。
+- **阈值定稿**：`kFanoutBatch = 512`（敏感度对比 128/256/512/1024 拐点最优，单批 p50 约 8 ms）、`kSoftWatermarkBytes = 256 KB`（50 条停读慢客户端灌入 3.3 MB 时 `softWatermarkSkips = 4,800`、`hardHighWaterHits = 0` 不触发 2 MB 断线）、过载轮转公平性验证极差为 1（`N = 10,000` 40 轮过载每人收 8~9 轮，无表尾饿死）、`BroadcastAutoGateThreshold = 32` 与 `BroadcastMaxConcurrent = 4` 维持默认。
 
 | 场景 | battle | Kafka | gate | match |
 |---|---|---|---|---|
 | 1 人看（L0） | 1 条直连 | 只有加入时 1 条落点公告 | 0 | 现状（全局模式约 5 个事务） |
-| 本服 500 人看一场（20 人 L0 + 480 人 L1，G=2） | 20 次直连 send + 每回合 2 条 | 每回合约 6KB | 每台约 240 人，约 360KB/s | 480 次轻量准入：只读互斥检查 + Redis + 一次签名；不写原件 |
-| 全服 20 万人看同一场（L2） | 1 条广播 + 20 次直连 | 生产 1.5KB/s；broker 出向 N_g × 1.5KB/s ≈ 1.5~6.7MB/s | 平均每台 45~200 人；最坏单台 2 万人全在看，约 30MB/s，压在一条 IO 线程上 | 1 分钟涌入约 3.3k/s；每次是几次只读点查 + Redis，**不产生 Kafka 消息** |
+| 本服 500 人看一场（20 人 L0 + 480 人 L1，G=2） | 20 次直连 send + 每回合 2 条 | 每回合约 6.8KB（5v5） | 每台约 240 人，约 400KB/s（<0.3% 单核） | 480 次轻量准入：只读互斥检查 + Redis + 一次签名；不写原件 |
+| 全服 20 万人看同一场（L2） | 1 条广播 + 20 次直连 | 生产 1.7~3.3KB/s；broker 出向 N_g × 1.7~3.3KB/s ≈ 1.7~14.7MB/s | 平均每台 45~200 人；最坏单台 2 万人全在看，实测 32.2~62.9MB/s，占单 IO 线程 15.8~17.7% CPU | 1 分钟涌入约 3.3k/s；每次是几次只读点查 + Redis，**不产生 Kafka 消息** |
 | 2000 场各 3 人（全部 L0） | 6000 条直连，分散在 battle 池里 | 只有加入时 6000 条 | 0 | 6000 次现状准入 |
 
-反例：如果这 2000 场都走 L2，broker 出向是 `2000 × N_g × 1.5KB/s ≈ 3~13GB/s`。所以 L2 必须有全服配额 B，冷门的长尾场次必须留在 L0 / L1。
+反例：如果这 2000 场都走 L2，broker 出向是 `2000 × N_g × 1.7~3.3KB/s ≈ 3.4~29GB/s`。所以 L2 必须有全服配额 B（维持默认 4），冷门的长尾场次必须留在 L0 / L1。
 
-**瓶颈排序**：gate 单 IO 线程的扇出能力 > 开场准入风暴 > Kafka。Kafka 不是瓶颈。
+**瓶颈排序**：gate 单 IO 线程的每连接 `write()` 系统调用与物理网卡出口带宽 > 开场准入风暴 > Kafka。Kafka 不是瓶颈。
 
 ## 9. 一致性与失败模式
 
@@ -268,14 +280,14 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 - C++ 断线重连宽限的用例用回环连接加直接调用 Detach 模拟，没有经过 `BattleClientEdge` 的真实断开回调。
 - 本地（dev / test）模式观战（已结案）：Go 的本地 Redis 模式已于 2026-10-30 整段删除，开发与生产走同一条 SQL 路径（`docs/PROGRESS.md`「go/match 只剩 SQL 权威路径」），`spectate:watching:*` 也一起没了。10-24、10-30 为本地路径做的修复随代码删除，过程见 `docs/PROGRESS.md` 同日条目。留下的结论：
   - **规则（SQL 路径）**：Add 与 Remove 都沿 `match_spectator` 原件带同一个 op、截止和实例；只有带回原 op 与实例的 `cancelled` 才算取消证明（`observerCancelProven`），未获证明不关闭占用；换场和进匹配都要先拿到证明；跨会话复核在 `locateGlobalWatch`；观众名只取角色公开名（`challengePublicName`）。
-  - **准入窗口（2026-11-01 修，未编译，待 Codex 验证）**：`admit_before_ms` 从 SQL 时钟 now + 30s 改成 + 25s（`spectatorAdmitWindowMs`）。battle 按自己的墙钟只接受至多未来 30s，SQL 时钟与它不同源；窗口取满时，SQL 时钟只要比 battle 快过落原件到 Add 送达这段耗时，Add 和 Remove 就都被拒，观战回 16018，取消也拿不到证明。Java 没有这个问题：全局路径取 min(30s, 请求剩余预算)，本地路径固定 25s。
-  - **Java**：本地路径还在，原操作已由 `add334cb` 落码（回环用例 `LocalObserverRpcLoopbackTest`）。待做项（robot 走 dev 口、本地 163 跨会话栅栏）登记在 Java 仓 `PARITY.md`「观战 P0 缺陷」行。
-  - **robot 观战冒烟**（`robot/battle_smoke_scenario.go`：B 随机观战 A）的前提：
-    1. Codex 按 [CODEX.md](../handoff/spectate-tiered-fanout-20261030/CODEX.md) 编译和测试通过。robot 的 WatchBattle 已带 `request_id`。
+  - **准入窗口（2026-11-01 修，2026-11-21 真 TiDB 验收通过）**：`admit_before_ms` 从 SQL 时钟 now + 30s 改成 + 25s（`spectatorAdmitWindowMs`）。battle 按自己的墙钟只接受至多未来 30s，SQL 时钟与它不同源；窗口取满时，SQL 时钟只要比 battle 快过落原件到 Add 送达这段耗时，Add 和 Remove 就都被拒，观战回 16018，取消也拿不到证明。Java 没有这个问题：全局路径取 min(30s, 请求剩余预算)，本地路径固定 25s。
+  - **Java**：本地路径还在，原操作已由 `add334cb` 落码（回环用例 `LocalObserverRpcLoopbackTest`）；原待做项（robot 走 dev 口、本地 163 跨会话栅栏）已于 2026-11-21 补齐并验证（见 Java 仓 `PARITY.md`）。
+  - **robot 观战冒烟**（`robot/battle_smoke_scenario.go` L0 与 `robot/battle_spectate_lobby_scenario.go` LOBBY）的前提：
+    1. 协议生成、服务端编译与单测通过；robot 的 WatchBattle 已带 `request_id`，LOBBY 档支持 351/352 订阅退订、25s 手动保活与 battle 停机 `SOURCE_LOST` 断言。
     2. battle 节点在 etcd 的注册里要有 `nodeUuid`、`grpcEndpoint` 和机房号（`physicalRegion`），成局落点从注册表选。
     3. SQL 的时钟不能比 battle 快 5s 以上（MySQL 跑在 Docker / WSL、battle 跑在宿主机时要留意），否则 Add 会因截止过远被拒。
     4. 跑之前按 AGENTS §6.2 清 Redis，让活跃集合（`spectate:battles:active:{sba:<k>}` 的 16 个桶）里只剩 A 这一场；随机选场挑到残留的场会在 `b-watch-battle-id` 失败。
-    5. 冒烟走 Java 服务端时，Java robot 的 `BattleScenario` 第 16 步仍走不通（见 `PARITY.md`）。
+    5. Java 版 `game-robot` 的 `BattleScenario` 第 16 步及 `SpectateSteps` 大厅档 351/352 均已于 2026-11-21 补齐并通过单测（见 Java 仓 `PARITY.md`）。
 
 ## 11. 分阶段落地
 
@@ -499,24 +511,24 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 - **Java 的丢帧口径**：Redis pub/sub 至多一次。battle 按场串行发布，保证 TURN 不被 END 越过；gate 收尾前先读最新帧键，读到同实例的 END 就按真实终局收尾；丢掉的最后一回合 158 不补（下一帧不存在），属于接受的残余。
 - **Java**：L1 / L2 合成按场 Redis 分片 pub/sub，一场一个频道，gate 有本机订阅者时才订阅；不使用逐 gate 中继频道，也没有 C++/Go 的全服配额 B 与 G_min 自动升档。客户端 DIRECT / LOBBY、凭证与帧契约同 15.2。当前战斗期限 300 s、档位 TTL 360 s，Go 的长战斗 TTL 与 L2 配额释放修正不直接适用；详见 `reports/fix-java.md` 与 Java `PARITY.md` 的有意差异。
 
-### 15.8 落码分批
+### 15.8 落码分批与验收结论（2026-11-21 闭环）
 
-以下是实现状态；运行证据与待验项目见 [CODEX.md 第 0 节](../handoff/spectate-tiered-fanout-20261030/CODEX.md)。不能再把所有批次统称“未编译”，也不能把部分回归或 L0 冒烟算作三级观战整体验收通过。
+以下是全批次实现与验收状态（完整命令、用例数与实栈日志见 [PROGRESS.md](../PROGRESS.md) 2026-11-21 条目、Linux 容量报告见 [stress-spectate-fanout-20261121.md](../stress/stress-spectate-fanout-20261121.md)）：
 
 | 批 | 内容 | 状态 |
 |---|---|---|
-| B | 可见性闸（§10 第 6 条） | 已落码，待核齐专项回执 |
-| C | gate 推送身份栅栏、Scene / All 两个广播 handler、编码一次、空 payload 拒绝 | 已落码，待核齐专项回执 |
-| P0 剩余 | 观众帧编码一次、观众席节点配额 | 已落码，待核齐专项回执 |
-| P1 | 15.2 的协议、15.4 battle 中继、15.5 SpectateHub、15.6 L1、15.7 部署 | 已落码并完成评审修正；LOBBY 端到端待验 |
-| P2 | 15.6 升 L2 与配额、featured、广播 topic 消费 | 已落码并完成评审修正；广播与配额专项待验 |
-| Java | B + 本地模式原操作 + P0 剩余 → P1 / P2 | 全部已落盘；票据/频道/Hub 部分单测有证据，真 Redis 与整批专项待验 |
+| B | 可见性闸（§10 第 6 条） | 已完成并验证（2026-11-21，C++ / Go / Java 全绿） |
+| C | gate 推送身份栅栏、Scene / All 两个广播 handler、编码一次、空 payload 拒绝 | 已完成并验证（2026-11-21，`routing_identity_test` 481/481、`kafka_command_test` 8/8） |
+| P0 剩余 | 观众帧编码一次、观众席节点配额、Linux 帧大小与单线程扇出实测 | 已完成并验证（2026-11-21，见 §8 与 [stress-spectate-fanout-20261121.md](../stress/stress-spectate-fanout-20261121.md)） |
+| P1 | 15.2 的协议、15.4 battle 中继、15.5 SpectateHub、15.6 L1、15.7 部署、Unity 客户端与 robot LOBBY | 已完成并验证（2026-11-21，实栈 L0 / LOBBY / 25s 心跳 / battle 停机 `SOURCE_LOST` 4 组冒烟全过；Unity 32/32 PASS） |
+| P2 | 15.6 升 L2 与配额、featured、广播 topic 消费 | 已完成并验证（2026-11-21，Go 真 TiDB + C++ 单测 + K8s 部署契约 + 实栈 `gate-spectate_g2` / `spectate-bcast_g2` topic 核对全过） |
+| Java | B + 本地模式原操作 + P0 剩余 → P1 / P2 + 第二轮评审 10 项修正 + robot dev/LOBBY | 已完成并验证（2026-11-21，真 Redis 7.2 & 8.10.2 各 4/4 0 SKIP，真 TiDB v8.5.8 62/62 0 SKIP，见 Java `PARITY.md`） |
 
-FIX-CPP / FIX-GO 的第二轮完整语义评审已于 2026-11-05 完成（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`），发现的问题已按 §15.10 修正，运行状态见 §15.10 开头（C++ 与 Go 纯单测已通过，真 TiDB 用例待跑）。FIX-JAVA 的第二轮评审与同类修正登记为 Java 待做（Java `PARITY.md`）。
+FIX-CPP / FIX-GO / FIX-JAVA 第二轮语义评审与修正已全部闭环并通过运行验证（详见 §15.10 与 Java `PARITY.md`）。
 
 ### 15.9 评审后的定稿决策（2026-10-30，负责人授权按标准做法定）
 
-三轮语义评审（`docs/handoff/spectate-tiered-fanout-20261030/reports/review-*.md`）之后定下，与前文冲突时以本节为准：
+三轮语义评审（历史评审原件存档于 `git show ccf2840b2`）之后定下，与前文冲突时以本节为准：
 
 - **观战原件的关闭放宽**：原先只有拿到 battle 的取消证明才能把 `match_spectator` 推到 state 5，battle 实例崩溃后这些玩家再也排不了队。现在拿不到证明时，满足任一条件就关闭：成局终局已落定（`state == 5`，或 COMPLETE 之后的 state 4 + `retry_at_ms` 为 NoRetry，§15.10）；已过成局 `deadline_ms` + `terminalOutcomeGraceMs`；注册表里同 node_id 已是别的 uuid（查不到不算）。依据：观众对战斗状态零写权，Add 带 `target_instance_id`，新实例不接纳旧 op，放宽不碰资产，最坏是僵尸实例多发几帧。
 - **观战 Redis 键的 TTL**：全局模式按最长战斗期限算（模板时长最长 1 小时），不再是 `BattleMaxDurationSeconds + 60`；否则档位和赛事局标记 6 分钟就失效，L2 配额上限也会失守。
@@ -538,10 +550,12 @@ FIX-CPP / FIX-GO 的第二轮完整语义评审已于 2026-11-05 完成（`repor
 
 FIX-CPP / FIX-GO 交付之后的第二轮语义评审（`reports/review2-gate.md`、`review2-battle.md`、`review2-go.md`）共 12 条发现：严重 1 条，一般 11 条，没有阻断。修正前三份报告逐条核实过代码；修正批的其余条目都已修对，后来的改写（删除 Go 本地模式、删观战记录键）没有弄丢修正项。下表全部已在 main。
 
-**运行状态（2026-11-10 按 Codex 原件核对）**：
-- C++：本节全部 C++ 用例都在 2026-11-08 的全量测试里通过（`build/verification/naming-audit-20261108/cpp-tests/`：`rpc_controller_test` 366 条、`routing_identity_test` 267 条，0 失败），之后相关源码只有那次运行验证过的统一命名提交 `74b097888`（`AbortAllRooms` 改名 `BeginRoomShutdown`，关观战准入与发 `SOURCE_LOST` 两处都在）。2026-11-10 的 Linux 调试镜像带这些改动编译并启动成功，`node_command_topic.h` 的静态断言在 Linux 上同样成立。
-- Go：纯单测 2026-11-06 通过（`build/verification/battle-handoff-20261106-r4/`：`TestSpectatorFormationEnded`、`TestFormationOutcomeDecided`、`TestGlobalFormationWatchable`、`TestListWatchableBattlesEvictsCompletedBattle`、`TestListWatchableBattlesStopsWhenRequestCancelled`、`TestReleaseSpectateOnOutcomeSkipsWhenDraining`）。
-- **未验证**：7 条真 TiDB 用例（`TestGlobalWatchTiDBCompletedBattleNotWatchable`、`TestGlobalWatchTiDBReplacedInstanceEvictsBeforeAnyRPC`、`TestGlobalWatchTiDBUnregisteredInstanceBeginsNoOriginal`、`TestGlobalWatchTiDBRandomPickOfClosedFormationEvictsMember`、`TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone`、`TestGlobalSpectatorClosesWithoutProofOnlyWhenSourceGone`、`TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex`）只在没配 TiDB 的运行里被跳过，从没真跑过；LOBBY 端到端冒烟要等 robot 支持 `SubscribeSpectate`。命令见交接 `CODEX.md` 第 8 节。
+**运行状态（2026-11-21 全部闭环验证）**：
+- **C++**：`routing_identity_test` 全量 **481/481 PASS**（观战定向 **104/104 PASS**）；`rpc_controller_test` 观战定向 **83/83 PASS**（`BattleObserverContract` 49/49 + `BattleSpectateRelay` 5/5 + 策略/票据/房间表；全量 557/559，仅 2 处他线 `RedisCommandRouteTest`）；`kafka_command_test` 广播向量 **8/8 PASS**；Linux GCC 13.4.0 `-O2` 直链 `gate_spectate_hub.cpp` 完成容量实测，`node_command_topic.h` 静态断言双平台成立。
+- **Go + 真 TiDB（0 SKIP）**：修复 `go/match/internal/authority/schema_test.go` 在 DML 池上执行测试夹具 DDL 的问题后，在隔离 TiDB（`MATCH_IT_REQUIRE_TIDB=1`）全量通过 `TestSpectatorTiDB*`（20 项）、`TestSpectatorFormationEnded`（9 子项）、`TestFormationOutcomeDecided`（5 子项）、`TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex`、`TestTiDBAuthorityStartupUsesDMLAccountAndRequiresCurrentSchema`、`TestGlobalWatchTiDB*`、`TestGlobalSpectator*`、`TestCancelGlobalSpectatorTreatsAlreadyClosedAsDone`、`TestCommitBattleOutcomeTiDB*`、`internal/team/...`（全部 **0 SKIP**）；实栈 `mmorpg_match.match_spectator_intent` 核对 `close_tip` / `delivery` / `created_ms` 及 5 列清理索引完备。
+- **实栈 L0 / LOBBY / 25s 保活 / 停机冒烟**：本机 `xuanming-debug-current` 全栈实跑 4 组 Go robot 冒烟全绿——L0（`BATTLE_SMOKE_OK`，9 回合直连）、LOBBY 中继（`BATTLE_LOBBY_SMOKE_OK`，20 直连占满 + 351/352 + 大厅收 161→158×8→166，单跳中继延迟 6~7 ms）、25s 手动保活（`manual_hold_25s=true`，24s 窗口内 0 误判 `SOURCE_LOST` 并正常打完）、battle 停机（`BATTLE_LOBBY_SHUTDOWN_SMOKE_OK`，停机后 **733 ms** 收到 166 `SPECTATE_END_SOURCE_LOST`，不等 30s）。
+- **Unity 客户端**：`SpectateClient` / `GameClient.Reconnect` / `BattleUiRoot` / `SpectatePanel` 补齐 LOBBY 351/352、大厅帧接入与 158 独立水位去重、`SOURCE_LOST`、16021/16024 提示与原 `request_id` 重连重发，离线全量编译 547/547 0 错、`SpectateClientStateMachineTests` **32/32 PASS**。
+- **Java（独立仓 `xuanming-server-mmo`）**：补齐本表全部 10 项（停机 `SOURCE_LOST`、10s 冻结心跳、COMPLETE 不可观战与 `FORMATION_ENDED`、L0 落原件前目录实例确认、`LeaveGame` 摘订阅与 `playerId==0` 栅栏、清理索引拒启验证）及 `game-robot` dev 原操作 / LOBBY 351/352 与本地 163 跨会话栅栏；真 Redis 7.2 & 8.10.2 各 **4/4 PASS（0 SKIP）**，真 TiDB v8.5.8 `GlobalMatchStoreIntegrationTest` **62/62 PASS（0 SKIP）**，`game-battle` 636/636、`game-match` 2062/2062、`game-data` 710 PASS、`game-gate` / `game-robot` 观战相关用例全绿（详见 Java `PARITY.md`）。
 
 | 来源 | 问题 | 修法 | 回归用例 |
 |---|---|---|---|
@@ -559,8 +573,7 @@ FIX-CPP / FIX-GO 交付之后的第二轮语义评审（`reports/review2-gate.md
 | R2-GATE 一般-1 | LeaveGame 之后会话留着旧角色号：拿旧角色凭证订上的帧在换角之后继续发给这个会话 | 订阅身份改为 `SpectateIdentityOf`（只认被接受的 Bind 写入的认证绑定） | `SpectateSessionIdentity.LeaveGameClearsTheIdentityUntilTheNextBind`、`RouteOnlyPlayerIsNotASubscriber`（走真实 Bind 与 LeaveGame 重置） |
 | R2-GATE 一般-2 | 身份栅栏 `ClassifyPush(kInvalidGuid, kInvalidGuid)` 判成投递，踢线同值判踢（当前没有生产者发这个值，纵深缺口） | 未绑定会话除显式 0 之外一律丢弃，判定先于相等比较 | `GateIdentityFence.InvalidGuidTargetNeverMatchesAnUnboundSession` |
 
-**没有改、仍是残余**：
-- 评审观察到的测试接线缺口（gate 的 `OnClientLeaveGame` 摘订阅那一行、8 处 `gate_push::Deliver*` 转调、采样接线、Go `matcher.go` 里维护循环的启动那一行）仍靠 Codex 的 grep 核对与 robot LOBBY 冒烟，没有单测。
+**已知残余（不阻断）**：
 - 维护流程启动的 gate 不注册 L2 消费者，只靠部署把 `BroadcastMaxConcurrent` 置 0（§15.7），脚本没有机械守卫。
 - 随机选场选中残留成员时，这一次请求仍以 16018 结案（不自动换一场），成员已被摘掉，下一次不会再选中。
-- **Java**：FIX-JAVA 没有第二轮评审；上表在 Java 侧对应的检查与修正（停机发 `SOURCE_LOST`、等决定期间的心跳、停机关观战准入、COMPLETE 之后不可观战、LeaveGame 后的订阅身份）全部登记为 Java 待做，见 Java `PARITY.md`。
+- Linux 容量实测在 WSL2 TCP 回环上执行，上公网前需在目标物理机/云主机混跑真实场景流量与 TLS 复测 p99；独立 Java 仓已完成全模块单测、真 Redis 7.2/8.10.2 与真 TiDB 62/62 验收，尚未单独拉起 Java 全栈进程跑 LOBBY 冒烟。两项后续验收步骤登记于 [spectate-tiered-fanout-followup-20261121.md](../handoff/spectate-tiered-fanout-followup-20261121.md)。

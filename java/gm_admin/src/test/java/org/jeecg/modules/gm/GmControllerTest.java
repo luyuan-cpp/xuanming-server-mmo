@@ -98,6 +98,97 @@ class GmControllerTest {
         assertThrows(UnauthorizedException.class, () -> controller.command("42"));
         assertThrows(UnauthorizedException.class, () -> controller.commandAudit("42"));
     }
+
+    @Test void personalMailSupportsMultiAttachmentsAndRejectsDuplicatesOrMixing() throws Exception {
+        when(game.player(anyString())).thenReturn(json.createObjectNode().put("found", true));
+        when(journal.prepare(anyString(), anyString(), anyString(), anyString(), any())).thenReturn(json.createObjectNode().put("id", "43"));
+        String multi = """
+          {"clientRequestId":"05ee173b-67ed-4aef-836a-61180b26869a","playerId":"1001",
+           "title":"多附件补偿","body":"多种货币与道具","reason":"补偿工单","validDays":7,
+           "currencies":[{"currencyType":0,"amount":"100"},{"currencyType":2,"amount":"500"}],
+           "items":[{"configId":1001,"count":10},{"configId":1002,"count":20}]}
+          """;
+        controller.prepare(multi);
+        verify(journal).prepare(eq("gm-operator"), anyString(), eq("1001"), eq("补偿工单"), argThat(n ->
+                n.path("attachments").path("currencies").size() == 2
+                && n.path("attachments").path("items").size() == 2));
+
+        clearInvocations(game, journal);
+        // 重复币种
+        assertEquals(400, assertThrows(ResponseStatusException.class, () -> controller.prepare(
+                multi.replace("{\"currencyType\":2,\"amount\":\"500\"}", "{\"currencyType\":0,\"amount\":\"500\"}"))).getStatusCode().value());
+        // 物品总数超 4096
+        assertEquals(400, assertThrows(ResponseStatusException.class, () -> controller.prepare(
+                multi.replace("\"count\":10", "\"count\":4080"))).getStatusCode().value());
+        // 混用数组与单字段
+        assertEquals(400, assertThrows(ResponseStatusException.class, () -> controller.prepare(
+                multi.replace("\"validDays\":7,", "\"validDays\":7,\"currencyAmount\":\"10\","))).getStatusCode().value());
+        verifyNoInteractions(journal);
+    }
+
+    @Test void systemMailAndCampaignEndpointsEnforcePermissionsAndBuildManifest() throws Exception {
+        String sysDraft = """
+          {"clientRequestId":"05ee173b-67ed-4aef-836a-61180b26869a","title":"维护公告",
+           "body":"今晚维护","reason":"例行维护","validDays":3}
+          """;
+        when(journal.prepareSystemMail(anyString(), anyString(), anyString(), any())).thenReturn(json.createObjectNode().put("id", "50"));
+        controller.prepareSystemMail(sysDraft);
+        verify(journal).prepareSystemMail(eq("gm-operator"), anyString(), eq("例行维护"), argThat(n ->
+                n.path("senderKind").asInt() == 1 && !n.has("attachments") && n.path("validDays").asInt() == 3));
+        // 纯文本系统邮件不允许携带附件字段。
+        assertEquals(400, assertThrows(ResponseStatusException.class, () -> controller.prepareSystemMail(
+                sysDraft.replace("\"validDays\":3", "\"validDays\":3,\"currencies\":[]"))).getStatusCode().value());
+
+        String campDraft = """
+          {"clientRequestId":"15ee173b-67ed-4aef-836a-61180b26869b","title":"版本福利",
+           "body":"感谢支持","reason":"版本更新补偿","validDays":7,
+           "currencies":[{"currencyType":1,"amount":"200"}],
+           "items":[{"configId":3001,"count":5}],
+           "recipientPlayerIds":["20","5","20","100"]}
+          """;
+        when(journal.prepareMailCampaign(anyString(), anyString(), anyString(), any())).thenReturn(json.createObjectNode().put("id", "51"));
+        controller.prepareMailCampaign(campDraft);
+        verify(journal).prepareMailCampaign(eq("gm-operator"), anyString(), eq("版本更新补偿"), argThat(n ->
+                n.path("mail").path("expectedRecipientCount").asText().equals("3")
+                && n.path("mail").path("expectedShardCount").asInt() == 1
+                && n.path("mail").path("manifestHash").asText().length() == 64
+                && n.path("shards").get(0).get(0).asText().equals("5")
+                && n.path("shards").get(0).get(1).asText().equals("20")
+                && n.path("shards").get(0).get(2).asText().equals("100")));
+
+        // 活动发奖必须至少包含一种附件。
+        assertEquals(400, assertThrows(ResponseStatusException.class, () -> controller.prepareMailCampaign("""
+          {"clientRequestId":"15ee173b-67ed-4aef-836a-61180b26869b","title":"无附件活动",
+           "body":"内容","reason":"测试","validDays":7,"recipientPlayerIds":["100"]}
+          """)).getStatusCode().value());
+
+        when(journal.sendSystemMail(eq("50"), eq("gm-operator"), any())).thenReturn(json.createObjectNode().put("id", "50"));
+        controller.sendSystemMail("50");
+        verify(journal).sendSystemMail(eq("50"), eq("gm-operator"), any());
+        when(journal.sendMailCampaign(eq("51"), eq("gm-operator"), any())).thenReturn(json.createObjectNode().put("id", "51"));
+        controller.sendMailCampaign("51");
+        verify(journal).sendMailCampaign(eq("51"), eq("gm-operator"), any());
+
+        when(journal.listSystemMails(1, 20, "DELIVERED")).thenReturn(json.createObjectNode().put("total", 0));
+        controller.systemMailCommands(1, 20, "DELIVERED");
+        verify(journal).listSystemMails(1, 20, "DELIVERED");
+        when(journal.listMailCampaigns(1, 20, null)).thenReturn(json.createObjectNode().put("total", 0));
+        controller.mailCampaignCommands(1, 20, null);
+        verify(journal).listMailCampaigns(1, 20, null);
+        when(journal.get("50", "SYSTEM_MAIL")).thenReturn(json.createObjectNode().put("id", "50"));
+        controller.systemMailCommand("50");
+        verify(journal).get("50", "SYSTEM_MAIL");
+        when(journal.auditHistory("51", "MAIL_CAMPAIGN")).thenReturn(json.createObjectNode().put("commandId", "51"));
+        controller.mailCampaignAudit("51");
+        verify(journal).auditHistory("51", "MAIL_CAMPAIGN");
+
+        doThrow(new UnauthorizedException()).when(subject).checkPermission("gm:system-mail:prepare");
+        assertThrows(UnauthorizedException.class, () -> controller.prepareSystemMail(sysDraft));
+        assertThrows(UnauthorizedException.class, () -> controller.prepareMailCampaign(campDraft));
+        doThrow(new UnauthorizedException()).when(subject).checkPermission("gm:system-mail:send");
+        assertThrows(UnauthorizedException.class, () -> controller.sendSystemMail("50"));
+        assertThrows(UnauthorizedException.class, () -> controller.sendMailCampaign("51"));
+    }
     private String draft() {
         return """
           {"clientRequestId":"05ee173b-67ed-4aef-836a-61180b26869a","playerId":"9223372036854775807",

@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "de4be939691ab0e3"
+const SchemaDigest = "df34cab01b3439aa"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -34,6 +34,7 @@ var allTableNames = []string{
 	"ActorActionCombatState",
 	"ActorActionState",
 	"AfkPassRule",
+	"AppearanceRule",
 	"AttributeAllocRatio",
 	"AttributeAutoPlan",
 	"AttributeDimension",
@@ -41,6 +42,7 @@ var allTableNames = []string{
 	"AttributeRule",
 	"BaseScene",
 	"Buff",
+	"CharacterAppearance",
 	"Class",
 	"Condition",
 	"Cooldown",
@@ -114,6 +116,7 @@ type TableSet struct {
 	ActorActionCombatState *ActorActionCombatStateTableManager
 	ActorActionState *ActorActionStateTableManager
 	AfkPassRule *AfkPassRuleTableManager
+	AppearanceRule *AppearanceRuleTableManager
 	AttributeAllocRatio *AttributeAllocRatioTableManager
 	AttributeAutoPlan *AttributeAutoPlanTableManager
 	AttributeDimension *AttributeDimensionTableManager
@@ -121,6 +124,7 @@ type TableSet struct {
 	AttributeRule *AttributeRuleTableManager
 	BaseScene *BaseSceneTableManager
 	Buff *BuffTableManager
+	CharacterAppearance *CharacterAppearanceTableManager
 	Class *ClassTableManager
 	Condition *ConditionTableManager
 	Cooldown *CooldownTableManager
@@ -190,6 +194,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		ActorActionCombatState: NewActorActionCombatStateTableManager(),
 		ActorActionState: NewActorActionStateTableManager(),
 		AfkPassRule: NewAfkPassRuleTableManager(),
+		AppearanceRule: NewAppearanceRuleTableManager(),
 		AttributeAllocRatio: NewAttributeAllocRatioTableManager(),
 		AttributeAutoPlan: NewAttributeAutoPlanTableManager(),
 		AttributeDimension: NewAttributeDimensionTableManager(),
@@ -197,6 +202,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		AttributeRule: NewAttributeRuleTableManager(),
 		BaseScene: NewBaseSceneTableManager(),
 		Buff: NewBuffTableManager(),
+		CharacterAppearance: NewCharacterAppearanceTableManager(),
 		Class: NewClassTableManager(),
 		Condition: NewConditionTableManager(),
 		Cooldown: NewCooldownTableManager(),
@@ -257,6 +263,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	if err := ts.AfkPassRule.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare AfkPassRule table failed: %w", err)
 	}
+	if err := ts.AppearanceRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare AppearanceRule table failed: %w", err)
+	}
 	if err := ts.AttributeAllocRatio.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare AttributeAllocRatio table failed: %w", err)
 	}
@@ -277,6 +286,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.Buff.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Buff table failed: %w", err)
+	}
+	if err := ts.CharacterAppearance.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare CharacterAppearance table failed: %w", err)
 	}
 	if err := ts.Class.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Class table failed: %w", err)
@@ -429,6 +441,9 @@ func Commit(ts *TableSet) {
 	if ts.AfkPassRule != nil {
 		AfkPassRuleTableManagerInstance.swapSnapshot(ts.AfkPassRule.snap.Load())
 	}
+	if ts.AppearanceRule != nil {
+		AppearanceRuleTableManagerInstance.swapSnapshot(ts.AppearanceRule.snap.Load())
+	}
 	if ts.AttributeAllocRatio != nil {
 		AttributeAllocRatioTableManagerInstance.swapSnapshot(ts.AttributeAllocRatio.snap.Load())
 	}
@@ -449,6 +464,9 @@ func Commit(ts *TableSet) {
 	}
 	if ts.Buff != nil {
 		BuffTableManagerInstance.swapSnapshot(ts.Buff.snap.Load())
+	}
+	if ts.CharacterAppearance != nil {
+		CharacterAppearanceTableManagerInstance.swapSnapshot(ts.CharacterAppearance.snap.Load())
 	}
 	if ts.Class != nil {
 		ClassTableManagerInstance.swapSnapshot(ts.Class.snap.Load())
@@ -623,6 +641,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ActorActionCombatState: NewActorActionCombatStateTableManager(),
 		ActorActionState: NewActorActionStateTableManager(),
 		AfkPassRule: NewAfkPassRuleTableManager(),
+		AppearanceRule: NewAppearanceRuleTableManager(),
 		AttributeAllocRatio: NewAttributeAllocRatioTableManager(),
 		AttributeAutoPlan: NewAttributeAutoPlanTableManager(),
 		AttributeDimension: NewAttributeDimensionTableManager(),
@@ -630,6 +649,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		AttributeRule: NewAttributeRuleTableManager(),
 		BaseScene: NewBaseSceneTableManager(),
 		Buff: NewBuffTableManager(),
+		CharacterAppearance: NewCharacterAppearanceTableManager(),
 		Class: NewClassTableManager(),
 		Condition: NewConditionTableManager(),
 		Cooldown: NewCooldownTableManager(),
@@ -673,7 +693,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(54)
+	wg.Add(56)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -708,6 +728,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.AfkPassRule.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load AfkPassRule table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.AppearanceRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load AppearanceRule table: %v", err)
 		}
 	}()
 	go func() {
@@ -750,6 +776,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.Buff.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load Buff table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.CharacterAppearance.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load CharacterAppearance table: %v", err)
 		}
 	}()
 	go func() {

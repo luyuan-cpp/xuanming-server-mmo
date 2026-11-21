@@ -244,4 +244,65 @@ class GameServicesTest {
         assertEquals("7", view.path("session").path("sceneNodeId").asText());
         assertEquals("9007199254740998", view.path("session").path("sceneId").asText());
     }
+
+    @Test
+    void systemMailAndThreeStageCampaignSignAndVerifyEveryStep() throws Exception {
+        var stageCalls = new java.util.ArrayList<String>();
+        ServerServiceDefinition mail = ServerServiceDefinition.builder("mailpb.MailAdmin")
+                .addMethod(PROTO.method(GameServices.SEND_SYSTEM_MAIL), ServerCalls.asyncUnaryCall((request, observer) -> {
+                    stageCalls.add("create");
+                    reply(GameServices.SEND_SYSTEM_MAIL, "{\"mailId\":\"9007199254741111\"}", observer);
+                }))
+                .addMethod(PROTO.method(GameServices.IMPORT_RECIPIENTS), ServerCalls.asyncUnaryCall((request, observer) -> {
+                    stageCalls.add("import");
+                    int count = request.getRepeatedFieldCount(request.getDescriptorForType().findFieldByName("player_ids"));
+                    reply(GameServices.IMPORT_RECIPIENTS, "{\"importedCount\":\"" + count + "\"}", observer);
+                }))
+                .addMethod(PROTO.method(GameServices.SEAL_CAMPAIGN), ServerCalls.asyncUnaryCall((request, observer) -> {
+                    stageCalls.add("seal");
+                    reply(GameServices.SEAL_CAMPAIGN, "{\"mailId\":\"9007199254741111\"}", observer);
+                }))
+                .build();
+        server = NettyServerBuilder.forAddress(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
+                .addService(mail).build().start();
+        String target = "127.0.0.1:" + server.getPort();
+        connect(target, 5000);
+
+        // 纯文本全服系统邮件放行，带附件时拒绝（须走活动名单流程）。
+        ObjectNode notice = (ObjectNode) MAPPER.readTree("""
+                {"senderKind":1,"requestId":"9007199254740991","title":"停服维护公告","body":"今晚维护","expireMs":"1900000000000"}
+                """);
+        assertEquals("9007199254741111", services.sendSystemMail(notice).path("mailId").asText());
+        ObjectNode badNotice = notice.deepCopy();
+        badNotice.putObject("attachments").putArray("currencies").addObject().put("currencyType", 0).put("amount", "10");
+        assertEquals("INVALID_ARGUMENT", assertThrows(GameServices.CallFailure.class, () -> services.sendSystemMail(badNotice)).getCode());
+
+        // 三段式活动邮件：Create -> Import -> Seal。
+        var plan = MailCampaignManifest.build(java.util.List.of("1001", "1002", "9007199254740995"));
+        ObjectNode campaign = MAPPER.createObjectNode();
+        ObjectNode mailReq = campaign.putObject("mail")
+                .put("senderKind", 1).put("requestId", "9007199254740992")
+                .put("title", "全服补偿").put("body", "补偿附件").put("expireMs", "1900000000000")
+                .put("campaignId", "9007199254740992").put("manifestGeneration", "1")
+                .put("expectedRecipientCount", Integer.toString(plan.recipientCount()))
+                .put("expectedShardCount", plan.shards().size())
+                .put("manifestHash", plan.manifestHash());
+        mailReq.putObject("attachments").putArray("currencies").addObject().put("currencyType", 1).put("amount", "500");
+        var shardsJson = campaign.putArray("shards");
+        for (var shard : plan.shards()) {
+            var arr = shardsJson.addArray();
+            shard.forEach(arr::add);
+        }
+        stageCalls.clear();
+        ObjectNode sealed = services.sendMailCampaign(campaign);
+        assertEquals(java.util.List.of("create", "import", "seal"), stageCalls);
+        assertTrue(sealed.path("sealed").asBoolean());
+        assertEquals(3, sealed.path("importedRecipients").asInt());
+        assertEquals("9007199254741111", sealed.path("mailId").asText());
+
+        // 篡改摘要后在发包前即被拦截。
+        ObjectNode tampered = campaign.deepCopy();
+        ((ObjectNode) tampered.get("mail")).put("manifestHash", "0".repeat(64));
+        assertEquals("INVALID_ARGUMENT", assertThrows(GameServices.CallFailure.class, () -> services.sendMailCampaign(tampered)).getCode());
+    }
 }

@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+// AppearanceRule 表的权威 schema。源表 data/AppearanceRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 角色形象切换与 1 小时免费试用的单行全局规则(与 AfkPassRule / RoleNameRule 同套路:只取 id=1)。
+// 导表前如缺失 xlsx,请先运行 python tools/scripts/appearance_switch_xlsx_patch.py all。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AppearanceRuleTable {
+  option (cfg_sheet)       = "AppearanceRule";
+  option (cfg_source_file) = "AppearanceRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 切换永久形象消耗的道具 ID(Item.id,默认 3402 角色形象卡)
+  uint32 card_item_id = 2 [(cfg_fk) = "Item"];
+  // 每次永久切换消耗道具张数(>= 1,默认 1)
+  uint32 card_item_count = 3;
+  // 免费试用持续时长秒数(默认 3600 = 1 小时)
+  uint32 trial_duration_seconds = 4;
+  // 官方商城对应角色形象卡 SKU ID(前端快捷跳转展示用;0 = 未绑定)
+  uint64 mall_sku_id = 5;
+  // 官方商城标价(人民币分,默认 1000 = 10 元)
+  uint64 mall_price_fen = 6;
+  // 规则说明
+  string desc = 7;
+}

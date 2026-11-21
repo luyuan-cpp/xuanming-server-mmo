@@ -202,6 +202,7 @@
     <ClCompile Include="player\system\team_follow_system.cpp" />
     <ClCompile Include="player\system\afk_hosting.cpp" />
     <ClCompile Include="player\system\afk_pass.cpp" />
+    <ClCompile Include="player\system\player_appearance.cpp" />
     <ClCompile Include="player\system\player_rename.cpp" />
     <ClCompile Include="player\system\player_landing.cpp" />
     <ClCompile Include="player\system\player_skill.cpp" />

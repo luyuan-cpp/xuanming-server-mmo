@@ -3812,38 +3812,6 @@
   {
    "ability_kind": 1,
    "action_tags": 2,
-   "attack_multiplier": 0.9,
-   "battle_model": 1,
-   "caster_mask": 1,
-   "category": "主动",
-   "cooldown_rounds": 1,
-   "damage": "4*level",
-   "damage_type": 0,
-   "description": "法术伤害并减速；首测参数，待平衡。",
-   "effect": [
-    100070,
-    100071
-   ],
-   "id": 10007,
-   "mana_percent": 0.06,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "寒星凝魄",
-   "pet_max_targets": 1,
-   "prototype_code": "A07",
-   "require_target": 1,
-   "skill_type": [
-    1
-   ],
-   "target_team": 1,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 1,
-   "action_tags": 2,
    "attack_multiplier": 1.6,
    "battle_model": 1,
    "caster_mask": 1,
@@ -4017,46 +3985,14 @@
   {
    "ability_kind": 1,
    "action_tags": 1,
-   "attack_multiplier": 0.9,
-   "battle_model": 1,
-   "caster_mask": 1,
-   "category": "主动",
-   "cooldown_rounds": 1,
-   "damage": "4*level",
-   "damage_type": 1,
-   "description": "先手优先级的物理攻击；首测参数，待平衡。",
-   "effect": [
-    100170
-   ],
-   "id": 10017,
-   "initiative": 1,
-   "mana_percent": 0.05,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "长风先至",
-   "pet_max_targets": 1,
-   "prototype_code": "A17",
-   "require_target": 1,
-   "skill_type": [
-    1
-   ],
-   "target_team": 1,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 1,
-   "action_tags": 1,
    "attack_multiplier": 0.55,
    "battle_model": 1,
-   "caster_mask": 3,
+   "caster_mask": 2,
    "category": "主动",
    "cooldown_rounds": 1,
    "damage": "4*level",
    "damage_type": 1,
-   "description": "少量物理伤害并降低防御；首测参数，待平衡。",
+   "description": "少量物理伤害并降低防御。；首测参数，待平衡。",
    "effect": [
     100180,
     100181
@@ -4064,7 +4000,7 @@
    "id": 10018,
    "mana_percent": 0.05,
    "max_rank": 10,
-   "max_targets": 1,
+   "max_targets": 2,
    "name": "碎甲击",
    "pet_max_targets": 2,
    "prototype_code": "A18",
@@ -4337,34 +4273,6 @@
    "battle_model": 1,
    "caster_mask": 1,
    "category": "主动",
-   "cooldown_rounds": 1,
-   "description": "提前结算已有毒的部分剩余伤害，扣掉对应次数；首测参数，待平衡。",
-   "effect": [
-    100280
-   ],
-   "id": 10028,
-   "mana_percent": 0.06,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "催毒诀",
-   "pet_max_targets": 1,
-   "prototype_code": "A28",
-   "require_target": 1,
-   "skill_type": [
-    1
-   ],
-   "target_team": 1,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 1,
-   "action_tags": 16,
-   "battle_model": 1,
-   "caster_mask": 1,
-   "category": "主动",
    "cooldown_rounds": 2,
    "description": "延长已有毒的剩余结算次数，不凭空新上毒；首测参数，待平衡。",
    "effect": [
@@ -4441,37 +4349,6 @@
    "name": "毒火交攻",
    "pet_max_targets": 1,
    "prototype_code": "A31",
-   "require_target": 1,
-   "skill_type": [
-    1
-   ],
-   "target_team": 1,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 1,
-   "action_tags": 1,
-   "attack_multiplier": 1.0,
-   "battle_model": 1,
-   "caster_mask": 1,
-   "category": "主动",
-   "cooldown_rounds": 1,
-   "damage": "4*level",
-   "damage_type": 1,
-   "description": "对睡眠目标具有额外伤害的物理单攻；首测参数，待平衡。",
-   "effect": [
-    100320
-   ],
-   "id": 10032,
-   "mana_percent": 0.07,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "碎梦一击",
-   "pet_max_targets": 1,
-   "prototype_code": "A32",
    "require_target": 1,
    "skill_type": [
     1
@@ -4589,37 +4466,6 @@
     1
    ],
    "target_team": 2,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 1,
-   "action_tags": 1,
-   "attack_multiplier": 1.0,
-   "battle_model": 1,
-   "caster_mask": 1,
-   "category": "主动",
-   "cooldown_rounds": 1,
-   "damage": "4*level",
-   "damage_type": 1,
-   "description": "对处于破防状态的目标额外增伤；首测参数，待平衡。",
-   "effect": [
-    100370
-   ],
-   "id": 10037,
-   "mana_percent": 0.07,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "趁隙追斩",
-   "pet_max_targets": 1,
-   "prototype_code": "A37",
-   "require_target": 1,
-   "skill_type": [
-    1
-   ],
-   "target_team": 1,
    "targeting_mode": [
     1
    ],
@@ -4899,7 +4745,7 @@
    "max_rank": 10,
    "max_targets": 2,
    "name": "摄魂汲血",
-   "pet_max_targets": 1,
+   "pet_max_targets": 2,
    "prototype_code": "B12",
    "require_target": 1,
    "skill_type": [
@@ -5251,31 +5097,6 @@
    "ability_kind": 2,
    "action_tags": 8,
    "battle_model": 1,
-   "caster_mask": 1,
-   "category": "被动",
-   "cooldown_rounds": 0,
-   "description": "强化下一次单体直接伤害，最多储存 1 层。；首测参数，待平衡。",
-   "id": 12010,
-   "init_effect": [
-    120100
-   ],
-   "mana_percent": 0.0,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "闪影回锋",
-   "pet_max_targets": 1,
-   "prototype_code": "P10",
-   "require_target": 1,
-   "target_team": 3,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 2,
-   "action_tags": 8,
-   "battle_model": 1,
    "caster_mask": 2,
    "category": "被动",
    "cooldown_rounds": 0,
@@ -5426,10 +5247,10 @@
    "ability_kind": 3,
    "action_tags": 8,
    "battle_model": 1,
-   "caster_mask": 3,
+   "caster_mask": 2,
    "category": "追击",
    "cooldown_rounds": 0,
-   "description": "人物对原目标接一次较弱物理追击；宝宝物理追击最多作用2个敌方。；首测参数，待平衡。",
+   "description": "宝宝物理追击最多作用2个敌方。；首测参数，待平衡。",
    "id": 13001,
    "init_effect": [
     130010
@@ -5440,56 +5261,6 @@
    "name": "乘胜追击",
    "pet_max_targets": 1,
    "prototype_code": "T01",
-   "require_target": 1,
-   "target_team": 3,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 3,
-   "action_tags": 8,
-   "battle_model": 1,
-   "caster_mask": 1,
-   "category": "追击",
-   "cooldown_rounds": 0,
-   "description": "对该目标追加一次攻击。；首测参数，待平衡。",
-   "id": 13002,
-   "init_effect": [
-    130020
-   ],
-   "mana_percent": 0.0,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "顺势追击",
-   "pet_max_targets": 1,
-   "prototype_code": "T02",
-   "require_target": 1,
-   "target_team": 3,
-   "targeting_mode": [
-    1
-   ],
-   "unlock_level": 1
-  },
-  {
-   "ability_kind": 3,
-   "action_tags": 8,
-   "battle_model": 1,
-   "caster_mask": 1,
-   "category": "追击",
-   "cooldown_rounds": 0,
-   "description": "削减命中目标的法力。；首测参数，待平衡。",
-   "id": 13003,
-   "init_effect": [
-    130030
-   ],
-   "mana_percent": 0.0,
-   "max_rank": 10,
-   "max_targets": 1,
-   "name": "破法追击",
-   "pet_max_targets": 1,
-   "prototype_code": "T03",
    "require_target": 1,
    "target_team": 3,
    "targeting_mode": [

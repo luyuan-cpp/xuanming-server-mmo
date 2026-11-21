@@ -706,25 +706,6 @@
   },
   {
    "battle_op": 1,
-   "id": 100070,
-   "level": 1,
-   "max_layer": 1
-  },
-  {
-   "battle_op": 6,
-   "duration_rounds": 3,
-   "id": 100071,
-   "level": 1,
-   "max_layer": 1,
-   "modifier_stat": 4,
-   "ratio": -0.25,
-   "tag": {
-    "Slow": true
-   },
-   "tick_on_apply": 1
-  },
-  {
-   "battle_op": 1,
    "id": 100080,
    "level": 1,
    "max_layer": 1
@@ -780,12 +761,6 @@
     "Buff": true
    },
    "tick_on_apply": 1
-  },
-  {
-   "battle_op": 1,
-   "id": 100170,
-   "level": 1,
-   "max_layer": 1
   },
   {
    "battle_op": 1,
@@ -954,14 +929,6 @@
    "tick_on_apply": 1
   },
   {
-   "battle_op": 14,
-   "effect_count": 2,
-   "id": 100280,
-   "level": 1,
-   "max_layer": 1,
-   "required_tag": "Poison"
-  },
-  {
    "battle_op": 15,
    "effect_count": 1,
    "id": 100290,
@@ -1010,14 +977,6 @@
    "second_required_tag": "Burn"
   },
   {
-   "battle_op": 1,
-   "conditional_bonus": 0.75,
-   "id": 100320,
-   "level": 1,
-   "max_layer": 1,
-   "required_tag": "Sleep"
-  },
-  {
    "battle_op": 4,
    "effect_count": 1,
    "id": 100330,
@@ -1060,14 +1019,6 @@
    },
    "tick_on_apply": 1,
    "value_basis": 3
-  },
-  {
-   "battle_op": 1,
-   "conditional_bonus": 0.5,
-   "id": 100370,
-   "level": 1,
-   "max_layer": 1,
-   "required_tag": "Break"
   },
   {
    "application_chance": 0.55,
@@ -1303,31 +1254,6 @@
    "trigger_event": 3
   },
   {
-   "battle_op": 24,
-   "id": 120100,
-   "infinite_duration": 1,
-   "level": 1,
-   "max_layer": 1,
-   "sub_buff": [
-    120101
-   ],
-   "trigger_event": 5
-  },
-  {
-   "battle_op": 6,
-   "duration_rounds": 2,
-   "hit_limit": 1,
-   "id": 120101,
-   "level": 1,
-   "max_layer": 1,
-   "modifier_stat": 14,
-   "ratio": 0.3,
-   "tag": {
-    "Buff": true
-   },
-   "tick_on_apply": 0
-  },
-  {
    "battle_op": 6,
    "id": 120140,
    "infinite_duration": 1,
@@ -1399,31 +1325,6 @@
    "target_count": 1,
    "trigger_chance": 0.35,
    "trigger_event": 1
-  },
-  {
-   "battle_op": 20,
-   "damage_filter": 1,
-   "id": 130020,
-   "infinite_duration": 1,
-   "level": 1,
-   "max_layer": 1,
-   "per_round_limit": 1,
-   "ratio": 0.65,
-   "required_tag": "Break",
-   "second_required_tag": "Slow",
-   "target_count": 1,
-   "trigger_event": 1
-  },
-  {
-   "battle_op": 16,
-   "id": 130030,
-   "infinite_duration": 1,
-   "level": 1,
-   "max_layer": 1,
-   "per_round_limit": 1,
-   "ratio": 0.1,
-   "trigger_event": 1,
-   "value_basis": 4
   },
   {
    "battle_op": 21,

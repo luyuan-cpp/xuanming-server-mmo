@@ -171,7 +171,7 @@ protected:
             if (row->battle_model() == 1) catalog[id] = *row;
         }
         for (const auto& [id, row] : BuffTableManager::Instance().GetIdMap()) data->AddBuff(id) = *row;
-        ASSERT_EQ(catalog.size(), 69u);
+        ASSERT_EQ(catalog.size(), 61u);
     }
     const SkillTable& Row(uint32_t id) { return catalog.at(id); }
     std::shared_ptr<MemoryBattleDataProvider> data;
@@ -180,10 +180,10 @@ protected:
 
 TEST_F(ModernSkillCatalogTest, ExactAgreedCatalogHasExecutableEffectsAndSharedIdentity) {
     const std::map<char, std::vector<uint32_t>> expected = {
-        {'A',{2,3,6,7,8,10,12,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40}},
+        {'A',{2,3,6,8,10,12,14,15,16,18,19,20,21,22,23,24,25,26,27,29,30,31,33,34,35,36,38,39,40}},
         {'B',{5,6,7,8,9,11,12,13,14,15,16}},
-        {'P',{1,2,3,4,5,6,7,8,9,10,14,15,16,17,18,19}},
-        {'T',{1,2,3,5,6}}, {'O',{1,2,3}}};
+        {'P',{1,2,3,4,5,6,7,8,9,14,15,16,17,18,19}},
+        {'T',{1,5,6}}, {'O',{1,2,3}}};
     const std::map<char,uint32_t> bases = {{'A',10000},{'B',11000},{'P',12000},{'T',13000},{'O',14000}};
     std::set<std::string> codes;
     for (const auto& [prefix, numbers] : expected) {
@@ -219,7 +219,15 @@ TEST_F(ModernSkillCatalogTest, ExactAgreedCatalogHasExecutableEffectsAndSharedId
     EXPECT_EQ(Row(10002).pet_max_targets(), 2u);
     EXPECT_EQ(Row(10010).max_targets(), 7u);
     EXPECT_EQ(Row(10010).pet_max_targets(), 1u);
+    EXPECT_EQ(Row(10018).caster_mask(), 2u);
+    EXPECT_EQ(Row(10018).max_targets(), 2u);
+    EXPECT_EQ(Row(10018).pet_max_targets(), 2u);
+    EXPECT_EQ(Row(11012).max_targets(), 2u);
+    EXPECT_EQ(Row(11012).pet_max_targets(), 2u);
+    EXPECT_EQ(Row(13001).caster_mask(), 2u);
     EXPECT_EQ(Row(10040).caster_mask(), 1u);
+    for (const auto retired : {10007u, 10017u, 10028u, 10032u, 10037u, 12010u, 13002u, 13003u})
+        EXPECT_FALSE(catalog.contains(retired)) << retired;
 }
 
 TEST_F(ModernSkillCatalogTest, EveryActivePrototypeCanBeCastByEveryEligibleActor) {
@@ -249,7 +257,7 @@ TEST_F(ModernSkillCatalogTest, EveryActivePrototypeCanBeCastByEveryEligibleActor
             ++casts;
         }
     }
-    EXPECT_EQ(casts, 57u); // 人物34、宝宝11专属+12共享。
+    EXPECT_EQ(casts, 51u); // 人物28、宝宝12专属(含A18)+11共享。
 }
 
 TEST_F(ModernSkillCatalogTest, SharedAttackPreservesMainTargetAndUsesCasterTargetCap) {
@@ -355,11 +363,13 @@ TEST_F(ModernSkillCatalogTest, LifestealUsesActualHealthLossAndNeverAbsorbedDama
         engine.SubmitAction(source, Cast(11012, kEnemy));
         const auto result = engine.ResolveCurrentRound();
         uint64_t damage = 0, healed = 0;
+        std::set<uint64_t> victims;
         for (const auto& event : result.events()) {
             if (event.source_id() != source) continue;
-            if (event.event_type() == BATTLE_EVENT_DAMAGE) damage += event.value();
+            if (event.event_type() == BATTLE_EVENT_DAMAGE) { damage += event.value(); victims.insert(event.target_id()); }
             if (event.event_type() == BATTLE_EVENT_HEAL && event.target_id() == source) healed += event.value();
         }
+        EXPECT_EQ(victims.size(), 2u);
         if (shielded) { EXPECT_EQ(damage, 0u); EXPECT_EQ(healed, 0u); }
         else { EXPECT_GT(damage, 0u); EXPECT_GT(healed, 0u); EXPECT_LE(healed, damage); }
         EXPECT_EQ(Actor(result.state(), source).attributes().health(), 5000u + healed);
@@ -418,15 +428,20 @@ TEST_F(ModernSkillCatalogTest, DeadCharacterRemainsSelectableOnlyByReviveAbility
 TEST_F(ModernSkillCatalogTest, PoisonCatalystCanConsumeAlliedPoisonWithoutChangingOriginalSource) {
     auto request = Request();
     Learn(*request.mutable_players(0), Row(10019));
-    Learn(*request.mutable_players(1), Row(10028));
+    Learn(*request.mutable_players(0), Row(10030));
+    Learn(*request.mutable_players(1), Row(10031));
     data->AddBuff(100190).set_application_chance(1);
+    data->AddBuff(100301).set_application_chance(1);
     TurnBattleEngine engine(data);
     ASSERT_TRUE(engine.Initialize(request));
     DefendAllExcept(engine);
     engine.SubmitAction(kSelf, Cast(10019, kEnemy));
     engine.ResolveCurrentRound();
     DefendAllExcept(engine);
-    engine.SubmitAction(kAlly, Cast(10028, kEnemy));
+    engine.SubmitAction(kSelf, Cast(10030, kEnemy));
+    engine.ResolveCurrentRound();
+    DefendAllExcept(engine);
+    engine.SubmitAction(kAlly, Cast(10031, kEnemy));
     const auto result = engine.ResolveCurrentRound();
     size_t catalyzed = 0;
     for (const auto& event : result.events()) {

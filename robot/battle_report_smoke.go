@@ -15,6 +15,8 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"time"
 
 	"go.uber.org/zap"
@@ -116,6 +118,11 @@ func battleReportSmokeCheck(bot *battleSmokeBot, stats *metrics.Stats, battleId 
 	if replay.GetOutcome() != summary.GetOutcome() {
 		return battleReportSmokeResult{}, fmt.Errorf("replay outcome=%s but list says %s", replay.GetOutcome(), summary.GetOutcome())
 	}
+	if dumpPath := os.Getenv("BATTLE_REPORT_DUMP_PATH"); dumpPath != "" {
+		if err := dumpBattleReportResponse(dumpPath, got); err != nil {
+			return battleReportSmokeResult{}, err
+		}
+	}
 	result := battleReportSmokeResult{
 		listed:      len(list.GetReports()),
 		rounds:      len(replay.GetRounds()),
@@ -172,4 +179,21 @@ func decodeBattleReplay(envelope *battle.BattleReplayEnvelope) (*battle.BattleRe
 		return nil, fmt.Errorf("parse BattleReplay: %w", err)
 	}
 	return replay, nil
+}
+
+// dumpBattleReportResponse 将 GetBattleReport 原始回包落盘,供客户端 EditMode 单测作跨端夹具。
+func dumpBattleReportResponse(path string, resp *match.GetBattleReportResponse) error {
+	raw, err := proto.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("marshal GetBattleReportResponse: %w", err)
+	}
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("mkdir %q: %w", dir, err)
+		}
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return fmt.Errorf("write GetBattleReportResponse %q: %w", path, err)
+	}
+	return nil
 }

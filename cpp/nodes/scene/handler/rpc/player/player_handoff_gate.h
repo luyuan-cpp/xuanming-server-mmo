@@ -28,6 +28,7 @@
 #include "proto/common/base/empty.pb.h"
 #include "proto/scene/player_activity.pb.h"
 #include "proto/scene/player_afk_pass.pb.h"
+#include "proto/scene/player_appearance.pb.h"
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_battle_result.pb.h"
@@ -72,7 +73,8 @@ namespace scene_handoff_gate
 			service == SceneCurrencyClientPlayer::descriptor() ||
 			service == SceneActivityClientPlayer::descriptor() ||
 			service == SceneBattleResultClientPlayer::descriptor() ||
-			service == SceneAfkPassClientPlayer::descriptor())
+			service == SceneAfkPassClientPlayer::descriptor() ||
+			service == SceneAppearanceClientPlayer::descriptor())
 		{
 			return true;
 		}

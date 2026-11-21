@@ -43,6 +43,7 @@ class ExporterConfig:
     data_begin_row: int = 7
     metadata_rows: dict[str, int] = field(default_factory=dict)
     server_owner_types: list[str] = field(default_factory=lambda: ["server", "common"])
+    client_owner_types: list[str] = field(default_factory=lambda: ["client", "common"])
     # 权威 schema 目录。某张表在这里有 <sheet>_table.proto 就走 schema-first,
     # 没有就退回读 xlsx 第 2~5 行的旧路。缺省 <data_dir>/schema。
     schema_dir: Path = field(default_factory=Path)
@@ -51,6 +52,7 @@ class ExporterConfig:
     generated_dir: Path = field(default_factory=Path)
     json_dir: Path = field(default_factory=Path)
     binary_dir: Path = field(default_factory=Path)
+    client_binary_dir: Path = field(default_factory=Path)
     proto_dir: Path = field(default_factory=Path)
     proto_python_output_dir: Path = field(default_factory=Path)
     state_dir: Path = field(default_factory=Path)
@@ -136,6 +138,7 @@ def load_config(config_path: str | Path | None = None) -> ExporterConfig:
         data_begin_row=excel.get("data_begin_row", 7),
         metadata_rows=excel.get("metadata_rows", {}),
         server_owner_types=excel.get("server_owner_types", ["server", "common"]),
+        client_owner_types=excel.get("client_owner_types", ["client", "common"]),
         schema_dir=_resolve(base, excel.get("schema_dir"))
         if excel.get("schema_dir")
         else _resolve(base, excel.get("data_dir")) / "schema",
@@ -143,6 +146,7 @@ def load_config(config_path: str | Path | None = None) -> ExporterConfig:
         generated_dir=_resolve(base, output.get("generated_dir")),
         json_dir=_resolve(base, output.get("json_dir")),
         binary_dir=_resolve(base, output.get("binary_dir", output.get("json_dir", ""))),
+        client_binary_dir=_resolve(base, output.get("client_binary_dir")),
         proto_dir=_resolve(base, output.get("proto_dir")),
         proto_python_output_dir=_resolve(base, output.get("proto_python_output_dir", "../../generated/code/proto/python")),
         state_dir=_resolve(base, output.get("state_dir")),

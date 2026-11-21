@@ -597,6 +597,19 @@
         "ChatContactRejected": 18005,
         "ChatMessageNotFound": 18006
       }
+    },
+    "appearance_error": {
+      "base": 33000,
+      "width": 1000,
+      "ids": {
+        "AppearanceInvalid": 33000,
+        "AppearanceAlreadyCurrent": 33001,
+        "AppearanceNoCard": 33002,
+        "AppearanceTrialAlreadyUsed": 33003,
+        "AppearanceNoActiveTrial": 33004,
+        "AppearanceFrozen": 33005,
+        "AppearanceUnavailable": 33006
+      }
     }
   },
   "legacy_ids": {

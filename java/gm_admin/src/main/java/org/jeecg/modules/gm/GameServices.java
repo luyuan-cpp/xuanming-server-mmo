@@ -34,6 +34,9 @@ public final class GameServices {
     static final String HOME = "data_service.DataService/GetPlayerHomeZone";
     static final String SESSION = "playerlocator.PlayerLocator/GetSession";
     static final String SEND_MAIL = "mailpb.MailAdmin/SendPersonalMail";
+    static final String SEND_SYSTEM_MAIL = "mailpb.MailAdmin/SendSystemMail";
+    static final String IMPORT_RECIPIENTS = "mailpb.MailAdmin/ImportMailRecipients";
+    static final String SEAL_CAMPAIGN = "mailpb.MailAdmin/SealMailCampaign";
     private static final BigInteger MAX_UINT64 = new BigInteger("18446744073709551615");
     private final GameProto proto;
     private final ObjectMapper mapper;
@@ -183,10 +186,7 @@ public final class GameServices {
 
     /** 输入必须是已持久冻结的 SendMailRequest；成功仅表示邮件投递成功。 */
     public ObjectNode sendMail(ObjectNode frozenRequest) {
-        require(mail, "邮件服务");
-        if (mailSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
-            throw new CallFailure("NOT_CONFIGURED", "邮件管理签名密钥未配置", false, 0);
-        }
+        checkMailConfigured();
         if (frozenRequest == null || frozenRequest.has("auth")) {
             throw invalid("邮件请求非法，调用证明由服务端生成");
         }
@@ -211,9 +211,161 @@ public final class GameServices {
         }
         request = proto.sign(SEND_MAIL, request, "admin", mailSecret, System.currentTimeMillis());
         DynamicMessage reply = call(mail, SEND_MAIL, request, Deadline.after(budgetMillis, TimeUnit.MILLISECONDS), true);
-        Descriptors.FieldDescriptor errorField = reply.getDescriptorForType().findFieldByName("error_message");
-        DynamicMessage error = (DynamicMessage) reply.getField(errorField);
-        int tip = ((Number) error.getField(error.getDescriptorForType().findFieldByName("id"))).intValue();
+        return verifiedMailReply(reply);
+    }
+
+    /** 输入必须是已持久冻结的纯文本全服系统邮件 SendMailRequest；不允许携带附件或活动名单。 */
+    public ObjectNode sendSystemMail(ObjectNode frozenRequest) {
+        checkMailConfigured();
+        if (frozenRequest == null || frozenRequest.has("auth")) {
+            throw invalid("系统邮件请求非法，调用证明由服务端生成");
+        }
+        ObjectNode input = frozenRequest.deepCopy();
+        requireStringId(input, "requestId", "request_id");
+        requireStringId(input, "expireMs", "expire_ms");
+        DynamicMessage request;
+        try { request = proto.request(SEND_SYSTEM_MAIL, input); }
+        catch (IOException | IllegalArgumentException error) { throw invalid("系统邮件请求不符合游戏协议"); }
+        Descriptors.Descriptor type = request.getDescriptorForType();
+        if (!Integer.valueOf(1).equals(request.getField(type.findFieldByName("sender_kind")))) {
+            throw invalid("系统邮件发件角色必须是管理工具");
+        }
+        for (String field : List.of("recipient_player_id", "guild_id", "campaign_id", "manifest_generation",
+                "expected_recipient_count", "expected_shard_count")) {
+            if (((Number) request.getField(type.findFieldByName(field))).longValue() != 0) {
+                throw invalid("纯文本全服系统邮件不得携带单人收件或活动名单字段");
+            }
+        }
+        if (!request.getField(type.findFieldByName("manifest_hash")).equals("")) {
+            throw invalid("纯文本全服系统邮件不得携带名单摘要");
+        }
+        if (hasAttachments(request)) {
+            throw invalid("携带附件的系统邮件必须走冻结名单活动流程");
+        }
+        request = proto.sign(SEND_SYSTEM_MAIL, request, "admin", mailSecret, System.currentTimeMillis());
+        DynamicMessage reply = call(mail, SEND_SYSTEM_MAIL, request, Deadline.after(budgetMillis, TimeUnit.MILLISECONDS), true);
+        return verifiedMailReply(reply);
+    }
+
+    /**
+     * 三段式幂等批量活动发奖：SendSystemMail（建活动）→ ImportMailRecipients（逐片导入）→ SealMailCampaign（封存发布）。
+     * 任一阶段失败在建活动后均标记 outcomeUnknown=true，支持沿用同一冻结命令安全重试，绝不重复发布或部分发布。
+     */
+    public ObjectNode sendMailCampaign(ObjectNode frozenCampaign) {
+        checkMailConfigured();
+        if (frozenCampaign == null || !(frozenCampaign.get("mail") instanceof ObjectNode mailNode)
+                || !(frozenCampaign.get("shards") instanceof ArrayNode shardsNode) || shardsNode.isEmpty()) {
+            throw invalid("活动邮件草稿缺少冻结请求或名单分片");
+        }
+        if (mailNode.has("auth")) throw invalid("活动邮件请求非法，调用证明由服务端生成");
+        ObjectNode input = mailNode.deepCopy();
+        requireStringId(input, "requestId", "request_id");
+        requireStringId(input, "expireMs", "expire_ms");
+        requireStringId(input, "campaignId", "campaign_id");
+        requireStringId(input, "manifestGeneration", "manifest_generation");
+        requireStringId(input, "expectedRecipientCount", "expected_recipient_count");
+
+        List<List<String>> shards = new ArrayList<>(shardsNode.size());
+        long totalRecipients = 0;
+        for (JsonNode shardNode : shardsNode) {
+            if (!shardNode.isArray() || shardNode.isEmpty() || shardNode.size() > MailCampaignManifest.SHARD_SIZE) {
+                throw invalid("活动名单分片格式非法");
+            }
+            List<String> ids = new ArrayList<>(shardNode.size());
+            for (JsonNode idNode : shardNode) {
+                if (!idNode.isTextual()) throw invalid("活动收件人 ID 必须是字符串");
+                positiveUint64(idNode.textValue(), "收件人 ID");
+                ids.add(idNode.textValue());
+            }
+            shards.add(ids);
+            totalRecipients += ids.size();
+        }
+        DynamicMessage createReq;
+        try { createReq = proto.request(SEND_SYSTEM_MAIL, input); }
+        catch (IOException | IllegalArgumentException error) { throw invalid("活动邮件请求不符合游戏协议"); }
+        Descriptors.Descriptor type = createReq.getDescriptorForType();
+        if (!Integer.valueOf(1).equals(createReq.getField(type.findFieldByName("sender_kind")))) {
+            throw invalid("活动邮件发件角色必须是管理工具");
+        }
+        if (((Number) createReq.getField(type.findFieldByName("recipient_player_id"))).longValue() != 0
+                || ((Number) createReq.getField(type.findFieldByName("guild_id"))).longValue() != 0) {
+            throw invalid("系统活动邮件不得指定单人或帮会目标");
+        }
+        if (!hasAttachments(createReq)) {
+            throw invalid("系统活动邮件必须包含至少一项货币或物品附件");
+        }
+        long expectedCount = ((Number) createReq.getField(type.findFieldByName("expected_recipient_count"))).longValue();
+        int expectedShards = ((Number) createReq.getField(type.findFieldByName("expected_shard_count"))).intValue();
+        String expectedHash = (String) createReq.getField(type.findFieldByName("manifest_hash"));
+        String computedHash;
+        try { computedHash = MailCampaignManifest.manifestHashOf(shards); }
+        catch (IllegalArgumentException error) { throw invalid(error.getMessage()); }
+        if (expectedShards != shards.size() || expectedCount != totalRecipients || !computedHash.equals(expectedHash)) {
+            throw invalid("活动名单分片与冻结摘要不一致");
+        }
+
+        String campaignId = Long.toUnsignedString(((Number) createReq.getField(type.findFieldByName("campaign_id"))).longValue());
+        String generation = Long.toUnsignedString(((Number) createReq.getField(type.findFieldByName("manifest_generation"))).longValue());
+
+        // 阶段 1：创建或幂等重放活动意图（此时尚未发布可见）。
+        DynamicMessage signedCreate = proto.sign(SEND_SYSTEM_MAIL, createReq, "admin", mailSecret, System.currentTimeMillis());
+        DynamicMessage createReply = call(mail, SEND_SYSTEM_MAIL, signedCreate, Deadline.after(budgetMillis, TimeUnit.MILLISECONDS), true);
+        verifiedMailReply(createReply);
+
+        // 阶段 2 & 3：活动意图已在邮件服落盘，后续任一故障一律按 outcomeUnknown=true 保留原单待安全重试。
+        long importedTotal = 0;
+        try {
+            for (int index = 0; index < shards.size(); index++) {
+                List<String> shard = shards.get(index);
+                ObjectNode importJson = mapper.createObjectNode()
+                        .put("senderKind", 1)
+                        .put("campaignId", campaignId)
+                        .put("manifestGeneration", generation)
+                        .put("shardIndex", index);
+                ArrayNode playerArray = importJson.putArray("playerIds");
+                shard.forEach(playerArray::add);
+                DynamicMessage importReq = proto.request(IMPORT_RECIPIENTS, importJson);
+                importReq = proto.sign(IMPORT_RECIPIENTS, importReq, "admin", mailSecret, System.currentTimeMillis());
+                DynamicMessage importReply = call(mail, IMPORT_RECIPIENTS, importReq, Deadline.after(budgetMillis, TimeUnit.MILLISECONDS), true);
+                int tip = tipId(importReply);
+                if (tip != 0) throw new CallFailure("SERVER_TIP", "导入活动名单分片未确认，请保留原单重试", true, tip);
+                long imported = ((Number) importReply.getField(importReply.getDescriptorForType().findFieldByName("imported_count"))).longValue();
+                if (imported != shard.size()) {
+                    throw new CallFailure("INVALID_RESPONSE", "活动名单分片导入数量不匹配", true, 0);
+                }
+                importedTotal += imported;
+            }
+            ObjectNode sealJson = mapper.createObjectNode()
+                    .put("senderKind", 1)
+                    .put("campaignId", campaignId)
+                    .put("manifestGeneration", generation);
+            DynamicMessage sealReq = proto.request(SEAL_CAMPAIGN, sealJson);
+            sealReq = proto.sign(SEAL_CAMPAIGN, sealReq, "admin", mailSecret, System.currentTimeMillis());
+            DynamicMessage sealReply = call(mail, SEAL_CAMPAIGN, sealReq, Deadline.after(budgetMillis, TimeUnit.MILLISECONDS), true);
+            ObjectNode result = verifiedMailReply(sealReply);
+            result.put("campaignId", campaignId)
+                    .put("manifestGeneration", generation)
+                    .put("importedRecipients", importedTotal)
+                    .put("importedShards", shards.size())
+                    .put("sealed", true);
+            return result;
+        } catch (CallFailure error) {
+            if (error.isOutcomeUnknown()) throw error;
+            throw new CallFailure(error.getCode(), "活动邮件发布中途未完成，请沿用原命令重试：" + error.getCode(), true, error.getTipId());
+        } catch (IOException error) {
+            throw new CallFailure("INVALID_RESPONSE", "活动邮件协议序列化失败", true, 0);
+        }
+    }
+
+    private void checkMailConfigured() {
+        require(mail, "邮件服务");
+        if (mailSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new CallFailure("NOT_CONFIGURED", "邮件管理签名密钥未配置", false, 0);
+        }
+    }
+
+    private ObjectNode verifiedMailReply(DynamicMessage reply) {
+        int tip = tipId(reply);
         if (tip != 0) {
             // 不在这里复制导表器的故障码表。所有非零 tip 都保留原号并保守等待原请求核对。
             throw new CallFailure("SERVER_TIP", "服务器未确认邮件投递，请保留原请求核对", true, tip);
@@ -222,6 +374,21 @@ public final class GameServices {
         if (mailId == 0) throw new CallFailure("INVALID_RESPONSE", "邮件响应缺少投递凭据", true, 0);
         try { return proto.json(reply, mapper); }
         catch (IOException errorJson) { throw new CallFailure("INVALID_RESPONSE", "邮件响应无法解析", true, 0); }
+    }
+
+    private static int tipId(DynamicMessage reply) {
+        Descriptors.FieldDescriptor errorField = reply.getDescriptorForType().findFieldByName("error_message");
+        DynamicMessage error = (DynamicMessage) reply.getField(errorField);
+        return ((Number) error.getField(error.getDescriptorForType().findFieldByName("id"))).intValue();
+    }
+
+    private static boolean hasAttachments(DynamicMessage request) {
+        Descriptors.FieldDescriptor field = request.getDescriptorForType().findFieldByName("attachments");
+        if (!request.hasField(field)) return false;
+        DynamicMessage attachments = (DynamicMessage) request.getField(field);
+        Descriptors.Descriptor attType = attachments.getDescriptorForType();
+        return attachments.getRepeatedFieldCount(attType.findFieldByName("currencies")) > 0
+                || attachments.getRepeatedFieldCount(attType.findFieldByName("items")) > 0;
     }
 
     private ObjectNode readJson(ManagedChannel channel, String method, ObjectNode request, Deadline deadline) {

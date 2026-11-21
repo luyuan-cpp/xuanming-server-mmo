@@ -269,4 +269,73 @@ class GmCommandJournalTest {
         assertEquals("DRAFT", status(journal.get(id)));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM gm_command_audit WHERE command_id=?", Integer.class, id));
     }
+
+    @Test void systemMailFreezesWithoutRecipientAndSupportsIdempotentRetry() {
+        ObjectNode sysInput = mapper.createObjectNode().put("senderKind", 1).put("title", "停服维护").put("body", "02:00 维护").put("validDays", 3);
+        ObjectNode draft = journal.prepareSystemMail("operator", "sys-1", "维护公告", sysInput);
+        String id = draft.path("id").asText();
+        assertEquals("SYSTEM_MAIL", draft.path("commandType").asText());
+        assertEquals("0", draft.path("playerId").asText());
+        assertEquals(id, draft.path("request").path("requestId").asText());
+        assertFalse(draft.path("request").has("recipientPlayerId"));
+        assertFalse(draft.path("request").has("validDays"));
+        assertEquals(draft, journal.prepareSystemMail("operator", "sys-1", "维护公告", sysInput));
+        assertEquals(1, journal.listSystemMails(1, 10, "DRAFT").path("total").asInt());
+        assertEquals(0, journal.list().path("total").asInt());
+        http(409, () -> journal.send(id, "operator", req -> fail("Wrong endpoint")));
+
+        ObjectNode unknown = journal.sendSystemMail(id, "operator", req -> { throw new GameServices.CallFailure("UNAVAILABLE", "down", true, 0); });
+        assertEquals("UNKNOWN", status(unknown));
+        ObjectNode delivered = journal.sendSystemMail(id, "operator", req -> {
+            assertEquals(draft.path("request"), req);
+            return mapper.createObjectNode().put("mailId", "8801");
+        });
+        assertEquals("DELIVERED", status(delivered));
+        assertEquals(5, journal.auditHistory(id, "SYSTEM_MAIL").path("records").size());
+    }
+
+    @Test void mailCampaignCompactViewOmitsShardsWhileSenderReceivesFullShardsAndEnforcesExpiry() {
+        ObjectNode campaignInput = mapper.createObjectNode();
+        ObjectNode mail = campaignInput.putObject("mail")
+                .put("senderKind", 1).put("title", "开服补偿").put("body", "全服发放").put("validDays", 1)
+                .put("expectedRecipientCount", "25").put("expectedShardCount", 2).put("manifestHash", "a".repeat(64));
+        mail.putObject("attachments").putArray("currencies").addObject().put("currencyType", 1).put("amount", "500");
+        var shards = campaignInput.putArray("shards");
+        var shard0 = shards.addArray();
+        for (int i = 1; i <= 22; i++) shard0.add(Integer.toString(1000 + i));
+        shards.addArray().add("2001").add("2002").add("2003");
+
+        ObjectNode draft = journal.prepareMailCampaign("operator", "camp-1", "合服活动", campaignInput);
+        String id = draft.path("id").asText();
+        assertEquals("MAIL_CAMPAIGN", draft.path("commandType").asText());
+        assertEquals("0", draft.path("playerId").asText());
+        assertEquals(id, draft.path("request").path("mail").path("campaignId").asText());
+        assertEquals("1", draft.path("request").path("mail").path("manifestGeneration").asText());
+        assertEquals(id, draft.path("request").path("mail").path("requestId").asText());
+        assertFalse(draft.path("request").path("mail").has("validDays"));
+        // 视图必须裁剪巨大分片，仅返回前 20 条样例和汇总计数。
+        assertFalse(draft.path("request").has("shards"));
+        assertEquals(20, draft.path("request").path("recipientSample").size());
+        assertEquals(25, draft.path("request").path("totalRecipients").asInt());
+        assertEquals(2, draft.path("request").path("shardCount").asInt());
+        assertEquals(1, journal.listMailCampaigns(1, 10, null).path("total").asInt());
+        http(409, () -> journal.sendSystemMail(id, "operator", req -> fail("Wrong endpoint")));
+
+        // 发送回调必须拿到完整冻结分片。
+        ObjectNode delivered = journal.sendMailCampaign(id, "operator", fullRequest -> {
+            assertEquals(2, fullRequest.path("shards").size());
+            assertEquals(22, fullRequest.path("shards").get(0).size());
+            assertEquals(3, fullRequest.path("shards").get(1).size());
+            assertEquals(id, fullRequest.path("mail").path("campaignId").asText());
+            return mapper.createObjectNode().put("mailId", "9901").put("sealed", true);
+        });
+        assertEquals("DELIVERED", status(delivered));
+        assertFalse(delivered.path("request").has("shards"));
+
+        // 过期活动草稿原子拒绝。
+        String expiringId = journal.prepareMailCampaign("operator", "camp-exp", "过期活动", campaignInput).path("id").asText();
+        now.addAndGet(86_400_000L);
+        http(409, () -> journal.sendMailCampaign(expiringId, "operator", req -> fail("Expired campaign must not send")));
+        assertEquals("DRAFT", status(journal.get(expiringId, "MAIL_CAMPAIGN")));
+    }
 }

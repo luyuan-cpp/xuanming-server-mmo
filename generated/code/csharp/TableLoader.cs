@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 54;
+        public const int TableCount = 56;
 
         private static Action s_loadSuccessCallback;
 
@@ -44,6 +44,7 @@ namespace MmorpgClient.Table
                 ActorActionCombatStateTableManager.FileName(useBinary),
                 ActorActionStateTableManager.FileName(useBinary),
                 AfkPassRuleTableManager.FileName(useBinary),
+                AppearanceRuleTableManager.FileName(useBinary),
                 AttributeAllocRatioTableManager.FileName(useBinary),
                 AttributeAutoPlanTableManager.FileName(useBinary),
                 AttributeDimensionTableManager.FileName(useBinary),
@@ -51,6 +52,7 @@ namespace MmorpgClient.Table
                 AttributeRuleTableManager.FileName(useBinary),
                 BaseSceneTableManager.FileName(useBinary),
                 BuffTableManager.FileName(useBinary),
+                CharacterAppearanceTableManager.FileName(useBinary),
                 ClassTableManager.FileName(useBinary),
                 ConditionTableManager.FileName(useBinary),
                 CooldownTableManager.FileName(useBinary),
@@ -105,6 +107,7 @@ namespace MmorpgClient.Table
             ActorActionCombatStateTableManager.Instance.Load(configDir, useBinary);
             ActorActionStateTableManager.Instance.Load(configDir, useBinary);
             AfkPassRuleTableManager.Instance.Load(configDir, useBinary);
+            AppearanceRuleTableManager.Instance.Load(configDir, useBinary);
             AttributeAllocRatioTableManager.Instance.Load(configDir, useBinary);
             AttributeAutoPlanTableManager.Instance.Load(configDir, useBinary);
             AttributeDimensionTableManager.Instance.Load(configDir, useBinary);
@@ -112,6 +115,7 @@ namespace MmorpgClient.Table
             AttributeRuleTableManager.Instance.Load(configDir, useBinary);
             BaseSceneTableManager.Instance.Load(configDir, useBinary);
             BuffTableManager.Instance.Load(configDir, useBinary);
+            CharacterAppearanceTableManager.Instance.Load(configDir, useBinary);
             ClassTableManager.Instance.Load(configDir, useBinary);
             ConditionTableManager.Instance.Load(configDir, useBinary);
             CooldownTableManager.Instance.Load(configDir, useBinary);
@@ -189,6 +193,8 @@ namespace MmorpgClient.Table
                 ActorActionStateTableManager.Instance.LoadFromBytes, ActorActionStateTableManager.Instance.LoadFromJson);
             LoadOne(AfkPassRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 AfkPassRuleTableManager.Instance.LoadFromBytes, AfkPassRuleTableManager.Instance.LoadFromJson);
+            LoadOne(AppearanceRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                AppearanceRuleTableManager.Instance.LoadFromBytes, AppearanceRuleTableManager.Instance.LoadFromJson);
             LoadOne(AttributeAllocRatioTableManager.FileName(useBinary), byteProvider, useBinary,
                 AttributeAllocRatioTableManager.Instance.LoadFromBytes, AttributeAllocRatioTableManager.Instance.LoadFromJson);
             LoadOne(AttributeAutoPlanTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -203,6 +209,8 @@ namespace MmorpgClient.Table
                 BaseSceneTableManager.Instance.LoadFromBytes, BaseSceneTableManager.Instance.LoadFromJson);
             LoadOne(BuffTableManager.FileName(useBinary), byteProvider, useBinary,
                 BuffTableManager.Instance.LoadFromBytes, BuffTableManager.Instance.LoadFromJson);
+            LoadOne(CharacterAppearanceTableManager.FileName(useBinary), byteProvider, useBinary,
+                CharacterAppearanceTableManager.Instance.LoadFromBytes, CharacterAppearanceTableManager.Instance.LoadFromJson);
             LoadOne(ClassTableManager.FileName(useBinary), byteProvider, useBinary,
                 ClassTableManager.Instance.LoadFromBytes, ClassTableManager.Instance.LoadFromJson);
             LoadOne(ConditionTableManager.FileName(useBinary), byteProvider, useBinary,

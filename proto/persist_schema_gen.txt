@@ -340,6 +340,10 @@ state=bootstrap
 1=SavedBuffComp#3 optional uint64 expire_at_ms
 1=player_database#28 optional CooldownTimeListComp skill_cooldowns group=6
 1=player_database#29 repeated SavedBuffComp saved_buffs group=6
+1=PlayerProfileComp#7 optional bytes appearance_trial_used_bits
+1=PlayerProfileComp#8 optional string trial_appearance_id
+1=PlayerProfileComp#9 optional uint64 trial_expires_at
+1=PlayerProfileComp#10 optional uint64 appearance_switch_seq
 
 retired=player_database#10
 retired=player_database#17

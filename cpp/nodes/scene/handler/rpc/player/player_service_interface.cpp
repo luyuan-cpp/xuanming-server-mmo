@@ -5,6 +5,7 @@
 #include "client_player_common_handler.h"
 #include "player_activity_handler.h"
 #include "player_afk_pass_handler.h"
+#include "player_appearance_handler.h"
 #include "player_attribute_handler.h"
 #include "player_bag_handler.h"
 #include "player_battle_result_handler.h"
@@ -21,6 +22,7 @@
 class SceneClientPlayerCommonImpl : public SceneClientPlayerCommon {};
 class SceneActivityClientPlayerImpl : public SceneActivityClientPlayer {};
 class SceneAfkPassClientPlayerImpl : public SceneAfkPassClientPlayer {};
+class SceneAppearanceClientPlayerImpl : public SceneAppearanceClientPlayer {};
 class SceneAttributeClientPlayerImpl : public SceneAttributeClientPlayer {};
 class SceneBagClientPlayerImpl : public SceneBagClientPlayer {};
 class SceneBattleResultClientPlayerImpl : public SceneBattleResultClientPlayer {};
@@ -42,6 +44,7 @@ void InitPlayerService()
     gPlayerService.emplace("SceneClientPlayerCommon", std::make_unique<SceneClientPlayerCommonHandler>(std::make_unique<SceneClientPlayerCommonImpl>()));
     gPlayerService.emplace("SceneActivityClientPlayer", std::make_unique<SceneActivityClientPlayerHandler>(std::make_unique<SceneActivityClientPlayerImpl>()));
     gPlayerService.emplace("SceneAfkPassClientPlayer", std::make_unique<SceneAfkPassClientPlayerHandler>(std::make_unique<SceneAfkPassClientPlayerImpl>()));
+    gPlayerService.emplace("SceneAppearanceClientPlayer", std::make_unique<SceneAppearanceClientPlayerHandler>(std::make_unique<SceneAppearanceClientPlayerImpl>()));
     gPlayerService.emplace("SceneAttributeClientPlayer", std::make_unique<SceneAttributeClientPlayerHandler>(std::make_unique<SceneAttributeClientPlayerImpl>()));
     gPlayerService.emplace("SceneBagClientPlayer", std::make_unique<SceneBagClientPlayerHandler>(std::make_unique<SceneBagClientPlayerImpl>()));
     gPlayerService.emplace("SceneBattleResultClientPlayer", std::make_unique<SceneBattleResultClientPlayerHandler>(std::make_unique<SceneBattleResultClientPlayerImpl>()));

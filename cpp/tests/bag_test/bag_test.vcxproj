@@ -176,6 +176,7 @@
     <ClCompile Include="player_mystery_merchant_test.cpp" />
     <ClCompile Include="client_request_ledger_test.cpp" />
     <ClCompile Include="afk_pass_test.cpp" />
+    <ClCompile Include="player_appearance_test.cpp" />
     <ClCompile Include="player_rename_test.cpp" />
     <ClCompile Include="player_feature_snapshot_test.cpp" />
   </ItemGroup>

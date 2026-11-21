@@ -14,4 +14,4 @@ CREATE TABLE commerce_mock_transaction (
   INDEX idx_commerce_mock_pending(kind,applied,order_sn),
   CHECK (kind IN ('PAYMENT','REFUND')), CHECK (amount_minor>0), CHECK (created_ms>=0), CHECK (applied IN (0,1))
 );
-CREATE INDEX idx_commerce_refund_pending ON commerce_refund_intent(status,order_sn);
+CREATE INDEX idx_commerce_refund_pending ON commerce_refund_intent(status,order_sn,channel,transaction_id);

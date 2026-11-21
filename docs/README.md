@@ -105,6 +105,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [cross_scene_player_messaging.md](design/cross_scene_player_messaging.md) — Cross-Scene Player Messaging (跨场景玩家消息投递) · [EN](design/cross_scene_player_messaging_en.md) · [中文](design/cross_scene_player_messaging_zh.md)
 - [enter-scene-zone-routing.md](design/enter-scene-zone-routing.md) — EnterScene 选区路由设计
 - [nav-spawn-fix-2026-09-05.md](design/nav-spawn-fix-2026-09-05.md) — 客户端/服务端导航数据、出生点与位置纠正契约
+- [scene-actor-state-sync-and-client-hfsm-boundary.md](design/scene-actor-state-sync-and-client-hfsm-boundary.md) — 主角状态互斥即时同步与客户端 UnityHFSM 接入边界
 - [scene-creation-architecture.md](design/scene-creation-architecture.md) — Scene Creation Architecture
 - [scene-enter-chain-residuals.md](design/scene-enter-chain-residuals.md) — 进场链余项 a–e:踢线、离场、落点、释放与断线上报的身份栅栏
 - [scene-enter-session-fence.md](design/scene-enter-session-fence.md) — 入场会话栅栏:登录代次(login_generation)
@@ -287,6 +288,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [assetop-redelivery-sharding-20261110.md](design/assetop-redelivery-sharding-20261110.md) — 资产指令重投与终局发件箱按玩家分片(2026-11-10)
 - [audit-pipeline-horizontal-scale-20261106.md](design/audit-pipeline-horizontal-scale-20261106.md) — 审计流水链路的水平扩展(缺口清单第 15 条,2026-11-06)
 - [boss-trial-planning-ui.md](design/boss-trial-planning-ui.md) — 首领试炼：玩法规则与 UI 制作交接
+- [character-appearance-switch.md](design/character-appearance-switch.md) — 角色形象切换（10 元角色形象卡）与 1 小时免费试用设计
 - [chat-world-channel-fanout.md](design/chat-world-channel-fanout.md) — 世界频道:每副本近窗快照与推送扇出
 - [class-skills.md](design/class-skills.md) — 四职业技能(class skills)服务端设计
 - [client-request-idempotency.md](design/client-request-idempotency.md) — 客户端请求幂等键：场景服经济操作的去重账本（随存档落盘）
@@ -373,6 +375,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [release-track-canary-runbook.md](ops/release-track-canary-runbook.md) — 灰度与金丝雀发布手册（2026-11-06）
 - [run-directory.md](ops/run-directory.md) — `run/` — Runtime Artifacts
 - [stress-3zone-runbook.md](ops/stress-3zone-runbook.md) — 3 Zone × 15000 压测 — Runbook(2026-05)
+- [table-hot-reload-runbook.md](ops/table-hot-reload-runbook.md) — 配置表热更与表包分发运维手册
 - [trade-commerce-quarantine-runbook.md](ops/trade-commerce-quarantine-runbook.md) — 交易合同隔离与角色冲突处置手册
 - [wechat-qq-sandbox-runbook.md](ops/wechat-qq-sandbox-runbook.md) — WeChat / QQ Sandbox 接入清单 (todo #223 / U)
 
@@ -410,6 +413,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 - [account-deletion-handoff-20261120.md](handoff/account-deletion-handoff-20261120.md) — 账号注销与 Apple / Google 登录:剩余代码与全部验证交接(2026-11-20,交 Gemini)
 - [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接:战报回放的客户端细节(2026-11-06)
+- [minigame-websocket-handoff-20261120.md](handoff/minigame-websocket-handoff-20261120.md) — 小游戏 WebSocket 入口:待验证项交接(2026-11-20,交 Gemini)
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余代码与全部验证交接(2026-11-20,交 Gemini)
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)

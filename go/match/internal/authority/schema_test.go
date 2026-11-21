@@ -56,21 +56,29 @@ func TestAuthoritySchemaRequiresCleanPlan(t *testing.T) {
 // 真实账号权限证明：Plan和候选索引检查不需要CREATE/ALTER；缺表也不能由运行账号补建。
 func TestTiDBAuthorityStartupUsesDMLAccountAndRequiresCurrentSchema(t *testing.T) {
 	s := testStore(t)
+	install := testInstall(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	var database string
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&database))
+	// 写者账号 s.DB 只有 DML，建/删临时低权限账号走隔离 TiDB root 连接，改表结构走 install 连接。
+	adminCfg := mysql.NewConfig()
+	adminCfg.Net, adminCfg.Addr, adminCfg.DBName, adminCfg.User = "tcp", os.Getenv("MATCH_IT_TIDB"), database, "root"
+	adminCfg.Timeout, adminCfg.ReadTimeout, adminCfg.WriteTimeout = 3*time.Second, 3*time.Second, 3*time.Second
+	adminDB, err := sql.Open("mysql", adminCfg.FormatDSN())
+	require.NoError(t, err)
+	t.Cleanup(func() { adminDB.Close() })
 	user := "matchrt_" + uuid.NewString()[:8]
 	password := uuid.NewString()
-	_, err := s.DB.ExecContext(ctx, fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s'", user, password))
+	_, err = adminDB.ExecContext(ctx, fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s'", user, password))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, dropErr := s.DB.Exec(fmt.Sprintf("DROP USER '%s'@'%%'", user))
+		_, dropErr := adminDB.Exec(fmt.Sprintf("DROP USER '%s'@'%%'", user))
 		if dropErr != nil {
 			t.Errorf("清理隔离运行账号失败: %v", dropErr)
 		}
 	})
-	_, err = s.DB.ExecContext(ctx, fmt.Sprintf("GRANT SELECT,INSERT,UPDATE,DELETE ON `%s`.* TO '%s'@'%%'", database, user))
+	_, err = adminDB.ExecContext(ctx, fmt.Sprintf("GRANT SELECT,INSERT,UPDATE,DELETE ON `%s`.* TO '%s'@'%%'", database, user))
 	require.NoError(t, err)
 	c := mysql.NewConfig()
 	c.Net, c.Addr, c.DBName, c.User, c.Passwd = "tcp", os.Getenv("MATCH_IT_TIDB"), database, user, password
@@ -89,7 +97,7 @@ func TestTiDBAuthorityStartupUsesDMLAccountAndRequiresCurrentSchema(t *testing.T
 	_, err = runtimeDB.ExecContext(ctx, "ALTER TABLE match_global_policy ADD COLUMN forbidden_runtime_column BIGINT")
 	require.ErrorAs(t, err, &permissionErr)
 	require.EqualValues(t, 1142, permissionErr.Number)
-	_, err = s.DB.ExecContext(ctx, "DROP TABLE match_global_policy")
+	_, err = install.ExecContext(ctx, "DROP TABLE match_global_policy")
 	require.NoError(t, err)
 	require.Error(t, requireCurrentSchema(ctx, runtimeDB, database, schemamigrate.Plan))
 	var remaining int
@@ -101,12 +109,13 @@ func TestTiDBAuthorityStartupUsesDMLAccountAndRequiresCurrentSchema(t *testing.T
 // 不能带着每分钟一次的全表扫描上线(观战第二轮评审 R2-GO 一般-4)。
 func TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex(t *testing.T) {
 	s := testStore(t)
+	install := testInstall(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	require.NoError(t, s.CheckCandidateIndexes(ctx))
 	var index string
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT index_name FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='match_spectator_intent' AND seq_in_index=1 AND column_name='state' LIMIT 1").Scan(&index))
-	_, err := s.DB.ExecContext(ctx, fmt.Sprintf("DROP INDEX `%s` ON match_spectator_intent", index))
+	_, err := install.ExecContext(ctx, fmt.Sprintf("DROP INDEX `%s` ON match_spectator_intent", index))
 	require.NoError(t, err)
 
 	err = s.CheckCandidateIndexes(ctx)
@@ -118,12 +127,13 @@ func TestTiDBCandidateIndexesRequireSpectatorIntentPurgeIndex(t *testing.T) {
 // 剧本审核流水的保留期清理同样按 (reviewed_ms, 主键) 翻页,索引缺了每轮全表扫描,启动核对拒绝接流。
 func TestTiDBCandidateIndexesRequireBattleScriptReviewPurgeIndex(t *testing.T) {
 	s := testStore(t)
+	install := testInstall(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	require.NoError(t, s.CheckCandidateIndexes(ctx))
 	var index string
 	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT index_name FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='match_battle_script_review' AND seq_in_index=1 AND column_name='reviewed_ms' LIMIT 1").Scan(&index))
-	_, err := s.DB.ExecContext(ctx, fmt.Sprintf("DROP INDEX `%s` ON match_battle_script_review", index))
+	_, err := install.ExecContext(ctx, fmt.Sprintf("DROP INDEX `%s` ON match_battle_script_review", index))
 	require.NoError(t, err)
 
 	err = s.CheckCandidateIndexes(ctx)

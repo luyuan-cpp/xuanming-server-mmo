@@ -12,6 +12,7 @@
 
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "player/system/dirty_save_stats.h"
+#include "player/system/player_appearance.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_rename.h"
 #include "player/system/player_save_metrics.h" // [SaveTiming] 汇总行
@@ -204,7 +205,9 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         // 节点还在对他负责,不让 player_locator 在改派有结论之前就替他归位。静态函数,不引入新的绑定。
         PlayerLifecycleSystem::RefreshHostedPresence(TimeSystem::NowSecondsUTC());
         // 角色改名瞬时失败的退避重试(表为空时 O(1) 返回)。
-        PlayerRenameSystem::Tick(TimeSystem::NowMillisecondsUTC()); });
+        PlayerRenameSystem::Tick(TimeSystem::NowMillisecondsUTC());
+        // 角色形象试用到期还原与目录外观同步退避重试(表为空时 O(1) 返回)。
+        PlayerAppearanceSystem::Tick(TimeSystem::NowSecondsUTC(), TimeSystem::NowMillisecondsUTC()); });
     retryTimerActive_ = true;
 
     // 每 30 秒打一轮计数快照。

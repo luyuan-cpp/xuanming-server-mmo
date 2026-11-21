@@ -143,6 +143,11 @@ service DataService {
   // PlayerInboxAdmin.GetItemGainBlocks(那一层校验 x-admin-token),不是 scene。
   // 设计见 docs/design/player-inbox-service.md §2.2。
   rpc GetPlayerItemGainBlock(GetPlayerItemGainBlockRequest) returns (GetPlayerItemGainBlockResponse) {}
+
+  // ── 角色永久外观同步 ─────────────────────────────────────────
+  // scene 消耗角色形象卡成功落盘后同步账号目录 account_role.role_proto.appearance_id,使登录选角列表立即展示最新永久形象。
+  // 只认 scene 调用证明(RoleAdmissionAuth);不动 owner_revision 与 fence_version。
+  rpc UpdateRoleAppearance(UpdateRoleAppearanceRequest) returns (UpdateRoleAppearanceResponse) {}
 }
 
 message AccountDirectoryResponse {
@@ -893,4 +898,15 @@ message GetPlayerChannelIdentityResponse {
   uint64 account_created_ms = 5;
   uint32 player_level = 6;
   bool retry = 7;
+}
+
+// ── 角色永久外观同步(docs/design/character-appearance-switch.md)──
+message UpdateRoleAppearanceRequest {
+  uint64 player_id = 1;
+  string appearance_id = 2;
+  common.base.ServiceCallAuth auth = 3;
+}
+
+message UpdateRoleAppearanceResponse {
+  bool updated = 1;
 }

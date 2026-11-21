@@ -2,6 +2,7 @@
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_equipment_material_reward.h"
 #include "player/system/client_request_ledger.h"
+#include "player/system/player_appearance.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "battle_lock_reply_shape.h"
 #include "battle_lock_rules.h"
@@ -1098,7 +1099,7 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	// 名字字段尚未补齐时允许留空。
 	const auto& profile = registry.get<PlayerProfileComp>(player);
 	snapshot.set_player_name(profile.name());
-	snapshot.set_appearance_id(profile.appearance_id());
+	snapshot.set_appearance_id(PlayerAppearanceSystem::EffectiveAppearanceId(player, TimeSystem::NowSecondsUTC()));
 	snapshot.set_gender(profile.gender());
 	snapshot.set_class_id(registry.get<PlayerUint32Comp>(player).class_());
 

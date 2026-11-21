@@ -194,3 +194,7 @@ constexpr uint32_t DataServiceGetPlayerInboxLedgerIndex = 46;
 constexpr uint32_t DataServiceGetPlayerItemGainBlockMessageId = 385;
 constexpr uint32_t DataServiceGetPlayerItemGainBlockIndex = 47;
 #define DataServiceGetPlayerItemGainBlockMethod  ::DataService_Stub::descriptor()->method(47)
+
+constexpr uint32_t DataServiceUpdateRoleAppearanceMessageId = 441;
+constexpr uint32_t DataServiceUpdateRoleAppearanceIndex = 48;
+#define DataServiceUpdateRoleAppearanceMethod  ::DataService_Stub::descriptor()->method(48)

@@ -223,6 +223,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::GetPlayerChannelIdentityResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::UpdateRoleAppearanceRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::UpdateRoleAppearanceResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -371,6 +375,147 @@ const ::_pbi::ClassData* VerifyRoleAdmissionResponse_get_class_data() {
   return VerifyRoleAdmissionResponse_globals_.GetClassData();
 #else
   return VerifyRoleAdmissionResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class UpdateRoleAppearanceResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UpdateRoleAppearanceResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceResponse, _impl_._has_bits_);
+};
+
+constexpr UpdateRoleAppearanceResponse::ParseTableT_ UpdateRoleAppearanceResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::UpdateRoleAppearanceResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool updated = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(UpdateRoleAppearanceResponse, _impl_.updated_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceResponse, _impl_.updated_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool updated = 1;
+      {PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceResponse, _impl_.updated_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UpdateRoleAppearanceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        updated_{false} {}
+
+template <typename>
+constexpr UpdateRoleAppearanceResponse::UpdateRoleAppearanceResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UpdateRoleAppearanceResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UpdateRoleAppearanceResponse(arena);
+}
+constexpr auto UpdateRoleAppearanceResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UpdateRoleAppearanceResponse), alignof(UpdateRoleAppearanceResponse));
+}
+constexpr auto UpdateRoleAppearanceResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UpdateRoleAppearanceResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UpdateRoleAppearanceResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UpdateRoleAppearanceResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UpdateRoleAppearanceResponse>(), &UpdateRoleAppearanceResponse::ByteSizeLong,
+              &UpdateRoleAppearanceResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[98],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UpdateRoleAppearanceResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UpdateRoleAppearanceResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UpdateRoleAppearanceResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UpdateRoleAppearanceResponse::InternalGenerateClassData_(
+            _default, &UpdateRoleAppearanceResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UpdateRoleAppearanceResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UpdateRoleAppearanceResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UpdateRoleAppearanceResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UpdateRoleAppearanceResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UpdateRoleAppearanceResponseGlobalsTypeInternal UpdateRoleAppearanceResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UpdateRoleAppearanceResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UpdateRoleAppearanceResponse_globals_.GetClassData();
+#else
+  return UpdateRoleAppearanceResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -8465,6 +8610,173 @@ const ::_pbi::ClassData* UpsertAccountChannelIdentityRequest_get_class_data() {
   return UpsertAccountChannelIdentityRequest_globals_.GetClassData();
 #else
   return UpsertAccountChannelIdentityRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class UpdateRoleAppearanceRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UpdateRoleAppearanceRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_._has_bits_);
+};
+
+constexpr UpdateRoleAppearanceRequest::ParseTableT_ UpdateRoleAppearanceRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::UpdateRoleAppearanceRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UpdateRoleAppearanceRequest, _impl_.player_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.player_id_)}},
+      // string appearance_id = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.appearance_id_)}},
+      // .common.base.ServiceCallAuth auth = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.auth_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string appearance_id = 2;
+      {PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.appearance_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.ServiceCallAuth auth = 3;
+      {PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.auth_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+    }},
+    {{
+      "\50\0\15\0\0\0\0\0"
+      "data_service.UpdateRoleAppearanceRequest"
+      "appearance_id"
+    }},
+  };
+}
+
+
+inline constexpr UpdateRoleAppearanceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        appearance_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        auth_{nullptr},
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr UpdateRoleAppearanceRequest::UpdateRoleAppearanceRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UpdateRoleAppearanceRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UpdateRoleAppearanceRequest(arena);
+}
+constexpr auto UpdateRoleAppearanceRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(UpdateRoleAppearanceRequest), alignof(UpdateRoleAppearanceRequest));
+}
+constexpr auto UpdateRoleAppearanceRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UpdateRoleAppearanceRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UpdateRoleAppearanceRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UpdateRoleAppearanceRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UpdateRoleAppearanceRequest>(), &UpdateRoleAppearanceRequest::ByteSizeLong,
+              &UpdateRoleAppearanceRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[97],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UpdateRoleAppearanceRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UpdateRoleAppearanceRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UpdateRoleAppearanceRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UpdateRoleAppearanceRequest::InternalGenerateClassData_(
+            _default, &UpdateRoleAppearanceRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UpdateRoleAppearanceRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UpdateRoleAppearanceRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UpdateRoleAppearanceRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UpdateRoleAppearanceRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UpdateRoleAppearanceRequestGlobalsTypeInternal UpdateRoleAppearanceRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UpdateRoleAppearanceRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UpdateRoleAppearanceRequest_globals_.GetClassData();
+#else
+  return UpdateRoleAppearanceRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -17222,6 +17534,20 @@ const ::uint32_t
         6,
         5,
         4,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::UpdateRoleAppearanceRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::UpdateRoleAppearanceRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::UpdateRoleAppearanceRequest, _impl_.appearance_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::UpdateRoleAppearanceRequest, _impl_.auth_),
+        2,
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::UpdateRoleAppearanceResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::UpdateRoleAppearanceResponse, _impl_.updated_),
+        0,
 };
 
 static const ::_pbi::MigrationSchema
@@ -17323,6 +17649,8 @@ static const ::_pbi::MigrationSchema
         {930, sizeof(::data_service::UpsertAccountChannelIdentityRequest)},
         {941, sizeof(::data_service::GetPlayerChannelIdentityRequest)},
         {946, sizeof(::data_service::GetPlayerChannelIdentityResponse)},
+        {963, sizeof(::data_service::UpdateRoleAppearanceRequest)},
+        {972, sizeof(::data_service::UpdateRoleAppearanceResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -17423,6 +17751,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::data_service::UpsertAccountChannelIdentityRequest_globals_,
         &::data_service::GetPlayerChannelIdentityRequest_globals_,
         &::data_service::GetPlayerChannelIdentityResponse_globals_,
+        &::data_service::UpdateRoleAppearanceRequest_globals_,
+        &::data_service::UpdateRoleAppearanceResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -17725,182 +18055,189 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "ityResponse\022\r\n\005found\030\001 \001(\010\022\017\n\007account\030\002 "
     "\001(\t\022\017\n\007channel\030\003 \001(\t\022\017\n\007open_id\030\004 \001(\t\022\032\n"
     "\022account_created_ms\030\005 \001(\004\022\024\n\014player_leve"
-    "l\030\006 \001(\r\022\r\n\005retry\030\007 \001(\010*\200\001\n\024AccountDeleti"
-    "onState\022\037\n\033ACCOUNT_DELETION_STATE_NONE\020\000"
-    "\022\"\n\036ACCOUNT_DELETION_STATE_PENDING\020\001\022#\n\037"
-    "ACCOUNT_DELETION_STATE_DELETING\020\002*\374\001\n\026Ac"
-    "countDeletionOutcome\022(\n$ACCOUNT_DELETION"
-    "_OUTCOME_UNSPECIFIED\020\000\022\037\n\033ACCOUNT_DELETI"
-    "ON_OUTCOME_OK\020\001\022&\n\"ACCOUNT_DELETION_OUTC"
-    "OME_NOT_FOUND\020\002\022$\n ACCOUNT_DELETION_OUTC"
-    "OME_BLOCKED\020\003\022\"\n\036ACCOUNT_DELETION_OUTCOM"
-    "E_RETRY\020\004\022%\n!ACCOUNT_DELETION_OUTCOME_TO"
-    "O_LATE\020\005*\264\002\n\025AccountRoleTradeState\022(\n$AC"
-    "COUNT_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022%\n!"
-    "ACCOUNT_ROLE_TRADE_STATE_FREEZING\020\001\022#\n\037A"
-    "CCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"ACCO"
-    "UNT_ROLE_TRADE_STATE_CANCELLED\020\003\022(\n$ACCO"
-    "UNT_ROLE_TRADE_STATE_TRANSFERRED\020\004\022+\n\'AC"
-    "COUNT_ROLE_TRADE_STATE_CANCEL_PENDING\020\005\022"
-    "&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPARING\020\006*"
-    "\351\001\n\035AccountRoleFreezeEvidenceKind\0221\n-ACC"
-    "OUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPECIFI"
-    "ED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_KIN"
-    "D_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREEZE_"
-    "EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_ROLE_FR"
-    "EEZE_EVIDENCE_KIND_INITIAL_COMMIT\020\003*\207\001\n\014"
-    "SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021SNA"
-    "PSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_MAINTEN"
-    "ANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022\022\n\016SNA"
-    "PSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027RECALL_KI"
-    "ND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CURRENCY"
-    "\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022RecallRevie"
-    "wReason\022$\n RECALL_REVIEW_REASON_UNSPECIF"
-    "IED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELATION\020\001\022"
-    "!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002\022\037\n\033RE"
-    "CALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036RECALL_RE"
-    "VIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_REVIEW"
-    "_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIEW_LEDG"
-    "ER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDGER_NOT"
-    "_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_DISAGRE"
-    "E\020\010*\254\002\n\020RenameRoleResult\022\"\n\036RENAME_ROLE_"
-    "RESULT_UNSPECIFIED\020\000\022\022\n\016RENAME_ROLE_OK\020\001"
-    "\022\025\n\021RENAME_ROLE_TAKEN\020\002\022\027\n\023RENAME_ROLE_I"
-    "NVALID\020\003\022\030\n\024RENAME_ROLE_COOLDOWN\020\004\022\026\n\022RE"
-    "NAME_ROLE_FROZEN\020\005\022\031\n\025RENAME_ROLE_STALE_"
-    "SEQ\020\006\022\031\n\025RENAME_ROLE_SAME_NAME\020\007\022\031\n\025RENA"
-    "ME_ROLE_NOT_FOUND\020\010\022\027\n\023RENAME_ROLE_EXPIR"
-    "ED\020\t\022\024\n\020RENAME_ROLE_BUSY\020\n2\227(\n\013DataServi"
-    "ce\022k\n\024ReadAccountDirectory\022).data_servic"
-    "e.ReadAccountDirectoryRequest\032&.data_ser"
-    "vice.AccountDirectoryResponse\"\000\022e\n\021Creat"
-    "eAccountRole\022&.data_service.CreateAccoun"
-    "tRoleRequest\032&.data_service.AccountDirec"
-    "toryResponse\"\000\022a\n\021LookupAccountRole\022&.da"
-    "ta_service.LookupAccountRoleRequest\032\".da"
-    "ta_service.AccountRoleOwnership\"\000\022e\n\021Rep"
-    "airAccountRole\022&.data_service.RepairAcco"
-    "untRoleRequest\032&.data_service.AccountDir"
-    "ectoryResponse\"\000\022W\n\022RemoveAccountRoles\022\'"
-    ".data_service.RemoveAccountRolesRequest\032"
-    "\026.google.protobuf.Empty\"\000\022i\n\022SetAccountR"
-    "ealName\022\'.data_service.SetAccountRealNam"
-    "eRequest\032(.data_service.SetAccountRealNa"
-    "meResponse\"\000\022i\n\022GetAccountRealName\022\'.dat"
-    "a_service.GetAccountRealNameRequest\032(.da"
-    "ta_service.GetAccountRealNameResponse\"\000\022"
-    "o\n\024ResetAccountRealName\022).data_service.R"
-    "esetAccountRealNameRequest\032*.data_servic"
-    "e.ResetAccountRealNameResponse\"\000\022k\n\034Upse"
-    "rtAccountChannelIdentity\0221.data_service."
-    "UpsertAccountChannelIdentityRequest\032\026.go"
-    "ogle.protobuf.Empty\"\000\022{\n\030GetPlayerChanne"
-    "lIdentity\022-.data_service.GetPlayerChanne"
-    "lIdentityRequest\032..data_service.GetPlaye"
-    "rChannelIdentityResponse\"\000\022l\n\025BeginAccou"
-    "ntRoleTrade\022*.data_service.BeginAccountR"
-    "oleTradeRequest\032%.data_service.AccountRo"
-    "leTradeReceipt\"\000\022|\n\035ConfirmAccountRoleTr"
-    "adeFreeze\0222.data_service.ConfirmAccountR"
-    "oleTradeFreezeRequest\032%.data_service.Acc"
-    "ountRoleTradeReceipt\"\000\022n\n\026CancelAccountR"
-    "oleTrade\022+.data_service.CancelAccountRol"
-    "eTradeRequest\032%.data_service.AccountRole"
-    "TradeReceipt\"\000\022k\n\023TransferAccountRole\022(."
-    "data_service.TransferAccountRoleRequest\032"
-    "(.data_service.AccountRoleTransferReceip"
-    "t\"\000\022o\n\024CheckAccountRoleSlot\022).data_servi"
-    "ce.CheckAccountRoleSlotRequest\032*.data_se"
-    "rvice.CheckAccountRoleSlotResponse\"\000\022f\n\021"
-    "GetRoleFenceState\022&.data_service.GetRole"
-    "FenceStateRequest\032\'.data_service.GetRole"
-    "FenceStateResponse\"\000\022l\n\023VerifyRoleAdmiss"
-    "ion\022(.data_service.VerifyRoleAdmissionRe"
-    "quest\032).data_service.VerifyRoleAdmission"
-    "Response\"\000\022r\n\025RegisterRoleAdmission\022*.da"
-    "ta_service.RegisterRoleAdmissionRequest\032"
-    "+.data_service.RegisterRoleAdmissionResp"
-    "onse\"\000\022l\n\023CloseRoleAdmissions\022(.data_ser"
-    "vice.CloseRoleAdmissionsRequest\032).data_s"
-    "ervice.CloseRoleAdmissionsResponse\"\000\022U\n\021"
-    "AckRoleTradeDrain\022&.data_service.AckRole"
-    "TradeDrainRequest\032\026.google.protobuf.Empt"
-    "y\"\000\022n\n\026RequestAccountDeletion\022+.data_ser"
-    "vice.RequestAccountDeletionRequest\032%.dat"
-    "a_service.AccountDeletionResponse\"\000\022l\n\025C"
-    "ancelAccountDeletion\022*.data_service.Canc"
-    "elAccountDeletionRequest\032%.data_service."
-    "AccountDeletionResponse\"\000\022r\n\025ClaimAccoun"
-    "tDeletions\022*.data_service.ClaimAccountDe"
-    "letionsRequest\032+.data_service.ClaimAccou"
-    "ntDeletionsResponse\"\000\022r\n\025FinishAccountDe"
-    "letion\022*.data_service.FinishAccountDelet"
-    "ionRequest\032+.data_service.FinishAccountD"
-    "eletionResponse\"\000\022k\n\034ReleaseDeadPlayerSt"
-    "oreHolder\0221.data_service.ReleaseDeadPlay"
-    "erStoreHolderRequest\032\026.google.protobuf.E"
-    "mpty\"\000\022r\n\025ReadPlayerStoreHolder\022*.data_s"
-    "ervice.ReadPlayerStoreHolderRequest\032+.da"
-    "ta_service.ReadPlayerStoreHolderResponse"
-    "\"\000\022W\n\022RegisterPlayerZone\022\'.data_service."
-    "RegisterPlayerZoneRequest\032\026.google.proto"
-    "buf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&.data_"
-    "service.GetPlayerHomeZoneRequest\032\'.data_"
-    "service.GetPlayerHomeZoneResponse\"\000\022u\n\026B"
-    "atchGetPlayerHomeZone\022+.data_service.Bat"
-    "chGetPlayerHomeZoneRequest\032,.data_servic"
-    "e.BatchGetPlayerHomeZoneResponse\"\000\022P\n\016Ge"
-    "tMergedZones\022\026.google.protobuf.Empty\032$.d"
-    "ata_service.GetMergedZonesResponse\"\000\022]\n\016"
-    "CountZoneRoles\022#.data_service.CountZoneR"
-    "olesRequest\032$.data_service.CountZoneRole"
-    "sResponse\"\000\022]\n\016GetPlayerRoute\022#.data_ser"
-    "vice.GetPlayerRouteRequest\032$.data_servic"
-    "e.GetPlayerRouteResponse\"\000\022l\n\023ListPlayer"
-    "Snapshots\022(.data_service.ListPlayerSnaps"
-    "hotsRequest\032).data_service.ListPlayerSna"
-    "pshotsResponse\"\000\022c\n\020BatchRecallItems\022%.d"
-    "ata_service.BatchRecallItemsRequest\032&.da"
-    "ta_service.BatchRecallItemsResponse\"\000\022_\n"
-    "\016GetRecallBatch\022#.data_service.GetRecall"
-    "BatchRequest\032&.data_service.BatchRecallI"
-    "temsResponse\"\000\022e\n\021CancelRecallBatch\022&.da"
-    "ta_service.CancelRecallBatchRequest\032&.da"
-    "ta_service.BatchRecallItemsResponse\"\000\022`\n"
-    "\017ResolveRecallOp\022$.data_service.ResolveR"
-    "ecallOpRequest\032%.data_service.ResolveRec"
-    "allOpResponse\"\000\022\204\001\n\033RegisterRecallReview"
-    "Handled\0220.data_service.RegisterRecallRev"
-    "iewHandledRequest\0321.data_service.Registe"
-    "rRecallReviewHandledResponse\"\000\022l\n\023QueryT"
-    "ransactionLog\022(.data_service.QueryTransa"
-    "ctionLogRequest\032).data_service.QueryTran"
-    "sactionLogResponse\"\000\022f\n\021AllocateIdSegmen"
-    "t\022&.data_service.AllocateIdSegmentReques"
-    "t\032\'.data_service.AllocateIdSegmentRespon"
-    "se\"\000\022f\n\021ReservePlayerName\022&.data_service"
-    ".ReservePlayerNameRequest\032\'.data_service"
-    ".ReservePlayerNameResponse\"\000\022U\n\021ReleaseP"
-    "layerName\022&.data_service.ReleasePlayerNa"
-    "meRequest\032\026.google.protobuf.Empty\"\000\022i\n\022B"
-    "atchGetPlayerName\022\'.data_service.BatchGe"
-    "tPlayerNameRequest\032(.data_service.BatchG"
-    "etPlayerNameResponse\"\000\022Q\n\nRenameRole\022\037.d"
-    "ata_service.RenameRoleRequest\032 .data_ser"
-    "vice.RenameRoleResponse\"\000\022r\n\025BatchGetPla"
-    "yerDisplay\022*.data_service.BatchGetPlayer"
-    "DisplayRequest\032+.data_service.BatchGetPl"
-    "ayerDisplayResponse\"\000\022u\n\026GetPlayerAssetO"
-    "pLedger\022+.data_service.GetPlayerAssetOpL"
-    "edgerRequest\032,.data_service.GetPlayerAss"
-    "etOpLedgerResponse\"\000\022o\n\024GetPlayerInboxLe"
-    "dger\022).data_service.GetPlayerInboxLedger"
-    "Request\032*.data_service.GetPlayerInboxLed"
-    "gerResponse\"\000\022u\n\026GetPlayerItemGainBlock\022"
-    "+.data_service.GetPlayerItemGainBlockReq"
-    "uest\032,.data_service.GetPlayerItemGainBlo"
-    "ckResponse\"\000B\033Z\031data_service/data_servic"
-    "eb\006proto3"
+    "l\030\006 \001(\r\022\r\n\005retry\030\007 \001(\010\"s\n\033UpdateRoleAppe"
+    "aranceRequest\022\021\n\tplayer_id\030\001 \001(\004\022\025\n\rappe"
+    "arance_id\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.common.b"
+    "ase.ServiceCallAuth\"/\n\034UpdateRoleAppeara"
+    "nceResponse\022\017\n\007updated\030\001 \001(\010*\200\001\n\024Account"
+    "DeletionState\022\037\n\033ACCOUNT_DELETION_STATE_"
+    "NONE\020\000\022\"\n\036ACCOUNT_DELETION_STATE_PENDING"
+    "\020\001\022#\n\037ACCOUNT_DELETION_STATE_DELETING\020\002*"
+    "\374\001\n\026AccountDeletionOutcome\022(\n$ACCOUNT_DE"
+    "LETION_OUTCOME_UNSPECIFIED\020\000\022\037\n\033ACCOUNT_"
+    "DELETION_OUTCOME_OK\020\001\022&\n\"ACCOUNT_DELETIO"
+    "N_OUTCOME_NOT_FOUND\020\002\022$\n ACCOUNT_DELETIO"
+    "N_OUTCOME_BLOCKED\020\003\022\"\n\036ACCOUNT_DELETION_"
+    "OUTCOME_RETRY\020\004\022%\n!ACCOUNT_DELETION_OUTC"
+    "OME_TOO_LATE\020\005*\264\002\n\025AccountRoleTradeState"
+    "\022(\n$ACCOUNT_ROLE_TRADE_STATE_UNSPECIFIED"
+    "\020\000\022%\n!ACCOUNT_ROLE_TRADE_STATE_FREEZING\020"
+    "\001\022#\n\037ACCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&"
+    "\n\"ACCOUNT_ROLE_TRADE_STATE_CANCELLED\020\003\022("
+    "\n$ACCOUNT_ROLE_TRADE_STATE_TRANSFERRED\020\004"
+    "\022+\n\'ACCOUNT_ROLE_TRADE_STATE_CANCEL_PEND"
+    "ING\020\005\022&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPAR"
+    "ING\020\006*\351\001\n\035AccountRoleFreezeEvidenceKind\022"
+    "1\n-ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNS"
+    "PECIFIED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDEN"
+    "CE_KIND_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_F"
+    "REEZE_EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_R"
+    "OLE_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT\020"
+    "\003*\207\001\n\014SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022"
+    "\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_M"
+    "AINTENANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022"
+    "\022\n\016SNAPSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027REC"
+    "ALL_KIND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CU"
+    "RRENCY\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022Recal"
+    "lReviewReason\022$\n RECALL_REVIEW_REASON_UN"
+    "SPECIFIED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELAT"
+    "ION\020\001\022!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002"
+    "\022\037\n\033RECALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036REC"
+    "ALL_REVIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_"
+    "REVIEW_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIE"
+    "W_LEDGER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDG"
+    "ER_NOT_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_D"
+    "ISAGREE\020\010*\254\002\n\020RenameRoleResult\022\"\n\036RENAME"
+    "_ROLE_RESULT_UNSPECIFIED\020\000\022\022\n\016RENAME_ROL"
+    "E_OK\020\001\022\025\n\021RENAME_ROLE_TAKEN\020\002\022\027\n\023RENAME_"
+    "ROLE_INVALID\020\003\022\030\n\024RENAME_ROLE_COOLDOWN\020\004"
+    "\022\026\n\022RENAME_ROLE_FROZEN\020\005\022\031\n\025RENAME_ROLE_"
+    "STALE_SEQ\020\006\022\031\n\025RENAME_ROLE_SAME_NAME\020\007\022\031"
+    "\n\025RENAME_ROLE_NOT_FOUND\020\010\022\027\n\023RENAME_ROLE"
+    "_EXPIRED\020\t\022\024\n\020RENAME_ROLE_BUSY\020\n2\210)\n\013Dat"
+    "aService\022k\n\024ReadAccountDirectory\022).data_"
+    "service.ReadAccountDirectoryRequest\032&.da"
+    "ta_service.AccountDirectoryResponse\"\000\022e\n"
+    "\021CreateAccountRole\022&.data_service.Create"
+    "AccountRoleRequest\032&.data_service.Accoun"
+    "tDirectoryResponse\"\000\022a\n\021LookupAccountRol"
+    "e\022&.data_service.LookupAccountRoleReques"
+    "t\032\".data_service.AccountRoleOwnership\"\000\022"
+    "e\n\021RepairAccountRole\022&.data_service.Repa"
+    "irAccountRoleRequest\032&.data_service.Acco"
+    "untDirectoryResponse\"\000\022W\n\022RemoveAccountR"
+    "oles\022\'.data_service.RemoveAccountRolesRe"
+    "quest\032\026.google.protobuf.Empty\"\000\022i\n\022SetAc"
+    "countRealName\022\'.data_service.SetAccountR"
+    "ealNameRequest\032(.data_service.SetAccount"
+    "RealNameResponse\"\000\022i\n\022GetAccountRealName"
+    "\022\'.data_service.GetAccountRealNameReques"
+    "t\032(.data_service.GetAccountRealNameRespo"
+    "nse\"\000\022o\n\024ResetAccountRealName\022).data_ser"
+    "vice.ResetAccountRealNameRequest\032*.data_"
+    "service.ResetAccountRealNameResponse\"\000\022k"
+    "\n\034UpsertAccountChannelIdentity\0221.data_se"
+    "rvice.UpsertAccountChannelIdentityReques"
+    "t\032\026.google.protobuf.Empty\"\000\022{\n\030GetPlayer"
+    "ChannelIdentity\022-.data_service.GetPlayer"
+    "ChannelIdentityRequest\032..data_service.Ge"
+    "tPlayerChannelIdentityResponse\"\000\022l\n\025Begi"
+    "nAccountRoleTrade\022*.data_service.BeginAc"
+    "countRoleTradeRequest\032%.data_service.Acc"
+    "ountRoleTradeReceipt\"\000\022|\n\035ConfirmAccount"
+    "RoleTradeFreeze\0222.data_service.ConfirmAc"
+    "countRoleTradeFreezeRequest\032%.data_servi"
+    "ce.AccountRoleTradeReceipt\"\000\022n\n\026CancelAc"
+    "countRoleTrade\022+.data_service.CancelAcco"
+    "untRoleTradeRequest\032%.data_service.Accou"
+    "ntRoleTradeReceipt\"\000\022k\n\023TransferAccountR"
+    "ole\022(.data_service.TransferAccountRoleRe"
+    "quest\032(.data_service.AccountRoleTransfer"
+    "Receipt\"\000\022o\n\024CheckAccountRoleSlot\022).data"
+    "_service.CheckAccountRoleSlotRequest\032*.d"
+    "ata_service.CheckAccountRoleSlotResponse"
+    "\"\000\022f\n\021GetRoleFenceState\022&.data_service.G"
+    "etRoleFenceStateRequest\032\'.data_service.G"
+    "etRoleFenceStateResponse\"\000\022l\n\023VerifyRole"
+    "Admission\022(.data_service.VerifyRoleAdmis"
+    "sionRequest\032).data_service.VerifyRoleAdm"
+    "issionResponse\"\000\022r\n\025RegisterRoleAdmissio"
+    "n\022*.data_service.RegisterRoleAdmissionRe"
+    "quest\032+.data_service.RegisterRoleAdmissi"
+    "onResponse\"\000\022l\n\023CloseRoleAdmissions\022(.da"
+    "ta_service.CloseRoleAdmissionsRequest\032)."
+    "data_service.CloseRoleAdmissionsResponse"
+    "\"\000\022U\n\021AckRoleTradeDrain\022&.data_service.A"
+    "ckRoleTradeDrainRequest\032\026.google.protobu"
+    "f.Empty\"\000\022n\n\026RequestAccountDeletion\022+.da"
+    "ta_service.RequestAccountDeletionRequest"
+    "\032%.data_service.AccountDeletionResponse\""
+    "\000\022l\n\025CancelAccountDeletion\022*.data_servic"
+    "e.CancelAccountDeletionRequest\032%.data_se"
+    "rvice.AccountDeletionResponse\"\000\022r\n\025Claim"
+    "AccountDeletions\022*.data_service.ClaimAcc"
+    "ountDeletionsRequest\032+.data_service.Clai"
+    "mAccountDeletionsResponse\"\000\022r\n\025FinishAcc"
+    "ountDeletion\022*.data_service.FinishAccoun"
+    "tDeletionRequest\032+.data_service.FinishAc"
+    "countDeletionResponse\"\000\022k\n\034ReleaseDeadPl"
+    "ayerStoreHolder\0221.data_service.ReleaseDe"
+    "adPlayerStoreHolderRequest\032\026.google.prot"
+    "obuf.Empty\"\000\022r\n\025ReadPlayerStoreHolder\022*."
+    "data_service.ReadPlayerStoreHolderReques"
+    "t\032+.data_service.ReadPlayerStoreHolderRe"
+    "sponse\"\000\022W\n\022RegisterPlayerZone\022\'.data_se"
+    "rvice.RegisterPlayerZoneRequest\032\026.google"
+    ".protobuf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&"
+    ".data_service.GetPlayerHomeZoneRequest\032\'"
+    ".data_service.GetPlayerHomeZoneResponse\""
+    "\000\022u\n\026BatchGetPlayerHomeZone\022+.data_servi"
+    "ce.BatchGetPlayerHomeZoneRequest\032,.data_"
+    "service.BatchGetPlayerHomeZoneResponse\"\000"
+    "\022P\n\016GetMergedZones\022\026.google.protobuf.Emp"
+    "ty\032$.data_service.GetMergedZonesResponse"
+    "\"\000\022]\n\016CountZoneRoles\022#.data_service.Coun"
+    "tZoneRolesRequest\032$.data_service.CountZo"
+    "neRolesResponse\"\000\022]\n\016GetPlayerRoute\022#.da"
+    "ta_service.GetPlayerRouteRequest\032$.data_"
+    "service.GetPlayerRouteResponse\"\000\022l\n\023List"
+    "PlayerSnapshots\022(.data_service.ListPlaye"
+    "rSnapshotsRequest\032).data_service.ListPla"
+    "yerSnapshotsResponse\"\000\022c\n\020BatchRecallIte"
+    "ms\022%.data_service.BatchRecallItemsReques"
+    "t\032&.data_service.BatchRecallItemsRespons"
+    "e\"\000\022_\n\016GetRecallBatch\022#.data_service.Get"
+    "RecallBatchRequest\032&.data_service.BatchR"
+    "ecallItemsResponse\"\000\022e\n\021CancelRecallBatc"
+    "h\022&.data_service.CancelRecallBatchReques"
+    "t\032&.data_service.BatchRecallItemsRespons"
+    "e\"\000\022`\n\017ResolveRecallOp\022$.data_service.Re"
+    "solveRecallOpRequest\032%.data_service.Reso"
+    "lveRecallOpResponse\"\000\022\204\001\n\033RegisterRecall"
+    "ReviewHandled\0220.data_service.RegisterRec"
+    "allReviewHandledRequest\0321.data_service.R"
+    "egisterRecallReviewHandledResponse\"\000\022l\n\023"
+    "QueryTransactionLog\022(.data_service.Query"
+    "TransactionLogRequest\032).data_service.Que"
+    "ryTransactionLogResponse\"\000\022f\n\021AllocateId"
+    "Segment\022&.data_service.AllocateIdSegment"
+    "Request\032\'.data_service.AllocateIdSegment"
+    "Response\"\000\022f\n\021ReservePlayerName\022&.data_s"
+    "ervice.ReservePlayerNameRequest\032\'.data_s"
+    "ervice.ReservePlayerNameResponse\"\000\022U\n\021Re"
+    "leasePlayerName\022&.data_service.ReleasePl"
+    "ayerNameRequest\032\026.google.protobuf.Empty\""
+    "\000\022i\n\022BatchGetPlayerName\022\'.data_service.B"
+    "atchGetPlayerNameRequest\032(.data_service."
+    "BatchGetPlayerNameResponse\"\000\022Q\n\nRenameRo"
+    "le\022\037.data_service.RenameRoleRequest\032 .da"
+    "ta_service.RenameRoleResponse\"\000\022r\n\025Batch"
+    "GetPlayerDisplay\022*.data_service.BatchGet"
+    "PlayerDisplayRequest\032+.data_service.Batc"
+    "hGetPlayerDisplayResponse\"\000\022u\n\026GetPlayer"
+    "AssetOpLedger\022+.data_service.GetPlayerAs"
+    "setOpLedgerRequest\032,.data_service.GetPla"
+    "yerAssetOpLedgerResponse\"\000\022o\n\024GetPlayerI"
+    "nboxLedger\022).data_service.GetPlayerInbox"
+    "LedgerRequest\032*.data_service.GetPlayerIn"
+    "boxLedgerResponse\"\000\022u\n\026GetPlayerItemGain"
+    "Block\022+.data_service.GetPlayerItemGainBl"
+    "ockRequest\032,.data_service.GetPlayerItemG"
+    "ainBlockResponse\"\000\022o\n\024UpdateRoleAppearan"
+    "ce\022).data_service.UpdateRoleAppearanceRe"
+    "quest\032*.data_service.UpdateRoleAppearanc"
+    "eResponse\"\000B\033Z\031data_service/data_service"
+    "b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[8] = {
@@ -17917,13 +18254,13 @@ static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservic
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    18969,
+    19248,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps,
     8,
-    97,
+    99,
     schemas,
     file_message_globals,
     TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto::offsets,
@@ -44693,6 +45030,483 @@ void GetPlayerChannelIdentityResponse::InternalSwap(GetPlayerChannelIdentityResp
 }
 
 ::google::protobuf::Metadata GetPlayerChannelIdentityResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void UpdateRoleAppearanceRequest::clear_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+UpdateRoleAppearanceRequest::UpdateRoleAppearanceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UpdateRoleAppearanceRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.UpdateRoleAppearanceRequest)
+}
+PROTOBUF_NDEBUG_INLINE UpdateRoleAppearanceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::UpdateRoleAppearanceRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        appearance_id_(arena, from.appearance_id_) {}
+
+UpdateRoleAppearanceRequest::UpdateRoleAppearanceRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const UpdateRoleAppearanceRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UpdateRoleAppearanceRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  UpdateRoleAppearanceRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.player_id_ = from._impl_.player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.UpdateRoleAppearanceRequest)
+}
+PROTOBUF_NDEBUG_INLINE UpdateRoleAppearanceRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        appearance_id_(arena) {}
+
+inline void UpdateRoleAppearanceRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, auth_),
+           0,
+           offsetof(Impl_, player_id_) -
+               offsetof(Impl_, auth_) +
+               sizeof(Impl_::player_id_));
+}
+UpdateRoleAppearanceRequest::~UpdateRoleAppearanceRequest() {
+  // @@protoc_insertion_point(destructor:data_service.UpdateRoleAppearanceRequest)
+  SharedDtor(*this);
+}
+inline void UpdateRoleAppearanceRequest::SharedDtor(MessageLite& self) {
+  UpdateRoleAppearanceRequest& this_ = static_cast<UpdateRoleAppearanceRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.appearance_id_.Destroy();
+  delete this_._impl_.auth_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UpdateRoleAppearanceRequest_class_data_ =
+        UpdateRoleAppearanceRequest::InternalGenerateClassData_(UpdateRoleAppearanceRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UpdateRoleAppearanceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UpdateRoleAppearanceRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UpdateRoleAppearanceRequest_class_data_.tc_table);
+  return UpdateRoleAppearanceRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UpdateRoleAppearanceRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UpdateRoleAppearanceRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UpdateRoleAppearanceRequest_globals_));
+  return UpdateRoleAppearanceRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UpdateRoleAppearanceRequest::ParseTableT_
+    UpdateRoleAppearanceRequest::_table_ =
+        UpdateRoleAppearanceRequest::InternalGenerateParseTable_(UpdateRoleAppearanceRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UpdateRoleAppearanceRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.UpdateRoleAppearanceRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.appearance_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+  }
+  _impl_.player_id_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UpdateRoleAppearanceRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UpdateRoleAppearanceRequest& this_ = static_cast<const UpdateRoleAppearanceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UpdateRoleAppearanceRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UpdateRoleAppearanceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.UpdateRoleAppearanceRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string appearance_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_appearance_id().empty()) {
+      const ::std::string& _s = this_._internal_appearance_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.UpdateRoleAppearanceRequest.appearance_id");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // .common.base.ServiceCallAuth auth = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.UpdateRoleAppearanceRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UpdateRoleAppearanceRequest::ByteSizeLong(const MessageLite& base) {
+  const UpdateRoleAppearanceRequest& this_ = static_cast<const UpdateRoleAppearanceRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UpdateRoleAppearanceRequest::ByteSizeLong() const {
+  const UpdateRoleAppearanceRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.UpdateRoleAppearanceRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string appearance_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_appearance_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_appearance_id());
+      }
+    }
+    // .common.base.ServiceCallAuth auth = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UpdateRoleAppearanceRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UpdateRoleAppearanceRequest*>(&to_msg);
+  auto& from = static_cast<const UpdateRoleAppearanceRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.UpdateRoleAppearanceRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_appearance_id().empty()) {
+        _this->_internal_set_appearance_id(from._internal_appearance_id());
+      } else {
+        if (_this->_impl_.appearance_id_.IsDefault()) {
+          _this->_internal_set_appearance_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.auth_ != nullptr);
+      if (_this->_impl_.auth_ == nullptr) {
+        _this->_impl_.auth_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_);
+      } else {
+        _this->_impl_.auth_->MergeFrom(*from._impl_.auth_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UpdateRoleAppearanceRequest::CopyFrom(const UpdateRoleAppearanceRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.UpdateRoleAppearanceRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UpdateRoleAppearanceRequest::InternalSwap(UpdateRoleAppearanceRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_id_, &other->_impl_.appearance_id_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.player_id_)
+      + sizeof(UpdateRoleAppearanceRequest::_impl_.player_id_)
+      - PROTOBUF_FIELD_OFFSET(UpdateRoleAppearanceRequest, _impl_.auth_)>(
+          reinterpret_cast<char*>(&_impl_.auth_),
+          reinterpret_cast<char*>(&other->_impl_.auth_));
+}
+
+::google::protobuf::Metadata UpdateRoleAppearanceRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+UpdateRoleAppearanceResponse::UpdateRoleAppearanceResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UpdateRoleAppearanceResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.UpdateRoleAppearanceResponse)
+}
+UpdateRoleAppearanceResponse::UpdateRoleAppearanceResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpdateRoleAppearanceResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UpdateRoleAppearanceResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE UpdateRoleAppearanceResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UpdateRoleAppearanceResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.updated_ = {};
+}
+UpdateRoleAppearanceResponse::~UpdateRoleAppearanceResponse() {
+  // @@protoc_insertion_point(destructor:data_service.UpdateRoleAppearanceResponse)
+  SharedDtor(*this);
+}
+inline void UpdateRoleAppearanceResponse::SharedDtor(MessageLite& self) {
+  UpdateRoleAppearanceResponse& this_ = static_cast<UpdateRoleAppearanceResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UpdateRoleAppearanceResponse_class_data_ =
+        UpdateRoleAppearanceResponse::InternalGenerateClassData_(UpdateRoleAppearanceResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UpdateRoleAppearanceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UpdateRoleAppearanceResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UpdateRoleAppearanceResponse_class_data_.tc_table);
+  return UpdateRoleAppearanceResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UpdateRoleAppearanceResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UpdateRoleAppearanceResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UpdateRoleAppearanceResponse_globals_));
+  return UpdateRoleAppearanceResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UpdateRoleAppearanceResponse::ParseTableT_
+    UpdateRoleAppearanceResponse::_table_ =
+        UpdateRoleAppearanceResponse::InternalGenerateParseTable_(UpdateRoleAppearanceResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UpdateRoleAppearanceResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.UpdateRoleAppearanceResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.updated_ = false;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UpdateRoleAppearanceResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UpdateRoleAppearanceResponse& this_ = static_cast<const UpdateRoleAppearanceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UpdateRoleAppearanceResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UpdateRoleAppearanceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.UpdateRoleAppearanceResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool updated = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_updated() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_updated(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.UpdateRoleAppearanceResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UpdateRoleAppearanceResponse::ByteSizeLong(const MessageLite& base) {
+  const UpdateRoleAppearanceResponse& this_ = static_cast<const UpdateRoleAppearanceResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UpdateRoleAppearanceResponse::ByteSizeLong() const {
+  const UpdateRoleAppearanceResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.UpdateRoleAppearanceResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // bool updated = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_updated() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UpdateRoleAppearanceResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UpdateRoleAppearanceResponse*>(&to_msg);
+  auto& from = static_cast<const UpdateRoleAppearanceResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.UpdateRoleAppearanceResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_updated() != 0) {
+      _this->_impl_.updated_ = from._impl_.updated_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UpdateRoleAppearanceResponse::CopyFrom(const UpdateRoleAppearanceResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.UpdateRoleAppearanceResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UpdateRoleAppearanceResponse::InternalSwap(UpdateRoleAppearanceResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.updated_, other->_impl_.updated_);
+}
+
+::google::protobuf::Metadata UpdateRoleAppearanceResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

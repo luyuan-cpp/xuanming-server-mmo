@@ -98,7 +98,7 @@ The full picture, with the reasoning behind each decision, is in
 ├── deploy/               Docker Compose for local infra, Kubernetes manifests
 ├── tools/                code generators, table exporter, engineering scripts
 ├── docs/                 design docs, runbooks, stress reports
-├── third_party/          C++ dependencies (git submodules)
+├── third_party/          source-level external dependencies (git submodules: C++ libs and shared protobuf toolchain)
 ├── bin/                  working directory of the C++ nodes: configs only
 ├── game.sln              Visual Studio solution for all C++ projects
 ├── dev.bat               developer menu: build, generate, start, stop, logs

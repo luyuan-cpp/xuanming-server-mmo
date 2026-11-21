@@ -1,0 +1,13 @@
+{
+ "data": [
+  {
+   "card_item_count": 1,
+   "card_item_id": 3402,
+   "desc": "角色形象切换与一小时免费试用全局规则(单行)",
+   "id": 1,
+   "mall_price_fen": 1000,
+   "mall_sku_id": 3402,
+   "trial_duration_seconds": 3600
+  }
+ ]
+}

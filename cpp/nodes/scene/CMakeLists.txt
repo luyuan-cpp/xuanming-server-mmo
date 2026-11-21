@@ -93,6 +93,7 @@ set(SOURCE_FILES
     handler/rpc/player/player_activity_handler.cpp
     handler/rpc/player/player_mystery_merchant_handler.cpp
     handler/rpc/player/player_afk_pass_handler.cpp
+    handler/rpc/player/player_appearance_handler.cpp
     handler/rpc/player/player_battle_result_handler.cpp
 )
 

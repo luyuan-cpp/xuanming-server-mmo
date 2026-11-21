@@ -106,6 +106,17 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
             ensureIndex("gm_command_audit", "idx_gm_command_audit_command", "command_id, id");
             runMigration(5, () -> { });
         }
+        runMigration(6, () -> {
+            String roleId = db.queryForObject("SELECT id FROM sys_role WHERE role_code='admin'", String.class);
+            String[] permissions = {"gm:system-mail:prepare", "gm:system-mail:send"};
+            String[] labels = {"准备系统邮件", "确认系统邮件"};
+            for (int i = 0; i < permissions.length; i++) {
+                String id = "gm_sys_mail_permission_" + i;
+                addMenu(id, "gm_console", labels[i], null, null, 2, permissions[i]);
+                db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", "gm_admin_sys_mail_" + i, roleId, id);
+            }
+            db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
+        });
         ready = true;
     }
 

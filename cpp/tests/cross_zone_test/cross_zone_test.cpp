@@ -7997,12 +7997,13 @@ TEST(EnterFenceEcs, NewerSessionTakesOver)
 
 TEST(EnterFenceEcs, NewSessionInSameSceneRebuildsBaseline)
 {
-    // 断线宽限内重连、顶号先于旧会话退出:实体还在目标场景,新客户端要完整的入场基线,旧连接的 AOI 观察状态要重建。
+    // 断线宽限内重连、顶号先于旧会话退出:实体还在目标场景,不离场(保留格子与 AOI 关系),直接向新客户端重发入场基线。
     ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
     const auto player = MakeFencedPlayer(kFenceSessionA, kGenA);
     const auto scene = PlaceInScene(player, kFenceScene);
     tlsEcs.actorRegistry.remove<Hex>(player);
     tlsEcs.actorRegistry.emplace<Hex>(player, 0, 0, 0);
+    const uint64_t resendsBefore = PlayerSceneSystem::EntrySnapshotResendCount();
 
     EXPECT_EQ(EnterGameNode(FenceEnter(kFenceSessionB, kGenB, LOGIN_REPLACE, kFenceScene)),
               PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting);
@@ -8011,7 +8012,8 @@ TEST(EnterFenceEcs, NewSessionInSameSceneRebuildsBaseline)
     const auto *sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
     ASSERT_NE(sceneComp, nullptr);
     EXPECT_EQ(sceneComp->sceneEntity, scene);
-    EXPECT_FALSE(tlsEcs.actorRegistry.all_of<Hex>(player)) << "离场时清掉旧的 AOI 状态,下一拍按新连接重建";
+    EXPECT_EQ(PlayerSceneSystem::EntrySnapshotResendCount(), resendsBefore + 1) << "换新客户端必须重发入场快照";
+    EXPECT_TRUE(tlsEcs.actorRegistry.all_of<Hex>(player)) << "原地重发不离场,格子与邻居关注关系原样保留";
 
     ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
 }
@@ -10895,6 +10897,7 @@ void MakeHostedResident(entt::entity &player, SceneEntity &scene)
     identity.sessionId = kSessionAtExit;
     identity.loginGeneration = kHostedLostGeneration;
     tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
+    tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, kFixtureAdmissionGeneration, kFixtureOwnerRevision);
     scene = PlaceInScene(player, kRelocateSourceScene);
     PlayerLifecycleSystem::HandleClientConnectionLost(player);
     ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));

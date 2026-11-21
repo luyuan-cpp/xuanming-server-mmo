@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+// CharacterAppearance 表的权威 schema。源表 data/CharacterAppearance.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 角色可选外观目录表:
+//   - id 列带 (cfg_bit_index) = true,由导表器经 characterappearance_mapping.json 分配永不复用的紧凑位序,
+//     供 PlayerProfileComp.appearance_trial_used_bits 记录「每角色每形象 1 小时免费试用标记」。
+//   - 表级 (cfg_ids_permanent) = true:上线后禁止物理删行或复用旧 ID,下架某个外观请将 enabled 置 0。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message CharacterAppearanceTable {
+  option (cfg_sheet)         = "CharacterAppearance";
+  option (cfg_source_file)   = "CharacterAppearance.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+
+  // 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到试用位图下标)
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // 稳定资源外观身份 ID(如 "08_alchemy_prodigy_boy")
+  string appearance_id = 2;
+  // 中文展示名称(如 "炼丹童子")
+  string name = 3;
+  // 是否开放切换与试用:1 = 开放,0 = 下架(历史已持有该外观的玩家照常展示)
+  uint32 enabled = 4;
+  // 界面展示排序(升序)
+  uint32 sort_order = 5;
+  // 外观简述
+  string desc = 6;
+}

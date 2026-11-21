@@ -25,7 +25,7 @@ from core.generators.enum_gen import (
     validate_tip_references,
 )
 from core.generators.json_gen import generate_json
-from core.generators.binary_gen import generate_binary
+from core.generators.binary_gen import generate_binary, generate_client_binary
 from core.generators.proto_gen import (
     ProtoCompileError,
     compile_proto_cpp,
@@ -108,6 +108,7 @@ def run(cfg: ExporterConfig) -> None:
     compile_proto_csharp(cfg)
     compile_proto_python(cfg)
     generate_binary(cfg, tables)
+    generate_client_binary(cfg, tables)
     generate_config_classes(cfg, tables)
     generate_comp_headers(cfg, tables)
     _validate_java_code_outputs(cfg, tables)
@@ -129,7 +130,7 @@ def run(cfg: ExporterConfig) -> None:
 # ---------------------------------------------------------------------------
 
 def _ensure_output_dirs(cfg: ExporterConfig) -> None:
-    dirs: list[Path] = [cfg.json_dir, cfg.binary_dir, cfg.proto_dir, cfg.proto_python_output_dir, cfg.state_dir]
+    dirs: list[Path] = [cfg.json_dir, cfg.binary_dir, cfg.client_binary_dir, cfg.proto_dir, cfg.proto_python_output_dir, cfg.state_dir]
     for lang in (cfg.cpp, cfg.go, cfg.java, cfg.csharp, cfg.python, cfg.ue):
         if lang.enabled:
             dirs.extend([

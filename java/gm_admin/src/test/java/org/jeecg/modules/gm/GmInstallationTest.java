@@ -59,7 +59,9 @@ class GmInstallationTest {
         assertEquals("gm/console/index", db.queryForObject("SELECT component FROM sys_role_index WHERE id='gm_default_index'", String.class));
         assertEquals("DEFAULT", db.queryForObject("SELECT relation_type FROM sys_role_index WHERE id='gm_default_index'", String.class));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=2", Integer.class));
-        assertEquals(7, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
+        assertEquals(9, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
+        assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=6", Integer.class));
+        assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM sys_permission WHERE perms IN ('gm:system-mail:prepare','gm:system-mail:send')", Integer.class));
         db.update("UPDATE sys_role_index SET priority=5 WHERE id='gm_default_index'");
         start();
         assertEquals(5, db.queryForObject("SELECT priority FROM sys_role_index WHERE id='gm_default_index'", Integer.class));
@@ -89,7 +91,7 @@ class GmInstallationTest {
             assertEquals(1, db.queryForObject("SELECT hidden FROM sys_permission WHERE id=?", Integer.class, route));
         }
         assertEquals("system:user:add", db.queryForObject("SELECT perms FROM sys_permission WHERE id='native_button'", String.class));
-        assertEquals(7, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
+        assertEquals(9, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
         db.update("UPDATE sys_permission SET hidden=0 WHERE id='/ai'");
         start();
         assertEquals(0, db.queryForObject("SELECT hidden FROM sys_permission WHERE id='/ai'", Integer.class));

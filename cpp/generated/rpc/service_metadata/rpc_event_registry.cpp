@@ -29,6 +29,7 @@
 #include "proto/scene/client_player_common.pb.h"
 #include "proto/scene/player_activity.pb.h"
 #include "proto/scene/player_afk_pass.pb.h"
+#include "proto/scene/player_appearance.pb.h"
 #include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_battle_result.pb.h"
@@ -78,6 +79,7 @@
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "rpc/service_metadata/player_activity_service_metadata.h"
 #include "rpc/service_metadata/player_afk_pass_service_metadata.h"
+#include "rpc/service_metadata/player_appearance_service_metadata.h"
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
 #include "rpc/service_metadata/player_bag_service_metadata.h"
 #include "rpc/service_metadata/player_battle_result_service_metadata.h"
@@ -186,6 +188,7 @@ namespace data_service{void SendDataServiceBatchGetPlayerDisplayErased(entt::reg
 namespace data_service{void SendDataServiceGetPlayerAssetOpLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerInboxLedgerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace data_service{void SendDataServiceGetPlayerItemGainBlockErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace data_service{void SendDataServiceUpdateRoleAppearanceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVRangeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVPutErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace etcdserverpb{void SendKVDeleteRangeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -398,7 +401,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 441,
+static_assert(kMaxRpcMethodCount == 448,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -805,6 +808,11 @@ void InitMessageInfo()
         std::make_unique<::data_service::GetPlayerItemGainBlockRequest>(),
         std::make_unique<::data_service::GetPlayerItemGainBlockResponse>(),
         1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceGetPlayerItemGainBlockErased, "/data_service.DataService/GetPlayerItemGainBlock"};
+    gRpcMethodRegistry[DataServiceUpdateRoleAppearanceMessageId] = RpcMethodMeta{
+        "DataService", "UpdateRoleAppearance",
+        std::make_unique<::data_service::UpdateRoleAppearanceRequest>(),
+        std::make_unique<::data_service::UpdateRoleAppearanceResponse>(),
+        1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceUpdateRoleAppearanceErased, "/data_service.DataService/UpdateRoleAppearance"};
 
     // --- KV ---
     gRpcMethodRegistry[KVRangeMessageId] = RpcMethodMeta{
@@ -1654,6 +1662,38 @@ void InitMessageInfo()
         "SceneAfkPassClientPlayer", "GmSetAfkPass",
         std::make_unique<::GmSetAfkPassRequest>(),
         std::make_unique<::GmSetAfkPassResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneAppearanceClientPlayer ---
+    gRpcMethodRegistry[SceneAppearanceClientPlayerGetAppearanceInfoMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "GetAppearanceInfo",
+        std::make_unique<::GetAppearanceInfoRequest>(),
+        std::make_unique<::GetAppearanceInfoResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerSwitchAppearanceMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "SwitchAppearance",
+        std::make_unique<::SwitchAppearanceRequest>(),
+        std::make_unique<::SwitchAppearanceResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerStartAppearanceTrialMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "StartAppearanceTrial",
+        std::make_unique<::StartAppearanceTrialRequest>(),
+        std::make_unique<::StartAppearanceTrialResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerCancelAppearanceTrialMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "CancelAppearanceTrial",
+        std::make_unique<::CancelAppearanceTrialRequest>(),
+        std::make_unique<::CancelAppearanceTrialResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerNotifyActorAppearanceChangedMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "NotifyActorAppearanceChanged",
+        std::make_unique<::ActorAppearanceChangedS2C>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerNotifyAppearanceStateMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "NotifyAppearanceState",
+        std::make_unique<::AppearanceStateNotify>(),
+        std::make_unique<::Empty>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneAttributeClientPlayer ---
@@ -2621,6 +2661,10 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneAfkPassClientPlayerGetAfkPassMessageId:
 	case SceneAfkPassClientPlayerBuyAfkPassMessageId:
 	case SceneAfkPassClientPlayerGmSetAfkPassMessageId:
+	case SceneAppearanceClientPlayerGetAppearanceInfoMessageId:
+	case SceneAppearanceClientPlayerSwitchAppearanceMessageId:
+	case SceneAppearanceClientPlayerStartAppearanceTrialMessageId:
+	case SceneAppearanceClientPlayerCancelAppearanceTrialMessageId:
 	case SceneAttributeClientPlayerGetAttributePanelMessageId:
 	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
 	case SceneAttributeClientPlayerResetAttributePointsMessageId:

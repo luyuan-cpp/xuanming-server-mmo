@@ -16,12 +16,14 @@ excel:
     options: 4 # space-separated: bit_index key multi fk:T gfk:T expr:type expr_params:a,b
     comment: 5 # human-readable comment
   server_owner_types: [server, common] # owner values included in server gen
+  client_owner_types: [client, common] # owner values included in client binary tables (server-only columns stripped)
 
 # --- Output roots ---
 output:
   generated_dir: ../../generated
   json_dir: ../../generated/tables
   binary_dir: ../../generated/tables # .pb files go alongside .json files
+  client_binary_dir: ../../generated/client_tables # server-only fields stripped for client packaging
   proto_dir: ../../generated/code/proto
   proto_python_output_dir: ../../generated/code/proto/python # *_pb2.py for binary gen
   state_dir: ./state
@@ -108,6 +110,8 @@ languages:
         dst: ../../../mmorpg-client/Assets/Scripts/Table/Generated
       - src: ../../generated/code/proto/csharp
         dst: ../../../mmorpg-client/Assets/Scripts/Table/Generated
+      - src: ../../generated/client_tables
+        dst: ../../../mmorpg-client/Assets/StreamingAssets/Tables
 
   python:
     enabled: true

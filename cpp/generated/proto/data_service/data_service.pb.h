@@ -835,6 +835,22 @@ extern const ::google::protobuf::internal::ClassDataFull TransferAccountRoleRequ
 #else
 extern const TransferAccountRoleRequestGlobalsTypeInternal TransferAccountRoleRequest_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class UpdateRoleAppearanceRequest;
+struct UpdateRoleAppearanceRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UpdateRoleAppearanceRequestGlobalsTypeInternal UpdateRoleAppearanceRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UpdateRoleAppearanceRequest_class_data_;
+#else
+extern const UpdateRoleAppearanceRequestGlobalsTypeInternal UpdateRoleAppearanceRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class UpdateRoleAppearanceResponse;
+struct UpdateRoleAppearanceResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UpdateRoleAppearanceResponseGlobalsTypeInternal UpdateRoleAppearanceResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UpdateRoleAppearanceResponse_class_data_;
+#else
+extern const UpdateRoleAppearanceResponseGlobalsTypeInternal UpdateRoleAppearanceResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class UpsertAccountChannelIdentityRequest;
 struct UpsertAccountChannelIdentityRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1456,6 +1472,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED VerifyRoleAdmissionResponse final :
     ::google::protobuf::internal::CachedSize _cached_size_;
     bool valid_;
     bool retry_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateRoleAppearanceResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.UpdateRoleAppearanceResponse) */ {
+ public:
+  inline UpdateRoleAppearanceResponse() : UpdateRoleAppearanceResponse(nullptr) {}
+  ~UpdateRoleAppearanceResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UpdateRoleAppearanceResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UpdateRoleAppearanceResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UpdateRoleAppearanceResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UpdateRoleAppearanceResponse(const UpdateRoleAppearanceResponse& from) : UpdateRoleAppearanceResponse(nullptr, from) {}
+  inline UpdateRoleAppearanceResponse(UpdateRoleAppearanceResponse&& from) noexcept : UpdateRoleAppearanceResponse(nullptr, ::std::move(from)) {}
+  inline UpdateRoleAppearanceResponse& operator=(const UpdateRoleAppearanceResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UpdateRoleAppearanceResponse& operator=(UpdateRoleAppearanceResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UpdateRoleAppearanceResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateRoleAppearanceResponse>(&UpdateRoleAppearanceResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 98;
+  friend void swap(UpdateRoleAppearanceResponse& a, UpdateRoleAppearanceResponse& b) { a.Swap(&b); }
+  inline void Swap(UpdateRoleAppearanceResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UpdateRoleAppearanceResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UpdateRoleAppearanceResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UpdateRoleAppearanceResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UpdateRoleAppearanceResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UpdateRoleAppearanceResponse& from) { UpdateRoleAppearanceResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UpdateRoleAppearanceResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.UpdateRoleAppearanceResponse"; }
+
+  explicit UpdateRoleAppearanceResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UpdateRoleAppearanceResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpdateRoleAppearanceResponse& from);
+  UpdateRoleAppearanceResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UpdateRoleAppearanceResponse&& from) noexcept
+      : UpdateRoleAppearanceResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kUpdatedFieldNumber = 1,
+  };
+  // bool updated = 1;
+  void clear_updated() ;
+  [[nodiscard]] bool updated() const;
+  void set_updated(bool value);
+
+  private:
+  bool _internal_updated() const;
+  void _internal_set_updated(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.UpdateRoleAppearanceResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UpdateRoleAppearanceResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool updated_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -12769,6 +12986,242 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpsertAccountChannelIdentityRequest
     ::google::protobuf::internal::ArenaStringPtr channel_;
     ::google::protobuf::internal::ArenaStringPtr open_id_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateRoleAppearanceRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.UpdateRoleAppearanceRequest) */ {
+ public:
+  inline UpdateRoleAppearanceRequest() : UpdateRoleAppearanceRequest(nullptr) {}
+  ~UpdateRoleAppearanceRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UpdateRoleAppearanceRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UpdateRoleAppearanceRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UpdateRoleAppearanceRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UpdateRoleAppearanceRequest(const UpdateRoleAppearanceRequest& from) : UpdateRoleAppearanceRequest(nullptr, from) {}
+  inline UpdateRoleAppearanceRequest(UpdateRoleAppearanceRequest&& from) noexcept : UpdateRoleAppearanceRequest(nullptr, ::std::move(from)) {}
+  inline UpdateRoleAppearanceRequest& operator=(const UpdateRoleAppearanceRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UpdateRoleAppearanceRequest& operator=(UpdateRoleAppearanceRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UpdateRoleAppearanceRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateRoleAppearanceRequest>(&UpdateRoleAppearanceRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 97;
+  friend void swap(UpdateRoleAppearanceRequest& a, UpdateRoleAppearanceRequest& b) { a.Swap(&b); }
+  inline void Swap(UpdateRoleAppearanceRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UpdateRoleAppearanceRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UpdateRoleAppearanceRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UpdateRoleAppearanceRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UpdateRoleAppearanceRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UpdateRoleAppearanceRequest& from) { UpdateRoleAppearanceRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UpdateRoleAppearanceRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.UpdateRoleAppearanceRequest"; }
+
+  explicit UpdateRoleAppearanceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UpdateRoleAppearanceRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpdateRoleAppearanceRequest& from);
+  UpdateRoleAppearanceRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UpdateRoleAppearanceRequest&& from) noexcept
+      : UpdateRoleAppearanceRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAppearanceIdFieldNumber = 2,
+    kAuthFieldNumber = 3,
+    kPlayerIdFieldNumber = 1,
+  };
+  // string appearance_id = 2;
+  void clear_appearance_id() ;
+  [[nodiscard]] const ::std::string& appearance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_appearance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_appearance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_appearance_id();
+  void set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_appearance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_appearance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_appearance_id();
+
+  public:
+  // .common.base.ServiceCallAuth auth = 3;
+  [[nodiscard]] bool has_auth()
+      const;
+  void clear_auth() ;
+  [[nodiscard]] const ::common::base::ServiceCallAuth& auth() const;
+  [[nodiscard]] ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE release_auth();
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL mutable_auth();
+  void set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value);
+  ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE unsafe_arena_release_auth();
+
+  private:
+  const ::common::base::ServiceCallAuth& _internal_auth() const;
+  ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // uint64 player_id = 1;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.UpdateRoleAppearanceRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 62,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UpdateRoleAppearanceRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr appearance_id_;
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -37987,6 +38440,219 @@ inline bool GetPlayerChannelIdentityResponse::_internal_retry() const {
 inline void GetPlayerChannelIdentityResponse::_internal_set_retry(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retry_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// UpdateRoleAppearanceRequest
+
+// uint64 player_id = 1;
+inline void UpdateRoleAppearanceRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t UpdateRoleAppearanceRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:data_service.UpdateRoleAppearanceRequest.player_id)
+  return _internal_player_id();
+}
+inline void UpdateRoleAppearanceRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:data_service.UpdateRoleAppearanceRequest.player_id)
+}
+inline ::uint64_t UpdateRoleAppearanceRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void UpdateRoleAppearanceRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// string appearance_id = 2;
+inline void UpdateRoleAppearanceRequest::clear_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& UpdateRoleAppearanceRequest::appearance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.UpdateRoleAppearanceRequest.appearance_id)
+  return _internal_appearance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void UpdateRoleAppearanceRequest::set_appearance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.appearance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.UpdateRoleAppearanceRequest.appearance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL UpdateRoleAppearanceRequest::mutable_appearance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_appearance_id();
+  // @@protoc_insertion_point(field_mutable:data_service.UpdateRoleAppearanceRequest.appearance_id)
+  return _s;
+}
+inline const ::std::string& UpdateRoleAppearanceRequest::_internal_appearance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.appearance_id_.Get();
+}
+inline void UpdateRoleAppearanceRequest::_internal_set_appearance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.appearance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL UpdateRoleAppearanceRequest::_internal_mutable_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.appearance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE UpdateRoleAppearanceRequest::release_appearance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.UpdateRoleAppearanceRequest.appearance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.appearance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void UpdateRoleAppearanceRequest::set_allocated_appearance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.appearance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.appearance_id_.IsDefault()) {
+    _impl_.appearance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.UpdateRoleAppearanceRequest.appearance_id)
+}
+
+// .common.base.ServiceCallAuth auth = 3;
+inline bool UpdateRoleAppearanceRequest::has_auth() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.auth_ != nullptr);
+  return value;
+}
+inline const ::common::base::ServiceCallAuth& UpdateRoleAppearanceRequest::_internal_auth() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::ServiceCallAuth* p = _impl_.auth_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::ServiceCallAuth>(&::common::base::ServiceCallAuth_globals_);
+}
+inline const ::common::base::ServiceCallAuth& UpdateRoleAppearanceRequest::auth() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.UpdateRoleAppearanceRequest.auth)
+  return _internal_auth();
+}
+inline void UpdateRoleAppearanceRequest::unsafe_arena_set_allocated_auth(
+    ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:data_service.UpdateRoleAppearanceRequest.auth)
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE UpdateRoleAppearanceRequest::release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::ServiceCallAuth* released = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE UpdateRoleAppearanceRequest::unsafe_arena_release_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.UpdateRoleAppearanceRequest.auth)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::ServiceCallAuth* temp = _impl_.auth_;
+  _impl_.auth_ = nullptr;
+  return temp;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL UpdateRoleAppearanceRequest::_internal_mutable_auth() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.auth_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::ServiceCallAuth>(GetArena());
+    _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(p);
+  }
+  return _impl_.auth_;
+}
+inline ::common::base::ServiceCallAuth* PROTOBUF_NONNULL UpdateRoleAppearanceRequest::mutable_auth()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::ServiceCallAuth* _msg = _internal_mutable_auth();
+  // @@protoc_insertion_point(field_mutable:data_service.UpdateRoleAppearanceRequest.auth)
+  return _msg;
+}
+inline void UpdateRoleAppearanceRequest::set_allocated_auth(::common::base::ServiceCallAuth* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.auth_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
+  // @@protoc_insertion_point(field_set_allocated:data_service.UpdateRoleAppearanceRequest.auth)
+}
+
+// -------------------------------------------------------------------
+
+// UpdateRoleAppearanceResponse
+
+// bool updated = 1;
+inline void UpdateRoleAppearanceResponse::clear_updated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool UpdateRoleAppearanceResponse::updated() const {
+  // @@protoc_insertion_point(field_get:data_service.UpdateRoleAppearanceResponse.updated)
+  return _internal_updated();
+}
+inline void UpdateRoleAppearanceResponse::set_updated(bool value) {
+  _internal_set_updated(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:data_service.UpdateRoleAppearanceResponse.updated)
+}
+inline bool UpdateRoleAppearanceResponse::_internal_updated() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_;
+}
+inline void UpdateRoleAppearanceResponse::_internal_set_updated(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ = value;
 }
 
 #ifdef __GNUC__

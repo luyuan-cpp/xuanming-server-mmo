@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "de4be939691ab0e3";
+    public static final String SCHEMA_DIGEST = "df34cab01b3439aa";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -52,6 +52,8 @@ public class TableLoader {
 
         AfkPassRuleTableManager.getInstance().load(configDir, useBinary);
 
+        AppearanceRuleTableManager.getInstance().load(configDir, useBinary);
+
         AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
 
         AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
@@ -65,6 +67,8 @@ public class TableLoader {
         BaseSceneTableManager.getInstance().load(configDir, useBinary);
 
         BuffTableManager.getInstance().load(configDir, useBinary);
+
+        CharacterAppearanceTableManager.getInstance().load(configDir, useBinary);
 
         ClassTableManager.getInstance().load(configDir, useBinary);
 
@@ -163,7 +167,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(54);
+        CountDownLatch latch = new CountDownLatch(56);
 
         new Thread(() -> {
             try {
@@ -220,6 +224,16 @@ public class TableLoader {
                 AfkPassRuleTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load AfkPassRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AppearanceRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AppearanceRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -290,6 +304,16 @@ public class TableLoader {
                 BuffTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Buff table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                CharacterAppearanceTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load CharacterAppearance table", e);
             } finally {
                 latch.countDown();
             }
@@ -737,6 +761,8 @@ public class TableLoader {
 
         AfkPassRuleTableManager.getInstance().load(configDir, useBinary);
 
+        AppearanceRuleTableManager.getInstance().load(configDir, useBinary);
+
         AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
 
         AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
@@ -750,6 +776,8 @@ public class TableLoader {
         BaseSceneTableManager.getInstance().load(configDir, useBinary);
 
         BuffTableManager.getInstance().load(configDir, useBinary);
+
+        CharacterAppearanceTableManager.getInstance().load(configDir, useBinary);
 
         ClassTableManager.getInstance().load(configDir, useBinary);
 

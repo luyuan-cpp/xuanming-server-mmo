@@ -15,7 +15,7 @@
 | `navmesh_baker/` | C++ / Python | 场景导航烘焙(Recast);`sync_current_maps.py` 从客户端新地图合同同步正式网格/源表并支持 `--verify` |
 | `battle_art_gen/` | Go | 战斗美术素材的程序化生成 |
 | `dev/` | — | [mprocs](https://github.com/pvolok/mprocs) 的进程面板配置 |
-| `patches/` | — | 对第三方子模块的本地补丁 |
+| [`patches/`](patches/) | — | 第三方子模块的唯一兼容补丁目录(清单见 `third_party/releases.lock.json`) |
 | `docs/` | — | 生成器命名迁移的审计记录 |
 | `archived/` | — | 已退役的脚本,只作参考,不保证能运行 |
 

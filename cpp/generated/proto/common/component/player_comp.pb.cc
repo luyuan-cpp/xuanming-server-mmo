@@ -1345,11 +1345,11 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      10,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1369,21 +1369,41 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
        {18, 1, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_id_)}},
       // uint32 gender = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfileComp, _impl_.gender_), 5>(),
-       {24, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerProfileComp, _impl_.gender_), 9>(),
+       {24, 9, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_)}},
       // uint64 rename_seq = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.rename_seq_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.rename_seq_), 5>(),
+       {32, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_seq_)}},
       // uint64 renamed_ms = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.renamed_ms_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.renamed_ms_), 6>(),
+       {40, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.renamed_ms_)}},
       // .PlayerRenameOp rename_op = 6;
       {::_pbi::TcParser::FastMtS1,
-       {50, 2, 0,
+       {50, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_op_)}},
+      // bytes appearance_trial_used_bits = 7;
+      {::_pbi::TcParser::FastBS1,
+       {58, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_trial_used_bits_)}},
+      // string trial_appearance_id = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_appearance_id_)}},
+      // uint64 trial_expires_at = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.trial_expires_at_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_expires_at_)}},
+      // uint64 appearance_switch_seq = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerProfileComp, _impl_.appearance_switch_seq_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_switch_seq_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -1393,13 +1413,21 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
       // string appearance_id = 2;
       {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 gender = 3;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 rename_seq = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_seq_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_seq_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 renamed_ms = 5;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.renamed_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.renamed_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .PlayerRenameOp rename_op = 6;
-      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_op_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.rename_op_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bytes appearance_trial_used_bits = 7;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_trial_used_bits_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // string trial_appearance_id = 8;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_appearance_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 trial_expires_at = 9;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.trial_expires_at_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 appearance_switch_seq = 10;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.appearance_switch_seq_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1409,10 +1437,11 @@ constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGeneratePar
         #endif
     }},
     {{
-      "\21\4\15\0\0\0\0\0"
+      "\21\4\15\0\0\0\0\0\23\0\0\0\0\0\0\0"
       "PlayerProfileComp"
       "name"
       "appearance_id"
+      "trial_appearance_id"
     }},
   };
 }
@@ -1428,9 +1457,17 @@ inline constexpr PlayerProfileComp::Impl_::Impl_(
         appearance_id_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        appearance_trial_used_bits_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        trial_appearance_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         rename_op_{nullptr},
         rename_seq_{::uint64_t{0u}},
         renamed_ms_{::uint64_t{0u}},
+        trial_expires_at_{::uint64_t{0u}},
+        appearance_switch_seq_{::uint64_t{0u}},
         gender_{0u} {}
 
 template <typename>
@@ -1559,19 +1596,27 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_._has_bits_),
-        9, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.appearance_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.gender_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.rename_seq_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.renamed_ms_),
         PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.rename_op_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.appearance_trial_used_bits_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.trial_appearance_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.trial_expires_at_),
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.appearance_switch_seq_),
         0,
         1,
+        9,
         5,
-        3,
+        6,
         4,
         2,
+        3,
+        7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerRenameOp, _impl_._has_bits_),
         9, // hasbit index offset
@@ -1606,8 +1651,8 @@ static const ::_pbi::MigrationSchema
         {13, sizeof(::PlayerUint64Comp)},
         {20, sizeof(::PlayerUint32Comp)},
         {25, sizeof(::PlayerProfileComp)},
-        {40, sizeof(::PlayerRenameOp)},
-        {55, sizeof(::PlayerStressTestProbe)},
+        {48, sizeof(::PlayerRenameOp)},
+        {63, sizeof(::PlayerStressTestProbe)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1630,22 +1675,25 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcomp_
     "terPlayer\022\033\n\023logout_initiated_ms\030\001 \001(\003\"O"
     "\n\020PlayerUint64Comp\022\036\n\026registration_times"
     "tamp\030\001 \001(\004\022\033\n\023afk_pass_expires_at\030\002 \001(\004\""
-    "!\n\020PlayerUint32Comp\022\r\n\005class\030\001 \001(\r\"\224\001\n\021P"
+    "!\n\020PlayerUint32Comp\022\r\n\005class\030\001 \001(\r\"\216\002\n\021P"
     "layerProfileComp\022\014\n\004name\030\001 \001(\t\022\025\n\rappear"
     "ance_id\030\002 \001(\t\022\016\n\006gender\030\003 \001(\r\022\022\n\nrename_"
     "seq\030\004 \001(\004\022\022\n\nrenamed_ms\030\005 \001(\004\022\"\n\trename_"
-    "op\030\006 \001(\0132\017.PlayerRenameOp\"z\n\016PlayerRenam"
-    "eOp\022\013\n\003seq\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\017\n\007hold_i"
-    "d\030\003 \001(\004\022\024\n\014card_item_id\030\004 \001(\r\022\022\n\ncard_co"
-    "unt\030\005 \001(\r\022\022\n\nstarted_ms\030\006 \001(\004\";\n\025PlayerS"
-    "tressTestProbe\022\020\n\010test_seq\030\001 \001(\004\022\020\n\010test"
-    "_sig\030\002 \001(\014B\022Z\020common/componentb\006proto3"
+    "op\030\006 \001(\0132\017.PlayerRenameOp\022\"\n\032appearance_"
+    "trial_used_bits\030\007 \001(\014\022\033\n\023trial_appearanc"
+    "e_id\030\010 \001(\t\022\030\n\020trial_expires_at\030\t \001(\004\022\035\n\025"
+    "appearance_switch_seq\030\n \001(\004\"z\n\016PlayerRen"
+    "ameOp\022\013\n\003seq\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\017\n\007hold"
+    "_id\030\003 \001(\004\022\024\n\014card_item_id\030\004 \001(\r\022\022\n\ncard_"
+    "count\030\005 \001(\r\022\022\n\nstarted_ms\030\006 \001(\004\";\n\025Playe"
+    "rStressTestProbe\022\020\n\010test_seq\030\001 \001(\004\022\020\n\010te"
+    "st_sig\030\002 \001(\014B\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto = {
     false,
     false,
-    638,
+    760,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
     "proto/common/component/player_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto_once,
@@ -2685,7 +2733,9 @@ PROTOBUF_NDEBUG_INLINE PlayerProfileComp::Impl_::Impl_(
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
         name_(arena, from.name_),
-        appearance_id_(arena, from.appearance_id_) {}
+        appearance_id_(arena, from.appearance_id_),
+        appearance_trial_used_bits_(arena, from.appearance_trial_used_bits_),
+        trial_appearance_id_(arena, from.trial_appearance_id_) {}
 
 PlayerProfileComp::PlayerProfileComp(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2702,7 +2752,7 @@ PlayerProfileComp::PlayerProfileComp(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.rename_op_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+  _impl_.rename_op_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.rename_op_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -2720,7 +2770,9 @@ PROTOBUF_NDEBUG_INLINE PlayerProfileComp::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
         name_(arena),
-        appearance_id_(arena) {}
+        appearance_id_(arena),
+        appearance_trial_used_bits_(arena),
+        trial_appearance_id_(arena) {}
 
 inline void PlayerProfileComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -2744,6 +2796,8 @@ inline void PlayerProfileComp::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.name_.Destroy();
   this_._impl_.appearance_id_.Destroy();
+  this_._impl_.appearance_trial_used_bits_.Destroy();
+  this_._impl_.trial_appearance_id_.Destroy();
   delete this_._impl_.rename_op_;
   this_._impl_.~Impl_();
 }
@@ -2782,7 +2836,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
@@ -2790,14 +2844,25 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
       _impl_.appearance_id_.ClearNonDefaultToEmpty();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.appearance_trial_used_bits_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.trial_appearance_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(_impl_.rename_op_ != nullptr);
       _impl_.rename_op_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.rename_seq_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.trial_expires_at_) -
+        reinterpret_cast<char*>(&_impl_.rename_seq_)) + sizeof(_impl_.trial_expires_at_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.appearance_switch_seq_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.gender_) -
-        reinterpret_cast<char*>(&_impl_.rename_seq_)) + sizeof(_impl_.gender_));
+        reinterpret_cast<char*>(&_impl_.appearance_switch_seq_)) + sizeof(_impl_.gender_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2843,7 +2908,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint32 gender = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_gender() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2852,7 +2917,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint64 rename_seq = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_rename_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2861,7 +2926,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // uint64 renamed_ms = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_renamed_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2870,10 +2935,46 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
   }
 
   // .PlayerRenameOp rename_op = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         6, *this_._impl_.rename_op_, this_._impl_.rename_op_->GetCachedSize(), target,
         stream);
+  }
+
+  // bytes appearance_trial_used_bits = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_appearance_trial_used_bits().empty()) {
+      const ::std::string& _s = this_._internal_appearance_trial_used_bits();
+      target = stream->WriteBytesMaybeAliased(7, _s, target);
+    }
+  }
+
+  // string trial_appearance_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_trial_appearance_id().empty()) {
+      const ::std::string& _s = this_._internal_trial_appearance_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PlayerProfileComp.trial_appearance_id");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // uint64 trial_expires_at = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_trial_expires_at() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_trial_expires_at(), target);
+    }
+  }
+
+  // uint64 appearance_switch_seq = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_appearance_switch_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_appearance_switch_seq(), target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -2901,7 +3002,7 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string name = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_name().empty()) {
@@ -2916,27 +3017,57 @@ PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
                                         this_._internal_appearance_id());
       }
     }
-    // .PlayerRenameOp rename_op = 6;
+    // bytes appearance_trial_used_bits = 7;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_appearance_trial_used_bits().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_appearance_trial_used_bits());
+      }
+    }
+    // string trial_appearance_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_trial_appearance_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_trial_appearance_id());
+      }
+    }
+    // .PlayerRenameOp rename_op = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.rename_op_);
     }
     // uint64 rename_seq = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_rename_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_rename_seq());
       }
     }
     // uint64 renamed_ms = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_renamed_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_renamed_ms());
       }
     }
+    // uint64 trial_expires_at = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_trial_expires_at() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_trial_expires_at());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 appearance_switch_seq = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_appearance_switch_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_appearance_switch_seq());
+      }
+    }
     // uint32 gender = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_gender() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_gender());
@@ -2961,7 +3092,7 @@ void PlayerProfileComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_name().empty()) {
         _this->_internal_set_name(from._internal_name());
@@ -2981,6 +3112,24 @@ void PlayerProfileComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_appearance_trial_used_bits().empty()) {
+        _this->_internal_set_appearance_trial_used_bits(from._internal_appearance_trial_used_bits());
+      } else {
+        if (_this->_impl_.appearance_trial_used_bits_.IsDefault()) {
+          _this->_internal_set_appearance_trial_used_bits("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_trial_appearance_id().empty()) {
+        _this->_internal_set_trial_appearance_id(from._internal_trial_appearance_id());
+      } else {
+        if (_this->_impl_.trial_appearance_id_.IsDefault()) {
+          _this->_internal_set_trial_appearance_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       ABSL_DCHECK(from._impl_.rename_op_ != nullptr);
       if (_this->_impl_.rename_op_ == nullptr) {
         _this->_impl_.rename_op_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.rename_op_);
@@ -2988,17 +3137,29 @@ void PlayerProfileComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.rename_op_->MergeFrom(*from._impl_.rename_op_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_rename_seq() != 0) {
         _this->_impl_.rename_seq_ = from._impl_.rename_seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_renamed_ms() != 0) {
         _this->_impl_.renamed_ms_ = from._impl_.renamed_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_trial_expires_at() != 0) {
+        _this->_impl_.trial_expires_at_ = from._impl_.trial_expires_at_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_appearance_switch_seq() != 0) {
+        _this->_impl_.appearance_switch_seq_ = from._impl_.appearance_switch_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_gender() != 0) {
         _this->_impl_.gender_ = from._impl_.gender_;
       }
@@ -3025,6 +3186,8 @@ void PlayerProfileComp::InternalSwap(PlayerProfileComp* PROTOBUF_RESTRICT PROTOB
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_id_, &other->_impl_.appearance_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.appearance_trial_used_bits_, &other->_impl_.appearance_trial_used_bits_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.trial_appearance_id_, &other->_impl_.trial_appearance_id_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.gender_)
       + sizeof(PlayerProfileComp::_impl_.gender_)

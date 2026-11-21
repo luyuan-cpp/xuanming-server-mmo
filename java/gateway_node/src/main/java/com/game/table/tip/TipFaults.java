@@ -84,7 +84,8 @@ public final class TipFaults {
             new Fault(28010, "equip_error", "EquipInternalError"),
             new Fault(29014, "player_inbox_error", "PlayerInboxStoreUnavailable"),
             new Fault(30011, "mystery_merchant_error", "MysteryMerchantInternalError"),
-            new Fault(32004, "afk_pass_error", "AfkPassUnavailable")
+            new Fault(32004, "afk_pass_error", "AfkPassUnavailable"),
+            new Fault(33006, "appearance_error", "AppearanceUnavailable")
     );
 
     /** 由 FAULTS 派生,不单独生成第二份字面量。 */

@@ -36,7 +36,7 @@ import (
 const (
 	lobbySpectateDefaultFillCount = 20
 	lobbySpectateAccountPrefix    = "robot_91"
-	lobbySpectateLoginConcurrency = 8
+	lobbySpectateLoginConcurrency = 4
 	lobbySpectateShutdownMaxWait  = 10 * time.Second
 )
 

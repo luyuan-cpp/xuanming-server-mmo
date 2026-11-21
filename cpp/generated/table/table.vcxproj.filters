@@ -288,6 +288,9 @@
     <ClInclude Include="code\bit_index\reward_table_id_bit_index.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\bit_index\characterappearance_table_id_bit_index.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\constants\actoractioncombatstate_table_id_constants.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -558,6 +561,21 @@
     <ClInclude Include="code\afkpassrule_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\appearancerule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\appearancerule_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\appearancerule_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\characterappearance_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\characterappearance_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\mysterymerchantspot_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -573,6 +591,12 @@
     <ClInclude Include="proto\afkpassrule_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\appearancerule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\characterappearance_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\mysterymerchantspot_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -583,6 +607,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\afk_pass_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\tip\appearance_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\chat_error_tip.pb.h">
@@ -988,6 +1015,15 @@
     <ClCompile Include="code\afkpassrule_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\appearancerule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\appearancerule_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\characterappearance_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\mysterymerchantspot_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -1000,6 +1036,12 @@
     <ClCompile Include="proto\afkpassrule_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\appearancerule_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\characterappearance_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\mysterymerchantspot_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -1010,6 +1052,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\afk_pass_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\appearance_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\chat_error_tip.pb.cc">

@@ -2358,6 +2358,25 @@
    "id": 3401,
    "max_stack_size": 99,
    "name": "改名卡"
+  },
+  {
+   "affix_pool": 0,
+   "affix_rule": 0,
+   "artifact_id": 0,
+   "battle_heal_hp": 0,
+   "battle_heal_mp": 0,
+   "battle_usable": 0,
+   "description": "使用后可永久切换一次角色形象，切换后将替换当前形象（商城售价 10 元）。",
+   "equip_class": 0,
+   "equip_kind": 0,
+   "equip_level": 0,
+   "equip_profile": 0,
+   "forge_material_count": 0,
+   "forge_material_id": 0,
+   "icon_key": "UI/Icons/item_appearance_card",
+   "id": 3402,
+   "max_stack_size": 99,
+   "name": "角色形象卡"
   }
  ]
 }

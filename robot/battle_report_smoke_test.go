@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
 
 	"proto/battle"
+	"proto/match"
 )
 
 func sampleReplayBytes(t *testing.T) []byte {
@@ -79,5 +82,33 @@ func TestDecodeBattleReplayRejectsBadEnvelopes(t *testing.T) {
 		if _, err := decodeBattleReplay(envelope); err == nil {
 			t.Errorf("%s: expected an error", name)
 		}
+	}
+}
+
+func TestDumpBattleReportResponseRoundTripsWireBytes(t *testing.T) {
+	raw := sampleReplayBytes(t)
+	want := &match.GetBattleReportResponse{
+		Replay: &battle.BattleReplayEnvelope{
+			FormatVersion: 1,
+			Codec:         battle.EBattleReplayCodec_BATTLE_REPLAY_CODEC_GZIP,
+			RawBytes:      uint32(len(raw)),
+			Payload:       gzipBytes(t, raw),
+		},
+	}
+	out := filepath.Join(t.TempDir(), "nested", "sample.pb.bytes")
+	if err := dumpBattleReportResponse(out, want); err != nil {
+		t.Fatalf("dumpBattleReportResponse: %v", err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read dump: %v", err)
+	}
+	got := &match.GetBattleReportResponse{}
+	if err := proto.Unmarshal(data, got); err != nil {
+		t.Fatalf("unmarshal dump: %v", err)
+	}
+	replay, err := decodeBattleReplay(got.GetReplay())
+	if err != nil || replay.GetBattleId() != 77 {
+		t.Fatalf("decoded dumped replay mismatch: replay=%v err=%v", replay, err)
 	}
 }

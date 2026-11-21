@@ -363,8 +363,8 @@ TEST_F(AssetOpSystemTest, PaymentReversalDebitsStackableAcrossWarehouseAndNonSta
 	constexpr uint32_t kInstanceConfig = 1;
 
 	// 1. 堆叠物品分散在背包(1)与仓库(2),扣回 3 件须跨包扣净。
-	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kInventory], ItemCountMap{{kStackable, 1}}, TX_GM_GRANT, "seed-inv"));
-	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kWarehouse], ItemCountMap{{kStackable, 2}}, TX_GM_GRANT, "seed-wh"));
+	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kInventory], ItemCountMap{{kStackable, 1}}, TX_GM_GRANT, 0, "seed-inv"));
+	ASSERT_EQ(kSuccess, BagService::AddItems(player_, bags.bags[kWarehouse], ItemCountMap{{kStackable, 2}}, TX_GM_GRANT, 0, "seed-wh"));
 	::AssetOpRequest stackReq = MakeCurrencyRequest(ASSET_OP_STREAM_TRADE_DEBIT, 1, 0, TX_PAYMENT_REVERSAL);
 	stackReq.mutable_bundle()->clear_currencies();
 	auto* stackItem = stackReq.mutable_bundle()->add_items();

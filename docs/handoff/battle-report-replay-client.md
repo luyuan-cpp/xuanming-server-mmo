@@ -1,6 +1,6 @@
 # 交接:战报回放的客户端细节(2026-11-06)
 
-> **状态(2026-11-21)**:服务端 C++ / Go / robot 与 Unity 客户端(`../mmorpg-client`)代码已全部落码并在 `main` 完成闭环验证（C++ 125/125 + 122/122、Go 逻辑/配置与真 TiDB 5+23、跨区 1v1 冒烟 `BATTLE_REPORT_OK` + `CROSS_ZONE_MATCH_OK`、客户端全量编译 0 错及纯 C# EditMode 25/25 全部通过）。协议与 C# 生成产物(`MatchServiceRpc` 379 / 380、`PlayerBattle.cs`、`MatchService.cs`、`MatchErrorTip.cs` `KMatchBattleReportNotFound = 16025`)已存在,无需重跑协议生成。
+> **状态(2026-11-21)**:服务端 C++ / Go / robot 与 Unity 客户端(`../mmorpg-client`)代码已全部落码并在 `main` 完成闭环验证（C++ 125/125 + 122/122、Go 逻辑/配置与真 TiDB 5+23、跨区 1v1 冒烟 `BATTLE_REPORT_OK` + `CROSS_ZONE_MATCH_OK`、客户端全量编译 0 错及原生 Unity 6000.6.0f1 EditMode **78/78 PASS** 全部通过）。协议与 C# 生成产物(`MatchServiceRpc` 379 / 380、`PlayerBattle.cs`、`MatchService.cs`、`MatchErrorTip.cs` `KMatchBattleReportNotFound = 16025`)已存在,无需重跑协议生成。
 > **服务端设计**:[battle-report-replay.md](../design/battle-report-replay.md)。负责人 2026-11-06 定:只录 PVP,每名玩家保留最近 100 条。Java 版留 TODO。
 
 ## 1. 要做的三件事
@@ -116,4 +116,11 @@
 5. **落码与验证(`../mmorpg-client`)**:
    - 纯逻辑:`Assets/Scripts/Game/Battle/{BattleReplayDecoder,BattleReportClient,BattleReplayPlayer}.cs`
    - 接线与 UI:`Assets/Scripts/Game/GameClient.cs`、`Assets/Scripts/UI/Ugui/WorldHudNavigation.cs`、`Assets/Scripts/UI/Ugui/Battle/{BattleReportPanel,BattleResultPanel,BattleScreen,BattleUiRoot,BattleHudLogic,BattleUiWidgets}.cs`
-   - EditMode 测试:`Assets/Tests/EditMode/Battle/{BattleReplayDecoderTests,BattleReportClientTests,BattleReplayPlayerTests,BattleReportPanelUiTests}.cs`（543 份运行时源码 + 4 份战报 EditMode 测试离线 Roslyn 全量编译 0 错，3 套纯 C# 夹具 25/25 PASS；`BattleReportPanelUiTests.cs` 需在 Unity Test Runner 内执行 uGUI 断言，当前因 Unity Editor 占用工程锁未跑 batchmode）
+   - EditMode 测试:`Assets/Tests/EditMode/Battle/{BattleReplayDecoderTests,BattleReportClientTests,BattleReplayPlayerTests,BattleReportPanelUiTests}.cs`（`client_compile_check.ps1` 556 文件 0 错；原生 Unity `6000.6.0f1` 隔离工程执行含 uGUI `BattleReportPanelUiTests` 与 `BattleUiRootLifecycleTests` 在内的 7 套战斗夹具 **78/78 PASS、0 FAIL、0 SKIP**，XML 证据位于 `.codex-artifacts/battle-report-native-editmode/editmode-results-20261121-024508.xml`）
+
+## 10. 后续上线前待补验证（回头做）
+
+以下两项不影响当前 `main` 开发闭环，留待对应环境就绪后补跑：
+
+1. **Linux C++ 新镜像复跑跨区冒烟**：2026-11-21 跨区 1v1 冒烟为避免与并行 C++ Linux 镜像构建冲突，复用了 `debug-20261118` `xuanming-node` 镜像与 `b6a08148c` 表快照；后续新纳入的 §6.3 冻结重签、`GzipDecompress` 尾字节拒收与 `MMORPG_BATTLE_OUTCOME_SENDS_PER_PUMP`（`[1, 1024]`，默认 64）已在 Windows `battle.exe`、`turn_battle_engine_test`（125/125）与 `rpc_controller_test`（`Battle*` 122/122，含 `BattleObserverContract` 49/49）覆盖。下轮例行构建 `xuanming-node` 与 `match` 镜像并配齐最新导表后，顺手复跑一次 `battle-smoke` `cross_zone`（1v1）确认 `BATTLE_REPORT_OK` 与 `CROSS_ZONE_MATCH_OK`。
+2. **Unity WebGL / 小游戏真包导出与实测**：当前本机未装 WebGL Build Support，客户端已通过静态 WebGL 禁用 API 0 命中扫描与原生 Unity `6000.6.0f1` EditMode 78/78。待安装 WebGL Build Support 并进入微信/抖音小游戏转包阶段时，完整导出 Web 包并在真机宿主里实测拉列表、解压 `GZipStream` 与播放回放；若某小游戏宿主裁剪了 `System.IO.Compression`，按设计稿 §8 第 6 条将 `match` 侧切为 `BATTLE_REPLAY_CODEC_NONE` 下发即可（协议与客户端解码已原生兼容）。

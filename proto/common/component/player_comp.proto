@@ -69,6 +69,16 @@ message PlayerProfileComp
 	uint64 renamed_ms = 5;
 	// 进行中的改名;没有这个字段 = 没有改名在进行。
 	PlayerRenameOp rename_op = 6;
+	// 角色形象免费试用位图(docs/rules/bit-storage-and-table-ids.md):
+	// 第 i 位对应 CharacterAppearance 表经导表器分配的 bit_index i(低位在前,末尾全 0 字节不写)。
+	// 置 1 表示该角色已使用过对应形象的 1 小时免费试用资格;高位未知 bit 混跑时原样透传不截断。
+	bytes appearance_trial_used_bits = 7;
+	// 当前正在试用的形象 ID(空串 = 无试用中);展示生效形象由 PlayerAppearanceSystem::EffectiveAppearanceId 计算。
+	string trial_appearance_id = 8;
+	// 当前试用到期的 Unix 秒;0 = 无试用中;<= 现在 = 已到期(下次加载或 Tick 自动清理并广播还原)。
+	uint64 trial_expires_at = 9;
+	// 永久形象切换序号(每次消耗角色形象卡成功切换永久形象时递增),用于可靠同步到 data_service 账号角色目录。
+	uint64 appearance_switch_seq = 10;
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:

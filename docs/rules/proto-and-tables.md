@@ -15,7 +15,8 @@
    - 常规重生成：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`
    - 共享 Go 绑定写入 `go/proto/`。仅需重生成 db/login 的 go-zero 包装与修正导入时才执行 `cd go && build.bat`，它不能代替完整 proto 生成。
    - 默认生成配置会写同级客户端仓；不需要写客户端仓时使用 `-ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
-2. **同级客户端同步（改动客户端可见 `.proto`、`Tip.xlsx`，或默认配置写入了 `../mmorpg-client/Assets/Scripts/Net/Generated/Rpc/` 时必做）**：切到同级 `mmorpg-client` 运行 `.\gen_proto.bat`（一键顺序执行下面三步）：
+2. **同级客户端同步（改动客户端可见 `.proto`、`Tip.xlsx`、配置表，或默认配置写入了 `../mmorpg-client/Assets/Scripts/Net/Generated/Rpc/` 时必做）**：切到同级 `mmorpg-client` 运行 `.\gen.bat client`（或在客户端直接运行 `.\gen.bat` 一键串联服务端 `export` + `proto-gen` + 客户端同步），依次完成：
+   - `pwsh -File tools/sync_tables.ps1`（同步二进制配置表 `Assets/StreamingAssets/Tables/*.pb` 及 `Table/Generated`、`Net/Generated/Rpc` 的 `.meta`）
    - `pwsh -File tools/gen_proto.ps1`（自动扫描 `Rpc/*.cs` + 递归 `import` + 全部 `generated/code/proto/tip/*_tip.proto` + 底层信封种子，并自动探测同级服务端仓与仓库 `protoc`，无需手维护 `.proto` 清单）
    - `pwsh -File tools/gen_messageids.ps1`
    - `pwsh -File tools/client_compile_check.ps1`（若改到公共签名或测试代码，一并确认受影响的 EditMode/PlayMode 测试程序集编译通过，确保 Unity 启动不进 Safe Mode）

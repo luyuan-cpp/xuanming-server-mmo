@@ -1,0 +1,26 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum appearance_error {
+  kAppearance_errorOK = 0;
+
+  kAppearanceInvalid = 33000;
+
+  kAppearanceAlreadyCurrent = 33001;
+
+  kAppearanceNoCard = 33002;
+
+  kAppearanceTrialAlreadyUsed = 33003;
+
+  kAppearanceNoActiveTrial = 33004;
+
+  kAppearanceFrozen = 33005;
+
+  kAppearanceUnavailable = 33006;
+
+};

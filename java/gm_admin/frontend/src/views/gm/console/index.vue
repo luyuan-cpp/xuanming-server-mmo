@@ -77,9 +77,67 @@
       </a-col>
 
       <a-col :xs="24" :xl="14">
-        <a-card v-if="hasPermission('gm:mail:prepare')" title="邮件发放" class="gm-card">
-          <p class="gm-hint">附件可同时包含货币和一种物品；留空则不附加该项。所有操作都需要填写原因。</p>
+        <a-card v-if="hasPermission('gm:mail:prepare')" title="个人邮件发放" class="gm-card">
+          <p class="gm-hint">附件支持最多 {{ MAX_MAIL_CURRENCIES }} 种货币与最多 {{ MAX_MAIL_ITEMS }} 种物品（物品总数 ≤ {{ MAX_MAIL_TOTAL_ITEM_COUNT }}）；留空的行自动忽略。所有操作都需要填写原因。</p>
           <BasicForm @register="registerMailForm" :disabled="mutationBusy || !mailEnabled" />
+          <div class="gm-space">
+            <div class="gm-sub-header">
+              <span>货币附件（最多 {{ MAX_MAIL_CURRENCIES }} 种）</span>
+              <a-button
+                size="small"
+                :disabled="mutationBusy || !mailEnabled || mailCurrencies.length >= MAX_MAIL_CURRENCIES"
+                @click="addMailCurrency"
+              >
+                + 添加货币
+              </a-button>
+            </div>
+            <div v-for="(row, index) in mailCurrencies" :key="`mcur-${index}`" class="gm-attachment-row">
+              <a-select
+                v-model:value="row.currencyType"
+                class="gm-currency-select"
+                :options="mailCurrencyOptions"
+                :disabled="mutationBusy || !mailEnabled"
+                @change="invalidateDraft"
+              />
+              <a-input
+                v-model:value="row.amount"
+                inputmode="numeric"
+                placeholder="留空则不发货币"
+                :disabled="mutationBusy || !mailEnabled"
+                @change="invalidateDraft"
+              />
+              <a-button size="small" :disabled="mutationBusy || !mailEnabled" @click="removeMailCurrency(index)">移除</a-button>
+            </div>
+          </div>
+          <div class="gm-space">
+            <div class="gm-sub-header">
+              <span>物品附件（最多 {{ MAX_MAIL_ITEMS }} 种，总数 ≤ {{ MAX_MAIL_TOTAL_ITEM_COUNT }}）</span>
+              <a-button
+                size="small"
+                :disabled="mutationBusy || !mailEnabled || mailItems.length >= MAX_MAIL_ITEMS"
+                @click="addMailItem"
+              >
+                + 添加物品
+              </a-button>
+            </div>
+            <div v-for="(row, index) in mailItems" :key="`mitem-${index}`" class="gm-attachment-row">
+              <a-input
+                v-model:value="row.configId"
+                inputmode="numeric"
+                placeholder="物品配置 ID（留空忽略）"
+                :disabled="mutationBusy || !mailEnabled"
+                @change="invalidateDraft"
+              />
+              <a-input
+                v-model:value="row.count"
+                inputmode="numeric"
+                placeholder="数量 (1~4096)"
+                :disabled="mutationBusy || !mailEnabled"
+                @change="invalidateDraft"
+              />
+              <a-button size="small" :disabled="mutationBusy || !mailEnabled" @click="removeMailItem(index)">移除</a-button>
+            </div>
+          </div>
           <a-alert v-if="prepareError" type="warning" show-icon :message="prepareError" class="gm-space" />
           <div class="gm-actions">
             <a-button v-auth="'gm:mail:prepare'" type="primary" :loading="preparing" :disabled="mutationBusy || !mailEnabled" @click="prepareMail">
@@ -92,7 +150,7 @@
           >
           <p class="gm-hint">生成草稿不会发送邮件；核对弹窗中确认后才会投递。修改输入会生成新的草稿请求。</p>
         </a-card>
-        <a-card v-else title="邮件发放" class="gm-card">
+        <a-card v-else title="个人邮件发放" class="gm-card">
           <a-empty description="当前账号没有生成邮件草稿的权限" />
         </a-card>
       </a-col>
@@ -103,6 +161,14 @@
       :busy="mutationBusy"
       :player-id="player?.found ? player.playerId : undefined"
       @busy-change="playerCommandBusy = $event"
+    />
+
+    <SystemMail
+      v-if="canViewSystemMail"
+      :busy="mutationBusy"
+      :mail-enabled="mailEnabled"
+      :currencies="overview?.currencies || []"
+      @busy-change="systemMailBusy = $event"
     />
 
     <a-card v-if="hasPermission('gm:audit:read')" title="邮件操作记录" class="gm-card">
@@ -274,6 +340,7 @@
   import { usePermission } from '/@/hooks/web/usePermission';
   import { useMessage } from '/@/hooks/web/useMessage';
   import PlayerCommands from './PlayerCommands.vue';
+  import SystemMail from './SystemMail.vue';
   import { PLAYER_OPERATIONS } from '/@/api/gm/playerCommands';
   import {
     buildMailDraft,
@@ -283,6 +350,9 @@
     getGmCommands,
     getGmOverview,
     getGmPlayer,
+    MAX_MAIL_CURRENCIES,
+    MAX_MAIL_ITEMS,
+    MAX_MAIL_TOTAL_ITEM_COUNT,
     newClientRequestId,
     normalizePlayerId,
     prepareGmMail,
@@ -291,11 +361,16 @@
     type GmCommand,
     type GmOverview,
     type GmPlayer,
+    type MailCurrencyRow,
+    type MailItemRow,
   } from '/@/api/gm/console';
 
   const { hasPermission } = usePermission();
   const canViewPlayerCommands = computed(
     () => hasPermission('gm:audit:read') || PLAYER_OPERATIONS.some((operation) => hasPermission(operation.permission))
+  );
+  const canViewSystemMail = computed(
+    () => hasPermission('gm:system-mail:prepare') || hasPermission('gm:system-mail:send') || hasPermission('gm:audit:read')
   );
   const { createMessage } = useMessage();
   const overview = ref<GmOverview>();
@@ -320,7 +395,10 @@
   const preparing = ref(false);
   const sending = ref(false);
   const playerCommandBusy = ref(false);
-  const mutationBusy = computed(() => preparing.value || sending.value || playerCommandBusy.value);
+  const systemMailBusy = ref(false);
+  const mutationBusy = computed(() => preparing.value || sending.value || playerCommandBusy.value || systemMailBusy.value);
+  const mailCurrencies = ref<MailCurrencyRow[]>([{ currencyType: 0, amount: '' }]);
+  const mailItems = ref<MailItemRow[]>([{ configId: '', count: '' }]);
   const playerIdInput = ref('');
   const player = ref<GmPlayer>();
   const playerLoading = ref(false);
@@ -380,34 +458,6 @@
       label: '邮件正文',
       component: 'InputTextArea',
       componentProps: { rows: 3, placeholder: '可留空，最多 4096 个字符', onChange: invalidateDraft },
-    },
-    {
-      field: 'currencyType',
-      label: '附件币种',
-      component: 'Select',
-      defaultValue: 0,
-      componentProps: () => ({
-        options: mailCurrencyOptions.value,
-        onChange: invalidateDraft,
-      }),
-    },
-    {
-      field: 'currencyAmount',
-      label: '货币数量',
-      component: 'Input',
-      componentProps: { inputmode: 'numeric', placeholder: '留空则不发货币', onChange: invalidateDraft },
-    },
-    {
-      field: 'itemConfigId',
-      label: '物品配置 ID',
-      component: 'Input',
-      componentProps: { inputmode: 'numeric', placeholder: '留空则不发物品', onChange: invalidateDraft },
-    },
-    {
-      field: 'itemCount',
-      label: '物品数量',
-      component: 'Input',
-      componentProps: { inputmode: 'numeric', placeholder: '1 至 4096，与配置 ID 一起填写', onChange: invalidateDraft },
     },
     {
       field: 'validDays',
@@ -567,9 +617,37 @@
     createMessage.info('已填入收件玩家，请填写邮件内容并生成草稿。');
   }
 
+  function addMailCurrency() {
+    if (mutationBusy.value || mailCurrencies.value.length >= MAX_MAIL_CURRENCIES) return;
+    const used = new Set(mailCurrencies.value.map((row) => row.currencyType));
+    const nextOption = mailCurrencyOptions.value.find((option) => !used.has(option.value)) || mailCurrencyOptions.value[0];
+    mailCurrencies.value.push({ currencyType: nextOption?.value ?? 0, amount: '' });
+    invalidateDraft();
+  }
+
+  function removeMailCurrency(index: number) {
+    if (mutationBusy.value) return;
+    mailCurrencies.value.splice(index, 1);
+    invalidateDraft();
+  }
+
+  function addMailItem() {
+    if (mutationBusy.value || mailItems.value.length >= MAX_MAIL_ITEMS) return;
+    mailItems.value.push({ configId: '', count: '' });
+    invalidateDraft();
+  }
+
+  function removeMailItem(index: number) {
+    if (mutationBusy.value) return;
+    mailItems.value.splice(index, 1);
+    invalidateDraft();
+  }
+
   async function resetMail() {
     if (mutationBusy.value) return;
     await resetFields();
+    mailCurrencies.value = [{ currencyType: mailCurrencyOptions.value[0]?.value ?? 0, amount: '' }];
+    mailItems.value = [{ configId: '', count: '' }];
     invalidateDraft();
   }
 
@@ -632,7 +710,10 @@
     let command: GmCommand | undefined;
     try {
       // 先完成纯校验，再产生请求号。请求失败保留原号；只有输入变更或明确开始新操作才清除。
-      const draft = buildMailDraft(getFieldsValue(), clientRequestId.value, overview.value?.currencies);
+      const draft = buildMailDraft(getFieldsValue(), clientRequestId.value, overview.value?.currencies, {
+        currencies: mailCurrencies.value,
+        items: mailItems.value,
+      });
       if (!clientRequestId.value) clientRequestId.value = newClientRequestId();
       draft.clientRequestId = clientRequestId.value;
       command = await prepareGmMail(draft);
@@ -765,6 +846,23 @@
   }
   .gm-actions {
     flex-wrap: wrap;
+  }
+  .gm-sub-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .gm-attachment-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .gm-currency-select {
+    min-width: 120px;
   }
   .gm-space {
     margin-top: 16px;

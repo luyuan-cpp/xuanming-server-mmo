@@ -340,9 +340,19 @@ type PlayerProfileComp struct {
 	// 上一次改名成功的时刻 Unix 毫秒,0 = 没改过。只用来在本地预判冷却、少发一次无用请求;真正的判定在 data_service。
 	RenamedMs uint64 `protobuf:"varint,5,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"`
 	// 进行中的改名;没有这个字段 = 没有改名在进行。
-	RenameOp      *PlayerRenameOp `protobuf:"bytes,6,opt,name=rename_op,json=renameOp,proto3" json:"rename_op,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RenameOp *PlayerRenameOp `protobuf:"bytes,6,opt,name=rename_op,json=renameOp,proto3" json:"rename_op,omitempty"`
+	// 角色形象免费试用位图(docs/rules/bit-storage-and-table-ids.md):
+	// 第 i 位对应 CharacterAppearance 表经导表器分配的 bit_index i(低位在前,末尾全 0 字节不写)。
+	// 置 1 表示该角色已使用过对应形象的 1 小时免费试用资格;高位未知 bit 混跑时原样透传不截断。
+	AppearanceTrialUsedBits []byte `protobuf:"bytes,7,opt,name=appearance_trial_used_bits,json=appearanceTrialUsedBits,proto3" json:"appearance_trial_used_bits,omitempty"`
+	// 当前正在试用的形象 ID(空串 = 无试用中);展示生效形象由 PlayerAppearanceSystem::EffectiveAppearanceId 计算。
+	TrialAppearanceId string `protobuf:"bytes,8,opt,name=trial_appearance_id,json=trialAppearanceId,proto3" json:"trial_appearance_id,omitempty"`
+	// 当前试用到期的 Unix 秒;0 = 无试用中;<= 现在 = 已到期(下次加载或 Tick 自动清理并广播还原)。
+	TrialExpiresAt uint64 `protobuf:"varint,9,opt,name=trial_expires_at,json=trialExpiresAt,proto3" json:"trial_expires_at,omitempty"`
+	// 永久形象切换序号(每次消耗角色形象卡成功切换永久形象时递增),用于可靠同步到 data_service 账号角色目录。
+	AppearanceSwitchSeq uint64 `protobuf:"varint,10,opt,name=appearance_switch_seq,json=appearanceSwitchSeq,proto3" json:"appearance_switch_seq,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PlayerProfileComp) Reset() {
@@ -415,6 +425,34 @@ func (x *PlayerProfileComp) GetRenameOp() *PlayerRenameOp {
 		return x.RenameOp
 	}
 	return nil
+}
+
+func (x *PlayerProfileComp) GetAppearanceTrialUsedBits() []byte {
+	if x != nil {
+		return x.AppearanceTrialUsedBits
+	}
+	return nil
+}
+
+func (x *PlayerProfileComp) GetTrialAppearanceId() string {
+	if x != nil {
+		return x.TrialAppearanceId
+	}
+	return ""
+}
+
+func (x *PlayerProfileComp) GetTrialExpiresAt() uint64 {
+	if x != nil {
+		return x.TrialExpiresAt
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetAppearanceSwitchSeq() uint64 {
+	if x != nil {
+		return x.AppearanceSwitchSeq
+	}
+	return 0
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:
@@ -589,7 +627,7 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x16registration_timestamp\x18\x01 \x01(\x04R\x15registrationTimestamp\x12-\n" +
 	"\x13afk_pass_expires_at\x18\x02 \x01(\x04R\x10afkPassExpiresAt\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"\xd0\x01\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"\x9b\x03\n" +
 	"\x11PlayerProfileComp\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x16\n" +
@@ -598,7 +636,12 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"rename_seq\x18\x04 \x01(\x04R\trenameSeq\x12\x1d\n" +
 	"\n" +
 	"renamed_ms\x18\x05 \x01(\x04R\trenamedMs\x12,\n" +
-	"\trename_op\x18\x06 \x01(\v2\x0f.PlayerRenameOpR\brenameOp\"\xaf\x01\n" +
+	"\trename_op\x18\x06 \x01(\v2\x0f.PlayerRenameOpR\brenameOp\x12;\n" +
+	"\x1aappearance_trial_used_bits\x18\a \x01(\fR\x17appearanceTrialUsedBits\x12.\n" +
+	"\x13trial_appearance_id\x18\b \x01(\tR\x11trialAppearanceId\x12(\n" +
+	"\x10trial_expires_at\x18\t \x01(\x04R\x0etrialExpiresAt\x122\n" +
+	"\x15appearance_switch_seq\x18\n" +
+	" \x01(\x04R\x13appearanceSwitchSeq\"\xaf\x01\n" +
 	"\x0ePlayerRenameOp\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
