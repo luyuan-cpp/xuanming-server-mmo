@@ -29,6 +29,9 @@ public:
     static void NotifyPlayerRenamed(entt::entity player,
         const ::PlayerRenamedNotify* request,
         ::Empty* response);
+    static void NotifySelfActorStateFlags(entt::entity player,
+        const ::SelfActorStateFlagsS2C* request,
+        ::Empty* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -71,6 +74,13 @@ public:
 			{
             NotifyPlayerRenamed(player,
                 static_cast<const ::PlayerRenamedNotify*>(request),
+                static_cast<::Empty*>(response));
+			}
+            break;
+        case 5:
+			{
+            NotifySelfActorStateFlags(player,
+                static_cast<const ::SelfActorStateFlagsS2C*>(request),
                 static_cast<::Empty*>(response));
 			}
             break;

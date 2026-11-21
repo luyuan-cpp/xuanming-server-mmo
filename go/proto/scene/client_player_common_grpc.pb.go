@@ -20,11 +20,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneClientPlayerCommon_SendTipToClient_FullMethodName     = "/SceneClientPlayerCommon/SendTipToClient"
-	SceneClientPlayerCommon_KickPlayer_FullMethodName          = "/SceneClientPlayerCommon/KickPlayer"
-	SceneClientPlayerCommon_RedirectToGate_FullMethodName      = "/SceneClientPlayerCommon/RedirectToGate"
-	SceneClientPlayerCommon_RenamePlayer_FullMethodName        = "/SceneClientPlayerCommon/RenamePlayer"
-	SceneClientPlayerCommon_NotifyPlayerRenamed_FullMethodName = "/SceneClientPlayerCommon/NotifyPlayerRenamed"
+	SceneClientPlayerCommon_SendTipToClient_FullMethodName           = "/SceneClientPlayerCommon/SendTipToClient"
+	SceneClientPlayerCommon_KickPlayer_FullMethodName                = "/SceneClientPlayerCommon/KickPlayer"
+	SceneClientPlayerCommon_RedirectToGate_FullMethodName            = "/SceneClientPlayerCommon/RedirectToGate"
+	SceneClientPlayerCommon_RenamePlayer_FullMethodName              = "/SceneClientPlayerCommon/RenamePlayer"
+	SceneClientPlayerCommon_NotifyPlayerRenamed_FullMethodName       = "/SceneClientPlayerCommon/NotifyPlayerRenamed"
+	SceneClientPlayerCommon_NotifySelfActorStateFlags_FullMethodName = "/SceneClientPlayerCommon/NotifySelfActorStateFlags"
 )
 
 // SceneClientPlayerCommonClient is the client API for SceneClientPlayerCommon service.
@@ -36,6 +37,7 @@ type SceneClientPlayerCommonClient interface {
 	RedirectToGate(ctx context.Context, in *RedirectToGateNotify, opts ...grpc.CallOption) (*base.Empty, error)
 	RenamePlayer(ctx context.Context, in *RenamePlayerRequest, opts ...grpc.CallOption) (*RenamePlayerResponse, error)
 	NotifyPlayerRenamed(ctx context.Context, in *PlayerRenamedNotify, opts ...grpc.CallOption) (*base.Empty, error)
+	NotifySelfActorStateFlags(ctx context.Context, in *SelfActorStateFlagsS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type sceneClientPlayerCommonClient struct {
@@ -96,6 +98,16 @@ func (c *sceneClientPlayerCommonClient) NotifyPlayerRenamed(ctx context.Context,
 	return out, nil
 }
 
+func (c *sceneClientPlayerCommonClient) NotifySelfActorStateFlags(ctx context.Context, in *SelfActorStateFlagsS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, SceneClientPlayerCommon_NotifySelfActorStateFlags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneClientPlayerCommonServer is the server API for SceneClientPlayerCommon service.
 // All implementations must embed UnimplementedSceneClientPlayerCommonServer
 // for forward compatibility.
@@ -105,6 +117,7 @@ type SceneClientPlayerCommonServer interface {
 	RedirectToGate(context.Context, *RedirectToGateNotify) (*base.Empty, error)
 	RenamePlayer(context.Context, *RenamePlayerRequest) (*RenamePlayerResponse, error)
 	NotifyPlayerRenamed(context.Context, *PlayerRenamedNotify) (*base.Empty, error)
+	NotifySelfActorStateFlags(context.Context, *SelfActorStateFlagsS2C) (*base.Empty, error)
 	mustEmbedUnimplementedSceneClientPlayerCommonServer()
 }
 
@@ -129,6 +142,9 @@ func (UnimplementedSceneClientPlayerCommonServer) RenamePlayer(context.Context, 
 }
 func (UnimplementedSceneClientPlayerCommonServer) NotifyPlayerRenamed(context.Context, *PlayerRenamedNotify) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyPlayerRenamed not implemented")
+}
+func (UnimplementedSceneClientPlayerCommonServer) NotifySelfActorStateFlags(context.Context, *SelfActorStateFlagsS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifySelfActorStateFlags not implemented")
 }
 func (UnimplementedSceneClientPlayerCommonServer) mustEmbedUnimplementedSceneClientPlayerCommonServer() {
 }
@@ -242,6 +258,24 @@ func _SceneClientPlayerCommon_NotifyPlayerRenamed_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneClientPlayerCommon_NotifySelfActorStateFlags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SelfActorStateFlagsS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneClientPlayerCommonServer).NotifySelfActorStateFlags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneClientPlayerCommon_NotifySelfActorStateFlags_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneClientPlayerCommonServer).NotifySelfActorStateFlags(ctx, req.(*SelfActorStateFlagsS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneClientPlayerCommon_ServiceDesc is the grpc.ServiceDesc for SceneClientPlayerCommon service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -268,6 +302,10 @@ var SceneClientPlayerCommon_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyPlayerRenamed",
 			Handler:    _SceneClientPlayerCommon_NotifyPlayerRenamed_Handler,
+		},
+		{
+			MethodName: "NotifySelfActorStateFlags",
+			Handler:    _SceneClientPlayerCommon_NotifySelfActorStateFlags_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

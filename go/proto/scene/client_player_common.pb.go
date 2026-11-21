@@ -315,6 +315,70 @@ func (x *PlayerRenamedNotify) GetNextRenameTime() uint64 {
 	return 0
 }
 
+// 主角权威状态互斥标志即时同步(只发给主角本人,不广播旁观者)。
+// 任何行为状态(ActorActionState: bit0=Combat, bit1=TeamFollow, bit2=Mounted)或
+// 战斗异常状态(ActorCombatState: bit1=Silence 等)发生实际位变化时立即单播给主角,
+// 供客户端刷新 UI 禁用与本地角色状态机纠偏;入场 / 重连落地若存在非零态也会补推一次。
+type SelfActorStateFlagsS2C struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ActionStateMask uint64                 `protobuf:"varint,1,opt,name=action_state_mask,json=actionStateMask,proto3" json:"action_state_mask,omitempty"` // 位 i = eActorState(i)
+	CombatStateMask uint64                 `protobuf:"varint,2,opt,name=combat_state_mask,json=combatStateMask,proto3" json:"combat_state_mask,omitempty"` // 位 i = eActorCombatState(i)
+	StateSeq        uint64                 `protobuf:"varint,3,opt,name=state_seq,json=stateSeq,proto3" json:"state_seq,omitempty"`                        // 单次进场内单调递增序号(仅位变化或重推时递增,防乱序覆盖)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SelfActorStateFlagsS2C) Reset() {
+	*x = SelfActorStateFlagsS2C{}
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelfActorStateFlagsS2C) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelfActorStateFlagsS2C) ProtoMessage() {}
+
+func (x *SelfActorStateFlagsS2C) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_client_player_common_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelfActorStateFlagsS2C.ProtoReflect.Descriptor instead.
+func (*SelfActorStateFlagsS2C) Descriptor() ([]byte, []int) {
+	return file_proto_scene_client_player_common_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SelfActorStateFlagsS2C) GetActionStateMask() uint64 {
+	if x != nil {
+		return x.ActionStateMask
+	}
+	return 0
+}
+
+func (x *SelfActorStateFlagsS2C) GetCombatStateMask() uint64 {
+	if x != nil {
+		return x.CombatStateMask
+	}
+	return 0
+}
+
+func (x *SelfActorStateFlagsS2C) GetStateSeq() uint64 {
+	if x != nil {
+		return x.StateSeq
+	}
+	return 0
+}
+
 var File_proto_scene_client_player_common_proto protoreflect.FileDescriptor
 
 const file_proto_scene_client_player_common_proto_rawDesc = "" +
@@ -338,14 +402,19 @@ const file_proto_scene_client_player_common_proto_rawDesc = "" +
 	"\x13PlayerRenamedNotify\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12(\n" +
-	"\x10next_rename_time\x18\x03 \x01(\x04R\x0enextRenameTime2\xbe\x02\n" +
+	"\x10next_rename_time\x18\x03 \x01(\x04R\x0enextRenameTime\"\x8d\x01\n" +
+	"\x16SelfActorStateFlagsS2C\x12*\n" +
+	"\x11action_state_mask\x18\x01 \x01(\x04R\x0factionStateMask\x12*\n" +
+	"\x11combat_state_mask\x18\x02 \x01(\x04R\x0fcombatStateMask\x12\x1b\n" +
+	"\tstate_seq\x18\x03 \x01(\x04R\bstateSeq2\x83\x03\n" +
 	"\x17SceneClientPlayerCommon\x121\n" +
 	"\x0fSendTipToClient\x12\x0f.TipInfoMessage\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x123\n" +
 	"\n" +
 	"KickPlayer\x12\x16.GameKickPlayerRequest\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x126\n" +
 	"\x0eRedirectToGate\x12\x15.RedirectToGateNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12;\n" +
 	"\fRenamePlayer\x12\x14.RenamePlayerRequest\x1a\x15.RenamePlayerResponse\x12:\n" +
-	"\x13NotifyPlayerRenamed\x12\x14.PlayerRenamedNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\n" +
+	"\x13NotifyPlayerRenamed\x12\x14.PlayerRenamedNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12C\n" +
+	"\x19NotifySelfActorStateFlags\x12\x17.SelfActorStateFlagsS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -360,32 +429,35 @@ func file_proto_scene_client_player_common_proto_rawDescGZIP() []byte {
 	return file_proto_scene_client_player_common_proto_rawDescData
 }
 
-var file_proto_scene_client_player_common_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_scene_client_player_common_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_scene_client_player_common_proto_goTypes = []any{
-	(*GameKickPlayerRequest)(nil), // 0: GameKickPlayerRequest
-	(*RedirectToGateNotify)(nil),  // 1: RedirectToGateNotify
-	(*RenamePlayerRequest)(nil),   // 2: RenamePlayerRequest
-	(*RenamePlayerResponse)(nil),  // 3: RenamePlayerResponse
-	(*PlayerRenamedNotify)(nil),   // 4: PlayerRenamedNotify
-	(*base.TipInfoMessage)(nil),   // 5: TipInfoMessage
-	(*base.Empty)(nil),            // 6: Empty
+	(*GameKickPlayerRequest)(nil),  // 0: GameKickPlayerRequest
+	(*RedirectToGateNotify)(nil),   // 1: RedirectToGateNotify
+	(*RenamePlayerRequest)(nil),    // 2: RenamePlayerRequest
+	(*RenamePlayerResponse)(nil),   // 3: RenamePlayerResponse
+	(*PlayerRenamedNotify)(nil),    // 4: PlayerRenamedNotify
+	(*SelfActorStateFlagsS2C)(nil), // 5: SelfActorStateFlagsS2C
+	(*base.TipInfoMessage)(nil),    // 6: TipInfoMessage
+	(*base.Empty)(nil),             // 7: Empty
 }
 var file_proto_scene_client_player_common_proto_depIdxs = []int32{
-	5, // 0: GameKickPlayerRequest.reason:type_name -> TipInfoMessage
-	5, // 1: RenamePlayerResponse.error_message:type_name -> TipInfoMessage
-	5, // 2: PlayerRenamedNotify.error_message:type_name -> TipInfoMessage
-	5, // 3: SceneClientPlayerCommon.SendTipToClient:input_type -> TipInfoMessage
+	6, // 0: GameKickPlayerRequest.reason:type_name -> TipInfoMessage
+	6, // 1: RenamePlayerResponse.error_message:type_name -> TipInfoMessage
+	6, // 2: PlayerRenamedNotify.error_message:type_name -> TipInfoMessage
+	6, // 3: SceneClientPlayerCommon.SendTipToClient:input_type -> TipInfoMessage
 	0, // 4: SceneClientPlayerCommon.KickPlayer:input_type -> GameKickPlayerRequest
 	1, // 5: SceneClientPlayerCommon.RedirectToGate:input_type -> RedirectToGateNotify
 	2, // 6: SceneClientPlayerCommon.RenamePlayer:input_type -> RenamePlayerRequest
 	4, // 7: SceneClientPlayerCommon.NotifyPlayerRenamed:input_type -> PlayerRenamedNotify
-	6, // 8: SceneClientPlayerCommon.SendTipToClient:output_type -> Empty
-	6, // 9: SceneClientPlayerCommon.KickPlayer:output_type -> Empty
-	6, // 10: SceneClientPlayerCommon.RedirectToGate:output_type -> Empty
-	3, // 11: SceneClientPlayerCommon.RenamePlayer:output_type -> RenamePlayerResponse
-	6, // 12: SceneClientPlayerCommon.NotifyPlayerRenamed:output_type -> Empty
-	8, // [8:13] is the sub-list for method output_type
-	3, // [3:8] is the sub-list for method input_type
+	5, // 8: SceneClientPlayerCommon.NotifySelfActorStateFlags:input_type -> SelfActorStateFlagsS2C
+	7, // 9: SceneClientPlayerCommon.SendTipToClient:output_type -> Empty
+	7, // 10: SceneClientPlayerCommon.KickPlayer:output_type -> Empty
+	7, // 11: SceneClientPlayerCommon.RedirectToGate:output_type -> Empty
+	3, // 12: SceneClientPlayerCommon.RenamePlayer:output_type -> RenamePlayerResponse
+	7, // 13: SceneClientPlayerCommon.NotifyPlayerRenamed:output_type -> Empty
+	7, // 14: SceneClientPlayerCommon.NotifySelfActorStateFlags:output_type -> Empty
+	9, // [9:15] is the sub-list for method output_type
+	3, // [3:9] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -402,7 +474,7 @@ func file_proto_scene_client_player_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_client_player_common_proto_rawDesc), len(file_proto_scene_client_player_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

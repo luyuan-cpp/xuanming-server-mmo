@@ -10,6 +10,7 @@
 #include "engine/core/utils/registry/actor_log.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "actor/actor_net_id.h"
+#include "actor/action_state/system/actor_action_state.h"
 #include "actor/attribute/system/actor_attribute_calculator.h"
 #include "combat/buff/system/buff.h"  // RestoreSavedBuffs:存档里下线保留的 Buff 在建实体时生效
 
@@ -3401,6 +3402,7 @@ bool PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	//     不依赖第 6 步冻结重建与本链的回调先后。
 	PlayerTeamSystem::OnEnteredScene(player);
 	if (!canContinueEntry()) return stopEntry();
+	ActorActionStateSystem::ResendStateFlagsAfterEntry(player);
 
 	// 4. Set login state for downstream systems (reconnect, first-login logic, etc.).
 	if (enterInfo.enter_gs_type() != 0)

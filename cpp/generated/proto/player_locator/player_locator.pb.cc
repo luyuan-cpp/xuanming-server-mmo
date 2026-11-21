@@ -37,6 +37,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto, /* tracker*/ nullptr,},
         // ::playerlocator::SetSessionRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto, /* tracker*/ nullptr,},
+        // ::playerlocator::PlayerScenePlacement
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto, /* tracker*/ nullptr,},
         // ::playerlocator::GetSessionRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto, /* tracker*/ nullptr,},
         // ::playerlocator::GetSessionResponse
@@ -181,7 +183,7 @@ constexpr auto SetDisconnectingRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
@@ -414,7 +416,7 @@ constexpr auto ReconnectRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
@@ -727,6 +729,201 @@ const ::_pbi::ClassData* PlayerSession_get_class_data() {
   return PlayerSession_globals_.GetClassData();
 #else
   return PlayerSession_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PlayerScenePlacement::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PlayerScenePlacement>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_._has_bits_);
+};
+
+constexpr PlayerScenePlacement::ParseTableT_ PlayerScenePlacement::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_._has_bits_),
+      0, // no _extensions_
+      8, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967040,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      8,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::playerlocator::PlayerScenePlacement>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 login_generation = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerScenePlacement, _impl_.login_generation_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.login_generation_)}},
+      // bool found = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerScenePlacement, _impl_.found_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.found_)}},
+      // uint32 zone_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerScenePlacement, _impl_.zone_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.zone_id_)}},
+      // string node_id = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.node_id_)}},
+      // uint64 scene_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerScenePlacement, _impl_.scene_id_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.scene_id_)}},
+      // uint64 owner_epoch = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerScenePlacement, _impl_.owner_epoch_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.owner_epoch_)}},
+      // bool awaiting_placement = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerScenePlacement, _impl_.awaiting_placement_), 3>(),
+       {48, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.awaiting_placement_)}},
+      // uint32 session_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerScenePlacement, _impl_.session_id_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.session_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bool found = 1;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.found_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 zone_id = 2;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.zone_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string node_id = 3;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.node_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 scene_id = 4;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.scene_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 owner_epoch = 5;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.owner_epoch_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool awaiting_placement = 6;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.awaiting_placement_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 session_id = 7;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.session_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 login_generation = 8;
+      {PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.login_generation_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\42\0\0\7\0\0\0\0\0\0\0\0\0\0\0\0"
+      "playerlocator.PlayerScenePlacement"
+      "node_id"
+    }},
+  };
+}
+
+
+inline constexpr PlayerScenePlacement::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        node_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        zone_id_{0u},
+        found_{false},
+        awaiting_placement_{false},
+        scene_id_{::uint64_t{0u}},
+        owner_epoch_{::uint64_t{0u}},
+        login_generation_{::uint64_t{0u}},
+        session_id_{0u} {}
+
+template <typename>
+constexpr PlayerScenePlacement::PlayerScenePlacement(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PlayerScenePlacement::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerScenePlacement(arena);
+}
+constexpr auto PlayerScenePlacement::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerScenePlacement), alignof(PlayerScenePlacement));
+}
+constexpr auto PlayerScenePlacement::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PlayerScenePlacement::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerScenePlacement>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerScenePlacement::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PlayerScenePlacement>(), &PlayerScenePlacement::ByteSizeLong,
+              &PlayerScenePlacement::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PlayerScenePlacementGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PlayerScenePlacementGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PlayerScenePlacement_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PlayerScenePlacement::InternalGenerateClassData_(
+            _default, &PlayerScenePlacement_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PlayerScenePlacement>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PlayerScenePlacementGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PlayerScenePlacement _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PlayerScenePlacement>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PlayerScenePlacementGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PlayerScenePlacementGlobalsTypeInternal PlayerScenePlacement_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PlayerScenePlacement_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PlayerScenePlacement_globals_.GetClassData();
+#else
+  return PlayerScenePlacement_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1180,7 +1377,7 @@ constexpr auto MarkOfflineRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
@@ -1369,7 +1566,7 @@ constexpr auto LeaseExpiredEvent::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
@@ -1432,11 +1629,11 @@ constexpr GetSessionRequest::ParseTableT_ GetSessionRequest::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(GetSessionRequest, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1446,6 +1643,10 @@ constexpr GetSessionRequest::ParseTableT_ GetSessionRequest::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::playerlocator::GetSessionRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // bool include_placement = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetSessionRequest, _impl_.include_placement_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetSessionRequest, _impl_.include_placement_)}},
       // uint64 player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetSessionRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
@@ -1455,6 +1656,8 @@ constexpr GetSessionRequest::ParseTableT_ GetSessionRequest::InternalGeneratePar
     }}, {{
       // uint64 player_id = 1;
       {PROTOBUF_FIELD_OFFSET(GetSessionRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool include_placement = 2;
+      {PROTOBUF_FIELD_OFFSET(GetSessionRequest, _impl_.include_placement_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -1467,7 +1670,8 @@ inline constexpr GetSessionRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        player_id_{::uint64_t{0u}} {}
+        player_id_{::uint64_t{0u}},
+        include_placement_{false} {}
 
 template <typename>
 constexpr GetSessionRequest::GetSessionRequest(::_pbi::ConstantInitialized,
@@ -1510,7 +1714,7 @@ constexpr auto GetSessionRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
@@ -1824,7 +2028,7 @@ constexpr auto ReconnectResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
@@ -1887,12 +2091,12 @@ constexpr GetSessionResponse::ParseTableT_ GetSessionResponse::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      1,  // num_aux_entries
+      3,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1901,27 +2105,39 @@ constexpr GetSessionResponse::ParseTableT_ GetSessionResponse::InternalGenerateP
       ::_pbi::TcParser::GetTable<::playerlocator::GetSessionResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // bool found = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetSessionResponse, _impl_.found_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.found_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // .playerlocator.PlayerSession session = 1;
       {::_pbi::TcParser::FastMtS1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.session_)}},
+      // bool found = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetSessionResponse, _impl_.found_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.found_)}},
+      // .playerlocator.PlayerScenePlacement placement = 3;
+      {::_pbi::TcParser::FastMtS1,
+       {26, 1, 1,
+        PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.placement_)}},
     }}, {{
       65535, 65535
     }}, {{
       // .playerlocator.PlayerSession session = 1;
       {PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.session_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool found = 2;
-      {PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.found_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.found_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .playerlocator.PlayerScenePlacement placement = 3;
+      {PROTOBUF_FIELD_OFFSET(GetSessionResponse, _impl_.placement_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::playerlocator::PlayerSession>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::playerlocator::PlayerSession_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::playerlocator::PlayerScenePlacement>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::playerlocator::PlayerScenePlacement_globals_},
         #endif
     }},
     {{
@@ -1935,6 +2151,7 @@ inline constexpr GetSessionResponse::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         session_{nullptr},
+        placement_{nullptr},
         found_{false} {}
 
 template <typename>
@@ -1978,7 +2195,7 @@ constexpr auto GetSessionResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
@@ -2100,16 +2317,39 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::playerlocator::SetSessionRequest, _impl_.session_),
         0,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionRequest, _impl_._has_bits_),
-        4, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_._has_bits_),
+        11, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.found_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.zone_id_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.node_id_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.scene_id_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.owner_epoch_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.awaiting_placement_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.session_id_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::PlayerScenePlacement, _impl_.login_generation_),
+        2,
+        1,
         0,
+        4,
+        5,
+        3,
+        7,
+        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionRequest, _impl_.include_placement_),
+        0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionResponse, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionResponse, _impl_.session_),
         PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionResponse, _impl_.found_),
+        PROTOBUF_FIELD_OFFSET(::playerlocator::GetSessionResponse, _impl_.placement_),
         0,
+        2,
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::playerlocator::MarkOfflineRequest, _impl_._has_bits_),
@@ -2192,13 +2432,14 @@ static const ::_pbi::MigrationSchema
         {17, sizeof(::playerlocator::PlayerId)},
         {22, sizeof(::playerlocator::PlayerSession)},
         {57, sizeof(::playerlocator::SetSessionRequest)},
-        {62, sizeof(::playerlocator::GetSessionRequest)},
-        {67, sizeof(::playerlocator::GetSessionResponse)},
-        {74, sizeof(::playerlocator::MarkOfflineRequest)},
-        {85, sizeof(::playerlocator::SetDisconnectingRequest)},
-        {98, sizeof(::playerlocator::ReconnectRequest)},
-        {123, sizeof(::playerlocator::ReconnectResponse)},
-        {132, sizeof(::playerlocator::LeaseExpiredEvent)},
+        {62, sizeof(::playerlocator::PlayerScenePlacement)},
+        {81, sizeof(::playerlocator::GetSessionRequest)},
+        {88, sizeof(::playerlocator::GetSessionResponse)},
+        {97, sizeof(::playerlocator::MarkOfflineRequest)},
+        {108, sizeof(::playerlocator::SetDisconnectingRequest)},
+        {121, sizeof(::playerlocator::ReconnectRequest)},
+        {146, sizeof(::playerlocator::ReconnectResponse)},
+        {155, sizeof(::playerlocator::LeaseExpiredEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2206,6 +2447,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::playerlocator::PlayerId_globals_,
         &::playerlocator::PlayerSession_globals_,
         &::playerlocator::SetSessionRequest_globals_,
+        &::playerlocator::PlayerScenePlacement_globals_,
         &::playerlocator::GetSessionRequest_globals_,
         &::playerlocator::GetSessionResponse_globals_,
         &::playerlocator::MarkOfflineRequest_globals_,
@@ -2233,47 +2475,54 @@ const char descriptor_table_protodef_proto_2fplayer_5flocator_2fplayer_5flocator
     "\r \001(\t\022\030\n\020login_generation\030\016 \001(\004\022\033\n\023sessi"
     "on_incarnation\030\017 \001(\004\022\024\n\014gate_zone_id\030\020 \001"
     "(\r\"B\n\021SetSessionRequest\022-\n\007session\030\001 \001(\013"
-    "2\034.playerlocator.PlayerSession\"&\n\021GetSes"
-    "sionRequest\022\021\n\tplayer_id\030\001 \001(\004\"R\n\022GetSes"
-    "sionResponse\022-\n\007session\030\001 \001(\0132\034.playerlo"
-    "cator.PlayerSession\022\r\n\005found\030\002 \001(\010\"\211\001\n\022M"
-    "arkOfflineRequest\022\021\n\tplayer_id\030\001 \001(\004\022\033\n\023"
-    "expected_session_id\030\002 \001(\r\022 \n\030expected_se"
-    "ssion_version\030\003 \001(\r\022!\n\031expected_gate_ins"
-    "tance_id\030\004 \001(\t\"\222\001\n\027SetDisconnectingReque"
-    "st\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001("
-    "\r\022\031\n\021lease_ttl_seconds\030\003 \001(\r\022\030\n\020gate_ins"
-    "tance_id\030\004 \001(\t\022\033\n\023session_incarnation\030\005 "
-    "\001(\004\"\205\002\n\020ReconnectRequest\022\021\n\tplayer_id\030\001 "
-    "\001(\004\022\026\n\016new_session_id\030\002 \001(\r\022\017\n\007gate_id\030\003"
-    " \001(\t\022\030\n\020gate_instance_id\030\004 \001(\t\022\020\n\010token_"
-    "id\030\005 \001(\t\022\027\n\017token_expiry_ms\030\006 \001(\004\022\022\n\nreq"
-    "uest_id\030\007 \001(\t\022\017\n\007account\030\010 \001(\t\022\030\n\020login_"
-    "generation\030\t \001(\004\022\033\n\023session_incarnation\030"
-    "\n \001(\004\022\024\n\014gate_zone_id\030\013 \001(\r\"j\n\021Reconnect"
-    "Response\022\017\n\007success\030\001 \001(\010\022-\n\007session\030\002 \001"
-    "(\0132\034.playerlocator.PlayerSession\022\025\n\rerro"
-    "r_message\030\003 \001(\t\"\216\001\n\021LeaseExpiredEvent\022\021\n"
-    "\tplayer_id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\025\n\r"
-    "scene_node_id\030\003 \001(\t\022\020\n\010scene_id\030\004 \001(\004\022\017\n"
-    "\007gate_id\030\005 \001(\t\022\030\n\020gate_instance_id\030\006 \001(\t"
-    "*\205\001\n\022PlayerSessionState\022\031\n\025SESSION_STATE"
-    "_UNKNOWN\020\000\022\030\n\024SESSION_STATE_ONLINE\020\001\022\037\n\033"
-    "SESSION_STATE_DISCONNECTING\020\002\022\031\n\025SESSION"
-    "_STATE_OFFLINE\020\0032\345\003\n\rPlayerLocator\0224\n\013Se"
-    "tLocation\022\035.playerlocator.PlayerLocation"
-    "\032\006.Empty\022E\n\013GetLocation\022\027.playerlocator."
-    "PlayerId\032\035.playerlocator.PlayerLocation\022"
-    "8\n\013MarkOffline\022!.playerlocator.MarkOffli"
-    "neRequest\032\006.Empty\0226\n\nSetSession\022 .player"
-    "locator.SetSessionRequest\032\006.Empty\022Q\n\nGet"
-    "Session\022 .playerlocator.GetSessionReques"
-    "t\032!.playerlocator.GetSessionResponse\022B\n\020"
-    "SetDisconnecting\022&.playerlocator.SetDisc"
-    "onnectingRequest\032\006.Empty\022N\n\tReconnect\022\037."
-    "playerlocator.ReconnectRequest\032 .playerl"
-    "ocator.ReconnectResponseB\026Z\024proto/player"
-    "_locatorb\006proto3"
+    "2\034.playerlocator.PlayerSession\"\270\001\n\024Playe"
+    "rScenePlacement\022\r\n\005found\030\001 \001(\010\022\017\n\007zone_i"
+    "d\030\002 \001(\r\022\017\n\007node_id\030\003 \001(\t\022\020\n\010scene_id\030\004 \001"
+    "(\004\022\023\n\013owner_epoch\030\005 \001(\004\022\032\n\022awaiting_plac"
+    "ement\030\006 \001(\010\022\022\n\nsession_id\030\007 \001(\r\022\030\n\020login"
+    "_generation\030\010 \001(\004\"A\n\021GetSessionRequest\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022\031\n\021include_placement\030\002"
+    " \001(\010\"\212\001\n\022GetSessionResponse\022-\n\007session\030\001"
+    " \001(\0132\034.playerlocator.PlayerSession\022\r\n\005fo"
+    "und\030\002 \001(\010\0226\n\tplacement\030\003 \001(\0132#.playerloc"
+    "ator.PlayerScenePlacement\"\211\001\n\022MarkOfflin"
+    "eRequest\022\021\n\tplayer_id\030\001 \001(\004\022\033\n\023expected_"
+    "session_id\030\002 \001(\r\022 \n\030expected_session_ver"
+    "sion\030\003 \001(\r\022!\n\031expected_gate_instance_id\030"
+    "\004 \001(\t\"\222\001\n\027SetDisconnectingRequest\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\031\n\021leas"
+    "e_ttl_seconds\030\003 \001(\r\022\030\n\020gate_instance_id\030"
+    "\004 \001(\t\022\033\n\023session_incarnation\030\005 \001(\004\"\205\002\n\020R"
+    "econnectRequest\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016ne"
+    "w_session_id\030\002 \001(\r\022\017\n\007gate_id\030\003 \001(\t\022\030\n\020g"
+    "ate_instance_id\030\004 \001(\t\022\020\n\010token_id\030\005 \001(\t\022"
+    "\027\n\017token_expiry_ms\030\006 \001(\004\022\022\n\nrequest_id\030\007"
+    " \001(\t\022\017\n\007account\030\010 \001(\t\022\030\n\020login_generatio"
+    "n\030\t \001(\004\022\033\n\023session_incarnation\030\n \001(\004\022\024\n\014"
+    "gate_zone_id\030\013 \001(\r\"j\n\021ReconnectResponse\022"
+    "\017\n\007success\030\001 \001(\010\022-\n\007session\030\002 \001(\0132\034.play"
+    "erlocator.PlayerSession\022\025\n\rerror_message"
+    "\030\003 \001(\t\"\216\001\n\021LeaseExpiredEvent\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\025\n\rscene_nod"
+    "e_id\030\003 \001(\t\022\020\n\010scene_id\030\004 \001(\004\022\017\n\007gate_id\030"
+    "\005 \001(\t\022\030\n\020gate_instance_id\030\006 \001(\t*\205\001\n\022Play"
+    "erSessionState\022\031\n\025SESSION_STATE_UNKNOWN\020"
+    "\000\022\030\n\024SESSION_STATE_ONLINE\020\001\022\037\n\033SESSION_S"
+    "TATE_DISCONNECTING\020\002\022\031\n\025SESSION_STATE_OF"
+    "FLINE\020\0032\345\003\n\rPlayerLocator\0224\n\013SetLocation"
+    "\022\035.playerlocator.PlayerLocation\032\006.Empty\022"
+    "E\n\013GetLocation\022\027.playerlocator.PlayerId\032"
+    "\035.playerlocator.PlayerLocation\0228\n\013MarkOf"
+    "fline\022!.playerlocator.MarkOfflineRequest"
+    "\032\006.Empty\0226\n\nSetSession\022 .playerlocator.S"
+    "etSessionRequest\032\006.Empty\022Q\n\nGetSession\022 "
+    ".playerlocator.GetSessionRequest\032!.playe"
+    "rlocator.GetSessionResponse\022B\n\020SetDiscon"
+    "necting\022&.playerlocator.SetDisconnecting"
+    "Request\032\006.Empty\022N\n\tReconnect\022\037.playerloc"
+    "ator.ReconnectRequest\032 .playerlocator.Re"
+    "connectResponseB\026Z\024proto/player_locatorb"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto_deps[1] = {
@@ -2283,13 +2532,13 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5flocator_2fplayer_5flo
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto = {
     false,
     false,
-    2296,
+    2567,
     descriptor_table_protodef_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto,
     "proto/player_locator/player_locator.proto",
     &descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto_once,
     descriptor_table_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto_deps,
     1,
-    11,
+    12,
     schemas,
     file_message_globals,
     TableStruct_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto::offsets,
@@ -3712,6 +3961,392 @@ void SetSessionRequest::InternalSwap(SetSessionRequest* PROTOBUF_RESTRICT PROTOB
 }
 // ===================================================================
 
+PlayerScenePlacement::PlayerScenePlacement(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerScenePlacement_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:playerlocator.PlayerScenePlacement)
+}
+PROTOBUF_NDEBUG_INLINE PlayerScenePlacement::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::playerlocator::PlayerScenePlacement& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        node_id_(arena, from.node_id_) {}
+
+PlayerScenePlacement::PlayerScenePlacement(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerScenePlacement& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerScenePlacement_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerScenePlacement* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, zone_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, zone_id_),
+           offsetof(Impl_, session_id_) -
+               offsetof(Impl_, zone_id_) +
+               sizeof(Impl_::session_id_));
+
+  // @@protoc_insertion_point(copy_constructor:playerlocator.PlayerScenePlacement)
+}
+PROTOBUF_NDEBUG_INLINE PlayerScenePlacement::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        node_id_(arena) {}
+
+inline void PlayerScenePlacement::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, zone_id_),
+           0,
+           offsetof(Impl_, session_id_) -
+               offsetof(Impl_, zone_id_) +
+               sizeof(Impl_::session_id_));
+}
+PlayerScenePlacement::~PlayerScenePlacement() {
+  // @@protoc_insertion_point(destructor:playerlocator.PlayerScenePlacement)
+  SharedDtor(*this);
+}
+inline void PlayerScenePlacement::SharedDtor(MessageLite& self) {
+  PlayerScenePlacement& this_ = static_cast<PlayerScenePlacement&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.node_id_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerScenePlacement_class_data_ =
+        PlayerScenePlacement::InternalGenerateClassData_(PlayerScenePlacement_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerScenePlacement::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerScenePlacement_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerScenePlacement_class_data_.tc_table);
+  return PlayerScenePlacement_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerScenePlacement::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerScenePlacement_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PlayerScenePlacement_globals_));
+  return PlayerScenePlacement_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PlayerScenePlacement::ParseTableT_
+    PlayerScenePlacement::_table_ =
+        PlayerScenePlacement::InternalGenerateParseTable_(PlayerScenePlacement_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PlayerScenePlacement::Clear() {
+// @@protoc_insertion_point(message_clear_start:playerlocator.PlayerScenePlacement)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.node_id_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.zone_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.session_id_) -
+        reinterpret_cast<char*>(&_impl_.zone_id_)) + sizeof(_impl_.session_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PlayerScenePlacement::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PlayerScenePlacement& this_ = static_cast<const PlayerScenePlacement&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PlayerScenePlacement::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PlayerScenePlacement& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:playerlocator.PlayerScenePlacement)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // bool found = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_found() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          1, this_._internal_found(), target);
+    }
+  }
+
+  // uint32 zone_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_zone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_zone_id(), target);
+    }
+  }
+
+  // string node_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_node_id().empty()) {
+      const ::std::string& _s = this_._internal_node_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "playerlocator.PlayerScenePlacement.node_id");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint64 scene_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_scene_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_scene_id(), target);
+    }
+  }
+
+  // uint64 owner_epoch = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_owner_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_owner_epoch(), target);
+    }
+  }
+
+  // bool awaiting_placement = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_awaiting_placement() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          6, this_._internal_awaiting_placement(), target);
+    }
+  }
+
+  // uint32 session_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_session_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_session_id(), target);
+    }
+  }
+
+  // uint64 login_generation = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_login_generation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_login_generation(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:playerlocator.PlayerScenePlacement)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PlayerScenePlacement::ByteSizeLong(const MessageLite& base) {
+  const PlayerScenePlacement& this_ = static_cast<const PlayerScenePlacement&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PlayerScenePlacement::ByteSizeLong() const {
+  const PlayerScenePlacement& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:playerlocator.PlayerScenePlacement)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string node_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_node_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_node_id());
+      }
+    }
+    // uint32 zone_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_zone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_zone_id());
+      }
+    }
+    // bool found = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_found() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool awaiting_placement = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_awaiting_placement() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 scene_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_scene_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_scene_id());
+      }
+    }
+    // uint64 owner_epoch = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_owner_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_owner_epoch());
+      }
+    }
+    // uint64 login_generation = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_login_generation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_login_generation());
+      }
+    }
+    // uint32 session_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_session_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_session_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PlayerScenePlacement::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PlayerScenePlacement*>(&to_msg);
+  auto& from = static_cast<const PlayerScenePlacement&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:playerlocator.PlayerScenePlacement)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_node_id().empty()) {
+        _this->_internal_set_node_id(from._internal_node_id());
+      } else {
+        if (_this->_impl_.node_id_.IsDefault()) {
+          _this->_internal_set_node_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_zone_id() != 0) {
+        _this->_impl_.zone_id_ = from._impl_.zone_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_found() != 0) {
+        _this->_impl_.found_ = from._impl_.found_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_awaiting_placement() != 0) {
+        _this->_impl_.awaiting_placement_ = from._impl_.awaiting_placement_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_scene_id() != 0) {
+        _this->_impl_.scene_id_ = from._impl_.scene_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_owner_epoch() != 0) {
+        _this->_impl_.owner_epoch_ = from._impl_.owner_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_login_generation() != 0) {
+        _this->_impl_.login_generation_ = from._impl_.login_generation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_session_id() != 0) {
+        _this->_impl_.session_id_ = from._impl_.session_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PlayerScenePlacement::CopyFrom(const PlayerScenePlacement& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:playerlocator.PlayerScenePlacement)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerScenePlacement::InternalSwap(PlayerScenePlacement* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.node_id_, &other->_impl_.node_id_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.session_id_)
+      + sizeof(PlayerScenePlacement::_impl_.session_id_)
+      - PROTOBUF_FIELD_OFFSET(PlayerScenePlacement, _impl_.zone_id_)>(
+          reinterpret_cast<char*>(&_impl_.zone_id_),
+          reinterpret_cast<char*>(&other->_impl_.zone_id_));
+}
+
+::google::protobuf::Metadata PlayerScenePlacement::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 GetSessionRequest::GetSessionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, GetSessionRequest_get_class_data()) {
@@ -3739,7 +4374,12 @@ PROTOBUF_NDEBUG_INLINE GetSessionRequest::Impl_::Impl_(
 
 inline void GetSessionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.player_id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, include_placement_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::include_placement_));
 }
 GetSessionRequest::~GetSessionRequest() {
   // @@protoc_insertion_point(destructor:playerlocator.GetSessionRequest)
@@ -3788,7 +4428,12 @@ PROTOBUF_NOINLINE void GetSessionRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.player_id_ = ::uint64_t{0u};
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.include_placement_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.include_placement_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -3821,6 +4466,15 @@ PROTOBUF_NOINLINE void GetSessionRequest::Clear() {
     }
   }
 
+  // bool include_placement = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_include_placement() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_include_placement(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3844,13 +4498,20 @@ PROTOBUF_NOINLINE void GetSessionRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
     // uint64 player_id = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
+      }
+    }
+    // bool include_placement = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_include_placement() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -3871,9 +4532,16 @@ void GetSessionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_player_id() != 0) {
-      _this->_impl_.player_id_ = from._impl_.player_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_include_placement() != 0) {
+        _this->_impl_.include_placement_ = from._impl_.include_placement_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3893,7 +4561,12 @@ void GetSessionRequest::InternalSwap(GetSessionRequest* PROTOBUF_RESTRICT PROTOB
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.player_id_, other->_impl_.player_id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetSessionRequest, _impl_.include_placement_)
+      + sizeof(GetSessionRequest::_impl_.include_placement_)
+      - PROTOBUF_FIELD_OFFSET(GetSessionRequest, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
 }
 
 ::google::protobuf::Metadata GetSessionRequest::GetMetadata() const {
@@ -3935,6 +4608,9 @@ GetSessionResponse::GetSessionResponse(
   _impl_.session_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.session_)
                 : nullptr;
+  _impl_.placement_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.placement_)
+                : nullptr;
   _impl_.found_ = from._impl_.found_;
 
   // @@protoc_insertion_point(copy_constructor:playerlocator.GetSessionResponse)
@@ -3965,6 +4641,7 @@ inline void GetSessionResponse::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.session_;
+  delete this_._impl_.placement_;
   this_._impl_.~Impl_();
 }
 
@@ -4002,9 +4679,15 @@ PROTOBUF_NOINLINE void GetSessionResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.session_ != nullptr);
-    _impl_.session_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.session_ != nullptr);
+      _impl_.session_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.placement_ != nullptr);
+      _impl_.placement_->Clear();
+    }
   }
   _impl_.found_ = false;
   _impl_._has_bits_.Clear();
@@ -4038,12 +4721,19 @@ PROTOBUF_NOINLINE void GetSessionResponse::Clear() {
   }
 
   // bool found = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_found() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           2, this_._internal_found(), target);
     }
+  }
+
+  // .playerlocator.PlayerScenePlacement placement = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.placement_, this_._impl_.placement_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -4071,14 +4761,19 @@ PROTOBUF_NOINLINE void GetSessionResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // .playerlocator.PlayerSession session = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.session_);
     }
-    // bool found = 2;
+    // .playerlocator.PlayerScenePlacement placement = 3;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.placement_);
+    }
+    // bool found = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_found() != 0) {
         total_size += 2;
       }
@@ -4102,7 +4797,7 @@ void GetSessionResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.session_ != nullptr);
       if (_this->_impl_.session_ == nullptr) {
@@ -4112,6 +4807,14 @@ void GetSessionResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.placement_ != nullptr);
+      if (_this->_impl_.placement_ == nullptr) {
+        _this->_impl_.placement_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.placement_);
+      } else {
+        _this->_impl_.placement_->MergeFrom(*from._impl_.placement_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_found() != 0) {
         _this->_impl_.found_ = from._impl_.found_;
       }

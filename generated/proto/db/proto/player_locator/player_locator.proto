@@ -62,13 +62,29 @@ message SetSessionRequest {
   PlayerSession session = 1;
 }
 
+// 玩家在 scene_manager 权威位置键（player:{id}:location）上的只读投影，
+// 供运维/GM 精准解析多区 (zone_id, node_id, scene_id) 与跨区交接态，不替代 PlayerSession。
+message PlayerScenePlacement {
+  bool found = 1;
+  uint32 zone_id = 2;
+  string node_id = 3;
+  uint64 scene_id = 4;
+  uint64 owner_epoch = 5;
+  bool awaiting_placement = 6;
+  uint32 session_id = 7;
+  uint64 login_generation = 8;
+}
+
 message GetSessionRequest {
   uint64 player_id = 1;
+  // 按需开启：同槽位 MGET 附带读取 player:{id}:location；默认 false 保持登录热路径零额外开销。
+  bool include_placement = 2;
 }
 
 message GetSessionResponse {
   PlayerSession session = 1;
   bool found = 2;
+  PlayerScenePlacement placement = 3;
 }
 
 // 正常登出必须带上 Login 观察到的精确会话。会话已被替换或版本已推进后，

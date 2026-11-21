@@ -22,3 +22,7 @@ constexpr uint32_t SceneClientPlayerCommonRenamePlayerIndex = 3;
 constexpr uint32_t SceneClientPlayerCommonNotifyPlayerRenamedMessageId = 429;
 constexpr uint32_t SceneClientPlayerCommonNotifyPlayerRenamedIndex = 4;
 #define SceneClientPlayerCommonNotifyPlayerRenamedMethod  ::SceneClientPlayerCommon_Stub::descriptor()->method(4)
+
+constexpr uint32_t SceneClientPlayerCommonNotifySelfActorStateFlagsMessageId = 440;
+constexpr uint32_t SceneClientPlayerCommonNotifySelfActorStateFlagsIndex = 5;
+#define SceneClientPlayerCommonNotifySelfActorStateFlagsMethod  ::SceneClientPlayerCommon_Stub::descriptor()->method(5)

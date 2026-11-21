@@ -25,6 +25,8 @@
 #include "services/scene/actor/action_state/system/actor_action_state.h"
 #include "services/scene/actor/attribute/comp/actor_attribute_comp.h"
 #include "services/scene/actor/attribute/system/actor_attribute_calculator.h"
+#include "services/scene/combat_state/constants/combat_state.h"
+#include "services/scene/combat_state/system/combat_state.h"
 #include "services/scene/player/system/content_guard_client.h"
 #include "services/scene/player/system/player_pet.h"
 #include "proto/content_guard/content_guard.pb.h"
@@ -420,6 +422,7 @@ protected:
     }
 
     void TearDown() override {
+        ActorActionStateSystem::SetSelfStateSyncTestHook({});
         ActorActionStateSystem::ResetRulesToTable();
         ActorActionStateSystem::ClearAllExitHooks();
         ActorEntityFixture::TearDown();
@@ -530,6 +533,81 @@ TEST_F(ActorActionStateTest, InterruptPathFiresExitHooksOnceAndRejectsBeforeSide
     // 4) 对已不存在的状态重复 RemoveState 幂等成功,不得再次触发钩子。
     EXPECT_EQ(kSuccess, ActorActionStateSystem::RemoveState(actor, kActorStateTeamFollow));
     EXPECT_EQ(1, hookCalls);
+}
+
+TEST_F(ActorActionStateTest, StateMutexChangePushesImmediateCoalescedSyncToSelf) {
+    struct SyncEvent {
+        entt::entity entity{entt::null};
+        uint64_t actionMask{0};
+        uint64_t combatMask{0};
+        uint64_t seq{0};
+    };
+    std::vector<SyncEvent> events;
+    ActorActionStateSystem::SetSelfStateSyncTestHook(
+        [&events](entt::entity e, uint64_t actionMask, uint64_t combatMask, uint64_t seq) {
+            events.push_back(SyncEvent{e, actionMask, combatMask, seq});
+        });
+
+    const std::array<combat_ai::StateRule, 3> rules{{
+        {kActorActionUseSkill, kActorStateTeamFollow, combat_ai::StateMode::kInterrupt, 0},
+        {kActorActionUseSkill, kActorStateMounted, combat_ai::StateMode::kInterrupt, 0},
+        {kActorActionUseSkill, kActorStateCombat, combat_ai::StateMode::kAllow, 0},
+    }};
+    ASSERT_EQ(0u, ActorActionStateSystem::LoadRules(rules));
+
+    const auto actor = NewEntity();
+
+    // 1) 逐个挂上 TeamFollow 与 Mounted:每次位图实变立即单播一次。
+    ASSERT_EQ(kSuccess, ActorActionStateSystem::AddState(actor, kActorStateTeamFollow));
+    ASSERT_EQ(kSuccess, ActorActionStateSystem::AddState(actor, kActorStateMounted));
+    ASSERT_EQ(2u, events.size());
+    EXPECT_EQ(actor, events[0].entity);
+    EXPECT_EQ(uint64_t{1} << kActorStateTeamFollow, events[0].actionMask);
+    EXPECT_EQ(0u, events[0].combatMask);
+    EXPECT_EQ(1u, events[0].seq);
+    EXPECT_EQ((uint64_t{1} << kActorStateTeamFollow) | (uint64_t{1} << kActorStateMounted), events[1].actionMask);
+    EXPECT_EQ(2u, events[1].seq);
+
+    // 2) TryPerformAction 一次打断 TeamFollow + Mounted 并切入 Combat:合并为 1 次推送。
+    ASSERT_EQ(kSuccess, ActorActionStateSystem::TryPerformAction(actor, kActorActionUseSkill, kActorStateCombat));
+    ASSERT_EQ(3u, events.size());
+    EXPECT_EQ(uint64_t{1} << kActorStateCombat, events[2].actionMask);
+    EXPECT_EQ(0u, events[2].combatMask);
+    EXPECT_EQ(3u, events[2].seq);
+
+    // 3) 重复添加已激活状态不触发冗余推送。
+    ASSERT_EQ(kSuccess, ActorActionStateSystem::AddState(actor, kActorStateCombat));
+    EXPECT_EQ(3u, events.size());
+
+    // 4) 战斗异常状态(沉默)多 Buff 引用计数:0->1 推一次,叠第二个 Buff 不重复推,
+    //    移第一个不推,移最后一个(1->0)立即再推一次。
+    CombatStateSystem::AddCombatState(actor, 101, kActorCombatStateSilence);
+    CombatStateSystem::AddCombatState(actor, 102, kActorCombatStateSilence);
+    ASSERT_EQ(4u, events.size());
+    EXPECT_EQ(uint64_t{1} << kActorStateCombat, events[3].actionMask);
+    EXPECT_EQ(uint64_t{1} << kActorCombatStateSilence, events[3].combatMask);
+    EXPECT_EQ(4u, events[3].seq);
+
+    CombatStateSystem::RemoveCombatState(actor, 101, kActorCombatStateSilence);
+    EXPECT_EQ(4u, events.size());
+    CombatStateSystem::RemoveCombatState(actor, 102, kActorCombatStateSilence);
+    ASSERT_EQ(5u, events.size());
+    EXPECT_EQ(uint64_t{1} << kActorStateCombat, events[4].actionMask);
+    EXPECT_EQ(0u, events[4].combatMask);
+    EXPECT_EQ(5u, events[4].seq);
+
+    // 5) 跨节点交接冻结期间不推网络包。
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(actor);
+    ASSERT_EQ(kSuccess, ActorActionStateSystem::AddState(actor, kActorStateMounted));
+    EXPECT_EQ(5u, events.size());
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(actor);
+
+    // 6) 入场 / 重连落地补推:重置客户端基准后把当前非零状态(Combat | Mounted)完整补推一次。
+    ActorActionStateSystem::ResendStateFlagsAfterEntry(actor);
+    ASSERT_EQ(6u, events.size());
+    EXPECT_EQ((uint64_t{1} << kActorStateCombat) | (uint64_t{1} << kActorStateMounted), events[5].actionMask);
+    EXPECT_EQ(0u, events[5].combatMask);
+    EXPECT_EQ(6u, events[5].seq);
 }
 
 // ── 宝宝组件(F074):PlayerPetComp 由加载链路挂上,PetSystem 所有入口只取不建 ─────────

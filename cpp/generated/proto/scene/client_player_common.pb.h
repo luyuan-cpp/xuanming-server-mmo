@@ -97,6 +97,14 @@ extern const ::google::protobuf::internal::ClassDataFull RenamePlayerResponse_cl
 #else
 extern const RenamePlayerResponseGlobalsTypeInternal RenamePlayerResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SelfActorStateFlagsS2C;
+struct SelfActorStateFlagsS2CGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SelfActorStateFlagsS2CGlobalsTypeInternal SelfActorStateFlagsS2C_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SelfActorStateFlagsS2C_class_data_;
+#else
+extern const SelfActorStateFlagsS2CGlobalsTypeInternal SelfActorStateFlagsS2C_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -106,6 +114,231 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelfActorStateFlagsS2C final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SelfActorStateFlagsS2C) */ {
+ public:
+  inline SelfActorStateFlagsS2C() : SelfActorStateFlagsS2C(nullptr) {}
+  ~SelfActorStateFlagsS2C() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SelfActorStateFlagsS2C* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SelfActorStateFlagsS2C));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SelfActorStateFlagsS2C(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SelfActorStateFlagsS2C(const SelfActorStateFlagsS2C& from) : SelfActorStateFlagsS2C(nullptr, from) {}
+  inline SelfActorStateFlagsS2C(SelfActorStateFlagsS2C&& from) noexcept : SelfActorStateFlagsS2C(nullptr, ::std::move(from)) {}
+  inline SelfActorStateFlagsS2C& operator=(const SelfActorStateFlagsS2C& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SelfActorStateFlagsS2C& operator=(SelfActorStateFlagsS2C&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SelfActorStateFlagsS2C& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelfActorStateFlagsS2C>(&SelfActorStateFlagsS2C_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(SelfActorStateFlagsS2C& a, SelfActorStateFlagsS2C& b) { a.Swap(&b); }
+  inline void Swap(SelfActorStateFlagsS2C* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SelfActorStateFlagsS2C* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SelfActorStateFlagsS2C* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SelfActorStateFlagsS2C>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SelfActorStateFlagsS2C& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SelfActorStateFlagsS2C& from) { SelfActorStateFlagsS2C::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SelfActorStateFlagsS2C* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SelfActorStateFlagsS2C"; }
+
+  explicit SelfActorStateFlagsS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SelfActorStateFlagsS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SelfActorStateFlagsS2C& from);
+  SelfActorStateFlagsS2C(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SelfActorStateFlagsS2C&& from) noexcept
+      : SelfActorStateFlagsS2C(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kActionStateMaskFieldNumber = 1,
+    kCombatStateMaskFieldNumber = 2,
+    kStateSeqFieldNumber = 3,
+  };
+  // uint64 action_state_mask = 1;
+  void clear_action_state_mask() ;
+  [[nodiscard]] ::uint64_t action_state_mask() const;
+  void set_action_state_mask(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_action_state_mask() const;
+  void _internal_set_action_state_mask(::uint64_t value);
+
+  public:
+  // uint64 combat_state_mask = 2;
+  void clear_combat_state_mask() ;
+  [[nodiscard]] ::uint64_t combat_state_mask() const;
+  void set_combat_state_mask(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_combat_state_mask() const;
+  void _internal_set_combat_state_mask(::uint64_t value);
+
+  public:
+  // uint64 state_seq = 3;
+  void clear_state_seq() ;
+  [[nodiscard]] ::uint64_t state_seq() const;
+  void set_state_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_state_seq() const;
+  void _internal_set_state_seq(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SelfActorStateFlagsS2C)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SelfActorStateFlagsS2C& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t action_state_mask_;
+    ::uint64_t combat_state_mask_;
+    ::uint64_t state_seq_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RenamePlayerRequest final : public ::google::protobuf::Message
@@ -1300,6 +1533,10 @@ class SceneClientPlayerCommon : public ::google::protobuf::Service {
                         const ::PlayerRenamedNotify* PROTOBUF_NONNULL request,
                         ::Empty* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void NotifySelfActorStateFlags(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SelfActorStateFlagsS2C* PROTOBUF_NONNULL request,
+                        ::Empty* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -1350,6 +1587,10 @@ class SceneClientPlayerCommon_Stub final : public SceneClientPlayerCommon {
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
   void NotifyPlayerRenamed(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::PlayerRenamedNotify* PROTOBUF_NONNULL request,
+                        ::Empty* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void NotifySelfActorStateFlags(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SelfActorStateFlagsS2C* PROTOBUF_NONNULL request,
                         ::Empty* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
@@ -2185,6 +2426,82 @@ inline ::uint64_t PlayerRenamedNotify::_internal_next_rename_time() const {
 inline void PlayerRenamedNotify::_internal_set_next_rename_time(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_rename_time_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SelfActorStateFlagsS2C
+
+// uint64 action_state_mask = 1;
+inline void SelfActorStateFlagsS2C::clear_action_state_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.action_state_mask_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t SelfActorStateFlagsS2C::action_state_mask() const {
+  // @@protoc_insertion_point(field_get:SelfActorStateFlagsS2C.action_state_mask)
+  return _internal_action_state_mask();
+}
+inline void SelfActorStateFlagsS2C::set_action_state_mask(::uint64_t value) {
+  _internal_set_action_state_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:SelfActorStateFlagsS2C.action_state_mask)
+}
+inline ::uint64_t SelfActorStateFlagsS2C::_internal_action_state_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.action_state_mask_;
+}
+inline void SelfActorStateFlagsS2C::_internal_set_action_state_mask(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.action_state_mask_ = value;
+}
+
+// uint64 combat_state_mask = 2;
+inline void SelfActorStateFlagsS2C::clear_combat_state_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.combat_state_mask_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t SelfActorStateFlagsS2C::combat_state_mask() const {
+  // @@protoc_insertion_point(field_get:SelfActorStateFlagsS2C.combat_state_mask)
+  return _internal_combat_state_mask();
+}
+inline void SelfActorStateFlagsS2C::set_combat_state_mask(::uint64_t value) {
+  _internal_set_combat_state_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:SelfActorStateFlagsS2C.combat_state_mask)
+}
+inline ::uint64_t SelfActorStateFlagsS2C::_internal_combat_state_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.combat_state_mask_;
+}
+inline void SelfActorStateFlagsS2C::_internal_set_combat_state_mask(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.combat_state_mask_ = value;
+}
+
+// uint64 state_seq = 3;
+inline void SelfActorStateFlagsS2C::clear_state_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t SelfActorStateFlagsS2C::state_seq() const {
+  // @@protoc_insertion_point(field_get:SelfActorStateFlagsS2C.state_seq)
+  return _internal_state_seq();
+}
+inline void SelfActorStateFlagsS2C::set_state_seq(::uint64_t value) {
+  _internal_set_state_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SelfActorStateFlagsS2C.state_seq)
+}
+inline ::uint64_t SelfActorStateFlagsS2C::_internal_state_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_seq_;
+}
+inline void SelfActorStateFlagsS2C::_internal_set_state_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_seq_ = value;
 }
 
 #ifdef __GNUC__

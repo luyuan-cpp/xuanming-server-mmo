@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <entt/src/entt/entity/entity.hpp>
 
@@ -17,6 +18,8 @@ class ActorActionStateSystem
 public:
     using ExitReason = combat_ai::StateExitReason;
     using ExitHook = combat_ai::StateExitHookRegistry<entt::entity>::Hook;
+    using SelfStateSyncTestHook =
+        std::function<void(entt::entity, uint64_t actionStateMask, uint64_t combatStateMask, uint64_t stateSeq)>;
 
     static uint32_t TryPerformAction(entt::entity actorEntity, uint32_t actorAction, uint32_t successState);
 
@@ -47,4 +50,14 @@ public:
     // 调用 ResetRulesToTable() 可恢复读取 ActorActionStateTableManager。
     static std::size_t LoadRules(std::span<const combat_ai::StateRule> rules);
     static void ResetRulesToTable();
+
+    // 当主角行为状态位图或战斗异常状态位图较上次推送发生变化时,立即单播 SelfActorStateFlagsS2C 给主角本人。
+    // TryPerformAction 内部自动合并本轮所有打断与入态为一次推送;仅对拥有有效网关会话且未冻结的玩家发送。
+    static void SyncSelfStateFlagsIfChanged(entt::entity actorEntity);
+
+    // 进场 / 重连落地后调用:重置上次推送基准为 0(客户端入场时已复位),若存在非零状态立刻补推一次。
+    static void ResendStateFlagsAfterEntry(entt::entity actorEntity);
+
+    // 单测探针:非空时接管原本的 SendToPlayerClient 单播(传空恢复真实网络发送)。
+    static void SetSelfStateSyncTestHook(SelfStateSyncTestHook hook);
 };

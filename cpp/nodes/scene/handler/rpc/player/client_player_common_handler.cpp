@@ -55,3 +55,11 @@ void SceneClientPlayerCommonHandler::NotifyPlayerRenamed(entt::entity player,con
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneClientPlayerCommonHandler::NotifySelfActorStateFlags(entt::entity player,const ::SelfActorStateFlagsS2C* request,
+	::Empty* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+
+}

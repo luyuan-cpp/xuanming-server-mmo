@@ -398,7 +398,7 @@ namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 440,
+static_assert(kMaxRpcMethodCount == 441,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1619,6 +1619,11 @@ void InitMessageInfo()
     gRpcMethodRegistry[SceneClientPlayerCommonNotifyPlayerRenamedMessageId] = RpcMethodMeta{
         "SceneClientPlayerCommon", "NotifyPlayerRenamed",
         std::make_unique<::PlayerRenamedNotify>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneClientPlayerCommonNotifySelfActorStateFlagsMessageId] = RpcMethodMeta{
+        "SceneClientPlayerCommon", "NotifySelfActorStateFlags",
+        std::make_unique<::SelfActorStateFlagsS2C>(),
         std::make_unique<::Empty>(),
         0, common::base::eNodeType::SceneNodeService};
 

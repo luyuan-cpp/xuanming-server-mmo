@@ -3,7 +3,8 @@
 #include "proto/scene/player_state_attribute_sync.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "player/comp/player_frozen_comp.h"  // cross-zone-readiness-audit.md §11.2
-#include "player/comp/player_session_snapshot_comp.h"
+#include "proto/common/component/player_network_comp.pb.h"
+#include "engine/core/type_define/type_define.h"
 #include "spatial/comp/scene_node_scene_comp.h"
 #include "spatial/system/interest.h"  // GetVisibleWatchers:属性同步的接收者
 #include "rpc/service_metadata/player_state_attribute_sync_service_metadata.h"
@@ -41,7 +42,8 @@ void ActorStateAttributeSyncSystem::Update(const double)
 		playerWatchers.clear();
 		for (const auto watcher : visibleWatchers)
 		{
-			if (tlsEcs.actorRegistry.any_of<PlayerSessionSnapshotComp>(watcher))
+			if (const auto* session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(watcher);
+				session != nullptr && session->gate_session_id() != kInvalidSessionId)
 			{
 				playerWatchers.emplace_back(watcher);
 			}

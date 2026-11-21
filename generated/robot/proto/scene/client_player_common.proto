@@ -45,6 +45,16 @@ message PlayerRenamedNotify {
   uint64 next_rename_time = 3;
 }
 
+// 主角权威状态互斥标志即时同步(只发给主角本人,不广播旁观者)。
+// 任何行为状态(ActorActionState: bit0=Combat, bit1=TeamFollow, bit2=Mounted)或
+// 战斗异常状态(ActorCombatState: bit1=Silence 等)发生实际位变化时立即单播给主角,
+// 供客户端刷新 UI 禁用与本地角色状态机纠偏;入场 / 重连落地若存在非零态也会补推一次。
+message SelfActorStateFlagsS2C {
+  uint64 action_state_mask = 1; // 位 i = eActorState(i)
+  uint64 combat_state_mask = 2; // 位 i = eActorCombatState(i)
+  uint64 state_seq = 3;         // 单次进场内单调递增序号(仅位变化或重推时递增,防乱序覆盖)
+}
+
 service SceneClientPlayerCommon 
 {
   option (OptionIsPlayerService) = true;
@@ -55,4 +65,5 @@ service SceneClientPlayerCommon
   rpc RedirectToGate (RedirectToGateNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc RenamePlayer (RenamePlayerRequest) returns (RenamePlayerResponse);
   rpc NotifyPlayerRenamed (PlayerRenamedNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+  rpc NotifySelfActorStateFlags (SelfActorStateFlagsS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
 }

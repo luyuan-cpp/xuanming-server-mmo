@@ -438,3 +438,4 @@
 437=DataServiceUpsertAccountChannelIdentity
 438=DataServiceGetPlayerChannelIdentity
 439=GuildServiceRenameGuild
+440=SceneClientPlayerCommonNotifySelfActorStateFlags

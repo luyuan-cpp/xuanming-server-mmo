@@ -106,6 +106,14 @@ extern const ::google::protobuf::internal::ClassDataFull PlayerLocation_class_da
 #else
 extern const PlayerLocationGlobalsTypeInternal PlayerLocation_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PlayerScenePlacement;
+struct PlayerScenePlacementGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PlayerScenePlacementGlobalsTypeInternal PlayerScenePlacement_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerScenePlacement_class_data_;
+#else
+extern const PlayerScenePlacementGlobalsTypeInternal PlayerScenePlacement_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerSession;
 struct PlayerSessionGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -262,7 +270,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetDisconnectingRequest final : pub
   [[nodiscard]] static const SetDisconnectingRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetDisconnectingRequest>(&SetDisconnectingRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(SetDisconnectingRequest& a, SetDisconnectingRequest& b) { a.Swap(&b); }
   inline void Swap(SetDisconnectingRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -516,7 +524,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
   [[nodiscard]] static const ReconnectRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReconnectRequest>(&ReconnectRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(ReconnectRequest& a, ReconnectRequest& b) { a.Swap(&b); }
   inline void Swap(ReconnectRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1217,6 +1225,296 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerScenePlacement final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:playerlocator.PlayerScenePlacement) */ {
+ public:
+  inline PlayerScenePlacement() : PlayerScenePlacement(nullptr) {}
+  ~PlayerScenePlacement() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PlayerScenePlacement* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PlayerScenePlacement));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PlayerScenePlacement(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PlayerScenePlacement(const PlayerScenePlacement& from) : PlayerScenePlacement(nullptr, from) {}
+  inline PlayerScenePlacement(PlayerScenePlacement&& from) noexcept : PlayerScenePlacement(nullptr, ::std::move(from)) {}
+  inline PlayerScenePlacement& operator=(const PlayerScenePlacement& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PlayerScenePlacement& operator=(PlayerScenePlacement&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PlayerScenePlacement& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerScenePlacement>(&PlayerScenePlacement_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 4;
+  friend void swap(PlayerScenePlacement& a, PlayerScenePlacement& b) { a.Swap(&b); }
+  inline void Swap(PlayerScenePlacement* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PlayerScenePlacement* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PlayerScenePlacement* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PlayerScenePlacement>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PlayerScenePlacement& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PlayerScenePlacement& from) { PlayerScenePlacement::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PlayerScenePlacement* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "playerlocator.PlayerScenePlacement"; }
+
+  explicit PlayerScenePlacement(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PlayerScenePlacement(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PlayerScenePlacement& from);
+  PlayerScenePlacement(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PlayerScenePlacement&& from) noexcept
+      : PlayerScenePlacement(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNodeIdFieldNumber = 3,
+    kZoneIdFieldNumber = 2,
+    kFoundFieldNumber = 1,
+    kAwaitingPlacementFieldNumber = 6,
+    kSceneIdFieldNumber = 4,
+    kOwnerEpochFieldNumber = 5,
+    kLoginGenerationFieldNumber = 8,
+    kSessionIdFieldNumber = 7,
+  };
+  // string node_id = 3;
+  void clear_node_id() ;
+  [[nodiscard]] const ::std::string& node_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_node_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_node_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_node_id();
+  void set_allocated_node_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_node_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_node_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_node_id();
+
+  public:
+  // uint32 zone_id = 2;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // bool found = 1;
+  void clear_found() ;
+  [[nodiscard]] bool found() const;
+  void set_found(bool value);
+
+  private:
+  bool _internal_found() const;
+  void _internal_set_found(bool value);
+
+  public:
+  // bool awaiting_placement = 6;
+  void clear_awaiting_placement() ;
+  [[nodiscard]] bool awaiting_placement() const;
+  void set_awaiting_placement(bool value);
+
+  private:
+  bool _internal_awaiting_placement() const;
+  void _internal_set_awaiting_placement(bool value);
+
+  public:
+  // uint64 scene_id = 4;
+  void clear_scene_id() ;
+  [[nodiscard]] ::uint64_t scene_id() const;
+  void set_scene_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_scene_id() const;
+  void _internal_set_scene_id(::uint64_t value);
+
+  public:
+  // uint64 owner_epoch = 5;
+  void clear_owner_epoch() ;
+  [[nodiscard]] ::uint64_t owner_epoch() const;
+  void set_owner_epoch(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_owner_epoch() const;
+  void _internal_set_owner_epoch(::uint64_t value);
+
+  public:
+  // uint64 login_generation = 8;
+  void clear_login_generation() ;
+  [[nodiscard]] ::uint64_t login_generation() const;
+  void set_login_generation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_login_generation() const;
+  void _internal_set_login_generation(::uint64_t value);
+
+  public:
+  // uint32 session_id = 7;
+  void clear_session_id() ;
+  [[nodiscard]] ::uint32_t session_id() const;
+  void set_session_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_session_id() const;
+  void _internal_set_session_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:playerlocator.PlayerScenePlacement)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 58,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PlayerScenePlacement& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr node_id_;
+    ::uint32_t zone_id_;
+    bool found_;
+    bool awaiting_placement_;
+    ::uint64_t scene_id_;
+    ::uint64_t owner_epoch_;
+    ::uint64_t login_generation_;
+    ::uint32_t session_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fplayer_5flocator_2fplayer_5flocator_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:playerlocator.PlayerLocation) */ {
  public:
@@ -1757,7 +2055,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MarkOfflineRequest final : public :
   [[nodiscard]] static const MarkOfflineRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MarkOfflineRequest>(&MarkOfflineRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 7;
   friend void swap(MarkOfflineRequest& a, MarkOfflineRequest& b) { a.Swap(&b); }
   inline void Swap(MarkOfflineRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1999,7 +2297,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LeaseExpiredEvent final : public ::
   [[nodiscard]] static const LeaseExpiredEvent& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LeaseExpiredEvent>(&LeaseExpiredEvent_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(LeaseExpiredEvent& a, LeaseExpiredEvent& b) { a.Swap(&b); }
   inline void Swap(LeaseExpiredEvent* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2275,7 +2573,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionRequest final : public ::
   [[nodiscard]] static const GetSessionRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSessionRequest>(&GetSessionRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(GetSessionRequest& a, GetSessionRequest& b) { a.Swap(&b); }
   inline void Swap(GetSessionRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2368,6 +2666,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionRequest final : public ::
   // accessors -------------------------------------------------------
   enum : int {
     kPlayerIdFieldNumber = 1,
+    kIncludePlacementFieldNumber = 2,
   };
   // uint64 player_id = 1;
   void clear_player_id() ;
@@ -2379,11 +2678,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionRequest final : public ::
   void _internal_set_player_id(::uint64_t value);
 
   public:
+  // bool include_placement = 2;
+  void clear_include_placement() ;
+  [[nodiscard]] bool include_placement() const;
+  void set_include_placement(bool value);
+
+  private:
+  bool _internal_include_placement() const;
+  void _internal_set_include_placement(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:playerlocator.GetSessionRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2413,6 +2722,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionRequest final : public ::
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
+    bool include_placement_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2683,7 +2993,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectResponse final : public ::
   [[nodiscard]] static const ReconnectResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ReconnectResponse>(&ReconnectResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(ReconnectResponse& a, ReconnectResponse& b) { a.Swap(&b); }
   inline void Swap(ReconnectResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2919,7 +3229,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionResponse final : public :
   [[nodiscard]] static const GetSessionResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSessionResponse>(&GetSessionResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(GetSessionResponse& a, GetSessionResponse& b) { a.Swap(&b); }
   inline void Swap(GetSessionResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3012,6 +3322,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionResponse final : public :
   // accessors -------------------------------------------------------
   enum : int {
     kSessionFieldNumber = 1,
+    kPlacementFieldNumber = 3,
     kFoundFieldNumber = 2,
   };
   // .playerlocator.PlayerSession session = 1;
@@ -3030,6 +3341,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionResponse final : public :
   ::playerlocator::PlayerSession* PROTOBUF_NONNULL _internal_mutable_session();
 
   public:
+  // .playerlocator.PlayerScenePlacement placement = 3;
+  [[nodiscard]] bool has_placement()
+      const;
+  void clear_placement() ;
+  [[nodiscard]] const ::playerlocator::PlayerScenePlacement& placement() const;
+  [[nodiscard]] ::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE release_placement();
+  ::playerlocator::PlayerScenePlacement* PROTOBUF_NONNULL mutable_placement();
+  void set_allocated_placement(::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_placement(::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE value);
+  ::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE unsafe_arena_release_placement();
+
+  private:
+  const ::playerlocator::PlayerScenePlacement& _internal_placement() const;
+  ::playerlocator::PlayerScenePlacement* PROTOBUF_NONNULL _internal_mutable_placement();
+
+  public:
   // bool found = 2;
   void clear_found() ;
   [[nodiscard]] bool found() const;
@@ -3044,8 +3371,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionResponse final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3074,6 +3401,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSessionResponse final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::playerlocator::PlayerSession* PROTOBUF_NULLABLE session_;
+    ::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE placement_;
     bool found_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -4105,6 +4433,242 @@ inline void SetSessionRequest::set_allocated_session(::playerlocator::PlayerSess
 
 // -------------------------------------------------------------------
 
+// PlayerScenePlacement
+
+// bool found = 1;
+inline void PlayerScenePlacement::clear_found() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool PlayerScenePlacement::found() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.found)
+  return _internal_found();
+}
+inline void PlayerScenePlacement::set_found(bool value) {
+  _internal_set_found(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.found)
+}
+inline bool PlayerScenePlacement::_internal_found() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.found_;
+}
+inline void PlayerScenePlacement::_internal_set_found(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.found_ = value;
+}
+
+// uint32 zone_id = 2;
+inline void PlayerScenePlacement::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t PlayerScenePlacement::zone_id() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.zone_id)
+  return _internal_zone_id();
+}
+inline void PlayerScenePlacement::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.zone_id)
+}
+inline ::uint32_t PlayerScenePlacement::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void PlayerScenePlacement::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// string node_id = 3;
+inline void PlayerScenePlacement::clear_node_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.node_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PlayerScenePlacement::node_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.node_id)
+  return _internal_node_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerScenePlacement::set_node_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.node_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.node_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerScenePlacement::mutable_node_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_node_id();
+  // @@protoc_insertion_point(field_mutable:playerlocator.PlayerScenePlacement.node_id)
+  return _s;
+}
+inline const ::std::string& PlayerScenePlacement::_internal_node_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.node_id_.Get();
+}
+inline void PlayerScenePlacement::_internal_set_node_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.node_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerScenePlacement::_internal_mutable_node_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.node_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerScenePlacement::release_node_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:playerlocator.PlayerScenePlacement.node_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.node_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.node_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerScenePlacement::set_allocated_node_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.node_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.node_id_.IsDefault()) {
+    _impl_.node_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:playerlocator.PlayerScenePlacement.node_id)
+}
+
+// uint64 scene_id = 4;
+inline void PlayerScenePlacement::clear_scene_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t PlayerScenePlacement::scene_id() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.scene_id)
+  return _internal_scene_id();
+}
+inline void PlayerScenePlacement::set_scene_id(::uint64_t value) {
+  _internal_set_scene_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.scene_id)
+}
+inline ::uint64_t PlayerScenePlacement::_internal_scene_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scene_id_;
+}
+inline void PlayerScenePlacement::_internal_set_scene_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scene_id_ = value;
+}
+
+// uint64 owner_epoch = 5;
+inline void PlayerScenePlacement::clear_owner_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_epoch_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t PlayerScenePlacement::owner_epoch() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.owner_epoch)
+  return _internal_owner_epoch();
+}
+inline void PlayerScenePlacement::set_owner_epoch(::uint64_t value) {
+  _internal_set_owner_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.owner_epoch)
+}
+inline ::uint64_t PlayerScenePlacement::_internal_owner_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owner_epoch_;
+}
+inline void PlayerScenePlacement::_internal_set_owner_epoch(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_epoch_ = value;
+}
+
+// bool awaiting_placement = 6;
+inline void PlayerScenePlacement::clear_awaiting_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.awaiting_placement_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool PlayerScenePlacement::awaiting_placement() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.awaiting_placement)
+  return _internal_awaiting_placement();
+}
+inline void PlayerScenePlacement::set_awaiting_placement(bool value) {
+  _internal_set_awaiting_placement(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.awaiting_placement)
+}
+inline bool PlayerScenePlacement::_internal_awaiting_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.awaiting_placement_;
+}
+inline void PlayerScenePlacement::_internal_set_awaiting_placement(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.awaiting_placement_ = value;
+}
+
+// uint32 session_id = 7;
+inline void PlayerScenePlacement::clear_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t PlayerScenePlacement::session_id() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.session_id)
+  return _internal_session_id();
+}
+inline void PlayerScenePlacement::set_session_id(::uint32_t value) {
+  _internal_set_session_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.session_id)
+}
+inline ::uint32_t PlayerScenePlacement::_internal_session_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_id_;
+}
+inline void PlayerScenePlacement::_internal_set_session_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_id_ = value;
+}
+
+// uint64 login_generation = 8;
+inline void PlayerScenePlacement::clear_login_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.login_generation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t PlayerScenePlacement::login_generation() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerScenePlacement.login_generation)
+  return _internal_login_generation();
+}
+inline void PlayerScenePlacement::set_login_generation(::uint64_t value) {
+  _internal_set_login_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerScenePlacement.login_generation)
+}
+inline ::uint64_t PlayerScenePlacement::_internal_login_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.login_generation_;
+}
+inline void PlayerScenePlacement::_internal_set_login_generation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.login_generation_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // GetSessionRequest
 
 // uint64 player_id = 1;
@@ -4129,6 +4693,30 @@ inline ::uint64_t GetSessionRequest::_internal_player_id() const {
 inline void GetSessionRequest::_internal_set_player_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = value;
+}
+
+// bool include_placement = 2;
+inline void GetSessionRequest::clear_include_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.include_placement_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool GetSessionRequest::include_placement() const {
+  // @@protoc_insertion_point(field_get:playerlocator.GetSessionRequest.include_placement)
+  return _internal_include_placement();
+}
+inline void GetSessionRequest::set_include_placement(bool value) {
+  _internal_set_include_placement(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:playerlocator.GetSessionRequest.include_placement)
+}
+inline bool GetSessionRequest::_internal_include_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.include_placement_;
+}
+inline void GetSessionRequest::_internal_set_include_placement(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.include_placement_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -4237,7 +4825,7 @@ inline void GetSessionResponse::set_allocated_session(::playerlocator::PlayerSes
 inline void GetSessionResponse::clear_found() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.found_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline bool GetSessionResponse::found() const {
   // @@protoc_insertion_point(field_get:playerlocator.GetSessionResponse.found)
@@ -4245,7 +4833,7 @@ inline bool GetSessionResponse::found() const {
 }
 inline void GetSessionResponse::set_found(bool value) {
   _internal_set_found(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:playerlocator.GetSessionResponse.found)
 }
 inline bool GetSessionResponse::_internal_found() const {
@@ -4255,6 +4843,104 @@ inline bool GetSessionResponse::_internal_found() const {
 inline void GetSessionResponse::_internal_set_found(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.found_ = value;
+}
+
+// .playerlocator.PlayerScenePlacement placement = 3;
+inline bool GetSessionResponse::has_placement() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.placement_ != nullptr);
+  return value;
+}
+inline void GetSessionResponse::clear_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ != nullptr) _impl_.placement_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::playerlocator::PlayerScenePlacement& GetSessionResponse::_internal_placement() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::playerlocator::PlayerScenePlacement* p = _impl_.placement_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::playerlocator::PlayerScenePlacement>(&::playerlocator::PlayerScenePlacement_globals_);
+}
+inline const ::playerlocator::PlayerScenePlacement& GetSessionResponse::placement() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:playerlocator.GetSessionResponse.placement)
+  return _internal_placement();
+}
+inline void GetSessionResponse::unsafe_arena_set_allocated_placement(
+    ::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+  _impl_.placement_ = reinterpret_cast<::playerlocator::PlayerScenePlacement*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:playerlocator.GetSessionResponse.placement)
+}
+inline ::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE GetSessionResponse::release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::playerlocator::PlayerScenePlacement* released = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE GetSessionResponse::unsafe_arena_release_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:playerlocator.GetSessionResponse.placement)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::playerlocator::PlayerScenePlacement* temp = _impl_.placement_;
+  _impl_.placement_ = nullptr;
+  return temp;
+}
+inline ::playerlocator::PlayerScenePlacement* PROTOBUF_NONNULL GetSessionResponse::_internal_mutable_placement() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.placement_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::playerlocator::PlayerScenePlacement>(GetArena());
+    _impl_.placement_ = reinterpret_cast<::playerlocator::PlayerScenePlacement*>(p);
+  }
+  return _impl_.placement_;
+}
+inline ::playerlocator::PlayerScenePlacement* PROTOBUF_NONNULL GetSessionResponse::mutable_placement()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::playerlocator::PlayerScenePlacement* _msg = _internal_mutable_placement();
+  // @@protoc_insertion_point(field_mutable:playerlocator.GetSessionResponse.placement)
+  return _msg;
+}
+inline void GetSessionResponse::set_allocated_placement(::playerlocator::PlayerScenePlacement* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.placement_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.placement_ = reinterpret_cast<::playerlocator::PlayerScenePlacement*>(value);
+  // @@protoc_insertion_point(field_set_allocated:playerlocator.GetSessionResponse.placement)
 }
 
 // -------------------------------------------------------------------

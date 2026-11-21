@@ -39,9 +39,167 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
         // ::PlayerRenamedNotify
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
+        // ::SelfActorStateFlagsS2C
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class SelfActorStateFlagsS2C::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SelfActorStateFlagsS2C>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_._has_bits_);
+};
+
+constexpr SelfActorStateFlagsS2C::ParseTableT_ SelfActorStateFlagsS2C::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SelfActorStateFlagsS2C>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 action_state_mask = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SelfActorStateFlagsS2C, _impl_.action_state_mask_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.action_state_mask_)}},
+      // uint64 combat_state_mask = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SelfActorStateFlagsS2C, _impl_.combat_state_mask_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.combat_state_mask_)}},
+      // uint64 state_seq = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SelfActorStateFlagsS2C, _impl_.state_seq_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.state_seq_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 action_state_mask = 1;
+      {PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.action_state_mask_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 combat_state_mask = 2;
+      {PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.combat_state_mask_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 state_seq = 3;
+      {PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.state_seq_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SelfActorStateFlagsS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        action_state_mask_{::uint64_t{0u}},
+        combat_state_mask_{::uint64_t{0u}},
+        state_seq_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr SelfActorStateFlagsS2C::SelfActorStateFlagsS2C(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SelfActorStateFlagsS2C::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SelfActorStateFlagsS2C(arena);
+}
+constexpr auto SelfActorStateFlagsS2C::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SelfActorStateFlagsS2C), alignof(SelfActorStateFlagsS2C));
+}
+constexpr auto SelfActorStateFlagsS2C::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SelfActorStateFlagsS2C::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SelfActorStateFlagsS2C>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SelfActorStateFlagsS2C::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SelfActorStateFlagsS2C>(), &SelfActorStateFlagsS2C::ByteSizeLong,
+              &SelfActorStateFlagsS2C::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[5],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SelfActorStateFlagsS2CGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SelfActorStateFlagsS2CGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SelfActorStateFlagsS2C_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SelfActorStateFlagsS2C::InternalGenerateClassData_(
+            _default, &SelfActorStateFlagsS2C_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SelfActorStateFlagsS2C>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SelfActorStateFlagsS2CGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SelfActorStateFlagsS2C _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SelfActorStateFlagsS2C>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2CGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SelfActorStateFlagsS2CGlobalsTypeInternal SelfActorStateFlagsS2C_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SelfActorStateFlagsS2C_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SelfActorStateFlagsS2C_globals_.GetClassData();
+#else
+  return SelfActorStateFlagsS2C_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RenamePlayerRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<RenamePlayerRequest>()._impl_._has_bits_);
@@ -899,6 +1057,15 @@ const ::uint32_t
         1,
         0,
         2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SelfActorStateFlagsS2C, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SelfActorStateFlagsS2C, _impl_.action_state_mask_),
+        PROTOBUF_FIELD_OFFSET(::SelfActorStateFlagsS2C, _impl_.combat_state_mask_),
+        PROTOBUF_FIELD_OFFSET(::SelfActorStateFlagsS2C, _impl_.state_seq_),
+        0,
+        1,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -908,6 +1075,7 @@ static const ::_pbi::MigrationSchema
         {22, sizeof(::RenamePlayerRequest)},
         {27, sizeof(::RenamePlayerResponse)},
         {32, sizeof(::PlayerRenamedNotify)},
+        {41, sizeof(::SelfActorStateFlagsS2C)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -916,6 +1084,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::RenamePlayerRequest_globals_,
         &::RenamePlayerResponse_globals_,
         &::PlayerRenamedNotify_globals_,
+        &::SelfActorStateFlagsS2C_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -933,15 +1102,20 @@ const char descriptor_table_protodef_proto_2fscene_2fclient_5fplayer_5fcommon_2e
     "age\030\001 \001(\0132\017.TipInfoMessage\"e\n\023PlayerRena"
     "medNotify\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
     "foMessage\022\014\n\004name\030\002 \001(\t\022\030\n\020next_rename_t"
-    "ime\030\003 \001(\0042\276\002\n\027SceneClientPlayerCommon\0221\n"
-    "\017SendTipToClient\022\017.TipInfoMessage\032\006.Empt"
-    "y\"\005\210\231\310\001\002\0223\n\nKickPlayer\022\026.GameKickPlayerR"
-    "equest\032\006.Empty\"\005\210\231\310\001\002\0226\n\016RedirectToGate\022"
-    "\025.RedirectToGateNotify\032\006.Empty\"\005\210\231\310\001\002\022;\n"
-    "\014RenamePlayer\022\024.RenamePlayerRequest\032\025.Re"
-    "namePlayerResponse\022:\n\023NotifyPlayerRename"
-    "d\022\024.PlayerRenamedNotify\032\006.Empty\"\005\210\231\310\001\002\032\n"
-    "\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "ime\030\003 \001(\004\"a\n\026SelfActorStateFlagsS2C\022\031\n\021a"
+    "ction_state_mask\030\001 \001(\004\022\031\n\021combat_state_m"
+    "ask\030\002 \001(\004\022\021\n\tstate_seq\030\003 \001(\0042\203\003\n\027SceneCl"
+    "ientPlayerCommon\0221\n\017SendTipToClient\022\017.Ti"
+    "pInfoMessage\032\006.Empty\"\005\210\231\310\001\002\0223\n\nKickPlaye"
+    "r\022\026.GameKickPlayerRequest\032\006.Empty\"\005\210\231\310\001\002"
+    "\0226\n\016RedirectToGate\022\025.RedirectToGateNotif"
+    "y\032\006.Empty\"\005\210\231\310\001\002\022;\n\014RenamePlayer\022\024.Renam"
+    "ePlayerRequest\032\025.RenamePlayerResponse\022:\n"
+    "\023NotifyPlayerRenamed\022\024.PlayerRenamedNoti"
+    "fy\032\006.Empty\"\005\210\231\310\001\002\022C\n\031NotifySelfActorStat"
+    "eFlags\022\027.SelfActorStateFlagsS2C\032\006.Empty\""
+    "\005\210\231\310\001\002\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006prot"
+    "o3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto_deps[3] = {
@@ -953,13 +1127,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fclient_5fplayer_5fcomm
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto = {
     false,
     false,
-    914,
+    1082,
     descriptor_table_protodef_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto,
     "proto/scene/client_player_common.proto",
     &descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto_once,
     descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto_deps,
     3,
-    5,
+    6,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto::offsets,
@@ -2323,6 +2497,255 @@ void PlayerRenamedNotify::InternalSwap(PlayerRenamedNotify* PROTOBUF_RESTRICT PR
 }
 // ===================================================================
 
+SelfActorStateFlagsS2C::SelfActorStateFlagsS2C(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SelfActorStateFlagsS2C_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SelfActorStateFlagsS2C)
+}
+SelfActorStateFlagsS2C::SelfActorStateFlagsS2C(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SelfActorStateFlagsS2C& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SelfActorStateFlagsS2C_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SelfActorStateFlagsS2C::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SelfActorStateFlagsS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, action_state_mask_),
+           0,
+           offsetof(Impl_, state_seq_) -
+               offsetof(Impl_, action_state_mask_) +
+               sizeof(Impl_::state_seq_));
+}
+SelfActorStateFlagsS2C::~SelfActorStateFlagsS2C() {
+  // @@protoc_insertion_point(destructor:SelfActorStateFlagsS2C)
+  SharedDtor(*this);
+}
+inline void SelfActorStateFlagsS2C::SharedDtor(MessageLite& self) {
+  SelfActorStateFlagsS2C& this_ = static_cast<SelfActorStateFlagsS2C&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SelfActorStateFlagsS2C_class_data_ =
+        SelfActorStateFlagsS2C::InternalGenerateClassData_(SelfActorStateFlagsS2C_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SelfActorStateFlagsS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SelfActorStateFlagsS2C_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SelfActorStateFlagsS2C_class_data_.tc_table);
+  return SelfActorStateFlagsS2C_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SelfActorStateFlagsS2C::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SelfActorStateFlagsS2C_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SelfActorStateFlagsS2C_globals_));
+  return SelfActorStateFlagsS2C_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SelfActorStateFlagsS2C::ParseTableT_
+    SelfActorStateFlagsS2C::_table_ =
+        SelfActorStateFlagsS2C::InternalGenerateParseTable_(SelfActorStateFlagsS2C_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SelfActorStateFlagsS2C::Clear() {
+// @@protoc_insertion_point(message_clear_start:SelfActorStateFlagsS2C)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.action_state_mask_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.state_seq_) -
+        reinterpret_cast<char*>(&_impl_.action_state_mask_)) + sizeof(_impl_.state_seq_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SelfActorStateFlagsS2C::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SelfActorStateFlagsS2C& this_ = static_cast<const SelfActorStateFlagsS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SelfActorStateFlagsS2C::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SelfActorStateFlagsS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SelfActorStateFlagsS2C)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 action_state_mask = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_action_state_mask() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_action_state_mask(), target);
+    }
+  }
+
+  // uint64 combat_state_mask = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_combat_state_mask() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_combat_state_mask(), target);
+    }
+  }
+
+  // uint64 state_seq = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_state_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_state_seq(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SelfActorStateFlagsS2C)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SelfActorStateFlagsS2C::ByteSizeLong(const MessageLite& base) {
+  const SelfActorStateFlagsS2C& this_ = static_cast<const SelfActorStateFlagsS2C&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SelfActorStateFlagsS2C::ByteSizeLong() const {
+  const SelfActorStateFlagsS2C& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SelfActorStateFlagsS2C)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 action_state_mask = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_action_state_mask() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_action_state_mask());
+      }
+    }
+    // uint64 combat_state_mask = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_combat_state_mask() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_combat_state_mask());
+      }
+    }
+    // uint64 state_seq = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_state_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_state_seq());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SelfActorStateFlagsS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SelfActorStateFlagsS2C*>(&to_msg);
+  auto& from = static_cast<const SelfActorStateFlagsS2C&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SelfActorStateFlagsS2C)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_action_state_mask() != 0) {
+        _this->_impl_.action_state_mask_ = from._impl_.action_state_mask_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_combat_state_mask() != 0) {
+        _this->_impl_.combat_state_mask_ = from._impl_.combat_state_mask_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_state_seq() != 0) {
+        _this->_impl_.state_seq_ = from._impl_.state_seq_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SelfActorStateFlagsS2C::CopyFrom(const SelfActorStateFlagsS2C& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SelfActorStateFlagsS2C)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SelfActorStateFlagsS2C::InternalSwap(SelfActorStateFlagsS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.state_seq_)
+      + sizeof(SelfActorStateFlagsS2C::_impl_.state_seq_)
+      - PROTOBUF_FIELD_OFFSET(SelfActorStateFlagsS2C, _impl_.action_state_mask_)>(
+          reinterpret_cast<char*>(&_impl_.action_state_mask_),
+          reinterpret_cast<char*>(&other->_impl_.action_state_mask_));
+}
+
+::google::protobuf::Metadata SelfActorStateFlagsS2C::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL SceneClientPlayerCommon::descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto);
   return file_level_service_descriptors_proto_2fscene_2fclient_5fplayer_5fcommon_2eproto[0];
@@ -2367,6 +2790,13 @@ void SceneClientPlayerCommon::NotifyPlayerRenamed(::google::protobuf::RpcControl
   controller->SetFailed("Method NotifyPlayerRenamed() not implemented.");
   done->Run();
 }
+void SceneClientPlayerCommon::NotifySelfActorStateFlags(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::SelfActorStateFlagsS2C* PROTOBUF_NONNULL,
+                         ::Empty* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method NotifySelfActorStateFlags() not implemented.");
+  done->Run();
+}
 
 void SceneClientPlayerCommon::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -2395,6 +2825,10 @@ void SceneClientPlayerCommon::CallMethod(
       this->NotifyPlayerRenamed(controller, ::google::protobuf::DownCastMessage<::PlayerRenamedNotify>(request),
                    ::google::protobuf::DownCastMessage<::Empty>(response), done);
       break;
+    case 5:
+      this->NotifySelfActorStateFlags(controller, ::google::protobuf::DownCastMessage<::SelfActorStateFlagsS2C>(request),
+                   ::google::protobuf::DownCastMessage<::Empty>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -2416,6 +2850,8 @@ const ::google::protobuf::Message& SceneClientPlayerCommon::GetRequestPrototype(
       return ::RenamePlayerRequest::default_instance();
     case 4:
       return ::PlayerRenamedNotify::default_instance();
+    case 5:
+      return ::SelfActorStateFlagsS2C::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -2437,6 +2873,8 @@ const ::google::protobuf::Message& SceneClientPlayerCommon::GetResponsePrototype
     case 3:
       return ::RenamePlayerResponse::default_instance();
     case 4:
+      return ::Empty::default_instance();
+    case 5:
       return ::Empty::default_instance();
 
     default:
@@ -2492,6 +2930,13 @@ void SceneClientPlayerCommon_Stub::NotifyPlayerRenamed(
     const ::PlayerRenamedNotify* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(4), controller,
+                       request, response, done);
+}
+void SceneClientPlayerCommon_Stub::NotifySelfActorStateFlags(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::SelfActorStateFlagsS2C* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(5), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

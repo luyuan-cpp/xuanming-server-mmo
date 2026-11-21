@@ -8,9 +8,15 @@
 #include "table/code/actoractionstate_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "actor/action_state/constants/actor_state.h"
+#include "combat_state/system/combat_state.h"
 #include "engine/core/macros/error_return.h"
 #include "engine/core/type_define/type_define.h"
+#include "network/client_message_sender.h"
+#include "player/comp/player_frozen_comp.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/player_network_comp.pb.h"
+#include "proto/scene/client_player_common.pb.h"
+#include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "thread_context/ecs_context.h"
 
 namespace {
@@ -19,6 +25,14 @@ namespace {
     struct ActorStateMaskComp
     {
         uint64_t mask{0};
+    };
+
+    // 记录上次单播给主角的状态位图与递增序号(不持久化,按需在首次推送时创建)。
+    struct SelfActorStateSyncComp
+    {
+        uint64_t lastSyncedActionMask{0};
+        uint64_t lastSyncedCombatMask{0};
+        uint64_t nextSeq{1};
     };
 
     struct CompiledActionStateCache
@@ -32,6 +46,15 @@ namespace {
 
     thread_local CompiledActionStateCache tlsCompiledActionStateCache{};
     thread_local combat_ai::StateExitHookRegistry<entt::entity> tlsExitHooks{};
+    thread_local ActorActionStateSystem::SelfStateSyncTestHook tlsSelfSyncTestHook{};
+    thread_local uint32_t tlsSuppressSelfSyncDepth{0};
+
+    // 合并 TryPerformAction 内多条打断 / 退出钩子 / 入态为一次最终单播推送。
+    struct SelfSyncSuppressGuard
+    {
+        SelfSyncSuppressGuard() noexcept { ++tlsSuppressSelfSyncDepth; }
+        ~SelfSyncSuppressGuard() noexcept { --tlsSuppressSelfSyncDepth; }
+    };
 
     static_assert(static_cast<uint32_t>(kActorStateActorStateMax) <= combat_ai::kMaxMutexStates,
                   "eActorState exceeds 64-bit StateMutexMatrix capacity");
@@ -76,6 +99,12 @@ namespace {
             return FoldProtoStateMask(*actorStatePbComponent);
         }
         return 0;
+    }
+
+    bool HasLiveGateSession(entt::entity entity) {
+        const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(entity);
+        return snapshot != nullptr && snapshot->gate_session_id() != 0 &&
+               snapshot->gate_session_id() != kInvalidSessionId;
     }
 
     std::size_t CompileFromTableSnapshot(CompiledActionStateCache& cache) {
@@ -170,6 +199,7 @@ namespace {
         // 先清除状态再回调子系统收尾,保证钩子内 HasState 为 false 且重入调用 RemoveState 幂等无环。
         if (wasActive) {
             tlsExitHooks.NotifyExited(actorEntity, actorState, reason);
+            ActorActionStateSystem::SyncSelfStateFlagsIfChanged(actorEntity);
         }
         return kSuccess;
     }
@@ -193,26 +223,32 @@ uint32_t ActorActionStateSystem::TryPerformAction(entt::entity actorEntity, uint
     }
 
     // 两阶段位图执行:先纯只读校验冲突,通过后按位掩码逐个打断(栈上纯整数循环,
-    // 零 vector 拷贝、零 protobuf::Map 迭代器失效),并自动派发退出钩子,最后入态。
+    // 零 vector 拷贝、零 protobuf::Map 迭代器失效),并自动派发退出钩子,最后入态;
+    // 整轮合并为一次即时单播给主角本人。
     const uint64_t activeMask = ReadActiveMask(actorEntity);
     uint32_t enterError = kSuccess;
-    const uint32_t result = matrix.TryPerform(
-        activeMask,
-        actorAction,
-        successState,
-        kActorStateActorStateMax,
-        kSuccess,
-        kInvalidTableId,
-        kInvalidParameter,
-        [actorEntity = actorEntity](uint32_t interruptedState) {
-            RemoveStateInternal(actorEntity, interruptedState, combat_ai::StateExitReason::kInterrupted);
-        },
-        [actorEntity = actorEntity, &enterError](uint32_t stateToEnter) {
-            enterError = AddState(actorEntity, stateToEnter);
-        });
+    uint32_t result = kSuccess;
+    {
+        SelfSyncSuppressGuard suppress;
+        result = matrix.TryPerform(
+            activeMask,
+            actorAction,
+            successState,
+            kActorStateActorStateMax,
+            kSuccess,
+            kInvalidTableId,
+            kInvalidParameter,
+            [actorEntity = actorEntity](uint32_t interruptedState) {
+                RemoveStateInternal(actorEntity, interruptedState, combat_ai::StateExitReason::kInterrupted);
+            },
+            [actorEntity = actorEntity, &enterError](uint32_t stateToEnter) {
+                enterError = AddState(actorEntity, stateToEnter);
+            });
+    }
     if (result != kSuccess) {
         return result;
     }
+    SyncSelfStateFlagsIfChanged(actorEntity);
     return enterError;
 }
 
@@ -272,6 +308,7 @@ uint32_t ActorActionStateSystem::AddState(const entt::entity actorEntity, uint32
 
     maskComp.mask |= bit;
     actorStatePbComponent.mutable_state_list()->emplace(std::make_pair(actorState, true));
+    SyncSelfStateFlagsIfChanged(actorEntity);
     return kSuccess;
 }
 
@@ -313,4 +350,61 @@ void ActorActionStateSystem::ResetRulesToTable() {
     tlsCompiledActionStateCache.snapshotAddr = 0;
     tlsCompiledActionStateCache.firstRowAddr = 0;
     tlsCompiledActionStateCache.rowCount = -1;
+}
+
+void ActorActionStateSystem::SyncSelfStateFlagsIfChanged(entt::entity actorEntity) {
+    if (tlsSuppressSelfSyncDepth > 0 || !tlsEcs.actorRegistry.valid(actorEntity)) {
+        return;
+    }
+    // 跨节点冻结交接在途或无在线网关会话(NPC / 离线托管 / 无会话单测)不推网络包。
+    if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(actorEntity)) {
+        return;
+    }
+    if (!tlsSelfSyncTestHook && !HasLiveGateSession(actorEntity)) {
+        return;
+    }
+
+    const uint64_t actionMask = ReadActiveMask(actorEntity);
+    const uint64_t combatMask = CombatStateSystem::ActiveMask(actorEntity);
+
+    auto* existingSync = tlsEcs.actorRegistry.try_get<SelfActorStateSyncComp>(actorEntity);
+    const uint64_t prevAction = existingSync != nullptr ? existingSync->lastSyncedActionMask : 0;
+    const uint64_t prevCombat = existingSync != nullptr ? existingSync->lastSyncedCombatMask : 0;
+    if (actionMask == prevAction && combatMask == prevCombat) {
+        return;
+    }
+
+    auto& syncComp = existingSync != nullptr
+                         ? *existingSync
+                         : tlsEcs.actorRegistry.emplace<SelfActorStateSyncComp>(actorEntity);
+    const uint64_t seq = syncComp.nextSeq++;
+    syncComp.lastSyncedActionMask = actionMask;
+    syncComp.lastSyncedCombatMask = combatMask;
+
+    SelfActorStateFlagsS2C msg;
+    msg.set_action_state_mask(actionMask);
+    msg.set_combat_state_mask(combatMask);
+    msg.set_state_seq(seq);
+
+    if (tlsSelfSyncTestHook) {
+        tlsSelfSyncTestHook(actorEntity, actionMask, combatMask, seq);
+        return;
+    }
+    SendToPlayerClient(SceneClientPlayerCommonNotifySelfActorStateFlagsMessageId, msg, actorEntity);
+}
+
+void ActorActionStateSystem::ResendStateFlagsAfterEntry(entt::entity actorEntity) {
+    if (!tlsEcs.actorRegistry.valid(actorEntity)) {
+        return;
+    }
+    if (auto* syncComp = tlsEcs.actorRegistry.try_get<SelfActorStateSyncComp>(actorEntity)) {
+        // 客户端收到 EnterSceneS2C 时已将本地状态位清零,此处重置基准确保非零状态立即补推。
+        syncComp->lastSyncedActionMask = 0;
+        syncComp->lastSyncedCombatMask = 0;
+    }
+    SyncSelfStateFlagsIfChanged(actorEntity);
+}
+
+void ActorActionStateSystem::SetSelfStateSyncTestHook(SelfStateSyncTestHook hook) {
+    tlsSelfSyncTestHook = std::move(hook);
 }

@@ -7,6 +7,7 @@
 #include "modules/combat_ai/state_mutex_matrix.h"
 #include "table/code/actoractioncombatstate_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "actor/action_state/system/actor_action_state.h"
 #include "actor/attribute/constants/actor_state_attribute_calculator_constants.h"
 #include "actor/attribute/system/actor_attribute_calculator.h"
 #include "combat_state/constants/combat_state.h"
@@ -159,9 +160,13 @@ void CombatStateSystem::AddCombatState(entt::entity entityId, uint64_t sourceBuf
     }
 
     stateIterator->second.mutable_sources()->emplace(sourceBuffId, false);
+    const uint64_t prevMask = maskComp.mask;
     maskComp.mask |= (uint64_t{1} << stateType);
 
     ActorAttributeCalculatorSystem::MarkAttributeForUpdate(entityId, kCombatState);
+    if (maskComp.mask != prevMask) {
+        ActorActionStateSystem::SyncSelfStateFlagsIfChanged(entityId);
+    }
 }
 
 void CombatStateSystem::RemoveCombatState(entt::entity entityId, uint64_t sourceBuffId, uint32_t stateType) {
@@ -189,14 +194,22 @@ void CombatStateSystem::RemoveCombatState(entt::entity entityId, uint64_t source
 
     stateIterator->second.mutable_sources()->erase(sourceBuffId);
 
+    bool maskChanged = false;
     if (stateIterator->second.sources().empty()) {
         combatStateCollection.mutable_states()->erase(stateIterator);
         if (auto* maskComp = tlsEcs.actorRegistry.try_get<CombatStateMaskComp>(entityId)) {
+            const uint64_t prevMask = maskComp->mask;
             maskComp->mask &= ~(uint64_t{1} << stateType);
+            maskChanged = (maskComp->mask != prevMask);
+        } else {
+            maskChanged = true;
         }
     }
 
     ActorAttributeCalculatorSystem::MarkAttributeForUpdate(entityId, kCombatState);
+    if (maskChanged) {
+        ActorActionStateSystem::SyncSelfStateFlagsIfChanged(entityId);
+    }
 }
 
 uint32_t CombatStateSystem::ValidateSkillUsage(const entt::entity entityId, const uint32_t combatAction) {

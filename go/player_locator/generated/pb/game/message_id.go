@@ -408,3 +408,4 @@ const ContentGuardCheckPlatformTextMessageId = 436
 const DataServiceUpsertAccountChannelIdentityMessageId = 437
 const DataServiceGetPlayerChannelIdentityMessageId = 438
 const GuildServiceRenameGuildMessageId = 439
+const SceneClientPlayerCommonNotifySelfActorStateFlagsMessageId = 440
