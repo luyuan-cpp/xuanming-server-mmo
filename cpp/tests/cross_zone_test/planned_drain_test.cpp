@@ -61,6 +61,35 @@ TEST(PlannedDrainBudget, MalformedValuesAreRejected)
 	}
 }
 
+TEST(ConflictDrainBudget, DefaultsAndValidBounds)
+{
+	bool valid = false;
+	EXPECT_EQ(planned_drain::ParseConflictDrainBudget(nullptr, &valid), planned_drain::kDefaultConflictDrainBudget);
+	EXPECT_TRUE(valid);
+	valid = false;
+	EXPECT_EQ(planned_drain::ParseConflictDrainBudget("", &valid), planned_drain::kDefaultConflictDrainBudget);
+	EXPECT_TRUE(valid);
+	valid = false;
+	EXPECT_EQ(planned_drain::ParseConflictDrainBudget("5", &valid), 5s);
+	EXPECT_TRUE(valid);
+	valid = false;
+	EXPECT_EQ(planned_drain::ParseConflictDrainBudget("30", &valid), 30s);
+	EXPECT_TRUE(valid);
+	valid = false;
+	EXPECT_EQ(planned_drain::ParseConflictDrainBudget("60", &valid), 60s);
+	EXPECT_TRUE(valid);
+}
+
+TEST(ConflictDrainBudget, RejectsMalformedOrOutOfRangeAndFallsBackToDefault)
+{
+	for (const char *raw : {"0", "4", "61", "-1", "15s", "abc"})
+	{
+		bool valid = true;
+		EXPECT_EQ(planned_drain::ParseConflictDrainBudget(raw, &valid), planned_drain::kDefaultConflictDrainBudget) << raw;
+		EXPECT_FALSE(valid) << raw;
+	}
+}
+
 TEST(PlannedDrainVerdict, WaitsUntilDrainedOrExpired)
 {
 	const auto deadline = kT0 + 30s;

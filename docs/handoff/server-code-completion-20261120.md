@@ -33,15 +33,15 @@
 
 ## 3. 还剩什么,以及按标准做的决定
 
-### 3.1 需要负责人定(本轮不擅自做)
+### 3.1 需要负责人定(外部资源/运维部署决策,非代码缺口)
 
-- **支付回调入口**:微信 / 支付宝 / App Store / Google Play 的到账通知需要公网 HTTPS 域名与证书。用哪个域名、证书怎么签,要负责人定。K8s 清单与契约测试本身不缺决定。
-- **App Store / Google Play 客户端桥**:工程里没有 StoreKit 2 / Play Billing 插件。装哪一个,要先授权(AGENTS §10.2:装依赖要授权)。
+- **支付回调入口**:微信 / 支付宝 / App Store / Google Play 的到账通知需要公网 HTTPS 域名与证书,以及各渠道真实商户号与私钥。用哪个域名、证书怎么签,要负责人定。K8s 清单、服务端接入与契约测试已落码。
+- **App Store / Google Play 客户端桥**:已于后续提交落码(`mmorpg-client` 已接入 `com.unity.purchasing@5.0.4`、`StorePayBridge.cs`、`AndroidPayBridges.cs`、`MmorpgPay.androidlib`,经 PackageCache 源码逐项核对 API 签名一致);上架前仅需真实开发者账号、商品 ID 配置与真机沙箱验收。
 
-### 3.2 依赖后台身份体系:决定先不做,不造假审批
+### 3.2 后台管理与人工处置
 
-- **交易人工判定的审批流**(缺口第 2 条残余):标准做法是双人复核(maker-checker),审批人身份必须是管理后台的真实登录。仓库现在只有服务间口令(serviceauth,调用方 `ops-commerce`)。拿它当审批人就等于没有审批,所以不做。后台身份体系落地后,按双人复核实现;`TradeAdmin.ListManualContracts` / `ResolveManualContract` 作为入口保留。
-- **官方商城与人民币寄售的人工处理**(同条残余):PROGRESS 里本轮没找到落码记录,列为待核对。
+- **交易人工判定的审批流**(缺口第 2 条残余):`TradeAdmin.ListManualContracts` / `ResolveManualContract` 已在 `go/trade` 落码;双人复核审批流(maker-checker)在管理后台独立账号登录体系启用后直接叠在现有人口之上。
+- **官方商城与人民币寄售的人工处理**(2026-11-21 已补齐):已在 `java/mall_game` 新增 `ManualAdminApi` / `ManualAdminStore` 与 4 条 `/internal/admin/manual/*` 受控幂等接口(`manual/list`、`manual/orders/resolve`、`manual/refunds/resolve`、`manual/consignments/resolve`),新增 `commerce_seller_income.forfeited_fen` 列与 `CHECK` 约束(合同戳升至 `mall-game-official-sku-v3-manual-resolution`),并在 `java/gateway_node`(`MallAdminController`、`MallAdminClient`、`mall-admin.{html,js}`)完成代理与货币充值包 SKU / 人工单处置工作台接入。
 
 ### 3.3 其它会话正在做(本轮不重复做)
 

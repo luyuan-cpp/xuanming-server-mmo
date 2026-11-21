@@ -81,5 +81,5 @@
 
 - 让位选人不看对方的护栏副本,可能选中同在删除中的成员;轮到他收尾时会再让一次。
 - 帮会双存储已经不一致(另有一个 role=3)时,让位按「恰好一个帮主」断言失败关闭,要人工修数据。
-- `deletionSessions.KickPlayer` 没有单测(Kafka 生产者是具体类型),只靠第 7 步冒烟第 4 条。
+- `deletionSessions.KickPlayer` 已于 2026-11-21 抽出 `kickPlayerSession` 并在 `go/login/internal/svc/account_deletion_test.go` 补齐 4 条单测(离线/缺失跳过、先踢 gate 再 MarkOffline、踢 gate 失败中止 MarkOffline、无 gate 身份直呼 MarkOffline)。
 - 发件预检与建邮箱行之间删角收尾恰好提交时,会留一行空邮箱行。

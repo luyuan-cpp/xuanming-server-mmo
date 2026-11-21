@@ -52,10 +52,11 @@ CREATE TABLE commerce_seller_income (
   net_fen BIGINT NOT NULL,
   reserved_fen BIGINT NOT NULL DEFAULT 0,
   paid_fen BIGINT NOT NULL DEFAULT 0,
+  forfeited_fen BIGINT NOT NULL DEFAULT 0,
   available_ms BIGINT NOT NULL,
   INDEX idx_seller_income(account,order_sn),
   CHECK(gross_fen>0), CHECK(fee_fen>=0 AND net_fen>=0), CHECK(fee_fen+net_fen=gross_fen),
-  CHECK(reserved_fen>=0 AND paid_fen>=0 AND reserved_fen+paid_fen<=net_fen)
+  CHECK(reserved_fen>=0 AND paid_fen>=0 AND forfeited_fen>=0 AND reserved_fen+paid_fen+forfeited_fen<=net_fen)
 );
 CREATE TABLE commerce_withdrawal (
   withdrawal_id VARCHAR(36) PRIMARY KEY,

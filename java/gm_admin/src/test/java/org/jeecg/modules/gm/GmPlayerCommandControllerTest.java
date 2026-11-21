@@ -135,6 +135,10 @@ class GmPlayerCommandControllerTest {
         verify(subject).checkPermission("gm:audit:read");
         verify(journal).listPlayerCommands(2, 25, "1001", "EXECUTED");
 
+        when(journal.get("42", "PLAYER")).thenReturn(json.createObjectNode().put("id", "42"));
+        controller.get("42");
+        verify(journal).get("42", "PLAYER");
+
         when(journal.auditHistory("42", "PLAYER")).thenReturn(json.createObjectNode().put("commandId", "42"));
         controller.audit("42");
         verify(journal).auditHistory("42", "PLAYER");

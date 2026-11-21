@@ -99,3 +99,24 @@ func TestValidAccountTag(t *testing.T) {
 		}
 	}
 }
+
+// 账本每个分片的四把键必须同槽(单槽 Lua),且 16 个分片必须分散到不同槽位以支持 Redis Cluster 水平扩展。
+func TestNppaLedgerKeysShareSlotPerShardAndSpreadAcrossSlots(t *testing.T) {
+	slots := make(map[uint16]struct{}, NppaLedgerShardCount)
+	for shard := 0; shard < NppaLedgerShardCount; shard++ {
+		keys := []string{NppaSessionsKey(shard), NppaLeasesKey(shard), NppaOutboxKey(shard), NppaSweepKey(shard)}
+		want := HashSlot(keys[0])
+		slots[want] = struct{}{}
+		for _, key := range keys {
+			if !HasHashTag(key) {
+				t.Errorf("shard %d key %q lacks hash tag", shard, key)
+			}
+			if got := HashSlot(key); got != want {
+				t.Errorf("shard %d key %q slot = %d, want %d", shard, key, got, want)
+			}
+		}
+	}
+	if len(slots) < NppaLedgerShardCount {
+		t.Errorf("nppa ledger shards collapsed into %d slots, want %d distinct slots", len(slots), NppaLedgerShardCount)
+	}
+}

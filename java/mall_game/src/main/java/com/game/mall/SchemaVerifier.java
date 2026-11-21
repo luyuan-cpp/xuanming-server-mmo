@@ -28,17 +28,17 @@ final class SchemaVerifier {
         Map.entry("commerce_consignment_order", "order_sn,listing_id,buyer_account,buyer_owner_revision,request_id,seller_account,escrow_reference,escrow_proof,fee_bps,cooling_ms"),
         Map.entry("commerce_consignment_return", "listing_id,return_proof"),
         Map.entry("commerce_seller_guard", "account"),
-        Map.entry("commerce_seller_income", "order_sn,account,gross_fen,fee_fen,net_fen,reserved_fen,paid_fen,available_ms"),
+        Map.entry("commerce_seller_income", "order_sn,account,gross_fen,fee_fen,net_fen,reserved_fen,paid_fen,forfeited_fen,available_ms"),
         Map.entry("commerce_withdrawal", "withdrawal_id,account,request_id,amount_fen,state,channel,transaction_id,created_ms"),
         Map.entry("commerce_withdrawal_allocation", "withdrawal_id,order_sn,amount_fen"),
         Map.entry("commerce_withdrawal_receipt", "withdrawal_id,channel,transaction_id,amount_fen,successful"),
         Map.entry("commerce_mock_payout", "withdrawal_id,request_id,transaction_id,amount_fen,successful,created_ms,applied"),
         Map.entry("commerce_request_nonce", "caller_role,nonce,expires_ms"));
     /**
-     * 存储合同戳,与 schema.sql 末行一致。2026-11-13 起换新:发放物多了货币一种、付款回执多了修订号、多了扣回待办与回执、
-     * 退款待办多了转人工的状态(payment-recharge.md §22.6)。下面只核表、列和唯一键,CHECK 的取值测不出,靠换戳强制重装。
+     * 存储合同戳,与 schema.sql 末行一致。2026-11-21 起换新:寄售卖家收入增加 forfeited_fen 及 CHECK 约束,
+     * 供人工单处置精确扣罚争议收入。下面只核表、列和唯一键,CHECK 的取值测不出,靠换戳强制重装。
      */
-    static final String STORAGE_CONTRACT = "mall-game-official-sku-v2-currency-grant-payment-revision";
+    static final String STORAGE_CONTRACT = "mall-game-official-sku-v3-manual-resolution";
     private SchemaVerifier() {}
     static void verify(JdbcTemplate jdbc, DataSource source) throws SQLException {
         List<Map<String, Object>> version = jdbc.queryForList("SELECT version,storage_contract FROM commerce_schema_version");
@@ -64,7 +64,7 @@ final class SchemaVerifier {
                                 && metadata.isNullable(i) != ResultSetMetaData.columnNullable) {
                             throw new IllegalStateException("付款回执的订单列必须可空，才能记录异常付款");
                         }
-                        if (Set.of("price_minor", "pay_amount", "amount_minor", "product_price_minor", "price_fen", "gross_fen", "fee_fen", "net_fen", "reserved_fen", "paid_fen", "amount_fen").contains(column) && metadata.getColumnType(i) != Types.BIGINT) {
+                        if (Set.of("price_minor", "pay_amount", "amount_minor", "product_price_minor", "price_fen", "gross_fen", "fee_fen", "net_fen", "reserved_fen", "paid_fen", "forfeited_fen", "amount_fen").contains(column) && metadata.getColumnType(i) != Types.BIGINT) {
                             throw new IllegalStateException("商城金额列必须为最小单位 BIGINT: " + table.getKey() + "." + column);
                         }
                     }

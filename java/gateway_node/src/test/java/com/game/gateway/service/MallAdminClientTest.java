@@ -47,7 +47,10 @@ class MallAdminClientTest {
         try (var fixture = new Upstream()) {
             byte[] response = bytes("{ \"skuId\":11, \"lockedStock\":2, \"priceMinor\":125 }");
             fixture.reply.set(new Response(200, response, null, false));
-            for (String command : List.of("skus/list", "skus/create", "skus/update", "skus/stock", "order-view")) {
+            var commands = List.of(
+                "skus/list", "skus/create", "skus/update", "skus/stock", "order-view",
+                "manual/list", "manual/orders/resolve", "manual/refunds/resolve", "manual/consignments/resolve");
+            for (String command : commands) {
                 var reply = fixture.client.execute(command, BODY);
                 assertEquals(200, reply.status());
                 assertArrayEquals(response, reply.body());
@@ -66,7 +69,7 @@ class MallAdminClientTest {
                 byte[] reserialized = new ObjectMapper().writeValueAsBytes(new ObjectMapper().readTree(BODY));
                 assertNotEquals(sign(request, request.path(), reserialized), request.signature(), "签名须覆盖原字节");
             }
-            assertEquals(5, fixture.calls.get());
+            assertEquals(commands.size(), fixture.calls.get());
             fixture.assertHealthy();
         }
     }

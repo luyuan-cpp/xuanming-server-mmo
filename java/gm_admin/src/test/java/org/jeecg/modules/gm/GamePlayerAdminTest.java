@@ -346,4 +346,92 @@ class GamePlayerAdminTest {
         assertTrue(services.sendPlayerCommand(frozen("player.level", "{\"level\":54}")).path("executed").asBoolean());
         assertEquals(2, writes.get());
     }
+
+    @Test
+    void multiZonePlacementResolvesSameNodeIdAcrossZonesAndRejectsHandoffOrMismatch() throws Exception {
+        String firstTarget = start(this::success);
+        int firstPort = server.getPort();
+        var secondWrites = new AtomicInteger();
+        ServerServiceDefinition secondAdmin = ServerServiceDefinition.builder("scene_node.SceneNodeGrpc")
+                .addMethod(PROTO.method(GamePlayerAdmin.EXECUTE), ServerCalls.asyncUnaryCall((request, observer) -> {
+                    secondWrites.incrementAndGet();
+                    success(request, observer);
+                })).build();
+        secondServer = NettyServerBuilder.forAddress(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
+                .addService(secondAdmin).build().start();
+        int secondPort = secondServer.getPort();
+
+        // Zone 1 与 Zone 2 同时存在 nodeId=7，必须按 (zoneId, nodeId) 精确区分而不误判歧义。
+        String multiZoneEtcd = "{\"kvs\":["
+                + "{\"key\":\"" + b64("SceneNodeService.rpc/zone/1/node/7") + "\",\"value\":\""
+                + b64("{\"nodeId\":7,\"zoneId\":1,\"grpcEndpoint\":{\"ip\":\"127.0.0.1\",\"port\":" + firstPort + "}}") + "\"},"
+                + "{\"key\":\"" + b64("SceneNodeService.rpc/zone/2/node/7") + "\",\"value\":\""
+                + b64("{\"nodeId\":7,\"zoneId\":2,\"grpcEndpoint\":{\"ip\":\"127.0.0.1\",\"port\":" + secondPort + "}}") + "\"}"
+                + "]}";
+        String etcdUrl = startEtcd(new AtomicReference<>(multiZoneEtcd));
+        services = new GameServices(PROTO, JSON, "", firstTarget, "", "", true, 5000, "{}", etcdUrl, KEY, 0);
+
+        // 模拟真实生产：PlayerSession.sceneNodeId 为空，权威落点来自 placement。
+        sessionReply = """
+                {"found":true,"session":{"playerId":"9007199254740995","state":"SESSION_STATE_ONLINE",
+                 "sceneNodeId":"","sessionId":10,"loginGeneration":"9007199254740999"},
+                 "placement":{"found":true,"zoneId":1,"nodeId":"7","sceneId":"100","ownerEpoch":"5",
+                 "awaitingPlacement":false,"sessionId":10,"loginGeneration":"9007199254740999"}}
+                """;
+        assertTrue(services.sendPlayerCommand(frozen("player.level", "{\"level\":50}")).path("executed").asBoolean());
+        assertEquals(1, writes.get());
+        assertEquals(0, secondWrites.get());
+
+        // 切到 Zone 2 同号 node 7，精确命中 secondServer。
+        sessionReply = """
+                {"found":true,"session":{"playerId":"9007199254740995","state":"SESSION_STATE_ONLINE",
+                 "sceneNodeId":"","sessionId":10,"loginGeneration":"9007199254740999"},
+                 "placement":{"found":true,"zoneId":2,"nodeId":"7","sceneId":"200","ownerEpoch":"6",
+                 "awaitingPlacement":false,"sessionId":10,"loginGeneration":"9007199254740999"}}
+                """;
+        assertTrue(services.sendPlayerCommand(frozen("player.level", "{\"level\":51}")).path("executed").asBoolean());
+        assertEquals(1, writes.get());
+        assertEquals(1, secondWrites.get());
+
+        // 未入场 / 跨区交接等待落点 / 会话代次未对齐均 fail-closed 且不触发写 RPC。
+        sessionReply = """
+                {"found":true,"session":{"playerId":"9007199254740995","state":"SESSION_STATE_ONLINE",
+                 "sessionId":10,"loginGeneration":"9007199254740999"},"placement":{"found":false}}
+                """;
+        assertEquals("PLAYER_NOT_IN_SCENE", assertThrows(GameServices.CallFailure.class,
+                () -> services.sendPlayerCommand(frozen("player.level", "{\"level\":52}"))).getCode());
+
+        sessionReply = """
+                {"found":true,"session":{"playerId":"9007199254740995","state":"SESSION_STATE_ONLINE",
+                 "sessionId":10,"loginGeneration":"9007199254740999"},
+                 "placement":{"found":true,"zoneId":2,"nodeId":"","ownerEpoch":"7","awaitingPlacement":true}}
+                """;
+        assertEquals("PLAYER_HANDOFF", assertThrows(GameServices.CallFailure.class,
+                () -> services.sendPlayerCommand(frozen("player.level", "{\"level\":52}"))).getCode());
+
+        sessionReply = """
+                {"found":true,"session":{"playerId":"9007199254740995","state":"SESSION_STATE_ONLINE",
+                 "sessionId":10,"loginGeneration":"9007199254740999"},
+                 "placement":{"found":true,"zoneId":2,"nodeId":"7","sceneId":"200","ownerEpoch":"8",
+                 "sessionId":10,"loginGeneration":"9007199254740998"}}
+                """;
+        assertEquals("SESSION_MISMATCH", assertThrows(GameServices.CallFailure.class,
+                () -> services.sendPlayerCommand(frozen("player.level", "{\"level\":52}"))).getCode());
+
+        assertEquals(1, writes.get());
+        assertEquals(1, secondWrites.get());
+
+        // 静态多区映射 {"2/7": ...} 支持精确覆盖指定区节点。
+        services.close();
+        services = new GameServices(PROTO, JSON, "", firstTarget, "", "", true, 5000,
+                "{\"2/7\":\"127.0.0.1:" + secondPort + "\"}", KEY);
+        sessionReply = """
+                {"found":true,"session":{"playerId":"9007199254740995","state":"SESSION_STATE_ONLINE",
+                 "sessionId":10,"loginGeneration":"9007199254740999"},
+                 "placement":{"found":true,"zoneId":2,"nodeId":"7","sceneId":"200","ownerEpoch":"9",
+                 "sessionId":10,"loginGeneration":"9007199254740999"}}
+                """;
+        assertTrue(services.sendPlayerCommand(frozen("player.level", "{\"level\":53}")).path("executed").asBoolean());
+        assertEquals(2, secondWrites.get());
+    }
 }

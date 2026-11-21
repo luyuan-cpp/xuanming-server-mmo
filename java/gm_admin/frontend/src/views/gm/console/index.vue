@@ -278,6 +278,7 @@
   import {
     buildMailDraft,
     currencyLabel,
+    getGmCommand,
     getGmCommandAudit,
     getGmCommands,
     getGmOverview,
@@ -600,8 +601,25 @@
   }
 
   async function refreshReviewedCommand() {
+    const current = reviewedCommand.value;
+    if (current && hasPermission('gm:audit:read')) {
+      try {
+        const updated = await getGmCommand(current.id);
+        if (reviewedCommand.value?.id === updated.id) {
+          if (updated.status !== current.status) reviewConfirmed.value = false;
+          reviewedCommand.value = updated;
+          if (preparedCommand.value?.id === updated.id) preparedCommand.value = updated;
+          if (updated.status !== 'UNKNOWN') {
+            if (unconfirmedCommandId.value === updated.id) unconfirmedCommandId.value = '';
+            sendError.value = '';
+          }
+        }
+      } catch (error) {
+        sendError.value = `刷新原命令状态失败。${errorText(error)}`;
+      }
+      await loadAuditHistory(current.id);
+    }
     await loadAudit();
-    if (reviewedCommand.value) await loadAuditHistory(reviewedCommand.value.id);
   }
 
   async function prepareMail() {

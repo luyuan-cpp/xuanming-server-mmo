@@ -128,7 +128,11 @@ class GmInstallationTest {
     }
 
     @Test void indexMigrationCreatesAuditAndQueryIndexesIdempotently() throws Exception {
+        request("/actuator/health/liveness", 200);
+        request("/actuator/health/readiness", 503);
         start();
+        request("/actuator/health/readiness", 200);
+        request("/actuator/health", 401);
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=5", Integer.class));
         for (String index : List.of("idx_gm_command_type_created", "idx_gm_command_type_player_created", "idx_gm_command_type_status_created")) {
             assertTrue(hasIndex("gm_command", index), "Missing index: " + index);

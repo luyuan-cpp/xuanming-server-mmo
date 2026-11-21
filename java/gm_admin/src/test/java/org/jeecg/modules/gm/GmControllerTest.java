@@ -88,10 +88,14 @@ class GmControllerTest {
         when(journal.list(2, 20, "1001", "DELIVERED")).thenReturn(json.createObjectNode().put("total", 0));
         controller.commands(2, 20, "1001", "DELIVERED");
         verify(journal).list(2, 20, "1001", "DELIVERED");
+        when(journal.get("42", "MAIL")).thenReturn(json.createObjectNode().put("id", "42"));
+        controller.command("42");
+        verify(journal).get("42", "MAIL");
         when(journal.auditHistory("42", "MAIL")).thenReturn(json.createObjectNode().put("commandId", "42"));
         controller.commandAudit("42");
         verify(journal).auditHistory("42", "MAIL");
         doThrow(new UnauthorizedException()).when(subject).checkPermission("gm:audit:read");
+        assertThrows(UnauthorizedException.class, () -> controller.command("42"));
         assertThrows(UnauthorizedException.class, () -> controller.commandAudit("42"));
     }
     private String draft() {

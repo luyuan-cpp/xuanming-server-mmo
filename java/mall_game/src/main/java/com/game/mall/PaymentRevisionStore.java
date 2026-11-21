@@ -176,7 +176,7 @@ public class PaymentRevisionStore {
                 byte[] sellerAccount = incomes.getFirst();
                 jdbc.update("INSERT INTO commerce_seller_guard(account) VALUES(?) ON DUPLICATE KEY UPDATE account=account", sellerAccount);
                 jdbc.queryForObject("SELECT account FROM commerce_seller_guard WHERE account=? FOR UPDATE", byte[].class, sellerAccount);
-                jdbc.update("UPDATE commerce_seller_income SET available_ms=? WHERE order_sn=? AND paid_fen+reserved_fen<net_fen",
+                jdbc.update("UPDATE commerce_seller_income SET available_ms=? WHERE order_sn=? AND paid_fen+reserved_fen+forfeited_fen<net_fen",
                     Long.MAX_VALUE, in.orderId());
             }
             jdbc.update("UPDATE commerce_consignment SET state='MANUAL' WHERE current_order_sn=?", in.orderId());

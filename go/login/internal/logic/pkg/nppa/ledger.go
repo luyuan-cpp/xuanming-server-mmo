@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"shared/redisslot"
@@ -17,24 +19,25 @@ import (
 // 进账本的是两种会话:要向国家系统上报上下线的(自有渠道实名的),和有截止时刻的(未成年人);一条会话可以两样都是。
 // 它保证两件事:报过上线的会话一定会报下线;事件在发给国家系统之前不因为 login 进程退出而丢。
 //
-//	会话表   login_nppa_sess:{nppa}    HASH  连接身份 → "si|pi|截止毫秒"(不上报的会话 si、pi 为空;截止 0 = 不限)
-//	租约     login_nppa_live:{nppa}    ZSET  连接身份 → 租约到期时刻(毫秒)
-//	待发事件 login_nppa_outbox:{nppa}  ZSET  "in|ot|si|pi" / "out|ot|si|pi" → 可以被领走的时刻(毫秒)
-//	清扫记录 login_nppa_sweep:{nppa}   HASH  last = 上一次清扫的时刻,hold_until = 清扫暂停到的时刻
+// 按连接身份确定性分 16 片(redisslot.NppaLedgerShardCount),每片四把键共用同一 hash tag `{nppa:<shard>}`,
+// 单连接操作保持单槽 Lua 原子性,同时把大量在线玩家的 Begin / Renew / End 水平分散到 Redis Cluster 各主节点:
 //
-// 四个键同一个槽,每个动作一段脚本,原子。时刻一律取 Redis 服务器的时钟,各副本的时钟差不影响结论。
+//	会话表   login_nppa_sess:{nppa:<shard>}    HASH  连接身份 → "si|pi|截止毫秒"(不上报的会话 si、pi 为空;截止 0 = 不限)
+//	租约     login_nppa_live:{nppa:<shard>}    ZSET  连接身份 → 租约到期时刻(毫秒)
+//	待发事件 login_nppa_outbox:{nppa:<shard>}  ZSET  "in|ot|si|pi" / "out|ot|si|pi" → 可以被领走的时刻(毫秒)
+//	清扫记录 login_nppa_sweep:{nppa:<shard>}   HASH  last = 上一次清扫的时刻,hold_until = 清扫暂停到的时刻
+//
+// 同一分片内四个键同一个槽,每个动作一段脚本,原子。时刻一律取 Redis 服务器的时钟,各副本的时钟差不影响结论。
 //   - Begin:登记会话、排一条上线;同一条连接上还留着上一次的会话,先给它排下线。
 //   - Renew:连接还活着(gate 的续租到了),租约顺延,并回它的截止时刻。未成年人的租约不超过当天的截止时刻。
 //   - End:会话收尾(断线、离开游戏),删掉登记、排一条下线。没有登记就什么都不做,所以重放无害。
-//   - Sweep:租约到期还没收尾的(gate 进程没了、断线通知丢了、End 那次 Redis 出错),按租约到期时刻补一条下线。
-//   - Claim / Ack / Release:发送方领走一批到期的事件(领走的 15 秒内别人看不见),发成功了删掉,没发的放回去;
+//   - Sweep:逐片清扫租约到期还没收尾的(gate 进程没了、断线通知丢了、End 那次 Redis 出错),按租约到期时刻补一条下线。
+//   - Claim / Ack / Release:轮询各片领走一批到期的事件(领走的 15 秒内别人看不见),发成功了按片删掉,没发的按片放回去;
 //     发了却没来得及删的,15 秒后会被再发一次(至少一次)。
-//
-// shortcut: 只有一个槽,所有操作落在同一个 Redis 主节点上。能发出去的量由国家系统的限流封顶(每秒约 1000 条),
-// 一个节点远远够用;国家系统放宽限流到一个节点吃不消时再按连接身份分片。
 type Ledger struct {
-	rdb   redis.UniversalClient
-	lease time.Duration
+	rdb         redis.UniversalClient
+	lease       time.Duration
+	claimCursor atomic.Uint32
 }
 
 const (
@@ -144,8 +147,8 @@ func NewLedger(rdb redis.UniversalClient, lease time.Duration) *Ledger {
 	return &Ledger{rdb: rdb, lease: lease}
 }
 
-func (l *Ledger) sessionKeys() []string {
-	return []string{redisslot.NppaSessionsKey(), redisslot.NppaLeasesKey(), redisslot.NppaOutboxKey()}
+func (l *Ledger) sessionKeys(shard int) []string {
+	return []string{redisslot.NppaSessionsKey(shard), redisslot.NppaLeasesKey(shard), redisslot.NppaOutboxKey(shard)}
 }
 
 // Begin 登记一条会话。conn 是连接身份(gate 实例加会话代次)。要上报的会话给 si(用 NewID 生成)与 pi,并排一条上线;
@@ -156,12 +159,14 @@ func (l *Ledger) Begin(ctx context.Context, conn, si, pi string, playDeadline ti
 	if !playDeadline.IsZero() {
 		capMs = playDeadline.UnixMilli()
 	}
-	return beginScript.Run(ctx, l.rdb, l.sessionKeys(), conn, si, pi, l.lease.Milliseconds(), capMs).Err()
+	shard := redisslot.NppaShard(conn)
+	return beginScript.Run(ctx, l.rdb, l.sessionKeys(shard), conn, si, pi, l.lease.Milliseconds(), capMs).Err()
 }
 
 // Renew 给还活着的连接的会话顺延租约,返回它的截止时刻(零值 = 不限,或账本里没有这条连接)。
 func (l *Ledger) Renew(ctx context.Context, conn string) (time.Time, error) {
-	capMs, err := renewScript.Run(ctx, l.rdb, l.sessionKeys()[:2], conn, l.lease.Milliseconds()).Int64()
+	shard := redisslot.NppaShard(conn)
+	capMs, err := renewScript.Run(ctx, l.rdb, l.sessionKeys(shard)[:2], conn, l.lease.Milliseconds()).Int64()
 	if err != nil || capMs <= 0 {
 		return time.Time{}, err
 	}
@@ -170,54 +175,96 @@ func (l *Ledger) Renew(ctx context.Context, conn string) (time.Time, error) {
 
 // End 收尾一条会话并排一条下线。没有登记时什么都不做。
 func (l *Ledger) End(ctx context.Context, conn string) error {
-	return endScript.Run(ctx, l.rdb, l.sessionKeys(), conn).Err()
+	shard := redisslot.NppaShard(conn)
+	return endScript.Run(ctx, l.rdb, l.sessionKeys(shard), conn).Err()
 }
 
-// Sweep 收尾租约到期的会话,要上报的补一条下线。返回这次收尾了几条。每个副本每拍调一次,谁调都一样。
+// Sweep 逐片收尾租约到期的会话,要上报的补一条下线。返回本次总共收尾了几条。每个副本每拍调一次,谁调都一样。
 func (l *Ledger) Sweep(ctx context.Context) (int, error) {
-	keys := append(l.sessionKeys(), redisslot.NppaSweepKey())
-	return sweepScript.Run(ctx, l.rdb, keys, l.lease.Milliseconds(), sweepBatch, int64(sweepBackfill/time.Second)).Int()
+	total := 0
+	var errs []error
+	for shard := 0; shard < redisslot.NppaLedgerShardCount; shard++ {
+		keys := append(l.sessionKeys(shard), redisslot.NppaSweepKey(shard))
+		n, err := sweepScript.Run(ctx, l.rdb, keys, l.lease.Milliseconds(), sweepBatch, int64(sweepBackfill/time.Second)).Int()
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		total += n
+	}
+	return total, errors.Join(errs...)
 }
 
-// Claimed 是领到的一条待发事件。Member 是它在账本里的原样,Ack / Release 用;Valid 为假说明原样解不出来,只能删掉。
+// Claimed 是领到的一条待发事件。Shard 与 Member 共同定位它在账本里的原样,Ack / Release 用;
+// Valid 为假说明原样解不出来,只能删掉。
 type Claimed struct {
+	Shard    int
 	Member   string
 	Behavior Behavior
 	Valid    bool
 }
 
-// Claim 领走至多 limit 条到期的事件。领走的 15 秒内别的副本看不见;发成功了 Ack,没发的 Release。
+// Claim 轮询各分片领走至多 limit 条到期的事件。领走的 15 秒内别的副本看不见;发成功了 Ack,没发的 Release。
 func (l *Ledger) Claim(ctx context.Context, limit int) ([]Claimed, error) {
-	members, err := claimScript.Run(ctx, l.rdb, []string{redisslot.NppaOutboxKey()}, limit, claimVisibility.Milliseconds()).StringSlice()
-	if err != nil {
-		return nil, err
+	if limit <= 0 {
+		return nil, nil
 	}
-	claimed := make([]Claimed, len(members))
-	for i, member := range members {
-		behavior, ok := parseEvent(member)
-		claimed[i] = Claimed{Member: member, Behavior: behavior, Valid: ok}
+	start := int((l.claimCursor.Add(1) - 1) % redisslot.NppaLedgerShardCount)
+	claimed := make([]Claimed, 0, min(limit, MaxBatch))
+	var errs []error
+	for i := 0; i < redisslot.NppaLedgerShardCount && len(claimed) < limit; i++ {
+		shard := (start + i) % redisslot.NppaLedgerShardCount
+		want := limit - len(claimed)
+		members, err := claimScript.Run(ctx, l.rdb, []string{redisslot.NppaOutboxKey(shard)}, want, claimVisibility.Milliseconds()).StringSlice()
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		for _, member := range members {
+			behavior, ok := parseEvent(member)
+			claimed = append(claimed, Claimed{Shard: shard, Member: member, Behavior: behavior, Valid: ok})
+		}
 	}
-	return claimed, nil
+	if len(claimed) == 0 && len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+	return claimed, errors.Join(errs...)
 }
 
-// Ack 删掉已经发给国家系统(或已经过期、解不出来)的事件。
-func (l *Ledger) Ack(ctx context.Context, members []string) error {
-	if len(members) == 0 {
+// Ack 按分片删掉已经发给国家系统(或已经过期、解不出来)的事件。
+func (l *Ledger) Ack(ctx context.Context, items []Claimed) error {
+	if len(items) == 0 {
 		return nil
 	}
-	return l.rdb.ZRem(ctx, redisslot.NppaOutboxKey(), toInterfaces(members)...).Err()
+	byShard := make(map[int][]interface{})
+	for _, item := range items {
+		byShard[item.Shard] = append(byShard[item.Shard], item.Member)
+	}
+	var errs []error
+	for shard, members := range byShard {
+		if err := l.rdb.ZRem(ctx, redisslot.NppaOutboxKey(shard), members...).Err(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
-// Release 把领走却没发的事件放回去,马上可以再被领走。已经被 Ack 的不会被放回来(只改还在的)。
-func (l *Ledger) Release(ctx context.Context, members []string) error {
-	if len(members) == 0 {
+// Release 按分片把领走却没发的事件放回去,马上可以再被领走。已经被 Ack 的不会被放回来(只改还在的)。
+func (l *Ledger) Release(ctx context.Context, items []Claimed) error {
+	if len(items) == 0 {
 		return nil
 	}
-	entries := make([]redis.Z, len(members))
-	for i, member := range members {
-		entries[i] = redis.Z{Score: 0, Member: member}
+	byShard := make(map[int][]redis.Z)
+	for _, item := range items {
+		byShard[item.Shard] = append(byShard[item.Shard], redis.Z{Score: 0, Member: item.Member})
 	}
-	return l.rdb.ZAddXX(ctx, redisslot.NppaOutboxKey(), entries...).Err()
+	var errs []error
+	for shard, entries := range byShard {
+		if err := l.rdb.ZAddXX(ctx, redisslot.NppaOutboxKey(shard), entries...).Err(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // parseEvent 解出 "in|ot|si|pi" / "out|ot|si|pi"。
@@ -240,14 +287,6 @@ func parseEvent(member string) (Behavior, bool) {
 		return Behavior{}, false
 	}
 	return b, true
-}
-
-func toInterfaces(values []string) []interface{} {
-	out := make([]interface{}, len(values))
-	for i, v := range values {
-		out[i] = v
-	}
-	return out
 }
 
 // NewID 生成一个 32 位随机十六进制标识。实名认证的 ai 与上报的会话标识 si 都用它:规范要求两者都不超过 32 位,

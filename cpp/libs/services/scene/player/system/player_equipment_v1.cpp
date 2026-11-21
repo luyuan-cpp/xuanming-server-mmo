@@ -256,9 +256,14 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
     std::map<std::pair<uint32_t,uint32_t>, std::pair<uint64_t,uint32_t>> values;
     std::vector<std::pair<Guid,const ItemTable*>> artifacts;
     bags->bags[kEquipment].ForEachItem([&](Guid id, const ItemComp& item) {
+        if (item.size() != 1) return;
         const auto* row = ItemRow(item.config_id());
-        if (row == nullptr || item.size() != 1 || !item.has_equip() ||
-            row->equip_profile() < 1 || row->equip_profile() > 3 || !ValidSelections(item,row->equip_profile())) return;
+        if (row == nullptr) { effects.set_support_sources_complete(false); return; }
+        if (row->equip_profile() < 1 || row->equip_profile() > 3) return;
+        if (!item.has_equip() || !ValidSelections(item, row->equip_profile())) {
+            effects.set_support_sources_complete(false);
+            return;
+        }
         for (const auto& selected : item.equip().fixed_affixes()) {
             const auto& affix = *AffixRow(selected.affix_id());
             auto& total = values[{affix.effect(),affix.effect_param()}];
@@ -308,7 +313,7 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
     std::sort(artifacts.begin(), artifacts.end(), [](const auto& a,const auto& b) { return a.first < b.first; });
     for (const auto& [id, item] : artifacts) {
         const auto* row = EquipArtifactTableManager::Instance().FindByIdSilent(item->artifact_id()).first;
-        if (row == nullptr || !ValidArtifact(*row)) continue;
+        if (row == nullptr || !ValidArtifact(*row)) { effects.set_support_sources_complete(false); continue; }
         auto* source = effects.add_artifacts(); source->set_item_id(id); source->set_effect_id(row->id());
         source->set_bonus_bps(row->bonus_bps()); source->set_cap_bps(row->cap_bps());
         source->set_per_round_limit(row->per_round_limit()); source->set_battle_limit(row->battle_limit());

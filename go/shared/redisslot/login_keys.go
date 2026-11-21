@@ -52,12 +52,21 @@ func NppaQuotaKey(api string) string {
 	return "login_nppa_quota:{nppa}:" + api
 }
 
-// 上下线上报账本的四个键(login 的 nppa.Ledger,docs/design/real-name-anti-addiction.md §5.5)。同一个 tag:
-// 一段脚本里原子地改会话表、租约与待发事件。
-func NppaSessionsKey() string { return "login_nppa_sess:{nppa}" }
-func NppaLeasesKey() string   { return "login_nppa_live:{nppa}" }
-func NppaOutboxKey() string   { return "login_nppa_outbox:{nppa}" }
-func NppaSweepKey() string    { return "login_nppa_sweep:{nppa}" }
+// NppaLedgerShardCount 是防沉迷上下线账本的固定分片数。按连接身份哈希落片,每个分片内四把键共用同一 hash tag
+// `{nppa:<shard>}`,保持单槽 Lua 原子性,同时让高并发在线会话的 Begin / Renew / End 水平分散到 Redis Cluster 各主节点。
+const NppaLedgerShardCount = 16
+
+// NppaShard 按连接身份确定性地算出账本分片号(0..NppaLedgerShardCount-1)。
+func NppaShard(connectionID string) int {
+	return int(CRC16(connectionID) % NppaLedgerShardCount)
+}
+
+// 上下线上报账本的四个分片键(login 的 nppa.Ledger,docs/design/real-name-anti-addiction.md §5.5)。
+// 同一分片共用 tag `{nppa:<shard>}`:一段脚本里原子地改会话表、租约、待发事件与清扫水位。
+func NppaSessionsKey(shard int) string { return "login_nppa_sess:{nppa:" + strconv.Itoa(shard) + "}" }
+func NppaLeasesKey(shard int) string   { return "login_nppa_live:{nppa:" + strconv.Itoa(shard) + "}" }
+func NppaOutboxKey(shard int) string   { return "login_nppa_outbox:{nppa:" + strconv.Itoa(shard) + "}" }
+func NppaSweepKey(shard int) string    { return "login_nppa_sweep:{nppa:" + strconv.Itoa(shard) + "}" }
 
 // RealNameAttemptsKey 是账号在某个北京日期(2006-01-02)提交实名的次数。
 func RealNameAttemptsKey(account, day string) string {

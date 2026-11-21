@@ -176,7 +176,10 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
         registry.addInterceptor(new HandlerInterceptor() {
             @Override public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
                 String path = request.getServletPath();
+                // K8s 存活探针在启动迁移期间即可放行；就绪探针必须等全部版本迁移落盘后才返回就绪。
+                if ("GET".equalsIgnoreCase(request.getMethod()) && "/actuator/health/liveness".equals(path)) return true;
                 if (!ready) return reject(response, 503);
+                if ("GET".equalsIgnoreCase(request.getMethod()) && "/actuator/health/readiness".equals(path)) return true;
                 if (OPEN.contains(path) || path.startsWith("/sys/randomImage/")) return true;
                 if (!SecurityUtils.getSubject().isAuthenticated()) return reject(response, 401);
                 if (path.startsWith("/gm/") || SESSION_READ.contains(path)) return true;

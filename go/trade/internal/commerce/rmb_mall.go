@@ -214,6 +214,7 @@ func (m *Mall) RmbIncomes(ctx context.Context, account, after string, limit uint
 			Net       uint64 `json:"netFen"`
 			Reserved  uint64 `json:"reservedFen"`
 			Paid      uint64 `json:"paidFen"`
+			Forfeited uint64 `json:"forfeitedFen"`
 			Available uint64 `json:"availableMs"`
 		} `json:"incomes"`
 	}
@@ -225,7 +226,7 @@ func (m *Mall) RmbIncomes(ctx context.Context, account, after string, limit uint
 	}
 	v := &tradepb.ListSellerIncomesResponse{}
 	for _, r := range out.Incomes {
-		if !mallOrderID.MatchString(r.Order) || r.Gross > 9_000_000_000_000_000 || r.Fee > r.Gross || r.Net != r.Gross-r.Fee || r.Paid > r.Net || r.Reserved > r.Net-r.Paid {
+		if !mallOrderID.MatchString(r.Order) || r.Gross > 9_000_000_000_000_000 || r.Fee > r.Gross || r.Net != r.Gross-r.Fee || r.Paid > r.Net || r.Reserved > r.Net-r.Paid || r.Forfeited > r.Net-r.Paid-r.Reserved {
 			return nil, errors.New("收入原件非法")
 		}
 		v.Incomes = append(v.Incomes, &tradepb.RmbSellerIncome{OrderId: r.Order, GrossFen: r.Gross, FeeFen: r.Fee, NetFen: r.Net, ReservedFen: r.Reserved, PaidFen: r.Paid, AvailableMs: r.Available})

@@ -2,8 +2,11 @@ package nppa
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
+
+	"shared/redisslot"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -35,15 +38,13 @@ func claimAll(t *testing.T, l *Ledger) []Behavior {
 		t.Fatal(err)
 	}
 	var out []Behavior
-	var members []string
 	for _, c := range claimed {
 		if !c.Valid {
 			t.Fatalf("unreadable event %q", c.Member)
 		}
 		out = append(out, c.Behavior)
-		members = append(members, c.Member)
 	}
-	if err := l.Ack(context.Background(), members); err != nil {
+	if err := l.Ack(context.Background(), claimed); err != nil {
 		t.Fatal(err)
 	}
 	return out
@@ -267,18 +268,18 @@ func TestLedgerClaimHidesEventsUntilAckedOrReleased(t *testing.T) {
 	if len(second) != 1 || second[0].Member != first[0].Member {
 		t.Fatalf("an unacked event must come back after the visibility timeout, got %+v", second)
 	}
-	if err := l.Release(ctx, []string{second[0].Member}); err != nil {
+	if err := l.Release(ctx, second[:1]); err != nil {
 		t.Fatal(err)
 	}
 	third, _ := l.Claim(ctx, MaxBatch)
 	if len(third) != 1 {
 		t.Fatalf("a released event must be claimable at once, got %+v", third)
 	}
-	if err := l.Ack(ctx, []string{third[0].Member}); err != nil {
+	if err := l.Ack(ctx, third[:1]); err != nil {
 		t.Fatal(err)
 	}
 	// 已经删掉的事件,迟到的放回不会让它复活。
-	_ = l.Release(ctx, []string{third[0].Member})
+	_ = l.Release(ctx, third[:1])
 	mr.SetTime(ledgerStart.Add(2 * claimVisibility))
 	if left, _ := l.Claim(ctx, MaxBatch); len(left) != 0 {
 		t.Fatalf("an acked event came back: %+v", left)
@@ -323,5 +324,63 @@ func TestNewIDIs32HexCharacters(t *testing.T) {
 	}
 	if b, _ := NewID(); a == b {
 		t.Fatal("two ids must differ")
+	}
+}
+
+// 多条连接按连接身份分散到多个分片:Claim / Release / Ack / Sweep 跨全部分片完整收敛,不漏不重。
+func TestLedgerDistributesConnectionsAcrossShards(t *testing.T) {
+	l, mr := newTestLedger(t)
+	ctx := context.Background()
+	const total = 48
+	shardsSeen := make(map[int]bool)
+	for i := 0; i < total; i++ {
+		conn := fmt.Sprintf("gate-%d:%d", i%4, i+1)
+		shardsSeen[redisslot.NppaShard(conn)] = true
+		if err := l.Begin(ctx, conn, fmt.Sprintf("si-%03d", i), testPI, time.Time{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(shardsSeen) < 8 {
+		t.Fatalf("expected connections to spread across shards, only hit %d shards", len(shardsSeen))
+	}
+
+	// 先领走 20 条再放回,再分批领完全部 48 条上线事件。
+	first, err := l.Claim(ctx, 20)
+	if err != nil || len(first) != 20 {
+		t.Fatalf("first claim = %d, %v; want 20", len(first), err)
+	}
+	if err := l.Release(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	gotLogins := make(map[string]int)
+	for {
+		batch, err := l.Claim(ctx, 17)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(batch) == 0 {
+			break
+		}
+		for _, item := range batch {
+			if !item.Valid || item.Behavior.BT != BehaviorLogin {
+				t.Fatalf("unexpected claimed item %+v", item)
+			}
+			gotLogins[item.Behavior.SI]++
+		}
+		if err := l.Ack(ctx, batch); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(gotLogins) != total {
+		t.Fatalf("claimed %d unique logins, want %d", len(gotLogins), total)
+	}
+
+	// 租约到期后一次 Sweep 跨全部分片补齐 48 条下线。
+	if n := runTo(t, l, mr, ledgerStart, ledgerStart.Add(testLease+time.Second)); n != total {
+		t.Fatalf("swept %d sessions across shards, want %d", n, total)
+	}
+	logouts := claimAll(t, l)
+	if len(logouts) != total {
+		t.Fatalf("claimed %d logouts across shards, want %d", len(logouts), total)
 	}
 }

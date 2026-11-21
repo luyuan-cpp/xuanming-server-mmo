@@ -59,10 +59,14 @@ const maxLong = 9223372036854775807n;
 submit("list-form", form => ["skus/list", {afterSkuId: integer(form, "afterSkuId", 0n, maxLong), limit: integer(form, "limit", 1n, 100n)}]);
 submit("order-form", form => ["order-view", {orderId: value(form, "orderId")}]);
 submit("terms-form", form => {
+  const isCurrency = value(form, "grantKind") === "currency";
   const terms = {
     productId: integer(form, "productId", 1n, maxLong), skuCode: value(form, "skuCode"),
     title: value(form, "title"), priceMinor: integer(form, "priceMinor", 1n, 9000000000000000n), currency: value(form, "currency"),
-    itemConfigId: integer(form, "itemConfigId", 1n, 2147483647n), countPerUnit: integer(form, "countPerUnit", 1n, 4096n),
+    itemConfigId: isCurrency ? "0" : integer(form, "itemConfigId", 1n, 2147483647n),
+    countPerUnit: isCurrency ? "0" : integer(form, "countPerUnit", 1n, 4096n),
+    currencyType: isCurrency ? integer(form, "currencyType", 0n, 2n) : "0",
+    currencyAmount: isCurrency ? integer(form, "currencyAmount", 1n, 9000000000000000n) : "0",
     published: value(form, "published") === "true"
   };
   const body = {requestId: value(form, "requestId"), skuId: integer(form, "skuId", 1n, maxLong), terms};
@@ -73,4 +77,24 @@ submit("terms-form", form => {
 submit("stock-form", form => ["skus/stock", {
   requestId: value(form, "requestId"), skuId: integer(form, "skuId", 1n, maxLong),
   expectedRevision: integer(form, "expectedRevision", 0n, maxLong - 1n), delta: integer(form, "delta", -2147483648n, 2147483647n)
+}]);
+submit("manual-list-form", form => ["manual/list", {
+  afterOrderId: value(form, "afterOrderId").trim(),
+  afterListingId: value(form, "afterListingId").trim(),
+  afterRefundCursor: value(form, "afterRefundCursor").trim(),
+  limit: integer(form, "limit", 1n, 100n)
+}]);
+submit("manual-order-form", form => ["manual/orders/resolve", {
+  requestId: value(form, "requestId"), orderId: value(form, "orderId").trim(),
+  action: value(form, "action"), reason: value(form, "reason").trim()
+}]);
+submit("manual-refund-form", form => ["manual/refunds/resolve", {
+  requestId: value(form, "requestId"), orderId: value(form, "orderId").trim(),
+  channel: value(form, "channel").trim(), paymentTransactionId: value(form, "paymentTransactionId").trim(),
+  action: value(form, "action"), externalRefundId: value(form, "externalRefundId").trim(),
+  reason: value(form, "reason").trim()
+}]);
+submit("manual-consignment-form", form => ["manual/consignments/resolve", {
+  requestId: value(form, "requestId"), listingId: value(form, "listingId").trim(),
+  action: value(form, "action"), reason: value(form, "reason").trim()
 }]);

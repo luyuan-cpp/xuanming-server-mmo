@@ -28,7 +28,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class MallAdminControllerTest {
     private static final String KEY = "test-only-gateway-admin-token-0000000001";
     private static final String MALL_SECRET = "test-only-upstream-signing-secret-000001";
-    private static final List<String> COMMANDS = List.of("skus/list", "skus/create", "skus/update", "skus/stock", "order-view");
+    private static final List<String> COMMANDS = List.of(
+        "skus/list", "skus/create", "skus/update", "skus/stock", "order-view",
+        "manual/list", "manual/orders/resolve", "manual/refunds/resolve", "manual/consignments/resolve");
     private static final List<Prefix> PREFIXES = List.of(new Prefix("", ""), new Prefix("/ops", ""), new Prefix("/ops", "/api"));
     private static final byte[] BODY = bytes("{\n \"requestId\":\"controller-original-001\", \"skuId\":11,"
         + " \"expectedRevision\":2, \"terms\":{\"priceMinor\":125,\"title\":\"玄铁\"}\n}");
@@ -81,7 +83,7 @@ class MallAdminControllerTest {
             verify(client, times(2)).execute(eq(name), any(byte[].class));
         }
         var bodies = ArgumentCaptor.forClass(byte[].class);
-        verify(client, times(10)).execute(anyString(), bodies.capture());
+        verify(client, times(COMMANDS.size() * 2)).execute(anyString(), bodies.capture());
         for (byte[] forwarded : bodies.getAllValues()) { assertArrayEquals(BODY, forwarded); }
         verifyNoMoreInteractions(client);
     }

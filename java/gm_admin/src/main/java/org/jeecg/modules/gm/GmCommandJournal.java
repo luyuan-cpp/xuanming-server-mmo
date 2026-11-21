@@ -118,6 +118,13 @@ public final class GmCommandJournal {
 
     public ObjectNode get(String id) { return row(id, false).view; }
 
+    public ObjectNode get(String id, String kind) {
+        check(id != null && id.matches("[1-9][0-9]{0,19}"), "命令 ID 非法");
+        Row command = row(id, false);
+        if (!kind.equals(command.view.path("commandType").asText())) throw conflict("命令类型与操作入口不符");
+        return command.view;
+    }
+
     public ObjectNode list() {
         return list(1, 50, null, null);
     }
@@ -210,6 +217,12 @@ public final class GmCommandJournal {
             String complete = kind.equals("MAIL") ? "DELIVERED" : "EXECUTED";
             if (current.view.path("status").asText().equals(complete)) return current;
             long now = clock.millis();
+            if (kind.equals("MAIL") && current.view.path("status").asText().equals("DRAFT")) {
+                long expireMs = parsePositiveLong(current.view.path("request").path("expireMs").asText(""));
+                if (expireMs <= now) {
+                    throw conflict("邮件草稿已过设定到期时间，请重新创建草稿");
+                }
+            }
             if (kind.equals("PLAYER") && current.view.path("status").asText().equals("DRAFT")) {
                 long issuedAtMs = parsePositiveLong(current.view.path("request").path("issuedAtMs").asText(""));
                 long age = now - issuedAtMs;

@@ -723,6 +723,7 @@ void PetSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequest& req
 	RecalculateOne(player, *ownerLevel, *pet, *pool, RecalcReason::kSkillChanged, &before);
 	response.set_upgraded_count(plan.steps);
 	if (plan.steps < request.count()) response.set_stop_tip_id(stopTip);
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_skill_upgraded");
 	PushList(player);
 	finish(0);
 }
@@ -828,6 +829,7 @@ uint32_t PetSystem::Allocate(entt::entity player, uint64_t petId,
 		}
 	}
 	RecalculateOne(player, *ownerLevel, *pet, *pool, RecalcReason::kAllocate, &before);
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_points_allocated");
 	LOG_INFO << "[PlayerPet] Points allocated: player_id=" << tlsEcs.GetPlayerId(player) << " pet_id=" << petId
 			 << " delta=" << delta << " remaining=" << (state.remaining - delta);
 	return kSuccess;
@@ -890,6 +892,7 @@ uint32_t PetSystem::Reset(entt::entity player, uint64_t petId) {
 		pet->mutable_allocated()->erase(dim->id());
 	}
 	RecalculateOne(player, *ownerLevel, *pet, *pool, RecalcReason::kReset, &before);
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "pet_points_reset");
 	LOG_INFO << "[PlayerPet] Points reset: player_id=" << tlsEcs.GetPlayerId(player) << " pet_id=" << petId
 			 << " cost_gold=" << cost;
 	return kSuccess;

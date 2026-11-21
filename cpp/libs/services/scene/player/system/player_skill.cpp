@@ -14,6 +14,7 @@
 #include "player/comp/player_ownership_comp.h"  // PlayerTravelHandoffComp
 #include "player/system/player_attribute.h"
 #include "player/system/player_level_rules.h"
+#include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
 #include "services/battle/constants/turn_battle_constants.h"
 #include "services/battle/system/class_skill_rules.h"
@@ -683,6 +684,7 @@ void PlayerSkillSystem::UpgradeSkill(entt::entity player, const UpgradeSkillRequ
 		PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSkillChanged);
 	}
 	// 主动技能的重数也改变辅助基础预览；同一次修习同步刷新属性来源，避免常驻面板持有旧预览。
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_upgraded");
 	PlayerAttributeSystem::PushPanel(player);
 	finish(0);
 }

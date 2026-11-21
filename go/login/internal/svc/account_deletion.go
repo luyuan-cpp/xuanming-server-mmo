@@ -9,6 +9,7 @@ import (
 	"login/internal/logic/pkg/accountdeletion"
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/sessionmanager"
+	plpb "proto/player_locator"
 	"shared/accountdirectory"
 	"shared/safego"
 
@@ -55,7 +56,13 @@ func (d deletionSessions) RevokeAll(ctx context.Context, account string) error {
 // 代次填 0:gate 不比较代次,只要会话还绑着这名角色就踢(session_identity_fence.h ClassifyKick)。会话键不带区号、存在地域共用的
 // 玩家域 Redis 上,gate 命令 topic 也是地域共用的(按 gate 实例 uuid 过滤),所以本区的 player_locator 查得到、踢得到本地域任何一个区的会话。
 func (d deletionSessions) KickPlayer(ctx context.Context, player uint64, reasonTip uint32) error {
-	session, err := sessionmanager.GetSession(ctx, d.s.PlayerLocatorClient, player)
+	return kickPlayerSession(ctx, d.s.PlayerLocatorClient, d.s.KickSessionWithReason, player, reasonTip)
+}
+
+type kickGateSessionFunc func(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, reasonTip uint32) error
+
+func kickPlayerSession(ctx context.Context, locator plpb.PlayerLocatorClient, kickGate kickGateSessionFunc, player uint64, reasonTip uint32) error {
+	session, err := sessionmanager.GetSession(ctx, locator, player)
 	if err != nil {
 		return err
 	}
@@ -63,11 +70,11 @@ func (d deletionSessions) KickPlayer(ctx context.Context, player uint64, reasonT
 		return nil
 	}
 	if session.GateID != "" && session.GateInstanceID != "" {
-		if err := d.s.KickSessionWithReason(ctx, session.GateID, session.GateInstanceID, session.SessionID, player, reasonTip); err != nil {
+		if err := kickGate(ctx, session.GateID, session.GateInstanceID, session.SessionID, player, reasonTip); err != nil {
 			return err
 		}
 	}
-	return sessionmanager.DeleteSession(ctx, d.s.PlayerLocatorClient, player, session.SessionID, session.GateInstanceID)
+	return sessionmanager.DeleteSession(ctx, locator, player, session.SessionID, session.GateInstanceID)
 }
 
 // startAccountDeletionExecutor 起执行者循环,关停时由 CloseSource 取消。

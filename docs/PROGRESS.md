@@ -4325,3 +4325,117 @@
      - `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`（同时带 `MMORPG_UNITY_IAP` 验证 Editor / `UNITY_ANDROID` / `UNITY_IOS` / `UNITY_WEBGL`）
      - 运行 EditMode 单测：`PaymentClientTests`、`CommerceClientTests`、`CommerceRecoveryFileStoreTests`、`RpcGuardTests`
   7. **冒烟**：本地 `devpay` 联调冒烟 +（集群就绪后）`kind` 部署冒烟；独立 Java 全服务版留待后续按 `PARITY.md` TODO 跟进。
+
+## 2026-11-21 宝宝条目点、五阶归属、人物治疗/护盾来源与 69 技能 / 72 Buff 全量审计收口（main 工作区，待 Codex 导表/编译/单测/冒烟）
+
+- **范围与约束**：所有改动落在 `xuanming-server-mmo-cpp` 与 `mmorpg-client` 的 `main` 工作区（零分支、未 `git commit`/`git push`）；Java 独立服按要求留待 TODO（见 Java 仓 `PARITY.md`）。本轮仅完成服务端与客户端代码、配表和单测编写并运行只读静态预检，导表/编译/单测/联调冒烟全部留交 Codex。
+- **一、服务端（`xuanming-server-mmo-cpp`）修补与加固**：
+  1. `cpp/libs/engine/core/network/network_constants.h`：`kProtoFieldCheckerThreshold` 由 `20` 提升至 `64`，根除宝宝 21 项条目点全量目标在 `scene_handler.cpp` 被静默丢包返回网关 `kServiceUnavailable(1003)` 的契约冲突，同时保留防超大 repeated/map 放大 DoS 护栏。
+  2. `cpp/libs/services/battle/system/configured_battle_effects.cpp` & `cpp/libs/services/battle/system/pet_cultivation_rules.h`：修复宝宝 `504`（护盾容量）条目因 `row.hit_limit() == 0` 条件被跳过而未对 `B05`（如意灵环）/ `B06`（神龙护体）有限次数数值护盾生效的缺陷；人物装备/法宝仍严守 `hit_limit == 0` 独立容量盾规则，宝宝仅提升有限数值护盾容量、不改变次数/时长、排除法力盾；整理 `pet_cultivation_rules.h` 为清晰标准格式。
+  3. `data/MessageLimiter.xlsx`：通过 `mail_xlsx_patch` 校验链补齐 `77`（`ListSkills`，10/s）、`317`（`UpgradeSkill`，10/s）、`410`（`GetPetEntries`，10/s）、`411`（`PreviewPetEntries`，20/s）、`412`（`SavePetEntries`，5/s）限频配置，消除高频点选条目预览与技能修习落入网关默认 3 次/秒触发 `kRateLimitExceeded(1008)` 的问题。
+  4. `cpp/libs/services/scene/player/system/player_pet_entries.cpp`、`pet_entry_rules.h`、`player_pet.cpp`、`player_skill.cpp`：按标准可读格式重写条目点系统与纯规则；幂等重放时检查 `BuildEntriesInfo` 错误（fail-closed）；在 `PetSystem::SaveEntries`、`PetSystem::UpgradeSkill`、`PetSystem::Allocate`、`PetSystem::Reset` 及 `PlayerSkillSystem::UpgradeSkill` 落账后统一调用节流且带 `owner_epoch` 围栏的 `PlayerLifecycleSystem::RequestKeyProgressSave` 强化崩溃持久化一致性，并补齐英文提交日志。
+  5. `cpp/libs/services/scene/player/system/player_equipment_v1.cpp` & `player_support_effects.cpp`：`CollectEffects` 遇到已穿戴缺失配置物品、非法 V1 词缀或失效法宝时 fail-closed 置 `support_sources_complete=false`（非 V1 旧装 `equip_profile=0` 保持完整）；`PlayerSupportEffectSystem::Build` 按 `skill.id()` 确定性排序 `previews` 并在自由技能效果缺失 Buff 行时置 `complete=false`。
+  6. C++ 回归单测：补齐 `cpp/tests/turn_battle_engine_test/pet_cultivation_test.cpp`（`HitLimitedFiniteShieldReceivesCapacityBonusWithoutChangingHitsOrManaShield`）、`cpp/tests/skill_test/pet_entries_test.cpp`（`FullCatalogTargetPassesSceneFieldThresholdAndEmptyTargetClearsKnown`）、`cpp/tests/bag_test/player_equipment_craft_test.cpp`（`CorruptedEquippedV1AffixMarksSupportSourcesIncomplete`）。
+- **二、客户端（`mmorpg-client`）修补与加固**：
+  1. `Assets/Scripts/Game/Pet/PetClient.Entries.cs`：保持非零紧凑条目载荷并移除临时 `shortcut`；删除 `BeginWrite` 之后可能泄漏 `Busy=true` 的重复校验；`PreviewEntries` 收到服务端业务拒绝时同步发布响应内较新权威 `Entries` 以便面板立刻触发 `EntryConflict` 恢复；在 `PetEntriesClientTests.cs` 补零值省略/全零清空及拒绝预览同步权威两个单测。
+  2. `Assets/Scripts/UI/Ugui/Pet/PetCultivationPanel.cs`：四维变动提示仅在 `_draft.Count != 0` 时提示撤回，不再误报条目点草稿。
+  3. `Assets/Scripts/UI/Ugui/Attribute/CharacterSupportModel.cs` & `CharacterSupportModelTests.cs`：修复战斗中生效临时状态（`Reason` 为空）拼接出尾随分号 `剩余 N 回合；` 的展示问题。
+- **三、已跑只读静态预检（全过）**：
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：10/10 OK；
+  - `python tools/scripts/tests/test_cpp_thread_sources.py`：5/5 OK；
+  - `python tools/scripts/check_log_text_english.py`：0 violations；
+  - `python tools/scripts/skill_catalog.py check`：`Verified 69 skills, 72 effects and legal pet loadouts`。
+- **四、交 Codex 验证命令（按顺序执行，本轮所有代码改动均未编译未跑测）**：
+  1. **导表（先用项目 `third_party\protobuf\install_vs2026_dbg\bin\protoc.exe` 35.1，产出新 `MessageLimiter` 配置表；本轮未改 `.proto`，若前序会话改过 `.proto` 先跑 `proto-gen-run`）**：
+     - `python tools/data_table_exporter/run.py`（验收：`generated/tables/messagelimiter.json` 含 `77, 317, 410, 411, 412` 五条新档位）
+     - 若需更新手绘地图 Docker 挂载批次，执行 `python tools/navmesh_baker/refresh_authored_runtime_tables.py --previous-manifest build/verification/authored-festival-character-pet-20261118/runtime-data-manifest.json --output build/verification/authored-festival-character-pet-20261121 --allow-table MessageLimiter`
+  2. **C++ 串行编译与 GTest 单测（仓库根 `d:\luyuan\xuanming-server-mmo-cpp`，严格 `/m:1`，Debug/x64）**：
+     - `msbuild /m:1 cpp/libs/engine/core/core.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 cpp/libs/services/battle/battle.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 cpp/libs/services/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 cpp/nodes/scene/scene.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 cpp/nodes/battle/battle.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 cpp/tests/turn_battle_engine_test/turn_battle_engine_test.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 cpp/tests/skill_test/skill_test.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - `msbuild /m:1 cpp/tests/bag_test/bag_test.vcxproj /p:Configuration=Debug /p:Platform=x64`
+     - 运行单测：`turn_battle_engine_test.exe --gtest_filter=PetCultivation*:EquipmentV1BattleTest.*`、`skill_test.exe --gtest_filter=PetEntriesTest.*:PlayerSkillBookTest.*`、`bag_test.exe --gtest_filter=PlayerEquipmentCraftTest.*:PersistRoundTripTest.*`
+  3. **Unity 客户端编译与 EditMode 单测（`d:\luyuan\mmorpg-client`）**：
+     - `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`
+     - Unity EditMode 过滤：`CharacterSupportModelTests|PetEntriesClientTests|PetCultivationInteractionTests|CharacterPetIconTests|SkillBookClientTests|SkillBookMapperTests|SkillPanelPresentationTests|BattleUiLayoutTests|AttributeClientTests`
+  4. **本机 Docker Debug 镜像重编与联网实战冒烟**：
+     - 重建 C++ `scene` / `battle` / `gate` 镜像并挂载更新后的 `MessageLimiter` 批次，清空开发库或新建测试号，运行 `d:\luyuan\mmorpg-client\.codex-artifacts\character-pet-ui-50fdfb\live-integrated-20261120\plan.json` 完成 2560×1080 + 1920×1080 + 实机 PvE 战斗放技能与战斗只读收口验收。
+
+## 2026-11-21（补充）战斗入口 `pet_cultivation` 快照边界校验与战内辅助完整度对称加固
+
+- `cpp/libs/services/battle/system/pet_cultivation_rules.h` & `turn_battle_engine.cpp`：新增 `petcultivation::ValidSnapshot`，在 `TurnBattleEngine::Initialize` 入口按与 `InitializeEquipment` 同标准拒绝越界 `pet_cultivation`（通道 > 10000 或障碍分型键不在 `1..7`），并记英文 `LOG_ERROR`；在 `cpp/tests/turn_battle_engine_test/pet_cultivation_test.cpp` 补齐 `InvalidCultivationSnapshotIsRejectedAtBattleEntry` 回归用例。
+- `cpp/libs/services/battle/system/equipment_battle_effects.cpp`：`TurnBattleEngine::BuildSupportEffects` 与场景侧对称，检查已学现代技能 `effect()` 是否缺失 Buff 配置，缺失时 fail-closed 置 `complete=false`。
+
+
+## 2026-11-21 Gemini（Gemini 4 Neon Extra）：GM 管理系统二轮深度复核修复——权威落点与多区场景发现闭环、邮件草稿过期拦截、单单精确刷新与 K8s 探针/优雅停机（未生成协议、未编译运行，交 Codex 验证；Java 全服务版留 TODO）
+
+- **二轮深审发现的根因缺陷（已全部直接在 `main` 修复，未建分支、未提交）**：
+  1. **真实在线玩家 GM 定位必失败 + 多区同号 `scene_node_id` 冲突（重大缺陷）**：
+     - 根因：线上 `login` 从不写 `PlayerSession.scene_node_id` / `scene_id`（生产恒为空/0，见 `entergamelogic.go:507`、`leasemonitor.go:539`），权威位置只在 `scene_manager` 的 `player:{id}:location`（含 `zone_id, node_id, scene_id, owner_epoch, session_id, login_generation`）；且多区生产各区独立从 `1` 分配 `node_id`，仅按 `nodeId` 索引 etcd 会把 Zone 1 `node=1` 与 Zone 2 `node=1` 误判成 `SCENE_AMBIGUOUS`。
+     - 修复：
+       - `proto/player_locator/player_locator.proto`：新增 `PlayerScenePlacement`，在 `GetSessionRequest` 增可选 `bool include_placement = 2`（默认 `false`，登录热路径零额外 Redis 读取），在 `GetSessionResponse` 增 `PlayerScenePlacement placement = 3`。
+       - `go/player_locator/internal/logic/getsessionlogic.go` + 新增 `go/player_locator/internal/logic/placement_session_test.go`：`include_placement=true` 时经同一 `{playerID}` 槽位单次 `MGET` 原子读取 `session` 与 `player:{id}:location`，填充 `placement`（含 `awaiting_placement`）且不改写 `PlayerSession` 原字段。
+       - `java/gm_admin/src/main/java/org/jeecg/modules/gm/{GamePlayerAdmin.java,GameServices.java}` + `{GamePlayerAdminTest.java,GameServicesTest.java}`：调用 `GetSession(includePlacement=true)`；未入场（`PLAYER_NOT_IN_SCENE`）、跨区交接中（`PLAYER_HANDOFF`）、会话代次未对齐（`SESSION_MISMATCH`）均 fail-closed；etcd 发现与动态通道池升级按 `(zoneId, nodeId)` 隔离（不同区同号节点互不冲突，同 `(zoneId, nodeId)` 双注册仍拒选 `SCENE_AMBIGUOUS`），静态映射 `GM_SCENE_TARGETS_JSON` 同时支持 `"<zoneId>/<nodeId>"` 与单区 `"<nodeId>"`；查询玩家卡片直显权威 `sceneZoneId` / `sceneNodeId` / `sceneId`。
+  2. **邮件过期草稿未在事务内拦截**：`GmCommandJournal.java`（+ `GmCommandJournalTest.java`）在 `FOR UPDATE` 锁内原子校验 `MAIL` `DRAFT` 的 `expireMs > now`，防止超期草稿转入 `SENDING` 后被下游 `mail` 拒绝。
+  3. **核对弹窗「刷新原命令状态」翻页/筛选后失灵 + 非法查询参数类型报错格式不统一**：
+     - `GmCommandJournal.java` 新增 `get(id, kind)`；`GmController.java` / `GmPlayerCommandController.java`（+ 两份单测）新增 `GET /gm/mail/commands/{id}`、`GET /gm/player-commands/{id}` 及 `MethodArgumentTypeMismatchException` 统一 400 JSON 处理器。
+     - `java/gm_admin/frontend/src/api/gm/{console.ts,playerCommands.ts}` 与 `views/gm/console/{index.vue,PlayerCommands.vue}`：弹窗刷新改按命令 ID 精确拉取原命令与审计轨迹，不受列表分页与筛选条件影响。
+  4. **K8s 多副本生产配置与探针闭环**：
+     - `java/gm_admin/src/main/resources/application-gm.yml`：`server.address`（`${GM_HTTP_ADDRESS:127.0.0.1}`）、`spring.data.redis.host`（`${GM_REDIS_HOST:127.0.0.1}`）改为可配置，新增 `server.shutdown: graceful`（25s）及 `liveness`/`readiness` 探针组。
+     - `GmInstallation.java`（+ `GmInstallationTest.java`）：仅对 `GET /actuator/health/liveness` 与迁移就绪后的 `GET /actuator/health/readiness` 放行免登录，复合 `/actuator/health` 保持 401/403 封闭。
+  5. **文档同步**：更新 `docs/design/jeecg-gm-administration.md` 与 `java/gm_admin/README.md`。
+- **交 Codex 验证步骤（按顺序执行，需先重生成 `player_locator.proto`）**：
+  1. **协议生成（仅改动了 `proto/player_locator/player_locator.proto`）**：
+     - `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`
+     - 确认 `go/proto/player_locator/player_locator.pb.go` 生成 `PlayerScenePlacement` 与 `IncludePlacement`。
+  2. **Go `player_locator` 编译与单测（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）**：
+     - `go build ./... && go vet ./... && go test ./internal/logic/... -count=1 -v`（重点核对新增 `TestGetSession_IncludePlacementReadsAuthoritativeLocationSameSlot` 与 `TestGetSession_IncludePlacementReportsAwaitingPlacementAndAbsentLocation`）。
+  3. **GM Java 扩展单测 + JeecgBoot 打包 + Vue 3 前端构建**：
+     - `python java/gm_admin/prepare.py`（重建 `gm-contracts.pb` 并同步源码至 `build/gm-admin-upstream`）
+     - `mvn -f java/gm_admin/pom.xml -DskipTests=false test`（重点核对新增多区 `placement` 路由、`expiredMailDraftFailsAtomicallyBeforeTransitioning`、单命令查询与 K8s liveness/readiness 探针测试）
+     - `mvn -s build/gm-admin-runtime/maven-settings.xml -f build/gm-admin-upstream/jeecg-boot/pom.xml -pl jeecg-module-system/jeecg-system-start -am '-Dmaven.compiler.proc=full' -DskipTests package`
+     - `pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 build`
+  4. **C++ 验证与本机冒烟**：沿用前一条（2026-11-20 GM 收口）的 C++ `gate`/`currency_test`/`scene` 与本机 `start_docker_debug.py --execute` + `probe_scene.py --execute` 验收。
+- **Java 全服务版（AGENTS §12）**：仍保留在 `PARITY.md` TODO，本轮未改动独立 Java 全服务仓 `xuanming-server-mmo`。
+
+
+## 2026-11-21 Gemini（Gemini 4 Neon Extra）：全仓代码完成度终审与四项实缺口补齐（商城/寄售人工单处置、NPPA 账本 16 分片水平扩展、冲突停机排空预算可配、账号注销踢线单测；未编译运行，交 Codex 验证；Java 全服务版留 TODO）
+
+- **全仓核对结论**：逐项复核服务器（C++、Go、仓内 Java `gateway_node`/`mall_game`/`gm_admin`、robot、K8s 部署脚本）与客户端（`D:\luyuan\mmorpg-client`），确认配表热更新、支付全渠道（含 `StorePayBridge.cs` 与 `com.unity.purchasing@5.0.4` PackageCache 源码 API 逐项核对）、战报回放、登录排队持票续排、小游戏 WebSocket、账号注销、battle/scene 计划排空等均已在 `main` 落码；仅剩以下 4 项实际代码/扩展性/可测性缺口，本轮直接在 `main` 一次性补齐（未建分支、未提交）：
+  1. **官方商城与人民币寄售 `MANUAL` 人工单完整处置闭环 + 货币充值包管理 UI**（填补 `server-code-completion-20261120.md §3.2` 最后运维死角）：
+     - `java/mall_game/src/main/resources/db/schema.sql`、`db/migration/V5__rmb_consignment.sql`、`SchemaVerifier.java`：`commerce_seller_income` 新增 `forfeited_fen BIGINT NOT NULL DEFAULT 0` 及 `CHECK(reserved_fen>=0 AND paid_fen>=0 AND forfeited_fen>=0 AND reserved_fen+paid_fen+forfeited_fen<=net_fen)`；存储合同戳升至 `mall-game-official-sku-v3-manual-resolution`（游戏未上线，清库重装即可）；`StorageAndAuthTest.java` 增加拒绝旧 v2 合同戳断言。
+     - `java/mall_game/src/main/java/com/game/mall/{RmbConsignmentApi.java,RmbConsignmentStore.java,PaymentRevisionStore.java}` 与 `go/trade/internal/commerce/rmb_mall.go`：卖家可提现净额与冻结条件统一扣除 `forfeited_fen`，`go/trade` 收入页解码同步校验 `forfeitedFen <= netFen - paidFen - reservedFen`。
+     - 新增 `java/mall_game/src/main/java/com/game/mall/{ManualAdminApi.java,ManualAdminStore.java}`，接入 `HmacAuthentication.java`（仅 `admin` 角色）与 `CatalogAdminController.java`：新增 `POST /internal/admin/manual/list`、`manual/orders/resolve`（`RETRY_REVERSAL` / `MARK_REVERSED` / `MARK_DELIVERED` / `CREATE_REFUND`）、`manual/refunds/resolve`（`RETRY_REFUND` / `MARK_REFUNDED` / `MARK_REVOKED`）、`manual/consignments/resolve`（`RETURN_TO_SELLER` / `UNFREEZE_INCOME` / `FORFEIT_INCOME`，且 `reserved_fen > 0` 在途提现时拒绝扣罚）。全部按全局统一锁序（`commerce_admin_command → oms_order → 各待办/寄售 → commerce_seller_guard → commerce_seller_income`）单事务 `READ COMMITTED` + `FOR UPDATE` 执行，按 `(actor, request_id)` 幂等并记英文提交后审计日志。
+     - `java/gateway_node`（`MallAdminController.java`、`MallAdminClient.java`、`mall-admin.{html,js}`、`MallAdminControllerTest.java`、`MallAdminClientTest.java`）：接入 4 条 `/admin/mall/manual/*` 代理命令，并在 `/mall-admin` 工作台补齐货币充值包 SKU（`currencyType`/`currencyAmount`）与人工单查询/处置表单。
+     - 新增 `java/mall_game/src/test/java/com/game/mall/ManualAdminStoreTest.java` 与 `CatalogAdminHttpTest.java` 角色隔离测试。
+  2. **NPPA 防沉迷会话账本 16 分片水平扩展**（消除全服最后一处 Redis 单槽 `shortcut:`）：
+     - `go/shared/redisslot/login_keys.go` + `login_keys_test.go`：新增 `NppaLedgerShardCount = 16` 与 `NppaShard(connectionID)`（CRC16 取模），四把账本键改为 `{nppa:<shard>}` 分片标签，单连接四键保持同槽 Lua 原子、16 片分散到 Redis Cluster 不同槽位。
+     - `go/login/internal/logic/pkg/nppa/{ledger.go,reporter.go,ledger_test.go,reporter_test.go}` 与 `go/login/internal/logic/clientplayerlogin/anti_addiction_login_test.go`：`Begin`/`Renew`/`End` 按连接分片路由；`Sweep` 跨全片清扫；`Claim` 原子游标轮询各片并携带 `Shard`；`Ack`/`Release` 按片分组批量操作，局部单片故障不阻断健康分片上报；新增跨片分布测试 `TestLedgerDistributesConnectionsAcrossShards`。
+  3. **C++ 节点冲突停机收尾预算可配置**（消除 `node.cpp:1867` 的 `TODO: 待压测实测复核该预算`）：
+     - `cpp/libs/engine/core/node/system/node/{node_planned_drain.h,node.cpp}` 与 `cpp/tests/cross_zone_test/planned_drain_test.cpp`：新增环境变量 `MMORPG_CONFLICT_DRAIN_BUDGET_SECONDS`（缺省 15s、合法范围 `[5, 60]` 秒，非法值打英文 WARN 回退 15s），补齐 `ConflictDrainBudget.*` 两条单测。
+  4. **账号注销踢线 `deletionSessions.KickPlayer` 可测性与单测补齐**：
+     - `go/login/internal/svc/account_deletion.go` + 新增 `account_deletion_test.go`：抽出 `kickPlayerSession` 补齐 4 条单测（无会话/已离线跳过、先踢 gate 再 `MarkOffline`、踢 gate 失败中止 `MarkOffline`、无 gate 身份直呼 `MarkOffline`）。
+- **静态检查结果（本轮已跑，全部通过）**：
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：10/10 OK
+  - `python tools/scripts/tests/test_cpp_thread_sources.py`：5/5 OK
+  - `python tools/scripts/tests/test_battle_no_direct_table_singleton.py`：1/1 OK
+  - `python tools/scripts/check_log_text_english.py --root D:\luyuan\xuanming-server-mmo-cpp`：0 违规
+  - `gofmt -l`（本轮全部 10 个 Go 文件）：0 格式差异
+- **交 Codex 验证命令（均未编译、未运行测试；清库后执行）**：
+  1. Go 模块（`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`）：
+     - `cd go/shared && go test ./redisslot/... -count=1 -v`
+     - `cd go/login && go build ./... && go vet ./... && go test ./internal/logic/pkg/nppa/... ./internal/svc/... ./internal/logic/clientplayerlogin/... -count=1 -v`
+     - `cd go/trade && go build ./... && go vet ./... && go test ./internal/commerce/... -count=1`
+  2. Java 仓内服务（工作目录 `java`）：
+     - `mvn -B -pl mall_game -am test "-Dtest=ManualAdminStoreTest,CatalogAdminHttpTest,CatalogAdminStoreTest,RmbConsignmentStoreTest,MockPayoutStoreTest,PaymentRevisionStoreTest,StorageAndAuthTest"`
+     - `mvn -B -pl gateway_node -am test "-Dtest=MallAdminControllerTest,MallAdminClientTest"`
+     - 有隔离 TiDB 时加 `-Dcommerce.it.tidb=...` 复跑 `ManualAdminStoreTest`、`RmbConsignmentStoreTest`、`StorageAndAuthTest`。
+  3. C++：
+     - `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`
+     - `pwsh -NoProfile -File tools/scripts/run_cpp_tests.ps1 -Build -Filter cross_zone_test`（核对 `ConflictDrainBudget.*` 通过）
+  4. 其余既有交接单（配表热更新、支付、小游戏 WebSocket、账号注销、战报回放、GM 管理台、组队跟随）按 `docs/PROGRESS.md` 与 `docs/handoff/` 既定顺序一并由 Codex 跑协议生成、编译、单测与冒烟。
+- **Java 全服务版（AGENTS §12）**：仍保留在独立仓 `D:\luyuan\xuanming-server-mmo\PARITY.md` TODO，本轮未改动。

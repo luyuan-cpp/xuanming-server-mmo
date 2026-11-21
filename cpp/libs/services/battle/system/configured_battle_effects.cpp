@@ -254,8 +254,10 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     // 持续治疗的覆盖强度与每跳快照采用同一完整施放方值，避免旧印因施法者加成不同被弱覆盖。
     if (op == BattleEffectOp::ReviveMark) value *= std::max(0.0, 1 + EquipmentOutgoingHeal(caster));
     std::vector<int> shieldArtifacts;
-    if (op == BattleEffectOp::Shield && row.hit_limit() == 0)
+    // 人物装备/法宝护盾加成仅作用于独立无次数容量盾(A40)；宝宝 504 护盾条目作用于全部有限数值护盾(含 B05/B06/O03)，不改次数与时长，法力盾(ManaShield)排除。
+    if (op == BattleEffectOp::Shield && (row.hit_limit() == 0 || caster.actor_type() == BATTLE_ACTOR_TYPE_PET)) {
         value = EquipmentShield(caster, receiver, value, context, shieldArtifacts);
+    }
     if (!Persistent(op) && row.trigger_event() == 0) {
         switch (op) {
         case BattleEffectOp::Damage: {

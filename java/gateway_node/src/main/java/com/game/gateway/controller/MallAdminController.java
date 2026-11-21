@@ -42,7 +42,12 @@ public final class MallAdminController {
         return ResponseEntity.ok().header("Cache-Control", "no-store").header("X-Content-Type-Options", "nosniff")
             .contentType(MediaType.parseMediaType(contentType)).body(new ClassPathResource(name).getContentAsByteArray());
     }
-    @PostMapping({"/admin/mall/skus/list", "/admin/mall/skus/create", "/admin/mall/skus/update", "/admin/mall/skus/stock", "/admin/mall/order-view"})
+    @PostMapping({
+        "/admin/mall/skus/list", "/admin/mall/skus/create", "/admin/mall/skus/update", "/admin/mall/skus/stock",
+        "/admin/mall/order-view",
+        "/admin/mall/manual/list", "/admin/mall/manual/orders/resolve", "/admin/mall/manual/refunds/resolve",
+        "/admin/mall/manual/consignments/resolve"
+    })
     public ResponseEntity<byte[]> execute(HttpServletRequest request) throws IOException {
         if (adminKey.length < 32) { throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "请先配置至少32字节的运维令牌"); }
         var keys = Collections.list(request.getHeaders("X-Admin-Key"));

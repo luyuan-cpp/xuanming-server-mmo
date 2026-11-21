@@ -68,8 +68,10 @@ final class GamePlayerAdmin {
     private final HttpClient http;
     private final Object discoveryLock = new Object();
     private final LinkedHashMap<String, SceneChannel> dynamicScenes = new LinkedHashMap<>(16, 0.75f, true);
-    private Map<String, String> discoveredEndpoints = Map.of();
-    private Set<String> ambiguousNodes = Set.of();
+    private Map<String, String> discoveredByZoneNode = Map.of();
+    private Set<String> ambiguousZoneNodes = Set.of();
+    private Map<String, String> discoveredByNodeOnly = Map.of();
+    private Set<String> ambiguousNodeOnly = Set.of();
     private long lastDiscoveryMs;
 
     GamePlayerAdmin(GameProto proto, ObjectMapper mapper, ManagedChannel locator, String targetsJson,
@@ -102,9 +104,9 @@ final class GamePlayerAdmin {
             var entries = targets.fields();
             while (entries.hasNext()) {
                 var entry = entries.next();
-                nodeId(entry.getKey());
+                validateStaticTargetKey(entry.getKey());
                 if (!entry.getValue().isTextual() || entry.getValue().textValue().isBlank()) {
-                    throw new IllegalArgumentException("场景地址映射必须是节点 ID 到部署地址");
+                    throw new IllegalArgumentException("场景地址映射必须是节点 ID 或区/节点 ID 到部署地址");
                 }
                 configured.put(entry.getKey(), channels.apply(entry.getValue().textValue()));
             }
@@ -150,24 +152,47 @@ final class GamePlayerAdmin {
         if (!(frozen.get("arguments") instanceof ObjectNode arguments)) throw invalid("操作参数必须是对象");
         validateArguments(operation, arguments);
 
-        // 业务字段仍用已冻结原件；准入身份由可信定位服务在执行前获取，再一同签名。
+        // 业务字段仍用已冻结原件；准入身份与权威场景落点在执行前向 PlayerLocator 同槽原子获取，再一同签名。
         ObjectNode wire = mapper.createObjectNode().put("commandId", requestId).put("playerId", playerId)
                 .put("operator", actor).put("reason", reason).put("issuedAtMs", Long.toString(issued));
         wire.set(command, arguments.deepCopy());
         Deadline deadline = Deadline.after(budgetMillis, TimeUnit.MILLISECONDS);
         ObjectNode sessionReply = invoke(locator, GameServices.SESSION,
-                mapper.createObjectNode().put("playerId", playerId), deadline, false);
+                mapper.createObjectNode().put("playerId", playerId).put("includePlacement", true), deadline, false);
         JsonNode session = sessionReply.path("session");
         if (!sessionReply.path("found").asBoolean(false) || !session.isObject()
                 || !"SESSION_STATE_ONLINE".equals(session.path("state").asText())) {
             throw failure("PLAYER_OFFLINE", "玩家当前不在线，不能执行在线命令", false, 0);
         }
         if (!playerId.equals(session.path("playerId").asText())) throw failure("INVALID_RESPONSE", "玩家定位结果不匹配", false, 0);
-        String targetNodeId = session.path("sceneNodeId").asText();
-        long target = nodeId(targetNodeId);
-        ManagedChannel scene = resolveScene(targetNodeId, deadline);
         long sessionId = uint32(session.get("sessionId"), "会话 ID", false);
         String generation = decimal(session.get("loginGeneration"), "登录代次");
+
+        String targetNodeId;
+        long targetZoneId;
+        if (sessionReply.has("placement") && sessionReply.path("placement").isObject()) {
+            JsonNode placement = sessionReply.path("placement");
+            if (!placement.path("found").asBoolean(false)) {
+                throw failure("PLAYER_NOT_IN_SCENE", "玩家尚未进入场景，不能执行在线命令", false, 0);
+            }
+            if (placement.path("awaitingPlacement").asBoolean(false)) {
+                throw failure("PLAYER_HANDOFF", "玩家正在跨区或切图交接中，请稍后重试", false, 0);
+            }
+            long placementSessionId = placement.path("sessionId").asLong(0);
+            String placementGeneration = placement.path("loginGeneration").asText("0");
+            if ((placementSessionId != 0 && placementSessionId != sessionId)
+                    || (!placementGeneration.isEmpty() && !placementGeneration.equals("0") && !placementGeneration.equals(generation))) {
+                throw failure("SESSION_MISMATCH", "玩家会话与场景落点尚未同步，请稍后重试", false, 0);
+            }
+            targetNodeId = placement.path("nodeId").asText("");
+            targetZoneId = placement.path("zoneId").asLong(0);
+        } else {
+            // 兼容尚未升级的旧版 player_locator 应答；新版始终返回 placement。
+            targetNodeId = session.path("sceneNodeId").asText("");
+            targetZoneId = session.path("gateZoneId").asLong(0);
+        }
+        long target = nodeId(targetNodeId);
+        ManagedChannel scene = resolveScene(targetZoneId, targetNodeId, deadline);
         wire.put("targetNodeId", target).put("expectedSessionId", sessionId).put("expectedLoginGeneration", generation);
         DynamicMessage request;
         try {
@@ -192,26 +217,33 @@ final class GamePlayerAdmin {
         shutdownChannels(all);
     }
 
-    private ManagedChannel resolveScene(String targetNodeId, Deadline deadline) {
+    private ManagedChannel resolveScene(long zoneId, String targetNodeId, Deadline deadline) {
+        if (zoneId > 0) {
+            ManagedChannel byZone = staticScenes.get(zoneId + "/" + targetNodeId);
+            if (byZone != null) return byZone;
+        }
         ManagedChannel configured = staticScenes.get(targetNodeId);
         if (configured != null) return configured;
         if (sceneEtcdRangeUri == null) throw failure("SCENE_NOT_CONFIGURED", "玩家所在场景未接入管理服务", false, 0);
+        String lookupKey = zoneId > 0 ? (zoneId + "/" + targetNodeId) : targetNodeId;
         synchronized (discoveryLock) {
             long nowMs = System.currentTimeMillis();
             boolean expired = lastDiscoveryMs == 0 || (nowMs - lastDiscoveryMs >= discoveryTtlMs);
-            boolean missRefreshable = !discoveredEndpoints.containsKey(targetNodeId)
-                    && !ambiguousNodes.contains(targetNodeId)
-                    && (nowMs - lastDiscoveryMs >= Math.min(MISS_REFRESH_COOLDOWN_MS, discoveryTtlMs));
+            boolean known = zoneId > 0
+                    ? (discoveredByZoneNode.containsKey(lookupKey) || ambiguousZoneNodes.contains(lookupKey))
+                    : (discoveredByNodeOnly.containsKey(lookupKey) || ambiguousNodeOnly.contains(lookupKey));
+            boolean missRefreshable = !known && (nowMs - lastDiscoveryMs >= Math.min(MISS_REFRESH_COOLDOWN_MS, discoveryTtlMs));
             if (expired || missRefreshable) refreshFromEtcd(deadline);
-            if (ambiguousNodes.contains(targetNodeId)) {
+            boolean ambiguous = zoneId > 0 ? ambiguousZoneNodes.contains(lookupKey) : ambiguousNodeOnly.contains(lookupKey);
+            if (ambiguous) {
                 throw failure("SCENE_AMBIGUOUS", "目标场景节点存在重复注册，已拒绝执行", false, 0);
             }
-            String endpoint = discoveredEndpoints.get(targetNodeId);
+            String endpoint = zoneId > 0 ? discoveredByZoneNode.get(lookupKey) : discoveredByNodeOnly.get(lookupKey);
             if (endpoint == null) throw failure("SCENE_NOT_CONFIGURED", "玩家所在场景未接入管理服务", false, 0);
-            SceneChannel existing = dynamicScenes.get(targetNodeId);
+            SceneChannel existing = dynamicScenes.get(lookupKey);
             if (existing != null && existing.endpoint.equals(endpoint)) return existing.channel;
             if (existing != null) {
-                dynamicScenes.remove(targetNodeId);
+                dynamicScenes.remove(lookupKey);
                 existing.channel.shutdown();
             }
             if (dynamicScenes.size() >= MAX_SCENE_CHANNELS) {
@@ -227,7 +259,7 @@ final class GamePlayerAdmin {
             catch (IllegalArgumentException error) {
                 throw failure("SCENE_TARGET_INVALID", "发现的场景地址不符合连接安全策略", false, 0);
             }
-            dynamicScenes.put(targetNodeId, new SceneChannel(endpoint, created));
+            dynamicScenes.put(lookupKey, new SceneChannel(endpoint, created));
             return created;
         }
     }
@@ -260,8 +292,10 @@ final class GamePlayerAdmin {
             throw failure("SCENE_DISCOVERY_UNAVAILABLE", "场景服务发现不可用", false, 0);
         }
 
-        Map<String, String> endpoints = new HashMap<>();
-        Set<String> ambiguous = new HashSet<>();
+        Map<String, String> byZoneNode = new HashMap<>();
+        Set<String> dupZoneNode = new HashSet<>();
+        Map<String, String> byNodeOnly = new HashMap<>();
+        Set<String> dupNodeOnly = new HashSet<>();
         JsonNode kvs = root.path("kvs");
         if (kvs.isArray()) {
             for (JsonNode kv : kvs) {
@@ -278,6 +312,12 @@ final class GamePlayerAdmin {
                 if (nodeIdField == null || !nodeIdField.isIntegralNumber() || !nodeIdField.canConvertToLong()) continue;
                 long id = nodeIdField.longValue();
                 if (id <= 0 || id > 0xffff_ffffL) continue;
+                long regZone = 0;
+                JsonNode zoneIdField = reg.get("zoneId");
+                if (zoneIdField != null && zoneIdField.isIntegralNumber() && zoneIdField.canConvertToLong()) {
+                    long z = zoneIdField.longValue();
+                    if (z > 0 && z <= 0xffff_ffffL) regZone = z;
+                }
                 // 只认 grpcEndpoint，绝不回退到 endpoint（那是 muduo raw TCP 端口）。
                 JsonNode grpcEndpoint = reg.path("grpcEndpoint");
                 String ip = grpcEndpoint.path("ip").asText("").strip();
@@ -285,29 +325,51 @@ final class GamePlayerAdmin {
                 if (ip.isEmpty() || port < 1 || port > 65535) continue;
                 String nodeKey = Long.toString(id);
                 String endpoint = formatEndpoint(ip, port);
-                if (ambiguous.contains(nodeKey)) continue;
-                String prior = endpoints.get(nodeKey);
-                if (prior != null && !prior.equals(endpoint)) {
-                    endpoints.remove(nodeKey);
-                    ambiguous.add(nodeKey);
-                } else {
-                    endpoints.put(nodeKey, endpoint);
+                recordDiscovery(byNodeOnly, dupNodeOnly, nodeKey, endpoint);
+                if (regZone > 0) {
+                    recordDiscovery(byZoneNode, dupZoneNode, regZone + "/" + nodeKey, endpoint);
                 }
             }
         }
-        discoveredEndpoints = Map.copyOf(endpoints);
-        ambiguousNodes = Set.copyOf(ambiguous);
+        discoveredByZoneNode = Map.copyOf(byZoneNode);
+        ambiguousZoneNodes = Set.copyOf(dupZoneNode);
+        discoveredByNodeOnly = Map.copyOf(byNodeOnly);
+        ambiguousNodeOnly = Set.copyOf(dupNodeOnly);
         lastDiscoveryMs = System.currentTimeMillis();
         // 清理已下线或更换地址的旧连接，使用优雅关闭以免中断在途调用。
         Iterator<Map.Entry<String, SceneChannel>> it = dynamicScenes.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, SceneChannel> entry = it.next();
-            String latest = discoveredEndpoints.get(entry.getKey());
+            String key = entry.getKey();
+            String latest = key.contains("/") ? discoveredByZoneNode.get(key) : discoveredByNodeOnly.get(key);
             if (latest == null || !latest.equals(entry.getValue().endpoint)) {
                 it.remove();
                 entry.getValue().channel.shutdown();
             }
         }
+    }
+
+    private static void recordDiscovery(Map<String, String> map, Set<String> ambiguous, String key, String endpoint) {
+        if (ambiguous.contains(key)) return;
+        String prior = map.get(key);
+        if (prior != null && !prior.equals(endpoint)) {
+            map.remove(key);
+            ambiguous.add(key);
+        } else {
+            map.put(key, endpoint);
+        }
+    }
+
+    private static void validateStaticTargetKey(String key) {
+        if (key == null) throw new IllegalArgumentException("场景节点 ID 非法");
+        int slash = key.indexOf('/');
+        if (slash < 0) {
+            nodeId(key);
+            return;
+        }
+        if (key.indexOf('/', slash + 1) >= 0) throw new IllegalArgumentException("场景节点映射键非法");
+        nodeId(key.substring(0, slash));
+        nodeId(key.substring(slash + 1));
     }
 
     private static URI parseEtcdRangeUri(String raw) {

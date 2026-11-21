@@ -21,7 +21,12 @@ public final class RmbConsignmentApi {
     public record OrderPage(String account, String afterOrderId, int limit) {}
     public record IncomePage(String account, String afterOrderId, int limit) {}
     public record Income(String orderId, long grossFen, long feeFen, long netFen, long reservedFen,
-                         long paidFen, long availableMs) {}
+                         long paidFen, long availableMs, long forfeitedFen) {
+        public Income(String orderId, long grossFen, long feeFen, long netFen, long reservedFen,
+                      long paidFen, long availableMs) {
+            this(orderId, grossFen, feeFen, netFen, reservedFen, paidFen, availableMs, 0L);
+        }
+    }
     public record Incomes(List<Income> incomes) {}
     public record Withdraw(String account, String requestId, long amountFen) {}
     public record Withdrawal(String withdrawalId, long amountFen, String state, String channel, String transactionId) {}

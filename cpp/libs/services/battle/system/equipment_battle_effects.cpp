@@ -174,7 +174,16 @@ void TurnBattleEngine::BuildSupportEffects(const BattleActorState& actor, Suppor
     shield->set_total_bonus_bps(shieldBonus * 10000);
     bool complete = actor.equipment_effects().support_sources_complete();
     for (const auto& buff : actor.buffs()) if (dataProvider->FindBuff(buff.buff_table_id()) == nullptr) complete = false;
-    for (const auto& [id, rank] : actor.skill_ranks()) if (rank > 0 && dataProvider->FindSkill(id) == nullptr) complete = false;
+    for (const auto& [id, rank] : actor.skill_ranks()) {
+        if (rank == 0) continue;
+        const auto* skill = dataProvider->FindSkill(id);
+        if (skill == nullptr) { complete = false; continue; }
+        if (skill->battle_model() == 1) {
+            for (const auto buffId : skill->effect()) {
+                if (dataProvider->FindBuff(buffId) == nullptr) complete = false;
+            }
+        }
+    }
     healing->set_complete(complete); shield->set_complete(complete);
     for (const bool isShield : {false, true}) {
         auto* part = isShield ? shield : healing;

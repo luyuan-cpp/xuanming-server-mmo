@@ -129,6 +129,17 @@ class CatalogAdminHttpTest {
         assertEquals(0, count("commerce_delivery_receipt"));
         assertEquals(0, count("commerce_refund_receipt"));
         assertEquals(404, call("/internal/admin/skus/unknown", "admin", "catalog-admin", Map.of()).statusCode());
+
+        // 人工单管理入口仅对 admin 角色开放，其它角色一律 401。
+        var manualQuery = new ManualAdminApi.ListQuery("", "", "", 20);
+        for (String role : new String[] {"gateway", "payment", "delivery"}) {
+            assertEquals(401, call("/internal/admin/manual/list", role, subject(role), manualQuery).statusCode());
+        }
+        var manualList = call("/internal/admin/manual/list", "admin", "catalog-admin", manualQuery);
+        assertEquals(200, manualList.statusCode(), manualList.body());
+        assertEquals(0, json.readTree(manualList.body()).path("orders").size());
+        assertEquals(0, json.readTree(manualList.body()).path("refunds").size());
+        assertEquals(0, json.readTree(manualList.body()).path("consignments").size());
     }
 
     private HttpResponse<String> call(String route, String role, String subject, Object body) throws Exception {

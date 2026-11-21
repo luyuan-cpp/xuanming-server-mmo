@@ -157,7 +157,8 @@ public final class GameServices {
             if (!error.getCode().equals("NOT_FOUND")) throw error;
             result.put("homeZoneFound", false);
         }
-        ObjectNode sessionReply = readJson(locator, SESSION, byId, deadline);
+        ObjectNode sessionReply = readJson(locator, SESSION,
+                mapper.createObjectNode().put("playerId", playerId).put("includePlacement", true), deadline);
         boolean found = sessionReply.path("found").asBoolean(false);
         result.put("sessionFound", found);
         if (found) {
@@ -165,11 +166,17 @@ public final class GameServices {
             if (!session.isObject() || !playerId.equals(session.path("playerId").asText())) {
                 throw new CallFailure("INVALID_RESPONSE", "会话响应与目标玩家不一致", false, 0);
             }
+            JsonNode placement = sessionReply.path("placement");
+            boolean hasPlacement = placement.isObject() && placement.path("found").asBoolean(false);
             ObjectNode view = result.putObject("session");
             view.put("state", session.path("state").asText("SESSION_STATE_UNKNOWN"));
-            view.put("sceneNodeId", session.path("sceneNodeId").asText(""));
-            view.put("sceneId", session.path("sceneId").asText("0"));
+            view.put("sceneNodeId", hasPlacement ? placement.path("nodeId").asText("") : session.path("sceneNodeId").asText(""));
+            view.put("sceneId", hasPlacement ? placement.path("sceneId").asText("0") : session.path("sceneId").asText("0"));
             view.put("lastActiveTs", session.path("lastActiveTs").asText("0"));
+            if (hasPlacement) {
+                view.put("sceneZoneId", placement.path("zoneId").asLong(0));
+                if (placement.path("awaitingPlacement").asBoolean(false)) view.put("awaitingPlacement", true);
+            }
         }
         return result;
     }

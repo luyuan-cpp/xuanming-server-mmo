@@ -1,4 +1,6 @@
 #include "gtest/gtest.h"
+#include "core/utils/proto/proto_field_checker.h"
+#include "network/network_constants.h"
 #include "player/system/player_pet.h"
 #include "player/system/pet_entry_rules.h"
 #include "player/comp/player_frozen_comp.h"
@@ -83,5 +85,41 @@ TEST_F(PetEntriesTest, FiveTierIdentityIsIndependentOfQualityAndRetainedOnLoad) 
  Pet().set_cultivation_tier(4);PetInfo info;PetSystem::FillCultivationTier(Pet(),info);EXPECT_EQ(info.cultivation_tier(),4u);EXPECT_EQ(info.cultivation_tier_name(),"神兽");
  PetSystem::InitializeOnLoad(player);EXPECT_EQ(Pet().cultivation_tier(),4u);
  Pet().set_cultivation_tier(0);PetSystem::InitializeOnLoad(player);EXPECT_EQ(Pet().cultivation_tier(),1u);
+}
+
+TEST_F(PetEntriesTest, FullCatalogTargetPassesSceneFieldThresholdAndEmptyTargetClearsKnown) {
+ PetEntriesInfo catalog;
+ ASSERT_EQ(PetSystem::BuildEntries(player, id, catalog), kSuccess);
+ ASSERT_EQ(catalog.entries_size(), 21);
+
+ PreviewPetEntriesRequest previewReq;
+ previewReq.set_pet_id(id);
+ previewReq.set_state_version(catalog.state_version());
+ previewReq.set_config_version(catalog.config_version());
+ for (const auto& row : catalog.entries()) {
+  (*previewReq.mutable_target())[row.id()] = row.id() == 501 ? 2u : 0u;
+ }
+ std::string details;
+ EXPECT_FALSE(ProtoFieldChecker::CheckFieldSizes(previewReq, kProtoFieldCheckerThreshold, details)) << details;
+
+ PreviewPetEntriesResponse previewResp;
+ PetSystem::PreviewEntries(player, previewReq, previewResp);
+ ASSERT_FALSE(previewResp.has_error_message());
+ EXPECT_EQ(previewResp.entries().remaining_points(), 18u);
+
+ auto saveReq = Request(3);
+ auto firstSave = Save(saveReq);
+ ASSERT_FALSE(firstSave.has_error_message());
+ EXPECT_EQ(firstSave.entries().remaining_points(), 17u);
+
+ SavePetEntriesRequest clearReq;
+ clearReq.set_pet_id(id);
+ clearReq.set_state_version(firstSave.entries().state_version());
+ clearReq.set_config_version(firstSave.entries().config_version());
+ clearReq.set_request_id("entry-request-clear-0001");
+ const auto cleared = Save(clearReq);
+ ASSERT_FALSE(cleared.has_error_message());
+ EXPECT_EQ(cleared.entries().remaining_points(), 20u);
+ EXPECT_TRUE(Pet().entry_allocated().empty());
 }
 }

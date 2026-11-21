@@ -13,6 +13,7 @@
 #include "system/battle_script.h"
 #include "system/combat_damage_rules.h"
 #include "system/equipment_battle_rules.h"
+#include "system/pet_cultivation_rules.h"
 #include "modules/currency/constants/currency.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -434,6 +435,11 @@ bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
                 LOG_ERROR << "CreateBattle pet ownership does not match its containing snapshot: battle_id=" << request.battle_id()
                           << " pet_id=" << pet.pet_id() << " owner=" << pet.owner_player_id()
                           << " snapshot_player=" << snapshot.player_id();
+                return false;
+            }
+            if (!petcultivation::ValidSnapshot(pet.pet_cultivation())) {
+                LOG_ERROR << "CreateBattle invalid pet_cultivation snapshot: battle_id=" << request.battle_id()
+                          << " pet_id=" << pet.pet_id();
                 return false;
             }
             actor.set_owner_player_id(snapshot.player_id());
@@ -1117,7 +1123,7 @@ void TurnBattleEngine::FillDungeonMonsterAiActions() {
         input.selfAlive = true;
         input.selfCanDefend = true;
         if (actor.max_health() > 0) {
-            const uint64_t clampedHp = std::min(actor.health(), actor.max_health());
+            const uint64_t clampedHp = std::min(actor.attributes().health(), actor.max_health());
             input.selfHpPermyriad = static_cast<uint32_t>(
                 (clampedHp * static_cast<uint64_t>(combat_ai::kUtilityScale)) / actor.max_health());
         } else {
@@ -1132,7 +1138,7 @@ void TurnBattleEngine::FillDungeonMonsterAiActions() {
 
             int32_t missingHp = 0;
             if (target.max_health() > 0) {
-                const uint64_t clampedHp = std::min(target.health(), target.max_health());
+                const uint64_t clampedHp = std::min(target.attributes().health(), target.max_health());
                 missingHp = static_cast<int32_t>(
                     ((target.max_health() - clampedHp) * static_cast<uint64_t>(combat_ai::kUtilityScale)) /
                     target.max_health());

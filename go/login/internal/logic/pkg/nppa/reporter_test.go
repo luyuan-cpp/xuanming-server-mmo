@@ -40,14 +40,18 @@ func (e *reporterEnv) at(redisNow time.Time) {
 	e.now = redisNow.Add(time.Second)
 }
 
-// pending 是账本里还没删掉的事件数(含已被领走、暂时不可见的)。
+// pending 是账本里还没删掉的事件数(含已被领走、暂时不可见的),跨全部分片汇总。
 func (e *reporterEnv) pending(t *testing.T) int {
 	t.Helper()
-	n, err := e.l.rdb.ZCard(context.Background(), redisslot.NppaOutboxKey()).Result()
-	if err != nil {
-		t.Fatal(err)
+	total := 0
+	for shard := 0; shard < redisslot.NppaLedgerShardCount; shard++ {
+		n, err := e.l.rdb.ZCard(context.Background(), redisslot.NppaOutboxKey(shard)).Result()
+		if err != nil {
+			t.Fatal(err)
+		}
+		total += int(n)
 	}
-	return int(n)
+	return total
 }
 
 func TestTickReportsLedgerEventsOnceAndRemovesThem(t *testing.T) {

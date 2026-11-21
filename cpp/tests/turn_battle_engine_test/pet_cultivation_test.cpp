@@ -158,3 +158,50 @@ TEST(PetCultivationBattle, AnotherCasterConsumesOriginalPetPoisonSnapshotWithout
  }
  EXPECT_GE(ticks,1u);EXPECT_TRUE(consumedByOwner);
 }
+
+TEST(PetCultivationBattle, HitLimitedFiniteShieldReceivesCapacityBonusWithoutChangingHitsOrManaShield) {
+ // B05/B06 型有限数值护盾(带 hit_limit=2)应吃 504 护盾容量加成，次数与持续回合不变。
+ PetBattleFixture f;
+ f.Skill(905, BattleEffectOp::Shield, true);
+ auto& shieldRow = f.data->AddBuff(905);
+ shieldRow.set_hit_limit(2);
+ shieldRow.set_duration_rounds(3);
+ shieldRow.set_tick_on_apply(1);
+ f.Pet().mutable_pet_cultivation()->set_shield_capacity_bps(1000);
+ TurnBattleEngine engine(f.data);
+ ASSERT_TRUE(engine.Initialize(f.request));
+ const auto result = f.Round(engine, 905, true);
+ bool foundEvent = false;
+ for (const auto& event : result.events()) {
+  if (event.event_type() == BATTLE_EVENT_BUFF_ADD && event.buff_table_id() == 905) {
+   EXPECT_EQ(event.shield_after(), 110u);
+   foundEvent = true;
+  }
+ }
+ EXPECT_TRUE(foundEvent);
+ bool foundBuff = false;
+ for (const auto& actor : result.state().actors()) {
+  if (actor.actor_id() != f.PetId(engine)) continue;
+  for (const auto& buff : actor.buffs()) {
+   if (buff.buff_table_id() == 905) {
+    EXPECT_EQ(buff.remaining_capacity(), 110u);
+    EXPECT_EQ(buff.remaining_hits(), 2u);
+    EXPECT_EQ(buff.remain_rounds(), 2u);
+    foundBuff = true;
+   }
+  }
+ }
+ EXPECT_TRUE(foundBuff);
+}
+
+TEST(PetCultivationBattle, InvalidCultivationSnapshotIsRejectedAtBattleEntry) {
+ PetBattleFixture f;
+ f.Pet().mutable_pet_cultivation()->set_physical_damage_bps(10001);
+ TurnBattleEngine badChannel(f.data);
+ EXPECT_FALSE(badChannel.Initialize(f.request));
+
+ f.Pet().mutable_pet_cultivation()->set_physical_damage_bps(500);
+ (*f.Pet().mutable_pet_cultivation()->mutable_ailment_hit_bps())[8] = 100;
+ TurnBattleEngine badStateKey(f.data);
+ EXPECT_FALSE(badStateKey.Initialize(f.request));
+}

@@ -220,6 +220,10 @@ export async function getGmCommands(query?: GmCommandQuery): Promise<GmCommandPa
   return { ...result, records: result.records.map(checkedCommand) };
 }
 
+export async function getGmCommand(commandId: string): Promise<GmCommand> {
+  return checkedCommand(await defHttp.get<GmCommand>({ url: `/gm/mail/commands/${encodeURIComponent(commandId)}` }, requestOptions));
+}
+
 export async function getGmCommandAudit(commandId: string): Promise<GmAuditEntry[]> {
   const result = await defHttp.get<{ commandId: string; records: GmAuditEntry[] }>(
     { url: `/gm/mail/commands/${encodeURIComponent(commandId)}/audit` },

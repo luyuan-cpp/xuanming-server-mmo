@@ -1,6 +1,12 @@
 package mall
 
-import "testing"
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 // 商城签名的跨语言黄金样例:与 go/trade mall_signature_test.go、robot commerce_mock_payer_test.go、
 // java/mall_game HmacSignatureGoldenTest 是同一组输入、同一个期望值。改签名算法必须几边同批改,不能只改这里的字面量。
@@ -29,5 +35,48 @@ func TestNewRejectsUnsafeConfiguration(t *testing.T) {
 		if _, err := New(args[0], args[1], args[2], 0); err == nil {
 			t.Fatalf("New accepted %s", name)
 		}
+	}
+}
+
+func TestPendingRefundsPagination(t *testing.T) {
+	var seenCursors []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/refunds/poll" {
+			http.NotFound(w, r)
+			return
+		}
+		var req struct {
+			Cursor string `json:"cursor"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		seenCursors = append(seenCursors, req.Cursor)
+		w.Header().Set("Content-Type", "application/json")
+		if req.Cursor == "" {
+			_ = json.NewEncoder(w).Encode(PendingRefundPage{
+				Entries:    []PendingRefund{{OrderID: "00000000-0000-0000-0000-000000000001", Channel: "wechat_pay", TransactionID: "tx-1", AmountMinor: 100, Currency: "CNY", Reason: "DUPLICATE_PAYMENT"}},
+				NextCursor: "r1:00000000-0000-0000-0000-000000000001:wechat_pay:tx-1",
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(PendingRefundPage{
+			Entries: []PendingRefund{{OrderID: "00000000-0000-0000-0000-000000000002", Channel: "alipay", TransactionID: "tx-2", AmountMinor: 200, Currency: "CNY", Reason: "CANCELLED_LATE"}},
+		})
+	}))
+	defer server.Close()
+
+	client, err := New(server.URL, "payment-adapter", "commerce-golden-payment-secret-0123456789", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := client.PendingRefunds(context.Background(), "")
+	if err != nil || len(first.Entries) != 1 || first.NextCursor == "" {
+		t.Fatalf("first page = %+v, %v", first, err)
+	}
+	second, err := client.PendingRefunds(context.Background(), first.NextCursor)
+	if err != nil || len(second.Entries) != 1 || second.NextCursor != "" {
+		t.Fatalf("second page = %+v, %v", second, err)
+	}
+	if len(seenCursors) != 2 || seenCursors[0] != "" || seenCursors[1] != first.NextCursor {
+		t.Fatalf("seenCursors = %v", seenCursors)
 	}
 }

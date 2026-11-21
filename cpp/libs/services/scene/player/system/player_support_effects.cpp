@@ -1,5 +1,7 @@
 #include "player_support_effects.h"
+#include <algorithm>
 #include <map>
+#include <vector>
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_skill.h"
 #include "player/system/player_level_rules.h"
@@ -76,21 +78,32 @@ void PlayerSupportEffectSystem::Build(entt::entity player, SupportEffectSummary&
     const double shieldBonus = equipment.shield_capacity_bps() / 10000.0 + shield.Total();
     summary.mutable_healing()->set_total_bonus_bps(healingBonus * 10000);
     summary.mutable_shield()->set_total_bonus_bps(shieldBonus * 10000);
-    summary.mutable_healing()->set_complete(complete); summary.mutable_shield()->set_complete(complete);
+    std::vector<const SkillTable*> freeSkills;
     for (const auto& skill : SkillTableManager::Instance().FindAll().data()) {
         if (!PlayerSkillSystem::IsFreeSkillFor(skill, 1)) continue;
+        freeSkills.push_back(&skill);
         for (const auto id : skill.effect()) {
+            if (BuffTableManager::Instance().FindByIdSilent(id).first == nullptr) complete = false;
+        }
+    }
+    std::sort(freeSkills.begin(), freeSkills.end(), [](const SkillTable* lhs, const SkillTable* rhs) {
+        return lhs->id() < rhs->id();
+    });
+    summary.mutable_healing()->set_complete(complete);
+    summary.mutable_shield()->set_complete(complete);
+    for (const auto* skill : freeSkills) {
+        for (const auto id : skill->effect()) {
             const auto* buff = BuffTableManager::Instance().FindByIdSilent(id).first;
             if (buff == nullptr) continue;
             const bool isShield = buff->battle_op() == static_cast<uint32_t>(turnbattle::BattleEffectOp::Shield);
-            const auto category = equipbattle::ManaCategory(skill, [](uint32_t buffId) {
+            const auto category = equipbattle::ManaCategory(*skill, [](uint32_t buffId) {
                 return BuffTableManager::Instance().FindByIdSilent(buffId).first;
             });
             const auto reduction = equipment.mana_reduction_bps().find(category);
             const double discount = (reduction == equipment.mana_reduction_bps().end() ? 0 : reduction->second) - mana.Total() * 10000;
-            const auto rank = ranks.find(skill.id());
+            const auto rank = ranks.find(skill->id());
             SupportSkillPreview preview;
-            if (supportrules::FillPreview(skill, *buff, level, rank == ranks.end() ? 0 : rank->second,
+            if (supportrules::FillPreview(*skill, *buff, level, rank == ranks.end() ? 0 : rank->second,
                 attributes->max_mana(), isShield ? shieldBonus : healingBonus,
                 discount, complete, preview)) { *summary.add_previews() = preview; break; }
         }

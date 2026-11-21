@@ -81,12 +81,16 @@ func newAntiAddictionEnv(t *testing.T, now time.Time) *antiAddictionEnv {
 	return e
 }
 
-// watched 是账本里登记着的会话数。
+// watched 是账本里登记着的会话数(跨全部分片汇总)。
 func (e *antiAddictionEnv) watched(t *testing.T) int64 {
 	t.Helper()
-	n, err := e.svcCtx.LoginRedis.ZCard(context.Background(), redisslot.NppaLeasesKey()).Result()
-	require.NoError(t, err)
-	return n
+	var total int64
+	for shard := 0; shard < redisslot.NppaLedgerShardCount; shard++ {
+		n, err := e.svcCtx.LoginRedis.ZCard(context.Background(), redisslot.NppaLeasesKey(shard)).Result()
+		require.NoError(t, err)
+		total += n
+	}
+	return total
 }
 
 // events 领走账本里待发的上下线事件。

@@ -1860,17 +1860,21 @@ void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 
 void Node::StartConflictDrainWatchdog()
 {
-	// 收尾预算。推导:收尾要等的是"每个在线玩家一次 Redis 存盘往返 + 一次
-	// SceneManager EnterScene 改派";正常情况下几百玩家在百毫秒级完成,15s 是给
-	// Redis / SceneManager 抖动留的保守上限。到期即退出,不无限等下去 ——
-	// 这是有界兜底,不是"等一会儿就当成功"(到期会明确打 ERROR 并报告未落地的数量)。
-	// TODO: 待压测实测复核该预算。
+	// 收尾预算:等每个在线玩家完成 Redis 存盘与 SceneManager 改派。缺省 15s(与 kShutdownDrainBudget 一致),
+	// 可通过 MMORPG_CONFLICT_DRAIN_BUDGET_SECONDS 在 [5, 60] 秒内覆盖。到期即退出,不无限等下去,
+	// 并明确打 ERROR 报告预算耗尽。
 	constexpr double kDrainPollIntervalSec = 0.1;
-	constexpr auto kDrainBudget = std::chrono::seconds(15);
+	bool budgetValid = true;
+	const auto drainBudget = planned_drain::ConflictDrainBudgetFromEnv(&budgetValid);
+	if (!budgetValid)
+	{
+		LOG_WARN << "Invalid " << planned_drain::kConflictDrainBudgetEnvVar
+				 << " value; falling back to default conflict drain budget_s=" << drainBudget.count();
+	}
 
-	conflictDrainDeadline_ = std::chrono::steady_clock::now() + kDrainBudget;
+	conflictDrainDeadline_ = std::chrono::steady_clock::now() + drainBudget;
 
-	conflictDrainTimer.RunEvery(kDrainPollIntervalSec, [this]
+	conflictDrainTimer.RunEvery(kDrainPollIntervalSec, [this, drainBudget]
 								{
 		const bool drained = !conflictDrainCompleteFn_ || conflictDrainCompleteFn_(*this);
 		const bool expired = std::chrono::steady_clock::now() >= conflictDrainDeadline_;
@@ -1887,7 +1891,7 @@ void Node::StartConflictDrainWatchdog()
 		else
 		{
 			LOG_ERROR << "Conflict drain budget exceeded; shutting down with work still in flight. node_id="
-					  << GetNodeId();
+					  << GetNodeId() << " budget_s=" << drainBudget.count();
 		}
 
 		// 走正常关闭路径:它会跑 before-shutdown hook、关 gRPC、flush Kafka producer、

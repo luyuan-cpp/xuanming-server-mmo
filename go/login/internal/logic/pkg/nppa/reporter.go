@@ -71,26 +71,28 @@ func (r *Reporter) sendBatch(ctx context.Context) bool {
 	claimed, err := r.ledger.Claim(ctx, MaxBatch)
 	if err != nil {
 		logx.Errorf("[nppa] ledger claim failed, retrying next tick: err=%v", err)
-		return false
+		if len(claimed) == 0 {
+			return false
+		}
 	}
 	if len(claimed) == 0 {
 		return false
 	}
 	// 按本副本的时钟分三类:过期的(报了也会被拒)删掉;时刻不早于现在的(本副本的钟比 Redis 慢)留着,领取到期后再发;其余的发。
 	now := r.now().Unix()
-	var discard, members []string
+	var discard, members []Claimed
 	var batch []Behavior
 	expired := 0
 	for _, c := range claimed {
 		switch {
 		case !c.Valid:
 			logx.Errorf("[nppa] unreadable ledger event dropped")
-			discard = append(discard, c.Member)
+			discard = append(discard, c)
 		case c.Behavior.OT < now-int64(r.maxAge/time.Second):
 			expired++
-			discard = append(discard, c.Member)
+			discard = append(discard, c)
 		case c.Behavior.OT < now:
-			members = append(members, c.Member)
+			members = append(members, c)
 			batch = append(batch, c.Behavior)
 		}
 	}

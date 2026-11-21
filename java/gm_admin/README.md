@@ -48,12 +48,12 @@ python java/gm_admin/run_local.py status
 
 草稿先落管理库，再核对目标、参数和原因；发送只提交命令号。
 
-- 邮件支持按权威 `CurrencyType` 选择币种（银两/灵石/绑定灵石）与物品附件；超时保留原命令，核对后可显式重试同号，复用服务端持久幂等。`DELIVERED` 不等于附件已领取。
-- 玩家 GM 仅允许开发或测试服的在线玩家，草稿有效期五分钟（在数据库 `FOR UPDATE` 事务内原子拦截过期）。命令进入 `SENDING` 后禁止重新发送；`UNKNOWN` 需核对玩家与服务日志，不能重新生成相同操作来重试。`EXECUTED` 表示同步域操作完成，持久化仍走游戏原有流程。
+- 邮件支持按权威 `CurrencyType` 选择币种（银两/灵石/绑定灵石）与物品附件；过期草稿在 `FOR UPDATE` 事务内原子拦截；超时保留原命令，核对后可显式重试同号，复用服务端持久幂等。`DELIVERED` 不等于附件已领取。
+- 玩家 GM 仅允许开发或测试服的在线玩家，通过 `PlayerLocator/GetSession(include_placement=true)` 原子读取 `scene_manager` 权威落点 `(zone_id, node_id, scene_id)`，草稿有效期五分钟（在数据库 `FOR UPDATE` 事务内原子拦截过期）。命令进入 `SENDING` 后禁止重新发送；`UNKNOWN` 需核对玩家与服务日志，不能重新生成相同操作来重试。`EXECUTED` 表示同步域操作完成，持久化仍走游戏原有流程。
 - 币种来自游戏协议目录；等级为 1–85，直接 GM 发物最多 99 个。金额和玩家 ID 使用十进制字符串。
-- 审计列表支持按玩家 ID 与状态筛选及分页（`page` / `pageSize`），核对弹窗支持查看完整 `gm_command_audit` 状态变更轨迹（`/gm/mail/commands/{id}/audit` 与 `/gm/player-commands/{id}/audit`）。
+- 审计列表支持按玩家 ID 与状态筛选及分页（`page` / `pageSize`），核对弹窗支持按命令 ID 精确刷新原命令状态并查看完整 `gm_command_audit` 状态变更轨迹（`/gm/mail/commands/{id}`、`/gm/mail/commands/{id}/audit` 与 `/gm/player-commands/{id}`、`/gm/player-commands/{id}/audit`）。
 
-生产部署另行配置域名、HTTPS 和服务间 TLS；水平扩展场景节点时，除静态映射 `GM_SCENE_TARGETS_JSON` 外，还可配置 `GM_SCENE_ETCD_URL`（仅允许 HTTPS 或本机回环 HTTP）动态发现 etcd `SceneNodeService.rpc/` 下的场景 `grpcEndpoint`；多副本 GM 管理后端支持并发安全启动迁移（`gm_install` 版本 1–5，含查询/审计复合索引）。
+生产部署另行配置域名、HTTPS、服务间 TLS、`GM_HTTP_ADDRESS` 与 `GM_REDIS_HOST`（支持优雅停机与 `/actuator/health/liveness`、`/actuator/health/readiness` K8s 探针）；水平扩展场景节点时，除静态映射 `GM_SCENE_TARGETS_JSON`（支持 `"<zoneId>/<nodeId>"` 与 `"<nodeId>"`）外，还可配置 `GM_SCENE_ETCD_URL`（仅允许 HTTPS 或本机回环 HTTP）按 `(zoneId, nodeId)` 动态发现 etcd `SceneNodeService.rpc/` 下的场景 `grpcEndpoint`；多副本 GM 管理后端支持并发安全启动迁移（`gm_install` 版本 1–5，含查询/审计复合索引）。
 
 ## Scene 部署与通道状态
 

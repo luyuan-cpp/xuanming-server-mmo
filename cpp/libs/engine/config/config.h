@@ -16,3 +16,4 @@ bool readGameConfig(const std::string &filename, GameConfig &gameConfig);
 
 std::string GetConfigDir();
 std::string GetDataRootDir();
+bool UseProtoBinaryTables();

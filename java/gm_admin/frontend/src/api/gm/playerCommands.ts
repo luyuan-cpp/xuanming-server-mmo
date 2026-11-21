@@ -150,6 +150,9 @@ export async function getPlayerCommands(
   if (!page || !Array.isArray(page.records)) throw new Error('玩家 GM 审计响应无效。');
   return { ...page, records: page.records.map(checkedPlayerCommand) };
 }
+export async function getPlayerCommand(id: string): Promise<PlayerCommand> {
+  return checkedPlayerCommand(await defHttp.get<PlayerCommand>({ url: `/gm/player-commands/${encodeURIComponent(id)}` }, options));
+}
 export async function getPlayerCommandAudit(id: string): Promise<GmAuditEntry[]> {
   const result = await defHttp.get<{ commandId: string; records: GmAuditEntry[] }>(
     { url: `/gm/player-commands/${encodeURIComponent(id)}/audit` },

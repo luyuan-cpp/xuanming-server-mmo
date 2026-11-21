@@ -33,6 +33,13 @@ inline constexpr const char *kPodRevisionEnvVar = "MMORPG_POD_REVISION";
 // 预算上限。K8s 宽限期是秒级整数,一天足够任何一种排空;更大的值多半是手误多写了几个 0。
 inline constexpr std::chrono::seconds kMaxBudget{24 * 60 * 60};
 
+// 冲突停机收尾预算(秒):节点失租/冲突后等待在线玩家异步存盘与改派落地的有界上限。
+// 不设或空串取缺省 15 秒(与普通停机排空预算 kShutdownDrainBudget 一致);允许运维按集群规模在 5..60 秒内调优。
+inline constexpr const char *kConflictDrainBudgetEnvVar = "MMORPG_CONFLICT_DRAIN_BUDGET_SECONDS";
+inline constexpr std::chrono::seconds kDefaultConflictDrainBudget{15};
+inline constexpr std::chrono::seconds kMinConflictDrainBudget{5};
+inline constexpr std::chrono::seconds kMaxConflictDrainBudget{60};
+
 // 预算环境变量的解析结论。底层类型按种类数选(4 种),AGENTS.md §11.2。
 enum class BudgetKind : uint8_t
 {
@@ -85,6 +92,40 @@ inline Budget ParseBudget(const char *raw)
 inline Budget BudgetFromEnv()
 {
 	return ParseBudget(std::getenv(kBudgetEnvVar));
+}
+
+// 解析冲突停机收尾预算:未设返回 15 秒;合法值在 [5, 60] 秒内生效;其余取值回退 15 秒并置 valid=false(由调用方打告警)。
+inline std::chrono::seconds ParseConflictDrainBudget(const char *raw, bool *valid = nullptr)
+{
+	const auto parsed = ParseBudget(raw);
+	if (parsed.kind == BudgetKind::kUseDefault)
+	{
+		if (valid != nullptr)
+		{
+			*valid = true;
+		}
+		return kDefaultConflictDrainBudget;
+	}
+	if (parsed.kind == BudgetKind::kSeconds &&
+		parsed.seconds >= kMinConflictDrainBudget &&
+		parsed.seconds <= kMaxConflictDrainBudget)
+	{
+		if (valid != nullptr)
+		{
+			*valid = true;
+		}
+		return parsed.seconds;
+	}
+	if (valid != nullptr)
+	{
+		*valid = false;
+	}
+	return kDefaultConflictDrainBudget;
+}
+
+inline std::chrono::seconds ConflictDrainBudgetFromEnv(bool *valid = nullptr)
+{
+	return ParseConflictDrainBudget(std::getenv(kConflictDrainBudgetEnvVar), valid);
 }
 
 // 构建标识与工作负载修订拼成 NodeInfo.build:两样都有 = "<构建>@<修订>",只有一样 = 那一样,都没有 = 空串。

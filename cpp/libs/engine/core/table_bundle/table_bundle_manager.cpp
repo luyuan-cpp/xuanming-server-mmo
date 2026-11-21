@@ -869,7 +869,7 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 	pendingState_ = "preparing";
 	pendingReason_.clear();
 
-	LOG_INFO << "Table hot-reload prepare started: schema_digest=" << kTableSchemaDigest
+	LOG_INFO << "Table hot-reload prepare started: schema_digest=" << std::string(kTableSchemaDigest)
 			 << " content_digest=" << desired->contentDigest
 			 << " version=" << desired->version
 			 << " activate_at_ms=" << desired->activateAtMs
@@ -966,7 +966,7 @@ void TableBundleManager::FinishPrepare(const uint64_t generation)
 	staging_->prepared = true;
 
 	const uint64_t nowMs = NowUnixMs();
-	LOG_INFO << "Table hot-reload prepared: schema_digest=" << kTableSchemaDigest
+	LOG_INFO << "Table hot-reload prepared: schema_digest=" << std::string(kTableSchemaDigest)
 			 << " content_digest=" << staging_->target.contentDigest
 			 << " version=" << staging_->target.version
 			 << " prepare_seconds=" << totalSec
@@ -1043,7 +1043,7 @@ void TableBundleManager::RejectCandidate(const PointerTarget &target,
 	if (isNeedsRestart)
 	{
 		++needsRestartCount_;
-		LOG_WARN << "Table hot-reload needs restart: schema_digest=" << kTableSchemaDigest
+		LOG_WARN << "Table hot-reload needs restart: schema_digest=" << std::string(kTableSchemaDigest)
 				 << " content_digest=" << target.contentDigest
 				 << " version=" << target.version
 				 << " reason=" << reason;
@@ -1051,7 +1051,7 @@ void TableBundleManager::RejectCandidate(const PointerTarget &target,
 	else
 	{
 		++rejectedCount_;
-		LOG_ERROR << "Table hot-reload rejected: schema_digest=" << kTableSchemaDigest
+		LOG_ERROR << "Table hot-reload rejected: schema_digest=" << std::string(kTableSchemaDigest)
 				  << " content_digest=" << target.contentDigest
 				  << " version=" << target.version
 				  << " reason=" << reason;

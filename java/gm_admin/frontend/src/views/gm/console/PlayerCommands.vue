@@ -356,6 +356,7 @@ import {
 import {
   PLAYER_OPERATIONS,
   buildPlayerCommandDraft,
+  getPlayerCommand,
   getPlayerCommandAudit,
   getPlayerCommandCatalog,
   getPlayerCommands,
@@ -739,8 +740,24 @@ async function loadAuditHistory(commandId: string) {
   }
 }
 async function refreshReviewed() {
+  const current = reviewed.value;
+  if (current && hasPermission("gm:audit:read")) {
+    try {
+      const updated = await getPlayerCommand(current.id);
+      if (reviewed.value?.id === updated.id) {
+        if (current.status !== updated.status) confirmed.value = false;
+        reviewed.value = updated;
+        if (preparedCommand.value?.id === updated.id)
+          preparedCommand.value = updated;
+        if (updated.status === "EXECUTED" || updated.status === "REJECTED")
+          sendError.value = "";
+      }
+    } catch (error) {
+      sendError.value = `刷新原命令状态失败。${errorText(error)}`;
+    }
+    await loadAuditHistory(current.id);
+  }
   await loadAudit();
-  if (reviewed.value) await loadAuditHistory(reviewed.value.id);
 }
 async function prepare() {
   if (blocked.value || !operationEnabled.value) return;

@@ -301,20 +301,20 @@ public class RmbConsignmentStore {
                 return withdrawal((String) prior.getFirst().get("withdrawal_id"), input.account(), false);
             }
             var funds = jdbc.query("SELECT * FROM commerce_seller_income WHERE account=? AND available_ms<=? "
-                + "AND net_fen-reserved_fen-paid_fen>0 ORDER BY order_sn LIMIT 100 FOR UPDATE",
+                + "AND net_fen-reserved_fen-paid_fen-forfeited_fen>0 ORDER BY order_sn LIMIT 100 FOR UPDATE",
                 (row, index) -> income(row), bytes(input.account()), clock.millis());
             long remaining = input.amountFen();
-            for (var row : funds) { remaining -= Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen()); }
+            for (var row : funds) { remaining -= Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen() - row.forfeitedFen()); }
             if (remaining != 0) { throw new CommerceException(409, "可提现收入不足或本次分配超过100单上限"); }
             String id = UUID.randomUUID().toString();
             jdbc.update("INSERT INTO commerce_withdrawal(withdrawal_id,account,request_id,amount_fen,state,created_ms)"
                 + " VALUES(?,?,?,?,'REQUESTED',?)", id, bytes(input.account()), bytes(input.requestId()), input.amountFen(), clock.millis());
             remaining = input.amountFen();
             for (var row : funds) {
-                long amount = Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen());
+                long amount = Math.min(remaining, row.netFen() - row.reservedFen() - row.paidFen() - row.forfeitedFen());
                 if (amount == 0) { break; }
                 if (jdbc.update("UPDATE commerce_seller_income SET reserved_fen=reserved_fen+? WHERE order_sn=? "
-                        + "AND net_fen-reserved_fen-paid_fen>=?", amount, row.orderId(), amount) != 1) {
+                        + "AND net_fen-reserved_fen-paid_fen-forfeited_fen>=?", amount, row.orderId(), amount) != 1) {
                     throw new CommerceException(503, "收入预留并发状态异常");
                 }
                 jdbc.update("INSERT INTO commerce_withdrawal_allocation(withdrawal_id,order_sn,amount_fen) VALUES(?,?,?)",
@@ -415,7 +415,8 @@ public class RmbConsignmentStore {
     }
     private static RmbConsignmentApi.Income income(ResultSet row) throws SQLException {
         return new RmbConsignmentApi.Income(row.getString("order_sn"), row.getLong("gross_fen"), row.getLong("fee_fen"),
-            row.getLong("net_fen"), row.getLong("reserved_fen"), row.getLong("paid_fen"), row.getLong("available_ms"));
+            row.getLong("net_fen"), row.getLong("reserved_fen"), row.getLong("paid_fen"), row.getLong("available_ms"),
+            row.getLong("forfeited_fen"));
     }
     private static void requireCurrentOrder(Stored value, String orderId, String state) {
         if (!state.equals(value.view().state()) || !orderId.equals(value.view().orderId())) {

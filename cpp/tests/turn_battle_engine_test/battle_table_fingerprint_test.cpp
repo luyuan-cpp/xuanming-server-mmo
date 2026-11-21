@@ -172,8 +172,6 @@ TEST(BattleTableFingerprintTest, TableOrderIsPartOfContract) {
     EXPECT_NE(onlySkill.Fingerprint(), onlyBuff.Fingerprint());
 }
 
-}  // namespace
-
 TEST(BattleTableFingerprintTest, PetAcquisitionTierChangesFingerprint) {
     TableSet tables = MakeTables();
     auto* pet = tables.pet.add_data();
@@ -182,3 +180,5 @@ TEST(BattleTableFingerprintTest, PetAcquisitionTierChangesFingerprint) {
     pet->set_acquisition_tier(1);
     EXPECT_NE(before, tables.Fingerprint());
 }
+
+}  // namespace

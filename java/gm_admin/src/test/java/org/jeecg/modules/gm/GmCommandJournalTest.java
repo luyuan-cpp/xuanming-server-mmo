@@ -258,5 +258,15 @@ class GmCommandJournalTest {
         assertEquals("UNKNOWN", history.path("records").get(2).path("event").asText());
         assertEquals("DELIVERED", history.path("records").get(4).path("event").asText());
         http(409, () -> journal.auditHistory(m2, "PLAYER"));
+        assertEquals(m2, journal.get(m2, "MAIL").path("id").asText());
+        http(409, () -> journal.get(m2, "PLAYER"));
+    }
+
+    @Test void expiredMailDraftFailsAtomicallyBeforeTransitioning() {
+        String id = journal.prepare("operator", "expired-mail", "1001", "过期测试", input().put("validDays", 1)).path("id").asText();
+        now.addAndGet(86_400_000L);
+        http(409, () -> journal.send(id, "operator", request -> { fail("Expired mail draft must not send"); return null; }));
+        assertEquals("DRAFT", status(journal.get(id)));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM gm_command_audit WHERE command_id=?", Integer.class, id));
     }
 }

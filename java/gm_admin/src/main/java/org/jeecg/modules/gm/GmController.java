@@ -22,6 +22,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
 /** 浏览器接缝：身份只取 JeecgBoot 的已认证主体，授权在每次服务端调用时执行。 */
@@ -142,6 +143,13 @@ public class GmController {
         return ok(journal.list(page, pageSize, playerId, status));
     }
 
+    @GetMapping("/mail/commands/{id}")
+    public String command(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        return ok(journal.get(id, "MAIL"));
+    }
+
     @GetMapping("/mail/commands/{id}/audit")
     public String commandAudit(@PathVariable String id) {
         require("gm:audit:read");
@@ -195,6 +203,8 @@ public class GmController {
 
     @ExceptionHandler(AuthorizationException.class)
     public ResponseEntity<String> forbidden() { return error(403, "没有此 GM 操作权限"); }
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<String> badParameter() { return error(400, "请求参数格式无效"); }
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<String> rejected(ResponseStatusException e) { return error(e.getStatusCode().value(), e.getReason()); }
     @ExceptionHandler(GameServices.CallFailure.class)

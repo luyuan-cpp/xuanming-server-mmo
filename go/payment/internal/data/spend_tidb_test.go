@@ -180,3 +180,62 @@ func TestTiDBPaidClosedAndRevivedIntents(t *testing.T) {
 		t.Fatalf("reviving a paid intent again: within=%v err=%v", within, err)
 	}
 }
+
+// 两个已关闭的未成年人意图并发迟到付款,总额超过月限额:原子 RecordMinorPaymentTxn 必须串行化,至多一笔转 PAID、另一笔落 MallOrphan。
+func TestTiDBRecordMinorPaymentTxnSerializesLatePayments(t *testing.T) {
+	repo := spendTestRepo(t)
+	ctx := context.Background()
+	spender, orderHi := randomKey(t), randomKey(t)
+	limit := SpendLimit{MonthlyFen: 20000, MonthStartMs: testMonthStart, DayStartMs: testMonthStart}
+	intents := []*paymentpb.PaymentIntentRecord{
+		minorIntentRow(orderHi, 11, spender, 15000),
+		minorIntentRow(orderHi, 12, spender, 15000),
+	}
+	for _, in := range intents {
+		if _, _, err := repo.ReserveIntent(ctx, in, limit); err != nil {
+			t.Fatalf("reserve %d: %v", in.OrderLo, err)
+		}
+		if closed, err := repo.CloseIntent(ctx, in.OrderHi, in.OrderLo, 2_500_000); err != nil || !closed {
+			t.Fatalf("close %d: %v %v", in.OrderLo, closed, err)
+		}
+	}
+	var wg sync.WaitGroup
+	outcomes := make([]RecordMinorPaymentOutcome, 2)
+	errs := make([]error, 2)
+	for i := range intents {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			txnID := "late-txn-" + string(rune('a'+i))
+			hi, lo := TxnKey(txnID)
+			rec := &paymentpb.PaymentTxnRecord{
+				Channel: 1, TxnHi: hi, TxnLo: lo, TransactionId: txnID,
+				OrderHi: intents[i].OrderHi, OrderLo: intents[i].OrderLo, PlayerId: 1,
+				PaidAmountMinor: 15000, PaidCurrency: "CNY", PaidMs: 3_000_000,
+				MallState: MallPending, MallDue: 1, NextAttemptMs: 3_000_000, CreatedMs: 3_000_000, UpdatedMs: 3_000_000,
+			}
+			outcomes[i], errs[i] = repo.RecordMinorPaymentTxn(ctx, rec, intents[i], limit, 3_000_000, 3_000_000, "minor_late_over_limit")
+		}(i)
+	}
+	wg.Wait()
+	accepted, overLimit := 0, 0
+	for i := range outcomes {
+		if errs[i] != nil {
+			t.Fatalf("RecordMinorPaymentTxn %d: %v", i, errs[i])
+		}
+		if !outcomes[i].Inserted || !outcomes[i].WasClosed {
+			t.Fatalf("RecordMinorPaymentTxn %d: inserted=%v wasClosed=%v", i, outcomes[i].Inserted, outcomes[i].WasClosed)
+		}
+		if outcomes[i].OverLimit {
+			overLimit++
+			if outcomes[i].Stored.MallState != MallOrphan {
+				t.Fatalf("over-limit txn %d mall_state=%d, want MallOrphan", i, outcomes[i].Stored.MallState)
+			}
+		} else {
+			accepted++
+		}
+	}
+	if accepted != 1 || overLimit != 1 {
+		t.Fatalf("concurrent closed minor payments: accepted=%d overLimit=%d, want 1 and 1", accepted, overLimit)
+	}
+}

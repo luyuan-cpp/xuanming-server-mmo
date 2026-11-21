@@ -214,4 +214,34 @@ class GameServicesTest {
         assertThrows(IllegalArgumentException.class, () -> new GameServices(PROTO, MAPPER,
                 "example.com:443", "", "", SECRET, true, 5000));
     }
+
+    @Test
+    void playerQueryUsesAuthoritativePlacementWhenPresent() throws Exception {
+        var sawIncludePlacement = new AtomicReference<Boolean>();
+        ServerServiceDefinition data = ServerServiceDefinition.builder("data_service.DataService")
+                .addMethod(PROTO.method(GameServices.DISPLAY), ServerCalls.asyncUnaryCall((request, observer) ->
+                        reply(GameServices.DISPLAY, "{\"players\":{\"9007199254740995\":{\"name\":\"测试角色\",\"level\":35}}}", observer)))
+                .addMethod(PROTO.method(GameServices.HOME), ServerCalls.asyncUnaryCall((request, observer) ->
+                        reply(GameServices.HOME, "{\"homeZoneId\":1}", observer)))
+                .build();
+        ServerServiceDefinition locator = ServerServiceDefinition.builder("playerlocator.PlayerLocator")
+                .addMethod(PROTO.method(GameServices.SESSION), ServerCalls.asyncUnaryCall((request, observer) -> {
+                    sawIncludePlacement.set((Boolean) request.getField(request.getDescriptorForType().findFieldByName("include_placement")));
+                    reply(GameServices.SESSION, """
+                        {"found":true,"session":{"playerId":"9007199254740995","state":"SESSION_STATE_ONLINE",
+                        "sceneNodeId":"","sceneId":"0","lastActiveTs":"1700000000123"},
+                        "placement":{"found":true,"zoneId":2,"nodeId":"7","sceneId":"9007199254740998",
+                        "ownerEpoch":"9","awaitingPlacement":false}}
+                        """, observer);
+                })).build();
+        server = NettyServerBuilder.forAddress(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
+                .addService(data).addService(locator).build().start();
+        String target = "127.0.0.1:" + server.getPort();
+        connect(target, 5000);
+        ObjectNode view = services.player(PLAYER);
+        assertEquals(Boolean.TRUE, sawIncludePlacement.get());
+        assertEquals(2, view.path("session").path("sceneZoneId").asInt());
+        assertEquals("7", view.path("session").path("sceneNodeId").asText());
+        assertEquals("9007199254740998", view.path("session").path("sceneId").asText());
+    }
 }

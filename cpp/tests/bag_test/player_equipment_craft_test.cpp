@@ -852,4 +852,19 @@ TEST_F(PlayerEquipmentCraftTest, ZeroKeyStaleRulesLowLevelAndFrozenOrBattleState
     tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 0;
     ASSERT_NO_FATAL_FAILURE(RejectUnchanged(request));
 }
+
+TEST_F(PlayerEquipmentCraftTest, CorruptedEquippedV1AffixMarksSupportSourcesIncomplete) {
+    ASSERT_NO_FATAL_FAILURE(Stock(100));
+    Guid id{};
+    ASSERT_NO_FATAL_FAILURE(Create(3101, id));
+    ASSERT_EQ(kSuccess, PlayerEquipSystem::Equip(player, id, 3));
+    auto* worn = Equipment().GetItemCompByGuid(id);
+    ASSERT_NE(nullptr, worn);
+    auto* broken = worn->mutable_equip()->add_fixed_affixes();
+    broken->set_slot(1);
+    broken->set_affix_id(999999);
+    EquipmentEffects effects;
+    PlayerEquipmentV1System::CollectEffects(player, effects);
+    EXPECT_FALSE(effects.support_sources_complete());
+}
 } // namespace

@@ -39,7 +39,9 @@ import org.springframework.web.server.ResponseStatusException;
 /** 固定命令的HTTP适配器；不重试未知提交，调用方使用原requestId重放。 */
 @Service
 public final class MallAdminClient {
-    private static final Set<String> COMMANDS = Set.of("skus/list", "skus/create", "skus/update", "skus/stock", "order-view");
+    private static final Set<String> COMMANDS = Set.of(
+        "skus/list", "skus/create", "skus/update", "skus/stock", "order-view",
+        "manual/list", "manual/orders/resolve", "manual/refunds/resolve", "manual/consignments/resolve");
     private static final int MAX_RESPONSE = 262_144;
     private final MallAdminProperties props;
     private final ObjectReader objects;

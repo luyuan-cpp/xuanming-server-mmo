@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
 /** 七种已有玩家 GM 的网页入口；请求不能提供操作者、RPC 地址或任意方法。 */
@@ -110,6 +111,13 @@ public class GmPlayerCommandController {
         return ok(journal.listPlayerCommands(page, pageSize, playerId, status));
     }
 
+    @GetMapping("/{id}")
+    public String get(@PathVariable String id) {
+        require("gm:audit:read");
+        decimal(id, "命令 ID");
+        return ok(journal.get(id, "PLAYER"));
+    }
+
     @GetMapping("/{id}/audit")
     public String audit(@PathVariable String id) {
         require("gm:audit:read");
@@ -195,6 +203,8 @@ public class GmPlayerCommandController {
     private String ok(JsonNode result) { return json.createObjectNode().put("success", true).put("code", 200).put("message", "").set("result", result).toString(); }
     @ExceptionHandler(AuthorizationException.class)
     public ResponseEntity<String> forbidden() { return error(403, "没有此 GM 操作权限"); }
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<String> badParameter() { return error(400, "请求参数格式无效"); }
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<String> rejected(ResponseStatusException e) { return error(e.getStatusCode().value(), e.getReason()); }
     @ExceptionHandler(GameServices.CallFailure.class)
