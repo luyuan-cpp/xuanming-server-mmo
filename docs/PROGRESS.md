@@ -4439,3 +4439,17 @@
      - `pwsh -NoProfile -File tools/scripts/run_cpp_tests.ps1 -Build -Filter cross_zone_test`（核对 `ConflictDrainBudget.*` 通过）
   4. 其余既有交接单（配表热更新、支付、小游戏 WebSocket、账号注销、战报回放、GM 管理台、组队跟随）按 `docs/PROGRESS.md` 与 `docs/handoff/` 既定顺序一并由 Codex 跑协议生成、编译、单测与冒烟。
 - **Java 全服务版（AGENTS §12）**：仍保留在独立仓 `D:\luyuan\xuanming-server-mmo\PARITY.md` TODO，本轮未改动。
+
+### 2026-11-21 战报回放（服务端 + Unity 客户端）闭环验证完成
+
+- **范围**：在 `main` 补齐全部编译/测试阻断与闭环验证（未建分支、未提交推送；Java 独立全服务版仍留 `PARITY.md` TODO）。
+- **闭环修复**：
+  - 服务端：补齐 `cpp/libs/engine/config/config.h` 中 `UseProtoBinaryTables()` 声明、修复 `cpp/libs/services/battle/system/turn_battle_engine.cpp`（`.attributes().health()`）与 `cpp/tests/turn_battle_engine_test/battle_table_fingerprint_test.cpp` 匿名命名空间闭合（上述 3 处已纳入 `3aea2802d`），并串行重编 `table` / `config` / `thread_context` / `core` / `battle` / `rpc` / `proto` / `grpc_client` 消除 `Node` / `TurnBattleEngine` / `gRpcMethodRegistry` 旧库 ABI 偏移。
+  - 客户端（`../mmorpg-client`）：修复 `.NET GZipStream` 静默吞截断/尾字节问题，在 `BattleReplayDecoder.cs` 补齐 RFC 1952 头、完整流消费、IEEE CRC32 与 ISIZE 校验并扩充 `BattleReplayDecoderTests.cs`（已纳入 `9e03ac07`，Unity Editor 已生成 8 份新脚本 `.meta`）。
+- **验证结果（全部 PASS）**：
+  - C++ `turn_battle_engine_test`（`BattleReplay*:TurnBattle*`）：**125/125 PASS**（含 `BattleReplay*` 7/7）。
+  - C++ `rpc_controller_test`（`--gtest_filter="Battle*"`）：**121/121 PASS**（含 `BattleObserverContract` **48/48 PASS**，4 条回放契约用例含 §6.3 `ReplayOutcomeRetriesReuseFrozenBodyAndPassVerify` 全过）。
+  - Go `match`：`go build` / `go vet` / `internal/config` / `internal/logic`（7/7）全过（叠加真 TiDB v8.5.2 5+23 全过）；`robot`：`-mod=readonly` build / vet / 4/4 全过；`check_log_text_english.py` exit 0。
+  - 跨区 1v1 隔离冒烟（`build/verification/battle-report-20261120/smoke-closure/`）：释放 5 个空闲 VS Code Java/Gradle 守护进程后（可用内存 4.948 GiB），双区 40 容器就绪（容器挂载 `b6a08148c` 表快照含第 34 批 379/380 限频表，重编 `robot.exe` 使用当前表），跨区成局 `battle_id=5992728852548223139` 打满 23 回合，`battle` 输出 `metric=battle_replay_frozen rounds=23 truncated=0 raw_bytes=10394 payload_bytes=1484 compress_us=179`，双方完成 `ListBattleReports`（1.8ms / 1.5ms）与 `GetBattleReport`（2.1ms / 2.4ms）并输出 `BATTLE_REPORT_OK` 与 `CROSS_ZONE_MATCH_OK`；隔离 MySQL 实查 `match_battle_report`（1 行，`envelope_bytes=1494, ref_count=2`）与 `match_player_battle_report`（2 行，`summary_bytes=88`）。结束后已 `down -v` 清理全部隔离容器、卷与网络。
+  - Unity 客户端：离线 Roslyn 全量编译 543 份运行时脚本 + 4 份战报 EditMode 测试 0 错，3 套纯 C# 夹具 **23/23 PASS**，WebGL 禁用 API 扫描 0 命中。
+- **文档同步**：已更新 `docs/design/battle-report-replay.md`（§17.3）与 `docs/handoff/battle-report-replay-client.md`（状态、§8、§9）。

@@ -410,7 +410,7 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
                 return kInvalidParameter;
     // 物品获得封禁(全服 + 本人)在扣消耗、建候选、回调之前判:任一项被封整笔拒绝,不扣材料、不发半笔,
     // 也不会因「主包放不下」改投临时格(封禁不是容量不足)。提交前再复核一次。
-    // entt::entity 用 init-capture(MSVC C3495,见 .github/copilot-instructions.md)。
+    // entt::entity 用 init-capture(MSVC C3495,见 AGENTS.md §13.3)。
     const auto firstBlockedGain = [player = playerEntity, &gained]() -> std::optional<uint32_t> {
         for (const auto& entry : gained)
             if (GainBlockService::IsItemGainBlocked(player, entry.first)) return entry.first;

@@ -1,6 +1,6 @@
 # 交接:战报回放的客户端细节(2026-11-06)
 
-> **状态(2026-11-20)**:服务端 C++ / Go / robot 与 Unity 客户端(`../mmorpg-client`)代码已全部落码(均未跑最终编译 / 测试 / 冒烟,待 Codex 验证)。协议与 C# 生成产物(`MatchServiceRpc` 379 / 380、`PlayerBattle.cs`、`MatchService.cs`、`MatchErrorTip.cs` `KMatchBattleReportNotFound = 16025`)已存在,无需重跑协议生成。
+> **状态(2026-11-21)**:服务端 C++ / Go / robot 与 Unity 客户端(`../mmorpg-client`)代码已全部落码并在 `main` 完成闭环验证（C++ 125/125 + 121/121、Go 逻辑/配置与真 TiDB 5+23、跨区 1v1 冒烟 `BATTLE_REPORT_OK` + `CROSS_ZONE_MATCH_OK`、客户端纯 C# EditMode 23/23 全部通过）。协议与 C# 生成产物(`MatchServiceRpc` 379 / 380、`PlayerBattle.cs`、`MatchService.cs`、`MatchErrorTip.cs` `KMatchBattleReportNotFound = 16025`)已存在,无需重跑协议生成。
 > **服务端设计**:[battle-report-replay.md](../design/battle-report-replay.md)。负责人 2026-11-06 定:只录 PVP,每名玩家保留最近 100 条。Java 版留 TODO。
 
 ## 1. 要做的三件事
@@ -100,20 +100,20 @@
 
 **样例数据**:Codex 跑通服务端冒烟(设计稿 §17 第 5 步)后,用 robot 打一局 1v1,把 `GetBattleReport` 的回包原样存一份,给客户端当夹具;再造一份 `DEADLINE_DRAW`(整场期限到)的样例。
 
-## 8. 服务端状态(2026-11-20)
+## 8. 服务端状态(2026-11-21)
 
-- 协议已生成:`MatchServiceListBattleReports` 消息号 379、`MatchServiceGetBattleReport` 380,tip 码 `kMatchBattleReportNotFound = 16025`。客户端按自己的流程用默认配置重新生成 C# 即可拿到同样的号。
-- 11-10 与 11-20 续验:battle 库编译与引擎 307/307 通过,三组体积见设计 §9;match build / vet、robot(`-mod=readonly`)build / vet / 3 个解码用例通过;真 TiDB v8.5.2 下 4 个 `TestBattleReportTiDB*` 与 15 个 `TerminalTiDB|CompletionTiDB` 回归全部通过(0 跳过)。跨区 1v1 冒烟已拉起双区隔离栈打完 24 回合并触发 `metric=battle_replay_frozen` 与终局提交,在进入战报查询前被 `robot/battle_smoke_cross_zone_scenario.go:344` 遗留的旧 `battle_ends>=1` 断言拦停,待切最高档模型对齐 `battle_smoke_scenario.go:517`(`battle_ends=0`)后复跑取样,详见设计稿 §17.2。
+- 协议已生成:`MatchServiceListBattleReports` 消息号 379、`MatchServiceGetBattleReport` 380,tip 码 `kMatchBattleReportNotFound = 16025`。客户端已同步生成同名 C# 文件。
+- 闭环验证已全部通过:C++ `turn_battle_engine_test`（`BattleReplay*:TurnBattle*` 125/125）与 `rpc_controller_test`（`Battle*` 121/121，含 `BattleObserverContract` 48/48）；Go `match` build / vet / 配置 / 逻辑（7/7）与真 TiDB v8.5.2（5+23）全过；`robot`（`-mod=readonly`）build / vet / 4/4 通过；跨区 1v1 隔离冒烟打出 `BATTLE_REPORT_OK battle_id=5992728852548223139` 与 `CROSS_ZONE_MATCH_OK`，MySQL 实查 `match_battle_report`（`ref_count=2, envelope_bytes=1494`）与 `match_player_battle_report`（2 行），详见设计稿 §17.3。
 - `data/MessageLimiter.xlsx` 的两行限频(379 每 2 秒 1 次、380 每秒 1 次)已导表落入服务端产物,批次 34,双区 gate 已挂载启动。
 - Java 版服务端待做(设计稿 §16);客户端契约两版相同,客户端不用区分。
 
-## 9. 客户端仓核对结论与落码清单(2026-11-20)
+## 9. 客户端仓核对结论与落码清单(2026-11-21)
 
 1. **播放复用**:已确认 `BattleScreen` 的 `TurnPlan` + `BattlePresenter` 不依赖战斗直连;已新增 `OpenReplay` + `CoPlayReplayTurn` 只读回放模式(隐藏命令环 / 倒计时 / 直连横幅,提供上一回合 / 暂停继续 / 下一回合 / 1x-2x-4x 倍速 / 跳过终态 / 跳至任意回合 / 退出回放)。
-2. **gzip 解压**:客户端工程为 Unity 6 (`6000.6.0f1`),使用单线程同步内存流 `MemoryStream` + `System.IO.Compression.GZipStream` 实现 `BattleReplayDecoder`(流式上限 `min(raw_bytes, 1 MiB) + 1`,防解压炸弹,无后台线程 / `Task.Run`),同时兼容 `BATTLE_REPLAY_CODEC_NONE` 兜底。若后续某小游戏目标裁剪掉 `System.IO.Compression`,只需将服务端下发切为 `NONE`,客户端解码无需改协议。
+2. **gzip 解压**:客户端工程为 Unity 6 (`6000.6.0f1`),使用单线程同步内存流 `MemoryStream` + `System.IO.Compression.GZipStream` 实现 `BattleReplayDecoder`(流式上限 `min(raw_bytes, 1 MiB) + 1`,防解压炸弹,并显式校验 RFC 1952 头 `1f 8b 08`、消费完整输入、IEEE CRC32 与 ISIZE 以防 `.NET GZipStream` 静默截断,无后台线程 / `Task.Run`),同时兼容 `BATTLE_REPLAY_CODEC_NONE` 兜底。若后续某小游戏目标裁剪掉 `System.IO.Compression`,只需将服务端下发切为 `NONE`,客户端解码无需改协议。
 3. **配表指纹**:当前客户端无独立的战斗七表指纹计算器;`BattleReplayPlayer` 已预留可选 `currentTableFingerprint` 比较与「游戏已更新，技能显示可能与当时不同」提示钩子(并有 EditMode 覆盖),暂传 `null` 不误报。
 4. **协议生成**:已核对 `Assets/Scripts/Proto/Generated/{PlayerBattle,MatchService,MatchErrorTip}.cs` 与 `Assets/Scripts/Net/Generated/Rpc/MatchServiceRpc.cs` 均已包含 379 / 380 与全部战报消息、枚举和 tip 码。
-5. **落码清单(`../mmorpg-client`)**:
+5. **落码与验证(`../mmorpg-client`)**:
    - 纯逻辑:`Assets/Scripts/Game/Battle/{BattleReplayDecoder,BattleReportClient,BattleReplayPlayer}.cs`
    - 接线与 UI:`Assets/Scripts/Game/GameClient.cs`、`Assets/Scripts/UI/Ugui/WorldHudNavigation.cs`、`Assets/Scripts/UI/Ugui/Battle/{BattleReportPanel,BattleResultPanel,BattleScreen,BattleUiRoot,BattleHudLogic,BattleUiWidgets}.cs`
-   - EditMode 测试:`Assets/Tests/EditMode/Battle/{BattleReplayDecoderTests,BattleReportClientTests,BattleReplayPlayerTests,BattleReportPanelUiTests}.cs`
+   - EditMode 测试:`Assets/Tests/EditMode/Battle/{BattleReplayDecoderTests,BattleReportClientTests,BattleReplayPlayerTests,BattleReportPanelUiTests}.cs`（543 份运行时源码 + 4 份战报 EditMode 测试 Roslyn 编译 0 错，3 套纯 C# 夹具 23/23 PASS；`BattleReportPanelUiTests.cs` 需在 Unity Test Runner 内执行 uGUI 断言，当前因 Unity Editor 占用工程锁未跑 batchmode）

@@ -1,22 +1,38 @@
 # mmorpg 项目规范与 AI 协作守则
 
-> 本文件是本项目对 AI Agent（Claude Code / Codex / Cursor / Copilot 等）和人类开发者的唯一规范入口。
-> `CLAUDE.md` 只通过 `@AGENTS.md` 导入本文件，不在两处重复维护规则；规则变更只编辑本文件，`CLAUDE.md` 永远保持单行导入。仓库既有“`CLAUDE.md §N`”引用均解释为本文件同号章节，新引用统一写“`AGENTS.md §N`”。架构、构建与编码细则见 [`.github/copilot-instructions.md`](./.github/copilot-instructions.md)；若细则与本文件冲突，以本文件为准。
+> 本文件是本项目对 AI Agent（Claude Code / Codex / Gemini / Cursor / Copilot 等）和人类开发者的**唯一规范总入口**。
+> `CLAUDE.md` 与 `.github/copilot-instructions.md` 只通过 `@AGENTS.md` 导入本文件，不在多处重复维护规则；规则变更只编辑本文件或 `docs/rules/` 下对应的分章文档，导入文件永远保持单行导入。仓库既有“`CLAUDE.md §N`”或“`.github/copilot-instructions.md`”引用均解释为本文件对应章节及其引用的分章文档，新引用统一写“`AGENTS.md §N`”。
 
 ## 会话启动门禁（每次必做）
 
 **AI 没有可靠的跨会话记忆。** 每次新会话动手前必须按序读完：
 
-1. `AGENTS.md`（Claude Code 已通过 `CLAUDE.md` 自动导入，无需重复读取）
+0. **新电脑 / 新 AI Agent 环境必先安装必装 Skills**（`mattpocock/skills`、`DietrichGebert/ponytail` 及精选 ≥2 万 Star 代码工程 Skills），清单与安装命令见 → [docs/rules/required-skills.md](docs/rules/required-skills.md)
+1. `AGENTS.md`（已通过 `CLAUDE.md` 或 `.github/copilot-instructions.md` 自动导入的无需重复读取）以及任务涉及的 `docs/rules/*.md` 分章细则
 2. `docs/PROGRESS.md` —— 当前进度（最新条目在文末；按任务关键词 grep 标题再读对应条目，不要从头整份读）
-3. `.github/copilot-instructions.md` —— 架构、构建与编码细则
-4. `docs/design/<相关服务>.md` —— 任务相关设计
-5. `git log -20 --oneline` —— 最近改动
-6. 当前打开的 PR / Issue
+3. `docs/design/<相关服务>.md` —— 任务相关设计
+4. `git log -20 --oneline` —— 最近改动
+5. 当前打开的 PR / Issue
 
 先确认任务范围、既有改动、约束和冲突；没读懂就不动手。
 
 **上线状态是兼容判断的前提**：负责人 2026-10-18 确认项目尚未上线。涉及混跑、降级、迁移、灰度或回档时，先读 [存盘围栏设计](docs/design/db-write-fencing-mysql.md) 文末「上线状态」，按其中限定的上线前范围判断阻塞；上线后以当时线上状态为准。
+
+## 规范分章索引（`docs/rules/`）
+
+| 章节 | 主题 | 完整规范文档 |
+|---|---|---|
+| 门禁 / §10 | **必装 AI Agent Skills 清单**（新电脑 / 新 Agent 必先安装） | [docs/rules/required-skills.md](docs/rules/required-skills.md) |
+| §3 / §4 | 生成物边界、proto 同步、字段类型、tip 与配置表 schema | [docs/rules/proto-and-tables.md](docs/rules/proto-and-tables.md) |
+| §6 | 压测纪律、基线清场与复盘脚本流程 | [docs/rules/stress-testing.md](docs/rules/stress-testing.md) |
+| §7 | 系统不变量（永久 ID / SnowFlake、Kafka 防僵尸、tip 单轴、ECS、逻辑库自治） | [docs/rules/invariants.md](docs/rules/invariants.md) |
+| §8 / §9 | 命名规范第一原则、关联 Git 仓库与权限/线程硬边界 | [docs/rules/naming-and-boundaries.md](docs/rules/naming-and-boundaries.md) |
+| §10 | AI 协作分工（Claude / Codex / Gemini）、写回流程与模型档位规定 | [docs/rules/ai-workflow.md](docs/rules/ai-workflow.md) |
+| §11 | 工程设计与编码原则（SOLID/KISS/不用宏/实例布局分层/muduo 生命周期） | [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md) |
+| §13（位图） | 位图（bit）优先存储规范、领取状态归属与策划删表 ID 红线 | [docs/rules/bit-storage-and-table-ids.md](docs/rules/bit-storage-and-table-ids.md) |
+| §13（运行时） | C++ 编码/门禁/生命周期、通信广播、gRPC 关机与构建测试命令 | [docs/rules/cpp-runtime-and-build.md](docs/rules/cpp-runtime-and-build.md) |
+
+---
 
 ## 1. 项目基本信息
 
@@ -29,284 +45,88 @@
 - **协议**：C++ 节点间 muduo TCP RPC、Go/C++ 控制面 gRPC，以及 Kafka 异步命令与事件
 - **基础设施**：MySQL（→ 迁移中：TiDB 全区全服数据层，见 `docs/design/global-data-layer-tidb-decision.md`）+ Redis + Kafka + etcd
 
-## 2. 中文回复
+## 2. 中文回复与日志语言
 
-所有 AI 协作产出**用中文**。注释、commit message、文档全中文。
-
-服务和脚本的日志文案（含标准输出和标准错误中的诊断信息）必须使用英文。
+- 所有 AI 协作产出**用中文**。注释、commit message、文档全中文。
+- 服务和脚本的日志文案（含标准输出和标准错误中的诊断信息）必须使用**英文**。
 
 ## 3. 生成代码与可编辑边界
 
-- ❌ 不要手改 `generated/` 或各语言 `proto` 输出树下的生成产物
-- 生成式 C++ handler 文件中含 `///<<< BEGIN WRITING YOUR CODE` 守护段的，自定义逻辑只写在守护段内
-- 不要手写与 proto 重复的并行 struct
+- ❌ 禁止手改 `generated/` 或各语言 `proto` 输出树下的生成产物；C++ 守护段只写在 `///<<< BEGIN WRITING YOUR CODE` 内；不手写与 proto 重复的并行 struct。
+- 完整细则见 → [docs/rules/proto-and-tables.md](docs/rules/proto-and-tables.md#1-生成代码与可编辑边界)。
 
-## 4. proto 同步流程
+## 4. proto 同步、tip 与配表 Schema
 
-1. proto 源契约在 `proto/`。在仓库根目录执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`（生成器源码变化或尚无工具时），再执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`；共享 Go 绑定写入 `go/proto/`。仅需重生成 db/login 的 go-zero 包装与修正导入时才执行 `cd go && build.bat`，它不能代替完整 proto 生成。默认生成配置会写同级客户端仓；未获客户端任务授权时使用 `-ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
-2. 重新编译受影响的 C++ / Go / Java 服务
-3. 字段编号上线后**不复用**，只能 deprecate（`reserved N;` + 注释原因）；开发期已删字段可复用，但须重生并完整编译所有启用 module
-4. **tip 错误码不在 proto 里手写**：`generated/code/proto/tip/*.proto` 全部由导表器从 `data/tip/Tip.xlsx` 生成。
-   加一个码 = 表里加一行（A 列码名，**全局唯一**，建议带域前缀；B 列中文文案；服务端内部故障在
-   `fault` 列填 `1`，业务拒绝留空）→ 跑导表器 → 在服务的 `constants.go` 里写 `ErrX = uint32(table.XxxError_kXxxX)`。
-   「哪个码算故障」也由表生成（`go/shared/generated/tip/faults.go`；Java 网关用同源的 `com.game.table.tip.TipFaults`），**不要在服务里再包一层 fault map**。
-   新开一个域 = 表里加一行组头 `//xxx_error base=<起始号> width=1000`，并把新生成的
-   `.pb.cc/.pb.h` 加进 `cpp/generated/table/CMakeLists.txt` 与 `table.vcxproj`。
-   详见 [docs/design/tip-code-axis.md](docs/design/tip-code-axis.md)。
-5. **配置表的 schema 也不在 xlsx 表头里写**：事实源是 `data/schema/<sheet>_table.proto`
-   （2026-09-03 起），类型 / owner / 键 / 索引 / 外键 / 位序 / 注释全用
-   `data/schema/cfg_options.proto` 的自定义 option 表达；xlsx 只出列名与数据。
-   加列、加表、改字段号的完整流程与全表索引见 [data/AGENTS.md](data/AGENTS.md)。
-   配表字段号与 §4.3 同规矩：**上线后不复用，删字段写 `reserved N;`**。
-
-### proto 字段类型约束（强制）
-
-- **坐标/Transform 用 double**：`Location` / `Rotation` / `Scale` / `Vector3` / `Velocity` / `Acceleration` 的 x/y/z 必须 `double`，匹配 UE 客户端精度
-- **BaseAttributesComp 用 uint64**：`strength` / `stamina` / `health` / `mana` / `critchance` / `armor` / `resistance` / `speed` 必须 `uint64`，避免战斗公式 cast 时窄化
-- **64 位 ID 用 uint64**：发号器的永久 ID（`player_id` / `item_id` / `tx_id` / `snapshot_id` 等）、SnowFlake 的 `scene_id`、运行时实例 ID（`entity` / `buff_id` / `skill_id`）必须 `uint64`；号源见 §7 第 1 条，不能按字段名推断位布局
-- **单调计数 / 代次用 uint64**：`session_incarnation` / `gate_call_seq`
-- **Unix 时间戳用 uint64/int64**：`created_at` / `expires_at` / `castTime` / `last_time` / `start` 等必须 64-bit
-- **货币用 uint64**：`CurrencyComp.values` / `owed` / `paid` / `balance_before/after`
-- **可用 uint32**：`session_id` / `session_version` / `attack_power` / `defense_power` / `max_health` / `skill_table_id`（表查 key）/ `current_frame`
-- **可用 float**：`ViewRadius.radius`（AOI range）
-- proto3 enum 第一个值必须是 0
+- 改协议先改 `proto/` 再跑 `dev_tools.ps1 -Command proto-gen-run` 并重编受影响服务；上线后字段号不复用（`reserved N;`）。
+- tip 错误码只由 `data/tip/Tip.xlsx` 导表生成，不手写数字；配置表 schema 事实源在 `data/schema/*_table.proto`（见 [data/AGENTS.md](data/AGENTS.md)）。
+- 强制字段类型（坐标 `double`、`BaseAttributesComp`/64位 ID/时间戳/货币 `uint64`）与完整流程见 → [docs/rules/proto-and-tables.md](docs/rules/proto-and-tables.md)。
 
 ## 5. 决策记录入口
 
-`AGENTS.md` 只保留稳定规范和索引，不维护长决策表。
+`AGENTS.md` 只保留稳定总纲和索引，不维护长决策表。**没写文档 = 没说过**（下个 AI 不会记得）。
 
-- 架构级决策 → `docs/design/`（架构总图）
-- 服务级决策 → 对应 `docs/design/<service>.md` 或服务 README
+- 规范分章细则 → `docs/rules/`
+- 架构 / 服务级决策 → `docs/design/` 或对应 `docs/design/<service>.md`
 - 压测结论 → `docs/stress/stress-<round>-*.md`
 - 运维手册与事故复盘 → `docs/ops/`
-- 交接说明与会话小结 → `docs/handoff/`（2026-11-20 负责人要求清理过时、废弃方案及已归档交接，仅保留当前有效交接与待验清单；旧交接原文用 `git show ccf2840b2:docs/handoff/<文件>` 查）
+- 交接说明与会话小结 → `docs/handoff/`（2026-11-20 起仅保留当前有效交接；旧交接用 `git show ccf2840b2:docs/handoff/<文件>` 查）
 - 已过期、仅作历史保留的文档 → `docs/archive/`
-- 周期进度与流水账 → `docs/PROGRESS.md`（只追加，不删旧条目；负责人要求瘦身时例外，2026-11-20 仅保留 11-19 起有效条目，11-18 及以前的历史原文用 `git show ccf2840b2:docs/PROGRESS.md` 查。该文件在 `.gitattributes` 里配了 `merge=union`，两边各自追加不会冲突，所以补充旧条目要另起一条，不要回头改最后一条）
-- 文档总索引 → `docs/README.md`（新增文档后在对应分类登记一行）
-
-**没写文档 = 没说过**（下个 AI 不会记得）。
+- 周期进度与流水账 → `docs/PROGRESS.md`（只追加，不删旧条目；2026-11-20 前历史用 `git show ccf2840b2:docs/PROGRESS.md` 查；`.gitattributes` 配了 `merge=union`，补充旧条目另起一条）
+- 文档总索引 → `docs/README.md`（新增文档后跑 `python tools/scripts/gen_docs_index.py` 更新）
 
 ## 6. 压测纪律（最重要）
 
-### 6.1 复盘只读脚本输出
-
-**压测复盘只读 `stress_summarize.ps1` 输出，不要手 grep raw prom dump**。
-
-- 命令：`pwsh tools/scripts/stress_summarize.ps1 -RunDir robot/logs/stress-<name>-<ts>`
-- 输出多段二维表：robot 每分钟 stats + EnterGame 端到端 + 建角阶段 + login 出站 RPC + SceneManager EnterScene 子阶段 + data_service 归属读 + 存盘接口（P1~P4）+ Redis 负载（R1 / R2）+ Kafka lag。
-- **Round 16+ 推荐用 `tools/scripts/stress_snap.ps1` 后台批量拉 snapshot**（并行 scrape 三端口）：
-  `pwsh tools/scripts/stress_snap.ps1 -RunDir robot/logs/stress-<name>-<ts> -StartTime '<yyyy-MM-dd HH:mm:ss>' -Stages 2,5,10,15,18`
-  端口分工：`:9101` login / `:9150` scene_manager / `:9160` db / `:9260` data_service（2026-10-23 起）。
-  文件命名 `t<N>m_login.txt` / `t<N>m_sm.txt` / `t<N>m_db.txt` / `t<N>m_ds.txt`，summarize 脚本自动按后缀分流。
-  同一时刻还对 `-RedisTargets`（缺省 `@{ core = 'docker:redis' }`）抓 `redis-cli INFO` 快照 `t<N>m_redis_<name>.txt`，
-  汇总脚本相邻两份求差出 Redis 的 ops/s、CPU、热点命令；Redis 求差要基线，`-Stages` 建议带上 0。
-  Redis Cluster 的 target：K8s 上玩家域写 `k8s-cluster:<namespace>/redis-player`，控制集群写 `k8s-cluster:<namespace>/redis-control`；本机开发集群写 `docker-cluster:redis-player-cluster-0:7100`（本机控制域的句柄缺省回落单实例 `redis`，指到开发集群时与玩家域共用这一套，指法见 `tools/scripts/README.md`「compose.redis-cluster.yml」）。集群 target 逐主节点抓，R1 / R2 逐主节点出行，再合成一行 `<name>-all`。
-- 旧式单端口手拉（legacy 兼容）：`curl -s http://127.0.0.1:9101/metrics > $RunDir/prom-snapshots/t<n>m.txt`。
-- 历史复盘文档（`stress-1zone-*.md`）直接复用脚本输出的表格，不要再贴 raw count/sum 数字。
-
-### 6.2 压测前后强制流程（任何一步漏了都重来）
-
-1. **跑测前** —— 把上一次压测的 `stress_summarize.ps1` 输出存为 `prev-summary.txt`（放在 `docs/stress/stress-<round>-<date>.md` 同目录或 commit 到对比 PR 描述里），作为 Round N 的对比基线。`prev-summary.txt` 不存就不许开下一轮。
-2. **跑测前** —— 清空所有可能污染数据的日志/缓存：
-   - `robot/logs/stress-*` 旧目录（留最近 1 个备查，其余删掉）
-   - `bin/log/*` cpp gate/scene 日志
-   - 各 go service stderr/stdout（`go-svc-stop` + 删 `tools/scripts/.run/` 的 pid/log）
-   - 清掉残留 lock / session key：`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`（单实例加本机开发集群 `redis-player-cluster-*` 的每个主节点；本机控制句柄指到开发集群时也在这一套里），K8s 压测环境用 `-Command k8s-redis-wipe -ConfirmWipeAllRedis`（只许 `mmorpg-stress-*` 的 infra namespace，逐主节点清其中实际存在的 `redis`、`redis-match-cluster`、`redis-player`、`redis-control`）。Redis Cluster 的 `FLUSHALL` 只清本节点，不要只对一个节点执行
-   - kafka topic offset reset（`pwsh tools/scripts/dev_tools.ps1 -Command kafka-offset-reset`）+ broker 数据目录可选清，生产/历史不要清
-   - prom snapshot 目录 = 新建 `robot/logs/stress-<name>-<ts>/prom-snapshots/`
-3. **压测中** —— 至少在 ramp 完成 / 稳态中段 / 稳态末三个时刻拉 snapshot 进 `prom-snapshots/`。
-4. **跑测后** —— 跑 `stress_summarize.ps1` 出 Round N 表，与 `prev-summary.txt` 二维对比写进新复盘文档，贴架构决策行 + 更新本文件 §5。
-5. **压期间不能上传任何日志**。
-6. **每次登录压测前，把所有 redis / mysql / etcd 数据全部删除再开新压测**。
-
-**不要在没有对比表的情况下声明“性能提升”**。
+- **复盘只读 `stress_summarize.ps1` 输出**，不手 grep raw prom dump；**没有对比表不许声称“性能提升”**。
+- 跑测前必须固化 `prev-summary.txt`、清空日志/Redis/Kafka/MySQL/etcd，压测期间禁止上传日志。
+- 完整压测前后强制流程与脚本命令见 → [docs/rules/stress-testing.md](docs/rules/stress-testing.md)。
 
 ## 7. 不变量（数据一致性 / 安全）
 
-跨服务必须保持的不变量，违反 → PR review 直接拒。
+跨服务必须保持的硬不变量，违反 → PR review 直接拒（完整细则见 → [docs/rules/invariants.md](docs/rules/invariants.md)）：
 
-1. **SnowFlake 节点隔离**：每种 SnowFlake ID 只能由一种 node 类型生产（不同 node 类型共享 node_id 范围会撞）。
-   注意**全系统有两种互不兼容的 ID**，不要混用解析函数（login 原来那套 `bwmarrin/snowflake` 毫秒布局 2026-11-12 已随 login、guild 的槽位申领代码一起删除，不再有第三种；本地库里若还留着这种旧 player_id，清库重建）：
-   - `shared/snowflake` 与 C++ `SnowFlake`：**17-bit** worker / 15-bit step / **秒**级 epoch（1773446400）。
-     仍由这套号源生成的 scene_id 等值可用 C++ `ParseSnowflakeGuid` 解，不能仅凭字段名选择解析器。Go 侧申领槽位的只剩 scene_manager。
-   - **发号器发的永久 ID**（player_id、guild_id、物品 guid、流水号、battle_id、challenge_id、team_id 等，`data_service.AllocateIdSegment`）：打散过的计数器值，63 位以内，不单调、不连续、没有位布局。**不能用 `ParseSnowflakeGuid` 解析，不能靠大小判断先后**（排序和翻页用时间列），Lua 里只当字符串，不进有序集合的分数。没有回退号源，发号失败就是操作失败。详见 [发号器设计](docs/design/player-data-tidb-scaling-plan.md) §6 与 [运维手册](docs/ops/id-issuer-runbook.md)。
-   **强规定(负责人 2026-10-31 定)**:发号器的预留记录必须写两套独立的 etcd,两份都写成功才发号。任何生产环境、任何预算档都不许省掉第二套,也不许把两份放在同一套;只有 `Mode=dev`、`test` 例外。
-   2026-11-05 起另有第三份记录在全世界共用的全局号源登记处,三份都写成功才发号;它同时把每个地域码唯一绑定到一个 K8s 集群(部署身份,运行期读 kube-system 的 UID)里的一对本地 etcd。登记处只走双向 TLS(世界 CA 签的证书),地域码只能按顺序认领;换码只换发号码(`-IdIssuerRegion`),存档库编号 `-Region` 不变。登记处不许从备份恢复,首次初始化和事故恢复是两个入口,见[发号器运维手册](docs/ops/id-issuer-runbook.md)。
-2. **Kafka 防僵尸**：发往 `{type}-{id}` topic 的消息必须填 `target_instance_id`（目标节点 UUID），空值则关闭过滤
-3. **kafka topic key = 业务实体 ID**（同一玩家 / 同一对局事件有序）
-4. **proto 字段编号上线后不复用**（见 §4）
-5. **tip 错误码只能由导表器发号，不许手写数字**。`TipInfoMessage.id` 是客户端可见契约（客户端按 id 查文案），
-   全仓一条数轴。段由 `data/tip/Tip.xlsx` 的组头行声明（`//guild_error base=14000 width=1000`），
-   发号器按段分配并在生成期自检（段不重叠 / 码不越段 / 枚举名全局唯一）。
-   历史教训：手写「私有段」只是**约定**，拦不住不知情的新服务 —— `go/match` 曾从 1 开始重数，
-   20 个码全部压在 common / login 段上，客户端弹出的是完全无关的文案，且全程零报错。
-   guild / friend / match 的 `constants_test.go` 里有 `TestNoHandWrittenTipCodes` 机械守住这条。
-   「这个码算不算服务端故障」同样是表的一列（`fault`），生成到 `tip.Faults` 供 `serverbase.TipVerdict` 消费；
-   服务里不许再手写故障码集合——那会把「段和发号分家」的病在分类上重新制造一遍。
-   详见 [docs/design/tip-code-axis.md](docs/design/tip-code-axis.md)。
-5. **ECS 组件访问**：修改或评审组件创建、读取、存盘与快照前，先按 [组件访问规则](docs/design/ecs-component-access-rules.md) 区分持久数据、按需状态和派生运行时数据；创建职责与缺失语义以该文档为准，读路径只读，跨实体查询用 `try_get`。
-6. **逻辑库自治**(负责人 2026-10-31 定,[规格](docs/design/horizontal-scale-logical-db.md)):一个逻辑库只归一个服务,服务之间**不许跨库 SQL**,只走 RPC(`CrossDatabase` 契约测试守着)。每个逻辑库自带一份写者闸门。服务提交点锁本库 `role_fence`,不碰目录;事务里不调 RPC。目录分片数 `Directory.LogicalShards` 上线后不能改,扩容靠把逻辑库搬到新集群(`tools/dbmove`)。
-7. **保证修改代码的正确性、数据一致性**
+1. **永久 ID 与 SnowFlake 隔离**：发号器永久 ID（63 位打散计数器，无位布局，禁 `ParseSnowflakeGuid`，生产强制双本地 etcd + 全局登记处）与 SnowFlake（只剩 `scene_manager` 的 `scene_id`）严禁混用。
+2. **Kafka 防僵尸与保序**：定向节点命令必带 `target_instance_id`；`topic key = 业务实体 ID`。
+3. **proto / 配表字段号上线后不复用**。
+4. **tip 错误码全仓单轴**：只由 `Tip.xlsx` 导表发号与判定 `fault`，严禁手写数字或私有 fault map。
+5. **ECS 组件访问**：按 [ecs-component-access-rules.md](docs/design/ecs-component-access-rules.md) 分类，读路径只读，跨实体用 `try_get`。
+6. **逻辑库自治**：一库一服务，禁止跨库 SQL，只走 RPC；事务内不调 RPC。
+7. **保证代码正确性与数据一致性**。
 
 ## 8. 命名规范
 
-- RPC 请求 handler 是 `cpp/nodes/scene/handler/rpc/...` 下的 `*Handler` 类
-- 节点间 muduo RPC（RPC0）的回包在调用点处理：`CallMethod` 的每次调用 lambda（`RpcStatus` + 响应），不再按 message_id 注册全局回包函数；服务端要等下游再回复用 `RpcDoneCallback::Adopt(done)`。见 `docs/design/muduo-rpc-channel.md`
-- `rpc_replies/` 只放 gRPC 异步应答适配（沿用 `On<Domain><Method>Reply` 命名）与玩家回包链
-- ECS/域逻辑放 `*System` 类与 `*Comp` 结构（`cpp/libs/services/scene/...`）
-- 用更清晰的动词式 RPC handler 名 + 薄包装委托模式（如 `ProcessClientPlayerMessage`）
+- **第一原则（强制）**：所有命名（类、函数、变量、字段、proto、配置表、错误码、指标等）**必须清晰易懂且语义完全准确**，拒绝模糊缩写、歧义布尔值、泛化名与误导性历史名。
+- 分层命名（`*Handler` / `*System` / `*Comp` / `On<Domain><Method>Reply` / RPC0 调用点 lambda）详见 → [docs/rules/naming-and-boundaries.md](docs/rules/naming-and-boundaries.md#1-命名规范8)。
 
 ## 9. 禁止事项与权限边界
 
-- **工作目录约束（2026-10-20，用户要求）**：`E:\work` 根目录只保留 `mmorpg-client`、`xuanming-server-mmo`、`image`、`proto2mysql` 四个主项目。临时产物、验证包、构建日志放在所属项目已忽略的目录或系统 `%TEMP%`；Git worktree 使用 Codex 托管目录或 `E:\work` 以外的位置，不再在根目录新建 `*-wt-*`、`builds`、`tmp`、`.codex-artifacts` 等目录。
-- ❌ 客户端统一使用同级独立仓库 `../mmorpg-client/`；服务端不再维护 `client/` 目录，未获客户端任务授权时不要读取或修改独立客户端
-- ❌ 不要手改生成产物（见 §3）
-- ❌ 不要在 `docs/design/` 之外随便建 README，不要为记录改动新建 markdown（除非用户要求）
-- ❌ 不要把 `player_id` 当 Prometheus label（高基数会爆）
-- ❌ C++ 节点自己的代码不新起线程（负责人 2026-11-19 定）：不加 `std::thread` / `std::jthread` / `std::async` / `EventLoopThread`，异步挂主 EventLoop，多步等待用 `loop_async::AwaitCallback`。保留的后台线程与原因登记在 `tools/scripts/tests/test_cpp_thread_sources.py`，清单之外 CI 判红；线程构成见 `docs/design/thread-count-monitoring_zh.md`
-- ❌ 不要用 `--no-verify`、注释断言、跳 test 等方式绕过安全检查
-- ❌ 不要执行 `git push` / `git tag`；`git commit` 仅在用户明确要求时执行
-- ❌ 不要登录远端账号（GitHub / k8s / 云厂商 / 注册表），不要改 CI 凭证 / secrets
-- ❌ 不要把 secret / token / 密码写入 git 跟踪文件或日志
-- ❌ 不要 `kubectl apply` 到生产或 `docker push` 到 registry；只可操作本地或用户明确指定的 dev 环境
+- **关联主仓库**（按 GitHub 地址定位，不写死盘符）：`luyuan-cpp/xuanming-server-mmo`（本仓）、`luyuan-java/xuanming-server-mmo`、`luhailong-python/xuanming-server-mmo-python`、`luhailong-cpp/mmorpg-client`、`luyuan-cpp/proto2mysql`。
+- ❌ **不要开启新的线程**：默认异步挂主 EventLoop，除非压测证实瓶颈确需新线程（如评估新增 Kafka consumer 线程）且**先与程序/负责人确认说明原因**并登记 `test_cpp_thread_sources.py`。
+- ❌ 禁止手改生成物、禁止把 `player_id` 当 Prometheus label、禁止 `--no-verify`、禁止未授权 `git commit`/`push`/`tag`、禁止写 secret 进仓库、禁止碰生产集群。
+- 完整清单见 → [docs/rules/naming-and-boundaries.md](docs/rules/naming-and-boundaries.md#2-禁止事项与权限边界9)。
 
 ## 10. AI 协作约定
 
-在 §9 权限内，AI 可写代码（C++ / Go / Java / proto / yaml / shell / ps1）、文档和测试；可跑本地 docker-compose / `dev_tools.ps1`，建议 commit message / PR 描述，执行代码与设计评审，分析 `stress_summarize` 输出。不同 Agent 按 §10.1 分工。
-
-### 10.1 编译 / 测试 / 压测协作
-
-**Claude 可修改代码、测试和文档，但不执行编译、测试或压测命令；这些命令由 Codex 执行。**
-
-- Claude ❌ 不跑 `msbuild` / `dotnet build` / `go build` / `go test` / `go vet` / `mvn` / `cmake` / `build.bat` / `build_linux.sh` 等任何构建、测试或压测命令，也不为“验证一下”而跑。
-- Claude ✅ 改完代码后，给出 Codex 可直接执行的细节：**目标工程/服务、具体命令、工作目录、环境变量、前置清理、期望产物、通过标准、失败时要保留的日志或摘要**。多个工程要说明先后顺序；C++ MSBuild 必须串行 `/m:1`，并发会报假的 C1041 / LNK1104。
-- Claude ✅ 改了 C++ 源码时，交付前先在仓库根跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`。它是只读的源码文本预检（几秒，不编译、不起服务），不在上面禁跑之列。类 / 结构体里不得有裸指针成员，违例会让 MSBuild 的 no-raw-pointer-member 门禁在首错处停下，整个工程不编不测；写法见 `.github/copilot-instructions.md`「C++ 类成员不放裸指针」一节。命中自己的文件就改，命中别的会话正在写的文件只告知对方；结论以门禁为准。
-- Codex 按上述细节执行本地编译、测试、压测与汇总，不自行脑补压测口径或宣称性能结论。
-- Claude 在没有 Codex 运行结果前，**不得声称“编译通过”“测试绿”“已验证”**；交付说明必须如实写明“未编译，待 Codex 验证”。
-
-### 10.2 执行与交付
-
-- 默认直接执行：完成会话启动门禁 → 明确范围 → 改代码/proto/yaml/脚本/文档 → 由有权限的执行者跑受影响的 build/test/lint → 汇报改动范围、验证证据、未验证项和剩余风险。需要 commit 时等用户明确发话。
-- 动手前先检查工作区和相关文件的既有改动；不覆盖、回退或顺手整理他人的工作，不夹带任务外改动。
-- **写回主工作区（负责人 2026-11-10 定）**：会话自己的 worktree 已删、桌面应用的守卫仍拦对主工作区的编辑时，在草稿目录改副本；写回前核对主仓文件与复制时逐字节相同，不同就用 `git merge-file` 三方合并，有冲突即停下；`docs/PROGRESS.md` 只纯追加。写回后用 `git diff` 逐文件核对只多了自己的改动，交付说明写明是这样写回的。不要跳过核对，直接用重定向、`sed -i` 或移动文件覆盖主仓文件。
-- 失败时不假装成功；命令失败后不连续自动重试，不注释断言或跳过测试，不用 `git reset` / `git checkout --` 销毁进度。保留关键错误与日志摘要并报告，等待决策。
-- 请求触犯 §9 禁令，或任务范围明显扩大、遗漏关键文件、规范文档冲突、预计改动 30+ 文件、需要安装/升级工具、修改系统环境、关闭防火墙、写 secrets、触碰生产、build 损坏其他服务或即将 push 时，立即停止并报告，等待授权或决策。
-
-### 10.3 模型档位规定（强制，负责人 2026-11-20 定）
-
-- **修改代码必须使用各软件当时的最高档模型**，不得在低档模型上改代码：
-  - Claude Code：`Fable 5.2 Max`
-  - Gemini：`Gemini 4 Neon Extra`
-  - Codex：`GPT 6.2 Astral Ultra`
-- **编译、生成、跑测试与冒烟使用低档模型**（发现需改代码的问题时先保留首错原文停下，切回最高档模型再改）：
-  - Gemini：`Carbon Medium`
-  - Codex：`6.1 Sol Ultra`
-  - Claude Code：`Opus 5 High`（按 §10.1 默认不跑构建命令，仅在负责人明确指定时用此档）
+- **§10.1 分工**：Claude 改代码/测试/文档（交付 C++ 前先跑只读预检 `test_cpp_no_raw_pointer_member.py`），不跑编译/测试/压测命令，交由 Codex 执行；无运行证据不得声称已验证。
+- **§10.2 执行与交付**：先查既有改动，不覆盖他人工作；失败保留首错日志，遇红线立即停下汇报。
+- **§10.3 模型档位（强制）**：改代码必须用各软件最高档模型（Claude Code `Fable 5.2 Max` / Gemini `Gemini 4 Neon Extra` / Codex `GPT 6.2 Astral Ultra`）；编译、生成、跑测与冒烟用低档模型（Gemini `Carbon Medium` / Codex `6.1 Sol Ultra` / Claude Code `Opus 5 High`）。
+- 完整分工与写回流程见 → [docs/rules/ai-workflow.md](docs/rules/ai-workflow.md)。
 
 ## 11. 工程设计与编码原则（强制）
 
-适用于新增、修改、重构和评审。“成熟工程团队标准”是模块接口清楚、接缝明确、改动可审、结果可验证，不是堆设计模式、层数、文件数或框架。
+优先级：`正确性 / 安全 / 数据一致性 / 向后兼容 > 简单 / 可读 / 与仓库一致 > 可维护 / 可测试 > 有数据支撑的性能 > 假想扩展`。
 
-原则冲突时按以下顺序取舍：
-
-`正确性 / 安全 / 数据一致性 / 向后兼容 > 简单 / 可读 / 与仓库一致 > 可维护 / 可测试 > 有数据支撑的性能 > 假想扩展`
-
-已经文档化的 SLO、容量上限和 per-tick 热路径预算属于正确性约束，不降级为普通性能偏好。
-
-偏离本节原则必须有当前需求或证据支撑，并在代码注释、设计文档或交付说明中记录原因与代价。
-
-### 11.1 模块与职责
-
-- **单一职责（SRP）**：一个模块只对一种变化原因或一类业务角色负责；这不等于“一个类只能有一个方法”。总是一起变化的规则放在一起，独立变化的策略、存储、传输和副作用分开。
-- **高内聚、低耦合**：相关状态与行为就近收口；模块只了解完成职责所需的信息，依赖单向且不得形成循环。
-- **信息隐藏与深模块**：用小而完整的接口隐藏验证、顺序、错误模式、配置与性能细节。承担协议转换、隔离外部依赖或稳定接缝的薄适配器有明确价值；避免没有隔离、转换或契约价值的连续透传层、万能管理器和需要调用者拼装内部步骤的接口。
-- **接口是完整契约**：除类型外，还必须明确输入约束、不变量、顺序、所有权、错误、超时、幂等、线程模型和性能特征。调用者不依赖未承诺的实现细节。
-- **开闭原则（OCP）**：面对已经确认且反复出现的变化轴，在接缝后增加适配器，避免每个新变体都修改全部调用者；扩展点必须受真实需求约束。
-- **里氏替换（LSP）**：任何实现或子类型替换后都保持接口契约，不得加强前置条件、削弱后置条件或改变错误语义。
-- **接口隔离（ISP）**：调用者只依赖自己需要的能力；但不得机械拆成大量单方法接口和透传层。
-- **依赖倒置（DIP）**：业务策略不依赖数据库、网络、框架或全局单例的具体细节；依赖在清晰接缝处注入。
-- **组合优于继承**：优先组合可替换行为构建能力；继承只用于真正稳定的 is-a 契约，避免复杂、脆弱且难以局部替换的继承树。
-
-### 11.2 简单、标准、可读
-
-- **KISS**：选择满足当前需求的最简单完整方案。优先标准库、仓库现有模式和团队已采用的成熟依赖；新增框架或依赖必须说明现有能力为何不足。
-- **YAGNI**：不实现没有调用者、验收标准或近期计划的能力；扩展性以真实变化为依据。
-- **DRY**：一条业务知识只有一个权威来源。只消除会共同变化的重复，不因几行形似代码就过早抽象。
-- 控制流保持直线化：优先早返回和小范围变量，减少无必要的深层嵌套、隐藏跳转和跨层回调；函数保持同一抽象层级。
-- 命名表达业务含义和单位，拒绝模糊缩写、布尔陷阱与魔法值。注释解释“为什么、约束和风险”，不复述代码“做了什么”。
-- **显式依赖**：依赖通过参数、构造函数或装配层传入；时间、随机数、I/O 和副作用必须显式可见。限制全局状态、静态可变状态和隐式初始化顺序。
-- **不用宏生成代码**：禁止 X-macro（`#define FOO_LIST(X) X(a) X(b)` 再展开成枚举 / 数组 / switch）以及任何"用宏拼出声明"的写法。它让代码无法直接阅读、跳转定义失效、编译错误指向宏展开处而非源头、调试器看不到真实符号。
-  - **正确做法**：写普通枚举 + 一张平铺的常量表，用 `static_assert(数组长度 == 枚举 kCount)` 保证两者不脱节——这正是 X-macro 唯一真正提供的保障，而它不牺牲可读性。枚举的最后一项固定为 `kCount`，同时用作数组长度。
-  - 示例见 `cpp/libs/modules/id_segment/guid_segment_registry.{h,cpp}`（`GuidKind` + `kGuidKindNames`）。
-  - 允许的宏只有四类：头文件卫士；平台 / 编译期条件编译；必须拿到 `__FILE__`/`__LINE__` 的日志与断言；以及**必须往调用方注入控制流**（`return` / `continue` / `break`）因而函数写不出来的守卫宏——例如 `cpp/libs/engine/core/macros/return_define.h` 的 `ECS_GET_OR_RETURN` 系列。
-  - 这四类之外一律用函数、模板或 `constexpr`。判据很简单：**这个宏是在生成声明，还是在做函数做不到的事？** 生成声明的一律不要。
-  - 枚举显式写出底层类型，宽度按**枚举项个数**选，不要跟着"被编号对象"的位宽走。典型误判：`GuidKind : uint8_t` 数的是 GUID 的**种类数**（现 3 种），与 guid 值本身是 `uint64` 毫无关系；看到 uint8 就担心"不够"是把两件事混为一谈。真要放宽时先问一句：**这个数字最大能到多少？**
-- 改动保持小而完整、可独立审阅和回滚；不在功能改动中夹带无关格式化、重命名或顺手重构。
-
-### 11.3 正确性与生产质量
-
-- 在系统接缝校验不可信输入；内部不变量尽早断言或显式失败。错误不得吞掉、伪装成功或静默降级；安全、权限、玩家资产和数据完整性路径默认 fail-closed。可用性优先的路径若选择 fail-open，必须记录风险依据并配套日志、指标和测试。
-- 能在副作用前安全完成的纯校验应先完成；提交点仍须用同一并发控制机制原子复核权限、版本和状态，不能让预检代替提交校验。跨存储、跨服务或异步流程必须明确原子范围、提交点、回滚/补偿、重试与幂等语义。
-- 重试只能用于可重试且幂等的操作，必须有超时、次数上限、退避与必要的抖动；支持取消并释放文件、锁、连接、线程与定时器等资源。
-- 并发代码必须写清状态所有者、同步方式和生命周期；共享可变状态不得依赖“通常不会并发”的假设。进程内耗时和超时预算用单调时钟与截止时间；跨进程绝对截止时间使用协议约定的时钟和格式，并明确时钟偏差与过期语义。不得用“重试次数 × sleep”代替时间预算。
-- 安全遵循最小权限、默认拒绝、纵深防御和敏感信息最少暴露；真实 secret、token 和密钥值不得硬编码或进入日志、指标、错误响应。主体标识只在确有诊断需要时最小化、脱敏并受控记录，不得外发给无权调用者。K8s 上工作负载的密钥只放 Secret：ConfigMap 与 `-DryRun` 输出里只出现变量名，经 `secretKeyRef` 注入，各档位同一条注入路径，细则见 `deploy/k8s/AGENTS.md`（2026-11-10~11）。
-- 已发布协议、持久化数据、外部配置和滚动升级接缝优先向后兼容。破坏性变更必须有版本、迁移、灰度与回滚方案，并验证新旧版本并存窗口。
-- 关键路径提供结构化日志、低基数指标和必要追踪；日志通过受控关联标识定位请求、阶段和结果，但不得使用 `player_id` 等高基数值作指标 label。
-- 性能优化必须由 profiling、benchmark 或压测数据驱动；先修算法、I/O 和数据结构瓶颈，不以牺牲正确性和可读性换未经测量的微优化。
-
-### 11.4 测试与评审
-
-- **面向接口测试**：接口同时是调用面和测试面。优先验证可观察行为与契约，避免测试私有实现步骤；测试替身通过同一接口注入。
-- 缺陷修复原则上先写能稳定复现问题的回归测试；红/绿运行证据按 §10.1 由 Codex 执行。确实无法先写时，必须说明原因并给出替代验证。
-- 按改动风险覆盖正常、边界、失败、回滚、幂等、并发和兼容场景中适用的部分；测试必须确定、可重复。单元测试不得依赖执行顺序、真实墙钟或外部残留状态；集成测试必须隔离输入、限定等待并清理自身状态。
-- 评审既检查代码，也检查遗漏的同类入口、调用点、生成源、配置、迁移、监控、文档和清理路径。新增状态或规则时必须搜索所有创建、读取、更新、迁移、销毁与恢复路径并逐项对齐。
-- 合并前执行受影响范围的格式化、静态检查、构建和测试；按本文件现有门禁区分静态、编译、单测、集成、真实环境和压测证据，任何未执行项都明确报告。
-
-### 11.5 执行与完成门禁
-
-1. 动手前能用一句话说明目标模块的职责、调用者、变化原因和不变量；复杂跨模块变更先落对应设计文档。
-2. 先找仓库现有实现、标准库和成熟依赖，沿用已有分层、命名、错误语义和测试方式。新增接口或接缝必须对应真实变化点、外部系统隔离或测试隔离需求；只有一个实现且没有上述需求时保持具体。
-3. 实现保持最小且完整，不夹带无关重构，不新造平行框架，不复制第二份业务真相。原则冲突或确需偏离时记录证据、原因和代价。
-4. 完成时按风险检查 `SRP / OCP / LSP / ISP / DIP / 高内聚、低耦合 / 信息隐藏 / KISS / YAGNI / DRY / 组合优于继承 / 显式依赖 / 面向接口测试`，以及 `失败 / 数据 / 并发 / 兼容 / 安全 / 可观测性 / 改动范围` 中的适用项；不适用项无需逐项罗列。
-5. 按 §10.1 完成相应构建、测试和 lint 协作；只报告实际证据、未验证项和剩余风险，不用静态阅读代替运行证据。
-
-### 11.6 实例与布局分层（数据层 / 显示层）
-
-一条记录只回答一个问题：**「它是什么」，还是「它摆在哪」**。实例是数据层的真相，摆放只是显示层的一种策略。两者写在一起时，实例记录会被迫携带在别的场景毫无意义的位置字段，而换一种摆法就要同时改协议、改存储、改客户端。
-
-适用于任何「多个实例 + 有位置概念」的系统：背包 / 仓库 / 装备、宠物出战、队伍站位、技能栏与快捷栏、时装外观、坐骑、好友分组、邮件附件。参考实现与完整推导见 `docs/design/bag-instance-layout-split.md`。
-
-- **实例层只描述实体**：身份（guid）、模板（config_id）、数量、状态、时间戳。不含 `pos` / `slot` / `index` / `bag_type` / 站位 / 排序等「摆在哪」的字段。判据：同一实例记录被邮件附件、掉落、交易、战斗快照复用时，如果需要写下「这个字段在这里被忽略」的注释，就说明分层错了。
-- **布局层只描述排列**：容量、槽位、占位（footprint）、顺序、整理策略。扁平、固定槽、格子是同一模型下的三种布局策略，不是三套系统；新增一种摆法只应新增一个布局实现，不改实例层，也不改调用方。
-- **接缝判据（可 grep，硬约束）**：布局层源码里不得出现任何领域概念——本仓库即 `config_id` / `ItemComp` / `ItemTable` / `entt`。布局层需要的领域信息（如格子占位 w×h）由桥接层显式传入，布局层不得自行反查配置表。这条缝一旦漏，两层就退化回一层。
-- **「是什么」不与「在哪」共用一个字段**：`equip_slot`（部位即位置）这类设计在「一个部位要放两件」时立刻破产。正确形状是实例上写**种类**（`equip_kind`），槽位由**配置表**枚举（`EquipSlot` 表中多行同 kind ＝ 同部位多槽）。同理，不得用 `active_xxx_id` / `equipped_xxx` 这类标量字段表达「当前出战/装备的那一个」——它把「同时出战两个」写死成了协议变更；用槽位表承载，数量变化只改表。
-- **集合顺序必须显式**：`repeated` / `vector` 的下标不得承载业务语义。位置要么写成字段，要么由槽位表给出；靠下标兜住的顺序会在序列化、合并、跨服迁移、并发写入中的任一环节静默丢失，且丢失时无任何报错。
-- **显示态不进持久化记录**：在线状态、客户端展示缓存、以及任何可由数据层重算的派生排列，不得写进要落库的 message。持久化结构里凡是注释「仅内存 / 不入库」的字段，都应移到独立的运行时结构——注释拦不住序列化。
-- **命名跟着分层走**：通用接口名不得泄漏某一种布局的实现细节（`GridsNeededFor` 这种名字把「要几个实例」和「占几格」混成一件事，应为 `StacksNeededFor`）。
-
-新增或修改上述系统前，先按本节确认分层再动手；已上线结构受 §11.3 向后兼容约束，改动需配版本、迁移与回滚方案。
-
-### 11.7 连接与回调生命周期（muduo，强制）
-
-**应用层不拥有连接，也不裸绑自己。** 存连接只存 `weak_ptr`、用时 `lock()`；绑进回调只绑 `weak_ptr<自己>`，对象没了回调自动失效。
-
-这是 2026-09-13 gate 在 `TcpConnection.cc:71 assert(state_ == kDisconnected)` 崩溃、随后又暴露 use-after-free 的完整教训，推导与证据见 `docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md` §8.0。所有坑的共同根源只有一个：应用层和 muduo 抢连接的所有权，或者把裸 `this` 交给 muduo 之后自己先死了。
-
-- **连接的所有权只在 muduo（`TcpServer` / `TcpClient`）手里。** 应用层任何寿命长于一次回调的地方——成员、ECS 组件、容器、定时器 / `queueInLoop` 闭包、thread_local——只能存 `std::weak_ptr<TcpConnection>`，用时 `lock()`，锁不住就当连接不存在。**禁止**长期持有 `TcpConnectionPtr` 强引用：它会让死连接连同 fd、缓冲区、`RpcChannel` 一起钉在内存里（muduo 的 `handleClose` 不关 fd，留给析构），还会把 `TcpClient::~TcpClient` 的 `use_count()==1` 判断带偏、跳过 `forceClose()`。
-- **绑进 muduo 回调（`set*Callback`、定时器、`queueInLoop`）的对象一律以 `weak_ptr<自己>` 捕获**（`enable_shared_from_this`），回调先 `lock()`，失败即返回。muduo 会把回调拷到 `TcpConnection` 上，且 `forceClose` 一律排队到下一轮，所以"对象已析构、回调才到"是必然而非偶然。**禁止**用裸 `this` / 裸指针 `std::bind` 进这些回调；与被绑对象同寿命的成员（如 `RpcServer` 自己的 `tcpServer`）除外。
-- **拆对象就是直接销毁。** 有了上两条，不需要析构函数摘回调，不需要"延迟关闭"兜底列表，不需要"DOWN 时记得清 X"的手动约定；剩下的 DOWN 清理只有记录卫生的意义。任何"为了不崩而不销毁"的写法都是在掩盖上两条的违例，必须回到根因。
-- **节点摘除只在 `queueInLoop` 里做**，不在连接自己的回调栈上。
-- **关机先排空再 `quit()`**：`quit()` 经**两跳 `queueInLoop`** 排到队列末尾，靠 FIFO 让排队的 `forceCloseInLoop`（第一趟）与 `connectDestroyed`（第二趟）都跑完；少一趟就是 `TcpConnection.cc:71` 或 `Channel.cc:43` 的 assert。关闭完成标记和通知必须在最后一跳的 `quit()` 之后、完成锁内发出，解锁后不再访问 Node，保证析构等待与 fallback 不会提前结束。**不要用定时器**：Windows 的 loop 是 `poll → handleEvents → timerQueue_->loop() → doPendingFunctors`，定时器恰在 N+1 趟到期时 `quit_` 先置位、只剩一趟——它"通常"能跑完，不是"必然"。
-
-新写或修改任何持有连接、绑进回调的类时只问两句：**"我存的是 weak 吗？""我绑的是 weak 吗？"** 两个都是，这一类问题与你无关。参考实现：`RpcChannel`（只存 weak 连接，超时 tick 与消息回调只绑 `weak_ptr<RpcChannel>`）、`RpcClient::connect()`、`RpcSession`（只存 weak channel）、`RpcDoneCallback`（延后回复只持 weak channel）、`BattleClientEdge::DirectSession`、`muduo_grpc::Server`（gRPC 服务端，TcpServer 的等价物：连接表是 `TcpConnectionPtr` 的唯一强持有者，Acceptor / 连接 / 定时器 / `queueInLoop` 回调一律绑 `weak_ptr<Server>`，Acceptor 与 Server 只在排队任务里或 loop 外析构）、`muduo_grpc::ServerCall`（可拷贝的入站调用完成句柄，只持 `weak_ptr<Server>`，最后一个副本析构仍未完成时回失败）。回归测试：`cpp/tests/rpc_controller_test/rpc_client_lifecycle_test.cpp`、`rpc_channel_loopback_test.cpp`、`cpp/tests/muduo_grpc_test/server_test.cpp`(gRPC 服务端生命周期)。
+- **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、fail-closed、面向接口测试与交付门禁。
+- **§11.6 实例与布局分层**：实例层只描述「是什么」，布局层只描述「摆在哪」，布局层源码不得出现领域概念。
+- **§11.7 连接与回调生命周期（muduo，强制）**：应用层不拥有连接也不裸绑自己——**存连接只存 `weak_ptr`，绑回调只绑 `weak_ptr<自己>`**，关机两跳 `queueInLoop` 再 `quit()`。
+- 完整细则见 → [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)。
 
 ## 12. 双版本服务器（C++/Go 版 + Java 版，强制）
 
-2026-09-29 起服务器有两个版本并行演进：本仓库（C++ 节点 + Go 微服务）与 **Java 版**
-（`github.com/luyuan-java/xuanming-server-mmo`，本机 `D:\luyuan\xuanming-server-mmo`；2026-10-12 前此处写的 `D:\luyuan\wuxingqitan\xuanming-server-mmo-java` 已不存在，照旧路径找不到仓库不等于 Java 版没做，按新路径核对 `PARITY.md`）。
+- 2026-09-29 起本仓库（C++ 节点 + Go 微服务）与 **Java 版**（`https://github.com/luyuan-java/xuanming-server-mmo`）并行演进；所有功能两版都要做，交付写明另一版状态。
+- 对账本为 Java 仓库根目录 `PARITY.md`；两版仅共享客户端契约（帧格式、客户端可见 proto、tip 码、配置表数据），服务端内部按各自语言惯用方式实现。
+- Java 版选型优先 GitHub ≥ 2 万 star 成熟库（JDK 与 Spring 视为事实标准），构建与测试以 Java 仓 `AGENTS.md` 为准。
 
-- **以后所有功能两个版本都要做。** 一个功能只在一边落地不算完成；交付说明必须写明另一版的状态（已做 / 待做 + 原因）。
-- **对账本**：Java 仓库根目录 `PARITY.md` 记录「本仓库 commit ↔ Java 版本号」与逐功能对齐状态。任一边完成一个功能都要在 `PARITY.md` 登记一行；本仓库的 `docs/PROGRESS.md` 条目同时注明对应的 Java 版本号。
-- **两版共享的只有客户端契约**：客户端 ↔ gate 的帧格式与 `proto/` 里客户端可见的消息、tip 码、配置表数据。改这些时两版必须同批改。服务端内部（RPC、注册发现、存储访问）Java 版按 Java 惯用方式实现，不照抄本仓库。
-- **Java 版选型**：第三方库优先 GitHub ≥ 2 万 star 的成熟项目（JDK 与 Spring 自带组件视为事实标准）。选型表与理由见 Java 仓库 `docs/design/`。
-- Java 仓库的构建与测试口径以该仓库自己的 `AGENTS.md` 为准。
+## 13. 架构、构建与编码细则
+
+- **位图（bit）优先存储与策划删表 ID 红线**（含空位永久占位、严禁复用旧 ID、查表判空、`bitset.count()` 陷阱、灰度高位未知 bit 透传、给策划与程序的完整清单）→ 见 [docs/rules/bit-storage-and-table-ids.md](docs/rules/bit-storage-and-table-ids.md)。
+- **C++ 运行时与构建细则**（避免 `static` 存储、K8s Gate 暴露、MSVC `/utf-8`、Lambda `C3495`、无裸指针成员门禁、`TimerTaskComp` 生命周期、流量统计、三级广播 bitmap、`muduo_grpc` 服务端与关机、C++/Go/Java 构建与本地开发命令）→ 见 [docs/rules/cpp-runtime-and-build.md](docs/rules/cpp-runtime-and-build.md)。

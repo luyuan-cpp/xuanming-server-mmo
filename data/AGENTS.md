@@ -97,6 +97,12 @@ message ItemTable {
 - 为什么：scene 遇到本节点表里查不到的 id 时，只有表行永不删除，才能判定它是更新版本或尚未热更到的行、
   回 RETRY 等它出现，而不是把引用它的资产当坏数据拒掉（`docs/design/mixed-version-persist-field-protection.md` §13 第 10 条）。
 
+### 位序存储（`(cfg_bit_index) = true`）与删 ID 红线
+- 玩家针对表 ID 的纯布尔完成/领取/解锁状态优先用位图存，在主键 `id` 列打 `(cfg_bit_index) = true`（与 `(cfg_multi)` 互斥），由导表器经 `tools/data_table_exporter/state/mapping/table_index_mapping/<表名>_mapping.json` 生成紧凑位序。
+- **策划红线**：上线后**绝不复用已删除/废弃的旧 ID**（旧 ID 在 `*_mapping.json` 永久占坑不回收，复用会让老玩家的历史 `1` 位静默串味到新内容）；有进行中/待领奖老玩家的表优先下架/禁用而非物理删行，物理删行前先与程序确认清理及计数口径。
+- **程序红线**：严禁手改/删除 `*_mapping.json` 或对已发布表用 `--bitindex-bootstrap`；查表判空容错、不拿 `bitset.count()` 充当有效完成总数、混跑高位未知 bit 原样回写。
+- 完整机制、风险示例与程序/策划红线清单见 → [docs/rules/bit-storage-and-table-ids.md](../docs/rules/bit-storage-and-table-ids.md)。
+
 ### 改字段号 / 删字段
 - **字段号是 wire 契约**。`.pb` 是入库的二进制，改号 = 让所有存量数据那一段被错读，
   而且 `ParseFromString` 不会报错。

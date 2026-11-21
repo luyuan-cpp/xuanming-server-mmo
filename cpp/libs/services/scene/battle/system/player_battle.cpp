@@ -654,7 +654,7 @@ namespace
 					 << " battle_id=" << battleId << ", lock will expire with its TTL";
 			return;
 		}
-		// entt::entity 用 init-capture(MSVC C3495,见 copilot-instructions)。
+		// entt::entity 用 init-capture(MSVC C3495,见 AGENTS.md §13.3)。
 		const int ret = tlsPlayerRedis.command(
 			[playerId, battleId, refollow = refollowOnDelete](hiredis::Hiredis*, redisReply* reply) {
 				OnBattleLockReleaseReply(playerId, battleId, refollow, reply);

@@ -477,3 +477,18 @@ player_id、battle_id 只进日志字段,不进任何指标 label。
 | 策略 | 每个 `MatchMode` 都在表里;只录 PVP;开关关闭或表外模式不录 |
 | 体积 | `BattleReplaySize.AutoBattlesStayWithinReplayLimits` 已通过,三组数字见 §9 |
 | robot | 解码:gzip 往返、未压缩、未知格式 / 编码、长度不符、截断、不是 gzip、超上限;冒烟:双方列表有这一局、`has_replay`、回放 battle_id 与回合数、结局与列表一致 |
+
+### 17.3 2026-11-21 服务端与客户端闭环验证结果
+
+在 `main` 完成 §6.3 终局重试复用冻结请求体（`frozenOutcomeRequest` + `service_call_auth::SignForDigest`）、gzip 尾部多余字节拒收、K8s `BattleReport.Enabled` 配置补齐、`robot` `verifyFighterDelivery()` 对齐以及 Unity 客户端（`../mmorpg-client`）全量战报回放落码后，执行完整闭环验证（证据目录 `build/verification/battle-report-20261120/{cpp-closure,smoke-closure}/`；Java 独立全服务版仍保留 TODO）：
+
+| 项目 | 实际结果 | 证据 / 备注 |
+|---|---|---|
+| C++ 录制与引擎测试 | 串行 `/m:1` 重编 `table` / `battle` / `turn_battle_engine_test`，`BattleReplay*:TurnBattle*` **125/125 PASS**（含 `BattleReplay*` 7/7、尾部垃圾字节拒收与三组体积验证） | `cpp-closure/` |
+| C++ 节点与终局契约 | 串行 `/m:1` 重编 `config` / `thread_context` / `core` / `rpc` / `proto` / `grpc_client` / `rpc_controller_test`，`--gtest_filter="Battle*"` **121/121 PASS**（含 `BattleObserverContract` **48/48 PASS**，4 条回放契约用例含 `ReplayOutcomeRetriesReuseFrozenBodyAndPassVerify` 全部通过） | `cpp-closure/05-rpc-controller-battle.log` |
+| Go `match` & `robot` | `match`: `go build ./...` / `go vet ./...` / `internal/config` / `internal/logic`（`Replay\|BattleReport` 7/7）全过（叠加 §17.2 真 TiDB v8.5.2 5+23 全过）；`robot`: `-mod=readonly` build / vet / `DecodeBattleReplay\|VerifyFighterDelivery` 4/4 全过 | `smoke-closure/` |
+| K8s 配置契约与静态门禁 | `k8s_deploy_contract.tests.ps1` `match ConfigMap`（含 `BattleReport.Enabled`）PASS；`check_log_text_english.py` exit 0；`[no-raw-pointer-member]` 全过 | 3 项无关 K8s 用例属其他会话改动 |
+| 跨区 1v1 端到端冒烟 | 释放 5 个空闲 VS Code Java/Gradle 守护进程后可用内存 4.948 GiB；隔离双区 40 容器就绪（容器挂载 `b6a08148c` 导表快照含第 34 批 379/380 限频表，重编 `robot.exe` 使用当前表），`robot_9003`(z1) 与 `robot_9004`(z2) 跨区成局 `battle_id=5992728852548223139` 打满 23 回合：`metric=battle_replay_frozen rounds=23 truncated=0 raw_bytes=10394 payload_bytes=1484 compress_us=179`；双方经 `ListBattleReports`（1.8ms / 1.5ms）与 `GetBattleReport`（2.1ms / 2.4ms）拉取并完整解码验证，输出 `BATTLE_REPORT_OK` 与 `CROSS_ZONE_MATCH_OK`；隔离 MySQL 实查 `match_battle_report` 1 行（`envelope_bytes=1494, ref_count=2`）与 `match_player_battle_report` 2 行（`summary_bytes=88`）。结束后已 `down -v` 清零全部容器、卷与网络 | `smoke-closure/04-robot-cross-zone.log`、`smoke-closure/05-match.log`、`smoke-closure/06-battle-file-logs/`、`smoke-closure/08-mysql-reports.txt` |
+| Unity 客户端 | 543 份运行时源码 + `Assets/Tests/EditMode/Battle/*.cs` 离线 Roslyn 编译 0 错（已修 `.NET GZipStream` 静默截断，补全 RFC 1952 头/尾/CRC32/ISIZE 校验）；3 套纯 C# NUnit 夹具（`BattleReplayDecoderTests` / `BattleReportClientTests` / `BattleReplayPlayerTests`）**23/23 PASS**；`BattleReportPanelUiTests.cs` 编译 0 错（因 Unity Editor 持有锁未跑 batchmode uGUI 执行）；WebGL 禁用 API 扫描 0 命中 | `../mmorpg-client` |
+
+> **版本备注**：本次隔离冒烟复用 `debug-20261118` `xuanming-node` 与 `debug-20261120` `match` 镜像完成端到端链路与真实落库验证；§6.3 冻结重签重构与 gzip 尾字节校验由 Windows C++ `rpc_controller_test`（121/121）和 `turn_battle_engine_test`（125/125）覆盖。

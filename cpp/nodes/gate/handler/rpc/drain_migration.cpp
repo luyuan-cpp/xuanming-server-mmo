@@ -275,7 +275,7 @@ void Tick(SteadyTime now)
 		session.drainMigrationInFlight = true;
 		++tlsInFlight;
 		--budget;
-		// 结构化绑定用 init-capture 拷一份(MSVC 对直接捕获结构化绑定的支持不稳,见 copilot-instructions 的 C3495 一节)。
+		// 结构化绑定用 init-capture 拷一份(MSVC 对直接捕获结构化绑定的支持不稳,见 AGENTS.md §13.3 的 C3495 一节)。
 		const bool sent = tlsSender(sessionId, session,
 			[id = sessionId, incarnation = session.incarnation, expectedPlayer, kind](const RequestReply &reply,
 																					SteadyTime receivedAt)

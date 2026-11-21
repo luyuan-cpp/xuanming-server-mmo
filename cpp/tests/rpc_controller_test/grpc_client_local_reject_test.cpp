@@ -47,7 +47,7 @@ protected:
         loop_.runAfter(0.5, [&loop = loop_] { loop.quit(); });
         loop_.loop();
         loop_.cancel(ticker);
-        // 仓库测试约定(.github/copilot-instructions.md 的 TimerTaskComp 段):loop 退出后、loop 仍存活时清掉实体定时器。
+        // 仓库测试约定(AGENTS.md §13.3 的 TimerTaskComp 段):loop 退出后、loop 仍存活时清掉实体定时器。
         tlsEcs.actorRegistry.clear();
     }
 

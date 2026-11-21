@@ -640,7 +640,7 @@ void PlayerSceneSystem::SendSceneInfo(entt::entity player, bool withChannelDirec
 	}
 
 	// 回调要用的东西全部按值带走(sceneInfo 指向 sceneRegistry 的组件存储,应答回来时场景可能已销毁)。
-	// 捕获一律用 init-capture:MSVC 对 entt::entity 的简单捕获有 C3495(.github/copilot-instructions.md)。
+	// 捕获一律用 init-capture:MSVC 对 entt::entity 的简单捕获有 C3495(AGENTS.md §13.3)。
 	const uint64_t sceneId = sceneInfo->scene_id();
 	const uint32_t sceneConfigId = sceneInfo->scene_config_id();
 	// 集群客户端自己把回调绑到提交这一刻的 trace 上,回调里推给客户端的 scene_info 接在这次请求的 trace 下
