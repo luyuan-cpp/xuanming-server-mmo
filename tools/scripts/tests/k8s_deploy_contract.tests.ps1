@@ -4301,11 +4301,11 @@ Test-Case 'mysql-connection-alerts.yaml:PrometheusRule 形状,额外库数阈值
 
     $alerts = [regex]::Matches($effective, '(?m)^[ ]*- alert:[ ]*(?<name>\S+)')
     $expectedAlerts = @('MysqlConnectionsRefused', 'MysqlConnectionsNearMax', 'SqlPoolSlowAcquire', 'SqlPoolSaturated',
-        'DbStorePoolsBeyondPlan', 'GatewayHikariAcquireTimeout', 'GatewayHikariSaturated')
+        'DbStorePoolsBeyondPlan', 'GatewayHikariAcquireTimeout', 'GatewayHikariSaturated', 'MallHikariAcquireTimeout', 'MallHikariSaturated')
     $actualAlerts = @($alerts | ForEach-Object { $_.Groups['name'].Value })
     Assert-Equal -Expected ($expectedAlerts | Sort-Object -CaseSensitive | Join-String -Separator ',') `
         -Actual ($actualAlerts | Sort-Object -CaseSensitive | Join-String -Separator ',') `
-        -Because '规则名单必须完整且不重复:MySQL 服务端 2 条、Go 连接池 3 条、gateway Hikari 连接池 2 条'
+        -Because '规则名单必须完整且不重复:MySQL 服务端 2 条、Go 连接池 3 条、gateway Hikari 连接池 2 条、mall Hikari 连接池 2 条'
     for ($i = 0; $i -lt $alerts.Count; $i++) {
         $bodyEnd = if ($i + 1 -lt $alerts.Count) { $alerts[$i + 1].Index } else { $effective.Length }
         $body = $effective.Substring($alerts[$i].Index, $bodyEnd - $alerts[$i].Index)

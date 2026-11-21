@@ -1190,8 +1190,8 @@ func confirmLifecycle(receipt *dbpb.SqlWriterLifecycleReceipt, request *dbpb.Sql
 
 // 只承载仓库实际SQL调用者读取的变量，既不解释shell文本，也不允许控制凭据进入normal。
 func readRuntimeEnvironment(ctx context.Context, entry *dbpb.SqlWriterBootRoster_Entry, root string) (map[string][]byte, error) {
-	if len(entry.RuntimeEnvironment) > 5 {
-		return nil, errors.New("roster SQL环境超过实际五变量白名单")
+	if len(entry.RuntimeEnvironment) > 6 {
+		return nil, errors.New("roster SQL环境超过实际六变量白名单")
 	}
 	values := make(map[string][]byte, len(entry.RuntimeEnvironment))
 	for _, variable := range entry.RuntimeEnvironment {
@@ -1200,7 +1200,7 @@ func readRuntimeEnvironment(ctx context.Context, entry *dbpb.SqlWriterBootRoster
 		}
 		isDSN := false
 		switch variable.Name {
-		case "CHAT_AUTHORITY_DSN", "MMORPG_GUILD_SQL_DSN", "MMORPG_MAIL_SQL_DSN", "MMORPG_RANK_SQL_DSN":
+		case "CHAT_AUTHORITY_DSN", "MMORPG_GUILD_SQL_DSN", "MMORPG_MAIL_SQL_DSN", "MMORPG_RANK_SQL_DSN", "MMORPG_PAYMENT_SQL_DSN":
 			isDSN = true
 		case "MATCH_MYSQL_PASSWORD":
 		default:

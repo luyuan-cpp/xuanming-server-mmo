@@ -270,9 +270,16 @@ func TestRuntimeEnvironmentRejectsControlNamesAndOversizedRosterBeforeReading(t 
 			t.Fatal("控制凭据或任意环境名不得进入 normal")
 		}
 	}
-	entry.RuntimeEnvironment = make([]*dbpb.SqlWriterBootRoster_RuntimeEnvironment, 6)
+	entry.RuntimeEnvironment = make([]*dbpb.SqlWriterBootRoster_RuntimeEnvironment, 7)
 	if _, err := readRuntimeEnvironment(context.Background(), entry, root); err == nil {
-		t.Fatal("超过五项实际 SQL 白名单未拒绝")
+		t.Fatal("超过六项实际 SQL 白名单未拒绝")
+	}
+	for _, allowed := range []string{"CHAT_AUTHORITY_DSN", "MMORPG_GUILD_SQL_DSN", "MMORPG_MAIL_SQL_DSN", "MMORPG_RANK_SQL_DSN", "MMORPG_PAYMENT_SQL_DSN", "MATCH_MYSQL_PASSWORD"} {
+		entry.RuntimeEnvironment = []*dbpb.SqlWriterBootRoster_RuntimeEnvironment{{Name: allowed,
+			ValuePath: "missing-private-file", ValueSha256: bytes.Repeat([]byte{7}, 32)}}
+		if _, err := readRuntimeEnvironment(context.Background(), entry, root); err == nil || strings.Contains(err.Error(), "白名单") {
+			t.Fatalf("白名单变量 %s 不得被白名单门禁拒绝: %v", allowed, err)
+		}
 	}
 	entry.RuntimeEnvironment = nil
 	values, err := readRuntimeEnvironment(context.Background(), entry, root)

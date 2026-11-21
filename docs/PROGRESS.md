@@ -4563,3 +4563,25 @@
   - **Linux 帧大小与 Gate 单线程扇出容量实测**：详见 [docs/stress/stress-spectate-fanout-20261121.md](stress/stress-spectate-fanout-20261121.md)（GCC 13.4.0 `-O2` 直链生产 `SpectateHub` + `EncodedFrame` + `muduo` 单线程真实 TCP 回环：5v5 线帧 3,373 B、5v5+pets 6,594 B；单台满载 20,000 连接 @2s 占单核 15.8~17.7% / 32.2~62.9 MB/s；`kFanoutBatch=512` p50 单批 8 ms；256 KB 软水位在 3.3 MB 压灌慢客户端下 `softSkip=4,800, hardHW=0`；过载合并轮转极差 1）。
   - **独立 Java 仓（`../xuanming-server-mmo`）**：`ContractSync --check` 0 协议/Tip/消息号漂移；`game-common`、`game-discovery`、`game-data`（710 PASS）、`game-battle`（636/636）、`game-match`（2062/2062）、`game-gate`（`SpectateHubTest` 37/37 + `ClientSpectateRequestTest` 全过；仅 1 处他线 `MessageRoutesTest` `RenameGuild`）、`game-robot`（`BattleAdminClientTest` 8/8 + `SpectateStepsTest` 23/23 全过；695/696 仅 1 处他线 `GuildScenarioTest` `RenameGuild`）；真 Redis 7.2 与 8.10.2 两轮 `SpectateFrameChannelIntegrationTest` 均 **4/4 PASS（0 SKIP）**；真 TiDB v8.5.8 `GlobalMatchStoreIntegrationTest` **62/62 PASS（0 SKIP）**。全部临时 Docker 容器已清理。
 - **残余与后续交接**：环境受限的两项后续验证（目标物理机/云主机混跑复测 Gate 扇出 p99、独立 Java 仓全栈进程 LOBBY 冒烟，以及附注的同期他线未闭合项边界）已登记至 `docs/handoff/spectate-tiered-fanout-followup-20261121.md`。
+
+
+## 2026-11-21 Gemini（协调员 Gemini 4 Neon Extra + 验证员 Gemini 4 Carbon Medium）：真钱支付 `devpay` 真进程端到端冒烟、`writer_authority` 白名单修复与部署契约补齐
+
+- **分工与边界**：按 `AGENTS.md §10.3` 由协调员（`gemini-4-neon-xhigh`）修复两处实测缺陷，由 `verifier-3`（`gemini-4-carbon-medium`）在完全隔离的临时容器/端口执行真进程冒烟与复验，全部日志落盘 `build/verification/payment-devpay-smoke-20261121/`；`finally` 彻底停止子进程并清除隔离容器（残留容器 `0`、残留子进程 `0`），未触碰主机在跑容器与已打开的 Unity Editor。
+- **冒烟与契约全量复测抓出并当场修复的 2 处本线真缺陷**：
+  1. `go/data_service/cmd/writer_authority/main.go`（L1193/L1203）与 `main_test.go`（L273）：`readRuntimeEnvironment` 仅放行 5 个 SQL 环境变量且未收录 `MMORPG_PAYMENT_SQL_DSN`，导致本机 `sql_boot_catalog_local.ps1` 与 K8s `payment` initContainer 调 `writer_authority -command register` 时报 `roster环境不是实际SQL白名单，禁止解释任意变量`。已扩为六变量白名单并补齐单测覆盖。
+  2. `tools/scripts/tests/k8s_deploy_contract.tests.ps1`（L4303-L4308）：同步补齐 `deploy/k8s/mysql-connection-alerts.yaml` 新增的 `MallHikariAcquireTimeout`、`MallHikariSaturated` 两条商城 Hikari 告警规则断言。
+- **实测结果**：
+  1. **`devpay` 真进程 5 步端到端冒烟（隔离 TiDB v8.5.2 `127.0.0.1:14002` + 隔离 etcd `127.0.0.1:12379` + 真实 `mall-game-0.1.0-SNAPSHOT.jar` + 真实 `payment.exe` + 真实 `devpaynotify`）**：总退出码 **`0`**。
+     - 建库迁移：`writer_authority -command prepare-schema`（`mmorpg_mall` + `schema.sql`）exit `0`；`payment.exe -migrate` exit `0`。
+     - 管理口隔离与指标：`mall_game` 管理口 `18221` `/actuator/health/liveness` & `/readiness` 均 `200 UP`、`/actuator/prometheus` `200`（含 `hikaricp` + `pool="mall"`），业务口 `18220` 访问 `/actuator/health/liveness` 返回 `404`；`payment.exe` `19280` `/healthz` `200`、`/metrics` `200`（含 `mmorpg_sql_pool_*` 与 `payment_*`）。
+     - 5 步业务实测（订单 `2004ef00-a384-42af-8bd7-3875ec1378da`，SKU `7001`，600 分 CNY）：
+       1. HMAC `gateway` `POST /api/orders` → `200`（`AWAITING_PAYMENT`, `paymentRevision=0`）。
+       2. gRPC `ListPayChannels(DESKTOP)` 含 `PAY_CHANNEL_DEVPAY`，`CreatePayIntent` / `GetPayIntent` → `CREATED`。
+       3. `devpaynotify -amount 600` exit `0` → `GetPayIntent` 转 `PAID`，`oms_order status=1 (DELIVERY_PENDING)`，`commerce_payment_receipt (revision=0, fact='PAID')`，`commerce_delivery_intent (status='PENDING')`。
+       4. `devpaynotify -amount 600 -seq 1` exit `0` → 约 7.7s 内后台退款 worker 自动收敛：`commerce_abnormal_payment (DUPLICATE_PAYMENT)`、`commerce_refund_intent (status='REFUNDED')`、`commerce_refund_receipt` 落库。
+       5. `devpaynotify -amount 600 -revoke` exit `0` → <1s 收敛：`GetPayIntent` 转 `CLOSED`，`commerce_payment_receipt (revision=1, fact='REVOKED')`，`oms_order status=8 (REVERSAL_PENDING)`，`commerce_reversal_intent (revision=1, status='PENDING')`。
+  2. **`writer_authority` 修复复验**：`go build` / `go vet` / `go test ./cmd/writer_authority -count=1 -v` 均 exit `0`（顶层 **58 PASS / 0 FAIL / 3 SKIP**）；在隔离 TiDB v8.5.2 上跑原样 `New-LocalSqlBootInstanceFiles`（`SQL_WRITER_BOOT_ROSTER_V2` 含 `MMORPG_PAYMENT_SQL_DSN`）→ `Register-LocalSqlBootInstance` → `Assert-LocalSqlBootCatalog` → `Get-SqlWriterBootEnvironment` 全部 exit `0`（残留容器 `0`）。
+  3. **部署契约测试与静态门禁**：`k8s_mall_payment_deploy_contract` **22/22**、`sql_boot_catalog_local` **51/51**、`logical_db_deploy_contract` **46/46**、`redis_player_cluster_contract` **47/47**、`start_game_java` **5/5**、`check_log_text_english.py` exit `0`；`k8s_deploy_contract` **363/364**（本线 `mysql-connection-alerts.yaml` 已转绿，仅剩 1 条非本线 `chat ConfigMap` 的 `ReportChat` 既有失败）；`k8s_migrate_gate` **76/78**（2 条非本线既有测试夹具问题，未改动他线）。
+  4. **Unity 客户端原生复测**：`tools/client_compile_check.ps1` 原生 **exit `0`（`files=567 errors=0`）**。
+- **尚未覆盖/需负责人决策项**：本机未安装 `kind` 且 `kubectl` 无可用集群上下文（未做 `kind` 活集群冒烟）；真实渠道商户号/证书/回调域名/真机沙盒验单需负责人与真机操作；独立 Java 全服务仓 `D:\luyuan\xuanming-server-mmo`（30+ 文件且当前有并发会话未提交改动）仍留 `PARITY.md` TODO 待确认是否启动移植。
