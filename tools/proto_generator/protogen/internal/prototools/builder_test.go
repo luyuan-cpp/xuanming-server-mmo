@@ -67,9 +67,9 @@ func TestCopyProtoToGenDirRefreshesRobotLiveContractWithoutClearingUnrelatedFile
 		t.Errorf("复制不应清理无关的目标文件：got=%q，want=%q", actual, keepProto)
 	}
 	for _, service := range []string{"db", "login"} {
-		path := filepath.Join(stagingDir, service, "proto", commonRelative)
-		if actual := readFixture(path); actual != currentProto {
-			t.Errorf("%s 既有协议复制行为改变：got=%q，want=%q", service, actual, currentProto)
+		path := filepath.Join(stagingDir, service)
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("goctl 退役后不应再为 %s 生成暂存目录：%s (err=%v)", service, path, err)
 		}
 	}
 }

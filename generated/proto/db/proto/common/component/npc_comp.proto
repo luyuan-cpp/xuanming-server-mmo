@@ -1,9 +1,0 @@
-syntax = "proto3";
-option go_package = "db/proto/common/component";
-
-
-
-message Npc
-{
-}
-

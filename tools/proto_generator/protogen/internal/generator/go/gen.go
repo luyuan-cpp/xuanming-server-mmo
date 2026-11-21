@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	_config "protogen/internal/config"
-	"protogen/internal/prototools"
 	utils2 "protogen/internal/utils"
 	"protogen/logger"
 
@@ -143,32 +142,16 @@ func GenerateGoGrpc(protoFiles []string, outputDir string, protoRootPath string)
 	return utils2.RunProtocWithPath(protocPath, args, "generating Go gRPC code")
 }
 
-// AddGoPackageToProtoDir adds go_package declarations to proto files.
-// Only db and login need per-service go_package (for goctl); all other Go
-// services use the unified go/proto module.
+// AddGoPackageToProtoDir adds go_package declarations to staged robot proto files.
+// All Go services consume the unified go/proto module directly.
 func AddGoPackageToProtoDir(wg *sync.WaitGroup) {
 	wg.Add(1) // Increment wg counter to ensure the main flow waits for this goroutine.
 	go func() {
 		defer wg.Done()
 
-		for _, dirName := range prototools.GoctlServices() {
-			destDir := filepath.ToSlash(_config.Global.Paths.GeneratorProtoDir + dirName + "/" + _config.Global.DirectoryNames.ProtoDirName)
-			baseGoPackage := filepath.ToSlash(dirName)
-
-			if err := addDynamicGoPackage(destDir, baseGoPackage, destDir, false); err != nil {
-				logger.Global.Warn("GoPackage setup: failed to process directory",
-					zap.String("dest_dir", destDir),
-					zap.String("base_go_package", baseGoPackage),
-					zap.Error(err),
-				)
-			} else {
-				logger.Global.Info("GoPackage setup: directory processed",
-					zap.String("dest_dir", destDir),
-					zap.String("base_go_package", baseGoPackage),
-				)
-			}
+		if !_config.Global.Generators.EnableRobotProto {
+			return
 		}
-
 		destDir := _config.Global.Paths.RobotGeneratedProto
 		baseGoPackage := filepath.ToSlash(_config.Global.Naming.GoRobotPackage)
 

@@ -1,6 +1,6 @@
 # 交接:战报回放的客户端细节(2026-11-06)
 
-> **状态(2026-11-21)**:服务端 C++ / Go / robot 与 Unity 客户端(`../mmorpg-client`)代码已全部落码并在 `main` 完成闭环验证（C++ 125/125 + 121/121、Go 逻辑/配置与真 TiDB 5+23、跨区 1v1 冒烟 `BATTLE_REPORT_OK` + `CROSS_ZONE_MATCH_OK`、客户端纯 C# EditMode 23/23 全部通过）。协议与 C# 生成产物(`MatchServiceRpc` 379 / 380、`PlayerBattle.cs`、`MatchService.cs`、`MatchErrorTip.cs` `KMatchBattleReportNotFound = 16025`)已存在,无需重跑协议生成。
+> **状态(2026-11-21)**:服务端 C++ / Go / robot 与 Unity 客户端(`../mmorpg-client`)代码已全部落码并在 `main` 完成闭环验证（C++ 125/125 + 122/122、Go 逻辑/配置与真 TiDB 5+23、跨区 1v1 冒烟 `BATTLE_REPORT_OK` + `CROSS_ZONE_MATCH_OK`、客户端全量编译 0 错及纯 C# EditMode 25/25 全部通过）。协议与 C# 生成产物(`MatchServiceRpc` 379 / 380、`PlayerBattle.cs`、`MatchService.cs`、`MatchErrorTip.cs` `KMatchBattleReportNotFound = 16025`)已存在,无需重跑协议生成。
 > **服务端设计**:[battle-report-replay.md](../design/battle-report-replay.md)。负责人 2026-11-06 定:只录 PVP,每名玩家保留最近 100 条。Java 版留 TODO。
 
 ## 1. 要做的三件事
@@ -103,7 +103,7 @@
 ## 8. 服务端状态(2026-11-21)
 
 - 协议已生成:`MatchServiceListBattleReports` 消息号 379、`MatchServiceGetBattleReport` 380,tip 码 `kMatchBattleReportNotFound = 16025`。客户端已同步生成同名 C# 文件。
-- 闭环验证已全部通过:C++ `turn_battle_engine_test`（`BattleReplay*:TurnBattle*` 125/125）与 `rpc_controller_test`（`Battle*` 121/121，含 `BattleObserverContract` 48/48）；Go `match` build / vet / 配置 / 逻辑（7/7）与真 TiDB v8.5.2（5+23）全过；`robot`（`-mod=readonly`）build / vet / 4/4 通过；跨区 1v1 隔离冒烟打出 `BATTLE_REPORT_OK battle_id=5992728852548223139` 与 `CROSS_ZONE_MATCH_OK`，MySQL 实查 `match_battle_report`（`ref_count=2, envelope_bytes=1494`）与 `match_player_battle_report`（2 行），详见设计稿 §17.3。
+- 闭环验证已全部通过:C++ `turn_battle_engine_test`（`BattleReplay*:TurnBattle*` 125/125）、`battle.exe` 与 `rpc_controller_test`（`Battle*` 122/122，含 `BattleObserverContract` 49/49）；Go `match` build / vet / 配置 / 逻辑（7/7）与真 TiDB v8.5.2（5+23）全过；`robot`（`-mod=readonly`）build / vet / 4/4 通过；跨区 1v1 隔离冒烟打出 `BATTLE_REPORT_OK battle_id=5992728852548223139` 与 `CROSS_ZONE_MATCH_OK`，MySQL 实查 `match_battle_report`（`ref_count=2, envelope_bytes=1494`）与 `match_player_battle_report`（2 行），详见设计稿 §17.3。
 - `data/MessageLimiter.xlsx` 的两行限频(379 每 2 秒 1 次、380 每秒 1 次)已导表落入服务端产物,批次 34,双区 gate 已挂载启动。
 - Java 版服务端待做(设计稿 §16);客户端契约两版相同,客户端不用区分。
 
@@ -116,4 +116,4 @@
 5. **落码与验证(`../mmorpg-client`)**:
    - 纯逻辑:`Assets/Scripts/Game/Battle/{BattleReplayDecoder,BattleReportClient,BattleReplayPlayer}.cs`
    - 接线与 UI:`Assets/Scripts/Game/GameClient.cs`、`Assets/Scripts/UI/Ugui/WorldHudNavigation.cs`、`Assets/Scripts/UI/Ugui/Battle/{BattleReportPanel,BattleResultPanel,BattleScreen,BattleUiRoot,BattleHudLogic,BattleUiWidgets}.cs`
-   - EditMode 测试:`Assets/Tests/EditMode/Battle/{BattleReplayDecoderTests,BattleReportClientTests,BattleReplayPlayerTests,BattleReportPanelUiTests}.cs`（543 份运行时源码 + 4 份战报 EditMode 测试 Roslyn 编译 0 错，3 套纯 C# 夹具 23/23 PASS；`BattleReportPanelUiTests.cs` 需在 Unity Test Runner 内执行 uGUI 断言，当前因 Unity Editor 占用工程锁未跑 batchmode）
+   - EditMode 测试:`Assets/Tests/EditMode/Battle/{BattleReplayDecoderTests,BattleReportClientTests,BattleReplayPlayerTests,BattleReportPanelUiTests}.cs`（543 份运行时源码 + 4 份战报 EditMode 测试离线 Roslyn 全量编译 0 错，3 套纯 C# 夹具 25/25 PASS；`BattleReportPanelUiTests.cs` 需在 Unity Test Runner 内执行 uGUI 断言，当前因 Unity Editor 占用工程锁未跑 batchmode）

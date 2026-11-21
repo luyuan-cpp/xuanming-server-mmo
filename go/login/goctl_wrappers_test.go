@@ -10,12 +10,12 @@ import (
 	loginpb "proto/login"
 )
 
-// goctl 生成的服务包装(internal/server/*/…server.go)都嵌着 pb 的 Unimplemented…Server:proto 里新加一个方法之后,
-// 不重生包装(go/build.ps1)也照样编得过,只是这个方法每次调用都回 codes.Unimplemented,没有任何单测会红。
+// 服务端转发层(internal/server/*/*server.go)都嵌着 pb 的 Unimplemented…Server:proto 里新加一个方法之后,
+// 漏加转发方法也照样编得过,只是这个方法每次调用都回 codes.Unimplemented,没有任何单测会红。
 //
 // gate 排空迁移的 RequestGateMigration 就这样漏过:gate 每次要票都被拒,迁移一律退避、永远不生效
-// (docs/design/gate-drain-session-migration.md §18.3)。这里逐个服务核对:pb 服务描述里的每个方法,包装里都要有自己的实现。
-// 用例红了就重生包装,不要手改生成文件(AGENTS.md §3)。
+// (docs/design/gate-drain-session-migration.md §18.3)。这里逐个服务核对:pb 服务描述里的每个方法,
+// internal/server/*/*server.go 里都要有自己的实现。用例红了直接在对应 server 文件里补转发方法。
 func TestGoctlServerWrappersImplementEveryRPC(t *testing.T) {
 	wrappers := []struct {
 		desc     grpc.ServiceDesc
@@ -45,7 +45,7 @@ func TestGoctlServerWrappersImplementEveryRPC(t *testing.T) {
 			declared := regexp.MustCompile(`(?m)^func \(\w+ \*` + regexp.QuoteMeta(w.receiver) + `\) ` + regexp.QuoteMeta(name) + `\(`)
 			if !declared.Match(source) {
 				t.Errorf("%s does not implement %s.%s: the embedded Unimplemented stub answers it with codes.Unimplemented; "+
-					"regenerate the goctl wrappers with go/build.ps1", w.file, w.desc.ServiceName, name)
+					"add the forwarding method to %s", w.file, w.desc.ServiceName, name, w.file)
 			}
 		}
 	}

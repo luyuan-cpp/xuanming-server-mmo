@@ -287,9 +287,9 @@ namespace
         // 这里只做就绪校验:空表说明数据目录配置有问题,尽早在日志里暴露。
         struct TableLoadHandler
         {
-            static std::shared_ptr<const turnbattle::BattleRewardConfig> &ProcessBattleRewards()
+            static std::shared_ptr<const BattleRewardConfig> &ProcessBattleRewards()
             {
-                static std::shared_ptr<const turnbattle::BattleRewardConfig> rewards;
+                static std::shared_ptr<const BattleRewardConfig> rewards;
                 return rewards;
             }
 
@@ -439,6 +439,18 @@ int main(int argc, char *argv[])
             context.clientEdge = std::make_shared<BattleClientEdge>();
             ConfigureClientAdmissionOrDie(*context.clientEdge);
             BattleRoomManager::Instance().SetClientEdge(context.clientEdge.get());
+            {
+                bool sendsValid = true;
+                const char *rawSends = std::getenv(BattleRoomManager::kSqlOutcomeSendsPerPumpEnv.data());
+                const std::size_t sendsPerPump = BattleRoomManager::ResolveSqlOutcomeSendsPerPump(
+                    rawSends != nullptr ? std::string_view(rawSends) : std::string_view{}, &sendsValid);
+                if (!sendsValid)
+                {
+                    LOG_WARN << "Invalid " << BattleRoomManager::kSqlOutcomeSendsPerPumpEnv.data()
+                             << " value; falling back to default sends_per_pump=" << sendsPerPump;
+                }
+                BattleRoomManager::Instance().SetSqlOutcomeSendsPerPump(sendsPerPump);
+            }
 
             // 房间 = Agones 单元(D82 / D85):房间表(battle_room_table.h,只能经 Emplace / Erase 增删)
             // 每次插表 / 移除恰好回调一次,转发到 GameServerLifecycle 的单元计数,key = battle_id(活跃房间之间唯一)。

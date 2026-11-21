@@ -271,6 +271,22 @@ type BattleSmokeConfig struct {
 	// 缺省 "1v1"。
 	Mode string `yaml:"mode"`
 
+	// LobbySpectate 开启 LOBBY 档观战冒烟(battle-spectate-tiered-fanout §6 / §8.4):
+	// 填满房间直连席后由大厅观众走 WatchBattle(delivery=LOBBY) → GateClientSpectate.SubscribeSpectate,
+	// 断言大厅连接依次收到 161 / 158 / 166。
+	LobbySpectate bool `yaml:"lobby_spectate"`
+
+	// DirectFillCount 指定 LOBBY 冒烟前先占满多少个直连观众席(0 = 默认 20,即 BattleRoomManager::kMaxObserversPerRoom)。
+	DirectFillCount int `yaml:"direct_fill_count"`
+
+	// ManualHold25s 开启 §8.4 心跳断言:首回合参战方不开自动战斗、等满 25 s 行动窗口,
+	// 断言 gate 在最后一回合前不会提前合成 SOURCE_LOST。
+	ManualHold25s bool `yaml:"manual_hold_25s"`
+
+	// ShutdownBattleCommand 开启 §8.4 停机断言:大厅观众收到 161 后执行该命令优雅停掉 battle 节点,
+	// 断言大厅观众立刻收到 166 SPECTATE_END_SOURCE_LOST(不等 30 s 空闲超时)。
+	ShutdownBattleCommand string `yaml:"shutdown_battle_command"`
+
 	// FeaturesSmoke only uses an explicitly selected existing account/character.
 	FeaturesSmoke FeaturesSmokeConfig `yaml:"features_smoke"`
 }

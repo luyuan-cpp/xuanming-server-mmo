@@ -14,7 +14,7 @@ func BattleClientPlayerNotifySpectateTurnResultHandler(player *gameobject.Player
 		zap.L().Warn("nil spectate TurnResultS2C", zap.Uint64("player", player.ID))
 		return
 	}
-	player.AddSpectateTurnResult()
+	player.AddSpectateTurnRound(response.GetRoundIndex())
 	zap.L().Info("notify spectate turn result",
 		zap.Uint64("player", player.ID),
 		zap.Uint64("battle_id", response.GetBattleId()),

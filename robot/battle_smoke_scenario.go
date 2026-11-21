@@ -102,8 +102,13 @@ func RunBattleSmoke(cfg *config.Config) {
 	// (password / satoken),这里先挂上配置。
 	loginTestCfg = cfg
 
-	// 子模式分流:cross_zone=true 走跨 zone 匹配冒烟(battle_smoke_cross_zone_scenario.go),
-	// 否则下面的 PVE + 观战流程保持原样。
+	// 子模式分流:lobby_spectate=true 走 LOBBY 档观战冒烟(battle_spectate_lobby_scenario.go);
+	// cross_zone=true 走跨 zone 匹配冒烟(battle_smoke_cross_zone_scenario.go);
+	// 否则下面的 PVE + L0 直连观战流程保持原样。
+	if cfg.BattleSmoke.LobbySpectate {
+		runBattleSpectateLobbySmoke(cfg)
+		return
+	}
 	if cfg.BattleSmoke.CrossZone {
 		runCrossZoneMatchSmoke(cfg)
 		return

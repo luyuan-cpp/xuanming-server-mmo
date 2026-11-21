@@ -1,0 +1,25 @@
+# battle-smoke LOBBY 档观战冒烟配置(battle-spectate-tiered-fanout §6 / §8.4)
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/battle_smoke_lobby.yaml
+# 退出码 0 = 日志输出 BATTLE_LOBBY_SMOKE_OK;
+# 退出码 1 = 日志输出 BATTLE_LOBBY_SMOKE_FAIL step=... reason=...
+
+gateway_addr: "http://127.0.0.1:8081"
+zone_id: 1
+robot_count: 23
+account_fmt: "robot_%04d"
+password: "123456"
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 3
+report_interval: 5
+
+mode: "battle-smoke"
+battle_smoke:
+  lobby_spectate: true
+  direct_fill_count: 20
+  manual_hold_25s: false
+  shutdown_battle_command: ""
+
+auth_type: "password"

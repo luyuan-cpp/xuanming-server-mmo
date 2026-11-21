@@ -113,16 +113,12 @@ func retireFixture() (retired, kept map[string]string) {
 		"go/proto/gone/named_grpc_grpc.pb.go": goGrpcOutput("gone/named_grpc"),
 		"go/proto/gone/licensed.pb.go":        licensedGoOutput("gone/licensed"),
 		"robot/vendor/proto/db/db_task.pb.go": goOutput("db/db_task"),
-		// 暂存副本:db、login 两份给 goctl,robot 一份。
-		"generated/proto/db/proto/db/db_task.proto":    stagedProto("db/proto/db"),
-		"generated/proto/db/proto/top_level.proto":     stagedProto("db/proto"),
-		"generated/proto/login/proto/db/db_task.proto": stagedProto("login/proto/db"),
-		"generated/proto/login/proto/gone/only.proto":  stagedProto("login/proto/gone"),
-		"generated/robot/proto/db/db_task.proto":       stagedProto("robot/proto/db"),
+		// 暂存副本:robot 一份(goctl 退役后不再维护 generated/proto/{db,login} 副本)。
+		"generated/robot/proto/db/db_task.proto":   stagedProto("robot/proto/db"),
+		"generated/robot/proto/top_level.proto":    stagedProto("robot/proto"),
+		"generated/robot/proto/gone/only.proto":    stagedProto("robot/proto/gone"),
 		// 旧编号快照已由权威 message_id.txt 取代,只清暂存根目录的固定文件。
-		"generated/proto/db/proto/service_id.txt":    "74=GateRoutePlayerMessage\n",
-		"generated/proto/login/proto/service_id.txt": "81=SceneRoutePlayerStringMsg\n",
-		"generated/robot/proto/service_id.txt":       "74=GateRoutePlayerMessage\n81=SceneRoutePlayerStringMsg\n",
+		"generated/robot/proto/service_id.txt": "74=GateRoutePlayerMessage\n81=SceneRoutePlayerStringMsg\n",
 	}
 	kept = map[string]string{
 		// 还在的协议和它们的产物。
@@ -142,10 +138,8 @@ func retireFixture() (retired, kept map[string]string) {
 		// 只按后缀推源会把这个活绑定当成退役产物删掉。
 		"go/proto/common/constants/etcd_grpc.pb.go":     goOutput("common/constants/etcd_grpc"),
 		"go/proto/common/base/empty.pb.go":              licensedGoOutput("common/base/empty"),
-		"robot/vendor/proto/db/db.pb.go":                goOutput("db/db"),
-		"generated/proto/db/proto/db/db.proto":          stagedProto("db/proto/db"),
-		"generated/proto/login/proto/login/login.proto": stagedProto("login/proto/login"),
-		"generated/robot/proto/db/db.proto":             stagedProto("robot/proto/db"),
+		"robot/vendor/proto/db/db.pb.go":    goOutput("db/db"),
+		"generated/robot/proto/db/db.proto": stagedProto("robot/proto/db"),
 		// 手写或来源不明:名字可能像产物,但证明不了是生成流程写的。
 		"go/proto/go.mod":                                              "module proto\n",
 		"go/proto/db/helper.go":                                        "package db\n",
@@ -156,12 +150,12 @@ func retireFixture() (retired, kept map[string]string) {
 		"cpp/generated/proto/custom/handwritten.pb.cc":                 "// 手写\n",
 		"cpp/generated/grpc_client/custom/handwritten_grpc_client.cpp": "// 手写\n",
 		"cpp/generated/grpc_client/grpc_init_client.cpp":               "// 聚合入口\n",
-		"generated/robot/proto/keep.proto":                             "syntax = \"proto3\";\nmessage KeepExistingRobotContract {}\n",
-		"generated/proto/db/proto/db/moved.proto":                      stagedProto("db/proto/elsewhere"),
-		"generated/proto/db/proto/message_id.txt":                      "74=reserved:GateRoutePlayerMessage\n",
-		"generated/proto/login/proto/event_id.txt":                     "1=SomeEvent\n",
-		"generated/robot/proto/notes.txt":                              "保留非编号快照\n",
-		"generated/proto/db/proto/nested/service_id.txt":               "1=x\n",
+		"generated/robot/proto/keep.proto":               "syntax = \"proto3\";\nmessage KeepExistingRobotContract {}\n",
+		"generated/robot/proto/db/moved.proto":           stagedProto("robot/proto/elsewhere"),
+		"generated/robot/proto/message_id.txt":           "74=reserved:GateRoutePlayerMessage\n",
+		"generated/robot/proto/event_id.txt":             "1=SomeEvent\n",
+		"generated/robot/proto/notes.txt":                "保留非编号快照\n",
+		"generated/robot/proto/nested/service_id.txt":    "1=x\n",
 		"go/proto/service_id.txt":                                      "1=x\n",
 		"cpp/generated/proto/service_id.txt":                           "1=x\n",
 		// 输出目录之外:文件头和退役产物一样也不能碰。
@@ -184,7 +178,7 @@ func TestRetireOrphanedOutputsRemovesOnlyProvenOrphansAndIsIdempotent(t *testing
 		assertRepoFilesGone(t, root, retired)
 		assertRepoFilesKept(t, root, kept)
 	}
-	for _, dir := range []string{"go/proto/gone", "cpp/generated/proto/gone", "cpp/generated/grpc_client/gone", "generated/proto/login/proto/gone"} {
+	for _, dir := range []string{"go/proto/gone", "cpp/generated/proto/gone", "cpp/generated/grpc_client/gone", "generated/robot/proto/gone"} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(dir))); !os.IsNotExist(err) {
 			t.Errorf("清退后变空的目录 %s 应该删掉: %v", dir, err)
 		}
@@ -194,11 +188,9 @@ func TestRetireOrphanedOutputsRemovesOnlyProvenOrphansAndIsIdempotent(t *testing
 func TestRetireOrphanedOutputsKeepsServiceIDWhenSourceExists(t *testing.T) {
 	root := useRetireConfig(t)
 	kept := map[string]string{
-		"proto/db/db.proto":                          "syntax = \"proto3\";\n",
-		"proto/service_id.txt":                       "74=GateRoutePlayerMessage\n",
-		"generated/proto/db/proto/service_id.txt":    "74=GateRoutePlayerMessage\n",
-		"generated/proto/login/proto/service_id.txt": "74=GateRoutePlayerMessage\n",
-		"generated/robot/proto/service_id.txt":       "74=GateRoutePlayerMessage\n",
+		"proto/db/db.proto":                    "syntax = \"proto3\";\n",
+		"proto/service_id.txt":                 "74=GateRoutePlayerMessage\n",
+		"generated/robot/proto/service_id.txt": "74=GateRoutePlayerMessage\n",
 	}
 	writeRepoFiles(t, root, kept)
 	if err := retireOrphanedOutputs(_config.Global.Paths.ProtoDir, orphanRetirementRules()); err != nil {
@@ -215,8 +207,7 @@ func TestRetireOrphanedOutputsKeepsDisabledRobotServiceID(t *testing.T) {
 		"generated/robot/proto/service_id.txt": "81=SceneRoutePlayerStringMsg\n",
 	}
 	retired := map[string]string{
-		"generated/proto/db/proto/service_id.txt":    "74=GateRoutePlayerMessage\n",
-		"generated/proto/login/proto/service_id.txt": "81=SceneRoutePlayerStringMsg\n",
+		"go/proto/db/db_task.pb.go": goOutput("db/db_task"),
 	}
 	writeRepoFiles(t, root, kept)
 	writeRepoFiles(t, root, retired)
@@ -303,8 +294,8 @@ func TestRetireOrphanedOutputsPrintsWholePlanBeforeDeleting(t *testing.T) {
 func TestRetireOrphanedOutputsRefusesWithoutProtoSources(t *testing.T) {
 	root := useRetireConfig(t)
 	orphan := map[string]string{
-		"go/proto/db/db_task.pb.go":               goOutput("db/db_task"),
-		"generated/proto/db/proto/service_id.txt": "74=GateRoutePlayerMessage\n",
+		"go/proto/db/db_task.pb.go":            goOutput("db/db_task"),
+		"generated/robot/proto/service_id.txt": "74=GateRoutePlayerMessage\n",
 	}
 	writeRepoFiles(t, root, orphan)
 

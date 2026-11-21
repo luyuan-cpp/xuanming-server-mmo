@@ -17,8 +17,8 @@
 #      日志有一行 WARN,其余步骤照常。
 #   2. gate 签发票据:本地 bin/etc/base_deploy_config.yaml 与 login 都配了 GateTokenSecret。迁移票据就是 gate 登录票据,
 #      空密钥 dev 直通时签不出来。
-#   3. login 的 GateDrain.Interval > 0 且 GateDrain.Migrate.Enabled=true(两项缺省都满足),并且 login 的 goctl 包装已含
-#      RequestGateMigration(先跑过 go/build.ps1)。包装没重新生成时 gate 每次要票都得到 UNIMPLEMENTED,表现同样是 G3-mark 超时。
+#   3. login 的 GateDrain.Interval > 0 且 GateDrain.Migrate.Enabled=true(两项缺省都满足),并且 login 的 ClientPlayerLoginServer 已实现
+#      RequestGateMigration。漏实现时 gate 每次要票都得到 UNIMPLEMENTED,表现同样是 G3-mark 超时。
 #   4. gate、scene 是带排空迁移与断线保留的版本(2026-11-10 起)。没有断线保留的话 G3-resume 会报 actor 号变了。
 #   5. robot_9961 ~ robot_9964 没有别的进程同时在登,也不在任何队伍里。前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth。
 #   6. 从 robot/ 目录运行(table_dir 是相对路径)。

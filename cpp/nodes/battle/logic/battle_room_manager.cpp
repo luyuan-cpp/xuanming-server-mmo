@@ -1,6 +1,7 @@
 #include "battle_room_manager.h"
 
 #include <algorithm>
+#include <charconv>
 #include <limits>
 #include <cstdlib>
 #include <chrono>
@@ -1986,6 +1987,28 @@ void BattleRoomManager::ReclaimExpiredObserverSeats(const uint64_t battleId,
         RetireObserver(*room, observerId, "observer_seat_reclaimed");
     }
     ArmObserverSeatTimer(*room);
+}
+
+std::size_t BattleRoomManager::ResolveSqlOutcomeSendsPerPump(const std::string_view rawValue, bool *valid)
+{
+    if (valid != nullptr) *valid = true;
+    if (rawValue.empty()) return kDefaultSqlOutcomeSendsPerPump;
+    std::size_t parsed = 0;
+    const char *const begin = rawValue.data();
+    const char *const end = begin + rawValue.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, parsed);
+    if (ec != std::errc{} || ptr != end || parsed < kMinSqlOutcomeSendsPerPump || parsed > kMaxSqlOutcomeSendsPerPump)
+    {
+        if (valid != nullptr) *valid = false;
+        return kDefaultSqlOutcomeSendsPerPump;
+    }
+    return parsed;
+}
+
+void BattleRoomManager::SetSqlOutcomeSendsPerPump(const std::size_t sends)
+{
+    sqlOutcomeSendsPerPump_ = std::clamp(sends, kMinSqlOutcomeSendsPerPump, kMaxSqlOutcomeSendsPerPump);
+    LOG_INFO << "battle sql outcome sends per pump configured: sends_per_pump=" << sqlOutcomeSendsPerPump_;
 }
 
 void BattleRoomManager::BeginRoomShutdown(const std::string &reason)

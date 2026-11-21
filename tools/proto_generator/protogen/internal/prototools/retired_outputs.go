@@ -266,9 +266,6 @@ func orphanRetirementRules() []retireRule {
 		// robot 用 -mod=vendor 构建,这里是 go/proto 的副本。这一步只删不补:新协议进 vendor 仍靠 go mod vendor。
 		retireRule{filepath.Join(paths.OutputRoot, "robot", "vendor", "proto"), goBindingOutput},
 	)
-	for _, service := range goctlServices {
-		rules = append(rules, retireRule{paths.GeneratorProtoDir + BuildGeneratorProtoPath(service), stagedProtoOutput(service)})
-	}
 	if _config.Global.Generators.EnableRobotProto {
 		rules = append(rules, retireRule{paths.RobotGeneratedProto, stagedProtoOutput(_config.Global.Naming.GoRobotPackage)})
 	}

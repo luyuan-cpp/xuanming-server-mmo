@@ -1,8 +1,0 @@
-syntax = "proto3";
-option go_package = "db/proto/common/base";
-
-message TipInfoMessage
-{
-  uint32 id = 1;
-  repeated string parameters = 2;
-}

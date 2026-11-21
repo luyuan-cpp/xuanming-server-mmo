@@ -30,23 +30,33 @@
 ## 2. 跨 Agent 安装方式（新电脑初始化指南）
 
 ### 方式 A：通过开放 `skills` CLI 一键同步到多 Agent（推荐）
-适用于同时使用 Claude Code、Codex、Gemini / Antigravity、Cursor、Copilot 的开发机（需 Node.js；Windows PowerShell 若禁用 `.ps1` 执行策略，用 `cmd /c` 包裹）：
+适用于同时使用 Claude Code、Codex、Gemini / Antigravity、Cursor、Copilot 的开发机（需 Node.js；Windows PowerShell 若禁用 `.ps1` 执行策略，用 `cmd /c` 包裹，注意 `cmd` 里不要给 `*` 加单引号）：
 
 ```powershell
-# 1. 安装 / 同步标准 Agent Skills（支持 -g 全局安装与指定目标 Agent）
-cmd /c "npx --yes skills add mattpocock/skills -g -y"
-cmd /c "npx --yes skills add DietrichGebert/ponytail -g -y"
-cmd /c "npx --yes skills add obra/superpowers -g -y"
-cmd /c "npx --yes skills add anthropics/skills -g -y"
-cmd /c "npx --yes skills add addyosmani/agent-skills -g -y"
-cmd /c "npx --yes skills add affaan-m/ECC -g -y"
-cmd /c "npx --yes skills add wshobson/agents -g -y"
+# 1. 标准中小型 Skill 仓库直接在线全局安装（自动同步 ~/.agents/skills、~/.claude/skills、~/.gemini/config/skills）
+cmd /c "npx --yes skills add mattpocock/skills -g -a claude-code codex gemini-cli antigravity cursor github-copilot -s * -y --copy"
+cmd /c "npx --yes skills add DietrichGebert/ponytail -g -a claude-code codex gemini-cli antigravity cursor github-copilot -s * -y --copy"
+cmd /c "npx --yes skills add obra/superpowers -g -a claude-code codex gemini-cli antigravity cursor github-copilot -s * -y --copy"
+cmd /c "npx --yes skills add addyosmani/agent-skills -g -a claude-code codex gemini-cli antigravity cursor github-copilot -s * -y --copy"
 
-# 2. 代码库知识图谱 CLI（需 uv 或 pipx）
-uv tool install graphifyy
-graphify install                     # Claude Code
-graphify install --platform codex    # Codex
-graphify cursor install              # Cursor
+# 2. 较大仓库建议先浅克隆再本地安装，避免默认 300s 克隆超时
+foreach ($r in @("anthropics/skills", "affaan-m/ECC", "wshobson/agents")) {
+    $dir = Join-Path $env:TEMP ("skill-" + ($r -replace "/", "-"))
+    if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
+    git clone --depth 1 --filter=blob:none "https://github.com/$r.git" $dir
+    cmd /c "npx --yes skills add `"$dir`" -g -a claude-code codex gemini-cli antigravity cursor github-copilot -s * -y --copy"
+    Remove-Item -Recurse -Force $dir
+}
+
+# 3. 代码库知识图谱 CLI（需 uv 或 pip）
+pip install --user graphifyy   # 或: uv tool install graphifyy
+# 注：Windows 下 --user 安装路径为 %APPDATA%\Python\Python3xx\Scripts\graphify.exe（需在 PATH 中或用完整路径调用）
+graphify install --platform claude
+graphify install --platform codex
+graphify install --platform antigravity-windows
+graphify install --platform copilot
+graphify install --platform agents
+# 如在项目目录内运行 --platform gemini / cursor，会生成当前目录的 GEMINI.md / .cursor/rules/graphify.mdc，请按需在具体仓库目录内执行
 ```
 
 > **注意**：`wshobson/agents`、`affaan-m/ECC`、`anthropics/skills` 仓库内 Skill 数量较多，建议按需挑选核心工程类 Skill 或通过插件机制按需加载（渐进式披露），避免一次性把上百个无关 Skill 全量灌入同一全局目录。

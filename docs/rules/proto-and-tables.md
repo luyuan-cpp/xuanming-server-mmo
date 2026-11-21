@@ -15,8 +15,12 @@
    - 常规重生成：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`
    - 共享 Go 绑定写入 `go/proto/`。仅需重生成 db/login 的 go-zero 包装与修正导入时才执行 `cd go && build.bat`，它不能代替完整 proto 生成。
    - 默认生成配置会写同级客户端仓；不需要写客户端仓时使用 `-ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
-2. 重新编译受影响的 C++ / Go / Java 服务。
-3. 字段编号上线后**不复用**，只能 deprecate（`reserved N;` + 注释原因）；开发期已删字段可复用，但须重生并完整编译所有启用 module。
+2. **同级客户端同步（改动客户端可见 `.proto`、`Tip.xlsx`，或默认配置写入了 `../mmorpg-client/Assets/Scripts/Net/Generated/Rpc/` 时必做）**：切到同级 `mmorpg-client` 按序执行：
+   - `pwsh -File tools/gen_proto.ps1`（自动扫描 `Rpc/*.cs` + 递归 `import` + 全部 `generated/code/proto/tip/*_tip.proto` + 底层信封种子，并自动探测同级服务端仓与仓库 `protoc`，无需手维护 `.proto` 清单）
+   - `pwsh -File tools/gen_messageids.ps1`
+   - `pwsh -File tools/client_compile_check.ps1`（若改到公共签名或测试代码，一并确认受影响的 EditMode/PlayMode 测试程序集编译通过，确保 Unity 启动不进 Safe Mode）
+3. 重新编译受影响的 C++ / Go / Java 服务。
+4. 字段编号上线后**不复用**，只能 deprecate（`reserved N;` + 注释原因）；开发期已删字段可复用，但须重生并完整编译所有启用 module。
 
 ## 3. tip 错误码与配置表 Schema
 

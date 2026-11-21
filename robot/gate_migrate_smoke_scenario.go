@@ -350,7 +350,7 @@ func RunGateMigrateSmoke(cfg *config.Config) {
 		fail("G3-mark", "no robot received a redirect within %s. Check, in this order: the draining mark was written to the Redis login "+
 			"reads gate marks from, under a draining_key listed above, with a TTL and a Unix-seconds value; the zone has at least two gates "+
 			"(with one, login answers NO_TARGET); login runs with GateDrain.Migrate.Enabled=true and logs "+
-			"'[GateDrain] gate N: migration lease sent'; login's goctl wrapper implements RequestGateMigration (go/build.ps1), "+
+			"'[GateDrain] gate N: migration lease sent'; login's ClientPlayerLoginServer implements RequestGateMigration, "+
 			"otherwise every ticket request is UNIMPLEMENTED; the gate logs '[DrainMigration] started'. robots: %s",
 			gateMigrateSmokeMarkWait, gateMigrateDescribeAll(bots))
 	}

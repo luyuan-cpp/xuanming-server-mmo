@@ -26,39 +26,13 @@ func ResolveGameProtoPath() (string, error) {
 	return gameProtoPath, nil
 }
 
-func BuildGeneratorProtoPath(dir string) string {
-	// dir is an absolute path; append the proto subdirectory name directly
-	return filepath.Join(dir, filepath.ToSlash(_config.Global.DirectoryNames.NormalGoProto))
-}
-
-// goctlServices lists services that need per-service proto staging directories
-// for goctl code generation (used by go/build.ps1).
-// All other Go services consume the unified go/proto module directly.
-var goctlServices = []string{"db", "login"}
-
-// GoctlServices returns the list of services that need per-service proto staging.
-func GoctlServices() []string {
-	return goctlServices
-}
-
-// CopyProtoToGenDir copies proto files to the generation output directories.
-// Only db and login need per-service copies (for goctl); all other Go services
-// use the unified go/proto module.
+// CopyProtoToGenDir copies proto files to the robot generation staging directory.
+// All Go services (including db and login) consume the unified go/proto module directly.
 func CopyProtoToGenDir(wg *sync.WaitGroup) {
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
-		for _, dir := range goctlServices {
-			destDir := _config.Global.Paths.GeneratorProtoDir + BuildGeneratorProtoPath(dir)
-			if err := copyProtoToDir(_config.Global.Paths.ProtoDir, destDir); err != nil {
-				logger.Global.Warn("Failed to copy proto files",
-					zap.String("copy_type", "normal generation dir"),
-					zap.String("dir", dir),
-					zap.Error(err),
-				)
-			}
-		}
 		// Robot 的活协议先跟随源刷新，后续串行阶段再改写 go_package。
 		if _config.Global.Generators.EnableRobotProto {
 			destDir := _config.Global.Paths.RobotGeneratedProto

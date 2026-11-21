@@ -70,14 +70,21 @@ type Player struct {
 	battleAssignedOnce sync.Once
 
 	// ---- 战斗冒烟(battle-smoke)状态:观战侧 ----
-	spectateBattleId  uint64        // 正在观战的对局 id(NotifySpectateState 记录)
-	spectateObservers uint32        // 观战人数(NotifySpectateState 记录)
-	spectateTurnCount int           // 收到的 NotifySpectateTurnResult 条数(观战视角回合数)
-	spectateEndReason int32         // 观战结束原因(ESpectateEndReason,NotifySpectateEnd 记录)
-	spectateState     chan struct{} // 首个 NotifySpectateState 到达时 close
-	spectateStateOnce sync.Once
-	spectateEnd       chan struct{} // NotifySpectateEnd 到达时 close
-	spectateEndOnce   sync.Once
+	spectateBattleId      uint64        // 正在观战的对局 id(NotifySpectateState 记录)
+	spectateObservers     uint32        // 观战人数(NotifySpectateState 记录)
+	spectateStateCount    int           // 收到的 NotifySpectateState 条数(含心跳 161)
+	spectateTurnCount     int           // 收到的 NotifySpectateTurnResult 条数(观战视角回合数)
+	spectateLastTurnRound uint32        // 最近一次收到的 158 回合号
+	spectateEndReason     int32         // 观战结束原因(ESpectateEndReason,NotifySpectateEnd 记录)
+	spectateEndReceived   bool          // 是否已收到 NotifySpectateEnd
+	spectateFrameSeq      int           // 161/158/166 到达顺序单调序号
+	spectateFirstStateSeq int           // 首次 161 序号(0=未到)
+	spectateFirstTurnSeq  int           // 首次 158 序号(0=未到)
+	spectateEndSeq        int           // 166 序号(0=未到)
+	spectateState         chan struct{} // 首个 NotifySpectateState 到达时 close
+	spectateStateOnce     sync.Once
+	spectateEnd           chan struct{} // NotifySpectateEnd 到达时 close
+	spectateEndOnce       sync.Once
 
 	// ---- 属性加点冒烟(attribute-smoke)状态 ----
 	// 面板是服务器唯一真相:每个写操作的响应都带全量面板,这里只存最近一份。
@@ -617,8 +624,20 @@ func (p *Player) SignalSpectateState(battleId uint64, observerCount uint32) {
 	p.mu.Lock()
 	p.spectateBattleId = battleId
 	p.spectateObservers = observerCount
+	p.spectateStateCount++
+	p.spectateFrameSeq++
+	if p.spectateFirstStateSeq == 0 {
+		p.spectateFirstStateSeq = p.spectateFrameSeq
+	}
 	p.mu.Unlock()
 	p.spectateStateOnce.Do(func() { close(p.spectateState) })
+}
+
+// GetSpectateStateCount 返回收到的 NotifySpectateState(161) 总条数(含重发/心跳)。
+func (p *Player) GetSpectateStateCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.spectateStateCount
 }
 
 // WaitSpectateState 阻塞等待首个 NotifySpectateState,返回观战对局 id。
@@ -646,9 +665,21 @@ func (p *Player) GetSpectateObserverCount() uint32 {
 
 // AddSpectateTurnResult 观战视角回合计数 +1(每收到一条 NotifySpectateTurnResult 调一次)。
 func (p *Player) AddSpectateTurnResult() {
+	p.AddSpectateTurnRound(0)
+}
+
+// AddSpectateTurnRound 记录观战回合结算及回合号,用于校验 161→158→166 顺序。
+func (p *Player) AddSpectateTurnRound(roundIndex uint32) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.spectateTurnCount++
+	if roundIndex > p.spectateLastTurnRound {
+		p.spectateLastTurnRound = roundIndex
+	}
+	p.spectateFrameSeq++
+	if p.spectateFirstTurnSeq == 0 {
+		p.spectateFirstTurnSeq = p.spectateFrameSeq
+	}
 }
 
 // GetSpectateTurnCount 返回观战视角收到的回合结算条数。
@@ -664,8 +695,27 @@ func (p *Player) SignalSpectateEnd(reason int32) {
 	p.ensureSpectateEndChannel()
 	p.mu.Lock()
 	p.spectateEndReason = reason
+	p.spectateEndReceived = true
+	p.spectateFrameSeq++
+	if p.spectateEndSeq == 0 {
+		p.spectateEndSeq = p.spectateFrameSeq
+	}
 	p.mu.Unlock()
 	p.spectateEndOnce.Do(func() { close(p.spectateEnd) })
+}
+
+// HasSpectateEnd 非阻塞查询是否已收到 NotifySpectateEnd(166) 及其结束原因。
+func (p *Player) HasSpectateEnd() (int32, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.spectateEndReason, p.spectateEndReceived
+}
+
+// GetSpectateFrameOrder 返回首次收到 161、158、166 的到达序号(0 表示未收到)。
+func (p *Player) GetSpectateFrameOrder() (firstStateSeq, firstTurnSeq, endSeq int) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.spectateFirstStateSeq, p.spectateFirstTurnSeq, p.spectateEndSeq
 }
 
 // WaitSpectateEnd 阻塞等待 NotifySpectateEnd,返回观战结束原因。

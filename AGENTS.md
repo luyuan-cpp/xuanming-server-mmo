@@ -58,6 +58,7 @@
 ## 4. proto 同步、tip 与配表 Schema
 
 - 改协议先改 `proto/` 再跑 `dev_tools.ps1 -Command proto-gen-run` 并重编受影响服务；上线后字段号不复用（`reserved N;`）。
+- 改动涉及客户端可见 `.proto` 或 `Tip.xlsx` 时，服务端生成完毕须同步在同级 `mmorpg-client` 执行 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1` 与 `tools/client_compile_check.ps1`（完整步骤见 `docs/rules/proto-and-tables.md` §2），防止客户端 `*Rpc.cs` 与 `Proto/Generated/*.cs` 错位触发 Unity Safe Mode。
 - tip 错误码只由 `data/tip/Tip.xlsx` 导表生成，不手写数字；配置表 schema 事实源在 `data/schema/*_table.proto`（见 [data/AGENTS.md](data/AGENTS.md)）。
 - 强制字段类型（坐标 `double`、`BaseAttributesComp`/64位 ID/时间戳/货币 `uint64`）与完整流程见 → [docs/rules/proto-and-tables.md](docs/rules/proto-and-tables.md)。
 
@@ -115,7 +116,7 @@
 
 优先级：`正确性 / 安全 / 数据一致性 / 向后兼容 > 简单 / 可读 / 与仓库一致 > 可维护 / 可测试 > 有数据支撑的性能 > 假想扩展`。
 
-- **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、fail-closed、面向接口测试与交付门禁。
+- **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、**适合用 23 种设计模式时主动采用并向程序说明原因**、**某功能有 GitHub ≥ 2 万 Star 成熟开源库可用时交由程序决定并说明原因**、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、fail-closed、面向接口测试与交付门禁。
 - **§11.6 实例与布局分层**：实例层只描述「是什么」，布局层只描述「摆在哪」，布局层源码不得出现领域概念。
 - **§11.7 连接与回调生命周期（muduo，强制）**：应用层不拥有连接也不裸绑自己——**存连接只存 `weak_ptr`，绑回调只绑 `weak_ptr<自己>`**，关机两跳 `queueInLoop` 再 `quit()`。
 - 完整细则见 → [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)。

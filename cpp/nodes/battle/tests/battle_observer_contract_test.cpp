@@ -2335,6 +2335,28 @@ TEST_F(BattleObserverContract, ReplayOutcomeRetriesReuseFrozenBodyAndPassVerify)
     EXPECT_TRUE(service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome", first, first.auth(), "battle", kOutcomeSecret, nowMs));
     EXPECT_TRUE(service_call_auth::Verify("/match.MatchInternal/CommitBattleOutcome", second, second.auth(), "battle", kOutcomeSecret, nowMs));
 }
+
+TEST_F(BattleObserverContract, SqlOutcomeSendsPerPumpResolvesDefaultValidAndInvalidEnvValues) {
+    bool valid = false;
+    EXPECT_EQ(BattleRoomManager::kDefaultSqlOutcomeSendsPerPump,
+              BattleRoomManager::ResolveSqlOutcomeSendsPerPump("", &valid));
+    EXPECT_TRUE(valid);
+
+    EXPECT_EQ(1u, BattleRoomManager::ResolveSqlOutcomeSendsPerPump("1", &valid));
+    EXPECT_TRUE(valid);
+    EXPECT_EQ(128u, BattleRoomManager::ResolveSqlOutcomeSendsPerPump("128", &valid));
+    EXPECT_TRUE(valid);
+    EXPECT_EQ(BattleRoomManager::kMaxSqlOutcomeSendsPerPump,
+              BattleRoomManager::ResolveSqlOutcomeSendsPerPump("1024", &valid));
+    EXPECT_TRUE(valid);
+
+    for (const std::string_view bad : {"0", "1025", "-5", "abc", "64x", " 64"}) {
+        valid = true;
+        EXPECT_EQ(BattleRoomManager::kDefaultSqlOutcomeSendsPerPump,
+                  BattleRoomManager::ResolveSqlOutcomeSendsPerPump(bad, &valid)) << bad;
+        EXPECT_FALSE(valid) << bad;
+    }
+}
 } // namespace
 
 TEST_F(BattleObserverContract, SupportSourcesArePrivateForOwnerAndRemovedFromObserverReplayProjection) {

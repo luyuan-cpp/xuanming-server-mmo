@@ -122,6 +122,15 @@ public:
 
     // ---- 客户端直连面(main.cpp 装配;BattleClientEdge 生命周期由 main 的运行时上下文持有) ----
 
+    // 终局提交每拍至多发出的局数(停机排空窗口外):缺省 64,可通过环境变量 MMORPG_BATTLE_OUTCOME_SENDS_PER_PUMP
+    // 在 [1, 1024] 范围内按集群规模调优(非法值回落 64)。只影响 match 不可达恢复后的积压泄洪节奏,不影响终局一致性。
+    static constexpr std::size_t kMinSqlOutcomeSendsPerPump = 1;
+    static constexpr std::size_t kDefaultSqlOutcomeSendsPerPump = 64;
+    static constexpr std::size_t kMaxSqlOutcomeSendsPerPump = 1024;
+    static constexpr std::string_view kSqlOutcomeSendsPerPumpEnv = "MMORPG_BATTLE_OUTCOME_SENDS_PER_PUMP";
+    static std::size_t ResolveSqlOutcomeSendsPerPump(std::string_view rawValue, bool *valid = nullptr);
+    void SetSqlOutcomeSendsPerPump(std::size_t sends);
+
     // 借用直连面;nullptr = 收回借用(不销毁对象,也不动观众席配额)。
     // 借用非空直连面时,按它的有效连接上限算出节点级观众席配额并注入(SetObserverSeatQuota,口径见公开区
     // 「节点级观众席配额」):main.cpp 在启动门禁之后、gRPC 开服之前调用一次,部署配置此刻已加载;
@@ -725,11 +734,14 @@ private:
     std::set<uint64_t> sqlOutcomeRooms_;
     TimerTaskComp sqlOutcomeTimer_;
     // 终局重放每拍至多发出的局数(停机排空窗口外)。常态下每拍到期的只有刚冻结的几局,碰不到上限;它只在 match 全部
-    // 不可达之后恢复时起作用,把积压摊到多拍上(积压 2000 局约 30 拍)。取值是估算,没有压测数据,match 提交吞吐有实测后再调。
-    // BeginResultCommit 也会立即泵一拍,所以恢复期每个 battle 副本每秒至多发 64 ×(1 + 每秒新打完的局数)局。
-    static constexpr std::size_t kSqlOutcomeSendsPerPump = 64;
-    static_assert(kSqlOutcomeSendsPerPump > 0, "每拍至少要能发一局,否则积压永远发不出去");
-    // 生产恒为 kSqlOutcomeSendsPerPump;只有单测经 BattleRoomManagerTestAccess 改小,不用造几十间房就能测上限。
+    // 不可达之后恢复时起作用,把积压摊到多拍上(缺省 64/拍,积压 2000 局约 30 拍;启动期可经
+    // MMORPG_BATTLE_OUTCOME_SENDS_PER_PUMP 在 [1, 1024] 内覆盖)。
+    // BeginResultCommit 也会立即泵一拍,所以恢复期每个 battle 副本每秒至多发 sendsPerPump ×(1 + 每秒新打完的局数)局。
+    static constexpr std::size_t kSqlOutcomeSendsPerPump = kDefaultSqlOutcomeSendsPerPump;
+    static_assert(kSqlOutcomeSendsPerPump >= kMinSqlOutcomeSendsPerPump &&
+                      kSqlOutcomeSendsPerPump <= kMaxSqlOutcomeSendsPerPump,
+                  "缺省每拍上限必须落在合法区间内");
+    // 启动期经 SetSqlOutcomeSendsPerPump 注入(默认 kSqlOutcomeSendsPerPump);单测亦经 BattleRoomManagerTestAccess 调小。
     std::size_t sqlOutcomeSendsPerPump_ = kSqlOutcomeSendsPerPump;
     // PickSqlOutcomeSend 的替身:空 = 生产实现(按 READY 的 match 通道随机挑)。只有单测经 BattleRoomManagerTestAccess 换,
     // 用来模拟「通道没就绪 / 已就绪」、捕获请求并按需回放回复,不起 match。

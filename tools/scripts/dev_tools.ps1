@@ -668,37 +668,6 @@ function Invoke-ProtoGenPostHooks {
             }
         }
     }
-    Invoke-ProtoGenGoctlPostHook
-}
-
-# db / login 使用 goctl 生成服务端和客户端包装(internal/server/*/*server.go、client/*/*.go),
-# protogen 只负责把 proto 暂存到 generated/proto/{db,login}/,不会更新包装层。
-# 漏跑 go/build.ps1 时新增 RPC 能编译通过,但运行期全部由内嵌 Unimplemented 桩回 codes.Unimplemented。
-# 与 $ProtoGenPostHooks 同口径:只在暂存 proto 存在时执行(隔离夹具/裁剪配置跳过),存在则 fail-closed。
-function Invoke-ProtoGenGoctlPostHook {
-    $markers = @(
-        (Join-Path $RepoRoot 'generated\proto\db\proto\db\db.proto'),
-        (Join-Path $RepoRoot 'generated\proto\login\proto\login\login.proto')
-    )
-    $hasAnyMarker = $false
-    foreach ($marker in $markers) {
-        if (Test-Path -LiteralPath $marker -PathType Leaf) {
-            $hasAnyMarker = $true
-            break
-        }
-    }
-    if (-not $hasAnyMarker) { return }
-
-    $buildScript = Join-Path $RepoRoot 'go\build.ps1'
-    if (-not (Test-Path -LiteralPath $buildScript -PathType Leaf)) {
-        throw "goctl 包装生成脚本不存在:$buildScript(proto 已生成,但 db/login 的 goctl 包装未刷新)"
-    }
-    Write-Host "[proto-gen post-hook] goctl: go/build.ps1"
-    $global:LASTEXITCODE = 0
-    & $buildScript
-    if ($LASTEXITCODE -ne 0) {
-        throw "goctl 包装生成钩子 (go/build.ps1) 失败(退出码 $LASTEXITCODE);proto 已生成但 db/login 包装未刷新,修好后重跑:pwsh -File go/build.ps1"
-    }
 }
 
 function Invoke-Tree {
