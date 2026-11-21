@@ -20,6 +20,7 @@
 #include <system_error>
 #include <vector>
 
+#include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"

@@ -301,11 +301,11 @@ TEST(WebSocketFrame, BinaryHeaderUsesTheShortestLengthForm)
 TEST(WebSocketFrame, FrameKeepsThePayloadForBothHeaderPlacements)
 {
 	// 小帧:帧头放进缓冲的预留区。
-	const std::string small = Bytes(Request(1));
+	const std::string smallPayload = Bytes(Request(1));
 	muduo::net::Buffer smallFrame;
 	ProtobufCodec::fillEmptyBuffer(&smallFrame, Request(1));
 	websocket::Frame(&smallFrame);
-	EXPECT_EQ(smallFrame.retrieveAllAsString(), ServerFrame(kBinary, small));
+	EXPECT_EQ(smallFrame.retrieveAllAsString(), ServerFrame(kBinary, smallPayload));
 
 	// 超过 65535 字节:帧头 10 字节,预留区放不下,换一块缓冲重排。
 	const std::string large(70000, 'x');
